@@ -25,6 +25,7 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
@@ -59,7 +60,9 @@ fun ChatScreen(
     viewModel: ChatViewModel,
     onNavigateBack: () -> Unit,
     onNavigateToGallery: () -> Unit,
-    onQuickDisguise: () -> Unit = {}
+    onQuickDisguise: () -> Unit = {},
+    onNavigateToProfile: () -> Unit = {},
+    onLoggedOut: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -427,6 +430,35 @@ fun ChatScreen(
                                             Icons.Outlined.EditNote,
                                             null,
                                             tint = RoseGoldPrimary
+                                        )
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Profile & Partner Settings") },
+                                    onClick = {
+                                        showChatMenu = false
+                                        onNavigateToProfile()
+                                    },
+                                    leadingIcon = {
+                                        Icon(
+                                            Icons.Default.Person,
+                                            null,
+                                            tint = RoseGoldPrimary
+                                        )
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Log Out / Switch Partner", color = MaterialTheme.colorScheme.error) },
+                                    onClick = {
+                                        showChatMenu = false
+                                        viewModel.logout()
+                                        onLoggedOut()
+                                    },
+                                    leadingIcon = {
+                                        Icon(
+                                            Icons.AutoMirrored.Filled.Logout,
+                                            null,
+                                            tint = MaterialTheme.colorScheme.error
                                         )
                                     }
                                 )

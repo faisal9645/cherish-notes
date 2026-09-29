@@ -424,6 +424,10 @@ class ChatViewModel(
         _uiState.update { it.copy(isCheckAfterReminderEnabled = enabled) }
     }
 
+    fun logout() {
+        authRepository.logout()
+    }
+
     override fun onCleared() {
         super.onCleared()
         voicePlayerHelper.stop()

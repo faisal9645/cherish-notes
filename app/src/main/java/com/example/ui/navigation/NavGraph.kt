@@ -118,7 +118,13 @@ fun CherishNavGraph(
                     }
                 },
                 onNavigateToGallery = { navController.navigate(Screen.SharedGallery.route) },
-                onQuickDisguise = { app.securityPreferences.reDisguise() }
+                onQuickDisguise = { app.securityPreferences.reDisguise() },
+                onNavigateToProfile = { navController.navigate(Screen.Profile.route) },
+                onLoggedOut = {
+                    navController.navigate(Screen.Auth.route) {
+                        popUpTo(0) { inclusive = true }
+                    }
+                }
             )
         }
 

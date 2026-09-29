@@ -208,13 +208,52 @@ fun AuthScreen(
 
                             Spacer(modifier = Modifier.height(14.dp))
 
+                            // Quick Swap Button for 2nd Phone
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "Connecting 2 phones?",
+                                    fontSize = 12.sp,
+                                    color = DarkOnSurfaceVariant
+                                )
+                                TextButton(
+                                    onClick = {
+                                        val temp = myUsername
+                                        myUsername = partnerUsername
+                                        partnerUsername = temp
+                                    },
+                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.SwapVert,
+                                        contentDescription = null,
+                                        tint = RoseGoldPrimary,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = "⇄ Swap for 2nd Phone",
+                                        fontSize = 12.sp,
+                                        color = RoseGoldPrimary,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(6.dp))
+
                             // Partner's Username
                             OutlinedTextField(
                                 value = partnerUsername,
                                 onValueChange = { partnerUsername = it },
                                 label = { Text("Partner's Username") },
                                 placeholder = { Text("e.g. karthik") },
-                                supportingText = { Text("Strictly 2 people: only this partner connects") },
+                                supportingText = { Text("Only this partner connects to your space") },
                                 leadingIcon = {
                                     Icon(Icons.Default.Favorite, contentDescription = null, tint = HeartRed)
                                 },
@@ -243,6 +282,31 @@ fun AuthScreen(
                                     .fillMaxWidth()
                                     .testTag("input_couple_passcode")
                             )
+
+                            Spacer(modifier = Modifier.height(14.dp))
+
+                            // 2-Phone Pairing Info Box
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(Color(0xFFF9F0F3))
+                                    .padding(horizontal = 12.dp, vertical = 8.dp)
+                            ) {
+                                Column {
+                                    Text(
+                                        text = "💡 How to connect both phones:",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = DarkOnBackground
+                                    )
+                                    Text(
+                                        text = "• Phone 1: You: ${myUsername.ifBlank { "User A" }} | Partner: ${partnerUsername.ifBlank { "User B" }}\n• Phone 2: You: ${partnerUsername.ifBlank { "User B" }} | Partner: ${myUsername.ifBlank { "User A" }}",
+                                        fontSize = 11.sp,
+                                        color = DarkOnSurfaceVariant
+                                    )
+                                }
+                            }
 
                             Spacer(modifier = Modifier.height(18.dp))
 
@@ -285,51 +349,48 @@ fun AuthScreen(
                                 }
                             }
 
-                            // Enter / Sign In Primary Button
-                            Surface(
+                            // Enter / Sign In Native Button
+                            Button(
+                                onClick = {
+                                    viewModel.login(
+                                        username = myUsername,
+                                        pass = password,
+                                        partnerUsername = partnerUsername,
+                                        coupleKey = couplePasscode
+                                    )
+                                },
+                                enabled = uiState !is AuthUiState.Loading,
                                 shape = RoundedCornerShape(14.dp),
-                                color = RoseGoldPrimary,
-                                shadowElevation = 3.dp,
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = RoseGoldPrimary,
+                                    disabledContainerColor = RoseGoldPrimary.copy(alpha = 0.6f)
+                                ),
+                                elevation = ButtonDefaults.buttonElevation(defaultElevation = 2.dp),
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .height(52.dp)
-                                    .clip(RoundedCornerShape(14.dp))
-                                    .clickable(enabled = uiState !is AuthUiState.Loading) {
-                                        viewModel.login(
-                                            username = myUsername,
-                                            pass = password,
-                                            partnerUsername = partnerUsername,
-                                            coupleKey = couplePasscode
-                                        )
-                                    }
                                     .testTag("auth_submit_button")
                             ) {
-                                Row(
-                                    modifier = Modifier.fillMaxSize(),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.Center
-                                ) {
-                                    if (uiState is AuthUiState.Loading) {
-                                        CircularProgressIndicator(
-                                            color = Color.White,
-                                            modifier = Modifier.size(24.dp),
-                                            strokeWidth = 2.dp
-                                        )
-                                    } else {
-                                        Icon(
-                                            imageVector = Icons.Default.Favorite,
-                                            contentDescription = null,
-                                            tint = Color.White,
-                                            modifier = Modifier.size(20.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(10.dp))
-                                        Text(
-                                            text = "Enter Our Space",
-                                            fontSize = 15.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = Color.White
-                                        )
-                                    }
+                                if (uiState is AuthUiState.Loading) {
+                                    CircularProgressIndicator(
+                                        color = Color.White,
+                                        modifier = Modifier.size(22.dp),
+                                        strokeWidth = 2.dp
+                                    )
+                                } else {
+                                    Icon(
+                                        imageVector = Icons.Default.Favorite,
+                                        contentDescription = null,
+                                        tint = Color.White,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Text(
+                                        text = "Enter Our Space",
+                                        fontSize = 15.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color.White
+                                    )
                                 }
                             }
 
