@@ -68,12 +68,18 @@ fun MessageBubble(
             .padding(horizontal = 12.dp, vertical = 3.dp),
         horizontalAlignment = if (isFromMe) Alignment.End else Alignment.Start
     ) {
-        Surface(
-            shape = bubbleShape,
-            color = bubbleBg,
-            tonalElevation = if (isFromMe) 2.dp else 1.dp,
+        Box(
             modifier = Modifier
                 .widthIn(min = 80.dp, max = 310.dp)
+                .then(
+                    if (isFromMe) Modifier.appGradientShadow(bubbleShape)
+                    else Modifier
+                )
+                .clip(bubbleShape)
+                .background(
+                    if (isFromMe) appHorizontalGradient()
+                    else androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.surfaceVariant)
+                )
                 .combinedClickable(
                     onClick = {
                         if (message.getTypedType() == MessageType.IMAGE && message.mediaUrl != null) {

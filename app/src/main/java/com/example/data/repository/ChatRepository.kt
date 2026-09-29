@@ -35,6 +35,10 @@ class ChatRepository(
     private val _messagesFlow = MutableStateFlow<List<Message>>(emptyList())
     val messagesFlow: StateFlow<List<Message>> = _messagesFlow.asStateFlow()
 
+    // Dual-consent chat deletion state (both must accept to delete chat)
+    private val _deletionRequestFlow = MutableStateFlow<com.example.data.model.ChatDeletionRequest?>(null)
+    val deletionRequestFlow: StateFlow<com.example.data.model.ChatDeletionRequest?> = _deletionRequestFlow.asStateFlow()
+
     private var messagesListener: ListenerRegistration? = null
     private var currentActiveConversationId: String? = null
 
@@ -257,6 +261,54 @@ class ChatRepository(
         } catch (e: Exception) {
             // ignore
         }
+    }
+
+    // --- DUAL-CONSENT CHAT DELETION (Both must accept before chat can be deleted) ---
+    fun requestChatDeletion(scope: String = "ALL_MESSAGES", targetMessageId: String? = null) {
+        val currentUser = authRepository.currentUserState.value
+        val userId = currentUser?.id ?: "current_user"
+        val userName = currentUser?.displayName?.ifBlank { "Partner" } ?: "Partner"
+
+        val request = com.example.data.model.ChatDeletionRequest(
+            id = UUID.randomUUID().toString(),
+            requestedByUserId = userId,
+            requestedByUserName = userName,
+            timestamp = System.currentTimeMillis(),
+            scope = scope,
+            targetMessageId = targetMessageId,
+            status = com.example.data.model.DeletionRequestStatus.PENDING.name
+        )
+        _deletionRequestFlow.value = request
+    }
+
+    suspend fun acceptChatDeletion() {
+        val request = _deletionRequestFlow.value ?: return
+        if (request.scope == "ALL_MESSAGES") {
+            // Clear entire conversation history with mutual consent
+            _messagesFlow.value = listOf(
+                Message(
+                    id = "mutual_clear_${System.currentTimeMillis()}",
+                    conversationId = getConversationId(),
+                    senderId = "system",
+                    senderName = "Cherish Vault",
+                    receiverId = "both",
+                    text = "🔒 Chat history cleared with mutual consent from both partners.",
+                    timestamp = System.currentTimeMillis(),
+                    type = MessageType.TEXT.name
+                )
+            )
+        } else if (request.targetMessageId != null) {
+            deleteMessage(request.targetMessageId)
+        }
+        _deletionRequestFlow.value = null
+    }
+
+    fun declineChatDeletion() {
+        _deletionRequestFlow.value = null
+    }
+
+    fun cancelChatDeletion() {
+        _deletionRequestFlow.value = null
     }
 
     fun getStarredMessages(): List<Message> {

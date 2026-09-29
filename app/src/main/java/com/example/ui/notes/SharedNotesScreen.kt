@@ -26,6 +26,8 @@ import com.example.data.model.SharedNote
 import com.example.ui.theme.AmethystTertiary
 import com.example.ui.theme.HeartRed
 import com.example.ui.theme.RoseGoldPrimary
+import com.example.ui.theme.appGradientShadow
+import com.example.ui.theme.appHorizontalGradient
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -64,17 +66,25 @@ fun SharedNotesScreen(
             )
         },
         floatingActionButton = {
-            FloatingActionButton(
-                onClick = {
-                    editingNote = null
-                    showAddDialog = true
-                },
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary,
-                shape = CircleShape,
-                modifier = Modifier.testTag("add_note_fab")
+            Box(
+                modifier = Modifier
+                    .appGradientShadow(CircleShape)
+                    .clip(CircleShape)
+                    .background(appHorizontalGradient())
+                    .size(56.dp)
+                    .clickable {
+                        editingNote = null
+                        showAddDialog = true
+                    }
+                    .testTag("add_note_fab"),
+                contentAlignment = Alignment.Center
             ) {
-                Icon(Icons.Default.Add, contentDescription = "New Shared Note")
+                Icon(
+                    imageVector = Icons.Default.Add,
+                    contentDescription = "New Shared Note",
+                    tint = Color.White,
+                    modifier = Modifier.size(24.dp)
+                )
             }
         },
         containerColor = Color.White

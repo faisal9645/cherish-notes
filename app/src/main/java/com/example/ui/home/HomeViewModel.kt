@@ -2,7 +2,9 @@ package com.example.ui.home
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.data.model.Conversation
+import com.example.data.model.BucketListItem
+import com.example.data.model.DailyQuestion
+import com.example.data.model.LoveJarNote
 import com.example.data.model.Message
 import com.example.data.model.User
 import com.example.data.repository.AuthRepository
@@ -20,7 +22,11 @@ data class HomeUiState(
     val lastMessage: Message? = null,
     val unreadCount: Int = 0,
     val daysTogether: Long = 280L,
-    val isPartnerTyping: Boolean = false
+    val isPartnerTyping: Boolean = false,
+    val dailyQuestion: DailyQuestion = DailyQuestion(),
+    val loveJarNotes: List<LoveJarNote> = emptyList(),
+    val bucketList: List<BucketListItem> = emptyList(),
+    val lastLoveNudgeSent: String? = null
 )
 
 class HomeViewModel(
@@ -65,6 +71,55 @@ class HomeViewModel(
                 }
             }
         }
+
+        viewModelScope.launch {
+            coupleFeaturesRepository.dailyQuestionFlow.collect { dq ->
+                _uiState.update { it.copy(dailyQuestion = dq) }
+            }
+        }
+
+        viewModelScope.launch {
+            coupleFeaturesRepository.loveJarNotesFlow.collect { notes ->
+                _uiState.update { it.copy(loveJarNotes = notes) }
+            }
+        }
+
+        viewModelScope.launch {
+            coupleFeaturesRepository.bucketListFlow.collect { items ->
+                _uiState.update { it.copy(bucketList = items) }
+            }
+        }
+    }
+
+    fun submitDailyAnswer(answer: String) {
+        coupleFeaturesRepository.submitMyDailyAnswer(answer)
+    }
+
+    fun toggleLikeDailyAnswer() {
+        coupleFeaturesRepository.toggleLikeDailyAnswer()
+    }
+
+    fun addLoveJarNote(text: String, emoji: String) {
+        coupleFeaturesRepository.addLoveJarNote(text, emoji)
+    }
+
+    fun toggleBucketItem(id: String) {
+        coupleFeaturesRepository.toggleBucketItem(id)
+    }
+
+    fun addBucketItem(title: String, category: String) {
+        coupleFeaturesRepository.addBucketItem(title, category)
+    }
+
+    fun sendLoveNudge(nudgeName: String, emoji: String, defaultMessage: String) {
+        viewModelScope.launch {
+            chatRepository.sendMessage(text = "$emoji $defaultMessage")
+            _uiState.update { it.copy(lastLoveNudgeSent = "Sent $nudgeName $emoji") }
+        }
+    }
+
+    fun clearLoveNudgeStatus() {
+        _uiState.update { it.copy(lastLoveNudgeSent = null) }
     }
 
     fun formatLastSeen(timestamp: Long, isOnline: Boolean): String {
@@ -89,7 +144,6 @@ class HomeViewModel(
     }
 
     fun formatMessageTime(timestamp: Long): String {
-        if (timestamp <= 0L) return ""
         val sdf = SimpleDateFormat("h:mm a", Locale.getDefault())
         return sdf.format(Date(timestamp))
     }

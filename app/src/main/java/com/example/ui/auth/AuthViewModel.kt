@@ -62,6 +62,52 @@ class AuthViewModel(private val authRepository: AuthRepository) : ViewModel() {
         }
     }
 
+    fun loginWithGmail(gmail: String, partnerGmail: String, coupleKey: String, pass: String = "gmail_secure_couple") {
+        val cleanGmail = gmail.trim().lowercase().let { if (!it.contains("@")) "$it@gmail.com" else it }
+        val cleanPartner = partnerGmail.trim().lowercase().let { if (it.isNotBlank() && !it.contains("@")) "$it@gmail.com" else it }
+
+        if (!cleanGmail.endsWith("@gmail.com") && !cleanGmail.endsWith("@googlemail.com")) {
+            _uiState.value = AuthUiState.Error("Please use a valid Gmail address (must end with @gmail.com)")
+            return
+        }
+
+        if (cleanPartner.isNotBlank() && !cleanPartner.endsWith("@gmail.com") && !cleanPartner.endsWith("@googlemail.com")) {
+            _uiState.value = AuthUiState.Error("Partner must also use a valid Gmail address (must end with @gmail.com)")
+            return
+        }
+
+        viewModelScope.launch {
+            _uiState.value = AuthUiState.Loading
+            val loginRes = authRepository.loginWithEmail(cleanGmail, pass)
+            loginRes.fold(
+                onSuccess = { user ->
+                    if (cleanPartner.isNotBlank()) {
+                        authRepository.pairWithPartner(cleanPartner, coupleKey.ifBlank { "CHERISH-FOREVER" })
+                    }
+                    _uiState.value = AuthUiState.Success(user)
+                },
+                onFailure = {
+                    val regRes = authRepository.registerWithEmail(
+                        email = cleanGmail,
+                        pass = pass,
+                        displayName = cleanGmail.substringBefore("@").replaceFirstChar { it.uppercase() }
+                    )
+                    regRes.fold(
+                        onSuccess = { user ->
+                            if (cleanPartner.isNotBlank()) {
+                                authRepository.pairWithPartner(cleanPartner, coupleKey.ifBlank { "CHERISH-FOREVER" })
+                            }
+                            _uiState.value = AuthUiState.Success(user)
+                        },
+                        onFailure = { err ->
+                            _uiState.value = AuthUiState.Error(err.localizedMessage ?: "Gmail authentication failed")
+                        }
+                    )
+                }
+            )
+        }
+    }
+
     fun sendPasswordReset(email: String, onDone: (Boolean, String) -> Unit) {
         if (email.isBlank()) {
             onDone(false, "Please enter your email address")

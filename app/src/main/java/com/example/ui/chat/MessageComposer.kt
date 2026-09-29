@@ -27,6 +27,8 @@ import com.example.data.model.Message
 import com.example.ui.components.WaveformView
 import com.example.ui.theme.HeartRed
 import com.example.ui.theme.RoseGoldPrimary
+import com.example.ui.theme.appGradientShadow
+import com.example.ui.theme.appHorizontalGradient
 
 @Composable
 fun MessageComposer(
@@ -43,6 +45,7 @@ fun MessageComposer(
     onCancelVoiceRecord: () -> Unit,
     onPickImage: () -> Unit,
     onPickDocument: () -> Unit,
+    placeholder: String = "Message your love...",
     modifier: Modifier = Modifier
 ) {
     var showEmojiQuickBar by remember { mutableStateOf(false) }
@@ -242,7 +245,7 @@ fun MessageComposer(
                 ) {
                     if (text.isEmpty()) {
                         Text(
-                            text = "Message your love...",
+                            text = placeholder,
                             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
                             style = MaterialTheme.typography.bodyMedium
                         )
@@ -264,17 +267,20 @@ fun MessageComposer(
                 Spacer(modifier = Modifier.width(6.dp))
 
                 if (text.isNotBlank()) {
-                    IconButton(
-                        onClick = onSendText,
+                    Box(
                         modifier = Modifier
                             .size(48.dp)
-                            .background(MaterialTheme.colorScheme.primary, CircleShape)
-                            .testTag("composer_send_button")
+                            .appGradientShadow(CircleShape)
+                            .clip(CircleShape)
+                            .background(appHorizontalGradient())
+                            .clickable { onSendText() }
+                            .testTag("composer_send_button"),
+                        contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = Icons.Default.Send,
                             contentDescription = "Send message",
-                            tint = MaterialTheme.colorScheme.onPrimary,
+                            tint = Color.White,
                             modifier = Modifier.size(20.dp)
                         )
                     }

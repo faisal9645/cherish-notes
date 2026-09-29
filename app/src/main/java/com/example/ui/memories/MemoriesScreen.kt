@@ -32,6 +32,8 @@ import coil.compose.AsyncImage
 import com.example.data.model.Memory
 import com.example.ui.theme.HeartRed
 import com.example.ui.theme.RoseGoldPrimary
+import com.example.ui.theme.appGradientShadow
+import com.example.ui.theme.appHorizontalGradient
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -69,14 +71,22 @@ fun MemoriesScreen(
             )
         },
         floatingActionButton = {
-            FloatingActionButton(
-                onClick = { showAddDialog = true },
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary,
-                shape = CircleShape,
-                modifier = Modifier.testTag("add_memory_fab")
+            Box(
+                modifier = Modifier
+                    .appGradientShadow(CircleShape)
+                    .clip(CircleShape)
+                    .background(appHorizontalGradient())
+                    .size(56.dp)
+                    .clickable { showAddDialog = true }
+                    .testTag("add_memory_fab"),
+                contentAlignment = Alignment.Center
             ) {
-                Icon(Icons.Default.Add, contentDescription = "Add Memory")
+                Icon(
+                    imageVector = Icons.Default.Add,
+                    contentDescription = "Add Memory",
+                    tint = Color.White,
+                    modifier = Modifier.size(24.dp)
+                )
             }
         },
         containerColor = Color.White

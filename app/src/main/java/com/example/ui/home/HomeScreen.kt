@@ -3,8 +3,8 @@ package com.example.ui.home
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -20,13 +20,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.data.model.LoveJarNote
 import com.example.ui.components.AvatarView
 import com.example.ui.theme.*
 
@@ -40,6 +40,8 @@ fun HomeScreen(
     onNavigateToNotes: () -> Unit,
     onNavigateToGallery: () -> Unit,
     onNavigateToProfile: () -> Unit,
+    onNavigateToLifetimeJourney: () -> Unit = {},
+    onNavigateToCloudBackup: () -> Unit = {},
     onQuickDisguise: () -> Unit = {}
 ) {
     BackHandler {
@@ -48,9 +50,16 @@ fun HomeScreen(
 
     val uiState by viewModel.uiState.collectAsState()
     val partner = uiState.partnerUser
-    val partnerName = partner?.displayName?.ifBlank { "My Girlfriend" } ?: "My Girlfriend"
+    val currentUser = uiState.currentUser
+    val partnerName = partner?.displayName?.ifBlank { "My Partner" } ?: "My Partner"
+    val partnerEmail = partner?.email?.ifBlank { "partner@gmail.com" } ?: "partner@gmail.com"
+    val myEmail = currentUser?.email?.ifBlank { "you@gmail.com" } ?: "you@gmail.com"
     val isOnline = partner?.isOnline ?: false
     val statusText = partner?.statusMessage ?: "Together forever & always 💕"
+
+    var showDrawNoteDialog by remember { mutableStateOf(false) }
+    var drawnNote by remember { mutableStateOf<LoveJarNote?>(null) }
+    var showAddLoveNoteDialog by remember { mutableStateOf(false) }
 
     val infiniteTransition = rememberInfiniteTransition(label = "heartbeat")
     val heartScale by infiniteTransition.animateFloat(
@@ -87,6 +96,26 @@ fun HomeScreen(
                 },
                 actions = {
                     IconButton(
+                        onClick = onNavigateToCloudBackup,
+                        modifier = Modifier.testTag("home_cloud_backup_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.CloudSync,
+                            contentDescription = "Google Drive Backup & Restore",
+                            tint = RoseGoldPrimary
+                        )
+                    }
+                    IconButton(
+                        onClick = onNavigateToLifetimeJourney,
+                        modifier = Modifier.testTag("home_lifetime_journey_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.AllInclusive,
+                            contentDescription = "Our Lifetime Story",
+                            tint = RoseGoldPrimary
+                        )
+                    }
+                    IconButton(
                         onClick = onQuickDisguise,
                         modifier = Modifier.testTag("home_quick_disguise_button")
                     ) {
@@ -101,70 +130,72 @@ fun HomeScreen(
                         modifier = Modifier.testTag("home_profile_button")
                     ) {
                         Icon(
-                            imageVector = Icons.Outlined.Settings,
-                            contentDescription = "Profile & Settings",
+                            imageVector = Icons.Outlined.Security,
+                            contentDescription = "Security & Profile",
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.background
-                )
+                    containerColor = Color.White
+                ),
+                windowInsets = WindowInsets.statusBars
             )
         },
         bottomBar = {
-            Column {
-                HorizontalDivider(color = Color(0xFFF0F0F2), thickness = 1.dp)
-                NavigationBar(
-                    containerColor = Color.White,
-                    tonalElevation = 0.dp
+            Surface(
+                color = Color.White,
+                tonalElevation = 2.dp,
+                shadowElevation = 8.dp,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .navigationBarsPadding()
                 ) {
-                    NavigationBarItem(
-                        selected = true,
-                        onClick = { },
-                        icon = { Icon(Icons.Filled.Home, contentDescription = "Home") },
-                        label = { Text("Us") },
-                        colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = MaterialTheme.colorScheme.primary,
-                            indicatorColor = MaterialTheme.colorScheme.primaryContainer
+                    HorizontalDivider(color = Color(0xFFF0F0F2), thickness = 1.dp)
+                    // Streamlined 3-tab navigation focused on strictly 2-person chat, daily growth, and ironclad security
+                    NavigationBar(
+                        containerColor = Color.Transparent,
+                        tonalElevation = 0.dp,
+                        windowInsets = WindowInsets(0.dp)
+                    ) {
+                        NavigationBarItem(
+                            selected = true,
+                            onClick = { },
+                            icon = { Icon(Icons.Filled.Favorite, contentDescription = "Us & Growth") },
+                            label = { Text("Love & Us") },
+                            colors = NavigationBarItemDefaults.colors(
+                                selectedIconColor = MaterialTheme.colorScheme.primary,
+                                indicatorColor = MaterialTheme.colorScheme.primaryContainer
+                            )
                         )
-                    )
-                    NavigationBarItem(
-                        selected = false,
-                        onClick = onNavigateToChat,
-                        icon = {
-                            BadgedBox(
-                                badge = {
-                                    if (uiState.unreadCount > 0) {
-                                        Badge(containerColor = HeartRed) {
-                                            Text("${uiState.unreadCount}")
+                        NavigationBarItem(
+                            selected = false,
+                            onClick = onNavigateToChat,
+                            icon = {
+                                BadgedBox(
+                                    badge = {
+                                        if (uiState.unreadCount > 0) {
+                                            Badge(containerColor = HeartRed) {
+                                                Text("${uiState.unreadCount}")
+                                            }
                                         }
                                     }
+                                ) {
+                                    Icon(Icons.Outlined.ChatBubble, contentDescription = "Chat")
                                 }
-                            ) {
-                                Icon(Icons.Outlined.ChatBubble, contentDescription = "Chat")
-                            }
-                        },
-                        label = { Text("Chat") }
-                    )
-                    NavigationBarItem(
-                        selected = false,
-                        onClick = onNavigateToMemories,
-                        icon = { Icon(Icons.Outlined.PhotoAlbum, contentDescription = "Memories") },
-                        label = { Text("Memories") }
-                    )
-                    NavigationBarItem(
-                        selected = false,
-                        onClick = onNavigateToDates,
-                        icon = { Icon(Icons.Outlined.Event, contentDescription = "Dates") },
-                        label = { Text("Dates") }
-                    )
-                    NavigationBarItem(
-                        selected = false,
-                        onClick = onNavigateToProfile,
-                        icon = { Icon(Icons.Outlined.Person, contentDescription = "Profile") },
-                        label = { Text("Profile") }
-                    )
+                            },
+                            label = { Text("Private Chat") }
+                        )
+                        NavigationBarItem(
+                            selected = false,
+                            onClick = onNavigateToProfile,
+                            icon = { Icon(Icons.Outlined.Security, contentDescription = "Security") },
+                            label = { Text("Security") }
+                        )
+                    }
                 }
             }
         },
@@ -175,10 +206,48 @@ fun HomeScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(20.dp)
+                .padding(horizontal = 20.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Girlfriend Showcase Card
+            // Strictly 2-Person Verified Badge
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = SoftPinkSurfaceVariant,
+                border = BorderStroke(1.dp, SoftBorderOutline),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 14.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Lock,
+                        contentDescription = null,
+                        tint = RoseGoldPrimary,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Column {
+                        Text(
+                            text = "Strictly 2-Person Private Channel",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = DarkOnBackground
+                        )
+                        Text(
+                            text = "$myEmail ❤️ $partnerEmail",
+                            fontSize = 11.sp,
+                            color = DarkOnSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+            }
+
+            // Partner Showcase Card
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -188,7 +257,7 @@ fun HomeScreen(
                 colors = CardDefaults.cardColors(
                     containerColor = Color.White
                 ),
-                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFF0F0F2)),
+                border = BorderStroke(1.dp, Color(0xFFF0F0F2)),
                 elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
             ) {
                 Row(
@@ -200,7 +269,7 @@ fun HomeScreen(
                     AvatarView(
                         photoUrl = partner?.photoUrl,
                         name = partnerName,
-                        size = 76.dp,
+                        size = 72.dp,
                         isOnline = isOnline,
                         showOnlineBadge = true
                     )
@@ -249,19 +318,13 @@ fun HomeScreen(
                 }
             }
 
-            // Relationship Milestone Banner
+            // Relationship Milestone Banner (Days Together)
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .appGradientShadow(RoundedCornerShape(20.dp))
                     .clip(RoundedCornerShape(20.dp))
-                    .background(
-                        Brush.horizontalGradient(
-                            listOf(
-                                RoseGoldPrimary.copy(alpha = 0.9f),
-                                ChampagneSecondary.copy(alpha = 0.85f)
-                            )
-                        )
-                    )
+                    .background(appHorizontalGradient())
                     .padding(horizontal = 20.dp, vertical = 16.dp)
             ) {
                 Row(
@@ -277,7 +340,7 @@ fun HomeScreen(
                         Spacer(modifier = Modifier.width(12.dp))
                         Column {
                             Text(
-                                text = "Days in Love",
+                                text = "Days in Deep Love",
                                 fontSize = 12.sp,
                                 color = Color.White.copy(alpha = 0.85f),
                                 fontWeight = FontWeight.Medium
@@ -294,10 +357,10 @@ fun HomeScreen(
                     Surface(
                         shape = CircleShape,
                         color = Color.White.copy(alpha = 0.25f),
-                        modifier = Modifier.clickable { onNavigateToDates() }
+                        modifier = Modifier.clickable { onNavigateToChat() }
                     ) {
                         Text(
-                            text = "Our Milestones →",
+                            text = "Say I Love You →",
                             fontSize = 12.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = Color.White,
@@ -307,7 +370,114 @@ fun HomeScreen(
                 }
             }
 
-            // Private Conversation Card
+            // Lifetime Love & Age Journey Card (Tracking our love across every age & year of our lives)
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onNavigateToLifetimeJourney() }
+                    .testTag("lifetime_journey_card"),
+                shape = RoundedCornerShape(22.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                border = BorderStroke(1.dp, Color(0xFFF0F0F2)),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(18.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier
+                                    .size(38.dp)
+                                    .clip(CircleShape)
+                                    .background(SoftPinkSurfaceVariant),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.AllInclusive,
+                                    contentDescription = null,
+                                    tint = RoseGoldPrimary,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column {
+                                Text(
+                                    text = "Our Lifetime Love & Ages",
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = DarkOnBackground
+                                )
+                                Text(
+                                    text = "Year by Year • Where we went & enjoyed",
+                                    fontSize = 11.sp,
+                                    color = DarkOnSurfaceVariant
+                                )
+                            }
+                        }
+
+                        Icon(
+                            imageVector = Icons.Default.ChevronRight,
+                            contentDescription = "Open Journey",
+                            tint = RoseGoldPrimary
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = SoftPinkSurfaceVariant,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Ages 34 & 31 • Year 3 of Our Bond",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = DarkOnBackground
+                            )
+                            Text(
+                                text = "Open Diary →",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = RoseGoldPrimary
+                            )
+                        }
+                    }
+                }
+            }
+
+            // 1. Instant Tactile Love Nudges
+            LoveNudgesBar(
+                onSendNudge = { name, emoji, msg ->
+                    viewModel.sendLoveNudge(name, emoji, msg)
+                }
+            )
+
+            // 2. Daily Us — Question of the Day (Engaging Double-Blind Q&A to Grow Love Daily)
+            DailyQuestionCard(
+                dailyQuestion = uiState.dailyQuestion,
+                partnerName = partnerName,
+                onSubmitAnswer = { answer ->
+                    viewModel.submitDailyAnswer(answer)
+                },
+                onToggleLike = {
+                    viewModel.toggleLikeDailyAnswer()
+                }
+            )
+
+            // 3. Strictly 2-Person Private Conversation Card
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -317,7 +487,7 @@ fun HomeScreen(
                 colors = CardDefaults.cardColors(
                     containerColor = Color.White
                 ),
-                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFF0F0F2)),
+                border = BorderStroke(1.dp, Color(0xFFF0F0F2)),
                 elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
             ) {
                 Column(
@@ -339,7 +509,7 @@ fun HomeScreen(
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = "Private Conversation",
+                                text = "Strictly 2-Person Chat",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurface
@@ -406,207 +576,207 @@ fun HomeScreen(
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    Button(
-                        onClick = onNavigateToChat,
+                    Box(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(48.dp)
+                            .appGradientShadow(RoundedCornerShape(14.dp))
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(appHorizontalGradient())
+                            .clickable { onNavigateToChat() }
                             .testTag("home_enter_chat_button"),
-                        shape = RoundedCornerShape(14.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.primary
-                        )
+                        contentAlignment = Alignment.Center
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Send,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "Open Private Messenger",
-                            fontWeight = FontWeight.SemiBold
-                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.Send,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Open 2-Person Messenger",
+                                color = Color.White,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
                     }
                 }
             }
 
-            // Couple Features Section Title
-            Text(
-                text = "Our Private World",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onBackground
-            )
-
-            // 2x2 Feature Quick-Access Cards
-            Row(
+            // 4. Daily Love Growth & Daily Tips Card
+            Card(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(14.dp)
+                shape = RoundedCornerShape(24.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                border = BorderStroke(1.dp, Color(0xFFF0F0F2)),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
             ) {
-                // Memories Card
-                Card(
+                Column(
                     modifier = Modifier
-                        .weight(1f)
-                        .clickable { onNavigateToMemories() }
-                        .testTag("home_memories_card"),
-                    shape = RoundedCornerShape(18.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color.White),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFF0F0F2)),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+                        .fillMaxWidth()
+                        .padding(20.dp)
                 ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Box(
-                            modifier = Modifier
-                                .size(40.dp)
-                                .background(RoseGoldPrimary.copy(alpha = 0.2f), CircleShape),
-                            contentAlignment = Alignment.Center
-                        ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(
-                                Icons.Default.PhotoAlbum,
+                                imageVector = Icons.Default.TrendingUp,
                                 contentDescription = null,
                                 tint = RoseGoldPrimary,
-                                modifier = Modifier.size(22.dp)
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Our Love Growth",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = DarkOnBackground
                             )
                         }
-                        Spacer(modifier = Modifier.height(10.dp))
-                        Text(
-                            text = "Memories",
-                            fontWeight = FontWeight.Bold,
-                            style = MaterialTheme.typography.titleSmall
-                        )
-                        Text(
-                            text = "Our photo timeline",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
 
-                // Important Dates Card
-                Card(
-                    modifier = Modifier
-                        .weight(1f)
-                        .clickable { onNavigateToDates() }
-                        .testTag("home_dates_card"),
-                    shape = RoundedCornerShape(18.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color.White),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFF0F0F2)),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
-                ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Box(
-                            modifier = Modifier
-                                .size(40.dp)
-                                .background(ChampagneSecondary.copy(alpha = 0.25f), CircleShape),
-                            contentAlignment = Alignment.Center
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = Color(0xFFFFF0F5)
                         ) {
-                            Icon(
-                                Icons.Default.Event,
-                                contentDescription = null,
-                                tint = ChampagneSecondary,
-                                modifier = Modifier.size(22.dp)
+                            Text(
+                                text = "Level 3: Soulmates 💖",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = RoseGoldPrimary,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                             )
                         }
-                        Spacer(modifier = Modifier.height(10.dp))
-                        Text(
-                            text = "Milestones",
-                            fontWeight = FontWeight.Bold,
-                            style = MaterialTheme.typography.titleSmall
-                        )
-                        Text(
-                            text = "Anniversaries & Countdowns",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Text(
+                        text = "14 Days Unbroken Connection Streak. Next milestone at 20 days!",
+                        fontSize = 12.sp,
+                        color = DarkOnSurfaceVariant
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    LinearProgressIndicator(
+                        progress = { 0.7f },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(6.dp)
+                            .clip(CircleShape),
+                        color = RoseGoldPrimary,
+                        trackColor = SoftPinkSurfaceVariant
+                    )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = SoftPinkSurfaceVariant,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(text = "💡", fontSize = 18.sp)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Today's Love Habit: Hug for at least 20 continuous seconds. It releases oxytocin and deepens bonding.",
+                                fontSize = 12.sp,
+                                color = DarkOnBackground,
+                                lineHeight = 16.sp
+                            )
+                        }
                     }
                 }
             }
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(14.dp)
+            // 5. Security & Shield Status
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onNavigateToProfile() },
+                shape = RoundedCornerShape(24.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                border = BorderStroke(1.dp, Color(0xFFF0F0F2)),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
             ) {
-                // Shared Notes Card
-                Card(
+                Column(
                     modifier = Modifier
-                        .weight(1f)
-                        .clickable { onNavigateToNotes() }
-                        .testTag("home_notes_card"),
-                    shape = RoundedCornerShape(18.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color.White),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFF0F0F2)),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+                        .fillMaxWidth()
+                        .padding(20.dp)
                 ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Box(
-                            modifier = Modifier
-                                .size(40.dp)
-                                .background(AmethystTertiary.copy(alpha = 0.2f), CircleShape),
-                            contentAlignment = Alignment.Center
-                        ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(
-                                Icons.Default.EditNote,
+                                imageVector = Icons.Default.Security,
                                 contentDescription = null,
-                                tint = AmethystTertiary,
-                                modifier = Modifier.size(22.dp)
+                                tint = Color(0xFF2E7D32),
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Couple Privacy & Security",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = DarkOnBackground
                             )
                         }
-                        Spacer(modifier = Modifier.height(10.dp))
                         Text(
-                            text = "Shared Notes",
-                            fontWeight = FontWeight.Bold,
-                            style = MaterialTheme.typography.titleSmall
-                        )
-                        Text(
-                            text = "Love letters & Wishlists",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            text = "Manage →",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = RoseGoldPrimary
                         )
                     }
-                }
 
-                // Shared Gallery Card
-                Card(
-                    modifier = Modifier
-                        .weight(1f)
-                        .clickable { onNavigateToGallery() }
-                        .testTag("home_gallery_card"),
-                    shape = RoundedCornerShape(18.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color.White),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFF0F0F2)),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
-                ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Box(
-                            modifier = Modifier
-                                .size(40.dp)
-                                .background(GoldMilestone.copy(alpha = 0.2f), CircleShape),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                Icons.Default.Collections,
-                                contentDescription = null,
-                                tint = GoldMilestone,
-                                modifier = Modifier.size(22.dp)
-                            )
-                        }
-                        Spacer(modifier = Modifier.height(10.dp))
-                        Text(
-                            text = "Gallery",
-                            fontWeight = FontWeight.Bold,
-                            style = MaterialTheme.typography.titleSmall
-                        )
-                        Text(
-                            text = "Shared photos & audio",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Text(
+                        text = "• Stealth Notes App Disguise (Passcode: 'love')\n• Screenshot Blocking (FLAG_SECURE Active)\n• Biometric / PIN Lock on Re-entry\n• Masked Lockscreen Notifications",
+                        fontSize = 12.sp,
+                        color = DarkOnSurfaceVariant,
+                        lineHeight = 18.sp
+                    )
                 }
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(24.dp))
         }
+    }
+
+    // Dialogs for Love Jar
+    if (showDrawNoteDialog) {
+        DrawLoveNoteDialog(
+            note = drawnNote,
+            onDismiss = { showDrawNoteDialog = false },
+            onDrawAnother = {
+                val notes = uiState.loveJarNotes
+                drawnNote = if (notes.isNotEmpty()) notes.random() else null
+            },
+            onAddNote = {
+                showDrawNoteDialog = false
+                showAddLoveNoteDialog = true
+            }
+        )
+    }
+
+    if (showAddLoveNoteDialog) {
+        AddLoveNoteDialog(
+            onDismiss = { showAddLoveNoteDialog = false },
+            onAdd = { text, emoji ->
+                viewModel.addLoveJarNote(text, emoji)
+            }
+        )
     }
 }

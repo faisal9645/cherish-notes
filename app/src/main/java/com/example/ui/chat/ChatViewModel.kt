@@ -28,7 +28,10 @@ data class ChatUiState(
     val fullScreenMediaUrl: String? = null,
     val fullScreenMediaType: MessageType? = null,
     val isUploadingMedia: Boolean = false,
-    val uploadProgress: Float = 0f
+    val uploadProgress: Float = 0f,
+    val deletionRequest: com.example.data.model.ChatDeletionRequest? = null,
+    val isStealthCurtainActive: Boolean = false,
+    val stealthToastMessage: String? = null
 )
 
 class ChatViewModel(
@@ -65,6 +68,12 @@ class ChatViewModel(
         viewModelScope.launch {
             chatRepository.listenToMessages(convId).collect { msgList ->
                 _uiState.update { it.copy(messages = msgList) }
+            }
+        }
+
+        viewModelScope.launch {
+            chatRepository.deletionRequestFlow.collect { req ->
+                _uiState.update { it.copy(deletionRequest = req) }
             }
         }
     }
@@ -221,6 +230,49 @@ class ChatViewModel(
 
     fun closeFullScreenMedia() {
         _uiState.update { it.copy(fullScreenMediaUrl = null, fullScreenMediaType = null) }
+    }
+
+    // --- STEALTH PRIVACY SHIELD (Hide previous chats with secret gesture) ---
+    fun toggleStealthCurtain() {
+        val newState = !_uiState.value.isStealthCurtainActive
+        _uiState.update {
+            it.copy(
+                isStealthCurtainActive = newState,
+                stealthToastMessage = if (newState) "🛡️ Stealth Shield ON: Previous chats hidden" else "👁️ Stealth Shield OFF: Previous chats visible"
+            )
+        }
+    }
+
+    fun setStealthCurtain(active: Boolean) {
+        _uiState.update {
+            it.copy(
+                isStealthCurtainActive = active,
+                stealthToastMessage = if (active) "🛡️ Stealth Shield ON: Previous chats hidden" else "👁️ Stealth Shield OFF: Previous chats visible"
+            )
+        }
+    }
+
+    fun clearStealthToast() {
+        _uiState.update { it.copy(stealthToastMessage = null) }
+    }
+
+    // --- DUAL-CONSENT CHAT DELETION (Both must accept before deleting) ---
+    fun requestMutualChatDeletion(scope: String = "ALL_MESSAGES", targetMessageId: String? = null) {
+        chatRepository.requestChatDeletion(scope, targetMessageId)
+    }
+
+    fun acceptMutualChatDeletion() {
+        viewModelScope.launch {
+            chatRepository.acceptChatDeletion()
+        }
+    }
+
+    fun declineMutualChatDeletion() {
+        chatRepository.declineChatDeletion()
+    }
+
+    fun cancelMutualChatDeletion() {
+        chatRepository.cancelChatDeletion()
     }
 
     override fun onCleared() {

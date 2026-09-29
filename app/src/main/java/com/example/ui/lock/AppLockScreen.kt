@@ -5,7 +5,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Backspace
 import androidx.compose.material.icons.filled.Fingerprint
@@ -25,6 +27,8 @@ import com.example.security.BiometricHelper
 import com.example.security.SecurityPreferences
 import com.example.ui.theme.HeartRed
 import com.example.ui.theme.RoseGoldPrimary
+import com.example.ui.theme.appGradientShadow
+import com.example.ui.theme.appHorizontalGradient
 
 @Composable
 fun AppLockScreen(
@@ -84,9 +88,11 @@ fun AppLockScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(24.dp)
                 .statusBarsPadding()
-                .navigationBarsPadding(),
+                .navigationBarsPadding()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 24.dp, vertical = 16.dp)
+                .widthIn(max = 420.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.SpaceBetween
         ) {
@@ -98,16 +104,15 @@ fun AppLockScreen(
                 Box(
                     modifier = Modifier
                         .size(72.dp)
-                        .background(
-                            Brush.linearGradient(listOf(RoseGoldPrimary, MaterialTheme.colorScheme.secondary)),
-                            CircleShape
-                        ),
+                        .appGradientShadow(CircleShape)
+                        .clip(CircleShape)
+                        .background(appHorizontalGradient()),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = Icons.Default.Lock,
                         contentDescription = "App Locked",
-                        tint = MaterialTheme.colorScheme.onPrimary,
+                        tint = androidx.compose.ui.graphics.Color.White,
                         modifier = Modifier.size(36.dp)
                     )
                 }
@@ -137,14 +142,17 @@ fun AppLockScreen(
                         Box(
                             modifier = Modifier
                                 .size(18.dp)
-                                .border(
-                                    2.dp,
-                                    if (filled) RoseGoldPrimary else MaterialTheme.colorScheme.outline,
-                                    CircleShape
+                                .then(
+                                    if (filled) Modifier.appGradientShadow(CircleShape) else Modifier
                                 )
+                                .clip(CircleShape)
                                 .background(
-                                    if (filled) RoseGoldPrimary else MaterialTheme.colorScheme.surfaceVariant,
-                                    CircleShape
+                                    if (filled) appHorizontalGradient()
+                                    else androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.surfaceVariant)
+                                )
+                                .then(
+                                    if (!filled) Modifier.border(1.5.dp, MaterialTheme.colorScheme.outline, CircleShape)
+                                    else Modifier
                                 )
                         )
                     }

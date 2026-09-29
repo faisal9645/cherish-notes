@@ -34,8 +34,8 @@ private val PureWhiteColorScheme = lightColorScheme(
     surfaceContainer = Color.White,
     surfaceContainerLow = Color.White,
     surfaceContainerLowest = Color.White,
-    surfaceContainerHigh = Color(0xFFFAFAFA),
-    surfaceContainerHighest = Color(0xFFF4F4F6),
+    surfaceContainerHigh = Color(0xFFFAFBFE),
+    surfaceContainerHighest = Color(0xFFF1F5FB),
     outline = SoftBorderOutline,
     outlineVariant = SoftBorderOutlineVariant
 )

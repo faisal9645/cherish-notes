@@ -1,6 +1,7 @@
 package com.example.ui.dates
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -26,6 +27,8 @@ import com.example.ui.theme.ChampagneSecondary
 import com.example.ui.theme.GoldMilestone
 import com.example.ui.theme.HeartRed
 import com.example.ui.theme.RoseGoldPrimary
+import com.example.ui.theme.appGradientShadow
+import com.example.ui.theme.appHorizontalGradient
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -63,14 +66,22 @@ fun ImportantDatesScreen(
             )
         },
         floatingActionButton = {
-            FloatingActionButton(
-                onClick = { showAddDialog = true },
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary,
-                shape = CircleShape,
-                modifier = Modifier.testTag("add_date_fab")
+            Box(
+                modifier = Modifier
+                    .appGradientShadow(CircleShape)
+                    .clip(CircleShape)
+                    .background(appHorizontalGradient())
+                    .size(56.dp)
+                    .clickable { showAddDialog = true }
+                    .testTag("add_date_fab"),
+                contentAlignment = Alignment.Center
             ) {
-                Icon(Icons.Default.Add, contentDescription = "Add Important Date")
+                Icon(
+                    imageVector = Icons.Default.Add,
+                    contentDescription = "Add Important Date",
+                    tint = Color.White,
+                    modifier = Modifier.size(24.dp)
+                )
             }
         },
         containerColor = Color.White

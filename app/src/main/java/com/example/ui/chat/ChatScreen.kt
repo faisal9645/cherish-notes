@@ -19,6 +19,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
@@ -39,8 +41,8 @@ import androidx.core.content.ContextCompat
 import com.example.data.model.Message
 import com.example.data.model.MessageType
 import com.example.ui.components.AvatarView
-import com.example.ui.theme.OnlineGreen
-import com.example.ui.theme.RoseGoldPrimary
+import androidx.compose.foundation.BorderStroke
+import com.example.ui.theme.*
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -63,6 +65,8 @@ fun ChatScreen(
     var editingMessage by remember { mutableStateOf<Message?>(null) }
     var editDialogText by remember { mutableStateOf("") }
     var showDeleteConfirmDialog by remember { mutableStateOf<Message?>(null) }
+    var showMutualDeleteRequestDialog by remember { mutableStateOf(false) }
+    var showChatMenu by remember { mutableStateOf(false) }
 
     val currentPlayingId by viewModel.voicePlayerHelper.currentlyPlayingId.collectAsState()
     val audioProgress by viewModel.voicePlayerHelper.playbackProgress.collectAsState()
@@ -97,6 +101,11 @@ fun ChatScreen(
         if (uiState.messages.isNotEmpty()) {
             listState.animateScrollToItem(uiState.messages.size - 1)
         }
+    }
+
+    // Clear disguised notifications upon entering chat
+    LaunchedEffect(Unit) {
+        com.example.notifications.NotificationHelper.clearNotifications(context)
     }
 
     // Partner info
@@ -192,6 +201,16 @@ fun ChatScreen(
                         }
                     } else {
                         IconButton(
+                            onClick = { viewModel.toggleStealthCurtain() },
+                            modifier = Modifier.testTag("chat_stealth_curtain_button")
+                        ) {
+                            Icon(
+                                imageVector = if (uiState.isStealthCurtainActive) Icons.Default.VisibilityOff else Icons.Outlined.Visibility,
+                                contentDescription = "Emergency Stealth Curtain (Hide Previous Chat)",
+                                tint = if (uiState.isStealthCurtainActive) RoseGoldPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        IconButton(
                             onClick = onQuickDisguise,
                             modifier = Modifier.testTag("chat_quick_disguise_button")
                         ) {
@@ -213,20 +232,66 @@ fun ChatScreen(
                         ) {
                             Icon(Icons.Outlined.PhotoLibrary, contentDescription = "Couple Media Gallery")
                         }
+                        Box {
+                            IconButton(
+                                onClick = { showChatMenu = true },
+                                modifier = Modifier.testTag("chat_more_menu_button")
+                            ) {
+                                Icon(Icons.Default.MoreVert, contentDescription = "More options")
+                            }
+                            DropdownMenu(
+                                expanded = showChatMenu,
+                                onDismissRequest = { showChatMenu = false }
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text(if (uiState.isStealthCurtainActive) "Unhide Previous Chat (Reveal)" else "Hide Previous Chat (Stealth)") },
+                                    onClick = {
+                                        showChatMenu = false
+                                        viewModel.toggleStealthCurtain()
+                                    },
+                                    leadingIcon = {
+                                        Icon(
+                                            if (uiState.isStealthCurtainActive) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                                            null,
+                                            tint = RoseGoldPrimary
+                                        )
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Clear Chat (Both Must Accept)", color = MaterialTheme.colorScheme.error) },
+                                    onClick = {
+                                        showChatMenu = false
+                                        showMutualDeleteRequestDialog = true
+                                    },
+                                    leadingIcon = {
+                                        Icon(Icons.Default.DeleteSweep, null, tint = MaterialTheme.colorScheme.error)
+                                    }
+                                )
+                            }
+                        }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = Color.White
-                )
+                ),
+                windowInsets = WindowInsets.statusBars
             )
         },
         bottomBar = {
-            Column(
-                modifier = Modifier
-                    .background(Color.White)
-                    .navigationBarsPadding()
+            Surface(
+                color = Color.White,
+                tonalElevation = 2.dp,
+                shadowElevation = 8.dp,
+                modifier = Modifier.fillMaxWidth()
             ) {
-                // Partner typing animated banner
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .navigationBarsPadding()
+                        .imePadding()
+                ) {
+                    HorizontalDivider(color = Color(0xFFF0F0F2), thickness = 1.dp)
+                    // Partner typing animated banner
                 AnimatedVisibility(visible = uiState.isPartnerTyping) {
                     Row(
                         modifier = Modifier
@@ -291,24 +356,98 @@ fun ChatScreen(
                     },
                     onPickDocument = {
                         docPickerLauncher.launch("*/*")
-                    }
+                    },
+                    placeholder = if (uiState.isStealthCurtainActive) "Add a note..." else "Message your love..."
                 )
             }
-        },
+        }
+    },
         containerColor = MaterialTheme.colorScheme.background
     ) { paddingValues ->
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
+                .pointerInput(Unit) {
+                    detectTapGestures(
+                        onDoubleTap = {
+                            viewModel.toggleStealthCurtain()
+                        }
+                    )
+                }
         ) {
-            LazyColumn(
-                state = listState,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
+            if (uiState.isStealthCurtainActive) {
+                // Emergency Privacy Shield: Harmless daily notes / tasks view hiding all previous chat
+                StealthDisguiseNotesView(
+                    onRestore = { viewModel.toggleStealthCurtain() }
+                )
+            } else {
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    // Mutual Consent Chat Deletion Active Request Banner
+                    if (uiState.deletionRequest != null) {
+                        item {
+                            MutualConsentDeletionBanner(
+                                request = uiState.deletionRequest!!,
+                                isFromMe = (uiState.deletionRequest!!.requestedByUserId == currentUserId),
+                                partnerName = partnerName,
+                                onAccept = { viewModel.acceptMutualChatDeletion() },
+                                onDecline = { viewModel.declineMutualChatDeletion() },
+                                onCancel = { viewModel.cancelMutualChatDeletion() }
+                            )
+                        }
+                    }
+
+                    item {
+                        Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 20.dp, vertical = 10.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Surface(
+                            shape = RoundedCornerShape(16.dp),
+                            color = SoftPinkSurfaceVariant,
+                            border = BorderStroke(1.dp, SoftBorderOutline),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(12.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = Icons.Default.Lock,
+                                        contentDescription = null,
+                                        tint = RoseGoldPrimary,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = "Strictly 2-Person Private Channel",
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 12.sp,
+                                        color = DarkOnBackground
+                                    )
+                                }
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = "Messages, voice notes, and photos are strictly between you and $partnerName. No third parties can ever join or view this chat.",
+                                    fontSize = 11.sp,
+                                    color = DarkOnSurfaceVariant,
+                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                    lineHeight = 15.sp
+                                )
+                            }
+                        }
+                    }
+                }
+
                 var lastDateStr = ""
 
                 items(displayedMessages, key = { it.id }) { message ->
@@ -396,6 +535,31 @@ fun ChatScreen(
                     shape = CircleShape
                 ) {
                     Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Scroll to bottom")
+                }
+            }
+            } // Close else branch of if (uiState.isStealthCurtainActive)
+
+            // Stealth mode floating status feedback badge
+            AnimatedVisibility(
+                visible = uiState.stealthToastMessage != null,
+                enter = fadeIn() + slideInVertically(initialOffsetY = { -it }),
+                exit = fadeOut() + slideOutVertically(targetOffsetY = { -it }),
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = 10.dp)
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(20.dp),
+                    color = Color(0xFF222228).copy(alpha = 0.95f),
+                    shadowElevation = 8.dp
+                ) {
+                    Text(
+                        text = uiState.stealthToastMessage ?: "",
+                        color = Color.White,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                    )
                 }
             }
         }
@@ -486,6 +650,228 @@ fun ChatScreen(
             mediaUrl = url,
             onDismiss = { viewModel.closeFullScreenMedia() }
         )
+    }
+
+    // Mutual Consent Chat Clear Request Dialog
+    if (showMutualDeleteRequestDialog) {
+        AlertDialog(
+            onDismissRequest = { showMutualDeleteRequestDialog = false },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Security, contentDescription = null, tint = RoseGoldPrimary)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Mutual Consent Chat Clear", fontWeight = FontWeight.Bold)
+                }
+            },
+            text = {
+                Text(
+                    text = "Under our Mutual Protection rule, clearing chat history requires BOTH partners to accept so that precious memories are never erased accidentally or unilaterally.\n\nWould you like to send a deletion request to $partnerName?",
+                    lineHeight = 20.sp
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.requestMutualChatDeletion("ALL_MESSAGES")
+                        showMutualDeleteRequestDialog = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text("Send Deletion Request")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showMutualDeleteRequestDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+}
+
+@Composable
+fun MutualConsentDeletionBanner(
+    request: com.example.data.model.ChatDeletionRequest,
+    isFromMe: Boolean,
+    partnerName: String,
+    onAccept: () -> Unit,
+    onDecline: () -> Unit,
+    onCancel: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 6.dp),
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = if (isFromMe) Color(0xFFFFF8E1) else Color(0xFFFFEBEE)),
+        border = BorderStroke(1.dp, if (isFromMe) Color(0xFFFFE082) else Color(0xFFFFCDD2))
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(14.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = if (isFromMe) Icons.Default.HourglassTop else Icons.Default.WarningAmber,
+                    contentDescription = null,
+                    tint = if (isFromMe) Color(0xFFF57F17) else MaterialTheme.colorScheme.error,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Mutual Consent Chat Deletion",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = DarkOnBackground
+                )
+            }
+
+            Spacer(modifier = Modifier.height(6.dp))
+
+            if (isFromMe) {
+                Text(
+                    text = "You requested to clear this chat. Waiting for $partnerName to accept. Both of you must agree before messages can be deleted.",
+                    fontSize = 12.sp,
+                    color = DarkOnSurfaceVariant,
+                    lineHeight = 16.sp
+                )
+                Spacer(modifier = Modifier.height(10.dp))
+                OutlinedButton(
+                    onClick = onCancel,
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier.height(36.dp)
+                ) {
+                    Text("Cancel Request", fontSize = 12.sp)
+                }
+            } else {
+                Text(
+                    text = "$partnerName requested to clear the chat history. Under mutual protection, deletion will only happen if you accept.",
+                    fontSize = 12.sp,
+                    color = DarkOnBackground,
+                    lineHeight = 16.sp
+                )
+                Spacer(modifier = Modifier.height(10.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(
+                        onClick = onAccept,
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.height(36.dp)
+                    ) {
+                        Text("Accept & Clear Chat", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+                    OutlinedButton(
+                        onClick = onDecline,
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.height(36.dp)
+                    ) {
+                        Text("Decline & Keep", fontSize = 12.sp)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun StealthDisguiseNotesView(
+    onRestore: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.White)
+            .padding(24.dp)
+            .clickable { onRestore() }
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Personal Checklist & Notes",
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold,
+                color = DarkOnBackground
+            )
+            Surface(
+                shape = RoundedCornerShape(8.dp),
+                color = Color(0xFFF0F0F2)
+            ) {
+                Text(
+                    text = "Saved",
+                    fontSize = 11.sp,
+                    color = Color.Gray,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(18.dp))
+
+        val dummyTasks = listOf(
+            "Weekly Groceries: Sourdough bread, Oat milk, Avocados, Olive oil" to true,
+            "Office: Review quarterly budget presentation by 3:00 PM" to false,
+            "Home Chores: Clean kitchen, change air filter" to true,
+            "Reminder: Pick up pharmacy prescription on the way home" to false,
+            "Car: Check tire pressure and washer fluid next Saturday" to false
+        )
+
+        dummyTasks.forEach { (task, checked) ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = if (checked) Icons.Default.CheckBox else Icons.Default.CheckBoxOutlineBlank,
+                    contentDescription = null,
+                    tint = if (checked) Color(0xFF4CAF50) else Color.LightGray,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.width(12.dp))
+                Text(
+                    text = task,
+                    fontSize = 13.sp,
+                    color = if (checked) Color.Gray else DarkOnBackground
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(20.dp))
+        HorizontalDivider(color = Color(0xFFF0F0F2))
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Text(
+            text = "Meeting Notes Draft:",
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Bold,
+            color = DarkOnBackground
+        )
+        Spacer(modifier = Modifier.height(6.dp))
+        Text(
+            text = "Team sprint planning completed. Next milestone scheduled for the 15th. Follow up with the project manager regarding the final deliverables.",
+            fontSize = 12.sp,
+            color = DarkOnSurfaceVariant,
+            lineHeight = 18.sp
+        )
+
+        Spacer(modifier = Modifier.weight(1f))
+
+        Box(
+            modifier = Modifier.fillMaxWidth(),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = "• Double-tap anywhere to restore previous chat •",
+                fontSize = 11.sp,
+                color = Color.LightGray,
+                fontWeight = FontWeight.Medium
+            )
+        }
     }
 }
 

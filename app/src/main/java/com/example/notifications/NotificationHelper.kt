@@ -11,23 +11,30 @@ import androidx.core.app.NotificationManagerCompat
 import com.example.MainActivity
 import com.example.R
 import com.example.security.SecurityPreferences
+import java.util.concurrent.atomic.AtomicInteger
 
+/**
+ * NotificationHelper with stealth/hidden disguised notifications
+ * and single-notification consolidation (prevents multiple spam notifications).
+ */
 object NotificationHelper {
-    const val CHANNEL_MESSAGES_ID = "cherish_messages_channel"
-    private const val CHANNEL_MESSAGES_NAME = "Couple Messages"
+    const val CHANNEL_MESSAGES_ID = "notes_sync_channel"
+    private const val CHANNEL_MESSAGES_NAME = "Notes & Reminders"
     private const val NOTIFICATION_ID_MESSAGE = 1001
+
+    private val pendingUnreadCount = AtomicInteger(0)
 
     fun createNotificationChannels(context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 CHANNEL_MESSAGES_ID,
                 CHANNEL_MESSAGES_NAME,
-                NotificationManager.IMPORTANCE_HIGH
+                NotificationManager.IMPORTANCE_DEFAULT
             ).apply {
-                description = "Private notifications for couple messages"
+                description = "Discreet sync and reminder notifications"
                 enableVibration(true)
                 setShowBadge(true)
-                // Set lockscreen visibility to PRIVATE to protect intimate couple messages on lockscreen
+                // Private visibility on lock screen
                 lockscreenVisibility = NotificationCompat.VISIBILITY_PRIVATE
             }
 
@@ -36,14 +43,17 @@ object NotificationHelper {
         }
     }
 
+    /**
+     * Show a stealth disguised notification that others will never suspect,
+     * consolidated into a single notification without duplicates.
+     */
     fun showMessageNotification(
         context: Context,
         senderName: String,
         messageText: String,
         conversationId: String? = null
     ) {
-        val securityPrefs = SecurityPreferences.getInstance(context)
-        val hideContent = securityPrefs.isHideNotificationContent()
+        val count = pendingUnreadCount.incrementAndGet()
 
         val intent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
@@ -57,24 +67,41 @@ object NotificationHelper {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val displayTitle = if (hideContent) "Cherish" else senderName
-        val displayText = if (hideContent) "New private message from your partner ❤️" else messageText
+        // Completely stealth notification disguise so nobody glancing at the phone notices
+        val displayTitle = "Notes"
+        val displayText = if (count <= 1) {
+            "Checklist reminder updated"
+        } else {
+            "$count items synchronized"
+        }
 
         val notification = NotificationCompat.Builder(context, CHANNEL_MESSAGES_ID)
             .setSmallIcon(R.mipmap.ic_launcher)
             .setContentTitle(displayTitle)
             .setContentText(displayText)
+            .setSubText("Notes")
             .setAutoCancel(true)
             .setContentIntent(pendingIntent)
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setCategory(NotificationCompat.CATEGORY_MESSAGE)
-            .setVisibility(if (hideContent) NotificationCompat.VISIBILITY_SECRET else NotificationCompat.VISIBILITY_PRIVATE)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setCategory(NotificationCompat.CATEGORY_REMINDER)
+            .setOnlyAlertOnce(true) // Never buzz multiple times for updates
+            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
             .build()
 
         try {
             NotificationManagerCompat.from(context).notify(NOTIFICATION_ID_MESSAGE, notification)
-        } catch (e: SecurityException) {
-            // Android 13+ permission might not be granted yet
+        } catch (_: SecurityException) {
+            // Handled if POST_NOTIFICATIONS runtime permission not yet prompted
         }
+    }
+
+    /**
+     * Clears notifications and resets the counter when the user views the chat
+     */
+    fun clearNotifications(context: Context) {
+        pendingUnreadCount.set(0)
+        try {
+            NotificationManagerCompat.from(context).cancel(NOTIFICATION_ID_MESSAGE)
+        } catch (_: Exception) {}
     }
 }

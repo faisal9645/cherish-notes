@@ -138,3 +138,81 @@ data class SharedNote(
         return runCatching { NoteCategory.valueOf(category) }.getOrDefault(NoteCategory.NOTE)
     }
 }
+
+@IgnoreExtraProperties
+data class DailyQuestion(
+    val id: String = "",
+    val question: String = "",
+    val category: String = "Deep Connection",
+    val myAnswer: String? = null,
+    val partnerAnswer: String? = null,
+    val isMyAnswerSubmitted: Boolean = false,
+    val isPartnerAnswerSubmitted: Boolean = false,
+    val isLikedByPartner: Boolean = false,
+    val streakDays: Int = 12
+)
+
+@IgnoreExtraProperties
+data class LoveJarNote(
+    val id: String = "",
+    val text: String = "",
+    val author: String = "",
+    val emoji: String = "💖",
+    val createdAt: Long = System.currentTimeMillis()
+)
+
+@IgnoreExtraProperties
+data class BucketListItem(
+    val id: String = "",
+    val title: String = "",
+    val category: String = "Romantic Dates",
+    val isCompleted: Boolean = false,
+    val completedDate: String? = null
+)
+
+@IgnoreExtraProperties
+data class YearlyJourneyEntry(
+    val id: String = "",
+    val year: Int = 2026,
+    val myAge: Int = 34,
+    val partnerAge: Int = 31,
+    val yearTheme: String = "",
+    val placesWent: String = "",
+    val howWeEnjoyed: String = "",
+    val specialMemory: String = "",
+    val songOrQuote: String = "",
+    val passionRating: Int = 5,
+    val photoUrl: String? = null,
+    val createdAt: Long = System.currentTimeMillis()
+)
+
+@IgnoreExtraProperties
+data class LifetimeAgeProfile(
+    val myBirthYear: Int = 1992,
+    val partnerBirthYear: Int = 1995,
+    val relationshipStartYear: Int = 2024,
+    val secretVow: String = "We may not wear rings before the world, but our hearts took a vow that no paper could ever hold. We chose each other freely, and our connection is for our entire lifetime."
+)
+
+enum class DeletionRequestStatus {
+    PENDING,
+    ACCEPTED,
+    DECLINED,
+    CANCELLED
+}
+
+@IgnoreExtraProperties
+data class ChatDeletionRequest(
+    val id: String = "",
+    val requestedByUserId: String = "",
+    val requestedByUserName: String = "",
+    val timestamp: Long = System.currentTimeMillis(),
+    val scope: String = "ALL_MESSAGES",
+    val targetMessageId: String? = null,
+    val status: String = DeletionRequestStatus.PENDING.name
+) {
+    fun getTypedStatus(): DeletionRequestStatus {
+        return runCatching { DeletionRequestStatus.valueOf(status) }.getOrDefault(DeletionRequestStatus.PENDING)
+    }
+}
+

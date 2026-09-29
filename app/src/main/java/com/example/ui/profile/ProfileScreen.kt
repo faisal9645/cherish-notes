@@ -7,6 +7,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -32,14 +33,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.components.AvatarView
-import com.example.ui.theme.HeartRed
-import com.example.ui.theme.RoseGoldPrimary
+import com.example.ui.theme.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProfileScreen(
     viewModel: ProfileViewModel,
     onNavigateBack: () -> Unit,
+    onNavigateToCloudBackup: () -> Unit = {},
     onLoggedOut: () -> Unit
 ) {
     val context = LocalContext.current
@@ -128,14 +129,15 @@ fun ProfileScreen(
                                 )
                             },
                             modifier = Modifier
-                                .size(32.dp)
+                                .size(36.dp)
+                                .minimumInteractiveComponentSize()
                                 .background(RoseGoldPrimary, CircleShape)
                         ) {
                             Icon(
                                 Icons.Default.CameraAlt,
                                 contentDescription = "Change profile photo",
                                 tint = Color.White,
-                                modifier = Modifier.size(16.dp)
+                                modifier = Modifier.size(18.dp)
                             )
                         }
                     }
@@ -383,6 +385,37 @@ fun ProfileScreen(
                         }
                     )
                 }
+            }
+
+            // Google Drive Cloud Backup & Transfer
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onNavigateToCloudBackup() }
+                    .testTag("profile_cloud_backup_card"),
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                border = BorderStroke(1.dp, Color(0xFFF0F0F2)),
+                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+            ) {
+                ListItem(
+                    headlineContent = { Text("Google Drive Backup & Restore", fontWeight = FontWeight.Bold, fontSize = 14.sp) },
+                    supportingContent = { Text("Transfer all chats, gallery & memories to a new mobile", fontSize = 12.sp) },
+                    leadingContent = {
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(CircleShape)
+                                .background(SoftPinkSurfaceVariant),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(Icons.Default.CloudDone, contentDescription = null, tint = RoseGoldPrimary, modifier = Modifier.size(22.dp))
+                        }
+                    },
+                    trailingContent = {
+                        Icon(Icons.Default.ChevronRight, contentDescription = null, tint = RoseGoldPrimary)
+                    }
+                )
             }
 
             // Logout Button

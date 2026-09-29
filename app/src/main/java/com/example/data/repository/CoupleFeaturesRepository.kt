@@ -358,4 +358,167 @@ class CoupleFeaturesRepository(
             )
         )
     }
+
+    // Daily Us (Question of the Day for Deep Lovers)
+    private val _dailyQuestionFlow = MutableStateFlow(
+        com.example.data.model.DailyQuestion(
+            id = "q_today",
+            question = "What is a small, quiet moment with me that made you feel deeply loved?",
+            category = "Deep Connection",
+            myAnswer = null,
+            partnerAnswer = "When we made dinner together in our socks and you held my hand while the pasta was boiling ❤️",
+            isMyAnswerSubmitted = false,
+            isPartnerAnswerSubmitted = true,
+            isLikedByPartner = false,
+            streakDays = 14
+        )
+    )
+    val dailyQuestionFlow: StateFlow<com.example.data.model.DailyQuestion> = _dailyQuestionFlow.asStateFlow()
+
+    fun submitMyDailyAnswer(answer: String) {
+        val current = _dailyQuestionFlow.value
+        _dailyQuestionFlow.value = current.copy(
+            myAnswer = answer.trim(),
+            isMyAnswerSubmitted = true,
+            streakDays = current.streakDays + 1
+        )
+    }
+
+    fun toggleLikeDailyAnswer() {
+        val current = _dailyQuestionFlow.value
+        _dailyQuestionFlow.value = current.copy(isLikedByPartner = !current.isLikedByPartner)
+    }
+
+    // Love Jar (Reasons Why I Love You)
+    private val _loveJarNotesFlow = MutableStateFlow(
+        listOf(
+            com.example.data.model.LoveJarNote("n1", "The way your nose scrunches when you genuinely laugh at my silly jokes.", "My Love", "🌸"),
+            com.example.data.model.LoveJarNote("n2", "How safe, peaceful, and warm I feel whenever my head is on your chest.", "My Love", "✨"),
+            com.example.data.model.LoveJarNote("n3", "You always make sure I drank enough water throughout the busy day.", "My Love", "💧"),
+            com.example.data.model.LoveJarNote("n4", "How patient, gentle, and kind your heart is with me.", "My Love", "💖"),
+            com.example.data.model.LoveJarNote("n5", "Because loving you is the easiest, most natural thing I have ever done.", "My Love", "💌")
+        )
+    )
+    val loveJarNotesFlow: StateFlow<List<com.example.data.model.LoveJarNote>> = _loveJarNotesFlow.asStateFlow()
+
+    fun addLoveJarNote(text: String, emoji: String) {
+        val note = com.example.data.model.LoveJarNote(
+            id = UUID.randomUUID().toString(),
+            text = text.trim(),
+            author = authRepository.currentUserState.value?.displayName?.ifBlank { "Me" } ?: "Me",
+            emoji = emoji
+        )
+        _loveJarNotesFlow.value = listOf(note) + _loveJarNotesFlow.value
+    }
+
+    // Shared Couple Bucket List
+    private val _bucketListFlow = MutableStateFlow(
+        listOf(
+            com.example.data.model.BucketListItem("b1", "Stargaze together all night from a truck bed", "Romantic Dates", true, "Aug 15"),
+            com.example.data.model.BucketListItem("b2", "Roadtrip down the Pacific Coast Highway with our playlist", "Travel", false),
+            com.example.data.model.BucketListItem("b3", "Take an authentic pasta-making class together", "Experiences", false),
+            com.example.data.model.BucketListItem("b4", "Watch the sunrise on the beach wrapped in a warm blanket", "Romantic Dates", true, "Jul 4"),
+            com.example.data.model.BucketListItem("b5", "Build a cozy pillow fort and have an all-night movie marathon", "Cozy Fun", false)
+        )
+    )
+    val bucketListFlow: StateFlow<List<com.example.data.model.BucketListItem>> = _bucketListFlow.asStateFlow()
+
+    fun toggleBucketItem(id: String) {
+        val sdf = java.text.SimpleDateFormat("MMM d", java.util.Locale.getDefault())
+        val dateText = sdf.format(java.util.Date())
+        _bucketListFlow.value = _bucketListFlow.value.map {
+            if (it.id == id) {
+                it.copy(
+                    isCompleted = !it.isCompleted,
+                    completedDate = if (!it.isCompleted) dateText else null
+                )
+            } else it
+        }
+    }
+
+    fun addBucketItem(title: String, category: String) {
+        val item = com.example.data.model.BucketListItem(
+            id = UUID.randomUUID().toString(),
+            title = title.trim(),
+            category = category,
+            isCompleted = false
+        )
+        _bucketListFlow.value = _bucketListFlow.value + item
+    }
+
+    // --- LIFETIME LOVE & AGE JOURNEY (For couples whose connection lasts their entire life) ---
+    private val _lifetimeProfileFlow = MutableStateFlow(
+        com.example.data.model.LifetimeAgeProfile(
+            myBirthYear = 1992,
+            partnerBirthYear = 1995,
+            relationshipStartYear = 2024,
+            secretVow = "We may not wear rings before the world, but our hearts took a vow that no paper could ever hold. We chose each other freely in secret, and our connection is an eternal sanctuary for our entire lives."
+        )
+    )
+    val lifetimeProfileFlow: StateFlow<com.example.data.model.LifetimeAgeProfile> = _lifetimeProfileFlow.asStateFlow()
+
+    private val _yearlyJourneysFlow = MutableStateFlow<List<com.example.data.model.YearlyJourneyEntry>>(
+        listOf(
+            com.example.data.model.YearlyJourneyEntry(
+                id = "year_2024",
+                year = 2024,
+                myAge = 32,
+                partnerAge = 29,
+                yearTheme = "The Spark That Ignited Our Secret World",
+                placesWent = "Midnight drives through city hills, secluded rooftop lounge, the secret seaside bungalow",
+                howWeEnjoyed = "We discovered each other in breathless secret conversations that lasted till dawn. Every glance across crowded rooms carried electric sparks that only we understood. Escaping into our private hideaway for hours where the rest of the world completely ceased to exist.",
+                specialMemory = "The stormy rainy night in October when you looked into my eyes and whispered: 'No matter what happens, you are my real home.'",
+                songOrQuote = "Our Anthem: 'Until I Found You' • Secret Codeword: 'Forever'",
+                passionRating = 5
+            ),
+            com.example.data.model.YearlyJourneyEntry(
+                id = "year_2025",
+                year = 2025,
+                myAge = 33,
+                partnerAge = 30,
+                yearTheme = "Stolen Escapes & Deep Intimacy",
+                placesWent = "Hidden cabin in the misty pine mountains, boutique hotel suite 402, quiet sunset beach cove",
+                howWeEnjoyed = "We learned to live two lives: what the outside world sees, and the breathtaking paradise we share together. Cooking breakfast together in secret at 2 PM, laughing uncontrollably, slow dancing in dim light without any shoes, touching with a hunger that only grew deeper.",
+                specialMemory = "Waking up before dawn tangled in blankets, watching the golden sun touch your face, and promising that distance and circumstances will never tear us apart.",
+                songOrQuote = "Quote: 'True love does not need a wedding ring; it needs two souls who choose each other every day.'",
+                passionRating = 5
+            ),
+            com.example.data.model.YearlyJourneyEntry(
+                id = "year_2026",
+                year = 2026,
+                myAge = 34,
+                partnerAge = 31,
+                yearTheme = "Soulmates Bound for Life",
+                placesWent = "Scenic mountain overlook, cozy weekend getaway, our private sacred sanctuary",
+                howWeEnjoyed = "Total emotional synchronization. We support each other through life's hardships, celebrating private victories, holding each other through quiet tears and fierce passion. We don't just love each other—we protect each other's peace.",
+                specialMemory = "Sitting side by side under the stars, renewing our secret oath: to grow old together in our hearts, year by year, age by age, until the very end.",
+                songOrQuote = "Motto: 'My heart has belonged to you since day one, and it will be yours forever.'",
+                passionRating = 5
+            )
+        )
+    )
+    val yearlyJourneysFlow: StateFlow<List<com.example.data.model.YearlyJourneyEntry>> = _yearlyJourneysFlow.asStateFlow()
+
+    fun updateLifetimeProfile(myBirthYear: Int, partnerBirthYear: Int, startYear: Int, vow: String) {
+        _lifetimeProfileFlow.value = com.example.data.model.LifetimeAgeProfile(
+            myBirthYear = myBirthYear,
+            partnerBirthYear = partnerBirthYear,
+            relationshipStartYear = startYear,
+            secretVow = vow.trim()
+        )
+    }
+
+    fun addYearlyJourney(entry: com.example.data.model.YearlyJourneyEntry) {
+        _yearlyJourneysFlow.value = (listOf(entry) + _yearlyJourneysFlow.value).sortedByDescending { it.year }
+    }
+
+    fun updateYearlyJourney(entry: com.example.data.model.YearlyJourneyEntry) {
+        _yearlyJourneysFlow.value = _yearlyJourneysFlow.value.map {
+            if (it.id == entry.id) entry else it
+        }.sortedByDescending { it.year }
+    }
+
+    fun deleteYearlyJourney(id: String) {
+        _yearlyJourneysFlow.value = _yearlyJourneysFlow.value.filterNot { it.id == id }
+    }
 }

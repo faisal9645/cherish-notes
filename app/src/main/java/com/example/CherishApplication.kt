@@ -4,6 +4,7 @@ import android.app.Application
 import android.util.Log
 import com.example.audio.VoicePlayerHelper
 import com.example.audio.VoiceRecorderHelper
+import com.example.data.local.notes.NotesRepository
 import com.example.data.repository.AuthRepository
 import com.example.data.repository.ChatRepository
 import com.example.data.repository.CoupleFeaturesRepository
@@ -15,6 +16,9 @@ import com.google.firebase.FirebaseApp
 class CherishApplication : Application() {
 
     lateinit var securityPreferences: SecurityPreferences
+        private set
+
+    lateinit var notesRepository: NotesRepository
         private set
 
     lateinit var authRepository: AuthRepository
@@ -35,6 +39,9 @@ class CherishApplication : Application() {
     lateinit var voicePlayerHelper: VoicePlayerHelper
         private set
 
+    lateinit var googleDriveBackupManager: com.example.backup.GoogleDriveBackupManager
+        private set
+
     override fun onCreate() {
         super.onCreate()
         instance = this
@@ -48,12 +55,19 @@ class CherishApplication : Application() {
         NotificationHelper.createNotificationChannels(this)
 
         securityPreferences = SecurityPreferences.getInstance(this)
+        notesRepository = NotesRepository.getInstance(this)
         authRepository = AuthRepository(this)
         chatRepository = ChatRepository(this, authRepository)
         mediaRepository = MediaRepository(this)
         coupleFeaturesRepository = CoupleFeaturesRepository(this, authRepository)
         voiceRecorderHelper = VoiceRecorderHelper(this)
         voicePlayerHelper = VoicePlayerHelper(this)
+        googleDriveBackupManager = com.example.backup.GoogleDriveBackupManager(
+            this,
+            authRepository,
+            chatRepository,
+            coupleFeaturesRepository
+        )
     }
 
     companion object {

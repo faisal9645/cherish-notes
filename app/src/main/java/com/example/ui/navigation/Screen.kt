@@ -10,4 +10,6 @@ sealed class Screen(val route: String) {
     object SharedGallery : Screen("shared_gallery")
     object Profile : Screen("profile")
     object AppLock : Screen("app_lock")
+    object LifetimeJourney : Screen("lifetime_journey")
+    object CloudBackup : Screen("cloud_backup")
 }
