@@ -100,12 +100,31 @@ class AuthViewModel(private val authRepository: AuthRepository) : ViewModel() {
                             _uiState.value = AuthUiState.Success(user)
                         },
                         onFailure = { err ->
-                            _uiState.value = AuthUiState.Error(err.localizedMessage ?: "Gmail authentication failed")
+                            val msg = err.localizedMessage ?: "Gmail authentication failed"
+                            val cleanMsg = if (msg.contains("operation is not allowed", ignoreCase = true) ||
+                                msg.contains("sign-in provider is disabled", ignoreCase = true)
+                            ) {
+                                "Firebase Email/Password provider is disabled in Firebase Console. Enable it in Firebase Console (Authentication > Sign-in method), or tap below to enter in Direct / Offline Mode."
+                            } else {
+                                msg
+                            }
+                            _uiState.value = AuthUiState.Error(cleanMsg)
                         }
                     )
                 }
             )
         }
+    }
+
+    fun continueOffline(gmail: String, partnerGmail: String, coupleKey: String) {
+        val cleanGmail = gmail.trim().lowercase().let { if (!it.contains("@")) "$it@gmail.com" else it }
+        val cleanPartner = partnerGmail.trim().lowercase().let { if (it.isNotBlank() && !it.contains("@")) "$it@gmail.com" else it }
+        val user = authRepository.loginOffline(
+            email = cleanGmail,
+            partnerEmail = cleanPartner,
+            coupleKey = coupleKey
+        )
+        _uiState.value = AuthUiState.Success(user)
     }
 
     fun sendPasswordReset(email: String, onDone: (Boolean, String) -> Unit) {

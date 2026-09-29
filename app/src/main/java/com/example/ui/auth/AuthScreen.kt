@@ -298,13 +298,47 @@ fun AuthScreen(
                             Spacer(modifier = Modifier.height(18.dp))
 
                             if (uiState is AuthUiState.Error) {
-                                Text(
-                                    text = (uiState as AuthUiState.Error).message,
-                                    color = HeartRed,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    textAlign = TextAlign.Center,
-                                    modifier = Modifier.padding(bottom = 12.dp)
-                                )
+                                val errorMsg = (uiState as AuthUiState.Error).message
+                                val isProviderDisabled = errorMsg.contains("operation is not allowed", ignoreCase = true) ||
+                                        errorMsg.contains("provider is disabled", ignoreCase = true)
+
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(bottom = 12.dp)
+                                        .background(Color(0xFFFFF0F2), RoundedCornerShape(10.dp))
+                                        .padding(12.dp)
+                                ) {
+                                    Text(
+                                        text = errorMsg,
+                                        color = HeartRed,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        textAlign = TextAlign.Center
+                                    )
+                                    if (isProviderDisabled) {
+                                        Spacer(modifier = Modifier.height(10.dp))
+                                        Button(
+                                            onClick = {
+                                                viewModel.continueOffline(
+                                                    gmail = myGmail,
+                                                    partnerGmail = partnerGmail,
+                                                    coupleKey = coupleSecretPasscode
+                                                )
+                                            },
+                                            colors = ButtonDefaults.buttonColors(containerColor = RoseGoldPrimary),
+                                            shape = RoundedCornerShape(8.dp),
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Text(
+                                                text = "Continue in Direct / Offline Mode",
+                                                color = Color.White,
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 13.sp
+                                            )
+                                        }
+                                    }
+                                }
                             }
 
                             // Sign in with Gmail Primary Button
@@ -349,6 +383,25 @@ fun AuthScreen(
                                         )
                                     }
                                 }
+                            }
+
+                            Spacer(modifier = Modifier.height(8.dp))
+                            TextButton(
+                                onClick = {
+                                    viewModel.continueOffline(
+                                        gmail = myGmail,
+                                        partnerGmail = partnerGmail,
+                                        coupleKey = coupleSecretPasscode
+                                    )
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(
+                                    text = "Or Skip & Enter in Direct / Offline Mode",
+                                    color = RoseGoldPrimary,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
                             }
                         }
                     }

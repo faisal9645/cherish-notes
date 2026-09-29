@@ -1,5 +1,7 @@
 package com.example
 
+import android.content.Context
+import android.os.Build
 import android.graphics.Color as AndroidColor
 import android.os.Bundle
 import android.view.WindowManager
@@ -22,6 +24,7 @@ class MainActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        setHighRefreshRate()
 
         // Explicitly set window background to pure white
         window.decorView.setBackgroundColor(AndroidColor.WHITE)
@@ -46,6 +49,7 @@ class MainActivity : FragmentActivity() {
 
     override fun onResume() {
         super.onResume()
+        setHighRefreshRate()
         applyScreenshotProtection()
         app.authRepository.setOnline(true)
     }
@@ -76,5 +80,33 @@ class MainActivity : FragmentActivity() {
         } else {
             window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
         }
+    }
+
+    private fun setHighRefreshRate() {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                val currentDisplay = display
+                if (currentDisplay != null) {
+                    val maxMode = currentDisplay.supportedModes.maxByOrNull { it.refreshRate }
+                    if (maxMode != null) {
+                        val params = window.attributes
+                        params.preferredDisplayModeId = maxMode.modeId
+                        params.preferredRefreshRate = maxMode.refreshRate
+                        window.attributes = params
+                    }
+                }
+            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                val wm = getSystemService(Context.WINDOW_SERVICE) as? WindowManager
+                @Suppress("DEPRECATION")
+                val currentDisplay = wm?.defaultDisplay
+                val maxMode = currentDisplay?.supportedModes?.maxByOrNull { it.refreshRate }
+                if (maxMode != null) {
+                    val params = window.attributes
+                    params.preferredDisplayModeId = maxMode.modeId
+                    params.preferredRefreshRate = maxMode.refreshRate
+                    window.attributes = params
+                }
+            }
+        } catch (_: Exception) {}
     }
 }

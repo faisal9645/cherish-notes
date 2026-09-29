@@ -17,6 +17,10 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
+import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
+import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridItemSpan
+import androidx.compose.foundation.lazy.staggeredgrid.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -545,83 +549,41 @@ fun NotesDisguiseScreen(
                 }
             } else {
                 if (uiState.isGridView) {
-                    // Staggered 2-column Grid Layout
-                    val leftCol = uiState.notes.filterIndexed { index, _ -> index % 2 == 0 }
-                    val rightCol = uiState.notes.filterIndexed { index, _ -> index % 2 == 1 }
-
-                    LazyColumn(
+                    // Optimized Virtualized Staggered 2-column Grid for 120Hz/144Hz high-refresh displays
+                    LazyVerticalStaggeredGrid(
+                        columns = StaggeredGridCells.Fixed(2),
                         modifier = Modifier
                             .fillMaxSize()
                             .padding(paddingValues)
-                            .padding(horizontal = 14.dp, vertical = 8.dp)
+                            .padding(horizontal = 14.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalItemSpacing = 10.dp
                     ) {
-                        item {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                Column(
-                                    modifier = Modifier.weight(1f),
-                                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                                ) {
-                                    leftCol.forEach { note ->
-                                        NoteCard(
-                                            note = note,
-                                            isSelectionMode = uiState.isSelectionMode,
-                                            isSelected = uiState.selectedNoteIds.contains(note.id),
-                                            onToggleSelect = { viewModel.toggleNoteSelection(note.id) },
-                                            onLongClick = {
-                                                if (!uiState.isSelectionMode) {
-                                                    viewModel.startSelectionMode(note.id)
-                                                }
-                                            },
-                                            onClick = {
-                                                selectedNoteForEdit = note
-                                                showEditorDialog = true
-                                            },
-                                            onTogglePin = { viewModel.togglePin(note) },
-                                            onToggleChecklistItem = { itemId, isDone ->
-                                                viewModel.toggleChecklistItem(note.id, itemId, isDone)
-                                            },
-                                            onDuplicate = { viewModel.duplicateNote(note) },
-                                            onShare = { viewModel.shareNote(context, note) },
-                                            onDelete = { viewModel.deleteNote(note.id) }
-                                        )
+                        items(uiState.notes, key = { it.id }, contentType = { "note" }) { note ->
+                            NoteCard(
+                                note = note,
+                                isSelectionMode = uiState.isSelectionMode,
+                                isSelected = uiState.selectedNoteIds.contains(note.id),
+                                onToggleSelect = { viewModel.toggleNoteSelection(note.id) },
+                                onLongClick = {
+                                    if (!uiState.isSelectionMode) {
+                                        viewModel.startSelectionMode(note.id)
                                     }
-                                }
-
-                                Column(
-                                    modifier = Modifier.weight(1f),
-                                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                                ) {
-                                    rightCol.forEach { note ->
-                                        NoteCard(
-                                            note = note,
-                                            isSelectionMode = uiState.isSelectionMode,
-                                            isSelected = uiState.selectedNoteIds.contains(note.id),
-                                            onToggleSelect = { viewModel.toggleNoteSelection(note.id) },
-                                            onLongClick = {
-                                                if (!uiState.isSelectionMode) {
-                                                    viewModel.startSelectionMode(note.id)
-                                                }
-                                            },
-                                            onClick = {
-                                                selectedNoteForEdit = note
-                                                showEditorDialog = true
-                                            },
-                                            onTogglePin = { viewModel.togglePin(note) },
-                                            onToggleChecklistItem = { itemId, isDone ->
-                                                viewModel.toggleChecklistItem(note.id, itemId, isDone)
-                                            },
-                                            onDuplicate = { viewModel.duplicateNote(note) },
-                                            onShare = { viewModel.shareNote(context, note) },
-                                            onDelete = { viewModel.deleteNote(note.id) }
-                                        )
-                                    }
-                                }
-                            }
+                                },
+                                onClick = {
+                                    selectedNoteForEdit = note
+                                    showEditorDialog = true
+                                },
+                                onTogglePin = { viewModel.togglePin(note) },
+                                onToggleChecklistItem = { itemId, isDone ->
+                                    viewModel.toggleChecklistItem(note.id, itemId, isDone)
+                                },
+                                onDuplicate = { viewModel.duplicateNote(note) },
+                                onShare = { viewModel.shareNote(context, note) },
+                                onDelete = { viewModel.deleteNote(note.id) }
+                            )
                         }
-                        item {
+                        item(span = StaggeredGridItemSpan.FullLine) {
                             Spacer(modifier = Modifier.height(72.dp))
                         }
                     }
@@ -634,7 +596,7 @@ fun NotesDisguiseScreen(
                             .padding(horizontal = 16.dp, vertical = 8.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        items(uiState.notes, key = { it.id }) { note ->
+                        items(uiState.notes, key = { it.id }, contentType = { "note" }) { note ->
                             NoteCard(
                                 note = note,
                                 isSelectionMode = uiState.isSelectionMode,

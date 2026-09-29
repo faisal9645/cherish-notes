@@ -133,6 +133,25 @@ class AuthRepository(private val context: Context) {
         }
     }
 
+    fun loginOffline(email: String, partnerEmail: String, coupleKey: String, displayName: String = ""): User {
+        val cleanEmail = email.trim().lowercase().let { if (!it.contains("@")) "$it@gmail.com" else it }
+        val cleanPartner = partnerEmail.trim().lowercase().let { if (it.isNotBlank() && !it.contains("@")) "$it@gmail.com" else it }
+        val coupleId = if (coupleKey.isNotBlank()) "couple_${coupleKey.trim().lowercase().replace(" ", "_")}" else "couple_cherish_private"
+        val localUser = User(
+            id = "local_${cleanEmail.substringBefore("@")}",
+            email = cleanEmail,
+            displayName = displayName.ifBlank { cleanEmail.substringBefore("@").replaceFirstChar { it.uppercase() } },
+            partnerEmail = cleanPartner.ifBlank { null },
+            coupleId = coupleId
+        )
+        if (cleanPartner.isNotBlank()) {
+            securityPrefs.setApprovedPartnerEmail(cleanPartner)
+        }
+        _currentUserState.value = localUser
+        saveLocalUserSession(localUser)
+        return localUser
+    }
+
     suspend fun sendPasswordReset(email: String): Result<Unit> {
         return try {
             auth?.sendPasswordResetEmail(email.trim())?.await()

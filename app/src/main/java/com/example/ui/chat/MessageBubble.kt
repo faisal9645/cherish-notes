@@ -31,6 +31,16 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+private val timeFormatThreadLocal = object : ThreadLocal<SimpleDateFormat>() {
+    override fun initialValue(): SimpleDateFormat {
+        return SimpleDateFormat("h:mm a", Locale.getDefault())
+    }
+}
+
+private fun formatMessageTime(timestamp: Long): String {
+    return timeFormatThreadLocal.get()?.format(Date(timestamp)) ?: ""
+}
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun MessageBubble(
@@ -252,7 +262,7 @@ fun MessageBubble(
                     }
 
                     Text(
-                        text = SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date(message.timestamp)),
+                        text = formatMessageTime(message.timestamp),
                         fontSize = 10.sp,
                         color = textColor.copy(alpha = 0.65f)
                     )

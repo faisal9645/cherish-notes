@@ -16,6 +16,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -448,15 +449,16 @@ fun ChatScreen(
                     }
                 }
 
-                var lastDateStr = ""
-
-                items(displayedMessages, key = { it.id }) { message ->
+                itemsIndexed(
+                    items = displayedMessages,
+                    key = { _, msg -> msg.id },
+                    contentType = { _, _ -> "message" }
+                ) { index, message ->
                     val isFromMe = message.senderId == currentUserId
-                    val msgDateStr = SimpleDateFormat("MMMM d, yyyy", Locale.getDefault()).format(Date(message.timestamp))
+                    val isNewDay = if (index == 0) true else !isSameDay(displayedMessages[index - 1].timestamp, message.timestamp)
 
                     // Date Separator Pill
-                    if (msgDateStr != lastDateStr) {
-                        lastDateStr = msgDateStr
+                    if (isNewDay) {
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -936,17 +938,22 @@ fun BouncingDots() {
     }
 }
 
-fun formatDateSeparator(timestamp: Long): String {
-    val date = Date(timestamp)
-    val now = Date()
-    val sdfDateOnly = SimpleDateFormat("yyyyMMdd", Locale.getDefault())
-    val isToday = sdfDateOnly.format(date) == sdfDateOnly.format(now)
-    val yesterday = Date(now.time - 24 * 3600 * 1000)
-    val isYesterday = sdfDateOnly.format(date) == sdfDateOnly.format(yesterday)
-
-    return when {
-        isToday -> "Today"
-        isYesterday -> "Yesterday"
-        else -> SimpleDateFormat("EEEE, MMMM d", Locale.getDefault()).format(date)
+private val dateSeparatorFormat = object : ThreadLocal<SimpleDateFormat>() {
+    override fun initialValue(): SimpleDateFormat {
+        return SimpleDateFormat("EEEE, MMMM d", Locale.getDefault())
     }
+}
+
+fun isSameDay(t1: Long, t2: Long): Boolean {
+    val cal1 = java.util.Calendar.getInstance().apply { timeInMillis = t1 }
+    val cal2 = java.util.Calendar.getInstance().apply { timeInMillis = t2 }
+    return cal1.get(java.util.Calendar.YEAR) == cal2.get(java.util.Calendar.YEAR) &&
+           cal1.get(java.util.Calendar.DAY_OF_YEAR) == cal2.get(java.util.Calendar.DAY_OF_YEAR)
+}
+
+fun formatDateSeparator(timestamp: Long): String {
+    val now = System.currentTimeMillis()
+    if (isSameDay(timestamp, now)) return "Today"
+    if (isSameDay(timestamp, now - 86400000L)) return "Yesterday"
+    return dateSeparatorFormat.get()?.format(Date(timestamp)) ?: ""
 }
