@@ -8,13 +8,21 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import java.io.File
 
 class VoicePlayerHelper(private val context: Context) {
     private var mediaPlayer: MediaPlayer? = null
     private var progressJob: Job? = null
+    private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
-    private val _currentlyPlayingId = MutableStateFlow<String?>(null)
-    val currentlyPlayingId: StateFlow<String?> = _currentlyPlayingId.asStateFlow()
+    private val _currentTrackId = MutableStateFlow<String?>(null)
+    val currentTrackId: StateFlow<String?> = _currentTrackId.asStateFlow()
+
+    // Backward-compat alias for any existing collectors
+    val currentlyPlayingId: StateFlow<String?> = _currentTrackId.asStateFlow()
+
+    private val _isPlaying = MutableStateFlow(false)
+    val isPlaying: StateFlow<Boolean> = _isPlaying.asStateFlow()
 
     private val _playbackProgress = MutableStateFlow(0f)
     val playbackProgress: StateFlow<Float> = _playbackProgress.asStateFlow()
@@ -51,33 +59,67 @@ class VoicePlayerHelper(private val context: Context) {
     }
 
     fun playAudio(messageId: String, audioUriOrUrl: String, onCompletion: () -> Unit = {}) {
-        if (_currentlyPlayingId.value == messageId && mediaPlayer?.isPlaying == true) {
+        // Case 1: Already active and currently playing -> PAUSE
+        if (_currentTrackId.value == messageId && _isPlaying.value && mediaPlayer != null) {
             pause()
             return
         }
 
+        // Case 2: Already active and paused -> RESUME
+        if (_currentTrackId.value == messageId && !_isPlaying.value && mediaPlayer != null) {
+            try {
+                mediaPlayer?.start()
+                _isPlaying.value = true
+                mediaPlayer?.let { startProgressTracker(it, onCompletion) }
+                return
+            } catch (e: Exception) {
+                Log.e("VoicePlayerHelper", "Failed to resume audio, restarting", e)
+            }
+        }
+
+        // Case 3: Start new audio or switch tracks
         stop()
+        _currentTrackId.value = messageId
+        _isPlaying.value = true // Set immediately so icon changes to Pause/Loading instantly
 
         try {
             mediaPlayer = MediaPlayer().apply {
                 if (audioUriOrUrl.startsWith("http://") || audioUriOrUrl.startsWith("https://")) {
                     setDataSource(audioUriOrUrl)
+                } else if (audioUriOrUrl.startsWith("file://")) {
+                    val path = Uri.parse(audioUriOrUrl).path
+                    if (path != null && File(path).exists()) {
+                        setDataSource(path)
+                    } else {
+                        setDataSource(context, Uri.parse(audioUriOrUrl))
+                    }
+                } else if (File(audioUriOrUrl).exists()) {
+                    setDataSource(audioUriOrUrl)
                 } else {
                     setDataSource(context, Uri.parse(audioUriOrUrl))
                 }
+
                 prepareAsync()
                 setOnPreparedListener { mp ->
+                    if (_currentTrackId.value != messageId) {
+                        mp.release()
+                        return@setOnPreparedListener
+                    }
                     if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
                         try {
                             mp.playbackParams = mp.playbackParams.setSpeed(_playbackSpeed.value)
                         } catch (_: Exception) {}
                     }
                     mp.start()
-                    _currentlyPlayingId.value = messageId
+                    _isPlaying.value = true
                     startProgressTracker(mp, onCompletion)
                 }
                 setOnCompletionListener {
-                    stop()
+                    _isPlaying.value = false
+                    _playbackProgress.value = 0f
+                    _currentPositionSec.value = 0
+                    _currentTrackId.value = null
+                    progressJob?.cancel()
                     onCompletion()
                 }
                 setOnErrorListener { _, what, extra ->
@@ -94,23 +136,29 @@ class VoicePlayerHelper(private val context: Context) {
 
     private fun startProgressTracker(player: MediaPlayer, onCompletion: () -> Unit) {
         progressJob?.cancel()
-        progressJob = CoroutineScope(Dispatchers.Main).launch {
-            while (isActive && player.isPlaying) {
-                val duration = player.duration
-                if (duration > 0) {
-                    val pos = player.currentPosition
-                    _playbackProgress.value = (pos.toFloat() / duration.toFloat()).coerceIn(0f, 1f)
-                    _currentPositionSec.value = pos / 1000
-                }
-                delay(80)
+        progressJob = scope.launch {
+            while (isActive && _isPlaying.value) {
+                try {
+                    if (player.isPlaying) {
+                        val duration = player.duration
+                        if (duration > 0) {
+                            val pos = player.currentPosition
+                            _playbackProgress.value = (pos.toFloat() / duration.toFloat()).coerceIn(0f, 1f)
+                            _currentPositionSec.value = pos / 1000
+                        }
+                    }
+                } catch (_: Exception) {}
+                delay(60)
             }
         }
     }
 
     fun pause() {
-        mediaPlayer?.pause()
+        try {
+            mediaPlayer?.pause()
+        } catch (_: Exception) {}
         progressJob?.cancel()
-        _currentlyPlayingId.value = null
+        _isPlaying.value = false
     }
 
     fun stop() {
@@ -125,7 +173,8 @@ class VoicePlayerHelper(private val context: Context) {
             // ignore
         }
         mediaPlayer = null
-        _currentlyPlayingId.value = null
+        _isPlaying.value = false
+        _currentTrackId.value = null
         _playbackProgress.value = 0f
         _currentPositionSec.value = 0
     }

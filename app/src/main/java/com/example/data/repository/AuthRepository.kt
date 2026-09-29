@@ -49,12 +49,10 @@ class AuthRepository(private val context: Context) {
     private var currentUserListener: ListenerRegistration? = null
 
     init {
+        loadLocalUserSession()
         val currentFirebaseUser = auth?.currentUser
         if (currentFirebaseUser != null) {
             listenToCurrentUser(currentFirebaseUser.uid)
-        } else {
-            // Check local fallback session
-            loadLocalUserSession()
         }
     }
 
@@ -161,28 +159,40 @@ class AuthRepository(private val context: Context) {
         }
     }
 
-    suspend fun updateProfile(displayName: String, statusMessage: String, photoUrl: String? = null): Result<Unit> {
+    suspend fun updateProfile(
+        displayName: String,
+        statusMessage: String,
+        photoUrl: String? = null,
+        removePhoto: Boolean = false
+    ): Result<Unit> {
         val uid = getCurrentUserId()
-        return try {
-            val updates = mutableMapOf<String, Any>(
-                "displayName" to displayName,
-                "statusMessage" to statusMessage
-            )
-            photoUrl?.let { updates["photoUrl"] = it }
-            firestore?.collection("users")?.document(uid)?.update(updates)?.await()
+        val finalPhotoUrl = when {
+            removePhoto -> null
+            photoUrl != null -> photoUrl
+            else -> _currentUserState.value?.photoUrl
+        }
+        val current = _currentUserState.value ?: User(id = uid)
+        val updatedUser = current.copy(
+            displayName = displayName,
+            statusMessage = statusMessage,
+            photoUrl = finalPhotoUrl
+        )
+        _currentUserState.value = updatedUser
+        saveLocalUserSession(updatedUser)
 
-            _currentUserState.value = _currentUserState.value?.copy(
-                displayName = displayName,
-                statusMessage = statusMessage,
-                photoUrl = photoUrl ?: _currentUserState.value?.photoUrl
-            )
+        return try {
+            val updates = mutableMapOf<String, Any?>()
+            updates["displayName"] = displayName
+            updates["statusMessage"] = statusMessage
+            if (removePhoto) {
+                updates["photoUrl"] = com.google.firebase.firestore.FieldValue.delete()
+            } else if (photoUrl != null) {
+                updates["photoUrl"] = photoUrl
+            }
+            firestore?.collection("users")?.document(uid)?.update(updates as Map<String, Any>)?.await()
             Result.success(Unit)
         } catch (e: Exception) {
-            _currentUserState.value = _currentUserState.value?.copy(
-                displayName = displayName,
-                statusMessage = statusMessage,
-                photoUrl = photoUrl ?: _currentUserState.value?.photoUrl
-            )
+            Log.w("AuthRepository", "Failed to update profile in Firestore, local update kept", e)
             Result.success(Unit)
         }
     }
@@ -250,14 +260,26 @@ class AuthRepository(private val context: Context) {
 
     fun setOnline(online: Boolean) {
         val uid = getCurrentUserId()
+        _currentUserState.value = _currentUserState.value?.copy(
+            isOnline = online,
+            lastSeen = System.currentTimeMillis()
+        )
         try {
-            val updates = mapOf(
+            val updates = mutableMapOf<String, Any>(
                 "isOnline" to online,
                 "lastSeen" to System.currentTimeMillis()
             )
+            if (!online) {
+                updates["typingInChat"] = false
+                updates["recordingAudioInChat"] = false
+            }
             firestore?.collection("users")?.document(uid)?.update(updates)
         } catch (e: Exception) {
             Log.w("AuthRepository", "Failed to update online status", e)
+        }
+
+        if (online) {
+            connectPartnerListener()
         }
     }
 
@@ -329,6 +351,8 @@ class AuthRepository(private val context: Context) {
         setCheckAfter(newTarget, _currentUserState.value?.checkAfterNote ?: "")
     }
 
+    private var partnerQueryListener: ListenerRegistration? = null
+
     private fun listenToCurrentUser(uid: String) {
         currentUserListener?.remove()
         currentUserListener = firestore?.collection("users")?.document(uid)
@@ -341,13 +365,28 @@ class AuthRepository(private val context: Context) {
                     val user = snapshot.toObject(User::class.java)
                     _currentUserState.value = user
                     user?.let { saveLocalUserSession(it) }
-                    user?.partnerId?.let { partnerId ->
+                    val partnerId = user?.partnerId
+                    if (!partnerId.isNullOrBlank()) {
                         if (partnerId != _partnerUserState.value?.id) {
                             listenToPartner(partnerId)
                         }
+                    } else {
+                        connectPartnerListener()
                     }
                 }
             }
+    }
+
+    fun connectPartnerListener() {
+        val user = _currentUserState.value ?: return
+        val partnerId = user.partnerId
+        if (!partnerId.isNullOrBlank()) {
+            if (partnerId != _partnerUserState.value?.id) {
+                listenToPartner(partnerId)
+            }
+        } else {
+            findAndListenToPartner(user.partnerEmail, user.coupleId, user.id)
+        }
     }
 
     fun listenToPartner(partnerId: String) {
@@ -364,6 +403,66 @@ class AuthRepository(private val context: Context) {
                     handlePartnerCheckAfterReminder(partner)
                 }
             }
+    }
+
+    private fun findAndListenToPartner(partnerEmail: String?, coupleId: String?, uid: String) {
+        val fs = firestore ?: return
+        val cleanEmail = partnerEmail?.trim()?.lowercase()
+        if (!cleanEmail.isNullOrBlank()) {
+            partnerQueryListener?.remove()
+            partnerQueryListener = fs.collection("users")
+                .whereEqualTo("email", cleanEmail)
+                .limit(1)
+                .addSnapshotListener { snapshots, error ->
+                    if (error != null) {
+                        Log.w("AuthRepository", "Partner query by email failed", error)
+                        return@addSnapshotListener
+                    }
+                    val doc = snapshots?.documents?.firstOrNull()
+                    if (doc != null && doc.id != uid) {
+                        val partner = doc.toObject(User::class.java)
+                        _partnerUserState.value = partner
+                        handlePartnerCheckAfterReminder(partner)
+                        if (_currentUserState.value?.partnerId != doc.id) {
+                            val updated = _currentUserState.value?.copy(partnerId = doc.id)
+                            if (updated != null) {
+                                _currentUserState.value = updated
+                                saveLocalUserSession(updated)
+                            }
+                            try {
+                                fs.collection("users").document(uid).update("partnerId", doc.id)
+                            } catch (_: Exception) {}
+                        }
+                    }
+                }
+        } else if (!coupleId.isNullOrBlank() && coupleId != "couple_default") {
+            partnerQueryListener?.remove()
+            partnerQueryListener = fs.collection("users")
+                .whereEqualTo("coupleId", coupleId)
+                .limit(5)
+                .addSnapshotListener { snapshots, error ->
+                    if (error != null) {
+                        Log.w("AuthRepository", "Partner query by coupleId failed", error)
+                        return@addSnapshotListener
+                    }
+                    val doc = snapshots?.documents?.firstOrNull { it.id != uid }
+                    if (doc != null) {
+                        val partner = doc.toObject(User::class.java)
+                        _partnerUserState.value = partner
+                        handlePartnerCheckAfterReminder(partner)
+                        if (_currentUserState.value?.partnerId != doc.id) {
+                            val updated = _currentUserState.value?.copy(partnerId = doc.id)
+                            if (updated != null) {
+                                _currentUserState.value = updated
+                                saveLocalUserSession(updated)
+                            }
+                            try {
+                                fs.collection("users").document(uid).update("partnerId", doc.id)
+                            } catch (_: Exception) {}
+                        }
+                    }
+                }
+        }
     }
 
     private fun handlePartnerCheckAfterReminder(partner: User?) {
@@ -404,6 +503,7 @@ class AuthRepository(private val context: Context) {
         setOnline(false)
         currentUserListener?.remove()
         partnerListener?.remove()
+        partnerQueryListener?.remove()
         try {
             auth?.signOut()
         } catch (e: Exception) {
@@ -420,8 +520,11 @@ class AuthRepository(private val context: Context) {
             .putString("uid", user.id)
             .putString("email", user.email)
             .putString("displayName", user.displayName)
-            .putString("partnerEmail", user.partnerEmail)
-            .putString("coupleId", user.coupleId)
+            .putString("photoUrl", user.photoUrl ?: "")
+            .putString("statusMessage", user.statusMessage)
+            .putString("partnerId", user.partnerId ?: "")
+            .putString("partnerEmail", user.partnerEmail ?: "")
+            .putString("coupleId", user.coupleId ?: "")
             .putLong("checkAfterTimeMillis", user.checkAfterTimeMillis ?: 0L)
             .putString("checkAfterNote", user.checkAfterNote ?: "")
             .putBoolean("checkAfterActive", user.checkAfterActive)
@@ -435,12 +538,20 @@ class AuthRepository(private val context: Context) {
             val targetTime = prefs.getLong("checkAfterTimeMillis", 0L)
             val note = prefs.getString("checkAfterNote", "") ?: ""
             val active = prefs.getBoolean("checkAfterActive", false)
+            val photo = prefs.getString("photoUrl", null)?.ifBlank { null }
+            val status = prefs.getString("statusMessage", "Loving every moment with you ✨") ?: "Loving every moment with you ✨"
+            val partnerId = prefs.getString("partnerId", null)?.ifBlank { null }
+            val partnerEmail = prefs.getString("partnerEmail", null)?.ifBlank { null }
+            val coupleId = prefs.getString("coupleId", "couple_default") ?: "couple_default"
             _currentUserState.value = User(
                 id = uid,
                 email = prefs.getString("email", "") ?: "",
                 displayName = prefs.getString("displayName", "User") ?: "User",
-                partnerEmail = prefs.getString("partnerEmail", null),
-                coupleId = prefs.getString("coupleId", "couple_default"),
+                photoUrl = photo,
+                statusMessage = status,
+                partnerId = partnerId,
+                partnerEmail = partnerEmail,
+                coupleId = coupleId,
                 checkAfterTimeMillis = if (targetTime > 0L) targetTime else null,
                 checkAfterNote = note.ifBlank { null },
                 checkAfterActive = active

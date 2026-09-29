@@ -54,26 +54,21 @@ class MainActivity : FragmentActivity() {
         setHighRefreshRate()
         applyScreenshotProtection()
         app.authRepository.setOnline(true)
-
-        // Check configurable auto-lock inactivity timeout
-        val timeoutSec = app.securityPreferences.getAutoLockTimeoutSeconds()
-        if (lastBackgroundTimestamp > 0L && timeoutSec >= 0) {
-            val elapsedSec = (System.currentTimeMillis() - lastBackgroundTimestamp) / 1000
-            if (elapsedSec >= timeoutSec) {
-                if (app.securityPreferences.isDisguiseModeEnabled()) {
-                    app.securityPreferences.reDisguise()
-                }
-                if (app.securityPreferences.hasPin()) {
-                    app.securityPreferences.lockApp()
-                }
-            }
-        }
     }
 
     override fun onPause() {
         super.onPause()
         app.authRepository.setOnline(false)
         lastBackgroundTimestamp = System.currentTimeMillis()
+
+        // Immediate Disguise Protection: Revert to normal notes as soon as the app is minimized
+        if (app.securityPreferences.isDisguiseModeEnabled()) {
+            app.securityPreferences.reDisguise()
+        }
+        if (app.securityPreferences.hasPin() && app.securityPreferences.isAppLockEnabled()) {
+            app.securityPreferences.lockApp()
+        }
+
         // Ensure recent-apps preview is redacted when leaving secret mode
         if (app.securityPreferences.isScreenshotProtectionEnabled() || !app.securityPreferences.isDisguiseActive.value) {
             window.setFlags(
@@ -85,14 +80,12 @@ class MainActivity : FragmentActivity() {
 
     override fun onStop() {
         super.onStop()
-        val timeoutSec = app.securityPreferences.getAutoLockTimeoutSeconds()
-        if (timeoutSec == 0) { // Immediately
-            if (app.securityPreferences.isDisguiseModeEnabled()) {
-                app.securityPreferences.reDisguise()
-            }
-            if (app.securityPreferences.hasPin()) {
-                app.securityPreferences.lockApp()
-            }
+        app.authRepository.setOnline(false)
+        if (app.securityPreferences.isDisguiseModeEnabled()) {
+            app.securityPreferences.reDisguise()
+        }
+        if (app.securityPreferences.hasPin() && app.securityPreferences.isAppLockEnabled()) {
+            app.securityPreferences.lockApp()
         }
     }
 

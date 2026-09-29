@@ -3,6 +3,8 @@ package com.example.data.repository
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Matrix
+import android.media.ExifInterface
 import android.net.Uri
 import android.util.Log
 import com.example.data.model.MessageType
@@ -26,33 +28,154 @@ class MediaRepository(private val context: Context) {
         }
     }
 
-    suspend fun compressAndPrepareImage(uri: Uri): File = withContext(Dispatchers.IO) {
-        val inputStream = context.contentResolver.openInputStream(uri)
-        val bitmap = BitmapFactory.decodeStream(inputStream)
-        inputStream?.close()
+    suspend fun saveAndPrepareAvatar(uri: Uri): File = withContext(Dispatchers.IO) {
+        val avatarsDir = File(context.filesDir, "avatars").apply { mkdirs() }
+        val avatarFile = File(avatarsDir, "avatar_${System.currentTimeMillis()}.jpg")
 
-        val maxDim = 1280
-        val ratio = (bitmap.width.toFloat() / bitmap.height.toFloat())
-        val targetWidth: Int
-        val targetHeight: Int
-        if (bitmap.width > bitmap.height) {
-            targetWidth = if (bitmap.width > maxDim) maxDim else bitmap.width
-            targetHeight = (targetWidth / ratio).toInt()
-        } else {
-            targetHeight = if (bitmap.height > maxDim) maxDim else bitmap.height
-            targetWidth = (targetHeight * ratio).toInt()
+        try {
+            val bitmap = decodeSampledBitmapFromUri(uri, 800, 800)
+            if (bitmap != null) {
+                val rotatedBitmap = rotateBitmapIfRequired(uri, bitmap)
+                val maxDim = 800
+                val ratio = (rotatedBitmap.width.toFloat() / rotatedBitmap.height.toFloat())
+                val targetWidth: Int
+                val targetHeight: Int
+                if (rotatedBitmap.width > rotatedBitmap.height) {
+                    targetWidth = if (rotatedBitmap.width > maxDim) maxDim else rotatedBitmap.width
+                    targetHeight = (targetWidth / ratio).toInt().coerceAtLeast(1)
+                } else {
+                    targetHeight = if (rotatedBitmap.height > maxDim) maxDim else rotatedBitmap.height
+                    targetWidth = (targetHeight * ratio).toInt().coerceAtLeast(1)
+                }
+
+                val resized = Bitmap.createScaledBitmap(rotatedBitmap, targetWidth, targetHeight, true)
+                FileOutputStream(avatarFile).use { out ->
+                    resized.compress(Bitmap.CompressFormat.JPEG, 90, out)
+                    out.flush()
+                }
+                if (resized != rotatedBitmap) resized.recycle()
+                if (rotatedBitmap != bitmap) rotatedBitmap.recycle()
+                bitmap.recycle()
+            } else {
+                context.contentResolver.openInputStream(uri)?.use { input ->
+                    FileOutputStream(avatarFile).use { output ->
+                        input.copyTo(output)
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("MediaRepository", "Error preparing avatar", e)
+            context.contentResolver.openInputStream(uri)?.use { input ->
+                FileOutputStream(avatarFile).use { output ->
+                    input.copyTo(output)
+                }
+            }
         }
 
-        val resized = Bitmap.createScaledBitmap(bitmap, targetWidth, targetHeight, true)
+        avatarFile
+    }
+
+    suspend fun compressAndPrepareImage(uri: Uri): File = withContext(Dispatchers.IO) {
         val cacheDir = File(context.cacheDir, "compressed_media").apply { mkdirs() }
         val compressedFile = File(cacheDir, "img_${UUID.randomUUID()}.jpg")
 
-        val outStream = FileOutputStream(compressedFile)
-        resized.compress(Bitmap.CompressFormat.JPEG, 80, outStream)
-        outStream.flush()
-        outStream.close()
+        try {
+            val bitmap = decodeSampledBitmapFromUri(uri, 1280, 1280)
+            if (bitmap != null) {
+                val rotatedBitmap = rotateBitmapIfRequired(uri, bitmap)
+                val maxDim = 1280
+                val ratio = (rotatedBitmap.width.toFloat() / rotatedBitmap.height.toFloat())
+                val targetWidth: Int
+                val targetHeight: Int
+                if (rotatedBitmap.width > rotatedBitmap.height) {
+                    targetWidth = if (rotatedBitmap.width > maxDim) maxDim else rotatedBitmap.width
+                    targetHeight = (targetWidth / ratio).toInt().coerceAtLeast(1)
+                } else {
+                    targetHeight = if (rotatedBitmap.height > maxDim) maxDim else rotatedBitmap.height
+                    targetWidth = (targetHeight * ratio).toInt().coerceAtLeast(1)
+                }
+
+                val resized = Bitmap.createScaledBitmap(rotatedBitmap, targetWidth, targetHeight, true)
+                FileOutputStream(compressedFile).use { outStream ->
+                    resized.compress(Bitmap.CompressFormat.JPEG, 80, outStream)
+                    outStream.flush()
+                }
+                if (resized != rotatedBitmap) resized.recycle()
+                if (rotatedBitmap != bitmap) rotatedBitmap.recycle()
+                bitmap.recycle()
+            } else {
+                context.contentResolver.openInputStream(uri)?.use { input ->
+                    FileOutputStream(compressedFile).use { output ->
+                        input.copyTo(output)
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("MediaRepository", "compressAndPrepareImage failed, copying stream directly", e)
+            context.contentResolver.openInputStream(uri)?.use { input ->
+                FileOutputStream(compressedFile).use { output ->
+                    input.copyTo(output)
+                }
+            }
+        }
 
         compressedFile
+    }
+
+    private fun decodeSampledBitmapFromUri(uri: Uri, reqWidth: Int, reqHeight: Int): Bitmap? {
+        return try {
+            val options = BitmapFactory.Options().apply {
+                inJustDecodeBounds = true
+            }
+            context.contentResolver.openInputStream(uri)?.use { input ->
+                BitmapFactory.decodeStream(input, null, options)
+            }
+
+            var inSampleSize = 1
+            if (options.outHeight > reqHeight || options.outWidth > reqWidth) {
+                val halfHeight = options.outHeight / 2
+                val halfWidth = options.outWidth / 2
+                while ((halfHeight / inSampleSize) >= reqHeight && (halfWidth / inSampleSize) >= reqWidth) {
+                    inSampleSize *= 2
+                }
+            }
+
+            val decodeOptions = BitmapFactory.Options().apply {
+                this.inSampleSize = inSampleSize
+            }
+            context.contentResolver.openInputStream(uri)?.use { input ->
+                BitmapFactory.decodeStream(input, null, decodeOptions)
+            }
+        } catch (e: Exception) {
+            Log.e("MediaRepository", "Failed to decode bitmap from URI", e)
+            null
+        }
+    }
+
+    private fun rotateBitmapIfRequired(uri: Uri, bitmap: Bitmap): Bitmap {
+        return try {
+            val inputStream = context.contentResolver.openInputStream(uri) ?: return bitmap
+            val exif = ExifInterface(inputStream)
+            val orientation = exif.getAttributeInt(
+                ExifInterface.TAG_ORIENTATION,
+                ExifInterface.ORIENTATION_NORMAL
+            )
+            inputStream.close()
+
+            when (orientation) {
+                ExifInterface.ORIENTATION_ROTATE_90 -> rotateBitmap(bitmap, 90f)
+                ExifInterface.ORIENTATION_ROTATE_180 -> rotateBitmap(bitmap, 180f)
+                ExifInterface.ORIENTATION_ROTATE_270 -> rotateBitmap(bitmap, 270f)
+                else -> bitmap
+            }
+        } catch (e: Exception) {
+            bitmap
+        }
+    }
+
+    private fun rotateBitmap(bitmap: Bitmap, degrees: Float): Bitmap {
+        val matrix = Matrix().apply { postRotate(degrees) }
+        return Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
     }
 
     suspend fun uploadFile(
@@ -80,8 +203,11 @@ class MediaRepository(private val context: Context) {
                 val uploadTask = storageRef.putFile(Uri.fromFile(file))
 
                 uploadTask.addOnProgressListener { taskSnapshot ->
-                    val progress = (taskSnapshot.bytesTransferred.toFloat() / taskSnapshot.totalByteCount.toFloat())
-                    onProgress(progress)
+                    val total = taskSnapshot.totalByteCount
+                    if (total > 0) {
+                        val progress = (taskSnapshot.bytesTransferred.toFloat() / total.toFloat())
+                        onProgress(progress)
+                    }
                 }
 
                 uploadTask.await()

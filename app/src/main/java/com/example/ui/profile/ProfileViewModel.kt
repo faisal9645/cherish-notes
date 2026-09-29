@@ -73,22 +73,61 @@ class ProfileViewModel(
         }
     }
 
-    fun updateProfile(displayName: String, status: String, newPhotoUri: Uri?) {
+    fun updateProfile(
+        displayName: String,
+        status: String,
+        newPhotoUri: Uri?,
+        removePhoto: Boolean = false,
+        onComplete: (Boolean) -> Unit = {}
+    ) {
         viewModelScope.launch {
             _uiState.update { it.copy(isUpdating = true) }
             var photoUrl: String? = null
-            if (newPhotoUri != null) {
-                try {
-                    val comp = mediaRepository.compressAndPrepareImage(newPhotoUri)
-                    val upload = mediaRepository.uploadFile(comp, MessageType.IMAGE, "avatars")
-                    photoUrl = upload.getOrNull()
-                } catch (e: Exception) {
-                    // ignore
+            if (removePhoto) {
+                authRepository.updateProfile(displayName.trim(), status.trim(), null, removePhoto = true)
+            } else {
+                if (newPhotoUri != null) {
+                    try {
+                        val avatarFile = mediaRepository.saveAndPrepareAvatar(newPhotoUri)
+                        val coupleId = _uiState.value.currentUser?.coupleId ?: "couple_default"
+                        val upload = mediaRepository.uploadFile(avatarFile, MessageType.IMAGE, coupleId)
+                        photoUrl = upload.getOrNull() ?: Uri.fromFile(avatarFile).toString()
+                    } catch (e: Exception) {
+                        android.util.Log.e("ProfileViewModel", "Avatar preparation/upload failed", e)
+                    }
                 }
+                authRepository.updateProfile(
+                    displayName = displayName.trim(),
+                    statusMessage = status.trim(),
+                    photoUrl = photoUrl,
+                    removePhoto = false
+                )
             }
-            authRepository.updateProfile(displayName, status, photoUrl)
             _uiState.update { it.copy(isUpdating = false) }
+            onComplete(true)
         }
+    }
+
+    fun updateAvatar(newPhotoUri: Uri, onComplete: (Boolean) -> Unit = {}) {
+        val user = _uiState.value.currentUser
+        updateProfile(
+            displayName = user?.displayName ?: "Me",
+            status = user?.statusMessage ?: "",
+            newPhotoUri = newPhotoUri,
+            removePhoto = false,
+            onComplete = onComplete
+        )
+    }
+
+    fun removeAvatar(onComplete: (Boolean) -> Unit = {}) {
+        val user = _uiState.value.currentUser
+        updateProfile(
+            displayName = user?.displayName ?: "Me",
+            status = user?.statusMessage ?: "",
+            newPhotoUri = null,
+            removePhoto = true,
+            onComplete = onComplete
+        )
     }
 
     fun setAppLock(enabled: Boolean, pin: String? = null) {

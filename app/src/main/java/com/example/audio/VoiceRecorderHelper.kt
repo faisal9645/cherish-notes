@@ -63,7 +63,7 @@ class VoiceRecorderHelper(private val context: Context) {
                     } catch (e: Exception) {
                         0
                     }
-                    val normalized = (maxAmp / 32767f).coerceIn(0.1f, 1f)
+                    val normalized = (maxAmp / 32767f).coerceIn(0.15f, 1f)
                     ampList.add(normalized)
                     if (ampList.size > 40) ampList.removeAt(0)
                     _amplitudes.value = ampList.toList()
@@ -81,7 +81,7 @@ class VoiceRecorderHelper(private val context: Context) {
     }
 
     fun stopRecording(): Pair<File?, Int> {
-        val duration = _recordingDurationSec.value
+        val elapsed = if (startTimeMillis > 0L) System.currentTimeMillis() - startTimeMillis else 0L
         _isRecording.value = false
         recordingJob?.cancel()
         recordingJob = null
@@ -98,7 +98,18 @@ class VoiceRecorderHelper(private val context: Context) {
 
         val file = currentOutputFile
         currentOutputFile = null
-        return Pair(file, duration)
+
+        if (elapsed < 400L || file == null || !file.exists() || file.length() < 100) {
+            // Accidental quick tap or corrupt file
+            file?.delete()
+            _recordingDurationSec.value = 0
+            _amplitudes.value = emptyList()
+            return Pair(null, 0)
+        }
+
+        val durationSec = ((elapsed + 500) / 1000).toInt().coerceAtLeast(1)
+        _recordingDurationSec.value = 0
+        return Pair(file, durationSec)
     }
 
     fun cancelRecording() {

@@ -74,6 +74,7 @@ fun ChatScreen(
     var showChatMenu by remember { mutableStateOf(false) }
 
     val currentPlayingId by viewModel.voicePlayerHelper.currentlyPlayingId.collectAsState()
+    val isAudioPlaying by viewModel.voicePlayerHelper.isPlaying.collectAsState()
     val audioProgress by viewModel.voicePlayerHelper.playbackProgress.collectAsState()
     val isRecordingVoice by viewModel.voiceRecorderHelper.isRecording.collectAsState()
     val recordingDurationSec by viewModel.voiceRecorderHelper.recordingDurationSec.collectAsState()
@@ -211,7 +212,6 @@ fun ChatScreen(
     }
 
     var highlightedMessageId by remember { mutableStateOf<String?>(null) }
-    var lastShieldTapTime by remember { mutableLongStateOf(0L) }
 
     // Panic Protection: Accelerometer shake listener to trigger instant disguise
     DisposableEffect(Unit) {
@@ -304,13 +304,34 @@ fun ChatScreen(
                                         if (headerRemaining.startsWith("✨")) "✨ Reconnecting now"
                                         else "🌙 Quiet time until ${CheckAfterHelper.formatTargetTime(partnerCheckAfterTarget)}"
                                     } else if (isPartnerOnline) {
-                                        "Both here in our space ✨"
+                                        "Online • Active now 🟢"
                                     } else {
-                                        "Our quiet sanctuary 💕"
+                                        val lastSeen = partner?.lastSeen ?: 0L
+                                        if (lastSeen > 0L) {
+                                            val diffSec = ((System.currentTimeMillis() - lastSeen) / 1000).coerceAtLeast(0)
+                                            when {
+                                                diffSec < 60 -> "Last seen just now"
+                                                diffSec < 3600 -> "Last seen ${diffSec / 60}m ago"
+                                                diffSec < 86400 -> "Last seen ${diffSec / 3600}h ago"
+                                                else -> "Offline"
+                                            }
+                                        } else {
+                                            "Offline"
+                                        }
                                     },
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = if (uiState.isPartnerRecordingAudio || uiState.isPartnerTyping || partnerHasCheckAfter) RoseGoldPrimary else if (isPartnerOnline) Color(0xFF2E7D32) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f),
-                                    fontWeight = if (partnerHasCheckAfter || uiState.isPartnerRecordingAudio || isPartnerOnline) FontWeight.SemiBold else FontWeight.Normal
+                                    color = if (uiState.isPartnerRecordingAudio || uiState.isPartnerTyping || partnerHasCheckAfter) {
+                                        RoseGoldPrimary
+                                    } else if (isPartnerOnline) {
+                                        Color(0xFF2E7D32)
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f)
+                                    },
+                                    fontWeight = if (partnerHasCheckAfter || uiState.isPartnerRecordingAudio || uiState.isPartnerTyping || isPartnerOnline) {
+                                        FontWeight.SemiBold
+                                    } else {
+                                        FontWeight.Normal
+                                    }
                                 )
                             }
                         }
@@ -339,33 +360,6 @@ fun ChatScreen(
                             Icon(Icons.Default.Close, contentDescription = "Close search")
                         }
                     } else {
-
-                        IconButton(
-                            onClick = onQuickDisguise,
-                            modifier = Modifier.testTag("chat_quick_disguise_button")
-                        ) {
-                            Icon(
-                                imageVector = Icons.Outlined.EditNote,
-                                contentDescription = "Quick Disguise as Notes",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        IconButton(
-                            onClick = {
-                                val now = System.currentTimeMillis()
-                                if (now - lastShieldTapTime < 500L) {
-                                    onQuickDisguise()
-                                }
-                                lastShieldTapTime = now
-                            },
-                            modifier = Modifier.testTag("chat_shield_panic_button")
-                        ) {
-                            Icon(
-                                imageVector = Icons.Filled.Shield,
-                                contentDescription = "Double-tap shield to disguise immediately",
-                                tint = RoseGoldPrimary
-                            )
-                        }
                         IconButton(
                             onClick = { viewModel.setSearching(true) },
                             modifier = Modifier.testTag("chat_search_button")
@@ -765,8 +759,8 @@ fun ChatScreen(
                     MessageBubble(
                         message = message,
                         isFromMe = isFromMe,
-                        isPlayingAudio = currentPlayingId == message.id,
-                        audioProgress = audioProgress,
+                        isPlayingAudio = (currentPlayingId == message.id && isAudioPlaying),
+                        audioProgress = if (currentPlayingId == message.id) audioProgress else 0f,
                         gallerySize = uiState.gallerySize,
                         onPlayAudio = {
                             message.mediaUrl?.let { url ->
@@ -909,6 +903,7 @@ fun ChatScreen(
             },
             onSaveToMemories = {
                 Toast.makeText(context, "Saved to Our Memories ❤️", Toast.LENGTH_SHORT).show()
+            }
         )
     }
 

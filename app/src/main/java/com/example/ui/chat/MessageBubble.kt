@@ -313,7 +313,7 @@ fun MessageBubble(
                             Column(modifier = Modifier.weight(1f)) {
                                 WaveformView(
                                     amplitudes = message.waveform,
-                                    progress = if (isPlayingAudio) audioProgress else 0f,
+                                    progress = audioProgress,
                                     activeColor = if (isFromMe) Color.White else MaterialTheme.colorScheme.primary,
                                     inactiveColor = textColor.copy(alpha = 0.35f),
                                     height = 24.dp

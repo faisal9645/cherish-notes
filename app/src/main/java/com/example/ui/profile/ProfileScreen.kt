@@ -3,6 +3,7 @@ package com.example.ui.profile
 import android.app.Activity
 import android.net.Uri
 import android.view.WindowManager
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -11,11 +12,14 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.core.content.FileProvider
+import java.io.File
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Logout
@@ -57,6 +61,7 @@ fun ProfileScreen(
     val partner = uiState.partnerUser
 
     var showEditProfileDialog by remember { mutableStateOf(false) }
+    var showAvatarOptionsDialog by remember { mutableStateOf(false) }
     var showSetPinDialog by remember { mutableStateOf(false) }
     var showSetPasscodeDialog by remember { mutableStateOf(false) }
     var showPairDialog by remember { mutableStateOf(false) }
@@ -66,15 +71,55 @@ fun ProfileScreen(
     var isDialogPasscodeRevealed by remember { mutableStateOf(false) }
     var showCheckAfterSheet by remember { mutableStateOf(false) }
 
+    var tempCameraUri by remember { mutableStateOf<Uri?>(null) }
+
+    val cameraLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.TakePicture()
+    ) { success: Boolean ->
+        if (success) {
+            tempCameraUri?.let { uri ->
+                viewModel.updateAvatar(uri) {
+                    Toast.makeText(context, "Profile photo updated ✨", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
+
+    val cameraPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            try {
+                val imagesDir = File(context.cacheDir, "avatar_snaps").apply { mkdirs() }
+                val photoFile = File(imagesDir, "snap_${System.currentTimeMillis()}.jpg").apply {
+                    createNewFile()
+                }
+                val uri = FileProvider.getUriForFile(
+                    context,
+                    "${context.packageName}.fileprovider",
+                    photoFile
+                )
+                tempCameraUri = uri
+                cameraLauncher.launch(uri)
+            } catch (e: Exception) {
+                Toast.makeText(context, "Could not open camera: ${e.message}", Toast.LENGTH_SHORT).show()
+            }
+        } else {
+            Toast.makeText(context, "Camera permission needed to take photo", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    fun launchCameraForAvatar() {
+        cameraPermissionLauncher.launch(android.Manifest.permission.CAMERA)
+    }
+
     val photoPicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia()
     ) { uri: Uri? ->
         if (uri != null) {
-            viewModel.updateProfile(
-                displayName = user?.displayName ?: "Me",
-                status = user?.statusMessage ?: "",
-                newPhotoUri = uri
-            )
+            viewModel.updateAvatar(uri) {
+                Toast.makeText(context, "Profile photo updated ✨", Toast.LENGTH_SHORT).show()
+            }
         }
     }
 
@@ -129,16 +174,32 @@ fun ProfileScreen(
                         AvatarView(
                             photoUrl = user?.photoUrl,
                             name = user?.displayName ?: "Me",
-                            size = 84.dp,
+                            size = 88.dp,
                             isOnline = true,
-                            showOnlineBadge = false
+                            showOnlineBadge = false,
+                            modifier = Modifier
+                                .clip(CircleShape)
+                                .clickable { showAvatarOptionsDialog = true }
                         )
-                        IconButton(
-                            onClick = {
-                                photoPicker.launch(
-                                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+
+                        if (uiState.isUpdating) {
+                            Box(
+                                modifier = Modifier
+                                    .size(88.dp)
+                                    .clip(CircleShape)
+                                    .background(Color.Black.copy(alpha = 0.45f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(32.dp),
+                                    color = Color.White,
+                                    strokeWidth = 3.dp
                                 )
-                            },
+                            }
+                        }
+
+                        IconButton(
+                            onClick = { showAvatarOptionsDialog = true },
                             modifier = Modifier
                                 .size(36.dp)
                                 .minimumInteractiveComponentSize()
@@ -168,24 +229,36 @@ fun ProfileScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
 
-                    Spacer(modifier = Modifier.height(6.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
 
-                    Text(
-                        text = user?.statusMessage ?: "Together forever ✨",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = RoseGoldPrimary
-                    )
+                    Surface(
+                        color = RoseGoldPrimary.copy(alpha = 0.08f),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.clickable { showEditProfileDialog = true }
+                    ) {
+                        Text(
+                            text = user?.statusMessage?.ifBlank { "Together forever ✨" } ?: "Together forever ✨",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = RoseGoldPrimary,
+                            fontWeight = FontWeight.Medium,
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
+                        )
+                    }
 
                     Spacer(modifier = Modifier.height(14.dp))
 
-                    OutlinedButton(
+                    Button(
                         onClick = { showEditProfileDialog = true },
                         shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = RoseGoldPrimary,
+                            contentColor = Color.White
+                        ),
                         modifier = Modifier.testTag("edit_profile_button")
                     ) {
                         Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("Edit Name & Status")
+                        Text("Edit Profile & Note")
                     }
                 }
             }
@@ -906,44 +979,295 @@ fun ProfileScreen(
         }
     }
 
+    // Avatar Options Dialog (Camera, Gallery, Remove)
+    if (showAvatarOptionsDialog) {
+        AlertDialog(
+            onDismissRequest = { showAvatarOptionsDialog = false },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        Icons.Default.CameraAlt,
+                        contentDescription = null,
+                        tint = RoseGoldPrimary,
+                        modifier = Modifier.size(22.dp)
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Text("Profile Photo", fontWeight = FontWeight.Bold)
+                }
+            },
+            text = {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        "Update your profile picture visible to your partner:",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    // Option 1: Camera
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                showAvatarOptionsDialog = false
+                                launchCameraForAvatar()
+                            }
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(14.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Default.CameraAlt, contentDescription = null, tint = RoseGoldPrimary)
+                            Spacer(modifier = Modifier.width(14.dp))
+                            Column {
+                                Text("Take Photo", fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
+                                Text("Use camera to snap a new picture", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                    }
+
+                    // Option 2: Gallery
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                showAvatarOptionsDialog = false
+                                photoPicker.launch(
+                                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                                )
+                            }
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(14.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Default.PhotoLibrary, contentDescription = null, tint = RoseGoldPrimary)
+                            Spacer(modifier = Modifier.width(14.dp))
+                            Column {
+                                Text("Choose from Gallery", fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
+                                Text("Select an image from device gallery", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                    }
+
+                    // Option 3: Remove Photo (if user has photo)
+                    if (!user?.photoUrl.isNullOrEmpty()) {
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    showAvatarOptionsDialog = false
+                                    viewModel.removeAvatar {
+                                        Toast.makeText(context, "Profile photo removed", Toast.LENGTH_SHORT).show()
+                                    }
+                                }
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(14.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error)
+                                Spacer(modifier = Modifier.width(14.dp))
+                                Column {
+                                    Text("Remove Photo", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
+                                    Text("Reset to default initial avatar", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { showAvatarOptionsDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
     // Edit Profile Dialog
     if (showEditProfileDialog) {
         var nameInput by remember { mutableStateOf(user?.displayName ?: "") }
         var statusInput by remember { mutableStateOf(user?.statusMessage ?: "") }
 
+        val statusSuggestions = listOf(
+            "Loving every moment with you ✨",
+            "Forever yours 💕",
+            "Thinking of you always 💭",
+            "Miss you so much 🥰",
+            "Working hard, talk soon! 💼",
+            "Together forever & always 💍"
+        )
+
         AlertDialog(
-            onDismissRequest = { showEditProfileDialog = false },
-            title = { Text("Edit Profile") },
+            onDismissRequest = {
+                if (!uiState.isUpdating) showEditProfileDialog = false
+            },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Edit, contentDescription = null, tint = RoseGoldPrimary, modifier = Modifier.size(20.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Edit Profile", fontWeight = FontWeight.Bold)
+                }
+            },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(14.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    // Tap avatar to change photo
+                    Box(
+                        contentAlignment = Alignment.BottomEnd,
+                        modifier = Modifier.padding(top = 4.dp)
+                    ) {
+                        AvatarView(
+                            photoUrl = user?.photoUrl,
+                            name = nameInput.ifBlank { user?.displayName ?: "Me" },
+                            size = 76.dp,
+                            isOnline = true,
+                            showOnlineBadge = false,
+                            modifier = Modifier
+                                .clip(CircleShape)
+                                .clickable {
+                                    showAvatarOptionsDialog = true
+                                }
+                        )
+                        Box(
+                            modifier = Modifier
+                                .size(26.dp)
+                                .clip(CircleShape)
+                                .background(RoseGoldPrimary)
+                                .clickable { showAvatarOptionsDialog = true },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                Icons.Default.CameraAlt,
+                                contentDescription = "Change photo",
+                                tint = Color.White,
+                                modifier = Modifier.size(14.dp)
+                            )
+                        }
+                    }
+
+                    Text(
+                        "Tap photo to change or remove",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
                     OutlinedTextField(
                         value = nameInput,
                         onValueChange = { nameInput = it },
                         label = { Text("Display Name") },
+                        placeholder = { Text("Your name") },
+                        leadingIcon = {
+                            Icon(Icons.Default.Person, contentDescription = null, tint = RoseGoldPrimary)
+                        },
+                        trailingIcon = {
+                            if (nameInput.isNotBlank()) {
+                                IconButton(onClick = { nameInput = "" }) {
+                                    Icon(Icons.Default.Clear, contentDescription = "Clear", modifier = Modifier.size(18.dp))
+                                }
+                            }
+                        },
                         singleLine = true,
+                        shape = RoundedCornerShape(12.dp),
                         modifier = Modifier.fillMaxWidth()
                     )
+
                     OutlinedTextField(
                         value = statusInput,
-                        onValueChange = { statusInput = it },
+                        onValueChange = { if (it.length <= 80) statusInput = it },
                         label = { Text("Status / Sweet Note") },
+                        placeholder = { Text("Loving every moment with you ✨") },
+                        leadingIcon = {
+                            Icon(Icons.Default.Favorite, contentDescription = null, tint = RoseGoldPrimary)
+                        },
+                        supportingText = {
+                            Text("${statusInput.length}/80", style = MaterialTheme.typography.labelSmall)
+                        },
                         singleLine = true,
+                        shape = RoundedCornerShape(12.dp),
                         modifier = Modifier.fillMaxWidth()
                     )
+
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        Text(
+                            "Quick Suggestions:",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            statusSuggestions.forEach { suggestion ->
+                                FilterChip(
+                                    selected = statusInput == suggestion,
+                                    onClick = { statusInput = suggestion },
+                                    label = { Text(suggestion, style = MaterialTheme.typography.bodySmall) },
+                                    shape = RoundedCornerShape(20.dp)
+                                )
+                            }
+                        }
+                    }
                 }
             },
             confirmButton = {
                 Button(
                     onClick = {
-                        viewModel.updateProfile(nameInput, statusInput, null)
-                        showEditProfileDialog = false
-                    }
+                        val finalName = nameInput.trim().ifBlank { user?.displayName ?: "Me" }
+                        val finalStatus = statusInput.trim().ifBlank { "Loving every moment with you ✨" }
+                        viewModel.updateProfile(
+                            displayName = finalName,
+                            status = finalStatus,
+                            newPhotoUri = null,
+                            removePhoto = false
+                        ) {
+                            Toast.makeText(context, "Profile updated successfully ✨", Toast.LENGTH_SHORT).show()
+                            showEditProfileDialog = false
+                        }
+                    },
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = RoseGoldPrimary,
+                        contentColor = Color.White
+                    ),
+                    enabled = !uiState.isUpdating
                 ) {
-                    Text("Save")
+                    if (uiState.isUpdating) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            color = Color.White,
+                            strokeWidth = 2.dp
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                    }
+                    Text("Save Changes")
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showEditProfileDialog = false }) {
+                TextButton(
+                    onClick = { showEditProfileDialog = false },
+                    enabled = !uiState.isUpdating
+                ) {
                     Text("Cancel")
                 }
             }

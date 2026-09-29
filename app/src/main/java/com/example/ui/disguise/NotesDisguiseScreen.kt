@@ -673,7 +673,6 @@ fun NotesDisguiseScreen(
             }
         }
     }
-}
 
     // Confirmation Dialog for Multiple / Batch Delete
     if (showBatchDeleteDialog) {
@@ -711,4 +710,6 @@ fun NotesDisguiseScreen(
             }
         )
     }
+}
+}
 }
