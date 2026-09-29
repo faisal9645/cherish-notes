@@ -47,7 +47,22 @@ class CherishApplication : Application() {
         instance = this
 
         try {
-            FirebaseApp.initializeApp(this)
+            if (FirebaseApp.getApps(this).isEmpty()) {
+                try {
+                    FirebaseApp.initializeApp(this)
+                } catch (_: Exception) {}
+            }
+            if (FirebaseApp.getApps(this).isEmpty()) {
+                val options = com.google.firebase.FirebaseOptions.Builder()
+                    .setApplicationId("1:589800064404:android:03cacc530a817c2971bb81")
+                    .setApiKey("AIzaSyD-bfI8gkOik7Iurqr85XSO-6beOOA_JGg")
+                    .setProjectId("gen-lang-client-0340321202")
+                    .setStorageBucket("gen-lang-client-0340321202.firebasestorage.app")
+                    .setGcmSenderId("589800064404")
+                    .build()
+                FirebaseApp.initializeApp(this, options)
+                Log.i("CherishApp", "FirebaseApp initialized with fallback options")
+            }
         } catch (e: Exception) {
             Log.w("CherishApp", "FirebaseApp initialization: ${e.message}")
         }

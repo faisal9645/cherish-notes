@@ -1,0 +1,34 @@
+{
+  "project_info": {
+    "project_number": "589800064404",
+    "project_id": "gen-lang-client-0340321202",
+    "storage_bucket": "gen-lang-client-0340321202.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:589800064404:android:03cacc530a817c2971bb81",
+        "android_client_info": {
+          "package_name": "com.aistudio.cherish.pxrtmv"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "589800064404-tggb6b8jqfrm6vo9p0skl6f2fr23hle4.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD-bfI8gkOik7Iurqr85XSO-6beOOA_JGg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
