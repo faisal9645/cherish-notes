@@ -93,6 +93,7 @@ fun FullScreenMediaViewer(
     var scale by remember(currentIndex) { mutableFloatStateOf(1f) }
     var offset by remember(currentIndex) { mutableStateOf(Offset.Zero) }
     var swipeOffsetY by remember(currentIndex) { mutableFloatStateOf(0f) }
+    var horizontalSwipeX by remember(currentIndex) { mutableFloatStateOf(0f) }
     var isChromeVisible by remember { mutableStateOf(true) }
 
     val filmstripListState = rememberLazyListState()
@@ -108,6 +109,7 @@ fun FullScreenMediaViewer(
         scale = 1f
         offset = Offset.Zero
         swipeOffsetY = 0f
+        horizontalSwipeX = 0f
     }
 
     fun zoomIn() {
@@ -247,6 +249,18 @@ fun FullScreenMediaViewer(
                                     }
                                 } else {
                                     swipeOffsetY = 0f
+                                }
+
+                                // Horizontal swipe between images when at 1x
+                                if (mediaList.size > 1 && abs(pan.y) < 15f) {
+                                    horizontalSwipeX += pan.x
+                                    if (horizontalSwipeX < -80f && currentIndex < mediaList.size - 1) {
+                                        currentIndex++
+                                        resetZoom()
+                                    } else if (horizontalSwipeX > 80f && currentIndex > 0) {
+                                        currentIndex--
+                                        resetZoom()
+                                    }
                                 }
                             }
                         }

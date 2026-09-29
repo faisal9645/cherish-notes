@@ -2,6 +2,7 @@ package com.example.ui.chat
 
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -40,6 +41,11 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.material.icons.automirrored.filled.Reply
+import kotlin.math.abs
+import kotlin.math.roundToInt
+
 private val timeFormatThreadLocal = object : ThreadLocal<SimpleDateFormat>() {
     override fun initialValue(): SimpleDateFormat {
         return SimpleDateFormat("h:mm a", Locale.getDefault())
@@ -61,7 +67,15 @@ fun MessageBubble(
     onImageClick: (String) -> Unit,
     onLongClick: () -> Unit,
     onReactionClick: (String) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    gallerySize: String = "medium",
+    onImageClickWithList: ((String, List<String>) -> Unit)? = null,
+    onSwipeToReply: (() -> Unit)? = null,
+    onOpenTheaterVideo: ((String) -> Unit)? = null,
+    voicePlaybackSpeed: Float = 1.0f,
+    onToggleVoiceSpeed: (() -> Unit)? = null,
+    isHighlighted: Boolean = false,
+    onReplyQuoteClick: ((replyToMessageId: String?) -> Unit)? = null
 ) {
     val bubbleShape = if (isFromMe) {
         RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp, bottomStart = 18.dp, bottomEnd = 4.dp)
@@ -86,6 +100,12 @@ fun MessageBubble(
     var showBurstHeart by remember { mutableStateOf(false) }
     val heartScale = remember { Animatable(0f) }
     val heartAlpha = remember { Animatable(0f) }
+
+    // Swipe-to-reply interactive state
+    val swipeOffset = remember { Animatable(0f) }
+    val replyIconAlpha by remember {
+        derivedStateOf { (abs(swipeOffset.value) / 45f).coerceIn(0f, 1f) }
+    }
 
     fun triggerHeartBurst() {
         scope.launch {
@@ -113,41 +133,99 @@ fun MessageBubble(
         }
     }
 
-    Column(
+    Row(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 3.dp),
-        horizontalAlignment = if (isFromMe) Alignment.End else Alignment.Start
+            .padding(horizontal = 12.dp, vertical = 2.5.dp),
+        horizontalArrangement = if (isFromMe) Arrangement.End else Arrangement.Start,
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Box(
+        if (!isFromMe && onSwipeToReply != null) {
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.Reply,
+                contentDescription = "Swipe to reply",
+                tint = RoseGoldPrimary.copy(alpha = replyIconAlpha),
+                modifier = Modifier
+                    .size(22.dp)
+                    .graphicsLayer {
+                        scaleX = replyIconAlpha
+                        scaleY = replyIconAlpha
+                    }
+                    .padding(end = 4.dp)
+            )
+        }
+
+        Column(
+            horizontalAlignment = if (isFromMe) Alignment.End else Alignment.Start,
             modifier = Modifier
-                .widthIn(min = 80.dp, max = 310.dp)
-                .then(
-                    if (isFromMe) Modifier.appGradientShadow(bubbleShape)
-                    else Modifier
-                )
-                .clip(bubbleShape)
-                .background(
-                    if (isFromMe) appHorizontalGradient()
-                    else androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.surfaceVariant)
-                )
+                .offset { androidx.compose.ui.unit.IntOffset(swipeOffset.value.roundToInt(), 0) }
                 .pointerInput(message.id) {
-                    detectTapGestures(
-                        onTap = {
-                            if (message.getTypedType() == MessageType.IMAGE && message.mediaUrl != null) {
-                                onImageClick(message.mediaUrl)
+                    if (onSwipeToReply != null) {
+                        detectHorizontalDragGestures(
+                            onDragEnd = {
+                                if (abs(swipeOffset.value) > 42f) {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    onSwipeToReply()
+                                }
+                                scope.launch {
+                                    swipeOffset.animateTo(0f, spring(dampingRatio = Spring.DampingRatioMediumBouncy))
+                                }
+                            },
+                            onDragCancel = {
+                                scope.launch { swipeOffset.animateTo(0f) }
+                            },
+                            onHorizontalDrag = { _, dragAmount ->
+                                val target = if (isFromMe) {
+                                    (swipeOffset.value + dragAmount).coerceIn(-65f, 0f)
+                                } else {
+                                    (swipeOffset.value + dragAmount).coerceIn(0f, 65f)
+                                }
+                                scope.launch { swipeOffset.snapTo(target) }
                             }
-                        },
-                        onLongPress = {
-                            onLongClick()
-                        },
-                        onDoubleTap = {
-                            triggerHeartBurst()
-                        }
-                    )
+                        )
+                    }
                 }
-                .testTag("message_bubble_${message.id}")
         ) {
+            Box(
+                modifier = Modifier
+                    .widthIn(min = 80.dp, max = 310.dp)
+                    .then(
+                        if (isFromMe) Modifier.appGradientShadow(bubbleShape)
+                        else Modifier
+                    )
+                    .clip(bubbleShape)
+                    .then(
+                        if (isHighlighted) Modifier.border(BorderStroke(2.dp, RoseGoldPrimary), bubbleShape)
+                        else Modifier
+                    )
+                    .background(
+                        if (isFromMe) appHorizontalGradient()
+                        else androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.surfaceVariant)
+                    )
+                    .pointerInput(message.id) {
+                        detectTapGestures(
+                            onTap = {
+                                if (message.getTypedType() == MessageType.IMAGE) {
+                                    val mediaList = message.getAllMediaUrls()
+                                    if (mediaList.isNotEmpty()) {
+                                        if (onImageClickWithList != null) {
+                                            onImageClickWithList(mediaList[0], mediaList)
+                                        } else {
+                                            onImageClick(mediaList[0])
+                                        }
+                                    }
+                                }
+                            },
+                            onLongPress = {
+                                onLongClick()
+                            },
+                            onDoubleTap = {
+                                triggerHeartBurst()
+                            }
+                        )
+                    }
+                    .testTag("message_bubble_${message.id}")
+            ) {
             Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
                 // Reply Quote Preview
                 if (!message.replyToText.isNullOrEmpty()) {
@@ -157,6 +235,9 @@ fun MessageBubble(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(bottom = 6.dp)
+                            .clickable {
+                                onReplyQuoteClick?.invoke(message.replyToMessageId)
+                            }
                     ) {
                         Row(modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)) {
                             Box(
@@ -187,16 +268,19 @@ fun MessageBubble(
                 // Media Content
                 when (message.getTypedType()) {
                     MessageType.IMAGE -> {
-                        if (!message.mediaUrl.isNullOrEmpty()) {
-                            AsyncImage(
-                                model = message.mediaUrl,
-                                contentDescription = "Shared photo",
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(200.dp)
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .padding(bottom = 6.dp)
+                        val mediaList = message.getAllMediaUrls()
+                        if (mediaList.isNotEmpty()) {
+                            AdaptiveMediaGrid(
+                                urls = mediaList,
+                                gallerySize = gallerySize,
+                                onImageClick = { _, clickedUrl ->
+                                    if (onImageClickWithList != null) {
+                                        onImageClickWithList(clickedUrl, mediaList)
+                                    } else {
+                                        onImageClick(clickedUrl)
+                                    }
+                                },
+                                modifier = Modifier.padding(bottom = 6.dp)
                             )
                         }
                     }
@@ -234,12 +318,37 @@ fun MessageBubble(
                                     inactiveColor = textColor.copy(alpha = 0.35f),
                                     height = 24.dp
                                 )
-                                Spacer(modifier = Modifier.height(2.dp))
-                                Text(
-                                    text = "${message.durationSeconds}s • Voice note",
-                                    fontSize = 10.sp,
-                                    color = textColor.copy(alpha = 0.7f)
-                                )
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.fillMaxWidth().padding(top = 2.dp)
+                                ) {
+                                    Text(
+                                        text = "${message.durationSeconds}s • Voice note",
+                                        fontSize = 10.sp,
+                                        color = textColor.copy(alpha = 0.7f),
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    if (isPlayingAudio && onToggleVoiceSpeed != null) {
+                                        Surface(
+                                            shape = RoundedCornerShape(10.dp),
+                                            color = (if (isFromMe) Color.White else MaterialTheme.colorScheme.primary).copy(alpha = 0.2f),
+                                            modifier = Modifier.clickable { onToggleVoiceSpeed() }
+                                        ) {
+                                            val speedLabel = when (voicePlaybackSpeed) {
+                                                1.5f -> "1.5x"
+                                                2.0f -> "2x"
+                                                else -> "1x"
+                                            }
+                                            Text(
+                                                text = speedLabel,
+                                                fontSize = 10.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = textColor,
+                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                            )
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
@@ -273,7 +382,7 @@ fun MessageBubble(
                     else -> {}
                 }
 
-                // Text Content
+                // Text Content & Inline YouTube / Link Preview
                 if (message.text.isNotEmpty() && message.getTypedType() != MessageType.AUDIO) {
                     Text(
                         text = message.text,
@@ -281,15 +390,44 @@ fun MessageBubble(
                         style = MaterialTheme.typography.bodyMedium,
                         fontStyle = if (message.isDeleted) FontStyle.Italic else FontStyle.Normal
                     )
+
+                    val youtubeVideoId = remember(message.text) {
+                        YouTubeHelper.extractVideoId(message.text)
+                    }
+                    val genericUrl = remember(message.text, youtubeVideoId) {
+                        if (youtubeVideoId == null) GenericLinkHelper.extractUrl(message.text) else null
+                    }
+
+                    if (youtubeVideoId != null) {
+                        Spacer(modifier = Modifier.height(6.dp))
+                        InlineYouTubeCard(
+                            videoId = youtubeVideoId,
+                            onOpenTheater = { vid -> onOpenTheaterVideo?.invoke(vid) }
+                        )
+                    } else if (genericUrl != null) {
+                        Spacer(modifier = Modifier.height(6.dp))
+                        LinkPreviewCard(url = genericUrl, textColor = textColor)
+                    }
                 }
 
-                // Bubble Footer: Time, Status Ticks, Star, Edit Label
+                // Bubble Footer: Time, Status Ticks, Pin, Star, Edit Label
                 Row(
                     modifier = Modifier
                         .align(Alignment.End)
                         .padding(top = 4.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    if (message.isPinned) {
+                        Icon(
+                            imageVector = Icons.Filled.PushPin,
+                            contentDescription = "Pinned",
+                            tint = if (isFromMe) Color.White.copy(alpha = 0.9f) else MaterialTheme.colorScheme.primary,
+                            modifier = Modifier
+                                .size(12.dp)
+                                .padding(end = 4.dp)
+                        )
+                    }
+
                     if (message.isStarred) {
                         Icon(
                             imageVector = Icons.Default.Star,
@@ -395,6 +533,23 @@ fun MessageBubble(
                     )
                 }
             }
+        }
+
+        }
+
+        if (isFromMe && onSwipeToReply != null) {
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.Reply,
+                contentDescription = "Swipe to reply",
+                tint = RoseGoldPrimary.copy(alpha = replyIconAlpha),
+                modifier = Modifier
+                    .size(22.dp)
+                    .graphicsLayer {
+                        scaleX = replyIconAlpha
+                        scaleY = replyIconAlpha
+                    }
+                    .padding(start = 4.dp)
+            )
         }
     }
 }

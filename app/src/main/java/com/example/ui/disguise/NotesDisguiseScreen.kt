@@ -6,11 +6,15 @@ import android.os.Vibrator
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.ui.graphics.graphicsLayer
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -91,7 +95,13 @@ fun NotesDisguiseScreen(
         viewModel.clearSelection()
     }
 
+    // Secret unlock transition state ("dopamine-like" delight effect)
+    var isUnlockingSecret by remember { mutableStateOf(false) }
+    val unlockProgress = remember { Animatable(0f) }
+
     fun triggerSecretUnlock() {
+        if (isUnlockingSecret) return
+        isUnlockingSecret = true
         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
         try {
             val vibrator = context.getSystemService(Vibrator::class.java)
@@ -99,17 +109,24 @@ fun NotesDisguiseScreen(
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                     vibrator.vibrate(
                         VibrationEffect.createWaveform(
-                            longArrayOf(0, 100, 100, 200),
+                            longArrayOf(0, 35, 70, 50),
                             -1
                         )
                     )
                 } else {
                     @Suppress("DEPRECATION")
-                    vibrator.vibrate(200)
+                    vibrator.vibrate(100)
                 }
             }
         } catch (_: Exception) {}
-        onSecretGestureTriggered()
+
+        coroutineScope.launch {
+            unlockProgress.animateTo(
+                targetValue = 1f,
+                animationSpec = tween(durationMillis = 360, easing = FastOutSlowInEasing)
+            )
+            onSecretGestureTriggered()
+        }
     }
 
     // Full-screen Note Editor Screen (fixes overlapping Save Note button issue by using real window insets)
@@ -153,10 +170,11 @@ fun NotesDisguiseScreen(
         }
     }
 
-    Surface(
-        modifier = modifier.fillMaxSize(),
-        color = Color.White
-    ) {
+    Box(modifier = modifier.fillMaxSize()) {
+        Surface(
+            modifier = Modifier.fillMaxSize(),
+            color = Color.White
+        ) {
         Scaffold(
             snackbarHost = { SnackbarHost(snackbarHostState) },
             topBar = {
@@ -343,8 +361,18 @@ fun NotesDisguiseScreen(
                     // Search Bar
                     OutlinedTextField(
                         value = uiState.searchQuery,
-                        onValueChange = {
-                            viewModel.setSearchQuery(it)
+                        onValueChange = { input ->
+                            // Check secret keyword trigger if enabled in Settings
+                            if (securityPreferences.isKeywordTriggerEnabled()) {
+                                if (securityPreferences.verifyDisguisePasscode(input)) {
+                                    // Clear query immediately so trigger word is never visible or stored
+                                    viewModel.setSearchQuery("")
+                                    triggerSecretUnlock()
+                                    return@OutlinedTextField
+                                }
+                            }
+                            // Normal search continues smoothly
+                            viewModel.setSearchQuery(input)
                         },
                         placeholder = {
                             Text(
@@ -458,25 +486,42 @@ fun NotesDisguiseScreen(
                                         val startTime = System.currentTimeMillis()
                                         var unlocked = false
 
-                                        val timerJob = coroutineScope.launch {
-                                            holdProgress.snapTo(0f)
-                                            holdProgress.animateTo(
-                                                targetValue = 1f,
-                                                animationSpec = tween(
-                                                    durationMillis = 2000,
-                                                    easing = LinearEasing
-                                                )
-                                            )
-                                            unlocked = true
-                                            triggerSecretUnlock()
-                                        }
+                                        val holdDurationSec = securityPreferences.getPlusIconHoldDuration()
+                                        val timerJob = if (holdDurationSec > 0) {
+                                            val totalDurationMillis = holdDurationSec * 1000L
+                                            coroutineScope.launch {
+                                                holdProgress.snapTo(0f)
+                                                var lastTick = 0
+                                                while (isActive) {
+                                                    val elapsed = System.currentTimeMillis() - startTime
+                                                    val progress = (elapsed.toFloat() / totalDurationMillis).coerceIn(0f, 1f)
+                                                    holdProgress.snapTo(progress)
+
+                                                    // Progressive subtle haptic feedback as user holds
+                                                    val currentTick = (progress * 4).toInt()
+                                                    if (currentTick > lastTick && currentTick < 4) {
+                                                        lastTick = currentTick
+                                                        try {
+                                                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                                        } catch (_: Exception) {}
+                                                    }
+
+                                                    if (progress >= 1f) {
+                                                        unlocked = true
+                                                        triggerSecretUnlock()
+                                                        break
+                                                    }
+                                                    kotlinx.coroutines.delay(16)
+                                                }
+                                            }
+                                        } else null
 
                                         val up = waitForUpOrCancellation()
-                                        timerJob.cancel()
+                                        timerJob?.cancel()
                                         isHoldingFab = false
                                         val elapsed = System.currentTimeMillis() - startTime
                                         coroutineScope.launch {
-                                            holdProgress.snapTo(0f)
+                                            holdProgress.animateTo(0f, tween(150))
                                         }
 
                                         if (!unlocked) {
@@ -643,6 +688,59 @@ fun NotesDisguiseScreen(
             }
         }
     }
+
+    // Dopamine-like delight effect overlay for Secret Chat opening
+    if (isUnlockingSecret) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    androidx.compose.ui.graphics.Brush.radialGradient(
+                        colors = listOf(
+                            RoseGoldPrimary.copy(alpha = 0.95f * unlockProgress.value),
+                            AmethystTertiary.copy(alpha = 0.97f * unlockProgress.value),
+                            Color(0xFF0F172A).copy(alpha = 0.99f * unlockProgress.value)
+                        ),
+                        radius = 1200f * unlockProgress.value.coerceAtLeast(0.1f)
+                    )
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+                modifier = Modifier.graphicsLayer {
+                    scaleX = 0.5f + (0.5f * unlockProgress.value)
+                    scaleY = 0.5f + (0.5f * unlockProgress.value)
+                    alpha = unlockProgress.value
+                }
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(80.dp)
+                        .clip(CircleShape)
+                        .background(Color.White.copy(alpha = 0.22f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Favorite,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(46.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    text = "Entering Private Space ✨",
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp,
+                    letterSpacing = 0.5.sp
+                )
+            }
+        }
+    }
+}
 
     // Confirmation Dialog for Multiple / Batch Delete
     if (showBatchDeleteDialog) {

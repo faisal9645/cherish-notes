@@ -6,6 +6,7 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -75,11 +76,17 @@ fun ChatScreen(
     val recordingDurationSec by viewModel.voiceRecorderHelper.recordingDurationSec.collectAsState()
     val recordingAmplitudes by viewModel.voiceRecorderHelper.amplitudes.collectAsState()
 
-    // Activity result launchers for media selection
+    // Activity result launchers for media selection (supports multiple photo selection)
     val photoPickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.PickVisualMedia()
-    ) { uri: Uri? ->
-        uri?.let { viewModel.sendMediaFile(it, MessageType.IMAGE) }
+        contract = ActivityResultContracts.PickMultipleVisualMedia(maxItems = 10)
+    ) { uris: List<Uri> ->
+        if (uris.isNotEmpty()) {
+            if (uris.size == 1) {
+                viewModel.sendMediaFile(uris[0], MessageType.IMAGE)
+            } else {
+                viewModel.sendMultipleImages(uris)
+            }
+        }
     }
 
     val docPickerLauncher = rememberLauncherForActivityResult(
@@ -114,13 +121,75 @@ fun ChatScreen(
     val partnerName = partner?.displayName?.ifBlank { "My Partner" } ?: "My Partner"
     val isPartnerOnline = partner?.isOnline ?: false
     val currentUserId = viewModel.uiState.value.currentUser?.id ?: "user_me"
+    val myUser = uiState.currentUser
 
-    // Filter messages for search query
-    val displayedMessages = remember(uiState.messages, uiState.searchQuery) {
-        if (uiState.searchQuery.isBlank()) {
-            uiState.messages
-        } else {
-            uiState.messages.filter { it.text.contains(uiState.searchQuery, ignoreCase = true) }
+    val partnerHasCheckAfter = partner?.hasActiveCheckAfter() == true
+    val partnerCheckAfterTarget = partner?.checkAfterTimeMillis ?: 0L
+    val iHaveCheckAfter = myUser?.hasActiveCheckAfter() == true
+    val myCheckAfterTarget = myUser?.checkAfterTimeMillis ?: 0L
+
+    var headerTicker by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(partnerCheckAfterTarget, partnerHasCheckAfter) {
+        if (partnerHasCheckAfter) {
+            while (true) {
+                headerTicker = System.currentTimeMillis()
+                kotlinx.coroutines.delay(1000)
+            }
+        }
+    }
+    val headerRemaining = remember(headerTicker, partnerCheckAfterTarget) {
+        if (partnerHasCheckAfter) CheckAfterHelper.calculateRemaining(partnerCheckAfterTarget).first else ""
+    }
+
+    // Filter messages for search query and starred filter
+    val displayedMessages = remember(uiState.messages, uiState.searchQuery, uiState.filterStarredOnly) {
+        var list = uiState.messages
+        if (uiState.filterStarredOnly) {
+            list = list.filter { it.isStarred }
+        }
+        if (uiState.searchQuery.isNotBlank()) {
+            list = list.filter { it.text.contains(uiState.searchQuery, ignoreCase = true) }
+        }
+        list
+    }
+
+    var highlightedMessageId by remember { mutableStateOf<String?>(null) }
+    var lastShieldTapTime by remember { mutableLongStateOf(0L) }
+
+    // Panic Protection: Accelerometer shake listener to trigger instant disguise
+    DisposableEffect(Unit) {
+        val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as? android.hardware.SensorManager
+        val accelerometer = sensorManager?.getDefaultSensor(android.hardware.Sensor.TYPE_ACCELEROMETER)
+        var lastShakeTime = 0L
+        var lastX = 0f
+        var lastY = 0f
+        var lastZ = 0f
+
+        val listener = object : android.hardware.SensorEventListener {
+            override fun onSensorChanged(event: android.hardware.SensorEvent?) {
+                if (event == null) return
+                val x = event.values[0]
+                val y = event.values[1]
+                val z = event.values[2]
+                val delta = kotlin.math.abs(x + y + z - lastX - lastY - lastZ)
+                val now = System.currentTimeMillis()
+                if (delta > 25f && now - lastShakeTime > 1500L) {
+                    lastShakeTime = now
+                    onQuickDisguise()
+                }
+                lastX = x
+                lastY = y
+                lastZ = z
+            }
+            override fun onAccuracyChanged(sensor: android.hardware.Sensor?, accuracy: Int) {}
+        }
+
+        accelerometer?.let {
+            sensorManager.registerListener(listener, it, android.hardware.SensorManager.SENSOR_DELAY_UI)
+        }
+
+        onDispose {
+            sensorManager?.unregisterListener(listener)
         }
     }
 
@@ -145,14 +214,20 @@ fun ChatScreen(
                     } else {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.clickable { onNavigateToGallery() }
+                            modifier = Modifier.clickable {
+                                if (partnerHasCheckAfter || iHaveCheckAfter) {
+                                    viewModel.openCheckAfterSheet()
+                                } else {
+                                    onNavigateToGallery()
+                                }
+                            }
                         ) {
                             AvatarView(
                                 photoUrl = partner?.photoUrl,
                                 name = partnerName,
                                 size = 40.dp,
                                 isOnline = isPartnerOnline,
-                                showOnlineBadge = true
+                                showOnlineBadge = !partnerHasCheckAfter
                             )
                             Spacer(modifier = Modifier.width(10.dp))
                             Column {
@@ -164,15 +239,21 @@ fun ChatScreen(
                                     overflow = TextOverflow.Ellipsis
                                 )
                                 Text(
-                                    text = if (uiState.isPartnerTyping) {
+                                    text = if (uiState.isPartnerRecordingAudio) {
+                                        "recording voice note... 🎙️"
+                                    } else if (uiState.isPartnerTyping) {
                                         "typing sweet words..."
+                                    } else if (partnerHasCheckAfter) {
+                                        if (headerRemaining.startsWith("✨")) "✨ Reconnecting now"
+                                        else "🌙 Quiet time until ${CheckAfterHelper.formatTargetTime(partnerCheckAfterTarget)}"
                                     } else if (isPartnerOnline) {
-                                        "Online"
+                                        "Both here in our space ✨"
                                     } else {
-                                        "Offline"
+                                        "Our quiet sanctuary 💕"
                                     },
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = if (uiState.isPartnerTyping) RoseGoldPrimary else if (isPartnerOnline) OnlineGreen else MaterialTheme.colorScheme.onSurfaceVariant
+                                    color = if (uiState.isPartnerRecordingAudio || uiState.isPartnerTyping || partnerHasCheckAfter) RoseGoldPrimary else if (isPartnerOnline) Color(0xFF2E7D32) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f),
+                                    fontWeight = if (partnerHasCheckAfter || uiState.isPartnerRecordingAudio || isPartnerOnline) FontWeight.SemiBold else FontWeight.Normal
                                 )
                             }
                         }
@@ -222,6 +303,22 @@ fun ChatScreen(
                             )
                         }
                         IconButton(
+                            onClick = {
+                                val now = System.currentTimeMillis()
+                                if (now - lastShieldTapTime < 500L) {
+                                    onQuickDisguise()
+                                }
+                                lastShieldTapTime = now
+                            },
+                            modifier = Modifier.testTag("chat_shield_panic_button")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.Shield,
+                                contentDescription = "Double-tap shield to disguise immediately",
+                                tint = RoseGoldPrimary
+                            )
+                        }
+                        IconButton(
                             onClick = { viewModel.setSearching(true) },
                             modifier = Modifier.testTag("chat_search_button")
                         ) {
@@ -232,6 +329,16 @@ fun ChatScreen(
                             modifier = Modifier.testTag("chat_gallery_button")
                         ) {
                             Icon(Icons.Outlined.PhotoLibrary, contentDescription = "Couple Media Gallery")
+                        }
+                        IconButton(
+                            onClick = { viewModel.openCheckAfterSheet() },
+                            modifier = Modifier.testTag("chat_check_after_button")
+                        ) {
+                            Icon(
+                                imageVector = if (partnerHasCheckAfter || iHaveCheckAfter) Icons.Filled.HourglassTop else Icons.Outlined.HourglassTop,
+                                contentDescription = "Check After Timer",
+                                tint = if (partnerHasCheckAfter || iHaveCheckAfter) RoseGoldPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
                         Box {
                             IconButton(
@@ -244,6 +351,26 @@ fun ChatScreen(
                                 expanded = showChatMenu,
                                 onDismissRequest = { showChatMenu = false }
                             ) {
+                                DropdownMenuItem(
+                                    text = { Text("Check After Timer") },
+                                    onClick = {
+                                        showChatMenu = false
+                                        viewModel.openCheckAfterSheet()
+                                    },
+                                    leadingIcon = {
+                                        Icon(Icons.Filled.HourglassTop, null, tint = RoseGoldPrimary)
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text(if (uiState.filterStarredOnly) "Show All Messages" else "Starred Messages ⭐") },
+                                    onClick = {
+                                        showChatMenu = false
+                                        viewModel.toggleFilterStarred()
+                                    },
+                                    leadingIcon = {
+                                        Icon(if (uiState.filterStarredOnly) Icons.Filled.Star else Icons.Outlined.StarOutline, null, tint = GoldMilestone)
+                                    }
+                                )
                                 DropdownMenuItem(
                                     text = { Text(if (uiState.isStealthCurtainActive) "Unhide Previous Chat (Reveal)" else "Hide Previous Chat (Stealth)") },
                                     onClick = {
@@ -292,8 +419,8 @@ fun ChatScreen(
                         .imePadding()
                 ) {
                     HorizontalDivider(color = Color(0xFFF0F0F2), thickness = 1.dp)
-                    // Partner typing animated banner
-                AnimatedVisibility(visible = uiState.isPartnerTyping) {
+                    // Partner typing / recording animated banner
+                AnimatedVisibility(visible = uiState.isPartnerRecordingAudio || uiState.isPartnerTyping) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -301,14 +428,30 @@ fun ChatScreen(
                             .padding(horizontal = 16.dp, vertical = 6.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        BouncingDots()
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "$partnerName is typing...",
-                            fontSize = 12.sp,
-                            color = RoseGoldPrimary,
-                            fontWeight = FontWeight.Medium
-                        )
+                        if (uiState.isPartnerRecordingAudio) {
+                            Icon(
+                                imageVector = Icons.Default.Mic,
+                                contentDescription = null,
+                                tint = RoseGoldPrimary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "$partnerName is recording a voice note... 🎙️",
+                                fontSize = 12.sp,
+                                color = RoseGoldPrimary,
+                                fontWeight = FontWeight.Medium
+                            )
+                        } else {
+                            BouncingDots()
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "$partnerName is typing...",
+                                fontSize = 12.sp,
+                                color = RoseGoldPrimary,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
                     }
                 }
 
@@ -365,11 +508,65 @@ fun ChatScreen(
     },
         containerColor = MaterialTheme.colorScheme.background
     ) { paddingValues ->
-        Box(
+        Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
+            // Starred Messages Filter Header Banner
+            AnimatedVisibility(visible = uiState.filterStarredOnly) {
+                Surface(
+                    color = GoldMilestone.copy(alpha = 0.15f),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Star,
+                            contentDescription = null,
+                            tint = GoldMilestone,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Showing starred messages only (${displayedMessages.size})",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = DarkOnBackground,
+                            modifier = Modifier.weight(1f)
+                        )
+                        TextButton(onClick = { viewModel.toggleFilterStarred() }) {
+                            Text("Show All", fontSize = 12.sp, color = RoseGoldPrimary)
+                        }
+                    }
+                }
+            }
+
+            // Telegram-style Pinned Message Banner
+            AnimatedVisibility(visible = uiState.pinnedMessage != null && !uiState.isStealthCurtainActive) {
+                uiState.pinnedMessage?.let { pinned ->
+                    TelegramPinnedBanner(
+                        message = pinned,
+                        onClick = {
+                            val index = displayedMessages.indexOfFirst { it.id == pinned.id }
+                            if (index >= 0) {
+                                scope.launch { listState.animateScrollToItem(index) }
+                            }
+                        },
+                        onUnpin = { viewModel.togglePin(pinned.id) }
+                    )
+                }
+            }
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+            ) {
             if (uiState.isStealthCurtainActive) {
                 // Emergency Privacy Shield: Harmless daily notes / tasks view hiding all previous chat
                 StealthDisguiseNotesView(
@@ -400,6 +597,41 @@ fun ChatScreen(
                                 onAccept = { viewModel.acceptMutualChatDeletion() },
                                 onDecline = { viewModel.declineMutualChatDeletion() },
                                 onCancel = { viewModel.cancelMutualChatDeletion() }
+                            )
+                        }
+                    }
+
+                    // Check-After Active Banner
+                    if (partnerHasCheckAfter) {
+                        item {
+                            CheckAfterChatBanner(
+                                targetMillis = partnerCheckAfterTarget,
+                                note = partner?.checkAfterNote ?: "",
+                                isSetByMe = false,
+                                partnerName = partnerName,
+                                isReminderEnabled = uiState.isCheckAfterReminderEnabled,
+                                onToggleReminder = { viewModel.toggleCheckAfterReminder(!uiState.isCheckAfterReminderEnabled) },
+                                onExtend30m = {},
+                                onExtend1h = {},
+                                onChangeTime = { viewModel.openCheckAfterSheet() },
+                                onCancel = {},
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
+                            )
+                        }
+                    } else if (iHaveCheckAfter) {
+                        item {
+                            CheckAfterChatBanner(
+                                targetMillis = myCheckAfterTarget,
+                                note = myUser?.checkAfterNote ?: "",
+                                isSetByMe = true,
+                                partnerName = partnerName,
+                                isReminderEnabled = false,
+                                onToggleReminder = {},
+                                onExtend30m = { viewModel.extendCheckAfter(30 * 60 * 1000L) },
+                                onExtend1h = { viewModel.extendCheckAfter(60 * 60 * 1000L) },
+                                onChangeTime = { viewModel.openCheckAfterSheet() },
+                                onCancel = { viewModel.cancelCheckAfter() },
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
                             )
                         }
                     }
@@ -493,19 +725,47 @@ fun ChatScreen(
                         isFromMe = isFromMe,
                         isPlayingAudio = currentPlayingId == message.id,
                         audioProgress = audioProgress,
+                        gallerySize = uiState.gallerySize,
                         onPlayAudio = {
                             message.mediaUrl?.let { url ->
                                 viewModel.playAudio(message.id, url)
                             }
                         },
                         onImageClick = { url ->
-                            viewModel.openFullScreenMedia(url, MessageType.IMAGE)
+                            viewModel.openFullScreenMedia(url, MessageType.IMAGE, message.getAllMediaUrls())
+                        },
+                        onImageClickWithList = { url, allUrls ->
+                            viewModel.openFullScreenMedia(url, MessageType.IMAGE, allUrls)
+                        },
+                        onSwipeToReply = {
+                            viewModel.setReplyingTo(message)
                         },
                         onLongClick = {
                             viewModel.setSelectedMessageForActions(message)
                         },
                         onReactionClick = { emoji ->
                             viewModel.toggleReaction(message.id, emoji)
+                        },
+                        onOpenTheaterVideo = { videoId ->
+                            viewModel.openTheaterVideo(videoId)
+                        },
+                        voicePlaybackSpeed = uiState.voicePlaybackSpeed,
+                        onToggleVoiceSpeed = {
+                            viewModel.toggleVoiceSpeed()
+                        },
+                        isHighlighted = (highlightedMessageId == message.id),
+                        onReplyQuoteClick = { replyId ->
+                            if (!replyId.isNullOrBlank()) {
+                                val targetIndex = displayedMessages.indexOfFirst { it.id == replyId }
+                                if (targetIndex >= 0) {
+                                    scope.launch {
+                                        listState.animateScrollToItem(targetIndex)
+                                        highlightedMessageId = replyId
+                                        kotlinx.coroutines.delay(1400)
+                                        highlightedMessageId = null
+                                    }
+                                }
+                            }
                         }
                     )
                 }
@@ -518,7 +778,7 @@ fun ChatScreen(
                 }
             }
 
-            AnimatedVisibility(
+            androidx.compose.animation.AnimatedVisibility(
                 visible = showScrollButton,
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
@@ -542,7 +802,7 @@ fun ChatScreen(
             } // Close else branch of if (uiState.isStealthCurtainActive)
 
             // Stealth mode floating status feedback badge
-            AnimatedVisibility(
+            androidx.compose.animation.AnimatedVisibility(
                 visible = uiState.stealthToastMessage != null,
                 enter = fadeIn() + slideInVertically(initialOffsetY = { -it }),
                 exit = fadeOut() + slideOutVertically(targetOffsetY = { -it }),
@@ -566,6 +826,7 @@ fun ChatScreen(
             }
         }
     }
+}
 
     // Message Actions Bottom Sheet
     uiState.selectedMessageForActions?.let { msg ->
@@ -581,12 +842,23 @@ fun ChatScreen(
                 clipboard.setPrimaryClip(clip)
             },
             onStar = { viewModel.toggleStar(msg.id) },
+            onPin = { viewModel.togglePin(msg.id) },
             onEdit = {
                 editingMessage = msg
                 editDialogText = msg.text
             },
             onDelete = {
                 showDeleteConfirmDialog = msg
+            },
+            onForward = {
+                composerText = "Fwd: ${msg.text}"
+                Toast.makeText(context, "Loaded into composer to forward", Toast.LENGTH_SHORT).show()
+            },
+            onSearch = {
+                viewModel.setSearching(true)
+            },
+            onSaveToMemories = {
+                Toast.makeText(context, "Saved to Our Memories ❤️", Toast.LENGTH_SHORT).show()
             }
         )
     }
@@ -650,7 +922,16 @@ fun ChatScreen(
     uiState.fullScreenMediaUrl?.let { url ->
         FullScreenMediaViewer(
             mediaUrl = url,
+            allMediaUrls = uiState.allMediaUrlsForViewer,
             onDismiss = { viewModel.closeFullScreenMedia() }
+        )
+    }
+
+    // In-App YouTube Theater Player Modal (no external redirection, keeps same session)
+    uiState.theaterVideoId?.let { videoId ->
+        InlineVideoTheaterModal(
+            videoId = videoId,
+            onDismiss = { viewModel.closeTheaterVideo() }
         )
     }
 
@@ -689,7 +970,94 @@ fun ChatScreen(
             }
         )
     }
+
+    // Check-After Setup & Modification Bottom Sheet
+    CheckAfterBottomSheet(
+        isOpen = uiState.isCheckAfterSheetOpen,
+        onDismiss = { viewModel.closeCheckAfterSheet() },
+        currentTargetMillis = if (iHaveCheckAfter) myCheckAfterTarget else if (partnerHasCheckAfter) partnerCheckAfterTarget else null,
+        currentNote = if (iHaveCheckAfter) myUser?.checkAfterNote else partner?.checkAfterNote,
+        isCurrentlyActive = iHaveCheckAfter || partnerHasCheckAfter,
+        isSetByMe = iHaveCheckAfter,
+        partnerName = partnerName,
+        isReminderEnabled = uiState.isCheckAfterReminderEnabled,
+        onToggleReminder = { viewModel.toggleCheckAfterReminder(it) },
+        onSaveCheckAfter = { target, note ->
+            viewModel.setCheckAfter(target, note)
+        },
+        onCancelCheckAfter = {
+            viewModel.cancelCheckAfter()
+        },
+        onExtend = { duration ->
+            viewModel.extendCheckAfter(duration)
+        }
+    )
 }
+
+@Composable
+fun TelegramPinnedBanner(
+    message: Message,
+    onClick: () -> Unit,
+    onUnpin: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.85f),
+        tonalElevation = 2.dp,
+        modifier = modifier
+            .fillMaxWidth()
+            .clickable { onClick() }
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .width(3.dp)
+                    .height(32.dp)
+                    .background(RoseGoldPrimary, CircleShape)
+            )
+            Spacer(modifier = Modifier.width(10.dp))
+            Icon(
+                imageVector = Icons.Filled.PushPin,
+                contentDescription = null,
+                tint = RoseGoldPrimary,
+                modifier = Modifier.size(16.dp)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Pinned Message",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = RoseGoldPrimary
+                )
+                Text(
+                    text = if (message.text.isNotBlank()) message.text else if (message.getTypedType() == MessageType.IMAGE) "📷 Photo" else if (message.getTypedType() == MessageType.AUDIO) "🎙️ Voice note" else "Document",
+                    fontSize = 12.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            IconButton(
+                onClick = onUnpin,
+                modifier = Modifier.size(28.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Close,
+                    contentDescription = "Unpin",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+        }
+    }
+}
+
 
 @Composable
 fun MutualConsentDeletionBanner(

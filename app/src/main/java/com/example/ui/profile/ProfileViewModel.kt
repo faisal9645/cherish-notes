@@ -21,6 +21,14 @@ data class ProfileUiState(
     val coupleKey: String = "",
     val isDisguiseModeEnabled: Boolean = true,
     val disguisePasscode: String = "love",
+    val isKeywordTriggerEnabled: Boolean = true,
+    val plusHoldDurationSec: Int = 2,
+    val gallerySize: String = "medium",
+    val isHapticEnabled: Boolean = true,
+    val isAutoPlayMedia: Boolean = true,
+    val isHighQualityMedia: Boolean = true,
+    val isDoubleTapZoomEnabled: Boolean = true,
+    val isCheckAfterReminderEnabled: Boolean = true,
     val isUpdating: Boolean = false
 )
 
@@ -38,7 +46,15 @@ class ProfileViewModel(
             isHideNotificationContent = securityPreferences.isHideNotificationContent(),
             coupleKey = securityPreferences.getCoupleSecretKey(),
             isDisguiseModeEnabled = securityPreferences.isDisguiseModeEnabled(),
-            disguisePasscode = securityPreferences.getDisguisePasscode()
+            disguisePasscode = securityPreferences.getDisguisePasscode(),
+            isKeywordTriggerEnabled = securityPreferences.isKeywordTriggerEnabled(),
+            plusHoldDurationSec = securityPreferences.getPlusIconHoldDuration(),
+            gallerySize = securityPreferences.getImageGallerySize(),
+            isHapticEnabled = securityPreferences.isHapticFeedbackEnabled(),
+            isAutoPlayMedia = securityPreferences.isAutoPlayMedia(),
+            isHighQualityMedia = securityPreferences.isHighQualityMedia(),
+            isDoubleTapZoomEnabled = securityPreferences.isDoubleTapZoomEnabled(),
+            isCheckAfterReminderEnabled = securityPreferences.isCheckAfterReminderEnabled()
         )
     )
     val uiState: StateFlow<ProfileUiState> = _uiState.asStateFlow()
@@ -107,6 +123,58 @@ class ProfileViewModel(
     fun setDisguisePasscode(passcode: String) {
         securityPreferences.setDisguisePasscode(passcode)
         _uiState.update { it.copy(disguisePasscode = passcode) }
+    }
+
+    fun setKeywordTriggerEnabled(enabled: Boolean) {
+        securityPreferences.setKeywordTriggerEnabled(enabled)
+        _uiState.update { it.copy(isKeywordTriggerEnabled = enabled) }
+    }
+
+    fun setPlusHoldDuration(seconds: Int) {
+        securityPreferences.setPlusIconHoldDuration(seconds)
+        _uiState.update { it.copy(plusHoldDurationSec = seconds) }
+    }
+
+    fun setImageGallerySize(size: String) {
+        securityPreferences.setImageGallerySize(size)
+        _uiState.update { it.copy(gallerySize = size) }
+    }
+
+    fun setHapticEnabled(enabled: Boolean) {
+        securityPreferences.setHapticFeedbackEnabled(enabled)
+        _uiState.update { it.copy(isHapticEnabled = enabled) }
+    }
+
+    fun setAutoPlayMedia(enabled: Boolean) {
+        securityPreferences.setAutoPlayMedia(enabled)
+        _uiState.update { it.copy(isAutoPlayMedia = enabled) }
+    }
+
+    fun setHighQualityMedia(enabled: Boolean) {
+        securityPreferences.setHighQualityMedia(enabled)
+        _uiState.update { it.copy(isHighQualityMedia = enabled) }
+    }
+
+    fun setDoubleTapZoom(enabled: Boolean) {
+        securityPreferences.setDoubleTapZoomEnabled(enabled)
+        _uiState.update { it.copy(isDoubleTapZoomEnabled = enabled) }
+    }
+
+    fun setCheckAfterReminderEnabled(enabled: Boolean) {
+        securityPreferences.setCheckAfterReminderEnabled(enabled)
+        _uiState.update { it.copy(isCheckAfterReminderEnabled = enabled) }
+    }
+
+    fun setCheckAfter(targetTimeMillis: Long, note: String = "") {
+        authRepository.setCheckAfter(targetTimeMillis, note)
+    }
+
+    fun cancelCheckAfter() {
+        authRepository.cancelCheckAfter()
+    }
+
+    fun extendCheckAfter(additionalMillis: Long) {
+        authRepository.extendCheckAfter(additionalMillis)
     }
 
     fun triggerInstantDisguise() {

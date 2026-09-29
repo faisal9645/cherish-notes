@@ -12,6 +12,8 @@ import com.example.data.model.User
 import com.example.data.repository.AuthRepository
 import com.example.data.repository.ChatRepository
 import com.example.data.repository.MediaRepository
+import com.example.CherishApplication
+import com.example.security.SecurityPreferences
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.io.File
@@ -27,11 +29,20 @@ data class ChatUiState(
     val selectedMessageForActions: Message? = null,
     val fullScreenMediaUrl: String? = null,
     val fullScreenMediaType: MessageType? = null,
+    val allMediaUrlsForViewer: List<String> = emptyList(),
+    val gallerySize: String = "medium",
     val isUploadingMedia: Boolean = false,
     val uploadProgress: Float = 0f,
     val deletionRequest: com.example.data.model.ChatDeletionRequest? = null,
     val isStealthCurtainActive: Boolean = false,
-    val stealthToastMessage: String? = null
+    val stealthToastMessage: String? = null,
+    val isCheckAfterSheetOpen: Boolean = false,
+    val isCheckAfterReminderEnabled: Boolean = true,
+    val isPartnerRecordingAudio: Boolean = false,
+    val pinnedMessage: Message? = null,
+    val theaterVideoId: String? = null,
+    val filterStarredOnly: Boolean = false,
+    val voicePlaybackSpeed: Float = 1.0f
 )
 
 class ChatViewModel(
@@ -39,10 +50,13 @@ class ChatViewModel(
     private val chatRepository: ChatRepository,
     private val mediaRepository: MediaRepository,
     val voiceRecorderHelper: VoiceRecorderHelper,
-    val voicePlayerHelper: VoicePlayerHelper
+    val voicePlayerHelper: VoicePlayerHelper,
+    val securityPreferences: SecurityPreferences = CherishApplication.instance.securityPreferences
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(ChatUiState())
+    private val _uiState = MutableStateFlow(
+        ChatUiState(gallerySize = securityPreferences.getImageGallerySize())
+    )
     val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
 
     init {
@@ -59,7 +73,8 @@ class ChatViewModel(
                 _uiState.update {
                     it.copy(
                         partnerUser = partner,
-                        isPartnerTyping = partner?.typingInChat ?: false
+                        isPartnerTyping = partner?.typingInChat ?: false,
+                        isPartnerRecordingAudio = partner?.recordingAudioInChat ?: false
                     )
                 }
             }
@@ -67,7 +82,19 @@ class ChatViewModel(
 
         viewModelScope.launch {
             chatRepository.listenToMessages(convId).collect { msgList ->
-                _uiState.update { it.copy(messages = msgList) }
+                val pinned = msgList.lastOrNull { it.isPinned && !it.isDeleted }
+                _uiState.update {
+                    it.copy(
+                        messages = msgList,
+                        pinnedMessage = pinned
+                    )
+                }
+            }
+        }
+
+        viewModelScope.launch {
+            voicePlayerHelper.playbackSpeed.collect { speed ->
+                _uiState.update { it.copy(voicePlaybackSpeed = speed) }
             }
         }
 
@@ -137,11 +164,56 @@ class ChatViewModel(
         }
     }
 
+    fun sendMultipleImages(uris: List<Uri>) {
+        if (uris.isEmpty()) return
+        viewModelScope.launch {
+            _uiState.update { it.copy(isUploadingMedia = true, uploadProgress = 0.05f) }
+            val uploadedUrls = mutableListOf<String>()
+            val coupleId = chatRepository.getConversationId()
+            try {
+                for ((index, uri) in uris.withIndex()) {
+                    try {
+                        val preparedFile = mediaRepository.compressAndPrepareImage(uri)
+                        val uploadResult = mediaRepository.uploadFile(
+                            file = preparedFile,
+                            type = MessageType.IMAGE,
+                            coupleId = coupleId,
+                            onProgress = { p ->
+                                val overall = (index + p) / uris.size.toFloat()
+                                _uiState.update { it.copy(uploadProgress = overall) }
+                            }
+                        )
+                        uploadResult.onSuccess { url ->
+                            uploadedUrls.add(url)
+                        }
+                    } catch (_: Exception) {}
+                }
+                if (uploadedUrls.isNotEmpty()) {
+                    chatRepository.sendMessage(
+                        text = if (uploadedUrls.size == 1) "Sent a photo" else "Sent ${uploadedUrls.size} photos",
+                        type = MessageType.IMAGE,
+                        mediaUrl = uploadedUrls.joinToString(","),
+                        replyTo = _uiState.value.replyingToMessage
+                    )
+                    _uiState.update { it.copy(replyingToMessage = null) }
+                }
+            } finally {
+                _uiState.update { it.copy(isUploadingMedia = false, uploadProgress = 0f) }
+            }
+        }
+    }
+
+    fun onRecordingAudioChanged(isRecording: Boolean) {
+        authRepository.setRecordingAudio(isRecording)
+    }
+
     fun startVoiceRecording() {
+        authRepository.setRecordingAudio(true)
         voiceRecorderHelper.startRecording()
     }
 
     fun stopAndSendVoiceRecording() {
+        authRepository.setRecordingAudio(false)
         val (file, duration) = voiceRecorderHelper.stopRecording()
         if (file != null && duration > 0) {
             viewModelScope.launch {
@@ -166,6 +238,7 @@ class ChatViewModel(
     }
 
     fun cancelVoiceRecording() {
+        authRepository.setRecordingAudio(false)
         voiceRecorderHelper.cancelRecording()
     }
 
@@ -189,6 +262,28 @@ class ChatViewModel(
         viewModelScope.launch {
             chatRepository.toggleStar(messageId)
         }
+    }
+
+    fun togglePin(messageId: String) {
+        viewModelScope.launch {
+            chatRepository.togglePin(messageId)
+        }
+    }
+
+    fun toggleVoiceSpeed() {
+        voicePlayerHelper.togglePlaybackSpeed()
+    }
+
+    fun openTheaterVideo(videoId: String) {
+        _uiState.update { it.copy(theaterVideoId = videoId) }
+    }
+
+    fun closeTheaterVideo() {
+        _uiState.update { it.copy(theaterVideoId = null) }
+    }
+
+    fun toggleFilterStarred() {
+        _uiState.update { it.copy(filterStarredOnly = !it.filterStarredOnly) }
     }
 
     fun editMessage(messageId: String, newText: String) {
@@ -224,12 +319,23 @@ class ChatViewModel(
         }
     }
 
-    fun openFullScreenMedia(url: String, type: MessageType) {
-        _uiState.update { it.copy(fullScreenMediaUrl = url, fullScreenMediaType = type) }
+    fun openFullScreenMedia(url: String, type: MessageType, allUrls: List<String> = emptyList()) {
+        _uiState.update {
+            it.copy(
+                fullScreenMediaUrl = url,
+                fullScreenMediaType = type,
+                allMediaUrlsForViewer = if (allUrls.isNotEmpty()) allUrls else listOf(url)
+            )
+        }
+    }
+
+    fun setGallerySize(size: String) {
+        securityPreferences.setImageGallerySize(size)
+        _uiState.update { it.copy(gallerySize = size) }
     }
 
     fun closeFullScreenMedia() {
-        _uiState.update { it.copy(fullScreenMediaUrl = null, fullScreenMediaType = null) }
+        _uiState.update { it.copy(fullScreenMediaUrl = null, fullScreenMediaType = null, allMediaUrlsForViewer = emptyList()) }
     }
 
     // --- STEALTH PRIVACY SHIELD (Hide previous chats with secret gesture) ---
@@ -275,10 +381,37 @@ class ChatViewModel(
         chatRepository.cancelChatDeletion()
     }
 
+    // --- CHECK-AFTER FEATURE ---
+    fun openCheckAfterSheet() {
+        _uiState.update { it.copy(isCheckAfterSheetOpen = true) }
+    }
+
+    fun closeCheckAfterSheet() {
+        _uiState.update { it.copy(isCheckAfterSheetOpen = false) }
+    }
+
+    fun setCheckAfter(targetTimeMillis: Long, note: String = "") {
+        authRepository.setCheckAfter(targetTimeMillis, note)
+    }
+
+    fun cancelCheckAfter() {
+        authRepository.cancelCheckAfter()
+    }
+
+    fun extendCheckAfter(additionalMillis: Long) {
+        authRepository.extendCheckAfter(additionalMillis)
+    }
+
+    fun toggleCheckAfterReminder(enabled: Boolean) {
+        securityPreferences.setCheckAfterReminderEnabled(enabled)
+        _uiState.update { it.copy(isCheckAfterReminderEnabled = enabled) }
+    }
+
     override fun onCleared() {
         super.onCleared()
         voicePlayerHelper.stop()
         voiceRecorderHelper.cancelRecording()
         authRepository.setTyping(false)
+        authRepository.setRecordingAudio(false)
     }
 }

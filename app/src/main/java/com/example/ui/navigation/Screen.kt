@@ -12,4 +12,8 @@ sealed class Screen(val route: String) {
     object AppLock : Screen("app_lock")
     object LifetimeJourney : Screen("lifetime_journey")
     object CloudBackup : Screen("cloud_backup")
+    object PrivacyAudit : Screen("privacy_audit")
+    object OpenWhen : Screen("open_when")
+    object StorageManager : Screen("storage_manager")
+    object DeviceSessions : Screen("device_sessions")
 }

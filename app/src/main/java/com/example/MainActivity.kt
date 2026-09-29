@@ -47,26 +47,52 @@ class MainActivity : FragmentActivity() {
         }
     }
 
+    private var lastBackgroundTimestamp: Long = 0L
+
     override fun onResume() {
         super.onResume()
         setHighRefreshRate()
         applyScreenshotProtection()
         app.authRepository.setOnline(true)
+
+        // Check configurable auto-lock inactivity timeout
+        val timeoutSec = app.securityPreferences.getAutoLockTimeoutSeconds()
+        if (lastBackgroundTimestamp > 0L && timeoutSec >= 0) {
+            val elapsedSec = (System.currentTimeMillis() - lastBackgroundTimestamp) / 1000
+            if (elapsedSec >= timeoutSec) {
+                if (app.securityPreferences.isDisguiseModeEnabled()) {
+                    app.securityPreferences.reDisguise()
+                }
+                if (app.securityPreferences.hasPin()) {
+                    app.securityPreferences.lockApp()
+                }
+            }
+        }
     }
 
     override fun onPause() {
         super.onPause()
         app.authRepository.setOnline(false)
+        lastBackgroundTimestamp = System.currentTimeMillis()
+        // Ensure recent-apps preview is redacted when leaving secret mode
+        if (app.securityPreferences.isScreenshotProtectionEnabled() || !app.securityPreferences.isDisguiseActive.value) {
+            window.setFlags(
+                WindowManager.LayoutParams.FLAG_SECURE,
+                WindowManager.LayoutParams.FLAG_SECURE
+            )
+        }
     }
 
     override fun onStop() {
         super.onStop()
-        if (app.securityPreferences.isDisguiseModeEnabled()) {
-            app.securityPreferences.reDisguise()
-        }
-        // Lock app when user leaves if app lock is enabled
-        if (app.securityPreferences.isAppLockEnabled() && app.securityPreferences.hasPin()) {
-            app.securityPreferences.lockApp()
+        val timeoutSec = app.securityPreferences.getAutoLockTimeoutSeconds()
+        if (timeoutSec == 0) { // Immediately
+            if (app.securityPreferences.isDisguiseModeEnabled()) {
+                app.securityPreferences.reDisguise()
+            }
+            if (app.securityPreferences.hasPin()) {
+                app.securityPreferences.lockApp()
+            }
         }
     }
 

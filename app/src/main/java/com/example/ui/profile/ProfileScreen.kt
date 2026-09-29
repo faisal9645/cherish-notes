@@ -30,9 +30,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.components.AvatarView
+import com.example.ui.chat.CheckAfterBottomSheet
+import com.example.ui.chat.CheckAfterHelper
 import com.example.ui.theme.*
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -41,6 +45,10 @@ fun ProfileScreen(
     viewModel: ProfileViewModel,
     onNavigateBack: () -> Unit,
     onNavigateToCloudBackup: () -> Unit = {},
+    onNavigateToPrivacyAudit: () -> Unit = {},
+    onNavigateToStorageManager: () -> Unit = {},
+    onNavigateToDeviceSessions: () -> Unit = {},
+    onNavigateToOpenWhen: () -> Unit = {},
     onLoggedOut: () -> Unit
 ) {
     val context = LocalContext.current
@@ -54,6 +62,9 @@ fun ProfileScreen(
     var showPairDialog by remember { mutableStateOf(false) }
     var newPinText by remember { mutableStateOf("") }
     var newPasscodeText by remember { mutableStateOf("") }
+    var isPasscodeRevealed by remember { mutableStateOf(false) }
+    var isDialogPasscodeRevealed by remember { mutableStateOf(false) }
+    var showCheckAfterSheet by remember { mutableStateOf(false) }
 
     val photoPicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia()
@@ -222,6 +233,131 @@ fun ProfileScreen(
                 }
             }
 
+            // 🛡️ Dedicated Privacy & Security Audit Card
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onNavigateToPrivacyAudit() }
+                    .testTag("profile_privacy_audit_card"),
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFFF1F8E9)),
+                border = BorderStroke(1.dp, Color(0xFF81C784)),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            ) {
+                ListItem(
+                    headlineContent = { Text("Privacy & Security Audit", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Color(0xFF1B5E20)) },
+                    supportingContent = { Text("8-point automated test: auto-lock, stealth disguise & panic", fontSize = 12.sp, color = Color(0xFF2E7D32)) },
+                    leadingContent = {
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFF2E7D32)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(Icons.Filled.VerifiedUser, contentDescription = null, tint = Color.White, modifier = Modifier.size(22.dp))
+                        }
+                    },
+                    trailingContent = {
+                        Icon(Icons.Default.ChevronRight, contentDescription = null, tint = Color(0xFF2E7D32))
+                    },
+                    colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                )
+            }
+
+            // 💌 Dedicated 'Open When...' Letters Card
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onNavigateToOpenWhen() }
+                    .testTag("profile_open_when_card"),
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                border = BorderStroke(1.dp, Color(0xFFF0F0F2)),
+                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+            ) {
+                ListItem(
+                    headlineContent = { Text("Open When... Envelopes 💌", fontWeight = FontWeight.Bold, fontSize = 14.sp) },
+                    supportingContent = { Text("Sealed love letters locked until the right emotional moment", fontSize = 12.sp) },
+                    leadingContent = {
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(CircleShape)
+                                .background(SoftPinkSurfaceVariant),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(Icons.Filled.MarkEmailRead, contentDescription = null, tint = RoseGoldPrimary, modifier = Modifier.size(20.dp))
+                        }
+                    },
+                    trailingContent = {
+                        Icon(Icons.Default.ChevronRight, contentDescription = null, tint = RoseGoldPrimary)
+                    }
+                )
+            }
+
+            // 📱 Authorized Devices & Sessions Card
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onNavigateToDeviceSessions() }
+                    .testTag("profile_device_sessions_card"),
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                border = BorderStroke(1.dp, Color(0xFFF0F0F2)),
+                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+            ) {
+                ListItem(
+                    headlineContent = { Text("Authorized Devices & Sessions", fontWeight = FontWeight.Bold, fontSize = 14.sp) },
+                    supportingContent = { Text("View active logins, manage pairing & remote logout", fontSize = 12.sp) },
+                    leadingContent = {
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(CircleShape)
+                                .background(SoftPinkSurfaceVariant),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(Icons.Default.Devices, contentDescription = null, tint = RoseGoldPrimary, modifier = Modifier.size(20.dp))
+                        }
+                    },
+                    trailingContent = {
+                        Icon(Icons.Default.ChevronRight, contentDescription = null, tint = RoseGoldPrimary)
+                    }
+                )
+            }
+
+            // 🧹 Storage & Cache Manager Card
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onNavigateToStorageManager() }
+                    .testTag("profile_storage_manager_card"),
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                border = BorderStroke(1.dp, Color(0xFFF0F0F2)),
+                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+            ) {
+                ListItem(
+                    headlineContent = { Text("Storage & Cache Manager", fontWeight = FontWeight.Bold, fontSize = 14.sp) },
+                    supportingContent = { Text("Clear temporary media cache without deleting chats", fontSize = 12.sp) },
+                    leadingContent = {
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(CircleShape)
+                                .background(SoftPinkSurfaceVariant),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(Icons.Default.CleaningServices, contentDescription = null, tint = RoseGoldPrimary, modifier = Modifier.size(20.dp))
+                        }
+                    },
+                    trailingContent = {
+                        Icon(Icons.Default.ChevronRight, contentDescription = null, tint = RoseGoldPrimary)
+                    }
+                )
+            }
+
             // Privacy & Security Section
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -251,49 +387,88 @@ fun ProfileScreen(
                     )
 
                     if (uiState.isDisguiseModeEnabled) {
-                        // Passcode Config
+                        // Keyword Trigger Enable/Disable Switch
                         ListItem(
-                            headlineContent = { Text("Notes Secret Passcode") },
-                            supportingContent = { Text("Current code: ${uiState.disguisePasscode}") },
-                            leadingContent = { Icon(Icons.Default.Password, contentDescription = null) },
+                            headlineContent = { Text("Search Bar Trigger Word") },
+                            supportingContent = { Text("Type word in Notes search to open Secret Chat") },
+                            leadingContent = { Icon(Icons.Default.Password, contentDescription = null, tint = RoseGoldPrimary) },
                             trailingContent = {
-                                TextButton(onClick = {
-                                    newPasscodeText = uiState.disguisePasscode
-                                    showSetPasscodeDialog = true
-                                }) {
-                                    Text("Change")
-                                }
+                                Switch(
+                                    checked = uiState.isKeywordTriggerEnabled,
+                                    onCheckedChange = { viewModel.setKeywordTriggerEnabled(it) }
+                                )
                             }
                         )
 
-                        // Secret Gestures Guide
-                        Card(
+                        // Secret Word Config (Hidden by default from normal UI)
+                        if (uiState.isKeywordTriggerEnabled) {
+                            ListItem(
+                                headlineContent = { Text("Custom Trigger Word") },
+                                supportingContent = {
+                                    Text(
+                                        text = "Current: " + if (isPasscodeRevealed) uiState.disguisePasscode else "••••••••",
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                },
+                                leadingContent = {
+                                    IconButton(onClick = { isPasscodeRevealed = !isPasscodeRevealed }) {
+                                        Icon(
+                                            imageVector = if (isPasscodeRevealed) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                            contentDescription = if (isPasscodeRevealed) "Hide trigger word" else "Reveal trigger word",
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                },
+                                trailingContent = {
+                                    TextButton(onClick = {
+                                        newPasscodeText = uiState.disguisePasscode
+                                        isDialogPasscodeRevealed = false
+                                        showSetPasscodeDialog = true
+                                    }) {
+                                        Text("Change")
+                                    }
+                                }
+                            )
+                        }
+
+                        // Plus (+) Icon Long-Press Hold Duration Selector
+                        ListItem(
+                            headlineContent = { Text("Hold '+' Button to Unlock") },
+                            supportingContent = { Text("Hold the Notes '+' icon with subtle haptics") },
+                            leadingContent = { Icon(Icons.Default.TouchApp, contentDescription = null, tint = RoseGoldPrimary) }
+                        )
+
+                        Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(vertical = 8.dp),
-                            shape = RoundedCornerShape(14.dp),
-                            colors = CardDefaults.cardColors(containerColor = Color(0xFFF7F7F9))
+                                .padding(horizontal = 16.dp, vertical = 4.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(Color(0xFFF4F4F8))
+                                .padding(4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
-                            Column(modifier = Modifier.padding(14.dp)) {
-                                Text(
-                                    text = "Secret Gestures to Open App:",
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 13.sp,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                                Spacer(modifier = Modifier.height(6.dp))
-                                Text(
-                                    text = "1. Type passcode (${uiState.disguisePasscode}) into the Search bar",
-                                    fontSize = 12.sp,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                Text(
-                                    text = "2. Long-press the '+' Add Note button for 3 seconds",
-                                    fontSize = 12.sp,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
+                            listOf(1 to "1s", 2 to "2s (Default)", 3 to "3s", 0 to "Off").forEach { (duration, label) ->
+                                val isSelected = uiState.plusHoldDurationSec == duration
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(if (isSelected) RoseGoldPrimary else Color.Transparent)
+                                        .clickable { viewModel.setPlusHoldDuration(duration) }
+                                        .padding(vertical = 8.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = label,
+                                        color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                        fontSize = 11.sp
+                                    )
+                                }
                             }
                         }
+
+                        Spacer(modifier = Modifier.height(8.dp))
 
                         // Test Disguise Now Button
                         OutlinedButton(
@@ -381,6 +556,294 @@ fun ProfileScreen(
                             Switch(
                                 checked = uiState.isHideNotificationContent,
                                 onCheckedChange = { viewModel.setHideNotificationContent(it) }
+                            )
+                        }
+                    )
+                }
+            }
+
+            // Dedicated Media & Gallery Preferences Card
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(24.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                border = BorderStroke(1.dp, Color(0xFFF0F0F2)),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(bottom = 12.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(CircleShape)
+                                .background(SoftPinkSurfaceVariant),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                Icons.Outlined.PhotoLibrary,
+                                contentDescription = null,
+                                tint = RoseGoldPrimary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column {
+                            Text(
+                                "Media & Gallery",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 16.sp,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                "Adaptive Telegram-style layout & preview sizing",
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+
+                    // Gallery Thumbnail Size Choice
+                    Text(
+                        "Chat Photo Thumbnail Size",
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp)
+                    )
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(Color(0xFFF4F4F8))
+                            .padding(4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        listOf("small" to "Small", "medium" to "Medium", "large" to "Large").forEach { (key, label) ->
+                            val isSelected = uiState.gallerySize == key
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(if (isSelected) RoseGoldPrimary else Color.Transparent)
+                                    .clickable { viewModel.setImageGallerySize(key) }
+                                    .padding(vertical = 8.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = label,
+                                    color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                    fontSize = 12.sp
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // Auto-Play Media
+                    ListItem(
+                        headlineContent = { Text("Auto-Play Media") },
+                        supportingContent = { Text("Play videos and GIFs automatically in chat") },
+                        trailingContent = {
+                            Switch(
+                                checked = uiState.isAutoPlayMedia,
+                                onCheckedChange = { viewModel.setAutoPlayMedia(it) }
+                            )
+                        }
+                    )
+
+                    // High-Quality Loading
+                    ListItem(
+                        headlineContent = { Text("High-Quality Photo Rendering") },
+                        supportingContent = { Text("Preserve sharp details and full resolution") },
+                        trailingContent = {
+                            Switch(
+                                checked = uiState.isHighQualityMedia,
+                                onCheckedChange = { viewModel.setHighQualityMedia(it) }
+                            )
+                        }
+                    )
+
+                    // Double-Tap Zoom in Viewer
+                    ListItem(
+                        headlineContent = { Text("Double-Tap Zoom in Viewer") },
+                        supportingContent = { Text("Instantly toggle fit and 2.8x zoom on double-tap") },
+                        trailingContent = {
+                            Switch(
+                                checked = uiState.isDoubleTapZoomEnabled,
+                                onCheckedChange = { viewModel.setDoubleTapZoom(it) }
+                            )
+                        }
+                    )
+
+                    // Haptic Feedback
+                    ListItem(
+                        headlineContent = { Text("Haptic Feedback") },
+                        supportingContent = { Text("Tactile pulses on gestures, reactions & secret unlocks") },
+                        trailingContent = {
+                            Switch(
+                                checked = uiState.isHapticEnabled,
+                                onCheckedChange = { viewModel.setHapticEnabled(it) }
+                            )
+                        }
+                    )
+                }
+            }
+
+            // Check After & Presence Section
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("profile_check_after_card"),
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                border = BorderStroke(1.dp, Color(0xFFF0F0F2)),
+                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(CircleShape)
+                                .background(SoftPinkSurfaceVariant),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(Icons.Filled.HourglassTop, contentDescription = null, tint = RoseGoldPrimary, modifier = Modifier.size(20.dp))
+                        }
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column {
+                            Text(
+                                text = "Check After & Presence",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 15.sp,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = "Reduce checking anxiety with peaceful sync",
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    val myActiveCheckAfter = user?.hasActiveCheckAfter() == true
+                    val partnerActiveCheckAfter = partner?.hasActiveCheckAfter() == true
+
+                    if (myActiveCheckAfter) {
+                        Surface(
+                            shape = RoundedCornerShape(14.dp),
+                            color = SoftPinkSurfaceVariant,
+                            border = BorderStroke(1.dp, SoftBorderOutline),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(12.dp)) {
+                                Text(
+                                    text = "❤️ Your Check-After is Active",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 13.sp,
+                                    color = DarkAubergine
+                                )
+                                Text(
+                                    text = "Until ${CheckAfterHelper.formatTargetTime(user?.checkAfterTimeMillis ?: 0L)}",
+                                    fontSize = 12.sp,
+                                    color = RoseGoldPrimary,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    FilledTonalButton(
+                                        onClick = { viewModel.extendCheckAfter(30 * 60 * 1000L) },
+                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                                        modifier = Modifier.height(28.dp)
+                                    ) {
+                                        Text("+30m", fontSize = 11.sp)
+                                    }
+                                    FilledTonalButton(
+                                        onClick = { viewModel.extendCheckAfter(60 * 60 * 1000L) },
+                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                                        modifier = Modifier.height(28.dp)
+                                    ) {
+                                        Text("+1h", fontSize = 11.sp)
+                                    }
+                                    OutlinedButton(
+                                        onClick = { showCheckAfterSheet = true },
+                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                                        modifier = Modifier.height(28.dp)
+                                    ) {
+                                        Text("Change", fontSize = 11.sp)
+                                    }
+                                    TextButton(
+                                        onClick = { viewModel.cancelCheckAfter() },
+                                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
+                                        modifier = Modifier.height(28.dp)
+                                    ) {
+                                        Text("Cancel", fontSize = 11.sp, color = Color(0xFFD32F2F))
+                                    }
+                                }
+                            }
+                        }
+                    } else if (partnerActiveCheckAfter) {
+                        Surface(
+                            shape = RoundedCornerShape(14.dp),
+                            color = SoftPinkSurfaceVariant,
+                            border = BorderStroke(1.dp, SoftBorderOutline),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(12.dp)) {
+                                Text(
+                                    text = "💕 Partner's Check-After Time",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 13.sp,
+                                    color = DarkAubergine
+                                )
+                                Text(
+                                    text = "${CheckAfterHelper.formatTargetTime(partner?.checkAfterTimeMillis ?: 0L)}",
+                                    fontSize = 13.sp,
+                                    color = RoseGoldPrimary,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                val (remaining, isExpired) = CheckAfterHelper.calculateRemaining(partner?.checkAfterTimeMillis ?: 0L)
+                                Text(
+                                    text = if (isExpired) "✨ You can check now" else "⏳ $remaining",
+                                    fontSize = 12.sp,
+                                    color = if (isExpired) Color(0xFF2E7D32) else DarkAubergine
+                                )
+                            }
+                        }
+                    } else {
+                        Button(
+                            onClick = { showCheckAfterSheet = true },
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = RoseGoldPrimary),
+                            modifier = Modifier.fillMaxWidth().height(42.dp)
+                        ) {
+                            Icon(Icons.Filled.HourglassTop, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Set Check-After Time", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+
+                    // Notification Reminder
+                    ListItem(
+                        headlineContent = { Text("Arrival Reminder Notification", fontSize = 14.sp) },
+                        supportingContent = { Text("Subtle alert when partner's check-after period completes", fontSize = 12.sp) },
+                        trailingContent = {
+                            Switch(
+                                checked = uiState.isCheckAfterReminderEnabled,
+                                onCheckedChange = { viewModel.setCheckAfterReminderEnabled(it) }
                             )
                         }
                     )
@@ -527,26 +990,35 @@ fun ProfileScreen(
         )
     }
 
-    // Set Passcode Dialog for Notes Disguise
+    // Set Passcode Dialog for Notes Disguise (Hidden input with reveal toggle)
     if (showSetPasscodeDialog) {
         AlertDialog(
             onDismissRequest = { showSetPasscodeDialog = false },
-            title = { Text("Set Notes Secret Passcode") },
+            title = { Text("Set Secret Trigger Word") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text(
-                        "Enter the secret passcode you can type in the Notes search bar or a note title to unlock your private space:",
+                        "Set your private trigger word. Typing this into the Notes search bar will immediately open Secret Chat without showing the word.",
                         fontSize = 13.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     OutlinedTextField(
                         value = newPasscodeText,
                         onValueChange = {
-                            if (it.length <= 10) {
+                            if (it.length <= 15) {
                                 newPasscodeText = it
                             }
                         },
-                        label = { Text("Secret Passcode (e.g. love)") },
+                        label = { Text("Secret Trigger Word (e.g. love)") },
+                        visualTransformation = if (isDialogPasscodeRevealed) VisualTransformation.None else PasswordVisualTransformation(),
+                        trailingIcon = {
+                            IconButton(onClick = { isDialogPasscodeRevealed = !isDialogPasscodeRevealed }) {
+                                Icon(
+                                    imageVector = if (isDialogPasscodeRevealed) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                    contentDescription = if (isDialogPasscodeRevealed) "Hide" else "Show"
+                                )
+                            }
+                        },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -560,9 +1032,9 @@ fun ProfileScreen(
                             showSetPasscodeDialog = false
                         }
                     },
-                    enabled = newPasscodeText.length >= 3
+                    enabled = newPasscodeText.length >= 2
                 ) {
-                    Text("Save Passcode")
+                    Text("Save Trigger Word")
                 }
             },
             dismissButton = {
@@ -616,4 +1088,27 @@ fun ProfileScreen(
             }
         )
     }
+
+    // Check-After Setup & Modification Bottom Sheet
+    CheckAfterBottomSheet(
+        isOpen = showCheckAfterSheet,
+        onDismiss = { showCheckAfterSheet = false },
+        currentTargetMillis = user?.checkAfterTimeMillis,
+        currentNote = user?.checkAfterNote,
+        isCurrentlyActive = user?.hasActiveCheckAfter() == true,
+        isSetByMe = true,
+        partnerName = partner?.displayName?.ifBlank { "My Partner" } ?: "My Partner",
+        isReminderEnabled = uiState.isCheckAfterReminderEnabled,
+        onToggleReminder = { viewModel.setCheckAfterReminderEnabled(it) },
+        onSaveCheckAfter = { target, note ->
+            viewModel.setCheckAfter(target, note)
+        },
+        onCancelCheckAfter = {
+            viewModel.cancelCheckAfter()
+        },
+        onExtend = { duration ->
+            viewModel.extendCheckAfter(duration)
+        }
+    )
 }
+

@@ -32,6 +32,15 @@ enum class NoteCategory {
     WISHLIST
 }
 
+enum class PartnerActivityStatus(val displayName: String, val emoji: String) {
+    AVAILABLE("I'm available", "💚"),
+    RESTING("I'm resting", "💤"),
+    WORKING("I'm working", "💻"),
+    STUDYING("I'm studying", "📚"),
+    TRAVELLING("I'm travelling", "🚗"),
+    TALK_LATER("Talk later", "❤️")
+}
+
 @IgnoreExtraProperties
 data class User(
     val id: String = "",
@@ -46,8 +55,36 @@ data class User(
     val lastSeen: Long = System.currentTimeMillis(),
     val typingInChat: Boolean = false,
     val fcmToken: String? = null,
-    val createdAt: Long = System.currentTimeMillis()
-)
+    val createdAt: Long = System.currentTimeMillis(),
+    val checkAfterTimeMillis: Long? = null,
+    val checkAfterNote: String? = null,
+    val checkAfterCreatedAt: Long? = null,
+    val checkAfterActive: Boolean = false,
+    val recordingAudioInChat: Boolean = false,
+    val activityStatus: String? = null,
+    val activityStatusNote: String? = null,
+    val isActivityHidden: Boolean = false
+) {
+    fun hasActiveCheckAfter(): Boolean {
+        val target = checkAfterTimeMillis ?: return false
+        return checkAfterActive && target > 0L && System.currentTimeMillis() < target
+    }
+
+    fun isCheckAfterExpired(): Boolean {
+        val target = checkAfterTimeMillis ?: return false
+        return checkAfterActive && target > 0L && System.currentTimeMillis() >= target
+    }
+
+    fun getEffectivePresenceStatus(): String {
+        return when {
+            hasActiveCheckAfter() -> "Check-after active"
+            isActivityHidden -> "Activity unavailable"
+            isOnline -> "Online"
+            else -> "Offline"
+        }
+    }
+}
+
 
 @IgnoreExtraProperties
 data class Message(
@@ -69,10 +106,12 @@ data class Message(
     val isEdited: Boolean = false,
     val isDeleted: Boolean = false,
     val isStarred: Boolean = false,
+    val isPinned: Boolean = false,
     val replyToMessageId: String? = null,
     val replyToText: String? = null,
     val replyToSenderName: String? = null,
-    val reactions: Map<String, String> = emptyMap() // userId -> emoji
+    val reactions: Map<String, String> = emptyMap(), // userId -> emoji
+    val mediaUrls: List<String> = emptyList()
 ) {
     fun getTypedType(): MessageType {
         return runCatching { MessageType.valueOf(type) }.getOrDefault(MessageType.TEXT)
@@ -80,6 +119,18 @@ data class Message(
 
     fun getTypedStatus(): MessageStatus {
         return runCatching { MessageStatus.valueOf(status) }.getOrDefault(MessageStatus.SENT)
+    }
+
+    fun getAllMediaUrls(): List<String> {
+        if (mediaUrls.isNotEmpty()) return mediaUrls
+        if (!mediaUrl.isNullOrBlank()) {
+            return if (mediaUrl.contains(",")) {
+                mediaUrl.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+            } else {
+                listOf(mediaUrl)
+            }
+        }
+        return emptyList()
     }
 }
 
@@ -158,8 +209,56 @@ data class LoveJarNote(
     val text: String = "",
     val author: String = "",
     val emoji: String = "💖",
+    val category: String = "ROMANTIC", // COMPLIMENTS, MEMORIES, FUNNY, MOTIVATION, ROMANTIC, SURPRISE
+    val isOpened: Boolean = false,
+    val openedAt: Long? = null,
     val createdAt: Long = System.currentTimeMillis()
 )
+
+@IgnoreExtraProperties
+data class OpenWhenLetter(
+    val id: String = "",
+    val coupleId: String = "",
+    val title: String = "", // e.g. "Open when you miss me"
+    val category: String = "MISS_YOU", // MISS_YOU, BAD_DAY, CANT_SLEEP, ANNIVERSARY, MOTIVATION, CUSTOM
+    val envelopeEmoji: String = "💌",
+    val content: String = "",
+    val photoUrl: String? = null,
+    val voiceUrl: String? = null,
+    val authorName: String = "",
+    val authorId: String = "",
+    val createdAt: Long = System.currentTimeMillis(),
+    val unlockCondition: String = "Open when you miss me ❤️",
+    val unlockDateMillis: Long? = null,
+    val isOpened: Boolean = false,
+    val openedAt: Long? = null
+)
+
+@IgnoreExtraProperties
+data class DeviceSession(
+    val id: String = "",
+    val deviceName: String = "",
+    val platform: String = "Android",
+    val lastActiveMillis: Long = System.currentTimeMillis(),
+    val isCurrent: Boolean = false,
+    val ipOrLocation: String = "Secured Mobile Session"
+)
+
+data class StorageBreakdown(
+    val photosBytes: Long = 0L,
+    val videosBytes: Long = 0L,
+    val voiceBytes: Long = 0L,
+    val cacheBytes: Long = 0L
+) {
+    fun formatBytes(bytes: Long): String {
+        return when {
+            bytes >= 1024 * 1024 * 1024 -> "%.1f GB".format(bytes.toDouble() / (1024 * 1024 * 1024))
+            bytes >= 1024 * 1024 -> "%.1f MB".format(bytes.toDouble() / (1024 * 1024))
+            bytes >= 1024 -> "%.1f KB".format(bytes.toDouble() / 1024)
+            else -> "$bytes B"
+        }
+    }
+}
 
 @IgnoreExtraProperties
 data class BucketListItem(

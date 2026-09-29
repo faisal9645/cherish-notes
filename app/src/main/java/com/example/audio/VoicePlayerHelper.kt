@@ -22,6 +22,34 @@ class VoicePlayerHelper(private val context: Context) {
     private val _currentPositionSec = MutableStateFlow(0)
     val currentPositionSec: StateFlow<Int> = _currentPositionSec.asStateFlow()
 
+    private val _playbackSpeed = MutableStateFlow(1.0f)
+    val playbackSpeed: StateFlow<Float> = _playbackSpeed.asStateFlow()
+
+    fun togglePlaybackSpeed(): Float {
+        val nextSpeed = when (_playbackSpeed.value) {
+            1.0f -> 1.5f
+            1.5f -> 2.0f
+            else -> 1.0f
+        }
+        setPlaybackSpeed(nextSpeed)
+        return nextSpeed
+    }
+
+    fun setPlaybackSpeed(speed: Float) {
+        _playbackSpeed.value = speed
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+            try {
+                mediaPlayer?.let { mp ->
+                    if (mp.isPlaying) {
+                        mp.playbackParams = mp.playbackParams.setSpeed(speed)
+                    }
+                }
+            } catch (e: Exception) {
+                Log.w("VoicePlayerHelper", "Could not set playback speed", e)
+            }
+        }
+    }
+
     fun playAudio(messageId: String, audioUriOrUrl: String, onCompletion: () -> Unit = {}) {
         if (_currentlyPlayingId.value == messageId && mediaPlayer?.isPlaying == true) {
             pause()
@@ -39,6 +67,11 @@ class VoicePlayerHelper(private val context: Context) {
                 }
                 prepareAsync()
                 setOnPreparedListener { mp ->
+                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+                        try {
+                            mp.playbackParams = mp.playbackParams.setSpeed(_playbackSpeed.value)
+                        } catch (_: Exception) {}
+                    }
                     mp.start()
                     _currentlyPlayingId.value = messageId
                     startProgressTracker(mp, onCompletion)

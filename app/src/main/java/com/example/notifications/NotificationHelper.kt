@@ -102,6 +102,56 @@ object NotificationHelper {
         pendingUnreadCount.set(0)
         try {
             NotificationManagerCompat.from(context).cancel(NOTIFICATION_ID_MESSAGE)
+            NotificationManagerCompat.from(context).cancel(NOTIFICATION_ID_CHECK_AFTER)
         } catch (_: Exception) {}
     }
+
+    const val NOTIFICATION_ID_CHECK_AFTER = 1002
+
+    /**
+     * Subtle reminder notification when partner's Check-After countdown finishes
+     */
+    fun showCheckAfterReminderNotification(context: Context, partnerName: String = "Your partner") {
+        val prefs = SecurityPreferences.getInstance(context)
+        if (!prefs.isCheckAfterReminderEnabled()) return
+
+        val intent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            putExtra("open_chat", true)
+        }
+
+        val pendingIntent = PendingIntent.getActivity(
+            context,
+            1,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val isDisguised = prefs.isHideNotificationContent() || prefs.isDisguiseModeEnabled()
+        val displayTitle = if (isDisguised) "Notes" else "❤️ It's time to check"
+        val displayText = if (isDisguised) {
+            "Reminder schedule completed"
+        } else {
+            "$partnerName's check-after time has arrived 💕"
+        }
+
+        val notification = NotificationCompat.Builder(context, CHANNEL_MESSAGES_ID)
+            .setSmallIcon(R.mipmap.ic_launcher)
+            .setContentTitle(displayTitle)
+            .setContentText(displayText)
+            .setSubText(if (isDisguised) "Notes" else "Cherish")
+            .setAutoCancel(true)
+            .setContentIntent(pendingIntent)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setCategory(NotificationCompat.CATEGORY_REMINDER)
+            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+            .build()
+
+        try {
+            NotificationManagerCompat.from(context).notify(NOTIFICATION_ID_CHECK_AFTER, notification)
+        } catch (_: SecurityException) {
+            // Handled if POST_NOTIFICATIONS runtime permission not yet prompted
+        }
+    }
 }
+

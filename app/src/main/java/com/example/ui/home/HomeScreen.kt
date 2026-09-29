@@ -28,6 +28,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.LoveJarNote
 import com.example.ui.components.AvatarView
+import com.example.ui.chat.CheckAfterHelper
+import kotlinx.coroutines.delay
 import com.example.ui.theme.*
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -56,6 +58,19 @@ fun HomeScreen(
     val myEmail = currentUser?.email?.ifBlank { "you@gmail.com" } ?: "you@gmail.com"
     val isOnline = partner?.isOnline ?: false
     val statusText = partner?.statusMessage ?: "Together forever & always 💕"
+
+    val partnerHasCheckAfter = partner?.hasActiveCheckAfter() == true
+    val partnerCheckAfterTarget = partner?.checkAfterTimeMillis ?: 0L
+
+    var partnerCheckTicker by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(partnerCheckAfterTarget, partnerHasCheckAfter) {
+        if (partnerHasCheckAfter) {
+            while (true) {
+                partnerCheckTicker = System.currentTimeMillis()
+                delay(1000)
+            }
+        }
+    }
 
     var showDrawNoteDialog by remember { mutableStateOf(false) }
     var drawnNote by remember { mutableStateOf<LoveJarNote?>(null) }
@@ -271,7 +286,7 @@ fun HomeScreen(
                         name = partnerName,
                         size = 72.dp,
                         isOnline = isOnline,
-                        showOnlineBadge = true
+                        showOnlineBadge = !partnerHasCheckAfter
                     )
 
                     Spacer(modifier = Modifier.width(18.dp))
@@ -286,24 +301,46 @@ fun HomeScreen(
 
                         Spacer(modifier = Modifier.height(4.dp))
 
-                        // Online / Last seen indicator
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(
-                                modifier = Modifier
-                                    .size(8.dp)
-                                    .background(
-                                        if (isOnline) OnlineGreen else MaterialTheme.colorScheme.outline,
-                                        CircleShape
-                                    )
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = viewModel.formatLastSeen(partner?.lastSeen ?: 0L, isOnline),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = if (isOnline) OnlineGreen else MaterialTheme.colorScheme.onSurfaceVariant,
-                                fontWeight = if (isOnline) FontWeight.SemiBold else FontWeight.Normal
-                            )
+                        if (partnerHasCheckAfter) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Filled.HourglassTop,
+                                    contentDescription = null,
+                                    tint = RoseGoldPrimary,
+                                    modifier = Modifier.size(13.dp)
+                                )
+                                Spacer(modifier = Modifier.width(5.dp))
+                                val (remaining, isExpired) = remember(partnerCheckTicker, partnerCheckAfterTarget) {
+                                    CheckAfterHelper.calculateRemaining(partnerCheckAfterTarget)
+                                }
+                                Text(
+                                    text = if (isExpired) "✨ You can check now" else "Check after ${CheckAfterHelper.formatTargetTime(partnerCheckAfterTarget)} ($remaining)",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = if (isExpired) Color(0xFF2E7D32) else RoseGoldPrimary,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+                        } else {
+                            // Online / Last seen indicator
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(8.dp)
+                                        .background(
+                                            if (isOnline) OnlineGreen else MaterialTheme.colorScheme.outline,
+                                            CircleShape
+                                        )
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = viewModel.formatLastSeen(partner?.lastSeen ?: 0L, isOnline),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = if (isOnline) OnlineGreen else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    fontWeight = if (isOnline) FontWeight.SemiBold else FontWeight.Normal
+                                )
+                            }
                         }
+
 
                         Spacer(modifier = Modifier.height(6.dp))
 

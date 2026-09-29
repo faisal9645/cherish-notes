@@ -219,6 +219,24 @@ class ChatRepository(
         }
     }
 
+    suspend fun togglePin(messageId: String) {
+        val currentMessage = _messagesFlow.value.find { it.id == messageId } ?: return
+        val newPinned = !currentMessage.isPinned
+        val updated = currentMessage.copy(isPinned = newPinned)
+        _messagesFlow.value = _messagesFlow.value.map { if (it.id == messageId) updated else it }
+
+        try {
+            val convId = getConversationId()
+            firestore?.collection("conversations")
+                ?.document(convId)
+                ?.collection("messages")
+                ?.document(messageId)
+                ?.update("isPinned", newPinned)
+        } catch (e: Exception) {
+            // ignore
+        }
+    }
+
     suspend fun editMessage(messageId: String, newText: String) {
         val currentMessage = _messagesFlow.value.find { it.id == messageId } ?: return
         val updated = currentMessage.copy(text = newText, isEdited = true)

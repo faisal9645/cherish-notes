@@ -134,6 +134,121 @@ class SecurityPreferences(context: Context) {
         prefs.edit().putString(KEY_PARTNER_EMAIL, email.trim().lowercase()).apply()
     }
 
+    // --- SECRET CHAT TRIGGER & GESTURE PREFERENCES ---
+
+    fun isKeywordTriggerEnabled(): Boolean = prefs.getBoolean(KEY_KEYWORD_TRIGGER_ENABLED, true)
+
+    fun setKeywordTriggerEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_KEYWORD_TRIGGER_ENABLED, enabled).apply()
+    }
+
+    fun getPlusIconHoldDuration(): Int = prefs.getInt(KEY_PLUS_HOLD_DURATION, 2)
+
+    fun setPlusIconHoldDuration(seconds: Int) {
+        prefs.edit().putInt(KEY_PLUS_HOLD_DURATION, seconds.coerceIn(0, 5)).apply()
+    }
+
+    // --- MEDIA & GALLERY PREFERENCES ---
+
+    fun getImageGallerySize(): String = prefs.getString(KEY_IMAGE_GALLERY_SIZE, "medium") ?: "medium"
+
+    fun setImageGallerySize(size: String) {
+        val validSize = when (size.lowercase()) {
+            "small", "large" -> size.lowercase()
+            else -> "medium"
+        }
+        prefs.edit().putString(KEY_IMAGE_GALLERY_SIZE, validSize).apply()
+    }
+
+    fun isHapticFeedbackEnabled(): Boolean = prefs.getBoolean(KEY_HAPTIC_FEEDBACK_ENABLED, true)
+
+    fun setHapticFeedbackEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_HAPTIC_FEEDBACK_ENABLED, enabled).apply()
+    }
+
+    fun isAutoPlayMedia(): Boolean = prefs.getBoolean(KEY_AUTOPLAY_MEDIA, true)
+
+    fun setAutoPlayMedia(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_AUTOPLAY_MEDIA, enabled).apply()
+    }
+
+    fun isHighQualityMedia(): Boolean = prefs.getBoolean(KEY_HIGH_QUALITY_MEDIA, true)
+
+    fun setHighQualityMedia(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_HIGH_QUALITY_MEDIA, enabled).apply()
+    }
+
+    fun isDoubleTapZoomEnabled(): Boolean = prefs.getBoolean(KEY_DOUBLE_TAP_ZOOM, true)
+
+    fun setDoubleTapZoomEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_DOUBLE_TAP_ZOOM, enabled).apply()
+    }
+
+    fun isCheckAfterReminderEnabled(): Boolean = prefs.getBoolean(KEY_CHECK_AFTER_REMINDER, true)
+
+    fun setCheckAfterReminderEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_CHECK_AFTER_REMINDER, enabled).apply()
+    }
+
+    // --- AUTO-LOCK & INACTIVITY TIMEOUT ---
+    // 0 = Immediately, 30 = 30s, 60 = 1m, 300 = 5m, -1 = Never
+    fun getAutoLockTimeoutSeconds(): Int = prefs.getInt(KEY_AUTO_LOCK_TIMEOUT_SEC, 60)
+
+    fun setAutoLockTimeoutSeconds(seconds: Int) {
+        prefs.edit().putInt(KEY_AUTO_LOCK_TIMEOUT_SEC, seconds).apply()
+    }
+
+    // --- PANIC GESTURE PREFERENCES ---
+    // "SHAKE", "DOUBLE_TAP_SHIELD", "HARDWARE_BACK", "INSTANT_EXIT"
+    fun getPanicGestureType(): String = prefs.getString(KEY_PANIC_GESTURE, "SHAKE") ?: "SHAKE"
+
+    fun setPanicGestureType(gesture: String) {
+        prefs.edit().putString(KEY_PANIC_GESTURE, gesture).apply()
+    }
+
+    // --- SECRET CHAT APPEARANCE MODE ---
+    // "NORMAL", "DARK", "MINIMAL", "NEUTRAL"
+    fun getSecretChatThemeMode(): String = prefs.getString(KEY_CHAT_THEME_MODE, "NORMAL") ?: "NORMAL"
+
+    fun setSecretChatThemeMode(mode: String) {
+        prefs.edit().putString(KEY_CHAT_THEME_MODE, mode).apply()
+    }
+
+    fun getCustomChatTitle(): String = prefs.getString(KEY_CUSTOM_CHAT_TITLE, "") ?: ""
+
+    fun setCustomChatTitle(title: String) {
+        prefs.edit().putString(KEY_CUSTOM_CHAT_TITLE, title.trim()).apply()
+    }
+
+    // --- NOTIFICATION PRIVACY LEVEL ---
+    // "FULL" (Sarah: I miss you), "NEUTRAL" (❤️ New message), "DISGUISED" (Notes synchronized), "NONE" (New message)
+    fun getNotificationPrivacyMode(): String = prefs.getString(KEY_NOTIFICATION_PRIVACY_MODE, "DISGUISED") ?: "DISGUISED"
+
+    fun setNotificationPrivacyMode(mode: String) {
+        prefs.edit().putString(KEY_NOTIFICATION_PRIVACY_MODE, mode).apply()
+    }
+
+    // --- DECOY / DURESS PIN ---
+    fun hasDuressPin(): Boolean = !prefs.getString(KEY_DURESS_PIN_HASH, null).isNullOrEmpty()
+
+    fun setDuressPin(pin: String) {
+        val hash = hashPin(pin)
+        prefs.edit().putString(KEY_DURESS_PIN_HASH, hash).apply()
+    }
+
+    fun verifyDuressPin(pin: String): Boolean {
+        val savedHash = prefs.getString(KEY_DURESS_PIN_HASH, null) ?: return false
+        return savedHash == hashPin(pin)
+    }
+
+    // --- GALLERY DENSITY SLIDER ---
+    // 0f = Compact, 0.5f = Balanced, 1f = Spacious
+    fun getGalleryDensity(): Float = prefs.getFloat(KEY_GALLERY_DENSITY, 0.5f)
+
+    fun setGalleryDensity(density: Float) {
+        prefs.edit().putFloat(KEY_GALLERY_DENSITY, density.coerceIn(0f, 1f)).apply()
+    }
+
     private fun hashPin(pin: String): String {
         val bytes = MessageDigest.getInstance("SHA-256").digest(pin.toByteArray())
         return bytes.joinToString("") { "%02x".format(it) }
@@ -149,6 +264,25 @@ class SecurityPreferences(context: Context) {
         private const val KEY_PIN_HASH = "pin_hash"
         private const val KEY_COUPLE_KEY = "couple_key"
         private const val KEY_PARTNER_EMAIL = "partner_email"
+
+        // Trigger & gallery keys
+        private const val KEY_KEYWORD_TRIGGER_ENABLED = "keyword_trigger_enabled"
+        private const val KEY_PLUS_HOLD_DURATION = "plus_hold_duration_sec"
+        private const val KEY_IMAGE_GALLERY_SIZE = "image_gallery_size"
+        private const val KEY_HAPTIC_FEEDBACK_ENABLED = "haptic_feedback_enabled"
+        private const val KEY_AUTOPLAY_MEDIA = "autoplay_media"
+        private const val KEY_HIGH_QUALITY_MEDIA = "high_quality_media"
+        private const val KEY_DOUBLE_TAP_ZOOM = "double_tap_zoom"
+        private const val KEY_CHECK_AFTER_REMINDER = "check_after_reminder_enabled"
+
+        // New Pillar 1 & 2 Keys
+        private const val KEY_AUTO_LOCK_TIMEOUT_SEC = "auto_lock_timeout_sec"
+        private const val KEY_PANIC_GESTURE = "panic_gesture_type"
+        private const val KEY_CHAT_THEME_MODE = "chat_theme_mode"
+        private const val KEY_CUSTOM_CHAT_TITLE = "custom_chat_title"
+        private const val KEY_NOTIFICATION_PRIVACY_MODE = "notification_privacy_mode"
+        private const val KEY_DURESS_PIN_HASH = "duress_pin_hash"
+        private const val KEY_GALLERY_DENSITY = "gallery_density"
 
         @Volatile
         private var INSTANCE: SecurityPreferences? = null

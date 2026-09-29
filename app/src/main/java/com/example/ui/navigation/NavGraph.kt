@@ -204,6 +204,10 @@ fun CherishNavGraph(
                 viewModel = profileViewModel,
                 onNavigateBack = { navController.popBackStack() },
                 onNavigateToCloudBackup = { navController.navigate(Screen.CloudBackup.route) },
+                onNavigateToPrivacyAudit = { navController.navigate(Screen.PrivacyAudit.route) },
+                onNavigateToStorageManager = { navController.navigate(Screen.StorageManager.route) },
+                onNavigateToDeviceSessions = { navController.navigate(Screen.DeviceSessions.route) },
+                onNavigateToOpenWhen = { navController.navigate(Screen.OpenWhen.route) },
                 onLoggedOut = {
                     navController.navigate(Screen.Auth.route) {
                         popUpTo(0) { inclusive = true }
@@ -228,6 +232,32 @@ fun CherishNavGraph(
             }
             CloudBackupScreen(
                 viewModel = backupViewModel,
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(Screen.PrivacyAudit.route) {
+            com.example.ui.security.PrivacyAuditScreen(
+                securityPreferences = app.securityPreferences,
+                onNavigateBack = { navController.popBackStack() },
+                onNavigateToBackup = { navController.navigate(Screen.CloudBackup.route) }
+            )
+        }
+
+        composable(Screen.OpenWhen.route) {
+            com.example.ui.home.OpenWhenScreen(
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(Screen.StorageManager.route) {
+            com.example.ui.profile.StorageManagerScreen(
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(Screen.DeviceSessions.route) {
+            com.example.ui.profile.DeviceSessionsScreen(
                 onNavigateBack = { navController.popBackStack() }
             )
         }

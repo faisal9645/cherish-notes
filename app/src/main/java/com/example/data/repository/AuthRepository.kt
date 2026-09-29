@@ -270,6 +270,65 @@ class AuthRepository(private val context: Context) {
         }
     }
 
+    fun setRecordingAudio(recording: Boolean) {
+        val uid = getCurrentUserId()
+        try {
+            firestore?.collection("users")?.document(uid)?.update("recordingAudioInChat", recording)
+        } catch (e: Exception) {
+            // ignore
+        }
+    }
+
+    fun setCheckAfter(targetTimeMillis: Long, note: String = "") {
+        val uid = getCurrentUserId()
+        val now = System.currentTimeMillis()
+        val updates = mapOf(
+            "checkAfterTimeMillis" to targetTimeMillis,
+            "checkAfterNote" to note,
+            "checkAfterCreatedAt" to now,
+            "checkAfterActive" to true
+        )
+        val current = _currentUserState.value ?: User(id = uid)
+        val updated = current.copy(
+            checkAfterTimeMillis = targetTimeMillis,
+            checkAfterNote = note,
+            checkAfterCreatedAt = now,
+            checkAfterActive = true
+        )
+        _currentUserState.value = updated
+        saveLocalUserSession(updated)
+        try {
+            firestore?.collection("users")?.document(uid)?.update(updates)
+        } catch (e: Exception) {
+            Log.w("AuthRepository", "Failed to update check-after in Firestore", e)
+        }
+    }
+
+    fun cancelCheckAfter() {
+        val uid = getCurrentUserId()
+        val updates = mapOf(
+            "checkAfterActive" to false
+        )
+        val current = _currentUserState.value
+        if (current != null) {
+            val updated = current.copy(checkAfterActive = false)
+            _currentUserState.value = updated
+            saveLocalUserSession(updated)
+        }
+        try {
+            firestore?.collection("users")?.document(uid)?.update(updates)
+        } catch (e: Exception) {
+            Log.w("AuthRepository", "Failed to cancel check-after in Firestore", e)
+        }
+    }
+
+    fun extendCheckAfter(additionalMillis: Long) {
+        val currentTarget = _currentUserState.value?.checkAfterTimeMillis ?: System.currentTimeMillis()
+        val base = if (currentTarget > System.currentTimeMillis()) currentTarget else System.currentTimeMillis()
+        val newTarget = base + additionalMillis
+        setCheckAfter(newTarget, _currentUserState.value?.checkAfterNote ?: "")
+    }
+
     private fun listenToCurrentUser(uid: String) {
         currentUserListener?.remove()
         currentUserListener = firestore?.collection("users")?.document(uid)
@@ -281,6 +340,7 @@ class AuthRepository(private val context: Context) {
                 if (snapshot != null && snapshot.exists()) {
                     val user = snapshot.toObject(User::class.java)
                     _currentUserState.value = user
+                    user?.let { saveLocalUserSession(it) }
                     user?.partnerId?.let { partnerId ->
                         if (partnerId != _partnerUserState.value?.id) {
                             listenToPartner(partnerId)
@@ -299,10 +359,27 @@ class AuthRepository(private val context: Context) {
                     return@addSnapshotListener
                 }
                 if (snapshot != null && snapshot.exists()) {
-                    _partnerUserState.value = snapshot.toObject(User::class.java)
+                    val partner = snapshot.toObject(User::class.java)
+                    _partnerUserState.value = partner
+                    handlePartnerCheckAfterReminder(partner)
                 }
             }
     }
+
+    private fun handlePartnerCheckAfterReminder(partner: User?) {
+        val target = partner?.checkAfterTimeMillis
+        val active = partner?.checkAfterActive == true
+        if (active && target != null && target > System.currentTimeMillis()) {
+            com.example.notifications.CheckAfterReminderScheduler.scheduleReminder(
+                context,
+                target,
+                partner.displayName.ifBlank { "My Partner" }
+            )
+        } else {
+            com.example.notifications.CheckAfterReminderScheduler.cancelReminder(context)
+        }
+    }
+
 
     private suspend fun fetchUserFromFirestore(uid: String): User? {
         return try {
@@ -345,6 +422,9 @@ class AuthRepository(private val context: Context) {
             .putString("displayName", user.displayName)
             .putString("partnerEmail", user.partnerEmail)
             .putString("coupleId", user.coupleId)
+            .putLong("checkAfterTimeMillis", user.checkAfterTimeMillis ?: 0L)
+            .putString("checkAfterNote", user.checkAfterNote ?: "")
+            .putBoolean("checkAfterActive", user.checkAfterActive)
             .apply()
     }
 
@@ -352,15 +432,22 @@ class AuthRepository(private val context: Context) {
         val prefs = context.getSharedPreferences("cherish_user_session", Context.MODE_PRIVATE)
         val uid = prefs.getString("uid", null)
         if (uid != null) {
+            val targetTime = prefs.getLong("checkAfterTimeMillis", 0L)
+            val note = prefs.getString("checkAfterNote", "") ?: ""
+            val active = prefs.getBoolean("checkAfterActive", false)
             _currentUserState.value = User(
                 id = uid,
                 email = prefs.getString("email", "") ?: "",
                 displayName = prefs.getString("displayName", "User") ?: "User",
                 partnerEmail = prefs.getString("partnerEmail", null),
-                coupleId = prefs.getString("coupleId", "couple_default")
+                coupleId = prefs.getString("coupleId", "couple_default"),
+                checkAfterTimeMillis = if (targetTime > 0L) targetTime else null,
+                checkAfterNote = note.ifBlank { null },
+                checkAfterActive = active
             )
         }
     }
+
 
     private fun clearLocalUserSession() {
         context.getSharedPreferences("cherish_user_session", Context.MODE_PRIVATE)
