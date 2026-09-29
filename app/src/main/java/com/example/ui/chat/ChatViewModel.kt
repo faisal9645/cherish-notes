@@ -1,0 +1,232 @@
+package com.example.ui.chat
+
+import android.content.Context
+import android.net.Uri
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.example.audio.VoicePlayerHelper
+import com.example.audio.VoiceRecorderHelper
+import com.example.data.model.Message
+import com.example.data.model.MessageType
+import com.example.data.model.User
+import com.example.data.repository.AuthRepository
+import com.example.data.repository.ChatRepository
+import com.example.data.repository.MediaRepository
+import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.launch
+import java.io.File
+
+data class ChatUiState(
+    val messages: List<Message> = emptyList(),
+    val currentUser: User? = null,
+    val partnerUser: User? = null,
+    val isPartnerTyping: Boolean = false,
+    val searchQuery: String = "",
+    val isSearching: Boolean = false,
+    val replyingToMessage: Message? = null,
+    val selectedMessageForActions: Message? = null,
+    val fullScreenMediaUrl: String? = null,
+    val fullScreenMediaType: MessageType? = null,
+    val isUploadingMedia: Boolean = false,
+    val uploadProgress: Float = 0f
+)
+
+class ChatViewModel(
+    private val authRepository: AuthRepository,
+    private val chatRepository: ChatRepository,
+    private val mediaRepository: MediaRepository,
+    val voiceRecorderHelper: VoiceRecorderHelper,
+    val voicePlayerHelper: VoicePlayerHelper
+) : ViewModel() {
+
+    private val _uiState = MutableStateFlow(ChatUiState())
+    val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
+
+    init {
+        val convId = chatRepository.getConversationId()
+
+        viewModelScope.launch {
+            authRepository.currentUserState.collect { user ->
+                _uiState.update { it.copy(currentUser = user) }
+            }
+        }
+
+        viewModelScope.launch {
+            authRepository.partnerUserState.collect { partner ->
+                _uiState.update {
+                    it.copy(
+                        partnerUser = partner,
+                        isPartnerTyping = partner?.typingInChat ?: false
+                    )
+                }
+            }
+        }
+
+        viewModelScope.launch {
+            chatRepository.listenToMessages(convId).collect { msgList ->
+                _uiState.update { it.copy(messages = msgList) }
+            }
+        }
+    }
+
+    fun onTypingChanged(isTyping: Boolean) {
+        authRepository.setTyping(isTyping)
+    }
+
+    fun sendTextMessage(text: String) {
+        val trimmed = text.trim()
+        if (trimmed.isEmpty()) return
+        val replyTo = _uiState.value.replyingToMessage
+
+        viewModelScope.launch {
+            _uiState.update { it.copy(replyingToMessage = null) }
+            chatRepository.sendMessage(
+                text = trimmed,
+                type = MessageType.TEXT,
+                replyTo = replyTo
+            )
+        }
+    }
+
+    fun sendMediaFile(uri: Uri, type: MessageType, mediaName: String? = null) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isUploadingMedia = true, uploadProgress = 0.1f) }
+            try {
+                val coupleId = chatRepository.getConversationId()
+                val preparedFile = if (type == MessageType.IMAGE) {
+                    mediaRepository.compressAndPrepareImage(uri)
+                } else {
+                    File(uri.path ?: "")
+                }
+
+                val uploadResult = mediaRepository.uploadFile(
+                    file = preparedFile,
+                    type = type,
+                    coupleId = coupleId,
+                    onProgress = { p -> _uiState.update { it.copy(uploadProgress = p) } }
+                )
+
+                uploadResult.fold(
+                    onSuccess = { downloadUrl ->
+                        chatRepository.sendMessage(
+                            text = if (type == MessageType.IMAGE) "Sent a photo" else "Sent a file",
+                            type = type,
+                            mediaUrl = downloadUrl,
+                            mediaName = mediaName ?: preparedFile.name,
+                            mediaSize = preparedFile.length(),
+                            replyTo = _uiState.value.replyingToMessage
+                        )
+                        _uiState.update { it.copy(replyingToMessage = null) }
+                    },
+                    onFailure = {
+                        // ignore or handle error
+                    }
+                )
+            } finally {
+                _uiState.update { it.copy(isUploadingMedia = false, uploadProgress = 0f) }
+            }
+        }
+    }
+
+    fun startVoiceRecording() {
+        voiceRecorderHelper.startRecording()
+    }
+
+    fun stopAndSendVoiceRecording() {
+        val (file, duration) = voiceRecorderHelper.stopRecording()
+        if (file != null && duration > 0) {
+            viewModelScope.launch {
+                val coupleId = chatRepository.getConversationId()
+                val uploadResult = mediaRepository.uploadFile(
+                    file = file,
+                    type = MessageType.AUDIO,
+                    coupleId = coupleId
+                )
+
+                uploadResult.onSuccess { downloadUrl ->
+                    chatRepository.sendMessage(
+                        text = "Voice message ($duration s)",
+                        type = MessageType.AUDIO,
+                        mediaUrl = downloadUrl,
+                        durationSeconds = duration,
+                        waveform = voiceRecorderHelper.amplitudes.value
+                    )
+                }
+            }
+        }
+    }
+
+    fun cancelVoiceRecording() {
+        voiceRecorderHelper.cancelRecording()
+    }
+
+    fun playAudio(messageId: String, audioUrl: String) {
+        voicePlayerHelper.playAudio(messageId, audioUrl)
+    }
+
+    fun markMessageAsRead(messageId: String) {
+        viewModelScope.launch {
+            chatRepository.markAsRead(messageId)
+        }
+    }
+
+    fun toggleReaction(messageId: String, emoji: String) {
+        viewModelScope.launch {
+            chatRepository.toggleReaction(messageId, emoji)
+        }
+    }
+
+    fun toggleStar(messageId: String) {
+        viewModelScope.launch {
+            chatRepository.toggleStar(messageId)
+        }
+    }
+
+    fun editMessage(messageId: String, newText: String) {
+        viewModelScope.launch {
+            chatRepository.editMessage(messageId, newText)
+        }
+    }
+
+    fun deleteMessage(messageId: String) {
+        viewModelScope.launch {
+            chatRepository.deleteMessage(messageId)
+        }
+    }
+
+    fun setReplyingTo(message: Message?) {
+        _uiState.update { it.copy(replyingToMessage = message) }
+    }
+
+    fun setSelectedMessageForActions(message: Message?) {
+        _uiState.update { it.copy(selectedMessageForActions = message) }
+    }
+
+    fun setSearchQuery(query: String) {
+        _uiState.update { it.copy(searchQuery = query) }
+    }
+
+    fun setSearching(searching: Boolean) {
+        _uiState.update {
+            it.copy(
+                isSearching = searching,
+                searchQuery = if (!searching) "" else it.searchQuery
+            )
+        }
+    }
+
+    fun openFullScreenMedia(url: String, type: MessageType) {
+        _uiState.update { it.copy(fullScreenMediaUrl = url, fullScreenMediaType = type) }
+    }
+
+    fun closeFullScreenMedia() {
+        _uiState.update { it.copy(fullScreenMediaUrl = null, fullScreenMediaType = null) }
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        voicePlayerHelper.stop()
+        voiceRecorderHelper.cancelRecording()
+        authRepository.setTyping(false)
+    }
+}

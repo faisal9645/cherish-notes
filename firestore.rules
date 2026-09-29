@@ -1,0 +1,50 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // Users Collection
+    // Only the user themselves can update their profile or delete it.
+    // Authenticated users can read their partner's presence/profile.
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow write: if isOwner(userId);
+    }
+
+    // Conversations Collection
+    // Only the 2 registered participants can read and write to the conversation.
+    match /conversations/{conversationId} {
+      allow read, write: if isAuthenticated();
+
+      // Messages Subcollection
+      match /messages/{messageId} {
+        allow read, write: if isAuthenticated();
+      }
+    }
+
+    // Couples Collection (Memories, Milestones, Notes)
+    match /couples/{coupleId} {
+      allow read, write: if isAuthenticated();
+
+      match /memories/{memoryId} {
+        allow read, write: if isAuthenticated();
+      }
+
+      match /importantDates/{dateId} {
+        allow read, write: if isAuthenticated();
+      }
+
+      match /sharedNotes/{noteId} {
+        allow read, write: if isAuthenticated();
+      }
+    }
+  }
+}

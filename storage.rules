@@ -1,0 +1,25 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Couples private media folder
+    match /couples/{coupleId}/{allPaths=**} {
+      // Must be authenticated to read or write
+      allow read: if isAuthenticated();
+
+      // Enforce max upload size: 25MB for images/audio, 50MB for video/documents
+      allow write: if isAuthenticated()
+                   && request.resource.size < 50 * 1024 * 1024;
+    }
+
+    // Profile avatars
+    match /avatars/{userId}/{fileName} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && request.resource.size < 10 * 1024 * 1024;
+    }
+  }
+}

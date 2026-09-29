@@ -1,0 +1,6 @@
+{
+  "name": "Notes",
+  "description": "Private couple messenger disguised as a realistic notes app with secret gesture unlock, real-time chat, voice notes, shared memories, milestones countdown, and biometric security.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
