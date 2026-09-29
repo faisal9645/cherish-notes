@@ -55,20 +55,20 @@ fun CherishNavGraph(
     val startDestination = when {
         isAppLocked -> Screen.AppLock.route
         !isUserLoggedIn -> Screen.Auth.route
-        else -> Screen.Home.route
+        else -> Screen.Chat.route
     }
 
     if (isAppLocked) {
         AppLockScreen(
             securityPreferences = app.securityPreferences,
             onUnlocked = {
-                // When unlocked, continue to appropriate screen
+                // When unlocked, continue to secret chat screen directly
                 if (!app.authRepository.isUserLoggedIn()) {
                     navController.navigate(Screen.Auth.route) {
                         popUpTo(0) { inclusive = true }
                     }
                 } else {
-                    navController.navigate(Screen.Home.route) {
+                    navController.navigate(Screen.Chat.route) {
                         popUpTo(0) { inclusive = true }
                     }
                 }
@@ -103,7 +103,7 @@ fun CherishNavGraph(
             AuthScreen(
                 viewModel = authViewModel,
                 onAuthSuccess = {
-                    navController.navigate(Screen.Home.route) {
+                    navController.navigate(Screen.Chat.route) {
                         popUpTo(Screen.Auth.route) { inclusive = true }
                     }
                 }
@@ -140,7 +140,11 @@ fun CherishNavGraph(
             }
             ChatScreen(
                 viewModel = chatViewModel,
-                onNavigateBack = { navController.popBackStack() },
+                onNavigateBack = {
+                    if (!navController.popBackStack()) {
+                        navController.navigate(Screen.Home.route)
+                    }
+                },
                 onNavigateToGallery = { navController.navigate(Screen.SharedGallery.route) },
                 onQuickDisguise = { app.securityPreferences.reDisguise() }
             )

@@ -1,21 +1,28 @@
 package com.example.ui.chat
 
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -27,6 +34,8 @@ import com.example.data.model.MessageStatus
 import com.example.data.model.MessageType
 import com.example.ui.components.WaveformView
 import com.example.ui.theme.*
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -72,6 +81,38 @@ fun MessageBubble(
         MaterialTheme.colorScheme.onSurfaceVariant
     }
 
+    val scope = rememberCoroutineScope()
+    val haptic = LocalHapticFeedback.current
+    var showBurstHeart by remember { mutableStateOf(false) }
+    val heartScale = remember { Animatable(0f) }
+    val heartAlpha = remember { Animatable(0f) }
+
+    fun triggerHeartBurst() {
+        scope.launch {
+            try {
+                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+            } catch (_: Exception) {}
+            onReactionClick("❤️")
+            showBurstHeart = true
+            heartScale.snapTo(0.2f)
+            heartAlpha.snapTo(1f)
+            launch {
+                heartScale.animateTo(
+                    targetValue = 1.6f,
+                    animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioMediumBouncy,
+                        stiffness = Spring.StiffnessLow
+                    )
+                )
+            }
+            launch {
+                delay(380)
+                heartAlpha.animateTo(0f, animationSpec = tween(250))
+                showBurstHeart = false
+            }
+        }
+    }
+
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -90,14 +131,21 @@ fun MessageBubble(
                     if (isFromMe) appHorizontalGradient()
                     else androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.surfaceVariant)
                 )
-                .combinedClickable(
-                    onClick = {
-                        if (message.getTypedType() == MessageType.IMAGE && message.mediaUrl != null) {
-                            onImageClick(message.mediaUrl)
+                .pointerInput(message.id) {
+                    detectTapGestures(
+                        onTap = {
+                            if (message.getTypedType() == MessageType.IMAGE && message.mediaUrl != null) {
+                                onImageClick(message.mediaUrl)
+                            }
+                        },
+                        onLongPress = {
+                            onLongClick()
+                        },
+                        onDoubleTap = {
+                            triggerHeartBurst()
                         }
-                    },
-                    onLongClick = onLongClick
-                )
+                    )
+                }
                 .testTag("message_bubble_${message.id}")
         ) {
             Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
@@ -306,6 +354,24 @@ fun MessageBubble(
                     }
                 }
             }
+
+            // Bursting Heart Dopamine Pop Animation on Double-Tap
+            if (showBurstHeart) {
+                Box(
+                    modifier = Modifier.matchParentSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "💖",
+                        fontSize = 44.sp,
+                        modifier = Modifier.graphicsLayer {
+                            scaleX = heartScale.value
+                            scaleY = heartScale.value
+                            alpha = heartAlpha.value
+                        }
+                    )
+                }
+            }
         }
 
         // Emoji reactions pill below bubble
@@ -325,10 +391,7 @@ fun MessageBubble(
                     Text(
                         text = "$emoji $count",
                         fontSize = 11.sp,
-                        modifier = Modifier.combinedClickable(
-                            onClick = { onReactionClick(emoji) },
-                            onLongClick = onLongClick
-                        )
+                        modifier = Modifier.clickable { onReactionClick(emoji) }
                     )
                 }
             }

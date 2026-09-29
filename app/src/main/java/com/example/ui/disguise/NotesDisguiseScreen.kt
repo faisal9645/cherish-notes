@@ -5,12 +5,17 @@ import android.os.VibrationEffect
 import android.os.Vibrator
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
@@ -32,6 +37,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
@@ -46,7 +52,8 @@ import com.example.CherishApplication
 import com.example.data.local.notes.NoteEntity
 import com.example.security.SecurityPreferences
 import com.example.ui.theme.*
-import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.launch
+
 @OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun NotesDisguiseScreen(
@@ -60,12 +67,22 @@ fun NotesDisguiseScreen(
 ) {
     val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
+    val coroutineScope = rememberCoroutineScope()
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     var showEditorDialog by remember { mutableStateOf(false) }
     var selectedNoteForEdit by remember { mutableStateOf<NoteEntity?>(null) }
     var showSortMenu by remember { mutableStateOf(false) }
     var showBatchDeleteDialog by remember { mutableStateOf(false) }
+
+    // State for the 2-second hold on the '+' FAB
+    val holdProgress = remember { Animatable(0f) }
+    var isHoldingFab by remember { mutableStateOf(false) }
+    val fabScale by animateFloatAsState(
+        targetValue = if (isHoldingFab) 0.90f else 1f,
+        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+        label = "fab_press_scale"
+    )
 
     val categories = listOf("All", "📌 Pinned", "Lists", "Personal", "Work", "Ideas", "Journal")
 
@@ -93,19 +110,6 @@ fun NotesDisguiseScreen(
             }
         } catch (_: Exception) {}
         onSecretGestureTriggered()
-    }
-
-    fun checkSecretUnlockAttempt(query: String): Boolean {
-        val trimmed = query.trim()
-        val configuredPasscode = securityPreferences.getDisguisePasscode().trim()
-        if (trimmed.equals(configuredPasscode, ignoreCase = true) ||
-            trimmed.equals("love", ignoreCase = true) ||
-            trimmed.equals("secret", ignoreCase = true)
-        ) {
-            triggerSecretUnlock()
-            return true
-        }
-        return false
     }
 
     // Full-screen Note Editor Screen (fixes overlapping Save Note button issue by using real window insets)
@@ -223,16 +227,12 @@ fun NotesDisguiseScreen(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            // Brand Icon + Title (with secret long press gesture)
+                            // Brand Icon + Title
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
                                 modifier = Modifier
                                     .padding(horizontal = 4.dp, vertical = 4.dp)
                                     .clip(RoundedCornerShape(12.dp))
-                                    .combinedClickable(
-                                        onClick = { /* do nothing on simple tap */ },
-                                        onLongClick = { triggerSecretUnlock() }
-                                    )
                                     .testTag("notes_header")
                             ) {
                                 Box(
@@ -340,14 +340,11 @@ fun NotesDisguiseScreen(
 
                     Spacer(modifier = Modifier.height(10.dp))
 
-                    // Search Bar: typing 'love' or passcode reveals secret app!
+                    // Search Bar
                     OutlinedTextField(
                         value = uiState.searchQuery,
                         onValueChange = {
                             viewModel.setSearchQuery(it)
-                            if (checkSecretUnlockAttempt(it)) {
-                                viewModel.setSearchQuery("")
-                            }
                         },
                         placeholder = {
                             Text(
@@ -428,32 +425,77 @@ fun NotesDisguiseScreen(
             },
             floatingActionButton = {
                 if (!uiState.isSelectionMode) {
-                    // Floating Action Button with Electric Blue gradient & shadow, and SECRET GESTURE: Long-press '+' button!
+                    // Floating Action Button: Hold 2 seconds to unlock secret couple chat!
                     Box(
                         modifier = Modifier
                             .testTag("add_note_fab")
-                            .appGradientShadow(CircleShape)
-                            .clip(CircleShape)
-                            .background(appHorizontalGradient())
-                            .size(56.dp)
-                            .combinedClickable(
-                                onClick = {
-                                    selectedNoteForEdit = null
-                                    showEditorDialog = true
-                                },
-                                onLongClick = {
-                                    // Long-press FAB to unlock secret app!
-                                    triggerSecretUnlock()
-                                }
-                            ),
+                            .size(72.dp),
                         contentAlignment = Alignment.Center
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Add,
-                            contentDescription = "Add Note",
-                            tint = Color.White,
-                            modifier = Modifier.size(26.dp)
-                        )
+                        // 2-second hold circular progress indicator
+                        if (holdProgress.value > 0f) {
+                            CircularProgressIndicator(
+                                progress = { holdProgress.value },
+                                modifier = Modifier.size(68.dp),
+                                color = RoseGoldPrimary,
+                                strokeWidth = 3.5.dp,
+                                trackColor = Color(0x25E05375)
+                            )
+                        }
+
+                        Box(
+                            modifier = Modifier
+                                .size(56.dp)
+                                .scale(fabScale)
+                                .appGradientShadow(CircleShape)
+                                .clip(CircleShape)
+                                .background(appHorizontalGradient())
+                                .pointerInput(Unit) {
+                                    awaitEachGesture {
+                                        val down = awaitFirstDown(requireUnconsumed = false)
+                                        down.consume()
+                                        isHoldingFab = true
+                                        val startTime = System.currentTimeMillis()
+                                        var unlocked = false
+
+                                        val timerJob = coroutineScope.launch {
+                                            holdProgress.snapTo(0f)
+                                            holdProgress.animateTo(
+                                                targetValue = 1f,
+                                                animationSpec = tween(
+                                                    durationMillis = 2000,
+                                                    easing = LinearEasing
+                                                )
+                                            )
+                                            unlocked = true
+                                            triggerSecretUnlock()
+                                        }
+
+                                        val up = waitForUpOrCancellation()
+                                        timerJob.cancel()
+                                        isHoldingFab = false
+                                        val elapsed = System.currentTimeMillis() - startTime
+                                        coroutineScope.launch {
+                                            holdProgress.snapTo(0f)
+                                        }
+
+                                        if (!unlocked) {
+                                            if (up != null && elapsed < 350L) {
+                                                selectedNoteForEdit = null
+                                                showEditorDialog = true
+                                            }
+                                        }
+                                    }
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Add,
+                                contentDescription = "Add Note (Hold 2 seconds for Secret Chat)",
+                                tint = Color.White,
+                                modifier = Modifier.size(28.dp)
+                            )
+                        }
                     }
                 }
             },
