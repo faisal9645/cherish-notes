@@ -368,13 +368,6 @@ fun ChatScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .pointerInput(Unit) {
-                    detectTapGestures(
-                        onDoubleTap = {
-                            viewModel.toggleStealthCurtain()
-                        }
-                    )
-                }
         ) {
             if (uiState.isStealthCurtainActive) {
                 // Emergency Privacy Shield: Harmless daily notes / tasks view hiding all previous chat
@@ -386,7 +379,14 @@ fun ChatScreen(
                     state = listState,
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(vertical = 8.dp),
+                        .padding(vertical = 8.dp)
+                        .pointerInput(Unit) {
+                            detectTapGestures(
+                                onDoubleTap = {
+                                    viewModel.toggleStealthCurtain()
+                                }
+                            )
+                        },
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     // Mutual Consent Chat Deletion Active Request Banner
@@ -778,12 +778,32 @@ fun MutualConsentDeletionBanner(
 fun StealthDisguiseNotesView(
     onRestore: () -> Unit
 ) {
+    var tapCount by remember { mutableIntStateOf(0) }
+    var lastTapTime by remember { mutableLongStateOf(0L) }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.White)
             .padding(24.dp)
-            .clickable { onRestore() }
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onTap = {
+                        val now = System.currentTimeMillis()
+                        if (now - lastTapTime < 550) {
+                            tapCount++
+                        } else {
+                            tapCount = 1
+                        }
+                        lastTapTime = now
+
+                        if (tapCount >= 3) {
+                            tapCount = 0
+                            onRestore()
+                        }
+                    }
+                )
+            }
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -866,7 +886,7 @@ fun StealthDisguiseNotesView(
             contentAlignment = Alignment.Center
         ) {
             Text(
-                text = "• Double-tap anywhere to restore previous chat •",
+                text = "• Triple-tap anywhere to restore previous chat •",
                 fontSize = 11.sp,
                 color = Color.LightGray,
                 fontWeight = FontWeight.Medium

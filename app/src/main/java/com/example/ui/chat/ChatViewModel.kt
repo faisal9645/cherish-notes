@@ -238,7 +238,7 @@ class ChatViewModel(
         _uiState.update {
             it.copy(
                 isStealthCurtainActive = newState,
-                stealthToastMessage = if (newState) "🛡️ Stealth Shield ON: Previous chats hidden" else "👁️ Stealth Shield OFF: Previous chats visible"
+                stealthToastMessage = if (newState) "🛡️ Stealth Shield ON: Chats hidden (3-tap to restore)" else "👁️ Stealth Shield OFF: Previous chats visible"
             )
         }
     }
@@ -247,7 +247,7 @@ class ChatViewModel(
         _uiState.update {
             it.copy(
                 isStealthCurtainActive = active,
-                stealthToastMessage = if (active) "🛡️ Stealth Shield ON: Previous chats hidden" else "👁️ Stealth Shield OFF: Previous chats visible"
+                stealthToastMessage = if (active) "🛡️ Stealth Shield ON: Chats hidden (3-tap to restore)" else "👁️ Stealth Shield OFF: Previous chats visible"
             )
         }
     }
