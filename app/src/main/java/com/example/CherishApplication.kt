@@ -54,8 +54,8 @@ class CherishApplication : Application() {
             }
             if (FirebaseApp.getApps(this).isEmpty()) {
                 val options = com.google.firebase.FirebaseOptions.Builder()
-                    .setApplicationId("1:589800064404:android:03cacc530a817c2971bb81")
-                    .setApiKey("AIzaSyD-bfI8gkOik7Iurqr85XSO-6beOOA_JGg")
+                    .setApplicationId("1:589800064404:android:48e44687a5abaab671bb81")
+                    .setApiKey("AIzaSyCYWCJQpzY9bZV9YFxzePy8ti9pL6Z1HQ4")
                     .setProjectId("gen-lang-client-0340321202")
                     .setStorageBucket("gen-lang-client-0340321202.firebasestorage.app")
                     .setGcmSenderId("589800064404")

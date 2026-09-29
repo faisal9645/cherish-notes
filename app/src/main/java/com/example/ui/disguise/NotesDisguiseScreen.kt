@@ -10,6 +10,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
@@ -46,33 +47,6 @@ import com.example.data.local.notes.NoteEntity
 import com.example.security.SecurityPreferences
 import com.example.ui.theme.*
 import kotlinx.coroutines.TimeoutCancellationException
-import kotlinx.coroutines.withTimeout
-
-/**
- * Custom 3-second long press gesture modifier for intentional secret unlock triggers.
- */
-fun Modifier.secretLongPressGesture(
-    durationMillis: Long = 3000L,
-    onClick: (() -> Unit)? = null,
-    onLongPress: () -> Unit
-): Modifier = this.pointerInput(durationMillis) {
-    awaitEachGesture {
-        awaitFirstDown(requireUnconsumed = false)
-        try {
-            withTimeout(durationMillis) {
-                val up = waitForUpOrCancellation()
-                if (up != null) {
-                    onClick?.invoke()
-                }
-            }
-        } catch (_: TimeoutCancellationException) {
-            // Held continuously for full 3 seconds!
-            onLongPress()
-            waitForUpOrCancellation()
-        }
-    }
-}
-
 @OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun NotesDisguiseScreen(
@@ -254,10 +228,10 @@ fun NotesDisguiseScreen(
                                 verticalAlignment = Alignment.CenterVertically,
                                 modifier = Modifier
                                     .padding(horizontal = 4.dp, vertical = 4.dp)
-                                    .secretLongPressGesture(
-                                        durationMillis = 3000L,
-                                        onClick = null,
-                                        onLongPress = { triggerSecretUnlock() }
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .combinedClickable(
+                                        onClick = { /* do nothing on simple tap */ },
+                                        onLongClick = { triggerSecretUnlock() }
                                     )
                                     .testTag("notes_header")
                             ) {
@@ -454,7 +428,7 @@ fun NotesDisguiseScreen(
             },
             floatingActionButton = {
                 if (!uiState.isSelectionMode) {
-                    // Floating Action Button with Electric Blue gradient & shadow, and SECRET GESTURE: 3-second Long-press '+' button!
+                    // Floating Action Button with Electric Blue gradient & shadow, and SECRET GESTURE: Long-press '+' button!
                     Box(
                         modifier = Modifier
                             .testTag("add_note_fab")
@@ -462,14 +436,13 @@ fun NotesDisguiseScreen(
                             .clip(CircleShape)
                             .background(appHorizontalGradient())
                             .size(56.dp)
-                            .secretLongPressGesture(
-                                durationMillis = 3000L,
+                            .combinedClickable(
                                 onClick = {
                                     selectedNoteForEdit = null
                                     showEditorDialog = true
                                 },
-                                onLongPress = {
-                                    // 3-second Long-press FAB to unlock secret app!
+                                onLongClick = {
+                                    // Long-press FAB to unlock secret app!
                                     triggerSecretUnlock()
                                 }
                             ),

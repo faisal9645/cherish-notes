@@ -156,38 +156,56 @@ fun NoteEditorScreen(
         bottomBar = {
             Surface(
                 color = Color.White,
-                tonalElevation = 4.dp,
-                shadowElevation = 8.dp,
+                tonalElevation = 0.dp,
+                shadowElevation = 16.dp,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .navigationBarsPadding()
                     .imePadding()
             ) {
-                Column(modifier = Modifier.fillMaxWidth()) {
-                    HorizontalDivider(color = Color(0xFFF0F0F2), thickness = 1.dp)
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(Color.White)
+                        .navigationBarsPadding()
+                ) {
+                    HorizontalDivider(color = Color(0xFFEEEEF0), thickness = 1.dp)
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 20.dp, vertical = 14.dp),
+                            .padding(horizontal = 18.dp, vertical = 12.dp),
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        OutlinedButton(
-                            onClick = onDismiss,
-                            shape = RoundedCornerShape(14.dp),
+                        // Cancel Button: Modern Soft Rounded Pill
+                        Surface(
+                            shape = RoundedCornerShape(16.dp),
+                            color = Color(0xFFF2F4F8),
                             modifier = Modifier
                                 .weight(1f)
                                 .height(50.dp)
+                                .clip(RoundedCornerShape(16.dp))
+                                .clickable { onDismiss() }
                         ) {
-                            Text("Cancel", color = DarkOnSurfaceVariant, fontWeight = FontWeight.SemiBold)
+                            Box(
+                                contentAlignment = Alignment.Center,
+                                modifier = Modifier.fillMaxSize()
+                            ) {
+                                Text(
+                                    text = "Cancel",
+                                    color = Color(0xFF4A4E5A),
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 15.sp
+                                )
+                            }
                         }
 
+                        // Save Note Button: Glowing Signature Electric Gradient Pill
                         Box(
                             modifier = Modifier
                                 .weight(1.5f)
                                 .height(50.dp)
-                                .appGradientShadow(RoundedCornerShape(14.dp))
-                                .clip(RoundedCornerShape(14.dp))
+                                .appGradientShadow(RoundedCornerShape(16.dp))
+                                .clip(RoundedCornerShape(16.dp))
                                 .background(appHorizontalGradient())
                                 .clickable {
                                     onSave(
@@ -204,14 +222,17 @@ fun NoteEditorScreen(
                                 .testTag("note_editor_save_button"),
                             contentAlignment = Alignment.Center
                         ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center
+                            ) {
                                 Icon(
                                     imageVector = Icons.Default.Check,
                                     contentDescription = null,
                                     tint = Color.White,
                                     modifier = Modifier.size(18.dp)
                                 )
-                                Spacer(modifier = Modifier.width(6.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
                                 Text(
                                     text = "Save Note",
                                     color = Color.White,

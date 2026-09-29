@@ -13,11 +13,11 @@ android {
   compileSdk { version = release(36) { minorApiLevel = 1 } }
 
   defaultConfig {
-    applicationId = "com.aistudio.cherish.pxrtmv"
+    applicationId = "com.cherish.notes"
     minSdk = 24
     targetSdk = 36
-    versionCode = 4
-    versionName = "1.0.3"
+    versionCode = 5
+    versionName = "1.0.4"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
