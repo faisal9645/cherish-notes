@@ -2,7 +2,6 @@ package com.example.ui.auth
 
 import androidx.compose.animation.*
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -19,9 +18,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -32,58 +29,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.theme.*
 
-@Composable
-fun GoogleLogoIcon(modifier: Modifier = Modifier.size(20.dp)) {
-    // Crisp vector rendering of the official 4-color Google 'G' icon
-    Canvas(modifier = modifier) {
-        val w = size.width
-        val h = size.height
-        val center = Offset(w / 2f, h / 2f)
-        val radius = w / 2f
-
-        // Blue right segment
-        drawArc(
-            color = Color(0xFF4285F4),
-            startAngle = -45f,
-            sweepAngle = 90f,
-            useCenter = true
-        )
-        // Green bottom segment
-        drawArc(
-            color = Color(0xFF34A853),
-            startAngle = 45f,
-            sweepAngle = 90f,
-            useCenter = true
-        )
-        // Yellow bottom-left segment
-        drawArc(
-            color = Color(0xFFFBBC05),
-            startAngle = 135f,
-            sweepAngle = 90f,
-            useCenter = true
-        )
-        // Red top segment
-        drawArc(
-            color = Color(0xFFEA4335),
-            startAngle = 225f,
-            sweepAngle = 90f,
-            useCenter = true
-        )
-        // White inner circle cutout
-        drawCircle(
-            color = Color.White,
-            radius = radius * 0.58f,
-            center = center
-        )
-        // Blue horizontal crossbar
-        drawRect(
-            color = Color(0xFF4285F4),
-            topLeft = Offset(center.x - radius * 0.1f, center.y - radius * 0.22f),
-            size = androidx.compose.ui.geometry.Size(radius * 1.05f, radius * 0.44f)
-        )
-    }
-}
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AuthScreen(
@@ -93,10 +38,10 @@ fun AuthScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
-    var myGmail by remember { mutableStateOf("faisallasiaff@gmail.com") }
-    var partnerGmail by remember { mutableStateOf("mylove@gmail.com") }
-    var coupleSecretPasscode by remember { mutableStateOf("cherish-forever-2026") }
+    var myUsername by remember { mutableStateOf("faisal") }
     var password by remember { mutableStateOf("cherish123") }
+    var partnerUsername by remember { mutableStateOf("karthik") }
+    var couplePasscode by remember { mutableStateOf("cherish-love") }
     var passwordVisible by remember { mutableStateOf(false) }
 
     LaunchedEffect(uiState) {
@@ -126,7 +71,7 @@ fun AuthScreen(
             ) {
                 Spacer(modifier = Modifier.height(20.dp))
 
-                // Centered container optimized for Samsung Galaxy S24 and Vivo V29 Pro
+                // Centered container optimized for all mobile screens
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -185,7 +130,7 @@ fun AuthScreen(
                                 .padding(24.dp),
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
-                            // Gmail Login Header
+                            // Header Banner
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -194,17 +139,22 @@ fun AuthScreen(
                                     .padding(horizontal = 14.dp, vertical = 10.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                GoogleLogoIcon(modifier = Modifier.size(22.dp))
+                                Icon(
+                                    imageVector = Icons.Default.Lock,
+                                    contentDescription = null,
+                                    tint = RoseGoldPrimary,
+                                    modifier = Modifier.size(20.dp)
+                                )
                                 Spacer(modifier = Modifier.width(10.dp))
                                 Column {
                                     Text(
-                                        text = "Gmail Account Sign-In",
+                                        text = "Account Sign-In",
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 13.sp,
                                         color = DarkOnBackground
                                     )
                                     Text(
-                                        text = "Only you & your partner can access",
+                                        text = "Private couple chat with your partner",
                                         fontSize = 11.sp,
                                         color = DarkOnSurfaceVariant
                                     )
@@ -213,64 +163,25 @@ fun AuthScreen(
 
                             Spacer(modifier = Modifier.height(18.dp))
 
-                            // Your Gmail
+                            // Your Username
                             OutlinedTextField(
-                                value = myGmail,
-                                onValueChange = { myGmail = it },
-                                label = { Text("Your Gmail Address") },
-                                placeholder = { Text("you@gmail.com") },
+                                value = myUsername,
+                                onValueChange = { myUsername = it },
+                                label = { Text("Your Username") },
+                                placeholder = { Text("e.g. faisal") },
                                 leadingIcon = {
-                                    Icon(Icons.Default.Mail, contentDescription = null, tint = RoseGoldPrimary)
-                                },
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
-                                singleLine = true,
-                                shape = RoundedCornerShape(14.dp),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .testTag("input_my_gmail")
-                            )
-
-                            Spacer(modifier = Modifier.height(14.dp))
-
-                            // Partner's Gmail
-                            OutlinedTextField(
-                                value = partnerGmail,
-                                onValueChange = { partnerGmail = it },
-                                label = { Text("Your Partner's Gmail") },
-                                placeholder = { Text("partner@gmail.com") },
-                                supportingText = { Text("Strictly 2 people: only this partner can connect") },
-                                leadingIcon = {
-                                    Icon(Icons.Default.Favorite, contentDescription = null, tint = HeartRed)
-                                },
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
-                                singleLine = true,
-                                shape = RoundedCornerShape(14.dp),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .testTag("input_partner_gmail")
-                            )
-
-                            Spacer(modifier = Modifier.height(14.dp))
-
-                            // Couple Secret Key
-                            OutlinedTextField(
-                                value = coupleSecretPasscode,
-                                onValueChange = { coupleSecretPasscode = it },
-                                label = { Text("Couple Secret Passcode") },
-                                supportingText = { Text("Matching passcode shared between you two") },
-                                leadingIcon = {
-                                    Icon(Icons.Default.VpnKey, contentDescription = null, tint = RoseGoldPrimary)
+                                    Icon(Icons.Default.Person, contentDescription = null, tint = RoseGoldPrimary)
                                 },
                                 singleLine = true,
                                 shape = RoundedCornerShape(14.dp),
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .testTag("input_couple_passcode")
+                                    .testTag("input_username")
                             )
 
                             Spacer(modifier = Modifier.height(14.dp))
 
-                            // Private Password
+                            // Password
                             OutlinedTextField(
                                 value = password,
                                 onValueChange = { password = it },
@@ -295,13 +206,48 @@ fun AuthScreen(
                                     .testTag("input_password")
                             )
 
+                            Spacer(modifier = Modifier.height(14.dp))
+
+                            // Partner's Username
+                            OutlinedTextField(
+                                value = partnerUsername,
+                                onValueChange = { partnerUsername = it },
+                                label = { Text("Partner's Username") },
+                                placeholder = { Text("e.g. karthik") },
+                                supportingText = { Text("Strictly 2 people: only this partner connects") },
+                                leadingIcon = {
+                                    Icon(Icons.Default.Favorite, contentDescription = null, tint = HeartRed)
+                                },
+                                singleLine = true,
+                                shape = RoundedCornerShape(14.dp),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .testTag("input_partner_username")
+                            )
+
+                            Spacer(modifier = Modifier.height(14.dp))
+
+                            // Couple Passcode / Room Code
+                            OutlinedTextField(
+                                value = couplePasscode,
+                                onValueChange = { couplePasscode = it },
+                                label = { Text("Couple Secret Passcode") },
+                                placeholder = { Text("cherish-love") },
+                                supportingText = { Text("Shared passcode between you two") },
+                                leadingIcon = {
+                                    Icon(Icons.Default.VpnKey, contentDescription = null, tint = RoseGoldPrimary)
+                                },
+                                singleLine = true,
+                                shape = RoundedCornerShape(14.dp),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .testTag("input_couple_passcode")
+                            )
+
                             Spacer(modifier = Modifier.height(18.dp))
 
                             if (uiState is AuthUiState.Error) {
                                 val errorMsg = (uiState as AuthUiState.Error).message
-                                val isProviderDisabled = errorMsg.contains("operation is not allowed", ignoreCase = true) ||
-                                        errorMsg.contains("provider is disabled", ignoreCase = true)
-
                                 Column(
                                     horizontalAlignment = Alignment.CenterHorizontally,
                                     modifier = Modifier
@@ -316,50 +262,47 @@ fun AuthScreen(
                                         style = MaterialTheme.typography.bodySmall,
                                         textAlign = TextAlign.Center
                                     )
-                                    if (isProviderDisabled) {
-                                        Spacer(modifier = Modifier.height(10.dp))
-                                        Button(
-                                            onClick = {
-                                                viewModel.continueOffline(
-                                                    gmail = myGmail,
-                                                    partnerGmail = partnerGmail,
-                                                    coupleKey = coupleSecretPasscode
-                                                )
-                                            },
-                                            colors = ButtonDefaults.buttonColors(containerColor = RoseGoldPrimary),
-                                            shape = RoundedCornerShape(8.dp),
-                                            modifier = Modifier.fillMaxWidth()
-                                        ) {
-                                            Text(
-                                                text = "Continue in Direct / Offline Mode",
-                                                color = Color.White,
-                                                fontWeight = FontWeight.Bold,
-                                                fontSize = 13.sp
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Button(
+                                        onClick = {
+                                            viewModel.continueOffline(
+                                                username = myUsername,
+                                                partnerUsername = partnerUsername,
+                                                coupleKey = couplePasscode
                                             )
-                                        }
+                                        },
+                                        colors = ButtonDefaults.buttonColors(containerColor = RoseGoldPrimary),
+                                        shape = RoundedCornerShape(8.dp),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Text(
+                                            text = "Enter in Direct / Offline Mode",
+                                            color = Color.White,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 13.sp
+                                        )
                                     }
                                 }
                             }
 
-                            // Sign in with Gmail Primary Button
+                            // Enter / Sign In Primary Button
                             Surface(
                                 shape = RoundedCornerShape(14.dp),
-                                color = Color.White,
-                                border = BorderStroke(1.5.dp, RoseGoldPrimary),
+                                color = RoseGoldPrimary,
                                 shadowElevation = 3.dp,
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .height(52.dp)
                                     .clip(RoundedCornerShape(14.dp))
                                     .clickable(enabled = uiState !is AuthUiState.Loading) {
-                                        viewModel.loginWithGmail(
-                                            gmail = myGmail,
-                                            partnerGmail = partnerGmail,
-                                            coupleKey = coupleSecretPasscode,
-                                            pass = password
+                                        viewModel.login(
+                                            username = myUsername,
+                                            pass = password,
+                                            partnerUsername = partnerUsername,
+                                            coupleKey = couplePasscode
                                         )
                                     }
-                                    .testTag("auth_submit_gmail_button")
+                                    .testTag("auth_submit_button")
                             ) {
                                 Row(
                                     modifier = Modifier.fillMaxSize(),
@@ -368,30 +311,36 @@ fun AuthScreen(
                                 ) {
                                     if (uiState is AuthUiState.Loading) {
                                         CircularProgressIndicator(
-                                            color = RoseGoldPrimary,
+                                            color = Color.White,
                                             modifier = Modifier.size(24.dp),
                                             strokeWidth = 2.dp
                                         )
                                     } else {
-                                        GoogleLogoIcon(modifier = Modifier.size(22.dp))
-                                        Spacer(modifier = Modifier.width(12.dp))
+                                        Icon(
+                                            imageVector = Icons.Default.Favorite,
+                                            contentDescription = null,
+                                            tint = Color.White,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(10.dp))
                                         Text(
-                                            text = "Continue with Gmail",
+                                            text = "Enter Our Space",
                                             fontSize = 15.sp,
                                             fontWeight = FontWeight.Bold,
-                                            color = DarkOnBackground
+                                            color = Color.White
                                         )
                                     }
                                 }
                             }
 
                             Spacer(modifier = Modifier.height(8.dp))
+
                             TextButton(
                                 onClick = {
                                     viewModel.continueOffline(
-                                        gmail = myGmail,
-                                        partnerGmail = partnerGmail,
-                                        coupleKey = coupleSecretPasscode
+                                        username = myUsername,
+                                        partnerUsername = partnerUsername,
+                                        coupleKey = couplePasscode
                                     )
                                 },
                                 modifier = Modifier.fillMaxWidth()

@@ -176,10 +176,13 @@ fun ChatScreen(
 
     // Partner info
     val partner = uiState.partnerUser
-    val partnerName = partner?.displayName?.ifBlank { "My Partner" } ?: "My Partner"
+    val myUser = uiState.currentUser
+    val partnerName = partner?.displayName?.ifBlank { null }
+        ?: myUser?.partnerEmail?.substringBefore("@")?.replaceFirstChar { it.uppercase() }
+        ?: myUser?.partnerId?.removePrefix("user_")?.replaceFirstChar { it.uppercase() }
+        ?: "My Partner"
     val isPartnerOnline = partner?.isOnline ?: false
     val currentUserId = viewModel.uiState.value.currentUser?.id ?: "user_me"
-    val myUser = uiState.currentUser
 
     val partnerHasCheckAfter = partner?.hasActiveCheckAfter() == true
     val partnerCheckAfterTarget = partner?.checkAfterTimeMillis ?: 0L

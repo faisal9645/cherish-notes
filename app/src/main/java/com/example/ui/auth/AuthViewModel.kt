@@ -21,14 +21,30 @@ class AuthViewModel(private val authRepository: AuthRepository) : ViewModel() {
     private val _uiState = MutableStateFlow<AuthUiState>(AuthUiState.Idle)
     val uiState: StateFlow<AuthUiState> = _uiState.asStateFlow()
 
-    fun login(email: String, pass: String) {
-        if (email.isBlank() || pass.isBlank()) {
-            _uiState.value = AuthUiState.Error("Please enter both email and password")
+    fun login(
+        username: String,
+        pass: String,
+        partnerUsername: String = "",
+        coupleKey: String = ""
+    ) {
+        val cleanUser = username.trim()
+        val cleanPass = pass.trim()
+        if (cleanUser.isBlank() || cleanPass.isBlank()) {
+            _uiState.value = AuthUiState.Error("Please enter your username and password")
+            return
+        }
+        if (cleanPass.length < 4) {
+            _uiState.value = AuthUiState.Error("Password must be at least 4 characters")
             return
         }
         viewModelScope.launch {
             _uiState.value = AuthUiState.Loading
-            val result = authRepository.loginWithEmail(email, pass)
+            val result = authRepository.loginWithUsernameAndPassword(
+                username = cleanUser,
+                pass = cleanPass,
+                partnerUsername = partnerUsername.trim(),
+                coupleKey = coupleKey.trim()
+            )
             result.fold(
                 onSuccess = { _uiState.value = AuthUiState.Success(it) },
                 onFailure = { _uiState.value = AuthUiState.Error(it.localizedMessage ?: "Login failed") }
@@ -36,107 +52,30 @@ class AuthViewModel(private val authRepository: AuthRepository) : ViewModel() {
         }
     }
 
-    fun register(email: String, pass: String, name: String, partnerEmail: String, coupleKey: String) {
-        if (email.isBlank() || pass.isBlank()) {
-            _uiState.value = AuthUiState.Error("Please provide all required fields")
-            return
-        }
-        if (pass.length < 6) {
-            _uiState.value = AuthUiState.Error("Password must be at least 6 characters")
-            return
-        }
-        viewModelScope.launch {
-            _uiState.value = AuthUiState.Loading
-            val regResult = authRepository.registerWithEmail(email, pass, name)
-            regResult.fold(
-                onSuccess = { user ->
-                    if (partnerEmail.isNotBlank() || coupleKey.isNotBlank()) {
-                        authRepository.pairWithPartner(partnerEmail, coupleKey.ifBlank { "CHERISH-FOREVER" })
-                    }
-                    _uiState.value = AuthUiState.Success(user)
-                },
-                onFailure = {
-                    _uiState.value = AuthUiState.Error(it.localizedMessage ?: "Registration failed")
-                }
-            )
-        }
-    }
-
-    fun loginWithGmail(gmail: String, partnerGmail: String, coupleKey: String, pass: String = "gmail_secure_couple") {
-        val cleanGmail = gmail.trim().lowercase().let { if (!it.contains("@")) "$it@gmail.com" else it }
-        val cleanPartner = partnerGmail.trim().lowercase().let { if (it.isNotBlank() && !it.contains("@")) "$it@gmail.com" else it }
-
-        if (!cleanGmail.endsWith("@gmail.com") && !cleanGmail.endsWith("@googlemail.com")) {
-            _uiState.value = AuthUiState.Error("Please use a valid Gmail address (must end with @gmail.com)")
-            return
-        }
-
-        if (cleanPartner.isNotBlank() && !cleanPartner.endsWith("@gmail.com") && !cleanPartner.endsWith("@googlemail.com")) {
-            _uiState.value = AuthUiState.Error("Partner must also use a valid Gmail address (must end with @gmail.com)")
-            return
-        }
-
-        viewModelScope.launch {
-            _uiState.value = AuthUiState.Loading
-            val loginRes = authRepository.loginWithEmail(cleanGmail, pass)
-            loginRes.fold(
-                onSuccess = { user ->
-                    if (cleanPartner.isNotBlank()) {
-                        authRepository.pairWithPartner(cleanPartner, coupleKey.ifBlank { "CHERISH-FOREVER" })
-                    }
-                    _uiState.value = AuthUiState.Success(user)
-                },
-                onFailure = {
-                    val regRes = authRepository.registerWithEmail(
-                        email = cleanGmail,
-                        pass = pass,
-                        displayName = cleanGmail.substringBefore("@").replaceFirstChar { it.uppercase() }
-                    )
-                    regRes.fold(
-                        onSuccess = { user ->
-                            if (cleanPartner.isNotBlank()) {
-                                authRepository.pairWithPartner(cleanPartner, coupleKey.ifBlank { "CHERISH-FOREVER" })
-                            }
-                            _uiState.value = AuthUiState.Success(user)
-                        },
-                        onFailure = { err ->
-                            val msg = err.localizedMessage ?: "Gmail authentication failed"
-                            val cleanMsg = if (msg.contains("operation is not allowed", ignoreCase = true) ||
-                                msg.contains("sign-in provider is disabled", ignoreCase = true)
-                            ) {
-                                "Firebase Email/Password provider is disabled in Firebase Console. Enable it in Firebase Console (Authentication > Sign-in method), or tap below to enter in Direct / Offline Mode."
-                            } else {
-                                msg
-                            }
-                            _uiState.value = AuthUiState.Error(cleanMsg)
-                        }
-                    )
-                }
-            )
-        }
-    }
-
-    fun continueOffline(gmail: String, partnerGmail: String, coupleKey: String) {
-        val cleanGmail = gmail.trim().lowercase().let { if (!it.contains("@")) "$it@gmail.com" else it }
-        val cleanPartner = partnerGmail.trim().lowercase().let { if (it.isNotBlank() && !it.contains("@")) "$it@gmail.com" else it }
+    fun continueOffline(
+        username: String,
+        partnerUsername: String = "",
+        coupleKey: String = ""
+    ) {
+        val cleanUser = username.trim().ifBlank { "me" }
         val user = authRepository.loginOffline(
-            email = cleanGmail,
-            partnerEmail = cleanPartner,
-            coupleKey = coupleKey
+            username = cleanUser,
+            partnerUsername = partnerUsername.trim(),
+            coupleKey = coupleKey.trim()
         )
         _uiState.value = AuthUiState.Success(user)
     }
 
     fun sendPasswordReset(email: String, onDone: (Boolean, String) -> Unit) {
         if (email.isBlank()) {
-            onDone(false, "Please enter your email address")
+            onDone(false, "Please enter your username")
             return
         }
         viewModelScope.launch {
             val res = authRepository.sendPasswordReset(email)
             res.fold(
-                onSuccess = { onDone(true, "Reset link sent! Please check your inbox.") },
-                onFailure = { onDone(false, it.localizedMessage ?: "Failed to send reset email") }
+                onSuccess = { onDone(true, "Reset link sent!") },
+                onFailure = { onDone(false, it.localizedMessage ?: "Failed to reset") }
             )
         }
     }

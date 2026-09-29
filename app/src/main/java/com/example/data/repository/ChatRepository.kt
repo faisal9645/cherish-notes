@@ -43,15 +43,12 @@ class ChatRepository(
     private var currentActiveConversationId: String? = null
 
     init {
-        // Load initial welcome couple messages if empty
-        if (_messagesFlow.value.isEmpty()) {
-            _messagesFlow.value = getSampleStarterMessages()
-        }
+        _messagesFlow.value = emptyList()
     }
 
     fun getConversationId(): String {
         val user = authRepository.currentUserState.value
-        val coupleId = user?.coupleId ?: "couple_cherish_private"
+        val coupleId = user?.coupleId ?: "couple_cherish_love"
         return coupleId
     }
 
@@ -71,12 +68,8 @@ class ChatRepository(
                 }
                 if (snapshot != null) {
                     val messages = snapshot.documents.mapNotNull { it.toObject(Message::class.java) }
-                    if (messages.isNotEmpty()) {
-                        _messagesFlow.value = messages
-                        trySend(messages)
-                    } else {
-                        trySend(_messagesFlow.value)
-                    }
+                    _messagesFlow.value = messages
+                    trySend(messages)
                 }
             }
 

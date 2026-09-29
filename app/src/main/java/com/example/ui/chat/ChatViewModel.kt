@@ -60,7 +60,22 @@ class ChatViewModel(
     val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
 
     init {
-        val convId = chatRepository.getConversationId()
+        viewModelScope.launch {
+            authRepository.currentUserState
+                .map { it?.coupleId ?: "couple_cherish_love" }
+                .distinctUntilChanged()
+                .collectLatest { convId ->
+                    chatRepository.listenToMessages(convId).collect { msgList ->
+                        val pinned = msgList.lastOrNull { it.isPinned && !it.isDeleted }
+                        _uiState.update {
+                            it.copy(
+                                messages = msgList,
+                                pinnedMessage = pinned
+                            )
+                        }
+                    }
+                }
+        }
 
         viewModelScope.launch {
             authRepository.currentUserState.collect { user ->
@@ -75,18 +90,6 @@ class ChatViewModel(
                         partnerUser = partner,
                         isPartnerTyping = partner?.typingInChat ?: false,
                         isPartnerRecordingAudio = partner?.recordingAudioInChat ?: false
-                    )
-                }
-            }
-        }
-
-        viewModelScope.launch {
-            chatRepository.listenToMessages(convId).collect { msgList ->
-                val pinned = msgList.lastOrNull { it.isPinned && !it.isDeleted }
-                _uiState.update {
-                    it.copy(
-                        messages = msgList,
-                        pinnedMessage = pinned
                     )
                 }
             }

@@ -51,11 +51,13 @@ fun HomeScreen(
     }
 
     val uiState by viewModel.uiState.collectAsState()
-    val partner = uiState.partnerUser
     val currentUser = uiState.currentUser
-    val partnerName = partner?.displayName?.ifBlank { "My Partner" } ?: "My Partner"
-    val partnerEmail = partner?.email?.ifBlank { "partner@gmail.com" } ?: "partner@gmail.com"
-    val myEmail = currentUser?.email?.ifBlank { "you@gmail.com" } ?: "you@gmail.com"
+    val partner = uiState.partnerUser
+    val partnerName = partner?.displayName?.ifBlank { null }
+        ?: currentUser?.partnerEmail?.substringBefore("@")?.replaceFirstChar { it.uppercase() }
+        ?: "My Partner"
+    val partnerEmail = partner?.email?.ifBlank { "partner@cherish.app" } ?: "partner@cherish.app"
+    val myEmail = currentUser?.email?.ifBlank { "you@cherish.app" } ?: "you@cherish.app"
     val isOnline = partner?.isOnline ?: false
     val statusText = partner?.statusMessage ?: "Together forever & always 💕"
 

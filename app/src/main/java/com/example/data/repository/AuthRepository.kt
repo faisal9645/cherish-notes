@@ -61,92 +61,196 @@ class AuthRepository(private val context: Context) {
     }
 
     fun getCurrentUserId(): String {
-        return auth?.currentUser?.uid ?: _currentUserState.value?.id ?: "local_user_a"
+        return _currentUserState.value?.id ?: auth?.currentUser?.uid ?: "local_user_a"
+    }
+
+    suspend fun loginWithUsernameAndPassword(
+        username: String,
+        pass: String,
+        partnerUsername: String,
+        coupleKey: String
+    ): Result<User> {
+        val cleanUser = username.trim().lowercase().replace("@", "_").replace(" ", "_").filter { it.isLetterOrDigit() || it == '_' }.ifBlank { "me" }
+        val cleanPartner = partnerUsername.trim().lowercase().replace("@", "_").replace(" ", "_").filter { it.isLetterOrDigit() || it == '_' }
+        val cleanKey = coupleKey.trim().lowercase().replace(" ", "_")
+
+        val coupleId = if (cleanKey.isNotBlank() && cleanKey != "cherish" && cleanKey != "cherish-forever-2026" && cleanKey != "cherish-love" && cleanKey != "couple_default") {
+            if (cleanKey.startsWith("couple_")) cleanKey else "couple_$cleanKey"
+        } else if (cleanPartner.isNotBlank()) {
+            val sorted = listOf(cleanUser, cleanPartner).sorted()
+            "couple_${sorted[0]}_${sorted[1]}"
+        } else {
+            "couple_$cleanUser"
+        }
+
+        val uid = "user_$cleanUser"
+        val partnerId = if (cleanPartner.isNotBlank()) "user_$cleanPartner" else null
+        val displayName = cleanUser.replaceFirstChar { it.uppercase() }
+        val virtualEmail = "$cleanUser@cherish.app"
+        val partnerVirtualEmail = if (cleanPartner.isNotBlank()) "$cleanPartner@cherish.app" else null
+
+        // Try Firebase Auth in the background (will not block if disabled/offline)
+        try {
+            val authInst = auth
+            if (authInst != null) {
+                try {
+                    authInst.signInWithEmailAndPassword(virtualEmail, pass).await()
+                } catch (_: Exception) {
+                    try {
+                        authInst.createUserWithEmailAndPassword(virtualEmail, pass).await()
+                    } catch (_: Exception) {
+                        try {
+                            if (authInst.currentUser == null) {
+                                authInst.signInAnonymously().await()
+                            }
+                        } catch (_: Exception) {}
+                    }
+                }
+            }
+        } catch (_: Exception) {}
+
+        val fs = firestore
+        var loadedUser: User? = null
+
+        if (fs != null) {
+            try {
+                val userDocRef = fs.collection("users").document(uid)
+                val snapshot = userDocRef.get().await()
+                if (snapshot.exists()) {
+                    val existing = snapshot.toObject(User::class.java)
+                    val storedPass = snapshot.getString("password")
+                    if (storedPass != null && storedPass != pass) {
+                        return Result.failure(IllegalArgumentException("Incorrect password for @$cleanUser"))
+                    }
+                    val updated = (existing ?: User(id = uid)).copy(
+                        displayName = existing?.displayName?.ifBlank { displayName } ?: displayName,
+                        isOnline = true,
+                        lastSeen = System.currentTimeMillis(),
+                        partnerId = partnerId ?: existing?.partnerId,
+                        partnerEmail = partnerVirtualEmail ?: existing?.partnerEmail,
+                        coupleId = coupleId
+                    )
+                    userDocRef.update(
+                        mapOf(
+                            "isOnline" to true,
+                            "lastSeen" to System.currentTimeMillis(),
+                            "partnerId" to (partnerId ?: existing?.partnerId ?: ""),
+                            "partnerEmail" to (partnerVirtualEmail ?: existing?.partnerEmail ?: ""),
+                            "coupleId" to coupleId
+                        )
+                    ).await()
+                    loadedUser = updated
+                } else {
+                    val newUser = User(
+                        id = uid,
+                        email = virtualEmail,
+                        displayName = displayName,
+                        partnerId = partnerId,
+                        partnerEmail = partnerVirtualEmail,
+                        coupleId = coupleId,
+                        isOnline = true,
+                        lastSeen = System.currentTimeMillis(),
+                        createdAt = System.currentTimeMillis()
+                    )
+                    userDocRef.set(newUser).await()
+                    try {
+                        userDocRef.update("password", pass).await()
+                    } catch (_: Exception) {}
+                    loadedUser = newUser
+                }
+            } catch (e: Exception) {
+                Log.w("AuthRepository", "Firestore user sync warning, continuing with local session", e)
+            }
+        }
+
+        val finalUser = loadedUser ?: User(
+            id = uid,
+            email = virtualEmail,
+            displayName = displayName,
+            partnerId = partnerId,
+            partnerEmail = partnerVirtualEmail,
+            coupleId = coupleId,
+            isOnline = true,
+            lastSeen = System.currentTimeMillis()
+        )
+
+        _currentUserState.value = finalUser
+        saveLocalUserSession(finalUser)
+        if (!partnerVirtualEmail.isNullOrBlank()) {
+            securityPrefs.setApprovedPartnerEmail(partnerVirtualEmail)
+        }
+        securityPrefs.setCoupleSecretKey(coupleId)
+
+        listenToCurrentUser(uid)
+        if (partnerId != null) {
+            listenToPartner(partnerId)
+        } else {
+            connectPartnerListener()
+        }
+        updateFcmToken(uid)
+        setOnline(true)
+
+        return Result.success(finalUser)
     }
 
     suspend fun loginWithEmail(email: String, pass: String): Result<User> {
-        return try {
-            val authInstance = auth
-            if (authInstance != null) {
-                val authResult = authInstance.signInWithEmailAndPassword(email.trim(), pass).await()
-                val uid = authResult.user?.uid ?: throw IllegalStateException("User ID is null")
-                val user = fetchUserFromFirestore(uid) ?: User(
-                    id = uid,
-                    email = email.trim(),
-                    displayName = authResult.user?.displayName ?: email.substringBefore("@")
-                )
-                listenToCurrentUser(uid)
-                updateFcmToken(uid)
-                setOnline(true)
-                Result.success(user)
-            } else {
-                // Local fallback mode for offline/preview
-                val localUser = User(
-                    id = "user_me",
-                    email = email.trim(),
-                    displayName = email.substringBefore("@").replaceFirstChar { it.uppercase() },
-                    partnerEmail = securityPrefs.getApprovedPartnerEmail()
-                )
-                _currentUserState.value = localUser
-                saveLocalUserSession(localUser)
-                Result.success(localUser)
-            }
-        } catch (e: Exception) {
-            Log.e("AuthRepository", "Login failed", e)
-            Result.failure(e)
-        }
+        return loginWithUsernameAndPassword(
+            username = email.substringBefore("@"),
+            pass = pass,
+            partnerUsername = "",
+            coupleKey = ""
+        )
     }
 
     suspend fun registerWithEmail(email: String, pass: String, displayName: String): Result<User> {
-        return try {
-            val authInstance = auth
-            if (authInstance != null) {
-                val authResult = authInstance.createUserWithEmailAndPassword(email.trim(), pass).await()
-                val uid = authResult.user?.uid ?: throw IllegalStateException("User ID is null")
-                val newUser = User(
-                    id = uid,
-                    email = email.trim(),
-                    displayName = displayName.ifBlank { email.substringBefore("@") },
-                    createdAt = System.currentTimeMillis()
-                )
-                firestore?.collection("users")?.document(uid)?.set(newUser)?.await()
-                listenToCurrentUser(uid)
-                updateFcmToken(uid)
-                setOnline(true)
-                Result.success(newUser)
-            } else {
-                val localUser = User(
-                    id = "user_me",
-                    email = email.trim(),
-                    displayName = displayName.ifBlank { email.substringBefore("@") },
-                    partnerEmail = securityPrefs.getApprovedPartnerEmail()
-                )
-                _currentUserState.value = localUser
-                saveLocalUserSession(localUser)
-                Result.success(localUser)
-            }
-        } catch (e: Exception) {
-            Log.e("AuthRepository", "Registration failed", e)
-            Result.failure(e)
-        }
+        return loginWithUsernameAndPassword(
+            username = email.substringBefore("@"),
+            pass = pass,
+            partnerUsername = "",
+            coupleKey = ""
+        )
     }
 
-    fun loginOffline(email: String, partnerEmail: String, coupleKey: String, displayName: String = ""): User {
-        val cleanEmail = email.trim().lowercase().let { if (!it.contains("@")) "$it@gmail.com" else it }
-        val cleanPartner = partnerEmail.trim().lowercase().let { if (it.isNotBlank() && !it.contains("@")) "$it@gmail.com" else it }
-        val coupleId = if (coupleKey.isNotBlank()) "couple_${coupleKey.trim().lowercase().replace(" ", "_")}" else "couple_cherish_private"
+    fun loginOffline(username: String, partnerUsername: String, coupleKey: String, displayName: String = ""): User {
+        val cleanUser = username.trim().lowercase().replace("@", "_").replace(" ", "_").filter { it.isLetterOrDigit() || it == '_' }.ifBlank { "me" }
+        val cleanPartner = partnerUsername.trim().lowercase().replace("@", "_").replace(" ", "_").filter { it.isLetterOrDigit() || it == '_' }
+        val cleanKey = coupleKey.trim().lowercase().replace(" ", "_")
+
+        val coupleId = if (cleanKey.isNotBlank() && cleanKey != "cherish" && cleanKey != "cherish-forever-2026" && cleanKey != "cherish-love" && cleanKey != "couple_default") {
+            if (cleanKey.startsWith("couple_")) cleanKey else "couple_$cleanKey"
+        } else if (cleanPartner.isNotBlank()) {
+            val sorted = listOf(cleanUser, cleanPartner).sorted()
+            "couple_${sorted[0]}_${sorted[1]}"
+        } else {
+            "couple_$cleanUser"
+        }
+
+        val uid = "user_$cleanUser"
+        val partnerId = if (cleanPartner.isNotBlank()) "user_$cleanPartner" else null
         val localUser = User(
-            id = "local_${cleanEmail.substringBefore("@")}",
-            email = cleanEmail,
-            displayName = displayName.ifBlank { cleanEmail.substringBefore("@").replaceFirstChar { it.uppercase() } },
-            partnerEmail = cleanPartner.ifBlank { null },
-            coupleId = coupleId
+            id = uid,
+            email = "$cleanUser@cherish.app",
+            displayName = displayName.ifBlank { cleanUser.replaceFirstChar { it.uppercase() } },
+            partnerId = partnerId,
+            partnerEmail = if (cleanPartner.isNotBlank()) "$cleanPartner@cherish.app" else null,
+            coupleId = coupleId,
+            isOnline = true
         )
         if (cleanPartner.isNotBlank()) {
-            securityPrefs.setApprovedPartnerEmail(cleanPartner)
+            securityPrefs.setApprovedPartnerEmail("$cleanPartner@cherish.app")
         }
+        securityPrefs.setCoupleSecretKey(coupleId)
         _currentUserState.value = localUser
         saveLocalUserSession(localUser)
+
+        try {
+            firestore?.collection("users")?.document(uid)?.set(localUser)
+        } catch (_: Exception) {}
+
+        listenToCurrentUser(uid)
+        if (partnerId != null) {
+            listenToPartner(partnerId)
+        }
         return localUser
     }
 
@@ -197,63 +301,51 @@ class AuthRepository(private val context: Context) {
         }
     }
 
-    suspend fun pairWithPartner(partnerEmail: String, coupleSecretKey: String): Result<User> {
+    suspend fun pairWithPartner(partnerUsername: String, coupleSecretKey: String): Result<User> {
         val uid = getCurrentUserId()
-        val formattedEmail = partnerEmail.trim().lowercase()
-        securityPrefs.setApprovedPartnerEmail(formattedEmail)
-        securityPrefs.setCoupleSecretKey(coupleSecretKey)
+        val cleanPartner = partnerUsername.trim().lowercase().replace("@", "_").replace(" ", "_").filter { it.isLetterOrDigit() || it == '_' }
+        val partnerId = "user_$cleanPartner"
+        val partnerEmail = "$cleanPartner@cherish.app"
+        val cleanKey = coupleSecretKey.trim().lowercase().replace(" ", "_")
 
-        val coupleId = "couple_${coupleSecretKey.trim().uppercase().replace(" ", "_")}"
+        val currentUser = _currentUserState.value
+        val cleanUser = currentUser?.displayName?.trim()?.lowercase()?.filter { it.isLetterOrDigit() || it == '_' }
+            ?: uid.removePrefix("user_")
+
+        val coupleId = if (cleanKey.isNotBlank() && cleanKey != "cherish" && cleanKey != "cherish-forever-2026" && cleanKey != "cherish-love" && cleanKey != "couple_default") {
+            if (cleanKey.startsWith("couple_")) cleanKey else "couple_$cleanKey"
+        } else if (cleanPartner.isNotBlank()) {
+            val sorted = listOf(cleanUser, cleanPartner).sorted()
+            "couple_${sorted[0]}_${sorted[1]}"
+        } else {
+            "couple_$cleanKey"
+        }
+
+        securityPrefs.setApprovedPartnerEmail(partnerEmail)
+        securityPrefs.setCoupleSecretKey(coupleId)
+
+        val updatedUser = (_currentUserState.value ?: User(id = uid)).copy(
+            partnerId = partnerId,
+            partnerEmail = partnerEmail,
+            coupleId = coupleId
+        )
+        _currentUserState.value = updatedUser
+        saveLocalUserSession(updatedUser)
 
         return try {
             val fs = firestore
             if (fs != null) {
-                // Find partner by email in Firestore
-                val partnerQuery = fs.collection("users")
-                    .whereEqualTo("email", formattedEmail)
-                    .limit(1)
-                    .get()
-                    .await()
-
-                val partnerDoc = partnerQuery.documents.firstOrNull()
-                val partnerId = partnerDoc?.id
-
-                // Update current user's document
-                val updates = mutableMapOf<String, Any>(
-                    "partnerEmail" to formattedEmail,
+                val updates = mapOf<String, Any>(
+                    "partnerEmail" to partnerEmail,
+                    "partnerId" to partnerId,
                     "coupleId" to coupleId
                 )
-                if (partnerId != null) {
-                    updates["partnerId"] = partnerId
-                }
                 fs.collection("users").document(uid).update(updates).await()
-
-                if (partnerId != null) {
-                    listenToPartner(partnerId)
-                }
-
-                val updatedUser = _currentUserState.value?.copy(
-                    partnerEmail = formattedEmail,
-                    partnerId = partnerId,
-                    coupleId = coupleId
-                ) ?: User(id = uid, partnerEmail = formattedEmail, partnerId = partnerId, coupleId = coupleId)
-                _currentUserState.value = updatedUser
-                Result.success(updatedUser)
-            } else {
-                val updatedUser = _currentUserState.value?.copy(
-                    partnerEmail = formattedEmail,
-                    coupleId = coupleId
-                ) ?: User(id = uid, partnerEmail = formattedEmail, coupleId = coupleId)
-                _currentUserState.value = updatedUser
-                saveLocalUserSession(updatedUser)
-                Result.success(updatedUser)
+                listenToPartner(partnerId)
             }
+            Result.success(updatedUser)
         } catch (e: Exception) {
-            val updatedUser = _currentUserState.value?.copy(
-                partnerEmail = formattedEmail,
-                coupleId = coupleId
-            ) ?: User(id = uid, partnerEmail = formattedEmail, coupleId = coupleId)
-            _currentUserState.value = updatedUser
+            Log.w("AuthRepository", "Pair with partner Firestore update warning", e)
             Result.success(updatedUser)
         }
     }
@@ -409,6 +501,9 @@ class AuthRepository(private val context: Context) {
         val fs = firestore ?: return
         val cleanEmail = partnerEmail?.trim()?.lowercase()
         if (!cleanEmail.isNullOrBlank()) {
+            val partnerUid = if (cleanEmail.contains("@")) "user_${cleanEmail.substringBefore("@")}" else "user_$cleanEmail"
+            listenToPartner(partnerUid)
+
             partnerQueryListener?.remove()
             partnerQueryListener = fs.collection("users")
                 .whereEqualTo("email", cleanEmail)
