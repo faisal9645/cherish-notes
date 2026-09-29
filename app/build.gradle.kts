@@ -20,6 +20,7 @@ android {
     versionName = "1.0.6"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    resourceConfigurations += listOf("en")
   }
 
   signingConfigs {
@@ -44,6 +45,7 @@ android {
     release {
       isCrunchPngs = false
       isMinifyEnabled = false
+      isShrinkResources = false
       proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
       val hasReleaseConfig = signingConfigs.findByName("release") != null
       signingConfig = if (hasReleaseConfig) signingConfigs.getByName("release") else signingConfigs.getByName("debugConfig")

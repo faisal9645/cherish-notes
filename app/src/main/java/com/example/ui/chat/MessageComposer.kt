@@ -43,8 +43,8 @@ fun MessageComposer(
     onStartVoiceRecord: () -> Unit,
     onStopAndSendVoiceRecord: () -> Unit,
     onCancelVoiceRecord: () -> Unit,
-    onPickImage: () -> Unit,
-    onPickDocument: () -> Unit,
+    onTakePhoto: () -> Unit,
+    onPickAttachment: () -> Unit,
     placeholder: String = "Message your love...",
     modifier: Modifier = Modifier
 ) {
@@ -194,82 +194,93 @@ fun MessageComposer(
                     )
                 }
             } else {
-                // Standard Text & Attach Mode
-                IconButton(
-                    onClick = { showEmojiQuickBar = !showEmojiQuickBar },
-                    modifier = Modifier
-                        .size(48.dp)
-                        .testTag("composer_emoji_button")
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.Mood,
-                        contentDescription = "Quick emojis",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-
-                IconButton(
-                    onClick = onPickImage,
-                    modifier = Modifier
-                        .size(48.dp)
-                        .testTag("composer_gallery_button")
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.PhotoCamera,
-                        contentDescription = "Send photo",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-
-                IconButton(
-                    onClick = onPickDocument,
-                    modifier = Modifier
-                        .size(48.dp)
-                        .testTag("composer_attach_button")
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.AttachFile,
-                        contentDescription = "Attach file",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-
-                // Text Input Field
-                Box(
+                // Main Text Input Bubble with Emoji on Left, Input in Center, Attachment + Camera on Right
+                Row(
                     modifier = Modifier
                         .weight(1f)
-                        .clip(RoundedCornerShape(22.dp))
+                        .clip(RoundedCornerShape(24.dp))
                         .background(MaterialTheme.colorScheme.surfaceVariant)
-                        .padding(horizontal = 14.dp, vertical = 12.dp),
-                    contentAlignment = Alignment.CenterStart
+                        .padding(horizontal = 4.dp, vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    if (text.isEmpty()) {
-                        Text(
-                            text = placeholder,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                            style = MaterialTheme.typography.bodyMedium
+                    // Quick Emojis toggle button on Left
+                    IconButton(
+                        onClick = { showEmojiQuickBar = !showEmojiQuickBar },
+                        modifier = Modifier
+                            .size(38.dp)
+                            .testTag("composer_emoji_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.Mood,
+                            contentDescription = "Quick emojis",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
-                    BasicTextField(
-                        value = text,
-                        onValueChange = onTextChanged,
-                        textStyle = TextStyle(
-                            color = MaterialTheme.colorScheme.onSurface,
-                            fontSize = 15.sp
-                        ),
-                        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+
+                    // Text Input Field in Center
+                    Box(
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("composer_text_input")
-                    )
+                            .weight(1f)
+                            .padding(horizontal = 4.dp, vertical = 8.dp),
+                        contentAlignment = Alignment.CenterStart
+                    ) {
+                        if (text.isEmpty()) {
+                            Text(
+                                text = placeholder,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        }
+                        BasicTextField(
+                            value = text,
+                            onValueChange = onTextChanged,
+                            textStyle = TextStyle(
+                                color = MaterialTheme.colorScheme.onSurface,
+                                fontSize = 15.sp
+                            ),
+                            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("composer_text_input")
+                        )
+                    }
+
+                    // Attachment Icon on Right side
+                    IconButton(
+                        onClick = onPickAttachment,
+                        modifier = Modifier
+                            .size(38.dp)
+                            .testTag("composer_attach_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.AttachFile,
+                            contentDescription = "Attach file or photo",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
+                    // Real-time Camera Snap Icon on Right side
+                    IconButton(
+                        onClick = onTakePhoto,
+                        modifier = Modifier
+                            .size(38.dp)
+                            .testTag("composer_camera_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.CameraAlt,
+                            contentDescription = "Real-time camera snap",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
 
                 Spacer(modifier = Modifier.width(6.dp))
 
+                // Send or Voice Mic action button
                 if (text.isNotBlank()) {
                     Box(
                         modifier = Modifier
-                            .size(48.dp)
+                            .size(46.dp)
                             .appGradientShadow(CircleShape)
                             .clip(CircleShape)
                             .background(appHorizontalGradient())
@@ -288,7 +299,7 @@ fun MessageComposer(
                     IconButton(
                         onClick = onStartVoiceRecord,
                         modifier = Modifier
-                            .size(48.dp)
+                            .size(46.dp)
                             .background(MaterialTheme.colorScheme.primaryContainer, CircleShape)
                             .testTag("composer_voice_button")
                     ) {

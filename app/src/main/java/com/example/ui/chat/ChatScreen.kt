@@ -45,7 +45,10 @@ import com.example.data.model.MessageType
 import com.example.ui.components.AvatarView
 import androidx.compose.foundation.BorderStroke
 import com.example.ui.theme.*
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import androidx.core.content.FileProvider
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -101,6 +104,60 @@ fun ChatScreen(
     ) { isGranted ->
         if (isGranted) {
             viewModel.startVoiceRecording()
+        }
+    }
+
+    // Real-time camera snap launcher
+    var tempCameraUri by remember { mutableStateOf<Uri?>(null) }
+    var showAttachmentSheet by remember { mutableStateOf(false) }
+
+    val cameraSnapLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.TakePicture()
+    ) { success: Boolean ->
+        if (success) {
+            tempCameraUri?.let { uri ->
+                viewModel.sendMediaFile(uri, MessageType.IMAGE)
+            }
+        }
+    }
+
+    fun launchRealtimeCameraSnap() {
+        try {
+            val imagesDir = File(context.cacheDir, "camera_snaps").apply { mkdirs() }
+            val photoFile = File(imagesDir, "snap_${System.currentTimeMillis()}.jpg").apply {
+                createNewFile()
+            }
+            val uri = FileProvider.getUriForFile(
+                context,
+                "${context.packageName}.fileprovider",
+                photoFile
+            )
+            tempCameraUri = uri
+            cameraSnapLauncher.launch(uri)
+        } catch (e: Exception) {
+            Toast.makeText(context, "Could not open camera: ${e.message}", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    val cameraPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            launchRealtimeCameraSnap()
+        } else {
+            Toast.makeText(context, "Camera permission needed to snap photos", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    val triggerCameraSnap: () -> Unit = {
+        val hasCamera = ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.CAMERA
+        ) == PackageManager.PERMISSION_GRANTED
+        if (hasCamera) {
+            launchRealtimeCameraSnap()
+        } else {
+            cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
         }
     }
 
@@ -282,16 +339,7 @@ fun ChatScreen(
                             Icon(Icons.Default.Close, contentDescription = "Close search")
                         }
                     } else {
-                        IconButton(
-                            onClick = { viewModel.toggleStealthCurtain() },
-                            modifier = Modifier.testTag("chat_stealth_curtain_button")
-                        ) {
-                            Icon(
-                                imageVector = if (uiState.isStealthCurtainActive) Icons.Default.VisibilityOff else Icons.Outlined.Visibility,
-                                contentDescription = "Emergency Stealth Curtain (Hide Previous Chat)",
-                                tint = if (uiState.isStealthCurtainActive) RoseGoldPrimary else MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
+
                         IconButton(
                             onClick = onQuickDisguise,
                             modifier = Modifier.testTag("chat_quick_disguise_button")
@@ -372,14 +420,14 @@ fun ChatScreen(
                                     }
                                 )
                                 DropdownMenuItem(
-                                    text = { Text(if (uiState.isStealthCurtainActive) "Unhide Previous Chat (Reveal)" else "Hide Previous Chat (Stealth)") },
+                                    text = { Text("Stealth Mode (Open Notes App)") },
                                     onClick = {
                                         showChatMenu = false
-                                        viewModel.toggleStealthCurtain()
+                                        onQuickDisguise()
                                     },
                                     leadingIcon = {
                                         Icon(
-                                            if (uiState.isStealthCurtainActive) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                                            Icons.Outlined.EditNote,
                                             null,
                                             tint = RoseGoldPrimary
                                         )
@@ -493,14 +541,8 @@ fun ChatScreen(
                     },
                     onStopAndSendVoiceRecord = { viewModel.stopAndSendVoiceRecording() },
                     onCancelVoiceRecord = { viewModel.cancelVoiceRecording() },
-                    onPickImage = {
-                        photoPickerLauncher.launch(
-                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)
-                        )
-                    },
-                    onPickDocument = {
-                        docPickerLauncher.launch("*/*")
-                    },
+                    onTakePhoto = triggerCameraSnap,
+                    onPickAttachment = { showAttachmentSheet = true },
                     placeholder = if (uiState.isStealthCurtainActive) "Add a note..." else "Message your love..."
                 )
             }
@@ -570,7 +612,7 @@ fun ChatScreen(
             if (uiState.isStealthCurtainActive) {
                 // Emergency Privacy Shield: Harmless daily notes / tasks view hiding all previous chat
                 StealthDisguiseNotesView(
-                    onRestore = { viewModel.toggleStealthCurtain() }
+                    onRestore = onQuickDisguise
                 )
             } else {
                 LazyColumn(
@@ -581,7 +623,7 @@ fun ChatScreen(
                         .pointerInput(Unit) {
                             detectTapGestures(
                                 onDoubleTap = {
-                                    viewModel.toggleStealthCurtain()
+                                    onQuickDisguise()
                                 }
                             )
                         },
@@ -801,7 +843,14 @@ fun ChatScreen(
             }
             } // Close else branch of if (uiState.isStealthCurtainActive)
 
-            // Stealth mode floating status feedback badge
+            // Stealth mode floating status feedback badge (first-time use only)
+            LaunchedEffect(uiState.stealthToastMessage) {
+                if (uiState.stealthToastMessage != null) {
+                    delay(3500)
+                    viewModel.clearStealthToast()
+                }
+            }
+
             androidx.compose.animation.AnimatedVisibility(
                 visible = uiState.stealthToastMessage != null,
                 enter = fadeIn() + slideInVertically(initialOffsetY = { -it }),
@@ -813,7 +862,8 @@ fun ChatScreen(
                 Surface(
                     shape = RoundedCornerShape(20.dp),
                     color = Color(0xFF222228).copy(alpha = 0.95f),
-                    shadowElevation = 8.dp
+                    shadowElevation = 8.dp,
+                    modifier = Modifier.clickable { viewModel.clearStealthToast() }
                 ) {
                     Text(
                         text = uiState.stealthToastMessage ?: "",
@@ -859,8 +909,68 @@ fun ChatScreen(
             },
             onSaveToMemories = {
                 Toast.makeText(context, "Saved to Our Memories ❤️", Toast.LENGTH_SHORT).show()
-            }
         )
+    }
+
+    // Attachment Options Bottom Sheet (Gallery, Camera Snap, Documents)
+    if (showAttachmentSheet) {
+        ModalBottomSheet(
+            onDismissRequest = { showAttachmentSheet = false },
+            containerColor = Color.White,
+            shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp)
+                    .padding(bottom = 36.dp, top = 8.dp)
+            ) {
+                Text(
+                    text = "Share with your love",
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF222228),
+                    modifier = Modifier.padding(bottom = 20.dp)
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceAround
+                ) {
+                    AttachmentOptionItem(
+                        icon = Icons.Outlined.PhotoLibrary,
+                        label = "Gallery",
+                        color = Color(0xFF6C5CE7),
+                        onClick = {
+                            showAttachmentSheet = false
+                            photoPickerLauncher.launch(
+                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)
+                            )
+                        }
+                    )
+
+                    AttachmentOptionItem(
+                        icon = Icons.Default.CameraAlt,
+                        label = "Camera",
+                        color = RoseGoldPrimary,
+                        onClick = {
+                            showAttachmentSheet = false
+                            triggerCameraSnap()
+                        }
+                    )
+
+                    AttachmentOptionItem(
+                        icon = Icons.Default.InsertDriveFile,
+                        label = "Document",
+                        color = Color(0xFF0984E3),
+                        onClick = {
+                            showAttachmentSheet = false
+                            docPickerLauncher.launch("*/*")
+                        }
+                    )
+                }
+            }
+        }
     }
 
     // Edit Message Dialog
@@ -1324,4 +1434,41 @@ fun formatDateSeparator(timestamp: Long): String {
     if (isSameDay(timestamp, now)) return "Today"
     if (isSameDay(timestamp, now - 86400000L)) return "Yesterday"
     return dateSeparatorFormat.get()?.format(Date(timestamp)) ?: ""
+}
+
+@Composable
+private fun AttachmentOptionItem(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    color: Color,
+    onClick: () -> Unit
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier
+            .clickable(onClick = onClick)
+            .padding(12.dp)
+    ) {
+        Surface(
+            shape = CircleShape,
+            color = color.copy(alpha = 0.12f),
+            modifier = Modifier.size(56.dp)
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = label,
+                    tint = color,
+                    modifier = Modifier.size(28.dp)
+                )
+            }
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = label,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Medium,
+            color = Color(0xFF222228)
+        )
+    }
 }

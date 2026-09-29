@@ -341,19 +341,33 @@ class ChatViewModel(
     // --- STEALTH PRIVACY SHIELD (Hide previous chats with secret gesture) ---
     fun toggleStealthCurtain() {
         val newState = !_uiState.value.isStealthCurtainActive
+        val hasSeenTip = securityPreferences.hasSeenStealthShieldTip()
+        val toastMessage = if (!hasSeenTip) {
+            securityPreferences.setHasSeenStealthShieldTip(true)
+            "🛡️ Stealth Shield: Chats hidden behind notes. Triple-tap to restore."
+        } else {
+            null
+        }
         _uiState.update {
             it.copy(
                 isStealthCurtainActive = newState,
-                stealthToastMessage = if (newState) "🛡️ Stealth Shield ON: Chats hidden (3-tap to restore)" else "👁️ Stealth Shield OFF: Previous chats visible"
+                stealthToastMessage = toastMessage
             )
         }
     }
 
     fun setStealthCurtain(active: Boolean) {
+        val hasSeenTip = securityPreferences.hasSeenStealthShieldTip()
+        val toastMessage = if (!hasSeenTip && active) {
+            securityPreferences.setHasSeenStealthShieldTip(true)
+            "🛡️ Stealth Shield: Chats hidden behind notes. Triple-tap to restore."
+        } else {
+            null
+        }
         _uiState.update {
             it.copy(
                 isStealthCurtainActive = active,
-                stealthToastMessage = if (active) "🛡️ Stealth Shield ON: Chats hidden (3-tap to restore)" else "👁️ Stealth Shield OFF: Previous chats visible"
+                stealthToastMessage = toastMessage
             )
         }
     }

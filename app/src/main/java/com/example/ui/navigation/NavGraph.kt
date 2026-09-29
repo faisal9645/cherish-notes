@@ -2,6 +2,7 @@ package com.example.ui.navigation
 
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -42,45 +43,16 @@ fun CherishNavGraph(
     val isAppLocked by app.securityPreferences.isAppLocked.collectAsState()
     val isUserLoggedIn = remember { app.authRepository.isUserLoggedIn() }
 
-    if (isDisguiseActive) {
-        NotesDisguiseScreen(
-            securityPreferences = app.securityPreferences,
-            onSecretGestureTriggered = {
-                app.securityPreferences.revealSecretApp()
-            }
-        )
-        return
-    }
-
     val startDestination = when {
-        isAppLocked -> Screen.AppLock.route
         !isUserLoggedIn -> Screen.Auth.route
         else -> Screen.Chat.route
     }
 
-    if (isAppLocked) {
-        AppLockScreen(
-            securityPreferences = app.securityPreferences,
-            onUnlocked = {
-                // When unlocked, continue to secret chat screen directly
-                if (!app.authRepository.isUserLoggedIn()) {
-                    navController.navigate(Screen.Auth.route) {
-                        popUpTo(0) { inclusive = true }
-                    }
-                } else {
-                    navController.navigate(Screen.Chat.route) {
-                        popUpTo(0) { inclusive = true }
-                    }
-                }
-            }
-        )
-        return
-    }
-
-    NavHost(
-        navController = navController,
-        startDestination = startDestination,
-        modifier = modifier.fillMaxSize(),
+    Box(modifier = modifier.fillMaxSize()) {
+        NavHost(
+            navController = navController,
+            startDestination = startDestination,
+            modifier = Modifier.fillMaxSize(),
         enterTransition = {
             fadeIn(animationSpec = tween(220, easing = FastOutSlowInEasing)) +
             slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Start, tween(220, easing = FastOutSlowInEasing))
@@ -262,4 +234,40 @@ fun CherishNavGraph(
             )
         }
     }
+
+    // App Lock overlay if locked and not in disguise
+    if (isAppLocked && !isDisguiseActive) {
+        AppLockScreen(
+            securityPreferences = app.securityPreferences,
+            onUnlocked = {
+                if (!app.authRepository.isUserLoggedIn()) {
+                    navController.navigate(Screen.Auth.route) {
+                        popUpTo(0) { inclusive = true }
+                    }
+                } else {
+                    navController.navigate(Screen.Chat.route) {
+                        popUpTo(0) { inclusive = true }
+                    }
+                }
+            }
+        )
+    }
+
+    // Real Notes Disguise screen with smooth transition
+    AnimatedVisibility(
+        visible = isDisguiseActive,
+        enter = fadeIn(animationSpec = tween(320, easing = FastOutSlowInEasing)) +
+                scaleIn(initialScale = 1.02f, animationSpec = tween(320, easing = FastOutSlowInEasing)),
+        exit = fadeOut(animationSpec = tween(260, easing = FastOutLinearInEasing)) +
+               scaleOut(targetScale = 0.96f, animationSpec = tween(260, easing = FastOutLinearInEasing)),
+        modifier = Modifier.fillMaxSize()
+    ) {
+        NotesDisguiseScreen(
+            securityPreferences = app.securityPreferences,
+            onSecretGestureTriggered = {
+                app.securityPreferences.revealSecretApp()
+            }
+        )
+    }
+}
 }

@@ -241,12 +241,17 @@ class SecurityPreferences(context: Context) {
         return savedHash == hashPin(pin)
     }
 
-    // --- GALLERY DENSITY SLIDER ---
-    // 0f = Compact, 0.5f = Balanced, 1f = Spacious
     fun getGalleryDensity(): Float = prefs.getFloat(KEY_GALLERY_DENSITY, 0.5f)
 
     fun setGalleryDensity(density: Float) {
         prefs.edit().putFloat(KEY_GALLERY_DENSITY, density.coerceIn(0f, 1f)).apply()
+    }
+
+    // --- STEALTH SHIELD FIRST-TIME ONBOARDING TIP ---
+    fun hasSeenStealthShieldTip(): Boolean = prefs.getBoolean(KEY_HAS_SEEN_STEALTH_SHIELD_TIP, false)
+
+    fun setHasSeenStealthShieldTip(seen: Boolean) {
+        prefs.edit().putBoolean(KEY_HAS_SEEN_STEALTH_SHIELD_TIP, seen).apply()
     }
 
     private fun hashPin(pin: String): String {
@@ -283,6 +288,7 @@ class SecurityPreferences(context: Context) {
         private const val KEY_NOTIFICATION_PRIVACY_MODE = "notification_privacy_mode"
         private const val KEY_DURESS_PIN_HASH = "duress_pin_hash"
         private const val KEY_GALLERY_DENSITY = "gallery_density"
+        private const val KEY_HAS_SEEN_STEALTH_SHIELD_TIP = "has_seen_stealth_shield_tip"
 
         @Volatile
         private var INSTANCE: SecurityPreferences? = null
