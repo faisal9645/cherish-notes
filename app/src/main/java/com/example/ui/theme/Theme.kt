@@ -40,15 +40,45 @@ private val PureWhiteColorScheme = lightColorScheme(
     outlineVariant = SoftBorderOutlineVariant
 )
 
+private val TrueDarkColorScheme = darkColorScheme(
+    primary = RoseGoldPrimary,
+    onPrimary = RoseGoldOnPrimary,
+    primaryContainer = Color(0xFF152060),
+    onPrimaryContainer = Color(0xFFD6E0FF),
+    secondary = ChampagneSecondary,
+    onSecondary = ChampagneOnSecondary,
+    secondaryContainer = Color(0xFF0B3A6E),
+    onSecondaryContainer = Color(0xFFD3E8FF),
+    tertiary = AmethystTertiary,
+    onTertiary = AmethystOnTertiary,
+    tertiaryContainer = Color(0xFF181570),
+    onTertiaryContainer = Color(0xFFE2E0FF),
+    background = TrueDarkBackground,
+    onBackground = TrueDarkOnBackground,
+    surface = TrueDarkSurface,
+    onSurface = TrueDarkOnSurface,
+    surfaceVariant = TrueDarkSurfaceVariant,
+    onSurfaceVariant = TrueDarkOnSurfaceVariant,
+    surfaceTint = Color.Transparent,
+    surfaceContainer = TrueDarkSurface,
+    surfaceContainerLow = TrueDarkBackground,
+    surfaceContainerLowest = TrueDarkBackground,
+    surfaceContainerHigh = TrueDarkSurfaceVariant,
+    surfaceContainerHighest = Color(0xFF2C2D33),
+    outline = TrueDarkOutline,
+    outlineVariant = TrueDarkOutlineVariant
+)
+
 @Composable
 fun CherishTheme(
-    darkTheme: Boolean = false,
+    darkTheme: Boolean = isSystemInDarkTheme(),
     dynamicColor: Boolean = false,
     content: @Composable () -> Unit
 ) {
-    // Exclusively use PureWhiteColorScheme to guarantee a modern, pure white background
+    val colorScheme = if (darkTheme) TrueDarkColorScheme else PureWhiteColorScheme
+
     MaterialTheme(
-        colorScheme = PureWhiteColorScheme,
+        colorScheme = colorScheme,
         typography = Typography,
         content = content
     )

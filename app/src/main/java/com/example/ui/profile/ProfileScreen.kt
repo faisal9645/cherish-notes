@@ -34,6 +34,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
@@ -654,6 +655,91 @@ fun ProfileScreen(
                             color = Color(0xFFF0F0F2)
                         )
                     }
+                    
+                    // Theme Mode Selector
+                    ListItem(
+                        headlineContent = { Text("App Theme (Day / Night)") },
+                        supportingContent = { Text("Select light or dark mode") },
+                        leadingContent = { Icon(Icons.Default.BrightnessMedium, contentDescription = null, tint = RoseGoldPrimary) }
+                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 4.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Color(0xFFF4F4F8))
+                            .padding(4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        listOf(
+                            0 to "System",
+                            1 to "Light (Day)",
+                            2 to "Dark (Night)"
+                        ).forEach { (mode, label) ->
+                            val isSelected = uiState.themeMode == mode
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(if (isSelected) RoseGoldPrimary else Color.Transparent)
+                                    .clickable { viewModel.setThemeMode(mode) }
+                                    .padding(vertical = 8.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = label,
+                                    color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                    fontSize = 12.sp,
+                                    textAlign = TextAlign.Center
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // Chat Background Theme Selector
+                    ListItem(
+                        headlineContent = { Text("Chat Background") },
+                        supportingContent = { Text("Select background style for chats") },
+                        leadingContent = { Icon(Icons.Default.Wallpaper, contentDescription = null, tint = RoseGoldPrimary) }
+                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 4.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Color(0xFFF4F4F8))
+                            .padding(4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        listOf(
+                            0 to "Normal",
+                            1 to "Theme 1"
+                        ).forEach { (theme, label) ->
+                            val isSelected = uiState.chatBgTheme == theme
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(if (isSelected) RoseGoldPrimary else Color.Transparent)
+                                    .clickable { viewModel.setChatBgTheme(theme) }
+                                    .padding(vertical = 8.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = label,
+                                    color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                    fontSize = 12.sp,
+                                    textAlign = TextAlign.Center
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
 
                     // App Lock Toggle
                     ListItem(

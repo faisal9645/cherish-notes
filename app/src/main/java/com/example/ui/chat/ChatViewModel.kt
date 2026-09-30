@@ -44,7 +44,8 @@ data class ChatUiState(
     val filterStarredOnly: Boolean = false,
     val voicePlaybackSpeed: Float = 1.0f,
     val isSecretHistoryRevealed: Boolean = false,
-    val targetScrollMessageId: String? = null
+    val targetScrollMessageId: String? = null,
+    val chatBgTheme: Int = 0
 )
 
 class ChatViewModel(
@@ -57,7 +58,11 @@ class ChatViewModel(
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(
-        ChatUiState(gallerySize = securityPreferences.getImageGallerySize())
+        ChatUiState(
+            gallerySize = securityPreferences.getImageGallerySize(),
+            chatBgTheme = securityPreferences.getChatBgTheme()
+        )
+
     )
     val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
 
@@ -94,6 +99,12 @@ class ChatViewModel(
                         isPartnerRecordingAudio = partner?.recordingAudioInChat ?: false
                     )
                 }
+            }
+        }
+
+        viewModelScope.launch {
+            securityPreferences.chatBgTheme.collect { theme ->
+                _uiState.update { it.copy(chatBgTheme = theme) }
             }
         }
 

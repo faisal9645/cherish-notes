@@ -46,6 +46,28 @@ class SecurityPreferences(context: Context) {
         }
     }
 
+    private val _themeMode = MutableStateFlow(getThemeMode())
+    val themeMode: StateFlow<Int> = _themeMode.asStateFlow()
+
+    // 0 = System, 1 = Light, 2 = Dark
+    fun getThemeMode(): Int = prefs.getInt("theme_mode", 0)
+
+    fun setThemeMode(mode: Int) {
+        prefs.edit().putInt("theme_mode", mode).apply()
+        _themeMode.value = mode
+    }
+
+    private val _chatBgTheme = MutableStateFlow(getChatBgTheme())
+    val chatBgTheme: StateFlow<Int> = _chatBgTheme.asStateFlow()
+
+    // 0 = Normal, 1 = Theme 1
+    fun getChatBgTheme(): Int = prefs.getInt("chat_bg_theme", 0)
+
+    fun setChatBgTheme(theme: Int) {
+        prefs.edit().putInt("chat_bg_theme", theme).apply()
+        _chatBgTheme.value = theme
+    }
+
     fun getDisguisePasscode(): String {
         val saved = prefs.getString(KEY_DISGUISE_PASSCODE, null)
         if (saved == null || saved == "1234") {

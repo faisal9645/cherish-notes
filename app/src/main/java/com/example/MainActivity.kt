@@ -17,6 +17,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
 import androidx.fragment.app.FragmentActivity
@@ -33,20 +35,29 @@ class MainActivity : FragmentActivity() {
         enableEdgeToEdge()
         setHighRefreshRate()
 
-        // Explicitly set window background to pure white
-        window.decorView.setBackgroundColor(AndroidColor.WHITE)
-        WindowCompat.getInsetsController(window, window.decorView).apply {
-            isAppearanceLightStatusBars = true
-            isAppearanceLightNavigationBars = true
-        }
-
         applyScreenshotProtection()
 
         setContent {
-            CherishTheme {
+            val themeMode by app.securityPreferences.themeMode.collectAsState(initial = 0)
+            val isSystemDark = androidx.compose.foundation.isSystemInDarkTheme()
+            val useDarkTheme = when (themeMode) {
+                1 -> false
+                2 -> true
+                else -> isSystemDark
+            }
+
+            LaunchedEffect(useDarkTheme) {
+                window.decorView.setBackgroundColor(if (useDarkTheme) android.graphics.Color.BLACK else android.graphics.Color.WHITE)
+                WindowCompat.getInsetsController(window, window.decorView).apply {
+                    isAppearanceLightStatusBars = !useDarkTheme
+                    isAppearanceLightNavigationBars = !useDarkTheme
+                }
+            }
+
+            CherishTheme(darkTheme = useDarkTheme) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
-                    color = Color.White
+                    color = androidx.compose.material3.MaterialTheme.colorScheme.background
                 ) {
                     val context = LocalContext.current
                     val permissionsToRequest = remember {

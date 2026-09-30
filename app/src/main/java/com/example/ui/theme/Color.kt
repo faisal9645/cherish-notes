@@ -71,11 +71,15 @@ val DarkOnSurfaceVariant = Color(0xFF52525B)
 val SoftBorderOutline = Color(0xFFE2E8F0)
 val SoftBorderOutlineVariant = Color(0xFFEDF2F7)
 
-// Dark Palette mapped to White Aesthetic for consistent pure white background
-val DarkBackground = Color(0xFFFFFFFF)
-val DarkSurface = Color(0xFFFFFFFF)
-val DarkSurfaceVariant = Color(0xFFF1F5FB)
-val DarkSurfaceTint = Color.Transparent
+// Dark Palette mapped to True Dark Aesthetic
+val TrueDarkBackground = Color(0xFF000000)
+val TrueDarkSurface = Color(0xFF121212)
+val TrueDarkSurfaceVariant = Color(0xFF1E1E1E)
+val TrueDarkOnBackground = Color(0xFFFFFFFF)
+val TrueDarkOnSurface = Color(0xFFFFFFFF)
+val TrueDarkOnSurfaceVariant = Color(0xFFA0A0A5)
+val TrueDarkOutline = Color(0xFF333333)
+val TrueDarkOutlineVariant = Color(0xFF222222)
 
 // Light Palette
 val LightBackground = Color(0xFFFFFFFF)

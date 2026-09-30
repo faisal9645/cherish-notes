@@ -215,63 +215,7 @@ fun AuthScreen(
 
                             Spacer(modifier = Modifier.height(18.dp))
 
-                            // One-Tap Gmail (Google) Sign-In Button
-                            OutlinedButton(
-                                onClick = { triggerGoogleSignIn() },
-                                enabled = !isGoogleSigningIn && uiState !is AuthUiState.Loading,
-                                shape = RoundedCornerShape(14.dp),
-                                border = BorderStroke(1.2.dp, Color(0xFFD2D5DA)),
-                                colors = ButtonDefaults.outlinedButtonColors(
-                                    containerColor = Color(0xFFFCFCFD)
-                                ),
-                                elevation = ButtonDefaults.buttonElevation(defaultElevation = 1.dp),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(52.dp)
-                                    .testTag("google_signin_button")
-                            ) {
-                                if (isGoogleSigningIn) {
-                                    CircularProgressIndicator(
-                                        color = RoseGoldPrimary,
-                                        modifier = Modifier.size(20.dp),
-                                        strokeWidth = 2.dp
-                                    )
-                                    Spacer(modifier = Modifier.width(10.dp))
-                                    Text(
-                                        text = "Connecting to Google...",
-                                        fontSize = 14.sp,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = DarkOnBackground
-                                    )
-                                } else {
-                                    GoogleBrandIcon(modifier = Modifier.size(22.dp))
-                                    Spacer(modifier = Modifier.width(10.dp))
-                                    Text(
-                                        text = "Continue with Gmail (Google)",
-                                        fontSize = 14.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = DarkOnBackground
-                                    )
-                                }
-                            }
 
-                            Spacer(modifier = Modifier.height(16.dp))
-
-                            // Divider with text
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                HorizontalDivider(modifier = Modifier.weight(1f), color = Color(0xFFE8E8EC))
-                                Text(
-                                    text = "  or sign in with username  ",
-                                    fontSize = 11.sp,
-                                    color = DarkOnSurfaceVariant
-                                )
-                                HorizontalDivider(modifier = Modifier.weight(1f), color = Color(0xFFE8E8EC))
-                            }
-
-                            Spacer(modifier = Modifier.height(16.dp))
 
                             // Your Username
                             OutlinedTextField(

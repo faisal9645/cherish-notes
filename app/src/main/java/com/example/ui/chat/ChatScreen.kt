@@ -34,6 +34,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.paint
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -728,6 +729,14 @@ fun ChatScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f)
+                    .then(
+                        if (uiState.chatBgTheme == 1 && !uiState.isStealthCurtainActive) {
+                            Modifier.paint(
+                                painter = androidx.compose.ui.res.painterResource(id = com.example.R.drawable.chat_bg_theme1),
+                                contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                            )
+                        } else Modifier
+                    )
             ) {
             if (uiState.isStealthCurtainActive) {
                 // Emergency Privacy Shield: Harmless daily notes / tasks view hiding all previous chat

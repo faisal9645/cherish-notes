@@ -30,7 +30,9 @@ data class ProfileUiState(
     val isHighQualityMedia: Boolean = true,
     val isDoubleTapZoomEnabled: Boolean = true,
     val isCheckAfterReminderEnabled: Boolean = true,
-    val isUpdating: Boolean = false
+    val isUpdating: Boolean = false,
+    val themeMode: Int = 0,
+    val chatBgTheme: Int = 0
 )
 
 class ProfileViewModel(
@@ -56,7 +58,9 @@ class ProfileViewModel(
             isAutoPlayMedia = securityPreferences.isAutoPlayMedia(),
             isHighQualityMedia = securityPreferences.isHighQualityMedia(),
             isDoubleTapZoomEnabled = securityPreferences.isDoubleTapZoomEnabled(),
-            isCheckAfterReminderEnabled = securityPreferences.isCheckAfterReminderEnabled()
+            isCheckAfterReminderEnabled = securityPreferences.isCheckAfterReminderEnabled(),
+            themeMode = securityPreferences.getThemeMode(),
+            chatBgTheme = securityPreferences.getChatBgTheme()
         )
     )
     val uiState: StateFlow<ProfileUiState> = _uiState.asStateFlow()
@@ -73,6 +77,26 @@ class ProfileViewModel(
                 _uiState.update { it.copy(partnerUser = partner) }
             }
         }
+
+        viewModelScope.launch {
+            securityPreferences.themeMode.collect { mode ->
+                _uiState.update { it.copy(themeMode = mode) }
+            }
+        }
+        
+        viewModelScope.launch {
+            securityPreferences.chatBgTheme.collect { theme ->
+                _uiState.update { it.copy(chatBgTheme = theme) }
+            }
+        }
+    }
+
+    fun setThemeMode(mode: Int) {
+        securityPreferences.setThemeMode(mode)
+    }
+
+    fun setChatBgTheme(theme: Int) {
+        securityPreferences.setChatBgTheme(theme)
     }
 
     fun updateProfile(
