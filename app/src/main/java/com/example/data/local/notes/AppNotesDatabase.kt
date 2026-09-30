@@ -19,7 +19,7 @@ abstract class AppNotesDatabase : RoomDatabase() {
                     context.applicationContext,
                     AppNotesDatabase::class.java,
                     "cherish_notes.db"
-                ).fallbackToDestructiveMigration().build()
+                ).fallbackToDestructiveMigration(dropAllTables = true).build()
                 INSTANCE = instance
                 instance
             }

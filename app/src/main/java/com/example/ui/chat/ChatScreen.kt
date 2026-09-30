@@ -139,6 +139,7 @@ fun ChatScreen(
                 photoFile
             )
             tempCameraUri = uri
+            com.example.security.SecurityPreferences.getInstance(context).ignoreNextPause = true
             cameraSnapLauncher.launch(uri)
         } catch (e: Exception) {
             Toast.makeText(context, "Could not open camera: ${e.message}", Toast.LENGTH_SHORT).show()
@@ -163,6 +164,7 @@ fun ChatScreen(
         if (hasCamera) {
             launchRealtimeCameraSnap()
         } else {
+            com.example.security.SecurityPreferences.getInstance(context).ignoreNextPause = true
             cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
         }
     }
@@ -567,6 +569,7 @@ fun ChatScreen(
                         if (hasMic) {
                             viewModel.startVoiceRecording()
                         } else {
+                            com.example.security.SecurityPreferences.getInstance(context).ignoreNextPause = true
                             micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
                         }
                     },
@@ -975,6 +978,7 @@ fun ChatScreen(
                         color = Color(0xFF6C5CE7),
                         onClick = {
                             showAttachmentSheet = false
+                            com.example.security.SecurityPreferences.getInstance(context).ignoreNextPause = true
                             photoPickerLauncher.launch(
                                 PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)
                             )
@@ -997,6 +1001,7 @@ fun ChatScreen(
                         color = Color(0xFF0984E3),
                         onClick = {
                             showAttachmentSheet = false
+                            com.example.security.SecurityPreferences.getInstance(context).ignoreNextPause = true
                             docPickerLauncher.launch("*/*")
                         }
                     )

@@ -259,6 +259,7 @@ fun AddMemoryDialog(
     var description by remember { mutableStateOf("") }
     var location by remember { mutableStateOf("") }
     var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
+    val context = androidx.compose.ui.platform.LocalContext.current
 
     val photoPicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia()
@@ -299,6 +300,7 @@ fun AddMemoryDialog(
 
                 Button(
                     onClick = {
+                        com.example.security.SecurityPreferences.getInstance(context).ignoreNextPause = true
                         photoPicker.launch(
                             PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
                         )

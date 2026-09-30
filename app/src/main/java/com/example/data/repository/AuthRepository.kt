@@ -477,13 +477,11 @@ class AuthRepository(private val context: Context) {
         if (uid.isBlank() || uid == "local_user_a") return
         _currentUserState.value = _currentUserState.value?.copy(
             isOnline = online,
-            online = online,
             lastSeen = System.currentTimeMillis()
         )
         try {
             val updates = mutableMapOf<String, Any>(
                 "isOnline" to online,
-                "online" to online,
                 "lastSeen" to System.currentTimeMillis()
             )
             if (!online) {

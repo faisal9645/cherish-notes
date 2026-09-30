@@ -54,8 +54,6 @@ data class User(
     val coupleId: String? = null,
     @get:PropertyName("isOnline") @set:PropertyName("isOnline")
     var isOnline: Boolean = false,
-    @get:PropertyName("online") @set:PropertyName("online")
-    var online: Boolean = false,
     val lastSeen: Long = System.currentTimeMillis(),
     val typingInChat: Boolean = false,
     val fcmToken: String? = null,
@@ -70,7 +68,7 @@ data class User(
     val isActivityHidden: Boolean = false
 ) {
     fun isEffectivelyOnline(): Boolean {
-        if (isOnline || online) return true
+        if (isOnline) return true
         if (typingInChat || recordingAudioInChat) return true
         val diff = System.currentTimeMillis() - lastSeen
         return diff in 0..60_000L

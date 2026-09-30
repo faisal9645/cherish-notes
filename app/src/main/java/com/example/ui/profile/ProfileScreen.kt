@@ -100,6 +100,7 @@ fun ProfileScreen(
                     photoFile
                 )
                 tempCameraUri = uri
+                com.example.security.SecurityPreferences.getInstance(context).ignoreNextPause = true
                 cameraLauncher.launch(uri)
             } catch (e: Exception) {
                 Toast.makeText(context, "Could not open camera: ${e.message}", Toast.LENGTH_SHORT).show()
@@ -110,6 +111,7 @@ fun ProfileScreen(
     }
 
     fun launchCameraForAvatar() {
+        com.example.security.SecurityPreferences.getInstance(context).ignoreNextPause = true
         cameraPermissionLauncher.launch(android.Manifest.permission.CAMERA)
     }
 
@@ -1039,6 +1041,7 @@ fun ProfileScreen(
                             .fillMaxWidth()
                             .clickable {
                                 showAvatarOptionsDialog = false
+                                com.example.security.SecurityPreferences.getInstance(context).ignoreNextPause = true
                                 photoPicker.launch(
                                     PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
                                 )

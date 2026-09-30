@@ -13,6 +13,9 @@ class SecurityPreferences(context: Context) {
     private val _isAppLocked = MutableStateFlow(false)
     val isAppLocked: StateFlow<Boolean> = _isAppLocked.asStateFlow()
 
+    var ignoreNextPause: Boolean = false
+
+
     private val _isDisguiseActive = MutableStateFlow(true)
     val isDisguiseActive: StateFlow<Boolean> = _isDisguiseActive.asStateFlow()
 

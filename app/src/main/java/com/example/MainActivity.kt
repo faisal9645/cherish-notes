@@ -54,18 +54,22 @@ class MainActivity : FragmentActivity() {
         setHighRefreshRate()
         applyScreenshotProtection()
         app.authRepository.onAppForegroundStateChanged(true)
+        // Reset the ignore flag when returning to the app
+        app.securityPreferences.ignoreNextPause = false
     }
 
     override fun onPause() {
         super.onPause()
         lastBackgroundTimestamp = System.currentTimeMillis()
 
-        // Immediate Disguise Protection: Revert to normal notes as soon as the app is minimized
-        if (app.securityPreferences.isDisguiseModeEnabled()) {
-            app.securityPreferences.reDisguise()
-        }
-        if (app.securityPreferences.hasPin() && app.securityPreferences.isAppLockEnabled()) {
-            app.securityPreferences.lockApp()
+        if (!app.securityPreferences.ignoreNextPause) {
+            // Immediate Disguise Protection: Revert to normal notes as soon as the app is minimized
+            if (app.securityPreferences.isDisguiseModeEnabled()) {
+                app.securityPreferences.reDisguise()
+            }
+            if (app.securityPreferences.hasPin() && app.securityPreferences.isAppLockEnabled()) {
+                app.securityPreferences.lockApp()
+            }
         }
 
         // Ensure recent-apps preview is redacted when leaving secret mode
@@ -80,11 +84,13 @@ class MainActivity : FragmentActivity() {
     override fun onStop() {
         super.onStop()
         app.authRepository.onAppForegroundStateChanged(false)
-        if (app.securityPreferences.isDisguiseModeEnabled()) {
-            app.securityPreferences.reDisguise()
-        }
-        if (app.securityPreferences.hasPin() && app.securityPreferences.isAppLockEnabled()) {
-            app.securityPreferences.lockApp()
+        if (!app.securityPreferences.ignoreNextPause) {
+            if (app.securityPreferences.isDisguiseModeEnabled()) {
+                app.securityPreferences.reDisguise()
+            }
+            if (app.securityPreferences.hasPin() && app.securityPreferences.isAppLockEnabled()) {
+                app.securityPreferences.lockApp()
+            }
         }
     }
 
