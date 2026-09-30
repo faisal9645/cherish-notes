@@ -1,6 +1,7 @@
 package com.example.data.model
 
 import com.google.firebase.firestore.IgnoreExtraProperties
+import com.google.firebase.firestore.PropertyName
 
 enum class MessageType {
     TEXT,
@@ -51,7 +52,10 @@ data class User(
     val partnerId: String? = null,
     val partnerEmail: String? = null,
     val coupleId: String? = null,
-    val isOnline: Boolean = false,
+    @get:PropertyName("isOnline") @set:PropertyName("isOnline")
+    var isOnline: Boolean = false,
+    @get:PropertyName("online") @set:PropertyName("online")
+    var online: Boolean = false,
     val lastSeen: Long = System.currentTimeMillis(),
     val typingInChat: Boolean = false,
     val fcmToken: String? = null,
@@ -65,6 +69,13 @@ data class User(
     val activityStatusNote: String? = null,
     val isActivityHidden: Boolean = false
 ) {
+    fun isEffectivelyOnline(): Boolean {
+        if (isOnline || online) return true
+        if (typingInChat || recordingAudioInChat) return true
+        val diff = System.currentTimeMillis() - lastSeen
+        return diff in 0..60_000L
+    }
+
     fun hasActiveCheckAfter(): Boolean {
         val target = checkAfterTimeMillis ?: return false
         return checkAfterActive && target > 0L && System.currentTimeMillis() < target
@@ -79,7 +90,7 @@ data class User(
         return when {
             hasActiveCheckAfter() -> "Check-after active"
             isActivityHidden -> "Activity unavailable"
-            isOnline -> "Online"
+            isEffectivelyOnline() -> "Online"
             else -> "Offline"
         }
     }

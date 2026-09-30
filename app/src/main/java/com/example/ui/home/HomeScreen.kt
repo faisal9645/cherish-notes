@@ -58,7 +58,7 @@ fun HomeScreen(
         ?: "My Partner"
     val partnerEmail = partner?.email?.ifBlank { "partner@cherish.app" } ?: "partner@cherish.app"
     val myEmail = currentUser?.email?.ifBlank { "you@cherish.app" } ?: "you@cherish.app"
-    val isOnline = partner?.isOnline ?: false
+    val isOnline = partner?.isEffectivelyOnline() ?: false
     val statusText = partner?.statusMessage ?: "Together forever & always 💕"
 
     val partnerHasCheckAfter = partner?.hasActiveCheckAfter() == true

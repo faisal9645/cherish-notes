@@ -53,12 +53,11 @@ class MainActivity : FragmentActivity() {
         super.onResume()
         setHighRefreshRate()
         applyScreenshotProtection()
-        app.authRepository.setOnline(true)
+        app.authRepository.onAppForegroundStateChanged(true)
     }
 
     override fun onPause() {
         super.onPause()
-        app.authRepository.setOnline(false)
         lastBackgroundTimestamp = System.currentTimeMillis()
 
         // Immediate Disguise Protection: Revert to normal notes as soon as the app is minimized
@@ -80,13 +79,18 @@ class MainActivity : FragmentActivity() {
 
     override fun onStop() {
         super.onStop()
-        app.authRepository.setOnline(false)
+        app.authRepository.onAppForegroundStateChanged(false)
         if (app.securityPreferences.isDisguiseModeEnabled()) {
             app.securityPreferences.reDisguise()
         }
         if (app.securityPreferences.hasPin() && app.securityPreferences.isAppLockEnabled()) {
             app.securityPreferences.lockApp()
         }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        app.authRepository.onAppForegroundStateChanged(false)
     }
 
     private fun applyScreenshotProtection() {

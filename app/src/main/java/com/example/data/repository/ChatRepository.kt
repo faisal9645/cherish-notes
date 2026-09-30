@@ -39,11 +39,19 @@ class ChatRepository(
     private val _deletionRequestFlow = MutableStateFlow<com.example.data.model.ChatDeletionRequest?>(null)
     val deletionRequestFlow: StateFlow<com.example.data.model.ChatDeletionRequest?> = _deletionRequestFlow.asStateFlow()
 
-    private var messagesListener: ListenerRegistration? = null
+    private var globalMessagesListener: ListenerRegistration? = null
     private var currentActiveConversationId: String? = null
 
     init {
         _messagesFlow.value = emptyList()
+        CoroutineScope(Dispatchers.IO).launch {
+            authRepository.currentUserState
+                .map { it?.coupleId ?: "couple_cherish_love" }
+                .distinctUntilChanged()
+                .collectLatest { convId ->
+                    startGlobalMessagesListener(convId)
+                }
+        }
     }
 
     fun getConversationId(): String {
@@ -52,34 +60,36 @@ class ChatRepository(
         return coupleId
     }
 
+    private fun startGlobalMessagesListener(conversationId: String) {
+        globalMessagesListener?.remove()
+        val fs = firestore ?: return
+        val query = fs.collection("conversations")
+            .document(conversationId)
+            .collection("messages")
+            .orderBy("timestamp", Query.Direction.ASCENDING)
+
+        globalMessagesListener = query.addSnapshotListener { snapshot, error ->
+            if (error != null) {
+                Log.w("ChatRepository", "Listen messages failed", error)
+                return@addSnapshotListener
+            }
+            if (snapshot != null) {
+                val messages = snapshot.documents.mapNotNull { it.toObject(Message::class.java) }
+                _messagesFlow.value = messages
+            }
+        }
+    }
+
     fun listenToMessages(conversationId: String): Flow<List<Message>> = callbackFlow {
         currentActiveConversationId = conversationId
-        val fs = firestore
-        if (fs != null) {
-            val query = fs.collection("conversations")
-                .document(conversationId)
-                .collection("messages")
-                .orderBy("timestamp", Query.Direction.ASCENDING)
-
-            val registration = query.addSnapshotListener { snapshot, error ->
-                if (error != null) {
-                    Log.w("ChatRepository", "Listen messages failed", error)
-                    return@addSnapshotListener
-                }
-                if (snapshot != null) {
-                    val messages = snapshot.documents.mapNotNull { it.toObject(Message::class.java) }
-                    _messagesFlow.value = messages
-                    trySend(messages)
-                }
+        startGlobalMessagesListener(conversationId)
+        val job = CoroutineScope(Dispatchers.IO).launch {
+            _messagesFlow.collect {
+                trySend(it)
             }
-
-            awaitClose {
-                registration.remove()
-            }
-        } else {
-            // Offline / fallback flow
-            trySend(_messagesFlow.value)
-            awaitClose { }
+        }
+        awaitClose {
+            job.cancel()
         }
     }
 

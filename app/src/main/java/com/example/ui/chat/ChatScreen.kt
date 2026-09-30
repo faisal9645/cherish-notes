@@ -184,7 +184,7 @@ fun ChatScreen(
         ?: myUser?.partnerEmail?.substringBefore("@")?.replaceFirstChar { it.uppercase() }
         ?: myUser?.partnerId?.removePrefix("user_")?.replaceFirstChar { it.uppercase() }
         ?: "My Partner"
-    val isPartnerOnline = partner?.isOnline ?: false
+    val isPartnerOnline = partner?.isEffectivelyOnline() ?: false
     val currentUserId = viewModel.uiState.value.currentUser?.id ?: "user_me"
 
     val partnerHasCheckAfter = partner?.hasActiveCheckAfter() == true

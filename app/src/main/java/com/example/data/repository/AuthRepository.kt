@@ -153,11 +153,7 @@ class AuthRepository(private val context: Context) {
 
         // Connect real-time listeners right away
         listenToCurrentUser(uid)
-        if (partnerId != null) {
-            listenToPartner(partnerId)
-        } else {
-            connectPartnerListener()
-        }
+        connectPartnerListener()
         setOnline(true)
 
         // Sync with Firestore in background without blocking login
@@ -178,6 +174,7 @@ class AuthRepository(private val context: Context) {
                         "partnerEmail" to (partnerVirtualEmail ?: ""),
                         "coupleId" to coupleId,
                         "isOnline" to true,
+                        "online" to true,
                         "lastSeen" to System.currentTimeMillis(),
                         "password" to pass
                     )
@@ -312,11 +309,7 @@ class AuthRepository(private val context: Context) {
             securityPrefs.setCoupleSecretKey(coupleId)
 
             listenToCurrentUser(uid)
-            if (partnerId != null) {
-                listenToPartner(partnerId)
-            } else {
-                connectPartnerListener()
-            }
+            connectPartnerListener()
             setOnline(true)
 
             val fs = firestore
@@ -330,6 +323,7 @@ class AuthRepository(private val context: Context) {
                     "partnerEmail" to (partnerVirtualEmail ?: ""),
                     "coupleId" to coupleId,
                     "isOnline" to true,
+                    "online" to true,
                     "lastSeen" to System.currentTimeMillis()
                 )
                 photoUrl?.let { updates["photoUrl"] = it }
@@ -440,15 +434,56 @@ class AuthRepository(private val context: Context) {
         }
     }
 
+    private var isAppInForeground: Boolean = false
+    private var heartbeatJob: kotlinx.coroutines.Job? = null
+
+    fun onAppForegroundStateChanged(inForeground: Boolean) {
+        isAppInForeground = inForeground
+        setOnline(inForeground)
+        if (inForeground) {
+            startHeartbeat()
+        } else {
+            heartbeatJob?.cancel()
+        }
+    }
+
+    private fun startHeartbeat() {
+        heartbeatJob?.cancel()
+        heartbeatJob = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+            while (isAppInForeground) {
+                kotlinx.coroutines.delay(20_000L)
+                if (isAppInForeground) {
+                    val uid = getCurrentUserId()
+                    if (uid.isNotBlank() && uid != "local_user_a") {
+                        val updates = mapOf<String, Any>(
+                            "isOnline" to true,
+                            "online" to true,
+                            "lastSeen" to System.currentTimeMillis()
+                        )
+                        try {
+                            firestore?.collection("users")?.document(uid)?.set(
+                                updates,
+                                com.google.firebase.firestore.SetOptions.merge()
+                            )
+                        } catch (_: Exception) {}
+                    }
+                }
+            }
+        }
+    }
+
     fun setOnline(online: Boolean) {
         val uid = getCurrentUserId()
+        if (uid.isBlank() || uid == "local_user_a") return
         _currentUserState.value = _currentUserState.value?.copy(
             isOnline = online,
+            online = online,
             lastSeen = System.currentTimeMillis()
         )
         try {
             val updates = mutableMapOf<String, Any>(
                 "isOnline" to online,
+                "online" to online,
                 "lastSeen" to System.currentTimeMillis()
             )
             if (!online) {
@@ -694,6 +729,8 @@ class AuthRepository(private val context: Context) {
     }
 
     fun logout() {
+        heartbeatJob?.cancel()
+        isAppInForeground = false
         setOnline(false)
         currentUserListener?.remove()
         partnerListener?.remove()
