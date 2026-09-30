@@ -89,7 +89,23 @@ fun HomeScreen(
         label = "heart_pulse"
     )
 
+    var dragAccumulator by remember { mutableFloatStateOf(0f) }
+
     Scaffold(
+        modifier = Modifier.pointerInput(Unit) {
+            androidx.compose.foundation.gestures.detectHorizontalDragGestures(
+                onDragStart = { dragAccumulator = 0f },
+                onDragEnd = {
+                    if (dragAccumulator < -80f) {
+                        onNavigateToChat()
+                    }
+                    dragAccumulator = 0f
+                },
+                onHorizontalDrag = { _, dragAmount ->
+                    dragAccumulator += dragAmount
+                }
+            )
+        },
         topBar = {
             TopAppBar(
                 title = {

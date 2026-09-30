@@ -173,10 +173,10 @@ fun ChatScreen(
         }
     }
 
-    // Scroll to bottom when new messages arrive
+    // Scroll to bottom (index 0) when new messages arrive
     LaunchedEffect(uiState.messages.size) {
         if (uiState.messages.isNotEmpty()) {
-            listState.animateScrollToItem(uiState.messages.size - 1)
+            listState.animateScrollToItem(0)
         }
     }
 
@@ -215,18 +215,27 @@ fun ChatScreen(
 
     // Filter messages for search query, starred filter, and privacy shield
     val displayedMessages = remember(uiState.messages, uiState.searchQuery, uiState.filterStarredOnly, uiState.isSecretHistoryRevealed) {
+        var list = uiState.messages
         if (!uiState.isSecretHistoryRevealed) {
-            emptyList()
-        } else {
-            var list = uiState.messages
-            if (uiState.filterStarredOnly) {
-                list = list.filter { it.isStarred }
+            val cal = java.util.Calendar.getInstance()
+            if (cal.get(java.util.Calendar.HOUR_OF_DAY) < 6) {
+                cal.add(java.util.Calendar.DAY_OF_YEAR, -1)
             }
-            if (uiState.searchQuery.isNotBlank()) {
-                list = list.filter { it.text.contains(uiState.searchQuery, ignoreCase = true) }
-            }
-            list
+            cal.set(java.util.Calendar.HOUR_OF_DAY, 6)
+            cal.set(java.util.Calendar.MINUTE, 0)
+            cal.set(java.util.Calendar.SECOND, 0)
+            cal.set(java.util.Calendar.MILLISECOND, 0)
+            val todayStart = cal.timeInMillis
+            list = list.filter { it.timestamp >= todayStart }
         }
+        
+        if (uiState.filterStarredOnly) {
+            list = list.filter { it.isStarred }
+        }
+        if (uiState.searchQuery.isNotBlank()) {
+            list = list.filter { it.text.contains(uiState.searchQuery, ignoreCase = true) }
+        }
+        list
     }
 
     var highlightedMessageId by remember { mutableStateOf<String?>(null) }
@@ -286,7 +295,27 @@ fun ChatScreen(
         }
     }
 
+    var dragAccumulator by remember { mutableFloatStateOf(0f) }
+
     Scaffold(
+        modifier = Modifier.pointerInput(Unit) {
+            androidx.compose.foundation.gestures.detectHorizontalDragGestures(
+                onDragStart = { dragAccumulator = 0f },
+                onDragEnd = {
+                    if (dragAccumulator > 80f) {
+                        // Swipe Right -> Home
+                        onNavigateBack()
+                    } else if (dragAccumulator < -80f) {
+                        // Swipe Left -> Profile
+                        onNavigateToProfile()
+                    }
+                    dragAccumulator = 0f
+                },
+                onHorizontalDrag = { _, dragAmount ->
+                    dragAccumulator += dragAmount
+                }
+            )
+        },
         topBar = {
             TopAppBar(
                 title = {
@@ -454,6 +483,22 @@ fun ChatScreen(
                                         Icon(Icons.Filled.HourglassTop, null, tint = RoseGoldPrimary)
                                     }
                                 )
+                                if (!uiState.isSecretHistoryRevealed) {
+                                    DropdownMenuItem(
+                                        text = { Text("Recover & Show Everything") },
+                                        onClick = {
+                                            showChatMenu = false
+                                            viewModel.revealSecretHistory()
+                                        },
+                                        leadingIcon = {
+                                            Icon(
+                                                Icons.Outlined.Visibility,
+                                                null,
+                                                tint = GoldMilestone
+                                            )
+                                        }
+                                    )
+                                }
                                 DropdownMenuItem(
                                     text = { Text(if (uiState.filterStarredOnly) "Show All Messages" else "Starred Messages ⭐") },
                                     onClick = {
@@ -689,84 +734,12 @@ fun ChatScreen(
                 StealthDisguiseNotesView(
                     onRestore = onQuickDisguise
                 )
-            } else if (!uiState.isSecretHistoryRevealed) {
-                // Secret Space Protected View with Recover & Show Everything button
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(24.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Surface(
-                        shape = RoundedCornerShape(24.dp),
-                        color = Color.White,
-                        shadowElevation = 6.dp,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(28.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(68.dp)
-                                    .clip(CircleShape)
-                                    .background(appHorizontalGradient()),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Lock,
-                                    contentDescription = null,
-                                    tint = Color.White,
-                                    modifier = Modifier.size(32.dp)
-                                )
-                            }
-                            Spacer(modifier = Modifier.height(16.dp))
-                            Text(
-                                text = "Secret Chat Protected",
-                                fontSize = 18.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(
-                                text = "Previous chats, media, voice notes, and gallery are shielded for privacy.",
-                                fontSize = 13.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                                lineHeight = 18.sp
-                            )
-                            Spacer(modifier = Modifier.height(24.dp))
-                            Button(
-                                onClick = {
-                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    viewModel.revealSecretHistory()
-                                },
-                                colors = ButtonDefaults.buttonColors(containerColor = RoseGoldPrimary),
-                                shape = RoundedCornerShape(16.dp),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(48.dp)
-                                    .testTag("recover_chat_history_button")
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.LockOpen,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text("Recover & Show Everything", fontWeight = FontWeight.Bold)
-                            }
-                        }
-                    }
-                }
             } else {
+                val reversedMessages = displayedMessages.reversed()
                 LazyColumn(
                     state = listState,
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(vertical = 8.dp)
                         .pointerInput(Unit) {
                             detectTapGestures(
                                 onDoubleTap = {
@@ -774,23 +747,158 @@ fun ChatScreen(
                                 }
                             )
                         },
+                    reverseLayout = true,
+                    contentPadding = PaddingValues(vertical = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    // Mutual Consent Chat Deletion Active Request Banner
-                    if (uiState.deletionRequest != null) {
-                        item {
-                            MutualConsentDeletionBanner(
-                                request = uiState.deletionRequest!!,
-                                isFromMe = (uiState.deletionRequest!!.requestedByUserId == currentUserId),
-                                partnerName = partnerName,
-                                onAccept = { viewModel.acceptMutualChatDeletion() },
-                                onDecline = { viewModel.declineMutualChatDeletion() },
-                                onCancel = { viewModel.cancelMutualChatDeletion() }
-                            )
+                    itemsIndexed(
+                        items = reversedMessages,
+                        key = { _, msg -> msg.id },
+                        contentType = { _, _ -> "message" }
+                    ) { index, message ->
+                        val isFromMe = message.senderId == currentUserId
+                        val isFirstOfDay = index == reversedMessages.lastIndex || !isSameDay(reversedMessages[index + 1].timestamp, message.timestamp)
+
+                        Column {
+                            if (isFirstOfDay) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 12.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Surface(
+                                        shape = CircleShape,
+                                        color = MaterialTheme.colorScheme.surfaceVariant,
+                                        tonalElevation = 1.dp
+                                    ) {
+                                        Text(
+                                            text = formatDateSeparator(message.timestamp),
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+                                        )
+                                    }
+                                }
+                            }
+
+                            LaunchedEffect(message.id) {
+                                if (!isFromMe && message.getTypedStatus() != com.example.data.model.MessageStatus.READ) {
+                                    viewModel.markMessageAsRead(message.id)
+                                }
+                            }
+
+                            val isHighlighted = (highlightedMessageId == message.id)
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .then(
+                                        if (isHighlighted) {
+                                            Modifier
+                                                .background(RoseGoldPrimary.copy(alpha = 0.15f), RoundedCornerShape(16.dp))
+                                                .border(2.dp, RoseGoldPrimary, RoundedCornerShape(16.dp))
+                                                .padding(4.dp)
+                                        } else Modifier
+                                    )
+                            ) {
+                                MessageBubble(
+                                    message = message,
+                                    isFromMe = isFromMe,
+                                    isPlayingAudio = (currentPlayingId == message.id && isAudioPlaying),
+                                    audioProgress = if (currentPlayingId == message.id) audioProgress else 0f,
+                                    gallerySize = uiState.gallerySize,
+                                    onPlayAudio = {
+                                        message.mediaUrl?.let { url ->
+                                            viewModel.playAudio(message.id, url)
+                                        }
+                                    },
+                                    onImageClick = { url ->
+                                        viewModel.openFullScreenMedia(url, MessageType.IMAGE, message.getAllMediaUrls())
+                                    },
+                                    onImageClickWithList = { url, allUrls ->
+                                        viewModel.openFullScreenMedia(url, MessageType.IMAGE, allUrls)
+                                    },
+                                    onSwipeToReply = {
+                                        viewModel.setReplyingTo(message)
+                                    },
+                                    onLongClick = {
+                                        viewModel.setSelectedMessageForActions(message)
+                                    },
+                                    onReactionClick = { emoji ->
+                                        viewModel.toggleReaction(message.id, emoji)
+                                    },
+                                    onOpenTheaterVideo = { videoId ->
+                                        viewModel.openTheaterVideo(videoId)
+                                    },
+                                    voicePlaybackSpeed = uiState.voicePlaybackSpeed,
+                                    onToggleVoiceSpeed = {
+                                        viewModel.toggleVoiceSpeed()
+                                    },
+                                    isHighlighted = isHighlighted,
+                                    onReplyQuoteClick = { replyId ->
+                                        if (!replyId.isNullOrBlank()) {
+                                            val targetIndex = reversedMessages.indexOfFirst { it.id == replyId }
+                                            if (targetIndex >= 0) {
+                                                scope.launch {
+                                                    listState.animateScrollToItem(targetIndex)
+                                                    highlightedMessageId = replyId
+                                                    kotlinx.coroutines.delay(1400)
+                                                    highlightedMessageId = null
+                                                }
+                                            }
+                                        }
+                                    }
+                                )
+                            }
                         }
                     }
 
-                    // Check-After Active Banner
+                    item {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 20.dp, vertical = 10.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Surface(
+                                shape = RoundedCornerShape(16.dp),
+                                color = SoftPinkSurfaceVariant,
+                                border = BorderStroke(1.dp, SoftBorderOutline),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(12.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            imageVector = Icons.Default.Lock,
+                                            contentDescription = null,
+                                            tint = RoseGoldPrimary,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(
+                                            text = "Strictly 2-Person Private Channel",
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 12.sp,
+                                            color = DarkOnBackground
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        text = "Messages, voice notes, and photos are strictly between you and $partnerName. No third parties can ever join or view this chat.",
+                                        fontSize = 11.sp,
+                                        color = DarkOnSurfaceVariant,
+                                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                        lineHeight = 15.sp
+                                    )
+                                }
+                            }
+                        }
+                    }
+
                     if (partnerHasCheckAfter) {
                         item {
                             CheckAfterChatBanner(
@@ -825,151 +933,17 @@ fun ChatScreen(
                         }
                     }
 
-                    item {
-                        Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 20.dp, vertical = 10.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Surface(
-                            shape = RoundedCornerShape(16.dp),
-                            color = SoftPinkSurfaceVariant,
-                            border = BorderStroke(1.dp, SoftBorderOutline),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(12.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(
-                                        imageVector = Icons.Default.Lock,
-                                        contentDescription = null,
-                                        tint = RoseGoldPrimary,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text(
-                                        text = "Strictly 2-Person Private Channel",
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 12.sp,
-                                        color = DarkOnBackground
-                                    )
-                                }
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Text(
-                                    text = "Messages, voice notes, and photos are strictly between you and $partnerName. No third parties can ever join or view this chat.",
-                                    fontSize = 11.sp,
-                                    color = DarkOnSurfaceVariant,
-                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                                    lineHeight = 15.sp
-                                )
-                            }
-                        }
-                    }
-                }
-
-                itemsIndexed(
-                    items = displayedMessages,
-                    key = { _, msg -> msg.id },
-                    contentType = { _, _ -> "message" }
-                ) { index, message ->
-                    val isFromMe = message.senderId == currentUserId
-                    val isNewDay = if (index == 0) true else !isSameDay(displayedMessages[index - 1].timestamp, message.timestamp)
-
-                    // Date Separator Pill
-                    if (isNewDay) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 12.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Surface(
-                                shape = CircleShape,
-                                color = MaterialTheme.colorScheme.surfaceVariant,
-                                tonalElevation = 1.dp
-                            ) {
-                                Text(
-                                    text = formatDateSeparator(message.timestamp),
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
-                                )
-                            }
-                        }
-                    }
-
-                    // Mark as read when seen
-                    LaunchedEffect(message.id) {
-                        if (!isFromMe && message.getTypedStatus() != com.example.data.model.MessageStatus.READ) {
-                            viewModel.markMessageAsRead(message.id)
-                        }
-                    }
-
-                    val isHighlighted = (highlightedMessageId == message.id)
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .then(
-                                if (isHighlighted) {
-                                    Modifier
-                                        .background(RoseGoldPrimary.copy(alpha = 0.15f), RoundedCornerShape(16.dp))
-                                        .border(2.dp, RoseGoldPrimary, RoundedCornerShape(16.dp))
-                                        .padding(4.dp)
-                                } else Modifier
+                    if (uiState.deletionRequest != null) {
+                        item {
+                            MutualConsentDeletionBanner(
+                                request = uiState.deletionRequest!!,
+                                isFromMe = (uiState.deletionRequest!!.requestedByUserId == currentUserId),
+                                partnerName = partnerName,
+                                onAccept = { viewModel.acceptMutualChatDeletion() },
+                                onDecline = { viewModel.declineMutualChatDeletion() },
+                                onCancel = { viewModel.cancelMutualChatDeletion() }
                             )
-                    ) {
-                        MessageBubble(
-                            message = message,
-                        isFromMe = isFromMe,
-                        isPlayingAudio = (currentPlayingId == message.id && isAudioPlaying),
-                        audioProgress = if (currentPlayingId == message.id) audioProgress else 0f,
-                        gallerySize = uiState.gallerySize,
-                        onPlayAudio = {
-                            message.mediaUrl?.let { url ->
-                                viewModel.playAudio(message.id, url)
-                            }
-                        },
-                        onImageClick = { url ->
-                            viewModel.openFullScreenMedia(url, MessageType.IMAGE, message.getAllMediaUrls())
-                        },
-                        onImageClickWithList = { url, allUrls ->
-                            viewModel.openFullScreenMedia(url, MessageType.IMAGE, allUrls)
-                        },
-                        onSwipeToReply = {
-                            viewModel.setReplyingTo(message)
-                        },
-                        onLongClick = {
-                            viewModel.setSelectedMessageForActions(message)
-                        },
-                        onReactionClick = { emoji ->
-                            viewModel.toggleReaction(message.id, emoji)
-                        },
-                        onOpenTheaterVideo = { videoId ->
-                            viewModel.openTheaterVideo(videoId)
-                        },
-                        voicePlaybackSpeed = uiState.voicePlaybackSpeed,
-                        onToggleVoiceSpeed = {
-                            viewModel.toggleVoiceSpeed()
-                        },
-                        isHighlighted = (highlightedMessageId == message.id),
-                        onReplyQuoteClick = { replyId ->
-                            if (!replyId.isNullOrBlank()) {
-                                val targetIndex = displayedMessages.indexOfFirst { it.id == replyId }
-                                if (targetIndex >= 0) {
-                                    scope.launch {
-                                        listState.animateScrollToItem(targetIndex)
-                                        highlightedMessageId = replyId
-                                        kotlinx.coroutines.delay(1400)
-                                        highlightedMessageId = null
-                                    }
-                                }
-                            }
                         }
-                    )
                     }
                 }
             }
@@ -977,7 +951,7 @@ fun ChatScreen(
             // Floating scroll to bottom button
             val showScrollButton by remember {
                 derivedStateOf {
-                    listState.firstVisibleItemIndex < (displayedMessages.size - 4).coerceAtLeast(0)
+                    listState.firstVisibleItemIndex > 3
                 }
             }
 
@@ -991,7 +965,7 @@ fun ChatScreen(
                     onClick = {
                         scope.launch {
                             if (displayedMessages.isNotEmpty()) {
-                                listState.animateScrollToItem(displayedMessages.size - 1)
+                                listState.animateScrollToItem(0)
                             }
                         }
                     },
@@ -1587,8 +1561,9 @@ private val dateSeparatorFormat = object : ThreadLocal<SimpleDateFormat>() {
 }
 
 fun isSameDay(t1: Long, t2: Long): Boolean {
-    val cal1 = java.util.Calendar.getInstance().apply { timeInMillis = t1 }
-    val cal2 = java.util.Calendar.getInstance().apply { timeInMillis = t2 }
+    val offset = 6 * 60 * 60 * 1000L
+    val cal1 = java.util.Calendar.getInstance().apply { timeInMillis = t1 - offset }
+    val cal2 = java.util.Calendar.getInstance().apply { timeInMillis = t2 - offset }
     return cal1.get(java.util.Calendar.YEAR) == cal2.get(java.util.Calendar.YEAR) &&
            cal1.get(java.util.Calendar.DAY_OF_YEAR) == cal2.get(java.util.Calendar.DAY_OF_YEAR)
 }
@@ -1597,7 +1572,9 @@ fun formatDateSeparator(timestamp: Long): String {
     val now = System.currentTimeMillis()
     if (isSameDay(timestamp, now)) return "Today"
     if (isSameDay(timestamp, now - 86400000L)) return "Yesterday"
-    return dateSeparatorFormat.get()?.format(Date(timestamp)) ?: ""
+    
+    val offset = 6 * 60 * 60 * 1000L
+    return dateSeparatorFormat.get()?.format(Date(timestamp - offset)) ?: ""
 }
 
 @Composable
