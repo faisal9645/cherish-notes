@@ -51,9 +51,19 @@ class AuthRepository(private val context: Context) {
 
     init {
         loadLocalUserSession()
-        val currentFirebaseUser = auth?.currentUser
-        if (currentFirebaseUser != null) {
-            listenToCurrentUser(currentFirebaseUser.uid)
+        val localUser = _currentUserState.value
+        if (localUser != null) {
+            listenToCurrentUser(localUser.id)
+            if (!localUser.partnerId.isNullOrBlank()) {
+                listenToPartner(localUser.partnerId)
+            } else {
+                connectPartnerListener()
+            }
+        } else {
+            val currentFirebaseUser = auth?.currentUser
+            if (currentFirebaseUser != null) {
+                listenToCurrentUser(currentFirebaseUser.uid)
+            }
         }
     }
 
@@ -126,7 +136,7 @@ class AuthRepository(private val context: Context) {
         kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
             try {
                 try {
-                    auth?.signInAnonymously()
+                    auth?.signInAnonymously()?.await()
                 } catch (_: Exception) {}
 
                 val fs = firestore
@@ -326,7 +336,10 @@ class AuthRepository(private val context: Context) {
                 updates["typingInChat"] = false
                 updates["recordingAudioInChat"] = false
             }
-            firestore?.collection("users")?.document(uid)?.update(updates)
+            firestore?.collection("users")?.document(uid)?.set(
+                updates,
+                com.google.firebase.firestore.SetOptions.merge()
+            )
         } catch (e: Exception) {
             Log.w("AuthRepository", "Failed to update online status", e)
         }
@@ -339,7 +352,10 @@ class AuthRepository(private val context: Context) {
     fun setTyping(typing: Boolean) {
         val uid = getCurrentUserId()
         try {
-            firestore?.collection("users")?.document(uid)?.update("typingInChat", typing)
+            firestore?.collection("users")?.document(uid)?.set(
+                mapOf("typingInChat" to typing),
+                com.google.firebase.firestore.SetOptions.merge()
+            )
         } catch (e: Exception) {
             // ignore
         }
@@ -348,7 +364,10 @@ class AuthRepository(private val context: Context) {
     fun setRecordingAudio(recording: Boolean) {
         val uid = getCurrentUserId()
         try {
-            firestore?.collection("users")?.document(uid)?.update("recordingAudioInChat", recording)
+            firestore?.collection("users")?.document(uid)?.set(
+                mapOf("recordingAudioInChat" to recording),
+                com.google.firebase.firestore.SetOptions.merge()
+            )
         } catch (e: Exception) {
             // ignore
         }

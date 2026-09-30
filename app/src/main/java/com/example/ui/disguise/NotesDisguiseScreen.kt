@@ -525,7 +525,8 @@ fun NotesDisguiseScreen(
                     }
                 }
             },
-            containerColor = Color.White
+            containerColor = Color.White,
+            contentWindowInsets = WindowInsets.navigationBars
         ) { paddingValues ->
             Box(
                 modifier = Modifier
@@ -599,7 +600,6 @@ fun NotesDisguiseScreen(
                         columns = StaggeredGridCells.Fixed(2),
                         modifier = Modifier
                             .fillMaxSize()
-                            .padding(paddingValues)
                             .padding(horizontal = 14.dp, vertical = 8.dp),
                         horizontalArrangement = Arrangement.spacedBy(10.dp),
                         verticalItemSpacing = 10.dp
@@ -637,7 +637,6 @@ fun NotesDisguiseScreen(
                     LazyColumn(
                         modifier = Modifier
                             .fillMaxSize()
-                            .padding(paddingValues)
                             .padding(horizontal = 16.dp, vertical = 8.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {

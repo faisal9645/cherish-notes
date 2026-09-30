@@ -134,7 +134,7 @@ class ChatRepository(
                     "lastMessageSenderId" to newMessage.senderId,
                     "lastMessageTimestamp" to newMessage.timestamp
                 )
-                convRef.set(summary).await()
+                convRef.set(summary, com.google.firebase.firestore.SetOptions.merge()).await()
             }
             Result.success(newMessage)
         } catch (e: Exception) {

@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -52,7 +53,9 @@ fun CherishNavGraph(
         NavHost(
             navController = navController,
             startDestination = startDestination,
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                .alpha(if (isDisguiseActive) 0f else 1f),
         enterTransition = {
             fadeIn(animationSpec = tween(220, easing = FastOutSlowInEasing)) +
             slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Start, tween(220, easing = FastOutSlowInEasing))
@@ -259,20 +262,19 @@ fun CherishNavGraph(
         )
     }
 
-    // Real Notes Disguise screen with smooth transition
+    // Real Notes Disguise screen with smooth solid transition
     AnimatedVisibility(
         visible = isDisguiseActive,
-        enter = fadeIn(animationSpec = tween(320, easing = FastOutSlowInEasing)) +
-                scaleIn(initialScale = 1.02f, animationSpec = tween(320, easing = FastOutSlowInEasing)),
-        exit = fadeOut(animationSpec = tween(260, easing = FastOutLinearInEasing)) +
-               scaleOut(targetScale = 0.96f, animationSpec = tween(260, easing = FastOutLinearInEasing)),
+        enter = fadeIn(animationSpec = tween(280, easing = FastOutSlowInEasing)),
+        exit = fadeOut(animationSpec = tween(240, easing = FastOutLinearInEasing)),
         modifier = Modifier.fillMaxSize()
     ) {
         NotesDisguiseScreen(
             securityPreferences = app.securityPreferences,
             onSecretGestureTriggered = {
                 app.securityPreferences.revealSecretApp()
-            }
+            },
+            modifier = Modifier.fillMaxSize()
         )
     }
 }
