@@ -95,6 +95,7 @@ data class User(
 }
 
 
+@androidx.compose.runtime.Immutable
 @IgnoreExtraProperties
 data class Message(
     val id: String = "",

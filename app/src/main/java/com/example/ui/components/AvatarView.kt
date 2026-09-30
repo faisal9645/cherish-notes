@@ -53,12 +53,34 @@ fun AvatarView(
             contentAlignment = Alignment.Center
         ) {
             if (!photoUrl.isNullOrEmpty()) {
-                AsyncImage(
-                    model = photoUrl,
-                    contentDescription = "$name's avatar",
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
-                )
+                if (photoUrl.startsWith("data:image/")) {
+                    val base64 = photoUrl.substringAfter("base64,")
+                    val bytes = android.util.Base64.decode(base64, android.util.Base64.DEFAULT)
+                    val bitmap = android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                    if (bitmap != null) {
+                        androidx.compose.foundation.Image(
+                            bitmap = androidx.compose.ui.graphics.asImageBitmap(bitmap),
+                            contentDescription = "$name's avatar",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    } else {
+                        val initial = name.trim().firstOrNull()?.uppercase() ?: "❤️"
+                        Text(
+                            text = initial,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontSize = (size.value * 0.42f).sp,
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                    }
+                } else {
+                    AsyncImage(
+                        model = photoUrl,
+                        contentDescription = "$name's avatar",
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
             } else {
                 val initial = name.trim().firstOrNull()?.uppercase() ?: "❤️"
                 Text(

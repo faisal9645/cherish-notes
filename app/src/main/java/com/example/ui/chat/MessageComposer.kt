@@ -424,7 +424,10 @@ fun MessageComposer(
                         .appGradientShadow(CircleShape)
                         .clip(CircleShape)
                         .background(appHorizontalGradient())
-                        .clickable { onSendText() }
+                        .clickable { 
+                            onSendText() 
+                            showEmojiQuickBar = false
+                        }
                         .testTag("composer_send_button"),
                     contentAlignment = Alignment.Center
                 ) {
@@ -532,6 +535,8 @@ fun MessageComposer(
                                         if (change == null || !change.pressed) {
                                             break
                                         }
+                                        change.consume()
+                                        
                                         val delta = change.position - down.position
                                         dragOffsetX = delta.x.coerceIn(-240f, 0f)
                                         dragOffsetY = delta.y.coerceIn(-180f, 0f)

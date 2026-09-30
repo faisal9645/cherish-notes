@@ -63,12 +63,7 @@ fun NormalWallpaper(
                 )
             )
         } else {
-            Brush.verticalGradient(
-                listOf(
-                    Color(0xFFFAFBFD),
-                    Color(0xFFF2F4F8)
-                )
-            )
+            androidx.compose.ui.graphics.SolidColor(Color.White)
         }
     }
 

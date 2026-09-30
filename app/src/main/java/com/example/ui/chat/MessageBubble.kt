@@ -64,7 +64,7 @@ fun MessageBubble(
     message: Message,
     isFromMe: Boolean,
     isPlayingAudio: Boolean,
-    audioProgress: Float,
+    audioProgress: () -> Float,
     onPlayAudio: () -> Unit,
     onImageClick: (String) -> Unit,
     onLongClick: () -> Unit,
@@ -319,9 +319,9 @@ fun MessageBubble(
                             Spacer(modifier = Modifier.width(8.dp))
 
                             Column(modifier = Modifier.weight(1f)) {
-                                WaveformView(
-                                    amplitudes = message.waveform,
-                                    progress = audioProgress,
+                                    WaveformView(
+                                        amplitudes = message.waveform,
+                                        progress = audioProgress(),
                                     activeColor = if (isFromMe) Color.White else MaterialTheme.colorScheme.primary,
                                     inactiveColor = textColor.copy(alpha = 0.35f),
                                     height = 24.dp

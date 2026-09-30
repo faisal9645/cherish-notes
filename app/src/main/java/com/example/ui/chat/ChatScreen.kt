@@ -815,7 +815,7 @@ fun ChatScreen(
                                     message = message,
                                     isFromMe = isFromMe,
                                     isPlayingAudio = (currentPlayingId == message.id && isAudioPlaying),
-                                    audioProgress = if (currentPlayingId == message.id) audioProgress else 0f,
+                                    audioProgress = { if (currentPlayingId == message.id) audioProgress else 0f },
                                     gallerySize = uiState.gallerySize,
                                     onPlayAudio = {
                                         message.mediaUrl?.let { url ->

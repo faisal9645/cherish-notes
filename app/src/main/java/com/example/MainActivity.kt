@@ -9,6 +9,7 @@ import android.view.WindowManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.SystemBarStyle
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
@@ -19,8 +20,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.DisposableEffect
 import androidx.core.content.ContextCompat
-import androidx.core.view.WindowCompat
 import androidx.fragment.app.FragmentActivity
 import com.example.ui.navigation.CherishNavGraph
 import com.example.ui.theme.CherishTheme
@@ -46,12 +47,18 @@ class MainActivity : FragmentActivity() {
                 else -> isSystemDark
             }
 
-            LaunchedEffect(useDarkTheme) {
-                window.decorView.setBackgroundColor(if (useDarkTheme) android.graphics.Color.BLACK else android.graphics.Color.WHITE)
-                WindowCompat.getInsetsController(window, window.decorView).apply {
-                    isAppearanceLightStatusBars = !useDarkTheme
-                    isAppearanceLightNavigationBars = !useDarkTheme
+            DisposableEffect(useDarkTheme) {
+                val style = if (useDarkTheme) {
+                    SystemBarStyle.dark(android.graphics.Color.TRANSPARENT)
+                } else {
+                    SystemBarStyle.light(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT)
                 }
+                enableEdgeToEdge(
+                    statusBarStyle = style,
+                    navigationBarStyle = style
+                )
+                window.decorView.setBackgroundColor(if (useDarkTheme) android.graphics.Color.BLACK else android.graphics.Color.WHITE)
+                onDispose {}
             }
 
             CherishTheme(darkTheme = useDarkTheme) {
