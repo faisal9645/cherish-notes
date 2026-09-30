@@ -3,6 +3,7 @@ package com.example.ui.auth
 import androidx.compose.animation.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -25,8 +26,17 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
+import android.widget.Toast
+import androidx.compose.ui.platform.LocalContext
+import androidx.credentials.CredentialManager
+import androidx.credentials.GetCredentialRequest
+import androidx.credentials.CustomCredential
+import androidx.credentials.exceptions.GetCredentialCancellationException
+import com.google.android.libraries.identity.googleid.GetGoogleIdOption
+import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.launch
 import com.example.ui.theme.*
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -40,9 +50,51 @@ fun AuthScreen(
 
     var myUsername by remember { mutableStateOf("faisal") }
     var password by remember { mutableStateOf("cherish123") }
-    var partnerUsername by remember { mutableStateOf("karthik") }
-    var couplePasscode by remember { mutableStateOf("cherish-love") }
+    var partnerUsername by remember { mutableStateOf("shali") }
+    var couplePasscode by remember { mutableStateOf("faisal-shali") }
     var passwordVisible by remember { mutableStateOf(false) }
+
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+    var isGoogleSigningIn by remember { mutableStateOf(false) }
+
+    fun triggerGoogleSignIn() {
+        coroutineScope.launch {
+            try {
+                isGoogleSigningIn = true
+                val credentialManager = CredentialManager.create(context)
+                val googleIdOption = GetGoogleIdOption.Builder()
+                    .setFilterByAuthorizedAccounts(false)
+                    .setServerClientId("589800064404-tggb6b8jqfrm6vo9p0skl6f2fr23hle4.apps.googleusercontent.com")
+                    .setAutoSelectEnabled(false)
+                    .build()
+
+                val request = GetCredentialRequest.Builder()
+                    .addCredentialOption(googleIdOption)
+                    .build()
+
+                val result = credentialManager.getCredential(context = context, request = request)
+                val credential = result.credential
+                if (credential is CustomCredential && credential.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL) {
+                    val googleIdTokenCredential = GoogleIdTokenCredential.createFrom(credential.data)
+                    val idToken = googleIdTokenCredential.idToken
+                    viewModel.loginWithGoogle(
+                        idToken = idToken,
+                        partnerUsernameOrEmail = partnerUsername,
+                        coupleKey = couplePasscode
+                    )
+                } else {
+                    Toast.makeText(context, "Unexpected credential returned", Toast.LENGTH_SHORT).show()
+                }
+            } catch (e: GetCredentialCancellationException) {
+                // User cancelled the prompt
+            } catch (e: Exception) {
+                Toast.makeText(context, "Google Sign-In: ${e.localizedMessage ?: e.message}", Toast.LENGTH_LONG).show()
+            } finally {
+                isGoogleSigningIn = false
+            }
+        }
+    }
 
     LaunchedEffect(uiState) {
         if (uiState is AuthUiState.Success) {
@@ -162,6 +214,64 @@ fun AuthScreen(
                             }
 
                             Spacer(modifier = Modifier.height(18.dp))
+
+                            // One-Tap Gmail (Google) Sign-In Button
+                            OutlinedButton(
+                                onClick = { triggerGoogleSignIn() },
+                                enabled = !isGoogleSigningIn && uiState !is AuthUiState.Loading,
+                                shape = RoundedCornerShape(14.dp),
+                                border = BorderStroke(1.2.dp, Color(0xFFD2D5DA)),
+                                colors = ButtonDefaults.outlinedButtonColors(
+                                    containerColor = Color(0xFFFCFCFD)
+                                ),
+                                elevation = ButtonDefaults.buttonElevation(defaultElevation = 1.dp),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(52.dp)
+                                    .testTag("google_signin_button")
+                            ) {
+                                if (isGoogleSigningIn) {
+                                    CircularProgressIndicator(
+                                        color = RoseGoldPrimary,
+                                        modifier = Modifier.size(20.dp),
+                                        strokeWidth = 2.dp
+                                    )
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Text(
+                                        text = "Connecting to Google...",
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = DarkOnBackground
+                                    )
+                                } else {
+                                    GoogleBrandIcon(modifier = Modifier.size(22.dp))
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Text(
+                                        text = "Continue with Gmail (Google)",
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = DarkOnBackground
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(16.dp))
+
+                            // Divider with text
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                HorizontalDivider(modifier = Modifier.weight(1f), color = Color(0xFFE8E8EC))
+                                Text(
+                                    text = "  or sign in with username  ",
+                                    fontSize = 11.sp,
+                                    color = DarkOnSurfaceVariant
+                                )
+                                HorizontalDivider(modifier = Modifier.weight(1f), color = Color(0xFFE8E8EC))
+                            }
+
+                            Spacer(modifier = Modifier.height(16.dp))
 
                             // Your Username
                             OutlinedTextField(
@@ -447,5 +557,24 @@ fun AuthScreen(
                 Spacer(modifier = Modifier.height(24.dp))
             }
         }
+    }
+}
+
+@Composable
+fun GoogleBrandIcon(modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier
+            .size(24.dp)
+            .clip(CircleShape)
+            .background(Color.White)
+            .border(BorderStroke(1.dp, Color(0xFFE2E4E9)), CircleShape),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = "G",
+            fontWeight = FontWeight.Black,
+            fontSize = 15.sp,
+            color = Color(0xFF4285F4)
+        )
     }
 }

@@ -66,6 +66,25 @@ class AuthViewModel(private val authRepository: AuthRepository) : ViewModel() {
         _uiState.value = AuthUiState.Success(user)
     }
 
+    fun loginWithGoogle(
+        idToken: String,
+        partnerUsernameOrEmail: String = "",
+        coupleKey: String = ""
+    ) {
+        viewModelScope.launch {
+            _uiState.value = AuthUiState.Loading
+            val result = authRepository.loginWithGoogleIdToken(
+                idToken = idToken,
+                partnerUsernameOrEmail = partnerUsernameOrEmail.trim(),
+                coupleKey = coupleKey.trim()
+            )
+            result.fold(
+                onSuccess = { _uiState.value = AuthUiState.Success(it) },
+                onFailure = { _uiState.value = AuthUiState.Error(it.localizedMessage ?: "Google sign-in failed") }
+            )
+        }
+    }
+
     fun sendPasswordReset(email: String, onDone: (Boolean, String) -> Unit) {
         if (email.isBlank()) {
             onDone(false, "Please enter your username")
