@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -49,13 +50,28 @@ fun CherishNavGraph(
         else -> Screen.Chat.route
     }
 
+    val appAlpha by animateFloatAsState(
+        targetValue = if (isDisguiseActive) 0f else 1f,
+        animationSpec = tween(380, easing = FastOutSlowInEasing),
+        label = "app_reveal_alpha"
+    )
+    val appScale by animateFloatAsState(
+        targetValue = if (isDisguiseActive) 0.94f else 1f,
+        animationSpec = tween(420, easing = FastOutSlowInEasing),
+        label = "app_reveal_scale"
+    )
+
     Box(modifier = modifier.fillMaxSize()) {
         NavHost(
             navController = navController,
             startDestination = startDestination,
             modifier = Modifier
                 .fillMaxSize()
-                .alpha(if (isDisguiseActive) 0f else 1f),
+                .graphicsLayer {
+                    alpha = appAlpha
+                    scaleX = appScale
+                    scaleY = appScale
+                },
         enterTransition = {
             fadeIn(animationSpec = tween(220, easing = FastOutSlowInEasing)) +
             slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Start, tween(220, easing = FastOutSlowInEasing))
@@ -173,7 +189,11 @@ fun CherishNavGraph(
             }
             SharedGalleryScreen(
                 chatViewModel = chatViewModel,
-                onNavigateBack = { navController.popBackStack() }
+                onNavigateBack = { navController.popBackStack() },
+                onNavigateToMessage = { messageId ->
+                    chatViewModel.navigateToMessageInChat(messageId)
+                    navController.popBackStack()
+                }
             )
         }
 
@@ -265,8 +285,10 @@ fun CherishNavGraph(
     // Real Notes Disguise screen with smooth solid transition
     AnimatedVisibility(
         visible = isDisguiseActive,
-        enter = fadeIn(animationSpec = tween(280, easing = FastOutSlowInEasing)),
-        exit = fadeOut(animationSpec = tween(240, easing = FastOutLinearInEasing)),
+        enter = fadeIn(animationSpec = tween(280, easing = FastOutSlowInEasing)) +
+                scaleIn(initialScale = 0.96f, animationSpec = tween(280, easing = FastOutSlowInEasing)),
+        exit = fadeOut(animationSpec = tween(380, easing = FastOutSlowInEasing)) +
+               scaleOut(targetScale = 1.08f, animationSpec = tween(380, easing = FastOutSlowInEasing)),
         modifier = Modifier.fillMaxSize()
     ) {
         NotesDisguiseScreen(

@@ -212,18 +212,27 @@ fun MessageComposer(
                     IconButton(
                         onClick = {
                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            isLockedRecording = false
                             onCancelVoiceRecord()
                         },
                         modifier = Modifier
                             .size(44.dp)
                             .testTag("composer_cancel_record_button")
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Delete,
-                            contentDescription = "Cancel voice note",
-                            tint = HeartRed,
-                            modifier = Modifier.size(26.dp)
-                        )
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(CircleShape)
+                                .background(HeartRed.copy(alpha = 0.12f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Delete,
+                                contentDescription = "Cancel voice note",
+                                tint = HeartRed,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
                     }
 
                     Row(
@@ -283,7 +292,7 @@ fun MessageComposer(
 
                         Spacer(modifier = Modifier.weight(1f))
 
-                        val isNearCancel = dragOffsetX < -160f
+                        val isNearCancel = dragOffsetX < -100f
                         if (isNearCancel) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(
@@ -303,7 +312,7 @@ fun MessageComposer(
                         } else {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.offset { IntOffset((dragOffsetX * 0.35f).roundToInt(), 0) }
+                                modifier = Modifier.offset { IntOffset((dragOffsetX * 0.4f).roundToInt(), 0) }
                             ) {
                                 Text(
                                     text = "‹‹‹",
@@ -436,6 +445,7 @@ fun MessageComposer(
                         .background(appHorizontalGradient())
                         .clickable {
                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            isLockedRecording = false
                             onStopAndSendVoiceRecord()
                         }
                         .testTag("composer_send_locked_voice_button"),
@@ -449,41 +459,46 @@ fun MessageComposer(
                     )
                 }
             } else {
-                // Case C: Persistent Hold-to-Record Mic Button with Lock Pill Overhead
+                // Case C: Persistent Hold-to-Record Mic Button with Dynamic Lock Pill Overhead
                 Box(contentAlignment = Alignment.Center) {
-                    // Lock pill overhead
+                    // Lock pill overhead (animates upward and locks as you slide up)
                     androidx.compose.animation.AnimatedVisibility(
-                        visible = isRecordingVoice,
+                        visible = isRecordingVoice && !isLockedRecording,
                         enter = fadeIn() + slideInVertically { it / 2 },
                         exit = fadeOut() + slideOutVertically { it / 2 }
                     ) {
+                        val isNearLock = dragOffsetY < -80f
                         Column(
                             horizontalAlignment = Alignment.CenterHorizontally,
                             modifier = Modifier
-                                .offset(y = (-56).dp)
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(Color.White)
-                                .border(BorderStroke(1.dp, Color(0xFFE8E8EC)), RoundedCornerShape(12.dp))
-                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                                .offset(y = (-64).dp + (dragOffsetY * 0.35f).coerceIn(-40f, 0f).dp)
+                                .clip(RoundedCornerShape(16.dp))
+                                .background(if (isNearLock) RoseGoldPrimary else Color.White)
+                                .border(
+                                    BorderStroke(1.dp, if (isNearLock) RoseGoldPrimary else Color(0xFFE8E8EC)),
+                                    RoundedCornerShape(16.dp)
+                                )
+                                .padding(horizontal = 8.dp, vertical = 6.dp)
                         ) {
                             Icon(
-                                imageVector = Icons.Default.Lock,
+                                imageVector = if (isNearLock) Icons.Default.Lock else Icons.Outlined.Lock,
                                 contentDescription = null,
-                                tint = RoseGoldPrimary,
-                                modifier = Modifier.size(14.dp)
+                                tint = if (isNearLock) Color.White else RoseGoldPrimary,
+                                modifier = Modifier.size(16.dp)
                             )
                             Icon(
                                 imageVector = Icons.Default.KeyboardArrowUp,
                                 contentDescription = null,
-                                tint = RoseGoldPrimary,
+                                tint = if (isNearLock) Color.White else RoseGoldPrimary,
                                 modifier = Modifier.size(14.dp)
                             )
                         }
                     }
 
-                    // Pulsing/Reactive Mic Button (Never destroyed mid-gesture!)
+                    // Pulsing/Reactive Mic Button
                     Box(
                         modifier = Modifier
+                            .offset { IntOffset((dragOffsetX * 0.35f).roundToInt(), 0) }
                             .scale(micScale)
                             .size(46.dp)
                             .then(
@@ -508,7 +523,8 @@ fun MessageComposer(
                                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                     onStartVoiceRecord()
 
-                                    var cancelled = false
+                                    var hasLocked = false
+                                    var hasTriggeredCancelHaptic = false
 
                                     while (true) {
                                         val event = awaitPointerEvent()
@@ -517,30 +533,36 @@ fun MessageComposer(
                                             break
                                         }
                                         val delta = change.position - down.position
-                                        dragOffsetX = delta.x.coerceAtMost(0f)
-                                        dragOffsetY = delta.y.coerceAtMost(0f)
+                                        dragOffsetX = delta.x.coerceIn(-240f, 0f)
+                                        dragOffsetY = delta.y.coerceIn(-180f, 0f)
 
-                                        if (dragOffsetY < -120f && !isLockedRecording) {
-                                            isLockedRecording = true
+                                        if (dragOffsetY < -80f && !hasLocked) {
+                                            hasLocked = true
                                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                            break
                                         }
 
-                                        if (dragOffsetX < -160f && !cancelled) {
-                                            cancelled = true
+                                        if (dragOffsetX < -100f && !hasTriggeredCancelHaptic) {
+                                            hasTriggeredCancelHaptic = true
                                             haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                        } else if (dragOffsetX >= -100f) {
+                                            hasTriggeredCancelHaptic = false
                                         }
                                     }
 
                                     val elapsed = System.currentTimeMillis() - startTime
-                                    if (isLockedRecording) {
-                                        // User locked into hands-free mode
-                                    } else if (cancelled || dragOffsetX < -160f) {
+                                    if (hasLocked) {
+                                        // User locked into hands-free mode: do not stop or send!
+                                        isLockedRecording = true
+                                    } else if (dragOffsetX < -100f) {
+                                        // Swiped left to cancel
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                         onCancelVoiceRecord()
-                                    } else if (elapsed < 400L) {
+                                    } else if (elapsed < 500L) {
+                                        // Tapped too quickly: cancel and instruct
                                         onCancelVoiceRecord()
                                         Toast.makeText(context, "Hold to record, release to send", Toast.LENGTH_SHORT).show()
                                     } else {
+                                        // Normal release: stop and send audio note
                                         onStopAndSendVoiceRecord()
                                     }
                                 }

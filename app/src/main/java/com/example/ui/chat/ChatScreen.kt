@@ -13,6 +13,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -35,6 +36,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -65,6 +68,7 @@ fun ChatScreen(
     onLoggedOut: () -> Unit = {}
 ) {
     val context = LocalContext.current
+    val haptic = LocalHapticFeedback.current
     val scope = rememberCoroutineScope()
     val uiState by viewModel.uiState.collectAsState()
     val listState = rememberLazyListState()
@@ -209,19 +213,38 @@ fun ChatScreen(
         if (partnerHasCheckAfter) CheckAfterHelper.calculateRemaining(partnerCheckAfterTarget).first else ""
     }
 
-    // Filter messages for search query and starred filter
-    val displayedMessages = remember(uiState.messages, uiState.searchQuery, uiState.filterStarredOnly) {
-        var list = uiState.messages
-        if (uiState.filterStarredOnly) {
-            list = list.filter { it.isStarred }
+    // Filter messages for search query, starred filter, and privacy shield
+    val displayedMessages = remember(uiState.messages, uiState.searchQuery, uiState.filterStarredOnly, uiState.isSecretHistoryRevealed) {
+        if (!uiState.isSecretHistoryRevealed) {
+            emptyList()
+        } else {
+            var list = uiState.messages
+            if (uiState.filterStarredOnly) {
+                list = list.filter { it.isStarred }
+            }
+            if (uiState.searchQuery.isNotBlank()) {
+                list = list.filter { it.text.contains(uiState.searchQuery, ignoreCase = true) }
+            }
+            list
         }
-        if (uiState.searchQuery.isNotBlank()) {
-            list = list.filter { it.text.contains(uiState.searchQuery, ignoreCase = true) }
-        }
-        list
     }
 
     var highlightedMessageId by remember { mutableStateOf<String?>(null) }
+
+    // Scroll to target message when navigating from gallery ("Show in chat")
+    LaunchedEffect(uiState.targetScrollMessageId, displayedMessages.size) {
+        val targetId = uiState.targetScrollMessageId
+        if (targetId != null && displayedMessages.isNotEmpty()) {
+            val idx = displayedMessages.indexOfFirst { it.id == targetId }
+            if (idx >= 0) {
+                listState.animateScrollToItem(idx)
+                highlightedMessageId = targetId
+                kotlinx.coroutines.delay(2500)
+                highlightedMessageId = null
+                viewModel.clearTargetScrollMessageId()
+            }
+        }
+    }
 
     // Panic Protection: Accelerometer shake listener to trigger instant disguise
     DisposableEffect(Unit) {
@@ -242,6 +265,7 @@ fun ChatScreen(
                 val now = System.currentTimeMillis()
                 if (delta > 25f && now - lastShakeTime > 1500L) {
                     lastShakeTime = now
+                    viewModel.hideSecretHistory()
                     onQuickDisguise()
                 }
                 lastX = x
@@ -257,6 +281,8 @@ fun ChatScreen(
 
         onDispose {
             sensorManager?.unregisterListener(listener)
+            viewModel.cancelVoiceRecording()
+            viewModel.hideSecretHistory()
         }
     }
 
@@ -391,6 +417,21 @@ fun ChatScreen(
                                 contentDescription = "Check After Timer",
                                 tint = if (partnerHasCheckAfter || iHaveCheckAfter) RoseGoldPrimary else MaterialTheme.colorScheme.onSurfaceVariant
                             )
+                        }
+                        if (uiState.isSecretHistoryRevealed) {
+                            IconButton(
+                                onClick = {
+                                    viewModel.hideSecretHistory()
+                                    Toast.makeText(context, "Chat history shielded for privacy", Toast.LENGTH_SHORT).show()
+                                },
+                                modifier = Modifier.testTag("chat_shield_button")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Shield,
+                                    contentDescription = "Shield Chat History",
+                                    tint = RoseGoldPrimary
+                                )
+                            }
                         }
                         Box {
                             IconButton(
@@ -648,6 +689,78 @@ fun ChatScreen(
                 StealthDisguiseNotesView(
                     onRestore = onQuickDisguise
                 )
+            } else if (!uiState.isSecretHistoryRevealed) {
+                // Secret Space Protected View with Recover & Show Everything button
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(24.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Surface(
+                        shape = RoundedCornerShape(24.dp),
+                        color = Color.White,
+                        shadowElevation = 6.dp,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(28.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(68.dp)
+                                    .clip(CircleShape)
+                                    .background(appHorizontalGradient()),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Lock,
+                                    contentDescription = null,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(32.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Text(
+                                text = "Secret Chat Protected",
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "Previous chats, media, voice notes, and gallery are shielded for privacy.",
+                                fontSize = 13.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                lineHeight = 18.sp
+                            )
+                            Spacer(modifier = Modifier.height(24.dp))
+                            Button(
+                                onClick = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    viewModel.revealSecretHistory()
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = RoseGoldPrimary),
+                                shape = RoundedCornerShape(16.dp),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(48.dp)
+                                    .testTag("recover_chat_history_button")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.LockOpen,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Recover & Show Everything", fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                }
             } else {
                 LazyColumn(
                     state = listState,
@@ -796,8 +909,21 @@ fun ChatScreen(
                         }
                     }
 
-                    MessageBubble(
-                        message = message,
+                    val isHighlighted = (highlightedMessageId == message.id)
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .then(
+                                if (isHighlighted) {
+                                    Modifier
+                                        .background(RoseGoldPrimary.copy(alpha = 0.15f), RoundedCornerShape(16.dp))
+                                        .border(2.dp, RoseGoldPrimary, RoundedCornerShape(16.dp))
+                                        .padding(4.dp)
+                                } else Modifier
+                            )
+                    ) {
+                        MessageBubble(
+                            message = message,
                         isFromMe = isFromMe,
                         isPlayingAudio = (currentPlayingId == message.id && isAudioPlaying),
                         audioProgress = if (currentPlayingId == message.id) audioProgress else 0f,
@@ -844,6 +970,7 @@ fun ChatScreen(
                             }
                         }
                     )
+                    }
                 }
             }
 

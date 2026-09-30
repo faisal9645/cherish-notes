@@ -98,10 +98,14 @@ fun NotesDisguiseScreen(
 
     // Secret unlock transition state
     var isUnlockingSecret by remember { mutableStateOf(false) }
+    var isUnlockingAnimationPlaying by remember { mutableStateOf(false) }
+    val unlockAnimProgress = remember { Animatable(0f) }
 
     fun triggerSecretUnlock() {
         if (isUnlockingSecret) return
         isUnlockingSecret = true
+        isUnlockingAnimationPlaying = true
+
         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
         try {
             val vibrator = context.getSystemService(Vibrator::class.java)
@@ -109,21 +113,57 @@ fun NotesDisguiseScreen(
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                     vibrator.vibrate(
                         VibrationEffect.createWaveform(
-                            longArrayOf(0, 35, 70, 50),
+                            longArrayOf(0, 45, 80, 70),
                             -1
                         )
                     )
                 } else {
                     @Suppress("DEPRECATION")
-                    vibrator.vibrate(100)
+                    vibrator.vibrate(120)
                 }
             }
         } catch (_: Exception) {}
 
-        onSecretGestureTriggered()
         coroutineScope.launch {
-            kotlinx.coroutines.delay(500)
+            unlockAnimProgress.snapTo(0f)
+            unlockAnimProgress.animateTo(
+                targetValue = 1f,
+                animationSpec = tween(650, easing = FastOutSlowInEasing)
+            )
+        }
+
+        // If user enabled device lock (password / PIN / pattern / fingerprint) after hold:
+        if (securityPreferences.isRequirePhoneLockAfterHold()) {
+            val activity = context as? androidx.fragment.app.FragmentActivity
+            if (activity != null && com.example.security.BiometricHelper.isDeviceLockOrBiometricAvailable(context)) {
+                com.example.security.BiometricHelper.showDeviceLockOrBiometricPrompt(
+                    activity = activity,
+                    title = "Confirm Phone Lock / Fingerprint",
+                    subtitle = "Verify device credentials to open secret space",
+                    onSuccess = {
+                        coroutineScope.launch {
+                            delay(250)
+                            onSecretGestureTriggered()
+                            delay(400)
+                            isUnlockingSecret = false
+                            isUnlockingAnimationPlaying = false
+                        }
+                    },
+                    onError = {
+                        isUnlockingSecret = false
+                        isUnlockingAnimationPlaying = false
+                    }
+                )
+                return
+            }
+        }
+
+        coroutineScope.launch {
+            delay(580)
+            onSecretGestureTriggered()
+            delay(400)
             isUnlockingSecret = false
+            isUnlockingAnimationPlaying = false
         }
     }
 
@@ -451,77 +491,97 @@ fun NotesDisguiseScreen(
             },
             floatingActionButton = {
                 if (!uiState.isSelectionMode) {
-                    // Floating Action Button: Tap to add note, hold to unlock secret chat (no visible progress ring)
-                    Box(
-                        modifier = Modifier
-                            .testTag("add_note_fab")
-                            .size(56.dp)
-                            .scale(fabScale)
-                            .appGradientShadow(CircleShape)
-                            .clip(CircleShape)
-                            .background(appHorizontalGradient())
-                            .pointerInput(Unit) {
-                                awaitEachGesture {
-                                    val down = awaitFirstDown(requireUnconsumed = false)
-                                    down.consume()
-                                    isHoldingFab = true
-                                    val startTime = System.currentTimeMillis()
-                                    var unlocked = false
+                    // Floating Action Button: Tap to add note, hold to unlock secret chat
+                    Box(contentAlignment = Alignment.Center) {
+                        // Immediately once selected seconds complete, circular animation loads
+                        if (isUnlockingAnimationPlaying) {
+                            // Expanding bloom circular ripple
+                            Box(
+                                modifier = Modifier
+                                    .size(66.dp + (48 * unlockAnimProgress.value).dp)
+                                    .graphicsLayer {
+                                        alpha = (1f - unlockAnimProgress.value).coerceIn(0f, 1f)
+                                    }
+                                    .border(
+                                        width = 3.dp,
+                                        brush = androidx.compose.ui.graphics.Brush.sweepGradient(
+                                            listOf(AppGradientStart, AppGradientMid, AppGradientEnd, AppGradientStart)
+                                        ),
+                                        shape = CircleShape
+                                    )
+                            )
 
-                                    val holdDurationSec = securityPreferences.getPlusIconHoldDuration()
-                                    val timerJob = if (holdDurationSec > 0) {
-                                        val totalDurationMillis = holdDurationSec * 1000L
-                                        coroutineScope.launch {
-                                            holdProgress.snapTo(0f)
-                                            var lastTick = 0
-                                            while (isActive) {
-                                                val elapsed = System.currentTimeMillis() - startTime
-                                                val progress = (elapsed.toFloat() / totalDurationMillis).coerceIn(0f, 1f)
-                                                holdProgress.snapTo(progress)
+                            // Circular loader ring
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(66.dp),
+                                color = RoseGoldPrimary,
+                                strokeWidth = 3.5.dp,
+                                trackColor = RoseGoldPrimary.copy(alpha = 0.2f)
+                            )
+                        }
 
-                                                // Progressive subtle haptic feedback as user holds
-                                                val currentTick = (progress * 4).toInt()
-                                                if (currentTick > lastTick && currentTick < 4) {
-                                                    lastTick = currentTick
-                                                    try {
-                                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                                    } catch (_: Exception) {}
-                                                }
+                        Box(
+                            modifier = Modifier
+                                .testTag("add_note_fab")
+                                .size(56.dp)
+                                .scale(fabScale)
+                                .appGradientShadow(CircleShape)
+                                .clip(CircleShape)
+                                .background(appHorizontalGradient())
+                                .pointerInput(Unit) {
+                                    awaitEachGesture {
+                                        val down = awaitFirstDown(requireUnconsumed = false)
+                                        down.consume()
+                                        isHoldingFab = true
+                                        val startTime = System.currentTimeMillis()
+                                        var unlocked = false
 
-                                                if (progress >= 1f) {
+                                        val holdDurationSec = securityPreferences.getPlusIconHoldDuration()
+                                        val timerJob = if (holdDurationSec > 0) {
+                                            val totalDurationMillis = holdDurationSec * 1000L
+                                            coroutineScope.launch {
+                                                // Stealth hold: No progressive ring shown during hold
+                                                delay(totalDurationMillis)
+                                                if (isActive) {
                                                     unlocked = true
                                                     triggerSecretUnlock()
-                                                    break
                                                 }
-                                                kotlinx.coroutines.delay(16)
+                                            }
+                                        } else null
+
+                                        val up = waitForUpOrCancellation()
+                                        timerJob?.cancel()
+                                        isHoldingFab = false
+                                        val elapsed = System.currentTimeMillis() - startTime
+
+                                        if (!unlocked) {
+                                            if (up != null && elapsed < 350L) {
+                                                selectedNoteForEdit = null
+                                                showEditorDialog = true
                                             }
                                         }
-                                    } else null
-
-                                    val up = waitForUpOrCancellation()
-                                    timerJob?.cancel()
-                                    isHoldingFab = false
-                                    val elapsed = System.currentTimeMillis() - startTime
-                                    coroutineScope.launch {
-                                        holdProgress.animateTo(0f, tween(150))
                                     }
-
-                                    if (!unlocked) {
-                                        if (up != null && elapsed < 350L) {
-                                            selectedNoteForEdit = null
-                                            showEditorDialog = true
-                                        }
-                                    }
-                                }
-                            },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Add,
-                            contentDescription = "Add Note",
-                            tint = Color.White,
-                            modifier = Modifier.size(28.dp)
-                        )
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (isUnlockingAnimationPlaying) {
+                                Icon(
+                                    imageVector = Icons.Default.LockOpen,
+                                    contentDescription = "Secret Unlocked",
+                                    tint = Color.White,
+                                    modifier = Modifier
+                                        .size(28.dp)
+                                        .scale(0.85f + (unlockAnimProgress.value * 0.25f))
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Default.Add,
+                                    contentDescription = "Add Note",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(28.dp)
+                                )
+                            }
+                        }
                     }
                 }
             },
@@ -708,6 +768,71 @@ fun NotesDisguiseScreen(
                 }
             }
         )
+    }
+
+    // Satisfying secret opening transition overlay once hold completes
+    if (isUnlockingAnimationPlaying) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = unlockAnimProgress.value * 0.22f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                Surface(
+                    shape = CircleShape,
+                    color = Color.White,
+                    shadowElevation = 14.dp,
+                    modifier = Modifier
+                        .size(72.dp)
+                        .scale(0.82f + (unlockAnimProgress.value * 0.28f))
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(appHorizontalGradient()),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.LockOpen,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(34.dp)
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(16.dp))
+                Surface(
+                    shape = RoundedCornerShape(20.dp),
+                    color = Color.White.copy(alpha = 0.95f),
+                    shadowElevation = 6.dp,
+                    modifier = Modifier.graphicsLayer {
+                        alpha = unlockAnimProgress.value
+                    }
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 9.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            color = RoseGoldPrimary,
+                            strokeWidth = 2.2.dp
+                        )
+                        Text(
+                            text = "Opening Cherish...",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color(0xFF1E293B)
+                        )
+                    }
+                }
+            }
+        }
     }
 }
 }

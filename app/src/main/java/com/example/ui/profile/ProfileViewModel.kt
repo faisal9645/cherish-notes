@@ -22,7 +22,8 @@ data class ProfileUiState(
     val isDisguiseModeEnabled: Boolean = true,
     val disguisePasscode: String = "love",
     val isKeywordTriggerEnabled: Boolean = true,
-    val plusHoldDurationSec: Int = 2,
+    val plusHoldDurationSec: Int = 5,
+    val isRequirePhoneLockAfterHold: Boolean = false,
     val gallerySize: String = "medium",
     val isHapticEnabled: Boolean = true,
     val isAutoPlayMedia: Boolean = true,
@@ -49,6 +50,7 @@ class ProfileViewModel(
             disguisePasscode = securityPreferences.getDisguisePasscode(),
             isKeywordTriggerEnabled = securityPreferences.isKeywordTriggerEnabled(),
             plusHoldDurationSec = securityPreferences.getPlusIconHoldDuration(),
+            isRequirePhoneLockAfterHold = securityPreferences.isRequirePhoneLockAfterHold(),
             gallerySize = securityPreferences.getImageGallerySize(),
             isHapticEnabled = securityPreferences.isHapticFeedbackEnabled(),
             isAutoPlayMedia = securityPreferences.isAutoPlayMedia(),
@@ -172,6 +174,11 @@ class ProfileViewModel(
     fun setPlusHoldDuration(seconds: Int) {
         securityPreferences.setPlusIconHoldDuration(seconds)
         _uiState.update { it.copy(plusHoldDurationSec = seconds) }
+    }
+
+    fun setRequirePhoneLockAfterHold(enabled: Boolean) {
+        securityPreferences.setRequirePhoneLockAfterHold(enabled)
+        _uiState.update { it.copy(isRequirePhoneLockAfterHold = enabled) }
     }
 
     fun setImageGallerySize(size: String) {

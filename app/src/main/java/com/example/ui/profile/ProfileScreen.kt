@@ -509,7 +509,13 @@ fun ProfileScreen(
                         // Plus (+) Icon Long-Press Hold Duration Selector
                         ListItem(
                             headlineContent = { Text("Hold '+' Button to Unlock") },
-                            supportingContent = { Text("Hold the Notes '+' icon with subtle haptics") },
+                            supportingContent = {
+                                Text(
+                                    if (uiState.plusHoldDurationSec > 0)
+                                        "Hold '+' for ${uiState.plusHoldDurationSec}s with subtle haptics to reveal secret chat"
+                                    else "Long-press unlock is currently disabled"
+                                )
+                            },
                             leadingContent = { Icon(Icons.Default.TouchApp, contentDescription = null, tint = RoseGoldPrimary) }
                         )
 
@@ -522,7 +528,13 @@ fun ProfileScreen(
                                 .padding(4.dp),
                             horizontalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
-                            listOf(1 to "1s", 2 to "2s (Default)", 3 to "3s", 0 to "Off").forEach { (duration, label) ->
+                            listOf(
+                                1 to "1s",
+                                2 to "2s",
+                                3 to "3s",
+                                5 to "5s (Secure)",
+                                0 to "Off"
+                            ).forEach { (duration, label) ->
                                 val isSelected = uiState.plusHoldDurationSec == duration
                                 Box(
                                     modifier = Modifier
@@ -542,6 +554,69 @@ fun ProfileScreen(
                                 }
                             }
                         }
+
+                        // Fine-tuned Duration Slider for Full Dynamic Customization
+                        if (uiState.plusHoldDurationSec > 0) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 4.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        "Custom Duration",
+                                        fontSize = 12.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Text(
+                                        "${uiState.plusHoldDurationSec} seconds",
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = RoseGoldPrimary
+                                    )
+                                }
+                                Slider(
+                                    value = uiState.plusHoldDurationSec.toFloat(),
+                                    onValueChange = { viewModel.setPlusHoldDuration(it.toInt()) },
+                                    valueRange = 1f..10f,
+                                    steps = 8,
+                                    colors = SliderDefaults.colors(
+                                        thumbColor = RoseGoldPrimary,
+                                        activeTrackColor = RoseGoldPrimary
+                                    )
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(4.dp))
+
+                        // Phone Lock (Password / PIN / Pattern) & Fingerprint after Hold Toggle
+                        ListItem(
+                            headlineContent = {
+                                Text(
+                                    "Phone Lock / Fingerprint After '+' Hold",
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            },
+                            supportingContent = {
+                                Text(
+                                    "Prompt device screen lock (PIN, Password, Pattern) or fingerprint after hold before opening secret chat"
+                                )
+                            },
+                            leadingContent = {
+                                Icon(Icons.Default.Security, contentDescription = null, tint = RoseGoldPrimary)
+                            },
+                            trailingContent = {
+                                Switch(
+                                    checked = uiState.isRequirePhoneLockAfterHold,
+                                    onCheckedChange = { viewModel.setRequirePhoneLockAfterHold(it) }
+                                )
+                            }
+                        )
 
                         Spacer(modifier = Modifier.height(8.dp))
 

@@ -45,6 +45,12 @@ class CoupleFeaturesRepository(
         return authRepository.currentUserState.value?.coupleId ?: "couple_cherish_private"
     }
 
+    private fun notifyAutoBackup() {
+        try {
+            com.example.CherishApplication.instance.googleDriveBackupManager.triggerImmediateAutoBackup()
+        } catch (_: Exception) {}
+    }
+
     // Memories
     fun listenToMemories(): Flow<List<Memory>> = callbackFlow {
         val coupleId = getCoupleId()
@@ -98,6 +104,7 @@ class CoupleFeaturesRepository(
         } catch (e: Exception) {
             Log.w("CoupleFeaturesRepo", "Firestore save memory error", e)
         }
+        notifyAutoBackup()
     }
 
     suspend fun deleteMemory(memoryId: String) {
@@ -113,6 +120,7 @@ class CoupleFeaturesRepository(
         } catch (e: Exception) {
             // ignore
         }
+        notifyAutoBackup()
     }
 
     // Important Dates

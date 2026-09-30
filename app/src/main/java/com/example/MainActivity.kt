@@ -1,16 +1,23 @@
 package com.example
 
 import android.content.Context
+import android.content.pm.PackageManager
 import android.os.Build
 import android.graphics.Color as AndroidColor
 import android.os.Bundle
 import android.view.WindowManager
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
 import androidx.fragment.app.FragmentActivity
 import com.example.ui.navigation.CherishNavGraph
@@ -41,6 +48,32 @@ class MainActivity : FragmentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = Color.White
                 ) {
+                    val context = LocalContext.current
+                    val permissionsToRequest = remember {
+                        buildList {
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                add(android.Manifest.permission.POST_NOTIFICATIONS)
+                            }
+                            add(android.Manifest.permission.RECORD_AUDIO)
+                            add(android.Manifest.permission.CAMERA)
+                        }
+                    }
+
+                    val permissionLauncher = rememberLauncherForActivityResult(
+                        contract = ActivityResultContracts.RequestMultiplePermissions()
+                    ) { _ ->
+                        app.securityPreferences.setInitialPermissionsRequested(true)
+                    }
+
+                    LaunchedEffect(Unit) {
+                        val ungranted = permissionsToRequest.filter { perm ->
+                            ContextCompat.checkSelfPermission(context, perm) != PackageManager.PERMISSION_GRANTED
+                        }
+                        if (ungranted.isNotEmpty() && !app.securityPreferences.hasRequestedInitialPermissions()) {
+                            permissionLauncher.launch(ungranted.toTypedArray())
+                        }
+                    }
+
                     CherishNavGraph(app = app)
                 }
             }

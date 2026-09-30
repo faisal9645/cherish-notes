@@ -70,6 +70,7 @@ import kotlin.math.roundToInt
 fun FullScreenMediaViewer(
     mediaUrl: String,
     allMediaUrls: List<String> = emptyList(),
+    onShowInChat: ((url: String) -> Unit)? = null,
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
@@ -336,6 +337,23 @@ fun FullScreenMediaViewer(
                         }
 
                         Row(verticalAlignment = Alignment.CenterVertically) {
+                            if (onShowInChat != null) {
+                                IconButton(
+                                    onClick = {
+                                        onShowInChat(currentUrl)
+                                        onDismiss()
+                                    },
+                                    modifier = Modifier.testTag("full_screen_media_show_in_chat")
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Chat,
+                                        contentDescription = "Show in chat",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(22.dp)
+                                    )
+                                }
+                            }
+
                             // Share
                             IconButton(
                                 onClick = { shareImage() },

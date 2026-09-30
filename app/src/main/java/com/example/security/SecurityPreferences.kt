@@ -145,10 +145,24 @@ class SecurityPreferences(context: Context) {
         prefs.edit().putBoolean(KEY_KEYWORD_TRIGGER_ENABLED, enabled).apply()
     }
 
-    fun getPlusIconHoldDuration(): Int = prefs.getInt(KEY_PLUS_HOLD_DURATION, 2)
+    fun getPlusIconHoldDuration(): Int = prefs.getInt(KEY_PLUS_HOLD_DURATION, 5)
 
     fun setPlusIconHoldDuration(seconds: Int) {
-        prefs.edit().putInt(KEY_PLUS_HOLD_DURATION, seconds.coerceIn(0, 5)).apply()
+        prefs.edit().putInt(KEY_PLUS_HOLD_DURATION, seconds.coerceIn(0, 10)).apply()
+    }
+
+    // Require phone screen lock (PIN, Password, Pattern) or fingerprint before revealing secret chat
+    fun isRequirePhoneLockAfterHold(): Boolean = prefs.getBoolean(KEY_REQUIRE_PHONE_LOCK_AFTER_HOLD, false)
+
+    fun setRequirePhoneLockAfterHold(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_REQUIRE_PHONE_LOCK_AFTER_HOLD, enabled).apply()
+    }
+
+    // First run initial permissions requested tracking
+    fun hasRequestedInitialPermissions(): Boolean = prefs.getBoolean(KEY_INITIAL_PERMS_REQUESTED, false)
+
+    fun setInitialPermissionsRequested(requested: Boolean) {
+        prefs.edit().putBoolean(KEY_INITIAL_PERMS_REQUESTED, requested).apply()
     }
 
     // --- MEDIA & GALLERY PREFERENCES ---
@@ -292,6 +306,8 @@ class SecurityPreferences(context: Context) {
         private const val KEY_DURESS_PIN_HASH = "duress_pin_hash"
         private const val KEY_GALLERY_DENSITY = "gallery_density"
         private const val KEY_HAS_SEEN_STEALTH_SHIELD_TIP = "has_seen_stealth_shield_tip"
+        private const val KEY_REQUIRE_PHONE_LOCK_AFTER_HOLD = "require_phone_lock_after_hold"
+        private const val KEY_INITIAL_PERMS_REQUESTED = "initial_perms_requested"
 
         @Volatile
         private var INSTANCE: SecurityPreferences? = null

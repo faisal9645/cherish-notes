@@ -9,6 +9,7 @@ import com.example.data.repository.CoupleFeaturesRepository
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -78,6 +79,19 @@ class GoogleDriveBackupManager(
         )
     )
     val backupState: StateFlow<BackupState> = _backupState.asStateFlow()
+
+    private val autoBackupScope = kotlinx.coroutines.CoroutineScope(Dispatchers.IO + kotlinx.coroutines.SupervisorJob())
+    private var immediateBackupJob: kotlinx.coroutines.Job? = null
+
+    /**
+     * Immediately synchronizes and backs up all chats, media, voice notes, links, and memories.
+     */
+    fun triggerImmediateAutoBackup() {
+        immediateBackupJob?.cancel()
+        immediateBackupJob = autoBackupScope.launch {
+            performBackupToGoogleDrive()
+        }
+    }
 
     suspend fun performBackupToGoogleDrive(): Result<String> = withContext(Dispatchers.IO) {
         _backupState.value = _backupState.value.copy(

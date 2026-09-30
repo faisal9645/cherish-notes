@@ -42,7 +42,9 @@ data class ChatUiState(
     val pinnedMessage: Message? = null,
     val theaterVideoId: String? = null,
     val filterStarredOnly: Boolean = false,
-    val voicePlaybackSpeed: Float = 1.0f
+    val voicePlaybackSpeed: Float = 1.0f,
+    val isSecretHistoryRevealed: Boolean = false,
+    val targetScrollMessageId: String? = null
 )
 
 class ChatViewModel(
@@ -118,7 +120,7 @@ class ChatViewModel(
         val replyTo = _uiState.value.replyingToMessage
 
         viewModelScope.launch {
-            _uiState.update { it.copy(replyingToMessage = null) }
+            _uiState.update { it.copy(replyingToMessage = null, isSecretHistoryRevealed = true) }
             chatRepository.sendMessage(
                 text = trimmed,
                 type = MessageType.TEXT,
@@ -343,6 +345,32 @@ class ChatViewModel(
 
     fun closeFullScreenMedia() {
         _uiState.update { it.copy(fullScreenMediaUrl = null, fullScreenMediaType = null, allMediaUrlsForViewer = emptyList()) }
+    }
+
+    // --- SECRET HISTORY PROTECTION & RECOVERY ---
+    fun revealSecretHistory() {
+        _uiState.update { it.copy(isSecretHistoryRevealed = true) }
+    }
+
+    fun hideSecretHistory() {
+        _uiState.update { it.copy(isSecretHistoryRevealed = false) }
+    }
+
+    fun toggleSecretHistory() {
+        _uiState.update { it.copy(isSecretHistoryRevealed = !it.isSecretHistoryRevealed) }
+    }
+
+    fun navigateToMessageInChat(messageId: String) {
+        _uiState.update {
+            it.copy(
+                isSecretHistoryRevealed = true,
+                targetScrollMessageId = messageId
+            )
+        }
+    }
+
+    fun clearTargetScrollMessageId() {
+        _uiState.update { it.copy(targetScrollMessageId = null) }
     }
 
     // --- STEALTH PRIVACY SHIELD (Hide previous chats with secret gesture) ---

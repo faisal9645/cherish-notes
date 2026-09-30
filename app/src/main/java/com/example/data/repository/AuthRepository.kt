@@ -718,10 +718,22 @@ class AuthRepository(private val context: Context) {
 
     private fun updateFcmToken(uid: String) {
         try {
-            FirebaseMessaging.getInstance().token.addOnSuccessListener { token ->
-                firestore?.collection("users")?.document(uid)?.update("fcmToken", token)
+            val availability = com.google.android.gms.common.GoogleApiAvailability.getInstance()
+                .isGooglePlayServicesAvailable(context)
+            if (availability != com.google.android.gms.common.ConnectionResult.SUCCESS) {
+                Log.d("AuthRepository", "Play Services not available for FCM ($availability)")
+                return
             }
-        } catch (e: Exception) {
+
+            val messaging = FirebaseMessaging.getInstance()
+            messaging.token
+                .addOnSuccessListener { token ->
+                    firestore?.collection("users")?.document(uid)?.update("fcmToken", token)
+                }
+                .addOnFailureListener { e ->
+                    Log.w("AuthRepository", "FCM token registration failed gracefully: ${e.message}")
+                }
+        } catch (e: Throwable) {
             Log.w("AuthRepository", "FCM token registration skipped", e)
         }
     }

@@ -146,9 +146,15 @@ class ChatRepository(
                 )
                 convRef.set(summary, com.google.firebase.firestore.SetOptions.merge()).await()
             }
+            try {
+                com.example.CherishApplication.instance.googleDriveBackupManager.triggerImmediateAutoBackup()
+            } catch (_: Exception) {}
             Result.success(newMessage)
         } catch (e: Exception) {
             Log.e("ChatRepository", "Error sending message to Firestore", e)
+            try {
+                com.example.CherishApplication.instance.googleDriveBackupManager.triggerImmediateAutoBackup()
+            } catch (_: Exception) {}
             Result.success(newMessage) // preserved locally
         }
     }
