@@ -15,6 +15,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -59,7 +60,7 @@ fun AvatarView(
                     val bitmap = android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
                     if (bitmap != null) {
                         androidx.compose.foundation.Image(
-                            bitmap = androidx.compose.ui.graphics.asImageBitmap(bitmap),
+                            bitmap = bitmap.asImageBitmap(),
                             contentDescription = "$name's avatar",
                             contentScale = ContentScale.Crop,
                             modifier = Modifier.fillMaxSize()
