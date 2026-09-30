@@ -107,7 +107,9 @@ fun ChatScreen(
         contract = ActivityResultContracts.RequestPermission()
     ) { isGranted ->
         if (isGranted) {
-            viewModel.startVoiceRecording()
+            Toast.makeText(context, "Microphone enabled! Hold mic to record", Toast.LENGTH_SHORT).show()
+        } else {
+            Toast.makeText(context, "Microphone permission is required for voice notes", Toast.LENGTH_LONG).show()
         }
     }
 

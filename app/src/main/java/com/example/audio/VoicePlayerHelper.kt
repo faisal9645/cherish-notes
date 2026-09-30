@@ -3,6 +3,7 @@ package com.example.audio
 import android.content.Context
 import android.media.MediaPlayer
 import android.net.Uri
+import android.util.Base64
 import android.util.Log
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -83,50 +84,66 @@ class VoicePlayerHelper(private val context: Context) {
         _isPlaying.value = true // Set immediately so icon changes to Pause/Loading instantly
 
         try {
-            mediaPlayer = MediaPlayer().apply {
-                if (audioUriOrUrl.startsWith("http://") || audioUriOrUrl.startsWith("https://")) {
-                    setDataSource(audioUriOrUrl)
-                } else if (audioUriOrUrl.startsWith("file://")) {
-                    val path = Uri.parse(audioUriOrUrl).path
-                    if (path != null && File(path).exists()) {
-                        setDataSource(path)
-                    } else {
-                        setDataSource(context, Uri.parse(audioUriOrUrl))
-                    }
-                } else if (File(audioUriOrUrl).exists()) {
-                    setDataSource(audioUriOrUrl)
-                } else {
-                    setDataSource(context, Uri.parse(audioUriOrUrl))
-                }
+            val player = MediaPlayer()
+            mediaPlayer = player
 
-                prepareAsync()
-                setOnPreparedListener { mp ->
-                    if (_currentTrackId.value != messageId) {
-                        mp.release()
-                        return@setOnPreparedListener
+            // Support Base64 data URIs (e.g. data:audio/m4a;base64,...)
+            if (audioUriOrUrl.startsWith("data:") || audioUriOrUrl.contains(";base64,")) {
+                val cacheDir = File(context.cacheDir, "voice_cache").apply { mkdirs() }
+                val safeFileName = "voice_" + Math.abs(messageId.hashCode()).toString() + ".m4a"
+                val cachedFile = File(cacheDir, safeFileName)
+                if (!cachedFile.exists() || cachedFile.length() == 0L) {
+                    val base64Part = if (audioUriOrUrl.contains(",")) {
+                        audioUriOrUrl.substringAfter(",")
+                    } else {
+                        audioUriOrUrl
                     }
-                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
-                        try {
-                            mp.playbackParams = mp.playbackParams.setSpeed(_playbackSpeed.value)
-                        } catch (_: Exception) {}
-                    }
-                    mp.start()
-                    _isPlaying.value = true
-                    startProgressTracker(mp, onCompletion)
+                    val audioBytes = Base64.decode(base64Part, Base64.DEFAULT)
+                    cachedFile.writeBytes(audioBytes)
                 }
-                setOnCompletionListener {
-                    _isPlaying.value = false
-                    _playbackProgress.value = 0f
-                    _currentPositionSec.value = 0
-                    _currentTrackId.value = null
-                    progressJob?.cancel()
-                    onCompletion()
+                player.setDataSource(cachedFile.absolutePath)
+            } else if (audioUriOrUrl.startsWith("http://") || audioUriOrUrl.startsWith("https://")) {
+                player.setDataSource(audioUriOrUrl)
+            } else if (audioUriOrUrl.startsWith("file://")) {
+                val path = Uri.parse(audioUriOrUrl).path
+                if (path != null && File(path).exists()) {
+                    player.setDataSource(path)
+                } else {
+                    player.setDataSource(context, Uri.parse(audioUriOrUrl))
                 }
-                setOnErrorListener { _, what, extra ->
-                    Log.e("VoicePlayerHelper", "MediaPlayer error: $what, $extra")
-                    stop()
-                    false
+            } else if (File(audioUriOrUrl).exists()) {
+                player.setDataSource(audioUriOrUrl)
+            } else {
+                player.setDataSource(context, Uri.parse(audioUriOrUrl))
+            }
+
+            player.prepareAsync()
+            player.setOnPreparedListener { mp ->
+                if (_currentTrackId.value != messageId) {
+                    mp.release()
+                    return@setOnPreparedListener
                 }
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+                    try {
+                        mp.playbackParams = mp.playbackParams.setSpeed(_playbackSpeed.value)
+                    } catch (_: Exception) {}
+                }
+                mp.start()
+                _isPlaying.value = true
+                startProgressTracker(mp, onCompletion)
+            }
+            player.setOnCompletionListener {
+                _isPlaying.value = false
+                _playbackProgress.value = 0f
+                _currentPositionSec.value = 0
+                _currentTrackId.value = null
+                progressJob?.cancel()
+                onCompletion()
+            }
+            player.setOnErrorListener { _, what, extra ->
+                Log.e("VoicePlayerHelper", "MediaPlayer error: $what, $extra")
+                stop()
+                true
             }
         } catch (e: Exception) {
             Log.e("VoicePlayerHelper", "Failed to play audio", e)

@@ -27,6 +27,8 @@ class VoiceRecorderHelper(private val context: Context) {
 
     fun startRecording(): File? {
         try {
+            cancelRecording() // Clean up any previous session
+
             val audioDir = File(context.cacheDir, "voice_notes").apply { mkdirs() }
             val outputFile = File(audioDir, "voice_${System.currentTimeMillis()}.m4a")
             currentOutputFile = outputFile
@@ -40,7 +42,7 @@ class VoiceRecorderHelper(private val context: Context) {
                 setAudioSource(MediaRecorder.AudioSource.MIC)
                 setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
                 setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
-                setAudioEncodingBitRate(128000)
+                setAudioEncodingBitRate(32000)
                 setAudioSamplingRate(44100)
                 setOutputFile(outputFile.absolutePath)
                 prepare()
@@ -54,7 +56,7 @@ class VoiceRecorderHelper(private val context: Context) {
 
             recordingJob = CoroutineScope(Dispatchers.IO).launch {
                 val ampList = mutableListOf<Float>()
-                while (_isRecording.value) {
+                while (_isRecording.value && isActive) {
                     val duration = ((System.currentTimeMillis() - startTimeMillis) / 1000).toInt()
                     _recordingDurationSec.value = duration
 
@@ -87,12 +89,14 @@ class VoiceRecorderHelper(private val context: Context) {
         recordingJob = null
 
         try {
-            recorder?.apply {
-                stop()
-                release()
-            }
+            recorder?.stop()
         } catch (e: Exception) {
-            Log.e("VoiceRecorderHelper", "Error stopping recorder", e)
+            Log.w("VoiceRecorderHelper", "Error stopping recorder", e)
+        }
+        try {
+            recorder?.release()
+        } catch (e: Exception) {
+            Log.w("VoiceRecorderHelper", "Error releasing recorder", e)
         }
         recorder = null
 
@@ -118,13 +122,11 @@ class VoiceRecorderHelper(private val context: Context) {
         recordingJob = null
 
         try {
-            recorder?.apply {
-                stop()
-                release()
-            }
-        } catch (e: Exception) {
-            // ignore cleanup errors
-        }
+            recorder?.stop()
+        } catch (_: Exception) {}
+        try {
+            recorder?.release()
+        } catch (_: Exception) {}
         recorder = null
 
         currentOutputFile?.let {

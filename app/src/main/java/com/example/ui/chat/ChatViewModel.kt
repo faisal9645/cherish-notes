@@ -211,12 +211,15 @@ class ChatViewModel(
     }
 
     fun startVoiceRecording() {
-        authRepository.setRecordingAudio(true)
-        voiceRecorderHelper.startRecording()
+        val file = voiceRecorderHelper.startRecording()
+        if (file != null) {
+            authRepository.setRecordingAudio(true)
+        }
     }
 
     fun stopAndSendVoiceRecording() {
         authRepository.setRecordingAudio(false)
+        val amplitudesSnapshot = voiceRecorderHelper.amplitudes.value.toList()
         val (file, duration) = voiceRecorderHelper.stopRecording()
         if (file != null && duration > 0) {
             viewModelScope.launch {
@@ -233,7 +236,7 @@ class ChatViewModel(
                         type = MessageType.AUDIO,
                         mediaUrl = downloadUrl,
                         durationSeconds = duration,
-                        waveform = voiceRecorderHelper.amplitudes.value
+                        waveform = if (amplitudesSnapshot.isNotEmpty()) amplitudesSnapshot else listOf(0.3f, 0.6f, 0.4f, 0.7f, 0.5f)
                     )
                 }
             }
@@ -274,7 +277,8 @@ class ChatViewModel(
     }
 
     fun toggleVoiceSpeed() {
-        voicePlayerHelper.togglePlaybackSpeed()
+        val newSpeed = voicePlayerHelper.togglePlaybackSpeed()
+        _uiState.update { it.copy(voicePlaybackSpeed = newSpeed) }
     }
 
     fun openTheaterVideo(videoId: String) {

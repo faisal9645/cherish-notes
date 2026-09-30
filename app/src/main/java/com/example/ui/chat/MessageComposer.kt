@@ -190,10 +190,8 @@ fun MessageComposer(
                 .padding(horizontal = 8.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            // LEFT / CENTER AREA
             if (isRecordingVoice) {
-                // ==========================================
-                // TELEGRAM / WHATSAPP RECORDING INTERFACE
-                // ==========================================
                 if (isLockedRecording) {
                     // --- Case 1: Locked Hands-Free Recording Mode ---
                     IconButton(
@@ -244,32 +242,8 @@ fun MessageComposer(
                             modifier = Modifier.weight(1f)
                         )
                     }
-
-                    Spacer(modifier = Modifier.width(8.dp))
-
-                    // Send Button for locked mode
-                    Box(
-                        modifier = Modifier
-                            .size(46.dp)
-                            .appGradientShadow(CircleShape)
-                            .clip(CircleShape)
-                            .background(appHorizontalGradient())
-                            .clickable {
-                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                onStopAndSendVoiceRecord()
-                            }
-                            .testTag("composer_send_locked_voice_button"),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Send,
-                            contentDescription = "Send voice note",
-                            tint = Color.White,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
                 } else {
-                    // --- Case 2: Active Hold-to-Record Mode with Slide-to-Cancel & Slide-up-to-Lock ---
+                    // --- Case 2: Active Hold-to-Record Mode with Slide-to-Cancel ---
                     Row(
                         modifier = Modifier
                             .weight(1f)
@@ -332,104 +306,9 @@ fun MessageComposer(
                             }
                         }
                     }
-
-                    Spacer(modifier = Modifier.width(8.dp))
-
-                    // Elevated Animated Mic Button with Lock Pill overhead
-                    Box(contentAlignment = Alignment.Center) {
-                        // Lock pill overhead
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            modifier = Modifier
-                                .offset(y = (-56).dp)
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(Color.White)
-                                .border(BorderStroke(1.dp, Color(0xFFE8E8EC)), RoundedCornerShape(12.dp))
-                                .padding(horizontal = 8.dp, vertical = 4.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Lock,
-                                contentDescription = null,
-                                tint = RoseGoldPrimary,
-                                modifier = Modifier.size(14.dp)
-                            )
-                            Icon(
-                                imageVector = Icons.Default.KeyboardArrowUp,
-                                contentDescription = null,
-                                tint = RoseGoldPrimary,
-                                modifier = Modifier.size(14.dp)
-                            )
-                        }
-
-                        // The Pulsing Mic Button being held
-                        Box(
-                            modifier = Modifier
-                                .scale(micScale)
-                                .size(48.dp)
-                                .appGradientShadow(CircleShape)
-                                .clip(CircleShape)
-                                .background(appHorizontalGradient())
-                                .pointerInput(Unit) {
-                                    awaitEachGesture {
-                                        val down = awaitFirstDown(requireUnconsumed = false)
-                                        down.consume()
-                                        val startTime = System.currentTimeMillis()
-                                        dragOffsetX = 0f
-                                        dragOffsetY = 0f
-
-                                        var cancelled = false
-
-                                        while (true) {
-                                            val event = awaitPointerEvent()
-                                            val change = event.changes.firstOrNull { it.id == down.id }
-                                            if (change == null || !change.pressed) {
-                                                break
-                                            }
-                                            val delta = change.position - down.position
-                                            dragOffsetX = delta.x.coerceAtMost(0f)
-                                            dragOffsetY = delta.y.coerceAtMost(0f)
-
-                                            if (dragOffsetY < -140f && !isLockedRecording) {
-                                                isLockedRecording = true
-                                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                                break
-                                            }
-
-                                            if (dragOffsetX < -180f && !cancelled) {
-                                                cancelled = true
-                                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                            }
-                                        }
-
-                                        val elapsed = System.currentTimeMillis() - startTime
-                                        if (isLockedRecording) {
-                                            // User locked by sliding up
-                                        } else if (cancelled || dragOffsetX < -180f) {
-                                            onCancelVoiceRecord()
-                                        } else if (elapsed < 400L) {
-                                            onCancelVoiceRecord()
-                                            Toast.makeText(context, "Hold to record, release to send", Toast.LENGTH_SHORT).show()
-                                        } else {
-                                            onStopAndSendVoiceRecord()
-                                        }
-                                    }
-                                }
-                                .testTag("composer_holding_mic_button"),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Mic,
-                                contentDescription = "Holding to record",
-                                tint = Color.White,
-                                modifier = Modifier.size(24.dp)
-                            )
-                        }
-                    }
                 }
             } else {
-                // ==========================================
-                // NORMAL TEXT INPUT & ATTACHMENTS INTERFACE
-                // ==========================================
+                // --- Normal Text Input & Media Tools ---
                 Row(
                     modifier = Modifier
                         .weight(1f)
@@ -508,35 +387,102 @@ fun MessageComposer(
                         )
                     }
                 }
+            }
 
-                Spacer(modifier = Modifier.width(6.dp))
+            Spacer(modifier = Modifier.width(6.dp))
 
-                // Send or Voice Mic action button
-                if (text.isNotBlank()) {
-                    Box(
-                        modifier = Modifier
-                            .size(46.dp)
-                            .appGradientShadow(CircleShape)
-                            .clip(CircleShape)
-                            .background(appHorizontalGradient())
-                            .clickable { onSendText() }
-                            .testTag("composer_send_button"),
-                        contentAlignment = Alignment.Center
+            // RIGHT ACTION BUTTON
+            if (text.isNotBlank()) {
+                // Case A: Send Text Button
+                Box(
+                    modifier = Modifier
+                        .size(46.dp)
+                        .appGradientShadow(CircleShape)
+                        .clip(CircleShape)
+                        .background(appHorizontalGradient())
+                        .clickable { onSendText() }
+                        .testTag("composer_send_button"),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Send,
+                        contentDescription = "Send message",
+                        tint = Color.White,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            } else if (isRecordingVoice && isLockedRecording) {
+                // Case B: Send Locked Voice Note Button
+                Box(
+                    modifier = Modifier
+                        .size(46.dp)
+                        .appGradientShadow(CircleShape)
+                        .clip(CircleShape)
+                        .background(appHorizontalGradient())
+                        .clickable {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            onStopAndSendVoiceRecord()
+                        }
+                        .testTag("composer_send_locked_voice_button"),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Send,
+                        contentDescription = "Send voice note",
+                        tint = Color.White,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            } else {
+                // Case C: Persistent Hold-to-Record Mic Button with Lock Pill Overhead
+                Box(contentAlignment = Alignment.Center) {
+                    // Lock pill overhead
+                    androidx.compose.animation.AnimatedVisibility(
+                        visible = isRecordingVoice,
+                        enter = fadeIn() + slideInVertically { it / 2 },
+                        exit = fadeOut() + slideOutVertically { it / 2 }
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Send,
-                            contentDescription = "Send message",
-                            tint = Color.White,
-                            modifier = Modifier.size(20.dp)
-                        )
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier
+                                .offset(y = (-56).dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(Color.White)
+                                .border(BorderStroke(1.dp, Color(0xFFE8E8EC)), RoundedCornerShape(12.dp))
+                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Lock,
+                                contentDescription = null,
+                                tint = RoseGoldPrimary,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Icon(
+                                imageVector = Icons.Default.KeyboardArrowUp,
+                                contentDescription = null,
+                                tint = RoseGoldPrimary,
+                                modifier = Modifier.size(14.dp)
+                            )
+                        }
                     }
-                } else {
-                    // Hold to Record Mic Button
+
+                    // Pulsing/Reactive Mic Button (Never destroyed mid-gesture!)
                     Box(
                         modifier = Modifier
+                            .scale(micScale)
                             .size(46.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.primaryContainer)
+                            .then(
+                                if (isRecordingVoice) {
+                                    Modifier
+                                        .appGradientShadow(CircleShape)
+                                        .clip(CircleShape)
+                                        .background(appHorizontalGradient())
+                                } else {
+                                    Modifier
+                                        .clip(CircleShape)
+                                        .background(MaterialTheme.colorScheme.primaryContainer)
+                                }
+                            )
                             .pointerInput(Unit) {
                                 awaitEachGesture {
                                     val down = awaitFirstDown(requireUnconsumed = false)
@@ -559,13 +505,13 @@ fun MessageComposer(
                                         dragOffsetX = delta.x.coerceAtMost(0f)
                                         dragOffsetY = delta.y.coerceAtMost(0f)
 
-                                        if (dragOffsetY < -140f && !isLockedRecording) {
+                                        if (dragOffsetY < -120f && !isLockedRecording) {
                                             isLockedRecording = true
                                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                             break
                                         }
 
-                                        if (dragOffsetX < -180f && !cancelled) {
+                                        if (dragOffsetX < -160f && !cancelled) {
                                             cancelled = true
                                             haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                         }
@@ -573,8 +519,8 @@ fun MessageComposer(
 
                                     val elapsed = System.currentTimeMillis() - startTime
                                     if (isLockedRecording) {
-                                        // User locked by sliding up
-                                    } else if (cancelled || dragOffsetX < -180f) {
+                                        // User locked into hands-free mode
+                                    } else if (cancelled || dragOffsetX < -160f) {
                                         onCancelVoiceRecord()
                                     } else if (elapsed < 400L) {
                                         onCancelVoiceRecord()
@@ -590,8 +536,8 @@ fun MessageComposer(
                         Icon(
                             imageVector = Icons.Default.Mic,
                             contentDescription = "Hold to record voice note",
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(22.dp)
+                            tint = if (isRecordingVoice) Color.White else MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(if (isRecordingVoice) 24.dp else 22.dp)
                         )
                     }
                 }

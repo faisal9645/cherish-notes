@@ -31,15 +31,19 @@ fun WaveformView(
         val barWidth = 3.dp.toPx()
         val spacing = (size.width - (totalBars * barWidth)) / (totalBars - 1).coerceAtLeast(1)
 
-        val samples = if (amplitudes.isEmpty()) {
+        val safeAmplitudes = runCatching {
+            (amplitudes as? List<*>)?.mapNotNull { (it as? Number)?.toFloat() } ?: emptyList()
+        }.getOrDefault(emptyList())
+
+        val samples = if (safeAmplitudes.isEmpty()) {
             List(totalBars) { index ->
                 (kotlin.math.sin(index * 0.4f) * 0.4f + 0.5f).coerceIn(0.2f, 0.9f)
             }
         } else {
             // Sample or interpolate amplitudes to totalBars
             List(totalBars) { i ->
-                val srcIdx = ((i.toFloat() / totalBars) * amplitudes.size).toInt().coerceIn(0, amplitudes.lastIndex)
-                amplitudes[srcIdx]
+                val srcIdx = ((i.toFloat() / totalBars) * safeAmplitudes.size).toInt().coerceIn(0, safeAmplitudes.lastIndex)
+                safeAmplitudes[srcIdx]
             }
         }
 

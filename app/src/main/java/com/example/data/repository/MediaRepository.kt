@@ -214,13 +214,32 @@ class MediaRepository(private val context: Context) {
                 val downloadUrl = storageRef.downloadUrl.await().toString()
                 Result.success(downloadUrl)
             } else {
-                // Local fallback URI
-                onProgress(1.0f)
+                fallbackToInlineOrLocal(file, type, onProgress)
+            }
+        } catch (e: Exception) {
+            Log.w("MediaRepository", "Failed to upload file to Cloud Storage, using robust data fallback", e)
+            fallbackToInlineOrLocal(file, type, onProgress)
+        }
+    }
+
+    private fun fallbackToInlineOrLocal(file: File, type: MessageType, onProgress: (Float) -> Unit): Result<String> {
+        onProgress(1.0f)
+        return try {
+            if (type == MessageType.AUDIO && file.exists() && file.length() < 750 * 1024) {
+                // High compression voice note: encode as base64 data URI so recipient receives it directly through Firestore
+                val bytes = file.readBytes()
+                val base64 = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+                Result.success("data:audio/m4a;base64,$base64")
+            } else if (type == MessageType.IMAGE && file.exists() && file.length() < 500 * 1024) {
+                // Small compressed image: encode as base64 data URI
+                val bytes = file.readBytes()
+                val base64 = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+                Result.success("data:image/jpeg;base64,$base64")
+            } else {
                 Result.success(Uri.fromFile(file).toString())
             }
         } catch (e: Exception) {
-            Log.e("MediaRepository", "Failed to upload file to Cloud Storage", e)
-            // Graceful fallback to file uri for testing
+            Log.e("MediaRepository", "Fallback encoding failed", e)
             Result.success(Uri.fromFile(file).toString())
         }
     }
