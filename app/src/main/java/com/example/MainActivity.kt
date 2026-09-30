@@ -92,6 +92,24 @@ class MainActivity : FragmentActivity() {
     }
 
     private var lastBackgroundTimestamp: Long = 0L
+    private var disguiseView: android.view.View? = null
+
+    private fun showRecentsDisguise() {
+        if (disguiseView == null) {
+            disguiseView = android.view.LayoutInflater.from(this).inflate(R.layout.layout_recents_disguise, null)
+        }
+        val decorView = window.decorView as? android.view.ViewGroup
+        if (disguiseView?.parent == null) {
+            decorView?.addView(disguiseView)
+        }
+    }
+
+    private fun hideRecentsDisguise() {
+        val decorView = window.decorView as? android.view.ViewGroup
+        disguiseView?.let { view ->
+            decorView?.removeView(view)
+        }
+    }
 
     override fun onResume() {
         super.onResume()
@@ -100,6 +118,7 @@ class MainActivity : FragmentActivity() {
         app.authRepository.onAppForegroundStateChanged(true)
         // Reset the ignore flag when returning to the app
         app.securityPreferences.ignoreNextPause = false
+        hideRecentsDisguise()
     }
 
     override fun onPause() {
@@ -114,14 +133,19 @@ class MainActivity : FragmentActivity() {
             if (app.securityPreferences.hasPin() && app.securityPreferences.isAppLockEnabled()) {
                 app.securityPreferences.lockApp()
             }
+            
+            // Show Native Notes layout over the screen for the Recents Snapshot
+            showRecentsDisguise()
         }
 
-        // Ensure recent-apps preview is redacted when leaving secret mode
-        if (app.securityPreferences.isScreenshotProtectionEnabled() || !app.securityPreferences.isDisguiseActive.value) {
+        // Ensure recent-apps preview is redacted when leaving secret mode (unless showing the fake notes overlay)
+        if (app.securityPreferences.isScreenshotProtectionEnabled()) {
             window.setFlags(
                 WindowManager.LayoutParams.FLAG_SECURE,
                 WindowManager.LayoutParams.FLAG_SECURE
             )
+        } else {
+            window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
         }
     }
 
@@ -141,6 +165,7 @@ class MainActivity : FragmentActivity() {
     override fun onDestroy() {
         super.onDestroy()
         app.authRepository.onAppForegroundStateChanged(false)
+        hideRecentsDisguise()
     }
 
     private fun applyScreenshotProtection() {

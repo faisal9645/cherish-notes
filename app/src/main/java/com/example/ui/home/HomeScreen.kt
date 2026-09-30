@@ -6,8 +6,10 @@ import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -93,8 +95,8 @@ fun HomeScreen(
 
     Scaffold(
         modifier = Modifier.pointerInput(Unit) {
-            androidx.compose.foundation.gestures.detectHorizontalDragGestures(
-                onDragStart = { dragAccumulator = 0f },
+            detectHorizontalDragGestures(
+                onDragStart = { _ -> dragAccumulator = 0f },
                 onDragEnd = {
                     if (dragAccumulator < -80f) {
                         onNavigateToChat()

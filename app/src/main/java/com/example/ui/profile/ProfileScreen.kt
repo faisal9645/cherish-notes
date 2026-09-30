@@ -12,12 +12,14 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.core.content.FileProvider
 import java.io.File
 import androidx.compose.material.icons.Icons
@@ -130,8 +132,8 @@ fun ProfileScreen(
 
     Scaffold(
         modifier = Modifier.pointerInput(Unit) {
-            androidx.compose.foundation.gestures.detectHorizontalDragGestures(
-                onDragStart = { dragAccumulator = 0f },
+            detectHorizontalDragGestures(
+                onDragStart = { _ -> dragAccumulator = 0f },
                 onDragEnd = {
                     if (dragAccumulator > 80f) {
                         onNavigateBack()
@@ -235,12 +237,28 @@ fun ProfileScreen(
 
                     Spacer(modifier = Modifier.height(14.dp))
 
-                    Text(
-                        text = user?.displayName?.ifBlank { "My Account" } ?: "My Account",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
+                    Row(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable { showEditProfileDialog = true }
+                            .padding(horizontal = 12.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Text(
+                            text = user?.displayName?.ifBlank { "My Account" } ?: "My Account",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Icon(
+                            Icons.Default.Edit,
+                            contentDescription = "Edit Profile",
+                            tint = RoseGoldPrimary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
 
                     Text(
                         text = user?.email ?: "",
@@ -667,7 +685,7 @@ fun ProfileScreen(
                             .fillMaxWidth()
                             .padding(horizontal = 16.dp, vertical = 4.dp)
                             .clip(RoundedCornerShape(12.dp))
-                            .background(Color(0xFFF4F4F8))
+                            .background(MaterialTheme.colorScheme.surfaceVariant)
                             .padding(4.dp),
                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
@@ -702,7 +720,7 @@ fun ProfileScreen(
                     // Chat Background Theme Selector
                     ListItem(
                         headlineContent = { Text("Chat Background") },
-                        supportingContent = { Text("Select background style for chats") },
+                        supportingContent = { Text("Select wallpaper style for both Day & Night modes") },
                         leadingContent = { Icon(Icons.Default.Wallpaper, contentDescription = null, tint = RoseGoldPrimary) }
                     )
                     Row(
@@ -710,13 +728,14 @@ fun ProfileScreen(
                             .fillMaxWidth()
                             .padding(horizontal = 16.dp, vertical = 4.dp)
                             .clip(RoundedCornerShape(12.dp))
-                            .background(Color(0xFFF4F4F8))
+                            .background(MaterialTheme.colorScheme.surfaceVariant)
                             .padding(4.dp),
                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         listOf(
                             0 to "Normal",
-                            1 to "Theme 1"
+                            1 to "Theme 1",
+                            2 to "Theme 2"
                         ).forEach { (theme, label) ->
                             val isSelected = uiState.chatBgTheme == theme
                             Box(

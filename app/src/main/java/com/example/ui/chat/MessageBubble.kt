@@ -18,8 +18,10 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
@@ -83,16 +85,18 @@ fun MessageBubble(
         RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp, bottomStart = 4.dp, bottomEnd = 18.dp)
     }
 
+    val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+
     val bubbleBg = if (isFromMe) {
         MaterialTheme.colorScheme.primary
     } else {
-        MaterialTheme.colorScheme.surfaceVariant
+        if (isDark) MaterialTheme.colorScheme.surfaceVariant else Color.White
     }
 
     val textColor = if (isFromMe) {
         MaterialTheme.colorScheme.onPrimary
     } else {
-        MaterialTheme.colorScheme.onSurfaceVariant
+        if (isDark) MaterialTheme.colorScheme.onSurfaceVariant else Color(0xFF1E2024)
     }
 
     val scope = rememberCoroutineScope()
@@ -191,16 +195,20 @@ fun MessageBubble(
                     .widthIn(min = 80.dp, max = 310.dp)
                     .then(
                         if (isFromMe) Modifier.appGradientShadow(bubbleShape)
-                        else Modifier
+                        else Modifier.shadow(1.dp, bubbleShape)
                     )
                     .clip(bubbleShape)
                     .then(
                         if (isHighlighted) Modifier.border(BorderStroke(2.dp, RoseGoldPrimary), bubbleShape)
+                        else if (!isFromMe) Modifier.border(
+                            BorderStroke(0.6.dp, if (isDark) Color(0xFF2E3342) else Color(0xFFE2E6EE)),
+                            bubbleShape
+                        )
                         else Modifier
                     )
                     .background(
                         if (isFromMe) appHorizontalGradient()
-                        else androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.surfaceVariant)
+                        else androidx.compose.ui.graphics.SolidColor(bubbleBg)
                     )
                     .pointerInput(message.id) {
                         detectTapGestures(

@@ -377,7 +377,7 @@ class AuthRepository(private val context: Context) {
             } else if (photoUrl != null) {
                 updates["photoUrl"] = photoUrl
             }
-            firestore?.collection("users")?.document(uid)?.update(updates as Map<String, Any>)
+            firestore?.collection("users")?.document(uid)?.set(updates as Map<String, Any>, com.google.firebase.firestore.SetOptions.merge())?.await()
             Result.success(Unit)
         } catch (e: Exception) {
             Log.w("AuthRepository", "Failed to update profile in Firestore, local update kept", e)

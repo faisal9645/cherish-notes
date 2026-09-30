@@ -22,6 +22,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.material.icons.Icons
@@ -300,8 +301,8 @@ fun ChatScreen(
 
     Scaffold(
         modifier = Modifier.pointerInput(Unit) {
-            androidx.compose.foundation.gestures.detectHorizontalDragGestures(
-                onDragStart = { dragAccumulator = 0f },
+            detectHorizontalDragGestures(
+                onDragStart = { _ -> dragAccumulator = 0f },
                 onDragEnd = {
                     if (dragAccumulator > 80f) {
                         // Swipe Right -> Home
@@ -699,7 +700,7 @@ fun ChatScreen(
                             text = "Showing starred messages only (${displayedMessages.size})",
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Medium,
-                            color = DarkOnBackground,
+                            color = MaterialTheme.colorScheme.onSurface,
                             modifier = Modifier.weight(1f)
                         )
                         TextButton(onClick = { viewModel.toggleFilterStarred() }) {
@@ -729,20 +730,19 @@ fun ChatScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f)
-                    .then(
-                        if (uiState.chatBgTheme == 1 && !uiState.isStealthCurtainActive) {
-                            Modifier.paint(
-                                painter = androidx.compose.ui.res.painterResource(id = com.example.R.drawable.chat_bg_theme1),
-                                contentScale = androidx.compose.ui.layout.ContentScale.Crop
-                            )
-                        } else Modifier
-                    )
             ) {
-            if (uiState.isStealthCurtainActive) {
-                // Emergency Privacy Shield: Harmless daily notes / tasks view hiding all previous chat
-                StealthDisguiseNotesView(
-                    onRestore = onQuickDisguise
-                )
+                if (!uiState.isStealthCurtainActive) {
+                    ChatWallpaper(
+                        chatBgTheme = uiState.chatBgTheme,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+
+                if (uiState.isStealthCurtainActive) {
+                    // Emergency Privacy Shield: Harmless daily notes / tasks view hiding all previous chat
+                    StealthDisguiseNotesView(
+                        onRestore = onQuickDisguise
+                    )
             } else {
                 val reversedMessages = displayedMessages.reversed()
                 LazyColumn(
@@ -872,8 +872,8 @@ fun ChatScreen(
                         ) {
                             Surface(
                                 shape = RoundedCornerShape(16.dp),
-                                color = SoftPinkSurfaceVariant,
-                                border = BorderStroke(1.dp, SoftBorderOutline),
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.85f),
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Column(
@@ -892,14 +892,14 @@ fun ChatScreen(
                                             text = "Strictly 2-Person Private Channel",
                                             fontWeight = FontWeight.Bold,
                                             fontSize = 12.sp,
-                                            color = DarkOnBackground
+                                            color = MaterialTheme.colorScheme.onSurface
                                         )
                                     }
                                     Spacer(modifier = Modifier.height(4.dp))
                                     Text(
                                         text = "Messages, voice notes, and photos are strictly between you and $partnerName. No third parties can ever join or view this chat.",
                                         fontSize = 11.sp,
-                                        color = DarkOnSurfaceVariant,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                                         lineHeight = 15.sp
                                     )
@@ -955,7 +955,6 @@ fun ChatScreen(
                         }
                     }
                 }
-            }
 
             // Floating scroll to bottom button
             val showScrollButton by remember {
@@ -1350,7 +1349,7 @@ fun MutualConsentDeletionBanner(
                     text = "Mutual Consent Chat Deletion",
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Bold,
-                    color = DarkOnBackground
+                    color = MaterialTheme.colorScheme.onSurface
                 )
             }
 
@@ -1360,7 +1359,7 @@ fun MutualConsentDeletionBanner(
                 Text(
                     text = "You requested to clear this chat. Waiting for $partnerName to accept. Both of you must agree before messages can be deleted.",
                     fontSize = 12.sp,
-                    color = DarkOnSurfaceVariant,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     lineHeight = 16.sp
                 )
                 Spacer(modifier = Modifier.height(10.dp))
@@ -1375,7 +1374,7 @@ fun MutualConsentDeletionBanner(
                 Text(
                     text = "$partnerName requested to clear the chat history. Under mutual protection, deletion will only happen if you accept.",
                     fontSize = 12.sp,
-                    color = DarkOnBackground,
+                    color = MaterialTheme.colorScheme.onSurface,
                     lineHeight = 16.sp
                 )
                 Spacer(modifier = Modifier.height(10.dp))
