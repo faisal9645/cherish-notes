@@ -377,7 +377,7 @@ class AuthRepository(private val context: Context) {
             } else if (photoUrl != null) {
                 updates["photoUrl"] = photoUrl
             }
-            firestore?.collection("users")?.document(uid)?.update(updates as Map<String, Any>)?.await()
+            firestore?.collection("users")?.document(uid)?.update(updates as Map<String, Any>)
             Result.success(Unit)
         } catch (e: Exception) {
             Log.w("AuthRepository", "Failed to update profile in Firestore, local update kept", e)
@@ -424,7 +424,7 @@ class AuthRepository(private val context: Context) {
                     "partnerId" to partnerId,
                     "coupleId" to coupleId
                 )
-                fs.collection("users").document(uid).update(updates).await()
+                fs.collection("users").document(uid).update(updates)
                 listenToPartner(partnerId)
             }
             Result.success(updatedUser)

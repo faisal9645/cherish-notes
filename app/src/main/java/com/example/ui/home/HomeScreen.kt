@@ -147,8 +147,8 @@ fun HomeScreen(
                         modifier = Modifier.testTag("home_profile_button")
                     ) {
                         Icon(
-                            imageVector = Icons.Outlined.Security,
-                            contentDescription = "Security & Profile",
+                            imageVector = Icons.Outlined.Person,
+                            contentDescription = "Profile",
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
@@ -209,8 +209,8 @@ fun HomeScreen(
                         NavigationBarItem(
                             selected = false,
                             onClick = onNavigateToProfile,
-                            icon = { Icon(Icons.Outlined.Security, contentDescription = "Security") },
-                            label = { Text("Security") }
+                            icon = { Icon(Icons.Outlined.Person, contentDescription = "Profile") },
+                            label = { Text("Profile") }
                         )
                     }
                 }
@@ -325,15 +325,6 @@ fun HomeScreen(
                         } else {
                             // Online / Last seen indicator
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(8.dp)
-                                        .background(
-                                            if (isOnline) OnlineGreen else MaterialTheme.colorScheme.outline,
-                                            CircleShape
-                                        )
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
                                 Text(
                                     text = viewModel.formatLastSeen(partner?.lastSeen ?: 0L, isOnline),
                                     style = MaterialTheme.typography.bodySmall,

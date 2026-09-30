@@ -10,6 +10,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -160,24 +162,37 @@ fun MessageComposer(
                 tonalElevation = 1.dp,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Row(
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 6.dp),
-                    horizontalArrangement = Arrangement.SpaceAround,
-                    verticalAlignment = Alignment.CenterVertically
+                        .padding(horizontal = 8.dp, vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    val quickEmojis = listOf("❤️", "🥰", "😘", "💖", "✨", "🥺", "🌸", "🌹")
-                    quickEmojis.forEach { emoji ->
-                        Text(
-                            text = emoji,
-                            fontSize = 22.sp,
-                            modifier = Modifier
-                                .clickable {
-                                    onTextChanged(text + emoji)
-                                }
-                                .padding(4.dp)
-                        )
+                    val quickEmojis = listOf(
+                        listOf("❤️", "🩷", "🧡", "💛", "💚", "🩵", "💙", "💜"),
+                        listOf("🤎", "🖤", "🩶", "🤍", "💖", "💗", "💓", "💞"),
+                        listOf("💕", "💘", "💝", "💟", "🥰", "😍", "😘", "😚"),
+                        listOf("😻", "💋", "🫂", "🤗", "🫶", "💌", "🌹", "🧸")
+                    )
+                    
+                    quickEmojis.forEach { rowEmojis ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceEvenly,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            rowEmojis.forEach { emoji ->
+                                Text(
+                                    text = emoji,
+                                    fontSize = 26.sp,
+                                    modifier = Modifier
+                                        .clickable {
+                                            onTextChanged(text + emoji)
+                                        }
+                                        .padding(4.dp)
+                                )
+                            }
+                        }
                     }
                 }
             }

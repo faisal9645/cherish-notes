@@ -314,7 +314,7 @@ fun ChatScreen(
                                         if (headerRemaining.startsWith("✨")) "✨ Reconnecting now"
                                         else "🌙 Quiet time until ${CheckAfterHelper.formatTargetTime(partnerCheckAfterTarget)}"
                                     } else if (isPartnerOnline) {
-                                        "Online • Active now 🟢"
+                                        "Online"
                                     } else {
                                         val lastSeen = partner?.lastSeen ?: 0L
                                         if (lastSeen > 0L) {
