@@ -38,6 +38,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.paint
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -502,7 +503,7 @@ fun ChatScreen(
                                     }
                                 )
                                 DropdownMenuItem(
-                                    text = { Text("Log Out / Switch Partner", color = MaterialTheme.colorScheme.error) },
+                                    text = { Text("Log Out", color = MaterialTheme.colorScheme.error) },
                                     onClick = {
                                         showChatMenu = false
                                         viewModel.logout()
@@ -1275,13 +1276,14 @@ fun MutualConsentDeletionBanner(
     onDecline: () -> Unit,
     onCancel: () -> Unit
 ) {
+    val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 6.dp),
         shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(containerColor = if (isFromMe) Color(0xFFFFF8E1) else Color(0xFFFFEBEE)),
-        border = BorderStroke(1.dp, if (isFromMe) Color(0xFFFFE082) else Color(0xFFFFCDD2))
+        colors = CardDefaults.cardColors(containerColor = if (isDark) MaterialTheme.colorScheme.surfaceVariant else if (isFromMe) Color(0xFFFFF8E1) else Color(0xFFFFEBEE)),
+        border = BorderStroke(1.dp, if (isDark) MaterialTheme.colorScheme.outlineVariant else if (isFromMe) Color(0xFFFFE082) else Color(0xFFFFCDD2))
     ) {
         Column(
             modifier = Modifier

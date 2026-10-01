@@ -25,6 +25,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -281,9 +282,10 @@ fun DailyQuestionCard(
                     }
                 }
 
+                val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
                 Surface(
                     shape = RoundedCornerShape(10.dp),
-                    color = Color(0xFFFFF3E0)
+                    color = if (isDark) Color(0xFF2E1C0C) else Color(0xFFFFF3E0)
                 ) {
                     Row(
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
@@ -295,7 +297,7 @@ fun DailyQuestionCard(
                             text = "${dailyQuestion.streakDays} Day Streak",
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Color(0xFFE65100)
+                            color = if (isDark) Color(0xFFFDBA74) else Color(0xFFE65100)
                         )
                     }
                 }

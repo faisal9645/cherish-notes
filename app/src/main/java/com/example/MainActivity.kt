@@ -114,6 +114,7 @@ class MainActivity : FragmentActivity() {
                 intent.hasExtra("conversationId")
         if (isFromNotification) {
             app.securityPreferences.revealSecretApp()
+            app.securityPreferences.setDisguiseModeEnabled(false)
         }
     }
 
@@ -143,6 +144,7 @@ class MainActivity : FragmentActivity() {
     override fun onStop() {
         super.onStop()
         app.authRepository.onAppForegroundStateChanged(false)
+        app.googleDriveBackupManager.triggerImmediateAutoBackup()
     }
 
     override fun onDestroy() {

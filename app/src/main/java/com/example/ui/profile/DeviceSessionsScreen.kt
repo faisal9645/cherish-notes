@@ -19,6 +19,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -94,8 +95,8 @@ fun DeviceSessionsScreen(
             item {
                 Surface(
                     shape = RoundedCornerShape(18.dp),
-                    color = Color(0xFFF7F6FB),
-                    border = BorderStroke(1.dp, Color(0xFFECEAF3)),
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Row(
@@ -105,7 +106,7 @@ fun DeviceSessionsScreen(
                         Icon(Icons.Outlined.Devices, contentDescription = null, tint = RoseGoldPrimary, modifier = Modifier.size(28.dp))
                         Spacer(modifier = Modifier.width(12.dp))
                         Column {
-                            Text("Two-Person Exclusive Pairing", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = DarkAubergine)
+                            Text("Two-Person Exclusive Pairing", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface)
                             Text(
                                 "Cherish only allows authorized mutual sessions. If an unrecognized device appears, revoke it immediately.",
                                 fontSize = 12.sp,
@@ -117,10 +118,11 @@ fun DeviceSessionsScreen(
             }
 
             item {
-                Text("Active Sessions", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = DarkAubergine)
+                Text("Active Sessions", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = MaterialTheme.colorScheme.onSurface)
             }
 
             items(sessions, key = { it.id }) { session ->
+                val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
                 Card(
                     shape = RoundedCornerShape(20.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -136,13 +138,13 @@ fun DeviceSessionsScreen(
                             modifier = Modifier
                                 .size(44.dp)
                                 .clip(CircleShape)
-                                .background(if (session.isCurrent) Color(0xFFE8F5E9) else Color(0xFFF4F4F8)),
+                                .background(if (session.isCurrent) (if (isDark) Color(0xFF1E3A8A) else Color(0xFFE8F5E9)) else MaterialTheme.colorScheme.surfaceVariant),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Smartphone,
                                 contentDescription = null,
-                                tint = if (session.isCurrent) Color(0xFF2E7D32) else RoseGoldPrimary,
+                                tint = if (session.isCurrent) (if (isDark) Color(0xFF93C5FD) else Color(0xFF2E7D32)) else RoseGoldPrimary,
                                 modifier = Modifier.size(24.dp)
                             )
                         }
@@ -155,17 +157,17 @@ fun DeviceSessionsScreen(
                                     session.deviceName,
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 14.sp,
-                                    color = DarkAubergine
+                                    color = MaterialTheme.colorScheme.onSurface
                                 )
                                 if (session.isCurrent) {
                                     Spacer(modifier = Modifier.width(6.dp))
                                     Surface(
                                         shape = RoundedCornerShape(6.dp),
-                                        color = Color(0xFF2E7D32)
+                                        color = if (isDark) Color(0xFF1E3A8A) else Color(0xFF2E7D32)
                                     ) {
                                         Text(
                                             "This Phone",
-                                            color = MaterialTheme.colorScheme.surface,
+                                            color = Color.White,
                                             fontSize = 9.sp,
                                             fontWeight = FontWeight.Bold,
                                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
@@ -175,7 +177,7 @@ fun DeviceSessionsScreen(
                             }
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(session.platform, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Text(session.ipOrLocation, fontSize = 11.sp, color = if (session.isCurrent) Color(0xFF2E7D32) else MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(session.ipOrLocation, fontSize = 11.sp, color = if (session.isCurrent) (if (isDark) Color(0xFF93C5FD) else Color(0xFF2E7D32)) else MaterialTheme.colorScheme.onSurfaceVariant)
                         }
 
                         if (!session.isCurrent) {

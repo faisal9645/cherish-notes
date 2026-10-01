@@ -20,6 +20,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -88,11 +89,12 @@ fun StorageManagerScreen(
             verticalArrangement = Arrangement.spacedBy(18.dp)
         ) {
             // Storage Overview Card
+            val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
             val totalBytes = photoSizeBytes + videoSizeBytes + voiceSizeBytes + cacheSizeBytes
             Card(
                 shape = RoundedCornerShape(24.dp),
-                colors = CardDefaults.cardColors(containerColor = Color(0xFFF7F6FB)),
-                border = BorderStroke(1.dp, Color(0xFFECEAF3)),
+                colors = CardDefaults.cardColors(containerColor = if (isDark) MaterialTheme.colorScheme.surfaceVariant else Color(0xFFF7F6FB)),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(modifier = Modifier.padding(20.dp)) {
@@ -105,7 +107,7 @@ fun StorageManagerScreen(
                         formatSize(totalBytes),
                         fontSize = 28.sp,
                         fontWeight = FontWeight.Bold,
-                        color = DarkAubergine
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                     Spacer(modifier = Modifier.height(14.dp))
 
@@ -137,7 +139,7 @@ fun StorageManagerScreen(
             }
 
             // Quick Cleanup Actions
-            Text("Manage & Optimize", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = DarkAubergine)
+            Text("Manage & Optimize", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = MaterialTheme.colorScheme.onSurface)
 
             Card(
                 shape = RoundedCornerShape(18.dp),
@@ -155,10 +157,10 @@ fun StorageManagerScreen(
                             modifier = Modifier
                                 .size(40.dp)
                                 .clip(CircleShape)
-                                .background(Color(0xFFE8F5E9)),
+                                .background(if (isDark) Color(0xFF1E3A8A) else Color(0xFFE8F5E9)),
                             contentAlignment = Alignment.Center
                         ) {
-                            Icon(Icons.Filled.CleaningServices, contentDescription = null, tint = Color(0xFF2E7D32), modifier = Modifier.size(20.dp))
+                            Icon(Icons.Filled.CleaningServices, contentDescription = null, tint = if (isDark) Color(0xFF93C5FD) else Color(0xFF2E7D32), modifier = Modifier.size(20.dp))
                         }
                         Spacer(modifier = Modifier.width(12.dp))
                         Column(modifier = Modifier.weight(1f)) {
@@ -195,7 +197,7 @@ fun StorageManagerScreen(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text("Safe Storage Guarantee", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = DarkAubergine)
+                    Text("Safe Storage Guarantee", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface)
                     Text(
                         "• All photos and voice notes are stored in Cherish's private encrypted app sandbox.\n" +
                         "• Hidden with .nomedia so external Android gallery or file scanners cannot see them.\n" +
@@ -218,7 +220,7 @@ private fun StorageLegend(color: Color, label: String, size: String) {
             Spacer(modifier = Modifier.width(4.dp))
             Text(label, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        Text(size, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = DarkAubergine)
+        Text(size, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
     }
 }
 

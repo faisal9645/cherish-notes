@@ -9,7 +9,7 @@
         <item name="android:windowLightNavigationBar">true</item>
         <!-- Android 12+ Splash Screen pure white entrance with centered high quality picture logo -->
         <item name="android:windowSplashScreenBackground">#FFFFFF</item>
-        <item name="android:windowSplashScreenAnimatedIcon">@drawable/notes_entrance_logo_512</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/notes_entrance_logo</item>
         <item name="android:windowSplashScreenIconBackgroundColor">#FFFFFF</item>
     </style>
 </resources>

@@ -4,6 +4,8 @@ import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -77,13 +79,19 @@ fun CherishNavGraph(
         NotesDisguiseViewModel(app.notesRepository)
     }
 
-    var isEntranceVisible by remember { mutableStateOf(true) }
-    LaunchedEffect(Unit) {
-        kotlinx.coroutines.delay(200)
-        isEntranceVisible = false
-    }
-
-    Box(modifier = modifier.fillMaxSize()) {
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .pointerInput(isDisguiseActive) {
+                if (!isDisguiseActive) {
+                    detectTapGestures(
+                        onDoubleTap = {
+                            app.securityPreferences.reDisguise()
+                        }
+                    )
+                }
+            }
+    ) {
         NavHost(
             navController = navController,
             startDestination = startDestination,
@@ -221,7 +229,12 @@ fun CherishNavGraph(
 
         composable(Screen.Profile.route) {
             val profileViewModel = remember {
-                ProfileViewModel(app.authRepository, app.mediaRepository, app.securityPreferences)
+                ProfileViewModel(
+                    app.authRepository,
+                    app.mediaRepository,
+                    app.securityPreferences,
+                    app.googleDriveBackupManager
+                )
             }
             ProfileScreen(
                 viewModel = profileViewModel,
@@ -320,45 +333,6 @@ fun CherishNavGraph(
             },
             modifier = Modifier.fillMaxSize()
         )
-    }
-
-    // High Quality Entrance Splash Screen with centered picture logo
-    val isEntranceDark = MaterialTheme.colorScheme.background == Color.Black ||
-            MaterialTheme.colorScheme.surface == Color.Black
-
-    AnimatedVisibility(
-        visible = isEntranceVisible,
-        enter = EnterTransition.None,
-        exit = fadeOut(animationSpec = tween(220, easing = FastOutSlowInEasing)),
-        modifier = Modifier.fillMaxSize()
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(if (isEntranceDark) Color.Black else Color.White),
-            contentAlignment = Alignment.Center
-        ) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
-            ) {
-                Image(
-                    painter = painterResource(com.example.R.drawable.notes_entrance_logo_512),
-                    contentDescription = "Notes",
-                    modifier = Modifier
-                        .size(132.dp)
-                        .clip(RoundedCornerShape(26.dp))
-                )
-                Spacer(modifier = Modifier.height(18.dp))
-                Text(
-                    text = "Notes",
-                    fontSize = 28.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = if (isEntranceDark) Color.White else Color(0xFF0F172A),
-                    letterSpacing = (-0.5).sp
-                )
-            }
-        }
     }
 }
 }

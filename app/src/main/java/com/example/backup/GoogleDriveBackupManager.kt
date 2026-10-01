@@ -83,6 +83,27 @@ class GoogleDriveBackupManager(
     private val autoBackupScope = kotlinx.coroutines.CoroutineScope(Dispatchers.IO + kotlinx.coroutines.SupervisorJob())
     private var immediateBackupJob: kotlinx.coroutines.Job? = null
 
+    init {
+        // Continuous Always-On Auto-Backup:
+        // Automatically syncs whenever chat messages, memories, shared notes, or dates are updated
+        autoBackupScope.launch {
+            kotlinx.coroutines.delay(5000) // Initial delay on startup
+            kotlinx.coroutines.flow.combine(
+                chatRepository.messagesFlow,
+                coupleFeaturesRepository.memoriesFlow,
+                coupleFeaturesRepository.notesFlow,
+                coupleFeaturesRepository.datesFlow,
+                coupleFeaturesRepository.bucketListFlow
+            ) { m, mem, n, d, b ->
+                m.size + mem.size + n.size + d.size + b.size
+            }.collect { totalItems ->
+                if (totalItems > 0 && !_backupState.value.isBackingUp && !_backupState.value.isRestoring) {
+                    performBackupToGoogleDrive()
+                }
+            }
+        }
+    }
+
     /**
      * Immediately synchronizes and backs up all chats, media, voice notes, links, and memories.
      */
@@ -189,6 +210,9 @@ class GoogleDriveBackupManager(
                 val payload = adapter.fromJson(json)
 
                 if (payload != null) {
+                    // Restore chat messages
+                    chatRepository.restoreMessages(payload.messages)
+
                     // Restore Yearly stories
                     payload.yearlyJourneys.forEach { entry ->
                         coupleFeaturesRepository.addYearlyJourney(entry)
@@ -218,15 +242,25 @@ class GoogleDriveBackupManager(
                         coupleFeaturesRepository.addBucketItem(b.title, b.category)
                     }
 
-                    val totalRestored = payload.manifest.totalMessages +
-                            payload.manifest.totalMemories +
-                            payload.manifest.totalYearlyStories
+                    // Restore important dates
+                    coupleFeaturesRepository.restoreImportantDates(payload.importantDates)
+
+                    // Restore shared notes
+                    coupleFeaturesRepository.restoreSharedNotes(payload.sharedNotes)
+
+                    val totalRestored = payload.messages.size +
+                            payload.memories.size +
+                            payload.yearlyJourneys.size +
+                            payload.bucketList.size +
+                            payload.importantDates.size +
+                            payload.sharedNotes.size
 
                     _backupState.value = _backupState.value.copy(
                         isRestoring = false,
-                        statusMessage = "Successfully restored $totalRestored items onto this mobile device!"
+                        totalItemsBackedUp = totalRestored,
+                        statusMessage = "Successfully recovered $totalRestored items onto this mobile device!"
                     )
-                    return@withContext Result.success("Successfully restored all data onto new mobile")
+                    return@withContext Result.success("Successfully recovered $totalRestored items from cloud backup")
                 }
             }
 

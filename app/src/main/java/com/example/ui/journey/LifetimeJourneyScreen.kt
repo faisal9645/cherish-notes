@@ -547,8 +547,8 @@ fun YearlyJourneyCard(
             if (entry.specialMemory.isNotBlank()) {
                 Surface(
                     shape = RoundedCornerShape(12.dp),
-                    color = Color(0xFFF9F9FB),
-                    border = BorderStroke(1.dp, Color(0xFFEAEAEC)),
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(modifier = Modifier.padding(12.dp)) {

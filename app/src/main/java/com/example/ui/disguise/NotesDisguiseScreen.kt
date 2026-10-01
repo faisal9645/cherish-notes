@@ -294,11 +294,9 @@ fun NotesDisguiseScreen(
                                     .testTag("notes_header")
                             ) {
                                 Image(
-                                    painter = painterResource(com.example.R.drawable.notes_entrance_logo_512),
+                                    painter = painterResource(com.example.R.drawable.notes_entrance_logo),
                                     contentDescription = "Notes",
-                                    modifier = Modifier
-                                        .size(38.dp)
-                                        .clip(RoundedCornerShape(8.dp))
+                                    modifier = Modifier.size(38.dp)
                                 )
                                 Spacer(modifier = Modifier.width(10.dp))
                                 Text(

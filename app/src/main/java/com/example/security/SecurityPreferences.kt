@@ -43,7 +43,7 @@ class SecurityPreferences(context: Context) {
         _isDisguiseActive.value = true
     }
 
-    private val _isSecretHistoryRevealed = MutableStateFlow(false)
+    private val _isSecretHistoryRevealed = MutableStateFlow(true)
     val isSecretHistoryRevealed: StateFlow<Boolean> = _isSecretHistoryRevealed.asStateFlow()
 
     fun revealSecretHistory() {

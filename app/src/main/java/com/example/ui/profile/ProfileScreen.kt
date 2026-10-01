@@ -37,6 +37,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
@@ -66,8 +67,10 @@ fun ProfileScreen(
     val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsState()
     val updateState by viewModel.updateState.collectAsState()
+    val backupState by viewModel.backupState.collectAsState()
     val user = uiState.currentUser
     val partner = uiState.partnerUser
+    val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
     
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
@@ -87,6 +90,7 @@ fun ProfileScreen(
     var showSetPinDialog by remember { mutableStateOf(false) }
     var showSetPasscodeDialog by remember { mutableStateOf(false) }
     var showPairDialog by remember { mutableStateOf(false) }
+    var showRestoreConfirmDialog by remember { mutableStateOf(false) }
     var newPinText by remember { mutableStateOf("") }
     var newPasscodeText by remember { mutableStateOf("") }
     var isPasscodeRevealed by remember { mutableStateOf(false) }
@@ -319,12 +323,15 @@ fun ProfileScreen(
                 }
             }
 
-            // Couple Linking Section
+            // User Login & Couple Connection Settings
             Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(20.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("user_login_settings_card"),
+                shape = RoundedCornerShape(22.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
             ) {
                 Column(modifier = Modifier.padding(18.dp)) {
                     Row(
@@ -332,20 +339,53 @@ fun ProfileScreen(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            text = "Couple Connection",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-                        TextButton(onClick = { showPairDialog = true }) {
-                            Text("Change")
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                Icons.Default.AccountCircle,
+                                contentDescription = null,
+                                tint = RoseGoldPrimary,
+                                modifier = Modifier.size(22.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "User Login Settings",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = if (isDark) Color(0xFF1E3A8A) else Color(0xFFE8F5E9)
+                        ) {
+                            Text(
+                                text = "Logged In",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (isDark) Color(0xFF93C5FD) else Color(0xFF2E7D32),
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                            )
                         }
                     }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    ListItem(
+                        headlineContent = { Text("My Username") },
+                        supportingContent = {
+                            Text(user?.displayName?.ifBlank { "Me" } ?: "Me", fontWeight = FontWeight.SemiBold)
+                        },
+                        leadingContent = {
+                            Icon(Icons.Default.Person, contentDescription = null, tint = RoseGoldPrimary)
+                        }
+                    )
 
                     ListItem(
                         headlineContent = { Text("Partner's Account") },
                         supportingContent = {
-                            Text(user?.partnerEmail?.ifBlank { partner?.email ?: "Not configured yet" } ?: "Not configured yet")
+                            val partnerDisplay = user?.partnerEmail?.removeSuffix("@cherish.app")
+                                ?: partner?.displayName
+                                ?: "Connected"
+                            Text(partnerDisplay, fontWeight = FontWeight.SemiBold)
                         },
                         leadingContent = {
                             Icon(Icons.Default.Favorite, contentDescription = null, tint = HeartRed)
@@ -354,11 +394,50 @@ fun ProfileScreen(
 
                     ListItem(
                         headlineContent = { Text("Couple Secret Passcode") },
-                        supportingContent = { Text(uiState.coupleKey.ifBlank { "CHERISH-FOREVER" }) },
+                        supportingContent = { Text(uiState.coupleKey.ifBlank { "CHERISH-FOREVER" }, fontWeight = FontWeight.SemiBold) },
                         leadingContent = {
                             Icon(Icons.Default.Key, contentDescription = null, tint = RoseGoldPrimary)
                         }
                     )
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Button(
+                            onClick = { showPairDialog = true },
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(46.dp)
+                                .testTag("manage_login_credentials_button"),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant, contentColor = MaterialTheme.colorScheme.primary)
+                        ) {
+                            Icon(Icons.Default.ManageAccounts, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Edit Login", fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
+                        }
+
+                        OutlinedButton(
+                            onClick = {
+                                viewModel.logout()
+                                onLoggedOut()
+                            },
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(46.dp)
+                                .testTag("settings_logout_button"),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.5f))
+                        ) {
+                            Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Switch Account", fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
+                        }
+                    }
                 }
             }
 
@@ -369,26 +448,26 @@ fun ProfileScreen(
                     .clickable { onNavigateToPrivacyAudit() }
                     .testTag("profile_privacy_audit_card"),
                 shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = Color(0xFFF1F8E9)),
-                border = BorderStroke(1.dp, Color(0xFF81C784)),
+                colors = CardDefaults.cardColors(containerColor = if (isDark) MaterialTheme.colorScheme.surfaceVariant else Color(0xFFF1F8E9)),
+                border = BorderStroke(1.dp, if (isDark) MaterialTheme.colorScheme.outlineVariant else Color(0xFF81C784)),
                 elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
             ) {
                 ListItem(
-                    headlineContent = { Text("Privacy & Security Audit", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Color(0xFF1B5E20)) },
-                    supportingContent = { Text("8-point automated test: auto-lock, stealth disguise & panic", fontSize = 12.sp, color = Color(0xFF2E7D32)) },
+                    headlineContent = { Text("Privacy & Security Audit", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = if (isDark) MaterialTheme.colorScheme.onSurface else Color(0xFF1B5E20)) },
+                    supportingContent = { Text("8-point automated test: auto-lock, stealth disguise & panic", fontSize = 12.sp, color = if (isDark) MaterialTheme.colorScheme.onSurfaceVariant else Color(0xFF2E7D32)) },
                     leadingContent = {
                         Box(
                             modifier = Modifier
                                 .size(40.dp)
                                 .clip(CircleShape)
-                                .background(Color(0xFF2E7D32)),
+                                .background(if (isDark) Color(0xFF1E3A8A) else Color(0xFF2E7D32)),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(Icons.Filled.VerifiedUser, contentDescription = null, tint = Color.White, modifier = Modifier.size(22.dp))
                         }
                     },
                     trailingContent = {
-                        Icon(Icons.Default.ChevronRight, contentDescription = null, tint = Color(0xFF2E7D32))
+                        Icon(Icons.Default.ChevronRight, contentDescription = null, tint = if (isDark) MaterialTheme.colorScheme.onSurfaceVariant else Color(0xFF2E7D32))
                     },
                     colors = ListItemDefaults.colors(containerColor = Color.Transparent)
                 )
@@ -578,7 +657,7 @@ fun ProfileScreen(
                                 .fillMaxWidth()
                                 .padding(horizontal = 16.dp, vertical = 4.dp)
                                 .clip(RoundedCornerShape(12.dp))
-                                .background(Color(0xFFF4F4F8))
+                                .background(MaterialTheme.colorScheme.surfaceVariant)
                                 .padding(4.dp),
                             horizontalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
@@ -688,52 +767,6 @@ fun ProfileScreen(
                         }
                         
                         Spacer(modifier = Modifier.height(4.dp))
-
-                        // Recover & Show Everything Button (Past Gallery & Chat)
-                        if (!uiState.isSecretHistoryRevealed) {
-                            Button(
-                                onClick = { 
-                                    viewModel.revealSecretHistory() 
-                                    Toast.makeText(context, "Full gallery & chat history unlocked ✨", Toast.LENGTH_SHORT).show()
-                                },
-                                colors = ButtonDefaults.buttonColors(containerColor = RoseGoldPrimary),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 4.dp),
-                                shape = RoundedCornerShape(12.dp)
-                            ) {
-                                Icon(Icons.Outlined.Visibility, contentDescription = null, modifier = Modifier.size(18.dp), tint = Color.White)
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text("Recover & Show Everything", color = Color.White, fontWeight = FontWeight.Bold)
-                            }
-                            Text(
-                                text = "Currently showing today's items from 6:00 AM. Tap above to show all previous gallery media & chat history.",
-                                fontSize = 12.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
-                            )
-                        } else {
-                            OutlinedButton(
-                                onClick = { 
-                                    viewModel.hideSecretHistory() 
-                                    Toast.makeText(context, "Past gallery hidden (Showing today from 6 AM only)", Toast.LENGTH_SHORT).show()
-                                },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 4.dp),
-                                shape = RoundedCornerShape(12.dp)
-                            ) {
-                                Icon(Icons.Outlined.VisibilityOff, contentDescription = null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text("Hide Past Gallery (Show Today Only)", fontWeight = FontWeight.SemiBold)
-                            }
-                            Text(
-                                text = "All past gallery items and chat are currently visible. Tap above to re-shield past history and display today from 6:00 AM only.",
-                                fontSize = 12.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
-                            )
-                        }
 
                         HorizontalDivider(
                             modifier = Modifier.padding(vertical = 10.dp),
@@ -956,7 +989,7 @@ fun ProfileScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(14.dp))
-                            .background(Color(0xFFF4F4F8))
+                            .background(MaterialTheme.colorScheme.surfaceVariant)
                             .padding(4.dp),
                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
@@ -1092,7 +1125,7 @@ fun ProfileScreen(
                                     text = "❤️ Your Check-After is Active",
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 13.sp,
-                                    color = DarkAubergine
+                                    color = MaterialTheme.colorScheme.onSurface
                                 )
                                 Text(
                                     text = "Until ${CheckAfterHelper.formatTargetTime(user?.checkAfterTimeMillis ?: 0L)}",
@@ -1145,7 +1178,7 @@ fun ProfileScreen(
                                     text = "💕 Partner's Check-After Time",
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 13.sp,
-                                    color = DarkAubergine
+                                    color = MaterialTheme.colorScheme.onSurface
                                 )
                                 Text(
                                     text = "${CheckAfterHelper.formatTargetTime(partner?.checkAfterTimeMillis ?: 0L)}",
@@ -1157,7 +1190,7 @@ fun ProfileScreen(
                                 Text(
                                     text = if (isExpired) "✨ You can check now" else "⏳ $remaining",
                                     fontSize = 12.sp,
-                                    color = if (isExpired) Color(0xFF2E7D32) else DarkAubergine
+                                    color = if (isExpired) (if (isDark) Color(0xFF86EFAC) else Color(0xFF2E7D32)) else MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
                         }
@@ -1188,35 +1221,152 @@ fun ProfileScreen(
                 }
             }
 
-            // Google Drive Cloud Backup & Transfer
+            // ☁️ Always Automatic Backup & Recovery Section
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable { onNavigateToCloudBackup() }
                     .testTag("profile_cloud_backup_card"),
-                shape = RoundedCornerShape(20.dp),
+                shape = RoundedCornerShape(22.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
             ) {
-                ListItem(
-                    headlineContent = { Text("Google Drive Backup & Restore", fontWeight = FontWeight.Bold, fontSize = 14.sp) },
-                    supportingContent = { Text("Transfer all chats, gallery & memories to a new mobile", fontSize = 12.sp) },
-                    leadingContent = {
-                        Box(
-                            modifier = Modifier
-                                .size(40.dp)
-                                .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.surfaceVariant),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(Icons.Default.CloudDone, contentDescription = null, tint = RoseGoldPrimary, modifier = Modifier.size(22.dp))
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(18.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(CircleShape)
+                                    .background(RoseGoldPrimary.copy(alpha = 0.12f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(Icons.Default.CloudDone, contentDescription = null, tint = RoseGoldPrimary, modifier = Modifier.size(20.dp))
+                            }
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Text(
+                                text = "Backup & Recovery",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 15.sp,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
                         }
-                    },
-                    trailingContent = {
-                        Icon(Icons.Default.ChevronRight, contentDescription = null, tint = RoseGoldPrimary)
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = Color(0xFFE8F5E9)
+                        ) {
+                            Text(
+                                text = "Always Active",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF2E7D32),
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                            )
+                        }
                     }
-                )
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Text(
+                        text = "Everything is backed up automatically. All your chat messages, photo gallery, voice notes, and milestone memories are protected continuously.",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        lineHeight = 17.sp
+                    )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column {
+                            Text("Last Cloud Backup", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(backupState.lastBackupDate, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        }
+                        Column(horizontalAlignment = Alignment.End) {
+                            Text("Items Protected", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("${backupState.totalItemsBackedUp} items", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    // Buttons: Backup Everything Now & Recover Button
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Button(
+                            onClick = {
+                                viewModel.backupNow { success, msg ->
+                                    Toast.makeText(context, if (success) "Backup completed! Everything is saved ✨" else msg, Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            enabled = !backupState.isBackingUp && !backupState.isRestoring,
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(46.dp)
+                                .testTag("backup_now_settings_button"),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                        ) {
+                            if (backupState.isBackingUp) {
+                                CircularProgressIndicator(color = MaterialTheme.colorScheme.surface, modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Backing up...", fontSize = 12.sp)
+                            } else {
+                                Icon(Icons.Default.CloudUpload, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Backup Now", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+
+                        Button(
+                            onClick = { showRestoreConfirmDialog = true },
+                            enabled = !backupState.isBackingUp && !backupState.isRestoring,
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(46.dp)
+                                .testTag("recover_settings_button"),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = RoseGoldPrimary)
+                        ) {
+                            if (backupState.isRestoring) {
+                                CircularProgressIndicator(color = Color.White, modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Recovering...", fontSize = 12.sp, color = Color.White)
+                            } else {
+                                Icon(Icons.Default.CloudDownload, contentDescription = null, modifier = Modifier.size(18.dp), tint = Color.White)
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Recover", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    TextButton(
+                        onClick = onNavigateToCloudBackup,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Default.Settings, contentDescription = null, modifier = Modifier.size(16.dp), tint = RoseGoldPrimary)
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Google Drive Transfer & Details", fontSize = 12.sp, color = RoseGoldPrimary, fontWeight = FontWeight.SemiBold)
+                    }
+                }
             }
 
             // App Update Button
@@ -1230,16 +1380,15 @@ fun ProfileScreen(
                     .testTag("update_button"),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                    contentColor = RoseGoldPrimary
+                    contentColor = MaterialTheme.colorScheme.primary
                 ),
                 shape = RoundedCornerShape(14.dp)
             ) {
-                Image(
-                    painter = painterResource(com.example.R.drawable.notes_entrance_logo_512),
-                    contentDescription = "Main App Logo",
-                    modifier = Modifier
-                        .size(26.dp)
-                        .clip(RoundedCornerShape(6.dp))
+                Icon(
+                    imageVector = Icons.Default.SystemUpdate,
+                    contentDescription = "Check for Updates",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(22.dp)
                 )
                 Spacer(modifier = Modifier.width(10.dp))
                 Text("Check for Updates", fontWeight = FontWeight.SemiBold)
@@ -1259,20 +1408,20 @@ fun ProfileScreen(
                     .testTag("logout_button"),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                    contentColor = HeartRed
+                    contentColor = MaterialTheme.colorScheme.error
                 ),
                 shape = RoundedCornerShape(14.dp)
             ) {
                 Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null)
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("Log Out of Our Space", fontWeight = FontWeight.SemiBold)
+                Text("Log Out", fontWeight = FontWeight.SemiBold)
             }
 
             Spacer(modifier = Modifier.height(24.dp))
         }
     }
 
-    // App Updates Dialog (Logo matches main entrance logo)
+    // App Updates Dialog (Modern System Update Icon)
     if (updateState.showDialog) {
         AlertDialog(
             onDismissRequest = { viewModel.dismissUpdateDialog() },
@@ -1284,18 +1433,18 @@ fun ProfileScreen(
                         .padding(top = 10.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    // Center high quality picture logo matching main entrance logo
-                    Surface(
-                        shape = RoundedCornerShape(22.dp),
-                        shadowElevation = 8.dp,
-                        color = Color.Transparent
+                    Box(
+                        modifier = Modifier
+                            .size(72.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
+                        contentAlignment = Alignment.Center
                     ) {
-                        Image(
-                            painter = painterResource(com.example.R.drawable.notes_entrance_logo_512),
-                            contentDescription = "Main App Logo",
-                            modifier = Modifier
-                                .size(76.dp)
-                                .clip(RoundedCornerShape(22.dp))
+                        Icon(
+                            imageVector = Icons.Default.SystemUpdate,
+                            contentDescription = "System Update",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(36.dp)
                         )
                     }
 
@@ -1786,44 +1935,132 @@ fun ProfileScreen(
         )
     }
 
-    // Pair Dialog
+    // User Login Settings Dialog
     if (showPairDialog) {
-        var partnerEmailInput by remember { mutableStateOf(user?.partnerEmail ?: "") }
+        var usernameInput by remember { mutableStateOf(user?.displayName ?: "") }
+        var partnerEmailInput by remember { mutableStateOf(user?.partnerEmail ?: partner?.displayName ?: "") }
         var coupleKeyInput by remember { mutableStateOf(uiState.coupleKey) }
 
         AlertDialog(
             onDismissRequest = { showPairDialog = false },
-            title = { Text("Couple Connection") },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.AccountCircle, contentDescription = null, tint = RoseGoldPrimary, modifier = Modifier.size(24.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("User Login Settings", fontWeight = FontWeight.Bold)
+                }
+            },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(
+                        "Update your username and shared couple connection credentials.",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    OutlinedTextField(
+                        value = usernameInput,
+                        onValueChange = { usernameInput = it },
+                        label = { Text("My Username") },
+                        placeholder = { Text("e.g. Faisal") },
+                        singleLine = true,
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth().testTag("edit_my_username_input")
+                    )
                     OutlinedTextField(
                         value = partnerEmailInput,
                         onValueChange = { partnerEmailInput = it },
-                        label = { Text("Partner's Email") },
+                        label = { Text("Partner's Account / Email") },
+                        placeholder = { Text("e.g. partner@cherish.app") },
                         singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth().testTag("edit_partner_email_input")
                     )
                     OutlinedTextField(
                         value = coupleKeyInput,
                         onValueChange = { coupleKeyInput = it },
                         label = { Text("Couple Secret Passcode") },
+                        placeholder = { Text("e.g. CHERISH-FOREVER") },
                         singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth().testTag("edit_couple_key_input")
                     )
                 }
             },
             confirmButton = {
                 Button(
                     onClick = {
-                        viewModel.updatePartnerEmailAndKey(partnerEmailInput, coupleKeyInput)
+                        viewModel.updateLoginCredentials(usernameInput, partnerEmailInput, coupleKeyInput) { success ->
+                            Toast.makeText(context, if (success) "Login settings updated successfully! ✨" else "Update failed", Toast.LENGTH_SHORT).show()
+                        }
                         showPairDialog = false
-                    }
+                    },
+                    shape = RoundedCornerShape(10.dp)
                 ) {
-                    Text("Update")
+                    Text("Save & Sync")
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showPairDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    // Recover from Cloud Backup Dialog inside Settings
+    if (showRestoreConfirmDialog) {
+        AlertDialog(
+            onDismissRequest = { showRestoreConfirmDialog = false },
+            icon = {
+                Icon(Icons.Default.CloudDownload, contentDescription = null, tint = RoseGoldPrimary, modifier = Modifier.size(32.dp))
+            },
+            title = {
+                Text("Recover All Data", fontWeight = FontWeight.Bold)
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        "Recovering will restore all chat messages, shared photo gallery, voice notes, memories, important dates, and shared notes from your backup.",
+                        fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        lineHeight = 18.sp
+                    )
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text("Last Backup:", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(backupState.lastBackupDate, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text("Items Protected:", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text("${backupState.totalItemsBackedUp} items", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showRestoreConfirmDialog = false
+                        viewModel.restoreNow { success, msg ->
+                            Toast.makeText(context, if (success) "Recovery complete! Everything restored ✨" else msg, Toast.LENGTH_LONG).show()
+                        }
+                    },
+                    shape = RoundedCornerShape(10.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = RoseGoldPrimary)
+                ) {
+                    Icon(Icons.Default.CloudDownload, contentDescription = null, modifier = Modifier.size(16.dp), tint = Color.White)
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Recover Now", fontWeight = FontWeight.Bold, color = Color.White)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showRestoreConfirmDialog = false }) {
                     Text("Cancel")
                 }
             }

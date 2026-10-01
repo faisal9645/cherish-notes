@@ -49,8 +49,53 @@ data class UpdateCheckState(
 class ProfileViewModel(
     private val authRepository: AuthRepository,
     private val mediaRepository: MediaRepository,
-    private val securityPreferences: SecurityPreferences
+    private val securityPreferences: SecurityPreferences,
+    private val googleDriveBackupManager: com.example.backup.GoogleDriveBackupManager
 ) : ViewModel() {
+
+    val backupState: StateFlow<com.example.backup.BackupState> = googleDriveBackupManager.backupState
+
+    fun backupNow(onResult: (Boolean, String) -> Unit = { _, _ -> }) {
+        viewModelScope.launch {
+            val res = googleDriveBackupManager.performBackupToGoogleDrive()
+            res.fold(
+                onSuccess = { onResult(true, it) },
+                onFailure = { onResult(false, it.localizedMessage ?: "Backup failed") }
+            )
+        }
+    }
+
+    fun restoreNow(onResult: (Boolean, String) -> Unit = { _, _ -> }) {
+        viewModelScope.launch {
+            val res = googleDriveBackupManager.performRestoreFromGoogleDrive()
+            res.fold(
+                onSuccess = { onResult(true, it) },
+                onFailure = { onResult(false, it.localizedMessage ?: "Restore failed") }
+            )
+        }
+    }
+
+    fun updateLoginCredentials(
+        username: String,
+        partnerName: String,
+        coupleSecretCode: String,
+        onResult: (Boolean) -> Unit = {}
+    ) {
+        viewModelScope.launch {
+            val cleanUser = username.trim().ifBlank { _uiState.value.currentUser?.displayName ?: "Me" }
+            val cleanPartner = partnerName.trim()
+            val cleanCode = coupleSecretCode.trim().ifBlank { "CHERISH-FOREVER" }
+
+            authRepository.updateProfile(cleanUser, _uiState.value.currentUser?.statusMessage ?: "", null, false)
+            if (cleanPartner.isNotBlank()) {
+                authRepository.pairWithPartner(cleanPartner, cleanCode)
+            }
+            securityPreferences.setCoupleSecretKey(cleanCode)
+            _uiState.update { it.copy(coupleKey = cleanCode) }
+            googleDriveBackupManager.triggerImmediateAutoBackup()
+            onResult(true)
+        }
+    }
 
     private val _updateState = MutableStateFlow(UpdateCheckState())
     val updateState: StateFlow<UpdateCheckState> = _updateState.asStateFlow()

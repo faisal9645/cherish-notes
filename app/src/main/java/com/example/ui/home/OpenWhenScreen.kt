@@ -23,6 +23,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
@@ -145,7 +146,7 @@ fun OpenWhenScreen(
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
             )
         },
-        containerColor = Color(0xFFFAF9FC)
+        containerColor = MaterialTheme.colorScheme.background
     ) { paddingValues ->
         LazyVerticalGrid(
             columns = GridCells.Fixed(2),
@@ -242,7 +243,7 @@ fun EnvelopeCard(
                 fontWeight = FontWeight.Bold,
                 fontSize = 13.sp,
                 textAlign = TextAlign.Center,
-                color = DarkAubergine,
+                color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 2
             )
 
@@ -258,9 +259,10 @@ fun EnvelopeCard(
 
             Spacer(modifier = Modifier.height(10.dp))
 
+            val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
             Surface(
                 shape = RoundedCornerShape(12.dp),
-                color = if (letter.isOpened) Color(0xFFE8F5E9) else Color(0xFFF3F0F7)
+                color = if (letter.isOpened) (if (isDark) Color(0xFF1E3A8A) else Color(0xFFE8F5E9)) else (if (isDark) MaterialTheme.colorScheme.surfaceVariant else Color(0xFFF3F0F7))
             ) {
                 Row(
                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
@@ -270,14 +272,14 @@ fun EnvelopeCard(
                         imageVector = if (letter.isOpened) Icons.Filled.Check else Icons.Outlined.Lock,
                         contentDescription = null,
                         modifier = Modifier.size(11.dp),
-                        tint = if (letter.isOpened) Color(0xFF2E7D32) else RoseGoldPrimary
+                        tint = if (letter.isOpened) (if (isDark) Color(0xFF93C5FD) else Color(0xFF2E7D32)) else RoseGoldPrimary
                     )
                     Spacer(modifier = Modifier.width(3.dp))
                     Text(
                         text = if (letter.isOpened) "Opened" else "Locked",
                         fontSize = 10.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = if (letter.isOpened) Color(0xFF2E7D32) else RoseGoldPrimary
+                        color = if (letter.isOpened) (if (isDark) Color(0xFF93C5FD) else Color(0xFF2E7D32)) else RoseGoldPrimary
                     )
                 }
             }
@@ -291,13 +293,14 @@ fun LetterModalDialog(
     onDismiss: () -> Unit,
     onMarkOpened: () -> Unit
 ) {
+    val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(letter.envelopeEmoji, fontSize = 24.sp)
                 Spacer(modifier = Modifier.width(8.dp))
-                Text(letter.title, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = DarkAubergine)
+                Text(letter.title, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurface)
             }
         },
         text = {
@@ -305,7 +308,7 @@ fun LetterModalDialog(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(16.dp))
-                    .background(Color(0xFFFFFDF7)) // parchment ivory color
+                    .background(if (isDark) MaterialTheme.colorScheme.surfaceVariant else Color(0xFFFFFDF7))
                     .padding(16.dp)
             ) {
                 Text(
@@ -319,7 +322,7 @@ fun LetterModalDialog(
                     text = letter.content,
                     fontSize = 14.sp,
                     lineHeight = 22.sp,
-                    color = Color(0xFF2C2416),
+                    color = MaterialTheme.colorScheme.onSurface,
                     fontFamily = FontFamily.Serif
                 )
                 Spacer(modifier = Modifier.height(14.dp))
@@ -327,7 +330,7 @@ fun LetterModalDialog(
                     text = "— With all my heart, ${letter.authorName} ❤️",
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Bold,
-                    color = DarkAubergine,
+                    color = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.fillMaxWidth(),
                     textAlign = TextAlign.End
                 )

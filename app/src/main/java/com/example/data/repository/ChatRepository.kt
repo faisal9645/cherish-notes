@@ -348,6 +348,28 @@ class ChatRepository(
         }
     }
 
+    suspend fun restoreMessages(messages: List<Message>) {
+        if (messages.isEmpty()) return
+        val current = _messagesFlow.value.toMutableList()
+        val existingIds = current.map { it.id }.toSet()
+        val toAdd = messages.filter { it.id !in existingIds }
+        if (toAdd.isNotEmpty()) {
+            current.addAll(toAdd)
+            _messagesFlow.value = current.sortedBy { it.timestamp }
+            val fs = firestore
+            val convId = getConversationId()
+            if (fs != null) {
+                toAdd.forEach { msg ->
+                    try {
+                        fs.collection("conversations").document(convId).collection("messages").document(msg.id).set(msg).await()
+                    } catch (e: Exception) {
+                        Log.w("ChatRepository", "Restore message sync warning", e)
+                    }
+                }
+            }
+        }
+    }
+
     private fun getSampleStarterMessages(): List<Message> {
         val now = System.currentTimeMillis()
         val oneHourAgo = now - 3600000

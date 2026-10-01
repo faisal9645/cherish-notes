@@ -54,9 +54,11 @@ object NotificationHelper {
         conversationId: String? = null
     ) {
         val count = pendingUnreadCount.incrementAndGet()
+        val prefs = SecurityPreferences.getInstance(context)
+        val isDiscreet = prefs.isHideNotificationContent()
 
         val intent = Intent(context, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
             putExtra("conversationId", conversationId)
             putExtra("open_chat", true)
             putExtra("from_notification", true)
@@ -69,25 +71,26 @@ object NotificationHelper {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        // Completely stealth notification disguise so nobody glancing at the phone notices
-        val displayTitle = "Notes"
-        val displayText = if (count <= 1) {
-            "Checklist reminder updated"
+        // When discreet/hidden mode is enabled, notification payloads mask sender names and contents
+        val displayTitle = if (isDiscreet) "Notes" else senderName
+        val displayText = if (isDiscreet) {
+            if (count <= 1) "Checklist reminder updated" else "$count reminders synchronized"
         } else {
-            "$count items synchronized"
+            messageText
         }
+        val subText = if (isDiscreet) "Notes" else "Cherish"
 
         val notification = NotificationCompat.Builder(context, CHANNEL_MESSAGES_ID)
             .setSmallIcon(R.mipmap.ic_launcher)
             .setContentTitle(displayTitle)
             .setContentText(displayText)
-            .setSubText("Notes")
+            .setSubText(subText)
             .setAutoCancel(true)
             .setContentIntent(pendingIntent)
-            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
-            .setCategory(NotificationCompat.CATEGORY_REMINDER)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setCategory(NotificationCompat.CATEGORY_MESSAGE)
             .setOnlyAlertOnce(true) // Never buzz multiple times for updates
-            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+            .setVisibility(if (isDiscreet) NotificationCompat.VISIBILITY_SECRET else NotificationCompat.VISIBILITY_PRIVATE)
             .build()
 
         try {

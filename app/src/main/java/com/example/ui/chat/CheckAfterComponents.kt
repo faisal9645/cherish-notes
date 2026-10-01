@@ -23,6 +23,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -148,14 +149,22 @@ fun CheckAfterChatBanner(
         label = "heart_scale"
     )
 
+    val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+
     val bannerBgGradient = if (isExpired) {
         Brush.horizontalGradient(
             colors = listOf(Color(0xFF2E7D32).copy(alpha = 0.15f), Color(0xFF81C784).copy(alpha = 0.15f))
         )
     } else {
-        Brush.horizontalGradient(
-            colors = listOf(Color(0xFFFFF0F5), Color(0xFFFDE8E9))
-        )
+        if (isDark) {
+            Brush.horizontalGradient(
+                colors = listOf(Color(0xFF0F172A), Color(0xFF1E293B))
+            )
+        } else {
+            Brush.horizontalGradient(
+                colors = listOf(Color(0xFFF1F5FB), Color(0xFFE2E8F0))
+            )
+        }
     }
 
     val borderColor = if (isExpired) Color(0xFF4CAF50) else RoseGoldPrimary.copy(alpha = 0.4f)
@@ -203,7 +212,7 @@ fun CheckAfterChatBanner(
                         },
                         fontWeight = FontWeight.Bold,
                         fontSize = 13.sp,
-                        color = if (isExpired) Color(0xFF1B5E20) else DarkAubergine,
+                        color = if (isExpired) (if (isDark) Color(0xFF86EFAC) else Color(0xFF1B5E20)) else MaterialTheme.colorScheme.onSurface,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -235,7 +244,7 @@ fun CheckAfterChatBanner(
                         "$partnerName is taking some quiet time until ${CheckAfterHelper.formatTargetTime(targetMillis)} 🌙. Leave a sweet thought for when they return."
                     },
                     fontSize = 12.sp,
-                    color = DarkAubergine.copy(alpha = 0.85f),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     lineHeight = 16.sp
                 )
 
@@ -323,7 +332,7 @@ fun CheckAfterChatBanner(
                             modifier = Modifier.height(30.dp),
                             border = BorderStroke(1.dp, RoseGoldPrimary.copy(alpha = 0.4f))
                         ) {
-                            Text("Change", fontSize = 11.sp, color = DarkAubergine)
+                            Text("Change", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface)
                         }
 
                         TextButton(
@@ -433,7 +442,7 @@ fun CheckAfterBottomSheet(
                     text = "Check After",
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
-                    color = DarkAubergine
+                    color = MaterialTheme.colorScheme.onSurface
                 )
             }
 
@@ -468,7 +477,7 @@ fun CheckAfterBottomSheet(
                                 text = "Active Check-After",
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 12.sp,
-                                color = DarkAubergine
+                                color = MaterialTheme.colorScheme.onSurface
                             )
                         }
                         Spacer(modifier = Modifier.height(4.dp))
@@ -482,7 +491,7 @@ fun CheckAfterBottomSheet(
                         Text(
                             text = "⏳ $remaining",
                             fontSize = 12.sp,
-                            color = DarkAubergine
+                            color = MaterialTheme.colorScheme.onSurface
                         )
 
                         Spacer(modifier = Modifier.height(10.dp))
@@ -540,7 +549,7 @@ fun CheckAfterBottomSheet(
                     text = "Or Set a New Time",
                     fontWeight = FontWeight.Bold,
                     fontSize = 13.sp,
-                    color = DarkAubergine,
+                    color = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.fillMaxWidth()
                 )
                 Spacer(modifier = Modifier.height(8.dp))
@@ -607,7 +616,7 @@ fun CheckAfterBottomSheet(
                             text = label,
                             fontSize = 13.sp,
                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                            color = if (isSelected) Color.White else DarkAubergine,
+                            color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface,
                             modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
                         )
                     }
@@ -619,7 +628,7 @@ fun CheckAfterBottomSheet(
             // Calculated Target Time Preview Box
             Surface(
                 shape = RoundedCornerShape(16.dp),
-                color = Color(0xFFFBF4F6),
+                color = MaterialTheme.colorScheme.surfaceVariant,
                 border = BorderStroke(1.dp, RoseGoldPrimary.copy(alpha = 0.3f)),
                 modifier = Modifier.fillMaxWidth()
             ) {
@@ -644,7 +653,7 @@ fun CheckAfterBottomSheet(
                             text = CheckAfterHelper.formatTargetTime(targetMillis),
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Bold,
-                            color = DarkAubergine
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                     }
                 }
@@ -670,10 +679,10 @@ fun CheckAfterBottomSheet(
                     val isTagSelected = selectedNote == noteTag
                     Surface(
                         shape = RoundedCornerShape(12.dp),
-                        color = if (isTagSelected) RoseGoldPrimary.copy(alpha = 0.15f) else Color(0xFFF7F7F8),
+                        color = if (isTagSelected) RoseGoldPrimary.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant,
                         border = BorderStroke(
                             1.dp,
-                            if (isTagSelected) RoseGoldPrimary else Color(0xFFE5E5E8)
+                            if (isTagSelected) RoseGoldPrimary else MaterialTheme.colorScheme.outlineVariant
                         ),
                         modifier = Modifier.clickable {
                             selectedNote = if (isTagSelected) "" else noteTag
@@ -682,7 +691,7 @@ fun CheckAfterBottomSheet(
                         Text(
                             text = noteTag,
                             fontSize = 11.sp,
-                            color = if (isTagSelected) RoseGoldPrimary else DarkAubergine,
+                            color = if (isTagSelected) RoseGoldPrimary else MaterialTheme.colorScheme.onSurface,
                             modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
                         )
                     }
@@ -722,7 +731,7 @@ fun CheckAfterBottomSheet(
                             text = "Notification Reminder",
                             fontSize = 13.sp,
                             fontWeight = FontWeight.SemiBold,
-                            color = DarkAubergine
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
                             text = "Get a discreet reminder when time arrives",

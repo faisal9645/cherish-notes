@@ -281,6 +281,28 @@ class CoupleFeaturesRepository(
         }
     }
 
+    suspend fun restoreSharedNotes(notes: List<SharedNote>) {
+        if (notes.isEmpty()) return
+        val current = _notesFlow.value.toMutableList()
+        val existingIds = current.map { it.id }.toSet()
+        val toAdd = notes.filter { it.id !in existingIds }
+        if (toAdd.isNotEmpty()) {
+            current.addAll(0, toAdd)
+            _notesFlow.value = current
+        }
+    }
+
+    suspend fun restoreImportantDates(dates: List<ImportantDate>) {
+        if (dates.isEmpty()) return
+        val current = _datesFlow.value.toMutableList()
+        val existingIds = current.map { it.id }.toSet()
+        val toAdd = dates.filter { it.id !in existingIds }
+        if (toAdd.isNotEmpty()) {
+            current.addAll(toAdd)
+            _datesFlow.value = current.sortedBy { it.dateMillis }
+        }
+    }
+
     private fun getSampleMemories(): List<Memory> {
         val now = System.currentTimeMillis()
         val thirtyDays = 30L * 24 * 3600 * 1000

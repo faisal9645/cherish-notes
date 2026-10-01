@@ -23,6 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -148,6 +149,8 @@ fun PrivacyAuditScreen(
         },
         containerColor = MaterialTheme.colorScheme.surface
     ) { paddingValues ->
+        val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+
         Column(
             modifier = modifier
                 .fillMaxSize()
@@ -159,8 +162,8 @@ fun PrivacyAuditScreen(
             // Hero Status Badge
             Surface(
                 shape = RoundedCornerShape(24.dp),
-                color = if (isAllPassed) Color(0xFFF1F8E9) else Color(0xFFFFF3E0),
-                border = BorderStroke(1.dp, if (isAllPassed) Color(0xFF81C784) else Color(0xFFFFB74D)),
+                color = if (isAllPassed) (if (isDark) Color(0xFF0F291E) else Color(0xFFF1F8E9)) else (if (isDark) Color(0xFF2E1C0C) else Color(0xFFFFF3E0)),
+                border = BorderStroke(1.dp, if (isAllPassed) (if (isDark) Color(0xFF1B5E20) else Color(0xFF81C784)) else (if (isDark) Color(0xFF7C2D12) else Color(0xFFFFB74D))),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(
@@ -195,7 +198,7 @@ fun PrivacyAuditScreen(
                         text = "$passedCount / $totalCount Protections Active",
                         fontSize = 20.sp,
                         fontWeight = FontWeight.Bold,
-                        color = if (isAllPassed) Color(0xFF1B5E20) else Color(0xFFE65100)
+                        color = if (isAllPassed) (if (isDark) Color(0xFF86EFAC) else Color(0xFF1B5E20)) else (if (isDark) Color(0xFFFDBA74) else Color(0xFFE65100))
                     )
 
                     Spacer(modifier = Modifier.height(4.dp))
@@ -207,7 +210,7 @@ fun PrivacyAuditScreen(
                             "Activate remaining layers below for full cryptographic & visual stealth."
                         },
                         fontSize = 12.sp,
-                        color = DarkAubergine.copy(alpha = 0.8f),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = androidx.compose.ui.text.style.TextAlign.Center
                     )
                 }
@@ -247,7 +250,7 @@ fun PrivacyAuditScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(12.dp))
-                            .background(Color(0xFFF4F4F8))
+                            .background(MaterialTheme.colorScheme.surfaceVariant)
                             .padding(4.dp),
                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
@@ -269,7 +272,7 @@ fun PrivacyAuditScreen(
                                     text = label,
                                     fontSize = 11.sp,
                                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                    color = if (isSelected) Color.White else DarkAubergine
+                                    color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
                         }
@@ -289,7 +292,7 @@ fun PrivacyAuditScreen(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Filled.WarningAmber, contentDescription = null, tint = Color(0xFFD32F2F), modifier = Modifier.size(20.dp))
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Panic Protection Gesture", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                        Text("Panic Protection Gesture", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface)
                     }
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
@@ -310,7 +313,7 @@ fun PrivacyAuditScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(12.dp))
-                            .background(Color(0xFFF4F4F8))
+                            .background(MaterialTheme.colorScheme.surfaceVariant)
                             .padding(4.dp),
                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
@@ -332,7 +335,7 @@ fun PrivacyAuditScreen(
                                     text = label,
                                     fontSize = 10.sp,
                                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                    color = if (isSelected) Color.White else DarkAubergine,
+                                    color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
                                     maxLines = 1
                                 )
                             }
@@ -346,7 +349,7 @@ fun PrivacyAuditScreen(
                 "8-Point Comprehensive Security Matrix",
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Bold,
-                color = DarkAubergine
+                color = MaterialTheme.colorScheme.onSurface
             )
 
             checks.forEach { check ->
@@ -365,13 +368,13 @@ fun PrivacyAuditScreen(
                             modifier = Modifier
                                 .size(32.dp)
                                 .clip(CircleShape)
-                                .background(if (check.isPassed) Color(0xFFE8F5E9) else Color(0xFFFFEBEE)),
+                                .background(if (check.isPassed) (if (isDark) Color(0xFF1E3A8A) else Color(0xFFE8F5E9)) else (if (isDark) Color(0xFF450A0A) else Color(0xFFFFEBEE))),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 imageVector = if (check.isPassed) Icons.Filled.Check else Icons.Filled.Close,
                                 contentDescription = null,
-                                tint = if (check.isPassed) Color(0xFF2E7D32) else Color(0xFFC62828),
+                                tint = if (check.isPassed) (if (isDark) Color(0xFF93C5FD) else Color(0xFF2E7D32)) else (if (isDark) Color(0xFFFCA5A5) else Color(0xFFC62828)),
                                 modifier = Modifier.size(18.dp)
                             )
                         }
@@ -383,7 +386,7 @@ fun PrivacyAuditScreen(
                                 text = check.title,
                                 fontWeight = FontWeight.SemiBold,
                                 fontSize = 13.sp,
-                                color = DarkAubergine
+                                color = MaterialTheme.colorScheme.onSurface
                             )
                             Text(
                                 text = check.description,
@@ -417,13 +420,13 @@ fun PrivacyAuditScreen(
                         } else {
                             Surface(
                                 shape = RoundedCornerShape(8.dp),
-                                color = if (check.isPassed) Color(0xFFE8F5E9) else Color(0xFFFFF3E0)
+                                color = if (check.isPassed) (if (isDark) Color(0xFF1E3A8A) else Color(0xFFE8F5E9)) else (if (isDark) Color(0xFF450A0A) else Color(0xFFFFEBEE))
                             ) {
                                 Text(
                                     text = check.actionText ?: if (check.isPassed) "Active" else "Action Needed",
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = if (check.isPassed) Color(0xFF2E7D32) else Color(0xFFE65100),
+                                    color = if (check.isPassed) (if (isDark) Color(0xFF93C5FD) else Color(0xFF2E7D32)) else (if (isDark) Color(0xFFFCA5A5) else Color(0xFFE65100)),
                                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                                 )
                             }

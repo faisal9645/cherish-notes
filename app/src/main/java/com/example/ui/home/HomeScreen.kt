@@ -689,13 +689,13 @@ fun HomeScreen(
 
                         Surface(
                             shape = RoundedCornerShape(10.dp),
-                            color = Color(0xFFFFF0F5)
+                            color = MaterialTheme.colorScheme.primaryContainer
                         ) {
                             Text(
                                 text = "Level 3: Soulmates 💖",
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = RoseGoldPrimary,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
                                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                             )
                         }

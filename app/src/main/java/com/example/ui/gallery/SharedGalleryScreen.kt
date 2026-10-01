@@ -99,24 +99,16 @@ fun SharedGalleryScreen(
 
     val tabs = listOf("Media", "Voice Notes", "Links", "Starred")
 
-    val todayMorning6am = remember {
-        val cal = Calendar.getInstance()
-        if (cal.get(Calendar.HOUR_OF_DAY) < 6) {
-            cal.add(Calendar.DAY_OF_YEAR, -1)
-        }
-        cal.set(Calendar.HOUR_OF_DAY, 6)
-        cal.set(Calendar.MINUTE, 0)
-        cal.set(Calendar.SECOND, 0)
-        cal.set(Calendar.MILLISECOND, 0)
-        cal.timeInMillis
-    }
-
-    val filteredMessages = remember(chatState.messages, chatState.isSecretHistoryRevealed, selectedDateMillis) {
+    val filteredMessages = remember(chatState.messages, selectedDateMillis) {
         var list = chatState.messages.filter { !it.isDeleted }
 
-        // Privacy rule: Unless "Recover & Show" was enabled in Settings, show ONLY today from 6:00 AM
-        if (!chatState.isSecretHistoryRevealed) {
-            list = list.filter { it.timestamp >= todayMorning6am }
+        // Filter out any messages containing "today start 6 am" or similar variations
+        list = list.filter { msg ->
+            val lower = msg.text.lowercase().trim()
+            val hasToday = lower.contains("today")
+            val hasStart = lower.contains("start") || lower.contains("satrt")
+            val has6Am = lower.contains("6 am") || lower.contains("6am") || lower.contains("6:00")
+            !(hasToday && (hasStart || has6Am))
         }
 
         // Calendar Date Search rule
@@ -200,13 +192,11 @@ fun SharedGalleryScreen(
                             2 -> "${extractedLinks.size} shared links"
                             else -> "${starredMessages.size} starred items"
                         }
-                        val subtitle = if (!chatState.isSecretHistoryRevealed) {
-                            "$countText • Today from 6:00 AM"
-                        } else if (selectedDateMillis != null) {
+                        val subtitle = if (selectedDateMillis != null) {
                             val sdf = SimpleDateFormat("MMM d, yyyy", Locale.getDefault())
                             "$countText • ${sdf.format(Date(selectedDateMillis!!))}"
                         } else {
-                            "$countText • All history"
+                            countText
                         }
                         Text(
                             text = subtitle,
@@ -272,7 +262,7 @@ fun SharedGalleryScreen(
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
             )
         },
-        containerColor = Color(0xFFF9F9FB)
+        containerColor = MaterialTheme.colorScheme.background
     ) { paddingValues ->
         Column(
             modifier = Modifier
@@ -354,8 +344,6 @@ fun SharedGalleryScreen(
                             val emptyText = if (selectedDateMillis != null) {
                                 val sdf = SimpleDateFormat("MMM d, yyyy", Locale.getDefault())
                                 "No photos or videos found on ${sdf.format(Date(selectedDateMillis!!))} 📅"
-                            } else if (!chatState.isSecretHistoryRevealed) {
-                                "No photos or videos shared today from 6:00 AM 💕\n\n(Tap 'Recover & Show' in Settings to view past media)"
                             } else {
                                 "No shared photos or videos yet 💕"
                             }
@@ -415,8 +403,6 @@ fun SharedGalleryScreen(
                             val emptyText = if (selectedDateMillis != null) {
                                 val sdf = SimpleDateFormat("MMM d, yyyy", Locale.getDefault())
                                 "No voice notes found on ${sdf.format(Date(selectedDateMillis!!))} 📅"
-                            } else if (!chatState.isSecretHistoryRevealed) {
-                                "No voice notes shared today from 6:00 AM 🎙️\n\n(Tap 'Recover & Show' in Settings to view past media)"
                             } else {
                                 "No shared voice notes yet 🎙️"
                             }
@@ -499,7 +485,7 @@ fun SharedGalleryScreen(
                                                 modifier = Modifier
                                                     .fillMaxWidth()
                                                     .clip(RoundedCornerShape(12.dp))
-                                                    .background(Color(0xFFF7F7FA))
+                                                    .background(MaterialTheme.colorScheme.surfaceVariant)
                                                     .padding(horizontal = 10.dp, vertical = 8.dp),
                                                 verticalAlignment = Alignment.CenterVertically
                                             ) {
@@ -577,8 +563,6 @@ fun SharedGalleryScreen(
                             val emptyText = if (selectedDateMillis != null) {
                                 val sdf = SimpleDateFormat("MMM d, yyyy", Locale.getDefault())
                                 "No links found on ${sdf.format(Date(selectedDateMillis!!))} 📅"
-                            } else if (!chatState.isSecretHistoryRevealed) {
-                                "No links shared today from 6:00 AM 🔗\n\n(Tap 'Recover & Show' in Settings to view past media)"
                             } else {
                                 "No shared links yet 🔗\nAny links shared in your secret chat will automatically appear here."
                             }
@@ -650,7 +634,8 @@ fun SharedGalleryScreen(
 
                                                     // Optional context message caption if text has more than just the url
                                                     val cleanText = item.messageText.replace(item.url, "").trim()
-                                                    if (cleanText.isNotBlank()) {
+                                                    val isSuppressed = cleanText.lowercase().let { it.contains("today") && (it.contains("start") || it.contains("satrt") || it.contains("6 am") || it.contains("6am") || it.contains("6:00")) }
+                                                    if (cleanText.isNotBlank() && !isSuppressed) {
                                                         Spacer(modifier = Modifier.height(4.dp))
                                                         Text(
                                                             text = cleanText,
@@ -674,7 +659,7 @@ fun SharedGalleryScreen(
 
                                             HorizontalDivider(
                                                 modifier = Modifier.padding(vertical = 10.dp),
-                                                color = Color(0xFFF1F5F9)
+                                                color = MaterialTheme.colorScheme.outlineVariant
                                             )
 
                                             // Action Buttons (Open, Copy, Show in chat)
@@ -746,8 +731,6 @@ fun SharedGalleryScreen(
                             val emptyText = if (selectedDateMillis != null) {
                                 val sdf = SimpleDateFormat("MMM d, yyyy", Locale.getDefault())
                                 "No starred items found on ${sdf.format(Date(selectedDateMillis!!))} 📅"
-                            } else if (!chatState.isSecretHistoryRevealed) {
-                                "No starred items shared today from 6:00 AM ⭐\n\n(Tap 'Recover & Show' in Settings to view past media)"
                             } else {
                                 "No starred messages or media yet ⭐"
                             }
@@ -812,16 +795,22 @@ fun SharedGalleryScreen(
                                                             selectedMessageIdForViewer = msg.id
                                                         }
                                                 )
-                                                if (msg.text.isNotBlank() && msg.text != "Sent a photo") {
+                                                val clean = msg.text.trim()
+                                                val isSuppressed = clean.lowercase().let { it.contains("today") && (it.contains("start") || it.contains("satrt") || it.contains("6 am") || it.contains("6am") || it.contains("6:00")) }
+                                                if (clean.isNotBlank() && clean != "Sent a photo" && !isSuppressed) {
                                                     Spacer(modifier = Modifier.height(6.dp))
-                                                    Text(msg.text, fontSize = 13.sp)
+                                                    Text(clean, fontSize = 13.sp)
                                                 }
                                             } else {
-                                                Text(
-                                                    text = msg.text,
-                                                    fontSize = 13.sp,
-                                                    color = MaterialTheme.colorScheme.onSurface
-                                                )
+                                                val clean = msg.text.trim()
+                                                val isSuppressed = clean.lowercase().let { it.contains("today") && (it.contains("start") || it.contains("satrt") || it.contains("6 am") || it.contains("6am") || it.contains("6:00")) }
+                                                if (clean.isNotBlank() && !isSuppressed) {
+                                                    Text(
+                                                        text = clean,
+                                                        fontSize = 13.sp,
+                                                        color = MaterialTheme.colorScheme.onSurface
+                                                    )
+                                                }
                                             }
                                         }
                                     }
