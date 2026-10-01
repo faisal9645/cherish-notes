@@ -189,7 +189,7 @@ fun HomeScreen(
                         .fillMaxWidth()
                         .navigationBarsPadding()
                 ) {
-                    HorizontalDivider(color = Color(0xFFF0F0F2), thickness = 1.dp)
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, thickness = 1.dp)
                     // Streamlined 3-tab navigation focused on strictly 2-person chat, daily growth, and ironclad security
                     NavigationBar(
                         containerColor = Color.Transparent,
@@ -247,8 +247,8 @@ fun HomeScreen(
             // Strictly 2-Person Verified Badge
             Surface(
                 shape = RoundedCornerShape(16.dp),
-                color = SoftPinkSurfaceVariant,
-                border = BorderStroke(1.dp, SoftBorderOutline),
+                color = MaterialTheme.colorScheme.surfaceVariant,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Row(
@@ -269,12 +269,12 @@ fun HomeScreen(
                             text = "Strictly 2-Person Private Channel",
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
-                            color = DarkOnBackground
+                            color = MaterialTheme.colorScheme.onBackground
                         )
                         Text(
                             text = "$myEmail ❤️ $partnerEmail",
                             fontSize = 11.sp,
-                            color = DarkOnSurfaceVariant,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
@@ -292,7 +292,7 @@ fun HomeScreen(
                 colors = CardDefaults.cardColors(
                     containerColor = MaterialTheme.colorScheme.surface
                 ),
-                border = BorderStroke(1.dp, Color(0xFFF0F0F2)),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                 elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
             ) {
                 Row(
@@ -426,7 +426,7 @@ fun HomeScreen(
                     .testTag("lifetime_journey_card"),
                 shape = RoundedCornerShape(22.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                border = BorderStroke(1.dp, Color(0xFFF0F0F2)),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                 elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
             ) {
                 Column(
@@ -444,7 +444,7 @@ fun HomeScreen(
                                 modifier = Modifier
                                     .size(38.dp)
                                     .clip(CircleShape)
-                                    .background(SoftPinkSurfaceVariant),
+                                    .background(MaterialTheme.colorScheme.surfaceVariant),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
@@ -460,12 +460,12 @@ fun HomeScreen(
                                     text = "Our Lifetime Love & Ages",
                                     fontSize = 15.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = DarkOnBackground
+                                    color = MaterialTheme.colorScheme.onBackground
                                 )
                                 Text(
                                     text = "Year by Year • Where we went & enjoyed",
                                     fontSize = 11.sp,
-                                    color = DarkOnSurfaceVariant
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
                         }
@@ -481,7 +481,7 @@ fun HomeScreen(
 
                     Surface(
                         shape = RoundedCornerShape(12.dp),
-                        color = SoftPinkSurfaceVariant,
+                        color = MaterialTheme.colorScheme.surfaceVariant,
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Row(
@@ -493,7 +493,7 @@ fun HomeScreen(
                                 text = "Ages 34 & 31 • Year 3 of Our Bond",
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.SemiBold,
-                                color = DarkOnBackground
+                                color = MaterialTheme.colorScheme.onBackground
                             )
                             Text(
                                 text = "Open Diary →",
@@ -535,7 +535,7 @@ fun HomeScreen(
                 colors = CardDefaults.cardColors(
                     containerColor = MaterialTheme.colorScheme.surface
                 ),
-                border = BorderStroke(1.dp, Color(0xFFF0F0F2)),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                 elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
             ) {
                 Column(
@@ -658,7 +658,7 @@ fun HomeScreen(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(24.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                border = BorderStroke(1.dp, Color(0xFFF0F0F2)),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                 elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
             ) {
                 Column(
@@ -683,7 +683,7 @@ fun HomeScreen(
                                 text = "Our Love Growth",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
-                                color = DarkOnBackground
+                                color = MaterialTheme.colorScheme.onBackground
                             )
                         }
 
@@ -706,7 +706,7 @@ fun HomeScreen(
                     Text(
                         text = "14 Days Unbroken Connection Streak. Next milestone at 20 days!",
                         fontSize = 12.sp,
-                        color = DarkOnSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
 
                     Spacer(modifier = Modifier.height(8.dp))
@@ -718,14 +718,14 @@ fun HomeScreen(
                             .height(6.dp)
                             .clip(CircleShape),
                         color = RoseGoldPrimary,
-                        trackColor = SoftPinkSurfaceVariant
+                        trackColor = MaterialTheme.colorScheme.surfaceVariant
                     )
 
                     Spacer(modifier = Modifier.height(12.dp))
 
                     Surface(
                         shape = RoundedCornerShape(12.dp),
-                        color = SoftPinkSurfaceVariant,
+                        color = MaterialTheme.colorScheme.surfaceVariant,
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Row(
@@ -737,7 +737,7 @@ fun HomeScreen(
                             Text(
                                 text = "Today's Love Habit: Hug for at least 20 continuous seconds. It releases oxytocin and deepens bonding.",
                                 fontSize = 12.sp,
-                                color = DarkOnBackground,
+                                color = MaterialTheme.colorScheme.onBackground,
                                 lineHeight = 16.sp
                             )
                         }
@@ -752,7 +752,7 @@ fun HomeScreen(
                     .clickable { onNavigateToProfile() },
                 shape = RoundedCornerShape(24.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                border = BorderStroke(1.dp, Color(0xFFF0F0F2)),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                 elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
             ) {
                 Column(
@@ -777,7 +777,7 @@ fun HomeScreen(
                                 text = "Couple Privacy & Security",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
-                                color = DarkOnBackground
+                                color = MaterialTheme.colorScheme.onBackground
                             )
                         }
                         Text(
@@ -793,7 +793,7 @@ fun HomeScreen(
                     Text(
                         text = "• Stealth Notes App Disguise (Passcode: 'love')\n• Screenshot Blocking (FLAG_SECURE Active)\n• Biometric / PIN Lock on Re-entry\n• Masked Lockscreen Notifications",
                         fontSize = 12.sp,
-                        color = DarkOnSurfaceVariant,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         lineHeight = 18.sp
                     )
                 }
@@ -828,5 +828,6 @@ fun HomeScreen(
         )
     }
 }
+
 
 

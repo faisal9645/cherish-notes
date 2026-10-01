@@ -198,7 +198,7 @@ fun ProfileScreen(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(24.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFF0F0F2)),
+                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                 elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
             ) {
                 Column(
@@ -321,7 +321,7 @@ fun ProfileScreen(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(20.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFF0F0F2))
+                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
             ) {
                 Column(modifier = Modifier.padding(18.dp)) {
                     Row(
@@ -399,7 +399,7 @@ fun ProfileScreen(
                     .testTag("profile_open_when_card"),
                 shape = RoundedCornerShape(20.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                border = BorderStroke(1.dp, Color(0xFFF0F0F2)),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                 elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
             ) {
                 ListItem(
@@ -410,7 +410,7 @@ fun ProfileScreen(
                             modifier = Modifier
                                 .size(40.dp)
                                 .clip(CircleShape)
-                                .background(SoftPinkSurfaceVariant),
+                                .background(MaterialTheme.colorScheme.surfaceVariant),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(Icons.Filled.MarkEmailRead, contentDescription = null, tint = RoseGoldPrimary, modifier = Modifier.size(20.dp))
@@ -430,7 +430,7 @@ fun ProfileScreen(
                     .testTag("profile_device_sessions_card"),
                 shape = RoundedCornerShape(20.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                border = BorderStroke(1.dp, Color(0xFFF0F0F2)),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                 elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
             ) {
                 ListItem(
@@ -441,7 +441,7 @@ fun ProfileScreen(
                             modifier = Modifier
                                 .size(40.dp)
                                 .clip(CircleShape)
-                                .background(SoftPinkSurfaceVariant),
+                                .background(MaterialTheme.colorScheme.surfaceVariant),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(Icons.Default.Devices, contentDescription = null, tint = RoseGoldPrimary, modifier = Modifier.size(20.dp))
@@ -461,7 +461,7 @@ fun ProfileScreen(
                     .testTag("profile_storage_manager_card"),
                 shape = RoundedCornerShape(20.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                border = BorderStroke(1.dp, Color(0xFFF0F0F2)),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                 elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
             ) {
                 ListItem(
@@ -472,7 +472,7 @@ fun ProfileScreen(
                             modifier = Modifier
                                 .size(40.dp)
                                 .clip(CircleShape)
-                                .background(SoftPinkSurfaceVariant),
+                                .background(MaterialTheme.colorScheme.surfaceVariant),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(Icons.Default.CleaningServices, contentDescription = null, tint = RoseGoldPrimary, modifier = Modifier.size(20.dp))
@@ -489,7 +489,7 @@ fun ProfileScreen(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(20.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFF0F0F2))
+                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
             ) {
                 Column(modifier = Modifier.padding(18.dp)) {
                     Text(
@@ -686,7 +686,7 @@ fun ProfileScreen(
 
                         HorizontalDivider(
                             modifier = Modifier.padding(vertical = 10.dp),
-                            color = Color(0xFFF0F0F2)
+                            color = MaterialTheme.colorScheme.outlineVariant
                         )
                     }
                     
@@ -854,7 +854,7 @@ fun ProfileScreen(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(24.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                border = BorderStroke(1.dp, Color(0xFFF0F0F2)),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                 elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
@@ -866,7 +866,7 @@ fun ProfileScreen(
                             modifier = Modifier
                                 .size(36.dp)
                                 .clip(CircleShape)
-                                .background(SoftPinkSurfaceVariant),
+                                .background(MaterialTheme.colorScheme.surfaceVariant),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
@@ -989,7 +989,7 @@ fun ProfileScreen(
                     .testTag("profile_check_after_card"),
                 shape = RoundedCornerShape(20.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                border = BorderStroke(1.dp, Color(0xFFF0F0F2)),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                 elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
             ) {
                 Column(
@@ -1003,7 +1003,7 @@ fun ProfileScreen(
                             modifier = Modifier
                                 .size(36.dp)
                                 .clip(CircleShape)
-                                .background(SoftPinkSurfaceVariant),
+                                .background(MaterialTheme.colorScheme.surfaceVariant),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(Icons.Filled.HourglassTop, contentDescription = null, tint = RoseGoldPrimary, modifier = Modifier.size(20.dp))
@@ -1032,8 +1032,8 @@ fun ProfileScreen(
                     if (myActiveCheckAfter) {
                         Surface(
                             shape = RoundedCornerShape(14.dp),
-                            color = SoftPinkSurfaceVariant,
-                            border = BorderStroke(1.dp, SoftBorderOutline),
+                            color = MaterialTheme.colorScheme.surfaceVariant,
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Column(modifier = Modifier.padding(12.dp)) {
@@ -1085,8 +1085,8 @@ fun ProfileScreen(
                     } else if (partnerActiveCheckAfter) {
                         Surface(
                             shape = RoundedCornerShape(14.dp),
-                            color = SoftPinkSurfaceVariant,
-                            border = BorderStroke(1.dp, SoftBorderOutline),
+                            color = MaterialTheme.colorScheme.surfaceVariant,
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Column(modifier = Modifier.padding(12.dp)) {
@@ -1145,7 +1145,7 @@ fun ProfileScreen(
                     .testTag("profile_cloud_backup_card"),
                 shape = RoundedCornerShape(20.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                border = BorderStroke(1.dp, Color(0xFFF0F0F2)),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                 elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
             ) {
                 ListItem(
@@ -1156,7 +1156,7 @@ fun ProfileScreen(
                             modifier = Modifier
                                 .size(40.dp)
                                 .clip(CircleShape)
-                                .background(SoftPinkSurfaceVariant),
+                                .background(MaterialTheme.colorScheme.surfaceVariant),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(Icons.Default.CloudDone, contentDescription = null, tint = RoseGoldPrimary, modifier = Modifier.size(22.dp))
@@ -1650,6 +1650,7 @@ fun ProfileScreen(
         }
     )
 }
+
 
 
 

@@ -587,7 +587,7 @@ fun ChatScreen(
                         .navigationBarsPadding()
                         .imePadding()
                 ) {
-                    HorizontalDivider(color = Color(0xFFF0F0F2), thickness = 1.dp)
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, thickness = 1.dp)
                     // Partner typing / recording animated banner
                 AnimatedVisibility(visible = uiState.isPartnerRecordingAudio || uiState.isPartnerTyping) {
                     Row(
@@ -1440,11 +1440,11 @@ fun StealthDisguiseNotesView(
                 text = "Personal Checklist & Notes",
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Bold,
-                color = DarkOnBackground
+                color = MaterialTheme.colorScheme.onBackground
             )
             Surface(
                 shape = RoundedCornerShape(8.dp),
-                color = Color(0xFFF0F0F2)
+                color = MaterialTheme.colorScheme.outlineVariant
             ) {
                 Text(
                     text = "Saved",
@@ -1482,26 +1482,26 @@ fun StealthDisguiseNotesView(
                 Text(
                     text = task,
                     fontSize = 13.sp,
-                    color = if (checked) Color.Gray else DarkOnBackground
+                    color = if (checked) Color.Gray else MaterialTheme.colorScheme.onBackground
                 )
             }
         }
 
         Spacer(modifier = Modifier.height(20.dp))
-        HorizontalDivider(color = Color(0xFFF0F0F2))
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
         Spacer(modifier = Modifier.height(16.dp))
 
         Text(
             text = "Meeting Notes Draft:",
             fontSize = 13.sp,
             fontWeight = FontWeight.Bold,
-            color = DarkOnBackground
+            color = MaterialTheme.colorScheme.onBackground
         )
         Spacer(modifier = Modifier.height(6.dp))
         Text(
             text = "Team sprint planning completed. Next milestone scheduled for the 15th. Follow up with the project manager regarding the final deliverables.",
             fontSize = 12.sp,
-            color = DarkOnSurfaceVariant,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             lineHeight = 18.sp
         )
 
@@ -1621,5 +1621,6 @@ private fun AttachmentOptionItem(
         )
     }
 }
+
 
 

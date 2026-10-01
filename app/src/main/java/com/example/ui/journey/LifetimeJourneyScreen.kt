@@ -225,8 +225,8 @@ fun LifetimeJourneyScreen(
                         .clickable { showEditProfileDialog = true }
                         .testTag("secret_vow_card"),
                     shape = RoundedCornerShape(22.dp),
-                    colors = CardDefaults.cardColors(containerColor = SoftPinkSurfaceVariant),
-                    border = BorderStroke(1.dp, SoftBorderOutline)
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
                 ) {
                     Column(
                         modifier = Modifier
@@ -250,13 +250,13 @@ fun LifetimeJourneyScreen(
                                     text = "Our Secret Lifelong Promise",
                                     fontSize = 14.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = DarkOnBackground
+                                    color = MaterialTheme.colorScheme.onBackground
                                 )
                             }
                             Icon(
                                 imageVector = Icons.Default.Edit,
                                 contentDescription = "Edit Vow",
-                                tint = DarkOnSurfaceVariant,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.size(16.dp)
                             )
                         }
@@ -266,7 +266,7 @@ fun LifetimeJourneyScreen(
                         Text(
                             text = "“${uiState.profile.secretVow}”",
                             fontSize = 13.sp,
-                            color = DarkOnBackground,
+                            color = MaterialTheme.colorScheme.onBackground,
                             lineHeight = 20.sp,
                             fontWeight = FontWeight.Normal,
                             fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
@@ -286,12 +286,12 @@ fun LifetimeJourneyScreen(
                         text = "How Our Love Evolves Each Year",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
-                        color = DarkOnBackground
+                        color = MaterialTheme.colorScheme.onBackground
                     )
 
                     Surface(
                         shape = RoundedCornerShape(10.dp),
-                        color = SoftPinkSurfaceVariant,
+                        color = MaterialTheme.colorScheme.surfaceVariant,
                         modifier = Modifier.clickable { showAddDialog = true }
                     ) {
                         Row(
@@ -409,7 +409,7 @@ fun YearlyJourneyCard(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(22.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = BorderStroke(1.dp, Color(0xFFF0F0F2)),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column(
@@ -443,13 +443,13 @@ fun YearlyJourneyCard(
                         text = "Ages ${entry.myAge} & ${entry.partnerAge}",
                         fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = DarkOnSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
 
                 Row {
                     IconButton(onClick = onEdit, modifier = Modifier.size(32.dp)) {
-                        Icon(Icons.Default.Edit, contentDescription = "Edit", tint = DarkOnSurfaceVariant, modifier = Modifier.size(16.dp))
+                        Icon(Icons.Default.Edit, contentDescription = "Edit", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(16.dp))
                     }
                     IconButton(onClick = onDelete, modifier = Modifier.size(32.dp)) {
                         Icon(Icons.Default.DeleteOutline, contentDescription = "Delete", tint = HeartRed.copy(alpha = 0.7f), modifier = Modifier.size(16.dp))
@@ -464,7 +464,7 @@ fun YearlyJourneyCard(
                 text = entry.yearTheme,
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
-                color = DarkOnBackground
+                color = MaterialTheme.colorScheme.onBackground
             )
 
             // Passion rating hearts
@@ -480,7 +480,7 @@ fun YearlyJourneyCard(
             if (entry.placesWent.isNotBlank()) {
                 Surface(
                     shape = RoundedCornerShape(12.dp),
-                    color = SoftPinkSurfaceVariant,
+                    color = MaterialTheme.colorScheme.surfaceVariant,
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Row(
@@ -499,13 +499,13 @@ fun YearlyJourneyCard(
                                 text = "Where We Went & Rendezvous:",
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = DarkOnBackground
+                                color = MaterialTheme.colorScheme.onBackground
                             )
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
                                 text = entry.placesWent,
                                 fontSize = 12.sp,
-                                color = DarkOnSurfaceVariant,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 lineHeight = 16.sp
                             )
                         }
@@ -528,13 +528,13 @@ fun YearlyJourneyCard(
                             text = "How We Enjoyed Our Love:",
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
-                            color = DarkOnBackground
+                            color = MaterialTheme.colorScheme.onBackground
                         )
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
                             text = entry.howWeEnjoyed,
                             fontSize = 12.sp,
-                            color = DarkOnSurfaceVariant,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             lineHeight = 17.sp
                         )
                     }
@@ -563,7 +563,7 @@ fun YearlyJourneyCard(
                             text = "“${entry.specialMemory}”",
                             fontSize = 12.sp,
                             fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
-                            color = DarkOnBackground,
+                            color = MaterialTheme.colorScheme.onBackground,
                             lineHeight = 17.sp
                         )
                     }
@@ -584,7 +584,7 @@ fun YearlyJourneyCard(
                     Text(
                         text = entry.songOrQuote,
                         fontSize = 11.sp,
-                        color = DarkOnSurfaceVariant,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontWeight = FontWeight.Medium
                     )
                 }
@@ -599,7 +599,7 @@ fun LifetimeMilestonesCard() {
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(22.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = BorderStroke(1.dp, Color(0xFFF0F0F2)),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column(
@@ -619,7 +619,7 @@ fun LifetimeMilestonesCard() {
                     text = "Growing Old Together in Secret Love",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
-                    color = DarkOnBackground
+                    color = MaterialTheme.colorScheme.onBackground
                 )
             }
 
@@ -628,7 +628,7 @@ fun LifetimeMilestonesCard() {
             Text(
                 text = "Our vision across every decade of our lives:",
                 fontSize = 12.sp,
-                color = DarkOnSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
             Spacer(modifier = Modifier.height(14.dp))
@@ -653,12 +653,12 @@ fun LifetimeMilestonesCard() {
                             text = ageSpan,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
-                            color = DarkOnBackground
+                            color = MaterialTheme.colorScheme.onBackground
                         )
                         Text(
                             text = description,
                             fontSize = 11.sp,
-                            color = DarkOnSurfaceVariant,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             lineHeight = 15.sp
                         )
                     }
@@ -903,5 +903,6 @@ fun EditLifetimeProfileDialog(
         }
     )
 }
+
 
 

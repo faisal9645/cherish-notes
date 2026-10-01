@@ -241,7 +241,7 @@ fun NotesDisguiseScreen(
                                     text = "${uiState.selectedNoteIds.size} selected",
                                     fontSize = 18.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = DarkOnBackground
+                                    color = MaterialTheme.colorScheme.onBackground
                                 )
                             }
 
@@ -311,7 +311,7 @@ fun NotesDisguiseScreen(
                                     text = "Notes",
                                     fontSize = 24.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = DarkOnBackground
+                                    color = MaterialTheme.colorScheme.onBackground
                                 )
                             }
 
@@ -325,7 +325,7 @@ fun NotesDisguiseScreen(
                                     Icon(
                                         imageVector = Icons.Outlined.CheckCircle,
                                         contentDescription = "Select notes to delete",
-                                        tint = DarkOnSurfaceVariant
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
 
@@ -334,7 +334,7 @@ fun NotesDisguiseScreen(
                                     Icon(
                                         imageVector = if (uiState.isGridView) Icons.Default.ViewAgenda else Icons.Default.GridView,
                                         contentDescription = if (uiState.isGridView) "Switch to List View" else "Switch to Grid View",
-                                        tint = DarkOnSurfaceVariant
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
 
@@ -344,7 +344,7 @@ fun NotesDisguiseScreen(
                                         Icon(
                                             imageVector = Icons.Outlined.Sort,
                                             contentDescription = "Sort notes",
-                                            tint = DarkOnSurfaceVariant
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
                                     }
 
@@ -415,7 +415,7 @@ fun NotesDisguiseScreen(
                         placeholder = {
                             Text(
                                 "Search notes, checklists, ideas...",
-                                color = DarkOnSurfaceVariant.copy(alpha = 0.7f),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                                 fontSize = 14.sp
                             )
                         },
@@ -423,7 +423,7 @@ fun NotesDisguiseScreen(
                             Icon(
                                 Icons.Outlined.Search,
                                 contentDescription = "Search",
-                                tint = DarkOnSurfaceVariant
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         },
                         trailingIcon = {
@@ -432,7 +432,7 @@ fun NotesDisguiseScreen(
                                     Icon(
                                         Icons.Default.Close,
                                         contentDescription = "Clear search",
-                                        tint = DarkOnSurfaceVariant
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
                             }
@@ -441,9 +441,9 @@ fun NotesDisguiseScreen(
                         shape = RoundedCornerShape(16.dp),
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedBorderColor = RoseGoldPrimary,
-                            unfocusedBorderColor = SoftBorderOutline,
-                            focusedContainerColor = SoftPinkSurfaceVariant,
-                            unfocusedContainerColor = SoftPinkSurfaceVariant
+                            unfocusedBorderColor = MaterialTheme.colorScheme.outline,
+                            focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant
                         ),
                         modifier = Modifier
                             .fillMaxWidth()
@@ -465,15 +465,15 @@ fun NotesDisguiseScreen(
                                     .then(if (isSelected) Modifier.appGradientShadow(RoundedCornerShape(14.dp)) else Modifier)
                                     .clip(RoundedCornerShape(14.dp))
                                     .background(
-                                        if (isSelected) appHorizontalGradient() else androidx.compose.ui.graphics.SolidColor(SoftPinkSurfaceVariant)
+                                        if (isSelected) appHorizontalGradient() else androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.surfaceVariant)
                                     )
-                                    .then(if (!isSelected) Modifier.border(1.dp, SoftBorderOutline, RoundedCornerShape(14.dp)) else Modifier)
+                                    .then(if (!isSelected) Modifier.border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(14.dp)) else Modifier)
                                     .clickable { viewModel.setSelectedCategory(cat) }
                                     .padding(horizontal = 16.dp, vertical = 7.dp)
                             ) {
                                 Text(
                                     text = cat,
-                                    color = if (isSelected) Color.White else DarkOnSurfaceVariant,
+                                    color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
                                     fontSize = 13.sp,
                                     fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
                                 )
@@ -483,7 +483,7 @@ fun NotesDisguiseScreen(
 
                     Spacer(modifier = Modifier.height(4.dp))
                     HorizontalDivider(
-                        color = Color(0xFFF0F0F2),
+                        color = MaterialTheme.colorScheme.outlineVariant,
                         thickness = 1.dp,
                         modifier = Modifier.padding(top = 8.dp)
                     )
@@ -625,7 +625,7 @@ fun NotesDisguiseScreen(
                             text = if (uiState.searchQuery.isNotBlank()) "No notes match '${uiState.searchQuery}'" else "No Notes in ${uiState.selectedCategory}",
                             fontSize = 17.sp,
                             fontWeight = FontWeight.Bold,
-                            color = DarkOnBackground
+                            color = MaterialTheme.colorScheme.onBackground
                         )
 
                         Spacer(modifier = Modifier.height(6.dp))
@@ -633,7 +633,7 @@ fun NotesDisguiseScreen(
                         Text(
                             text = "Tap the + button below to create your first note or checklist.",
                             fontSize = 13.sp,
-                            color = DarkOnSurfaceVariant,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             textAlign = androidx.compose.ui.text.style.TextAlign.Center
                         )
 
@@ -775,7 +775,7 @@ fun NotesDisguiseScreen(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.Black.copy(alpha = unlockAnimProgress.value * 0.22f)),
+                .background(MaterialTheme.colorScheme.onBackground.copy(alpha = unlockAnimProgress.value * 0.22f)),
             contentAlignment = Alignment.Center
         ) {
             Column(
@@ -837,5 +837,6 @@ fun NotesDisguiseScreen(
 }
 }
 }
+
 
 

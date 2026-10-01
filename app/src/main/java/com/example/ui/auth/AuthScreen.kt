@@ -173,7 +173,7 @@ fun AuthScreen(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(26.dp),
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                        border = BorderStroke(1.dp, Color(0xFFF0F0F2)),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                     ) {
                         Column(
@@ -187,7 +187,7 @@ fun AuthScreen(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clip(RoundedCornerShape(12.dp))
-                                    .background(SoftPinkSurfaceVariant)
+                                    .background(MaterialTheme.colorScheme.surfaceVariant)
                                     .padding(horizontal = 14.dp, vertical = 10.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
@@ -203,12 +203,12 @@ fun AuthScreen(
                                         text = "Account Sign-In",
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 13.sp,
-                                        color = DarkOnBackground
+                                        color = MaterialTheme.colorScheme.onBackground
                                     )
                                     Text(
                                         text = "Private couple chat with your partner",
                                         fontSize = 11.sp,
-                                        color = DarkOnSurfaceVariant
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
                             }
@@ -273,7 +273,7 @@ fun AuthScreen(
                                 Text(
                                     text = "Connecting 2 phones?",
                                     fontSize = 12.sp,
-                                    color = DarkOnSurfaceVariant
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                                 TextButton(
                                     onClick = {
@@ -352,12 +352,12 @@ fun AuthScreen(
                                         text = "💡 How to connect both phones:",
                                         fontSize = 11.sp,
                                         fontWeight = FontWeight.Bold,
-                                        color = DarkOnBackground
+                                        color = MaterialTheme.colorScheme.onBackground
                                     )
                                     Text(
                                         text = "• Phone 1: You: ${myUsername.ifBlank { "User A" }} | Partner: ${partnerUsername.ifBlank { "User B" }}\n• Phone 2: You: ${partnerUsername.ifBlank { "User B" }} | Partner: ${myUsername.ifBlank { "User A" }}",
                                         fontSize = 11.sp,
-                                        color = DarkOnSurfaceVariant
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
                             }
@@ -479,7 +479,7 @@ fun AuthScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(12.dp))
-                            .background(SoftPinkSurfaceVariant)
+                            .background(MaterialTheme.colorScheme.surfaceVariant)
                             .padding(horizontal = 16.dp, vertical = 10.dp)
                     ) {
                         Icon(
@@ -492,7 +492,7 @@ fun AuthScreen(
                         Text(
                             text = "Strictly 2-Person Chat: No third party can ever enter",
                             fontSize = 12.sp,
-                            color = DarkOnBackground,
+                            color = MaterialTheme.colorScheme.onBackground,
                             fontWeight = FontWeight.SemiBold
                         )
                     }
@@ -522,5 +522,6 @@ fun GoogleBrandIcon(modifier: Modifier = Modifier) {
         )
     }
 }
+
 
 

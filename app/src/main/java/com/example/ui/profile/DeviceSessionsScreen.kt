@@ -124,7 +124,7 @@ fun DeviceSessionsScreen(
                 Card(
                     shape = RoundedCornerShape(20.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    border = BorderStroke(1.dp, if (session.isCurrent) RoseGoldPrimary.copy(alpha = 0.4f) else Color(0xFFF0F0F2)),
+                    border = BorderStroke(1.dp, if (session.isCurrent) RoseGoldPrimary.copy(alpha = 0.4f) else MaterialTheme.colorScheme.outlineVariant),
                     elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
@@ -194,5 +194,6 @@ fun DeviceSessionsScreen(
         }
     }
 }
+
 
 

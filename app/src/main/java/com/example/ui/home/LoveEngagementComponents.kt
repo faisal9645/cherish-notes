@@ -74,7 +74,7 @@ fun LoveNudgesBar(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = BorderStroke(1.dp, Color(0xFFF0F0F2)),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column(
@@ -216,8 +216,8 @@ private fun NudgeButton(
             modifier = Modifier
                 .size(48.dp)
                 .clip(CircleShape)
-                .background(SoftPinkSurfaceVariant)
-                .border(1.dp, SoftBorderOutline, CircleShape),
+                .background(MaterialTheme.colorScheme.surfaceVariant)
+                .border(1.dp, MaterialTheme.colorScheme.outline, CircleShape),
             contentAlignment = Alignment.Center
         ) {
             Text(text = emoji, fontSize = 23.sp)
@@ -250,7 +250,7 @@ fun DailyQuestionCard(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = BorderStroke(1.dp, Color(0xFFF0F0F2)),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column(
@@ -308,7 +308,7 @@ fun DailyQuestionCard(
                 text = dailyQuestion.question,
                 fontSize = 17.sp,
                 fontWeight = FontWeight.Bold,
-                color = DarkOnBackground,
+                color = MaterialTheme.colorScheme.onBackground,
                 lineHeight = 23.sp
             )
 
@@ -331,7 +331,7 @@ fun DailyQuestionCard(
                     minLines = 2,
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = RoseGoldPrimary,
-                        unfocusedBorderColor = SoftBorderOutline
+                        unfocusedBorderColor = MaterialTheme.colorScheme.outline
                     )
                 )
 
@@ -345,7 +345,7 @@ fun DailyQuestionCard(
                     Text(
                         text = "🔒 Answer to reveal $partnerName's answer",
                         fontSize = 11.sp,
-                        color = DarkOnSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
 
                     Button(
@@ -368,25 +368,25 @@ fun DailyQuestionCard(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(16.dp))
-                        .background(SoftPinkSurfaceVariant)
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
                         .padding(14.dp)
                 ) {
                     // My Answer
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(text = "You", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = RoseGoldPrimary)
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text(text = "• Today", fontSize = 10.sp, color = DarkOnSurfaceVariant)
+                        Text(text = "• Today", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
                         text = dailyQuestion.myAnswer ?: "Loved every moment.",
                         fontSize = 14.sp,
-                        color = DarkOnBackground,
+                        color = MaterialTheme.colorScheme.onBackground,
                         lineHeight = 20.sp
                     )
 
                     HorizontalDivider(
-                        color = SoftBorderOutline,
+                        color = MaterialTheme.colorScheme.outline,
                         thickness = 0.5.dp,
                         modifier = Modifier.padding(vertical = 10.dp)
                     )
@@ -398,9 +398,9 @@ fun DailyQuestionCard(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(text = partnerName, fontWeight = FontWeight.Bold, fontSize = 12.sp, color = DarkOnBackground)
+                            Text(text = partnerName, fontWeight = FontWeight.Bold, fontSize = 12.sp, color = MaterialTheme.colorScheme.onBackground)
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text(text = "• Today", fontSize = 10.sp, color = DarkOnSurfaceVariant)
+                            Text(text = "• Today", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
 
                         IconButton(
@@ -410,7 +410,7 @@ fun DailyQuestionCard(
                             Icon(
                                 imageVector = if (dailyQuestion.isLikedByPartner) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
                                 contentDescription = "Like answer",
-                                tint = if (dailyQuestion.isLikedByPartner) HeartRed else DarkOnSurfaceVariant,
+                                tint = if (dailyQuestion.isLikedByPartner) HeartRed else MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.size(18.dp)
                             )
                         }
@@ -419,7 +419,7 @@ fun DailyQuestionCard(
                     Text(
                         text = dailyQuestion.partnerAnswer ?: "Waiting for answer...",
                         fontSize = 14.sp,
-                        color = DarkOnBackground,
+                        color = MaterialTheme.colorScheme.onBackground,
                         lineHeight = 20.sp
                     )
                 }
@@ -455,7 +455,7 @@ fun LoveJarCard(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = BorderStroke(1.dp, Color(0xFFF0F0F2)),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Row(
@@ -481,12 +481,12 @@ fun LoveJarCard(
                         text = "Love Jar",
                         fontWeight = FontWeight.Bold,
                         style = MaterialTheme.typography.titleMedium,
-                        color = DarkOnBackground
+                        color = MaterialTheme.colorScheme.onBackground
                     )
                     Text(
                         text = "$notesCount sweet notes & reasons inside",
                         fontSize = 12.sp,
-                        color = DarkOnSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
@@ -518,7 +518,7 @@ fun BucketListCard(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = BorderStroke(1.dp, Color(0xFFF0F0F2)),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column(
@@ -543,7 +543,7 @@ fun BucketListCard(
                         text = "Our Couple Bucket List",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
-                        color = DarkOnBackground
+                        color = MaterialTheme.colorScheme.onBackground
                     )
                 }
 
@@ -555,7 +555,7 @@ fun BucketListCard(
             Text(
                 text = "Things we dream of doing together ✈️",
                 fontSize = 12.sp,
-                color = DarkOnSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
             Spacer(modifier = Modifier.height(14.dp))
@@ -580,7 +580,7 @@ fun BucketListCard(
                         Text(
                             text = item.title,
                             fontSize = 14.sp,
-                            color = if (item.isCompleted) DarkOnSurfaceVariant else DarkOnBackground,
+                            color = if (item.isCompleted) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onBackground,
                             textDecoration = if (item.isCompleted) TextDecoration.LineThrough else null,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
@@ -622,7 +622,7 @@ fun DrawLoveNoteDialog(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(16.dp))
-                    .background(SoftPinkSurfaceVariant)
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
                     .padding(20.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
@@ -632,7 +632,7 @@ fun DrawLoveNoteDialog(
                     text = "\"${note?.text ?: "I love every little moment we share together."}\"",
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Medium,
-                    color = DarkOnBackground,
+                    color = MaterialTheme.colorScheme.onBackground,
                     textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                     lineHeight = 22.sp
                 )
@@ -683,7 +683,7 @@ fun AddLoveNoteDialog(
                 Text(
                     text = "Write a sweet compliment, reason why you love them, or a cherished memory:",
                     fontSize = 12.sp,
-                    color = DarkOnSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Spacer(modifier = Modifier.height(10.dp))
                 OutlinedTextField(
@@ -703,7 +703,7 @@ fun AddLoveNoteDialog(
                             modifier = Modifier
                                 .size(36.dp)
                                 .clip(CircleShape)
-                                .background(if (selectedEmoji == emoji) RoseGoldContainer else SoftPinkSurfaceVariant)
+                                .background(if (selectedEmoji == emoji) RoseGoldContainer else MaterialTheme.colorScheme.surfaceVariant)
                                 .clickable { selectedEmoji = emoji },
                             contentAlignment = Alignment.Center
                         ) {
@@ -769,12 +769,12 @@ fun AddBucketItemDialog(
                     items(categories) { cat ->
                         Surface(
                             shape = RoundedCornerShape(10.dp),
-                            color = if (category == cat) RoseGoldPrimary else SoftPinkSurfaceVariant,
+                            color = if (category == cat) RoseGoldPrimary else MaterialTheme.colorScheme.surfaceVariant,
                             modifier = Modifier.clickable { category = cat }
                         ) {
                             Text(
                                 text = cat,
-                                color = if (category == cat) Color.White else DarkOnSurfaceVariant,
+                                color = if (category == cat) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontSize = 11.sp,
                                 modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
                             )
@@ -804,4 +804,5 @@ fun AddBucketItemDialog(
         }
     )
 }
+
 

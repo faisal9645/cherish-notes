@@ -80,8 +80,8 @@ fun CloudBackupScreen(
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(22.dp),
-                    colors = CardDefaults.cardColors(containerColor = SoftPinkSurfaceVariant),
-                    border = BorderStroke(1.dp, SoftBorderOutline)
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
                 ) {
                     Column(
                         modifier = Modifier
@@ -109,7 +109,7 @@ fun CloudBackupScreen(
                                     text = "Where is it stored in Google Drive?",
                                     fontSize = 14.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = DarkOnBackground
+                                    color = MaterialTheme.colorScheme.onBackground
                                 )
                                 Text(
                                     text = "Location: Hidden AppData Space",
@@ -127,7 +127,7 @@ fun CloudBackupScreen(
                                     "• Invisible in Regular Drive: When you or anyone opens your Google Drive app or drive.google.com, it will NOT appear in recent files, folders, or search results.\n" +
                                     "• Web Verification: Only visible to you in Google Drive on desktop under: Settings (⚙️) → Manage Apps → Cherish.",
                             fontSize = 12.sp,
-                            color = DarkOnBackground,
+                            color = MaterialTheme.colorScheme.onBackground,
                             lineHeight = 18.sp
                         )
                     }
@@ -140,7 +140,7 @@ fun CloudBackupScreen(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(22.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    border = BorderStroke(1.dp, Color(0xFFF0F0F2)),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                     elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                 ) {
                     Column(
@@ -156,7 +156,7 @@ fun CloudBackupScreen(
                             Text(
                                 text = "Connected Google Account",
                                 fontSize = 12.sp,
-                                color = DarkOnSurfaceVariant,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontWeight = FontWeight.Medium
                             )
                             Surface(
@@ -179,11 +179,11 @@ fun CloudBackupScreen(
                             text = uiState.driveAccountEmail,
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Bold,
-                            color = DarkOnBackground
+                            color = MaterialTheme.colorScheme.onBackground
                         )
 
                         Spacer(modifier = Modifier.height(16.dp))
-                        HorizontalDivider(color = Color(0xFFF0F0F2))
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                         Spacer(modifier = Modifier.height(16.dp))
 
                         Row(
@@ -191,12 +191,12 @@ fun CloudBackupScreen(
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Column {
-                                Text(text = "Last Cloud Backup", fontSize = 11.sp, color = DarkOnSurfaceVariant)
-                                Text(text = uiState.lastBackupDate, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = DarkOnBackground)
+                                Text(text = "Last Cloud Backup", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(text = uiState.lastBackupDate, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onBackground)
                             }
                             Column(horizontalAlignment = Alignment.End) {
-                                Text(text = "Items Protected", fontSize = 11.sp, color = DarkOnSurfaceVariant)
-                                Text(text = "${uiState.totalItemsBackedUp} Items", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = DarkOnBackground)
+                                Text(text = "Items Protected", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(text = "${uiState.totalItemsBackedUp} Items", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onBackground)
                             }
                         }
 
@@ -205,7 +205,7 @@ fun CloudBackupScreen(
                         Text(
                             text = "Status: ${uiState.statusMessage}",
                             fontSize = 11.sp,
-                            color = DarkOnSurfaceVariant,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
                         )
                     }
@@ -273,7 +273,7 @@ fun CloudBackupScreen(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(22.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    border = BorderStroke(1.dp, Color(0xFFF0F0F2)),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                     elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                 ) {
                     Column(
@@ -293,7 +293,7 @@ fun CloudBackupScreen(
                                 text = "How to Transfer to a New Mobile",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
-                                color = DarkOnBackground
+                                color = MaterialTheme.colorScheme.onBackground
                             )
                         }
 
@@ -314,7 +314,7 @@ fun CloudBackupScreen(
                             ) {
                                 Surface(
                                     shape = RoundedCornerShape(8.dp),
-                                    color = SoftPinkSurfaceVariant
+                                    color = MaterialTheme.colorScheme.surfaceVariant
                                 ) {
                                     Text(
                                         text = step,
@@ -328,7 +328,7 @@ fun CloudBackupScreen(
                                 Text(
                                     text = text,
                                     fontSize = 12.sp,
-                                    color = DarkOnBackground,
+                                    color = MaterialTheme.colorScheme.onBackground,
                                     lineHeight = 17.sp
                                 )
                             }
@@ -365,5 +365,6 @@ fun CloudBackupScreen(
         )
     }
 }
+
 
 

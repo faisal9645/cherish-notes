@@ -118,6 +118,16 @@ class MainActivity : FragmentActivity() {
         }
     }
 
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (!hasFocus && !app.securityPreferences.ignoreNextPause) {
+            // Triggered instantly when user starts swiping up for Recents gesture
+            showRecentsDisguise()
+        } else if (hasFocus) {
+            hideRecentsDisguise()
+        }
+    }
+
     override fun onResume() {
         super.onResume()
         setHighRefreshRate()
@@ -145,15 +155,9 @@ class MainActivity : FragmentActivity() {
             showRecentsDisguise()
         }
 
-        // Ensure recent-apps preview is redacted when leaving secret mode (unless showing the fake notes overlay)
-        if (app.securityPreferences.isScreenshotProtectionEnabled()) {
-            window.setFlags(
-                WindowManager.LayoutParams.FLAG_SECURE,
-                WindowManager.LayoutParams.FLAG_SECURE
-            )
-        } else {
-            window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
-        }
+        // Temporarily clear FLAG_SECURE so the Android system can take a snapshot of the Disguise View
+        // instead of showing a black/blank screen in the multitasking menu.
+        window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
     }
 
     override fun onStop() {

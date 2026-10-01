@@ -164,7 +164,7 @@ fun InlineYouTubeCard(
 
     Surface(
         shape = RoundedCornerShape(14.dp),
-        color = Color(0xFF18181B),
+        color = MaterialTheme.colorScheme.onBackground,
         border = BorderStroke(1.dp, Color(0xFF27272A)),
         modifier = modifier
             .fillMaxWidth()
@@ -451,6 +451,7 @@ fun LinkPreviewCard(
         }
     }
 }
+
 
 
 

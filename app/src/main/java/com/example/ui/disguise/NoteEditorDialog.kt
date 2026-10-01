@@ -113,7 +113,7 @@ fun NoteEditorScreen(
                         text = if (initialNote == null) "New Note" else "Edit Note",
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
-                        color = DarkOnBackground
+                        color = MaterialTheme.colorScheme.onBackground
                     )
 
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -122,7 +122,7 @@ fun NoteEditorScreen(
                             Icon(
                                 imageVector = if (isPinned) Icons.Filled.PushPin else Icons.Outlined.PushPin,
                                 contentDescription = if (isPinned) "Unpin" else "Pin",
-                                tint = if (isPinned) RoseGoldPrimary else DarkOnSurfaceVariant
+                                tint = if (isPinned) RoseGoldPrimary else MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
 
@@ -131,7 +131,7 @@ fun NoteEditorScreen(
                             Icon(
                                 imageVector = if (isChecklistMode) Icons.Filled.Checklist else Icons.Outlined.Checklist,
                                 contentDescription = "Toggle Checklist",
-                                tint = if (isChecklistMode) RoseGoldPrimary else DarkOnSurfaceVariant
+                                tint = if (isChecklistMode) RoseGoldPrimary else MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
 
@@ -150,7 +150,7 @@ fun NoteEditorScreen(
                         }
                     }
                 }
-                HorizontalDivider(color = Color(0xFFF0F0F2), thickness = 1.dp)
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, thickness = 1.dp)
             }
         },
         bottomBar = {
@@ -263,7 +263,7 @@ fun NoteEditorScreen(
                         "Title",
                         fontSize = 22.sp,
                         fontWeight = FontWeight.Bold,
-                        color = DarkOnSurfaceVariant.copy(alpha = 0.5f)
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
                     )
                 },
                 textStyle = MaterialTheme.typography.titleLarge.copy(
@@ -286,7 +286,7 @@ fun NoteEditorScreen(
                 text = "Category",
                 fontSize = 12.sp,
                 fontWeight = FontWeight.SemiBold,
-                color = DarkOnSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Spacer(modifier = Modifier.height(6.dp))
             LazyRow(
@@ -297,15 +297,15 @@ fun NoteEditorScreen(
                     val isSelected = category == cat
                     Surface(
                         shape = RoundedCornerShape(12.dp),
-                        color = if (isSelected) RoseGoldPrimary else SoftPinkSurfaceVariant,
-                        border = if (isSelected) null else BorderStroke(1.dp, SoftBorderOutline),
+                        color = if (isSelected) RoseGoldPrimary else MaterialTheme.colorScheme.surfaceVariant,
+                        border = if (isSelected) null else BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
                         modifier = Modifier
                             .clip(RoundedCornerShape(12.dp))
                             .clickable { category = cat }
                     ) {
                         Text(
                             text = cat,
-                            color = if (isSelected) Color.White else DarkOnSurfaceVariant,
+                            color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
                             fontSize = 12.sp,
                             fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
                             modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
@@ -321,7 +321,7 @@ fun NoteEditorScreen(
                 text = "Note Theme Color",
                 fontSize = 12.sp,
                 fontWeight = FontWeight.SemiBold,
-                color = DarkOnSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Spacer(modifier = Modifier.height(6.dp))
             Row(
@@ -342,7 +342,7 @@ fun NoteEditorScreen(
                             .background(parsed)
                             .border(
                                 width = if (isSelected) 2.5.dp else 1.dp,
-                                color = if (isSelected) RoseGoldPrimary else SoftBorderOutline,
+                                color = if (isSelected) RoseGoldPrimary else MaterialTheme.colorScheme.outline,
                                 shape = CircleShape
                             )
                             .clickable { colorHex = hex },
@@ -361,7 +361,7 @@ fun NoteEditorScreen(
             }
 
             Spacer(modifier = Modifier.height(16.dp))
-            HorizontalDivider(color = Color(0xFFF0F0F2), thickness = 0.5.dp)
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, thickness = 0.5.dp)
             Spacer(modifier = Modifier.height(14.dp))
 
             // Checklist Section (if checklist mode is active)
@@ -371,7 +371,7 @@ fun NoteEditorScreen(
                         text = "Checklist Items",
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Bold,
-                        color = DarkOnBackground
+                        color = MaterialTheme.colorScheme.onBackground
                     )
                     Spacer(modifier = Modifier.height(8.dp))
 
@@ -395,7 +395,7 @@ fun NoteEditorScreen(
                             Text(
                                 text = item.text,
                                 fontSize = 14.sp,
-                                color = DarkOnBackground,
+                                color = MaterialTheme.colorScheme.onBackground,
                                 modifier = Modifier.weight(1f)
                             )
 
@@ -410,7 +410,7 @@ fun NoteEditorScreen(
                                 Icon(
                                     imageVector = Icons.Default.Close,
                                     contentDescription = "Remove item",
-                                    tint = DarkOnSurfaceVariant,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.size(16.dp)
                                 )
                             }
@@ -478,7 +478,7 @@ fun NoteEditorScreen(
                 text = "Note Content",
                 fontSize = 12.sp,
                 fontWeight = FontWeight.SemiBold,
-                color = DarkOnSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Spacer(modifier = Modifier.height(4.dp))
             OutlinedTextField(
@@ -487,7 +487,7 @@ fun NoteEditorScreen(
                 placeholder = {
                     Text(
                         "Type your thoughts, ideas, or meeting notes here...",
-                        color = DarkOnSurfaceVariant.copy(alpha = 0.5f)
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
                     )
                 },
                 minLines = 8,
@@ -497,7 +497,7 @@ fun NoteEditorScreen(
                     .testTag("note_editor_content_input"),
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedBorderColor = RoseGoldPrimary,
-                    unfocusedBorderColor = SoftBorderOutline
+                    unfocusedBorderColor = MaterialTheme.colorScheme.outline
                 )
             )
 
@@ -512,7 +512,7 @@ fun NoteEditorScreen(
                 Text(
                     text = "$wordCount words • $charCount characters",
                     fontSize = 11.sp,
-                    color = DarkOnSurfaceVariant.copy(alpha = 0.7f)
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                 )
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -562,5 +562,6 @@ fun NoteEditorDialog(
         onToast = onToast
     )
 }
+
 
 

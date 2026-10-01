@@ -217,7 +217,7 @@ fun PrivacyAuditScreen(
             Card(
                 shape = RoundedCornerShape(20.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                border = BorderStroke(1.dp, Color(0xFFF0F0F2)),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                 elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
@@ -281,7 +281,7 @@ fun PrivacyAuditScreen(
             Card(
                 shape = RoundedCornerShape(20.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                border = BorderStroke(1.dp, Color(0xFFF0F0F2)),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                 elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
@@ -353,7 +353,7 @@ fun PrivacyAuditScreen(
                 Surface(
                     shape = RoundedCornerShape(16.dp),
                     color = MaterialTheme.colorScheme.surface,
-                    border = BorderStroke(1.dp, Color(0xFFF0F0F2)),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                     shadowElevation = 1.dp,
                     modifier = Modifier.fillMaxWidth()
                 ) {
@@ -436,5 +436,6 @@ fun PrivacyAuditScreen(
         }
     }
 }
+
 
 

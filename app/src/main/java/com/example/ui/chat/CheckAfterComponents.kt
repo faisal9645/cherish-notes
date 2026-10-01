@@ -451,8 +451,8 @@ fun CheckAfterBottomSheet(
             if (isCurrentlyActive && currentTargetMillis != null && currentTargetMillis > System.currentTimeMillis()) {
                 Surface(
                     shape = RoundedCornerShape(16.dp),
-                    color = SoftPinkSurfaceVariant,
-                    border = BorderStroke(1.dp, SoftBorderOutline),
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(modifier = Modifier.padding(14.dp)) {
@@ -534,7 +534,7 @@ fun CheckAfterBottomSheet(
                     }
                 }
                 Spacer(modifier = Modifier.height(16.dp))
-                HorizontalDivider(color = Color(0xFFF0F0F2), thickness = 1.dp)
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, thickness = 1.dp)
                 Spacer(modifier = Modifier.height(14.dp))
                 Text(
                     text = "Or Set a New Time",
@@ -565,7 +565,7 @@ fun CheckAfterBottomSheet(
                     Surface(
                         shape = RoundedCornerShape(14.dp),
                         color = if (isSelected) RoseGoldPrimary else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
-                        border = if (isSelected) null else BorderStroke(1.dp, SoftBorderOutline),
+                        border = if (isSelected) null else BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
                         modifier = Modifier
                             .clickable {
                                 haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
@@ -771,6 +771,7 @@ fun CheckAfterBottomSheet(
         }
     }
 }
+
 
 
 

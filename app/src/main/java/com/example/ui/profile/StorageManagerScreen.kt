@@ -142,7 +142,7 @@ fun StorageManagerScreen(
             Card(
                 shape = RoundedCornerShape(18.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                border = BorderStroke(1.dp, Color(0xFFF0F0F2)),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                 elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
@@ -190,7 +190,7 @@ fun StorageManagerScreen(
             Card(
                 shape = RoundedCornerShape(18.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                border = BorderStroke(1.dp, Color(0xFFF0F0F2)),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                 elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
@@ -251,4 +251,5 @@ private fun formatSize(bytes: Long): String {
         else -> "$bytes B"
     }
 }
+
 
