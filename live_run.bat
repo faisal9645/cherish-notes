@@ -12,6 +12,20 @@ echo   CHERISH NOTES - LIVE RUN & INSTANT DEPLOY
 echo ========================================================
 echo.
 
+echo [*] Checking build environment...
+if not exist .env (
+    if exist .env.example (
+        copy .env.example .env >nul
+        echo [OK] Initialized .env from .env.example
+    )
+)
+if not exist debug.keystore (
+    if exist debug.keystore.base64 (
+        certutil -decode debug.keystore.base64 debug.keystore >nul 2>&1
+        echo [OK] Restored debug.keystore from backup
+    )
+)
+
 :check_device
 echo [*] Checking for connected devices or emulators...
 "%ADB%" devices | findstr /R /C:"[0-9a-zA-Z].*device$" >nul

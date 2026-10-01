@@ -2,17 +2,38 @@
 .gradle
 .kotlin
 /local.properties
+local.properties
+
+# Build artifacts
+/build
+/*/build
+/captures
+.externalNativeBuild
+.cxx
+.build-outputs/
+*.apk
+*.aab
+*.hprof
+
+# IDE and OS
+.DS_Store
+Thumbs.db
 /.idea/caches
 /.idea/libraries
 /.idea/modules.xml
 /.idea/workspace.xml
 /.idea/navEditor.xml
 /.idea/assetWizardSettings.xml
-.DS_Store
-/build
-/captures
-.externalNativeBuild
-.cxx
-local.properties
+/.idea/shelf
+/.idea/gradle.xml
+
+# Secrets & Environment (Keep .env.example tracked, ignore .env)
 .env
+!.env.example
+
+# Keystore (Keep debug.keystore.base64 tracked, ignore generated debug.keystore and private release keys)
 debug.keystore
+*.jks
+*.keystore
+!debug.keystore.base64
+
