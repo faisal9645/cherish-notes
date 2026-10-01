@@ -211,7 +211,7 @@ fun NotesDisguiseScreen(
     Box(modifier = modifier.fillMaxSize()) {
         Surface(
             modifier = Modifier.fillMaxSize(),
-            color = Color.White
+            color = MaterialTheme.colorScheme.surface
         ) {
         Scaffold(
             snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -219,7 +219,7 @@ fun NotesDisguiseScreen(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(Color.White)
+                        .background(MaterialTheme.colorScheme.surface)
                         .statusBarsPadding()
                         .padding(horizontal = 16.dp, vertical = 8.dp)
                 ) {
@@ -585,7 +585,7 @@ fun NotesDisguiseScreen(
                     }
                 }
             },
-            containerColor = Color.White,
+            containerColor = MaterialTheme.colorScheme.surface,
             contentWindowInsets = WindowInsets.navigationBars
         ) { paddingValues ->
             Box(
@@ -784,7 +784,7 @@ fun NotesDisguiseScreen(
             ) {
                 Surface(
                     shape = CircleShape,
-                    color = Color.White,
+                    color = MaterialTheme.colorScheme.surface,
                     shadowElevation = 14.dp,
                     modifier = Modifier
                         .size(72.dp)
@@ -807,7 +807,7 @@ fun NotesDisguiseScreen(
                 Spacer(modifier = Modifier.height(16.dp))
                 Surface(
                     shape = RoundedCornerShape(20.dp),
-                    color = Color.White.copy(alpha = 0.95f),
+                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f),
                     shadowElevation = 6.dp,
                     modifier = Modifier.graphicsLayer {
                         alpha = unlockAnimProgress.value
@@ -837,3 +837,5 @@ fun NotesDisguiseScreen(
 }
 }
 }
+
+

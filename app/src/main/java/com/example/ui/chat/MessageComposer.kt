@@ -103,7 +103,7 @@ fun MessageComposer(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .background(Color.White)
+            .background(MaterialTheme.colorScheme.surface)
     ) {
         // Reply bar preview
         AnimatedVisibility(visible = replyingTo != null) {
@@ -158,7 +158,7 @@ fun MessageComposer(
         // Quick Love Emojis Strip
         AnimatedVisibility(visible = showEmojiQuickBar) {
             Surface(
-                color = Color.White,
+                color = MaterialTheme.colorScheme.surface,
                 tonalElevation = 1.dp,
                 modifier = Modifier.fillMaxWidth()
             ) {
@@ -587,3 +587,4 @@ fun MessageComposer(
         }
     }
 }
+

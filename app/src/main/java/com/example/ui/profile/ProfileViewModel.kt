@@ -65,6 +65,31 @@ class ProfileViewModel(
     )
     val uiState: StateFlow<ProfileUiState> = _uiState.asStateFlow()
 
+    fun reloadSettings() {
+        _uiState.update { current ->
+            current.copy(
+                isAppLockEnabled = securityPreferences.isAppLockEnabled(),
+                isBiometricEnabled = securityPreferences.isBiometricEnabled(),
+                isScreenshotProtectionEnabled = securityPreferences.isScreenshotProtectionEnabled(),
+                isHideNotificationContent = securityPreferences.isHideNotificationContent(),
+                coupleKey = securityPreferences.getCoupleSecretKey(),
+                isDisguiseModeEnabled = securityPreferences.isDisguiseModeEnabled(),
+                disguisePasscode = securityPreferences.getDisguisePasscode(),
+                isKeywordTriggerEnabled = securityPreferences.isKeywordTriggerEnabled(),
+                plusHoldDurationSec = securityPreferences.getPlusIconHoldDuration(),
+                isRequirePhoneLockAfterHold = securityPreferences.isRequirePhoneLockAfterHold(),
+                gallerySize = securityPreferences.getImageGallerySize(),
+                isHapticEnabled = securityPreferences.isHapticFeedbackEnabled(),
+                isAutoPlayMedia = securityPreferences.isAutoPlayMedia(),
+                isHighQualityMedia = securityPreferences.isHighQualityMedia(),
+                isDoubleTapZoomEnabled = securityPreferences.isDoubleTapZoomEnabled(),
+                isCheckAfterReminderEnabled = securityPreferences.isCheckAfterReminderEnabled(),
+                themeMode = securityPreferences.getThemeMode(),
+                chatBgTheme = securityPreferences.getChatBgTheme()
+            )
+        }
+    }
+
     init {
         viewModelScope.launch {
             authRepository.currentUserState.collect { user ->

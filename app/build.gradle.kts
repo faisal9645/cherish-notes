@@ -43,9 +43,9 @@ android {
 
   buildTypes {
     release {
-      isCrunchPngs = false
-      isMinifyEnabled = false
-      isShrinkResources = false
+      isCrunchPngs = true
+      isMinifyEnabled = true
+      isShrinkResources = true
       proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
       val hasReleaseConfig = signingConfigs.findByName("release") != null
       signingConfig = if (hasReleaseConfig) signingConfigs.getByName("release") else signingConfigs.getByName("debugConfig")

@@ -106,7 +106,7 @@ fun NoteCard(
                 // Category Tag
                 Surface(
                     shape = RoundedCornerShape(8.dp),
-                    color = Color.White.copy(alpha = 0.8f),
+                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.8f),
                     border = BorderStroke(0.5.dp, SoftBorderOutline)
                 ) {
                     Text(
@@ -402,3 +402,5 @@ fun NoteCard(
         }
     }
 }
+
+

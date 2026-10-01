@@ -172,14 +172,14 @@ fun HomeScreen(
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.White
+                    containerColor = MaterialTheme.colorScheme.surface
                 ),
                 windowInsets = WindowInsets.statusBars
             )
         },
         bottomBar = {
             Surface(
-                color = Color.White,
+                color = MaterialTheme.colorScheme.surface,
                 tonalElevation = 2.dp,
                 shadowElevation = 8.dp,
                 modifier = Modifier.fillMaxWidth()
@@ -234,7 +234,7 @@ fun HomeScreen(
                 }
             }
         },
-        containerColor = Color.White
+        containerColor = MaterialTheme.colorScheme.surface
     ) { paddingValues ->
         Column(
             modifier = Modifier
@@ -290,7 +290,7 @@ fun HomeScreen(
                     .testTag("partner_profile_card"),
                 shape = RoundedCornerShape(24.dp),
                 colors = CardDefaults.cardColors(
-                    containerColor = Color.White
+                    containerColor = MaterialTheme.colorScheme.surface
                 ),
                 border = BorderStroke(1.dp, Color(0xFFF0F0F2)),
                 elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
@@ -390,28 +390,28 @@ fun HomeScreen(
                             Text(
                                 text = "Days in Deep Love",
                                 fontSize = 12.sp,
-                                color = Color.White.copy(alpha = 0.85f),
+                                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
                                 fontWeight = FontWeight.Medium
                             )
                             Text(
                                 text = "${uiState.daysTogether} Days Together",
                                 fontSize = 18.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = Color.White
+                                color = MaterialTheme.colorScheme.surface
                             )
                         }
                     }
 
                     Surface(
                         shape = CircleShape,
-                        color = Color.White.copy(alpha = 0.25f),
+                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.25f),
                         modifier = Modifier.clickable { onNavigateToChat() }
                     ) {
                         Text(
                             text = "Say I Love You →",
                             fontSize = 12.sp,
                             fontWeight = FontWeight.SemiBold,
-                            color = Color.White,
+                            color = MaterialTheme.colorScheme.surface,
                             modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
                         )
                     }
@@ -425,7 +425,7 @@ fun HomeScreen(
                     .clickable { onNavigateToLifetimeJourney() }
                     .testTag("lifetime_journey_card"),
                 shape = RoundedCornerShape(22.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 border = BorderStroke(1.dp, Color(0xFFF0F0F2)),
                 elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
             ) {
@@ -533,7 +533,7 @@ fun HomeScreen(
                     .testTag("open_chat_card"),
                 shape = RoundedCornerShape(24.dp),
                 colors = CardDefaults.cardColors(
-                    containerColor = Color.White
+                    containerColor = MaterialTheme.colorScheme.surface
                 ),
                 border = BorderStroke(1.dp, Color(0xFFF0F0F2)),
                 elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
@@ -607,7 +607,7 @@ fun HomeScreen(
                                 ) {
                                     Text(
                                         text = "${uiState.unreadCount}",
-                                        color = Color.White,
+                                        color = MaterialTheme.colorScheme.surface,
                                         fontSize = 11.sp,
                                         fontWeight = FontWeight.Bold
                                     )
@@ -645,7 +645,7 @@ fun HomeScreen(
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
                                 text = "Open 2-Person Messenger",
-                                color = Color.White,
+                                color = MaterialTheme.colorScheme.surface,
                                 fontWeight = FontWeight.SemiBold
                             )
                         }
@@ -657,7 +657,7 @@ fun HomeScreen(
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(24.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 border = BorderStroke(1.dp, Color(0xFFF0F0F2)),
                 elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
             ) {
@@ -751,7 +751,7 @@ fun HomeScreen(
                     .fillMaxWidth()
                     .clickable { onNavigateToProfile() },
                 shape = RoundedCornerShape(24.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 border = BorderStroke(1.dp, Color(0xFFF0F0F2)),
                 elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
             ) {
@@ -828,3 +828,5 @@ fun HomeScreen(
         )
     }
 }
+
+

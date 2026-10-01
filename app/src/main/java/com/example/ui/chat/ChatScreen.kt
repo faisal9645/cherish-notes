@@ -569,14 +569,14 @@ fun ChatScreen(
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.White
+                    containerColor = MaterialTheme.colorScheme.surface
                 ),
                 windowInsets = WindowInsets.statusBars
             )
         },
         bottomBar = {
             Surface(
-                color = Color.White,
+                color = MaterialTheme.colorScheme.surface,
                 tonalElevation = 2.dp,
                 shadowElevation = 8.dp,
                 modifier = Modifier.fillMaxWidth()
@@ -1010,7 +1010,7 @@ fun ChatScreen(
                 ) {
                     Text(
                         text = uiState.stealthToastMessage ?: "",
-                        color = Color.White,
+                        color = MaterialTheme.colorScheme.surface,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.SemiBold,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
@@ -1060,7 +1060,7 @@ fun ChatScreen(
     if (showAttachmentSheet) {
         ModalBottomSheet(
             onDismissRequest = { showAttachmentSheet = false },
-            containerColor = Color.White,
+            containerColor = MaterialTheme.colorScheme.surface,
             shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
         ) {
             Column(
@@ -1410,7 +1410,7 @@ fun StealthDisguiseNotesView(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.White)
+            .background(MaterialTheme.colorScheme.surface)
             .padding(24.dp)
             .pointerInput(Unit) {
                 detectTapGestures(
@@ -1621,3 +1621,5 @@ private fun AttachmentOptionItem(
         )
     }
 }
+
+

@@ -29,6 +29,9 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -62,6 +65,19 @@ fun ProfileScreen(
     val uiState by viewModel.uiState.collectAsState()
     val user = uiState.currentUser
     val partner = uiState.partnerUser
+    
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                viewModel.reloadSettings()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
 
     var showEditProfileDialog by remember { mutableStateOf(false) }
     var showAvatarOptionsDialog by remember { mutableStateOf(false) }
@@ -163,11 +179,11 @@ fun ProfileScreen(
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.White
+                    containerColor = MaterialTheme.colorScheme.surface
                 )
             )
         },
-        containerColor = Color.White
+        containerColor = MaterialTheme.colorScheme.surface
     ) { paddingValues ->
         Column(
             modifier = Modifier
@@ -181,7 +197,7 @@ fun ProfileScreen(
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(24.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFF0F0F2)),
                 elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
             ) {
@@ -213,7 +229,7 @@ fun ProfileScreen(
                             ) {
                                 CircularProgressIndicator(
                                     modifier = Modifier.size(32.dp),
-                                    color = Color.White,
+                                    color = MaterialTheme.colorScheme.surface,
                                     strokeWidth = 3.dp
                                 )
                             }
@@ -304,7 +320,7 @@ fun ProfileScreen(
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFF0F0F2))
             ) {
                 Column(modifier = Modifier.padding(18.dp)) {
@@ -382,7 +398,7 @@ fun ProfileScreen(
                     .clickable { onNavigateToOpenWhen() }
                     .testTag("profile_open_when_card"),
                 shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 border = BorderStroke(1.dp, Color(0xFFF0F0F2)),
                 elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
             ) {
@@ -413,7 +429,7 @@ fun ProfileScreen(
                     .clickable { onNavigateToDeviceSessions() }
                     .testTag("profile_device_sessions_card"),
                 shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 border = BorderStroke(1.dp, Color(0xFFF0F0F2)),
                 elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
             ) {
@@ -444,7 +460,7 @@ fun ProfileScreen(
                     .clickable { onNavigateToStorageManager() }
                     .testTag("profile_storage_manager_card"),
                 shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 border = BorderStroke(1.dp, Color(0xFFF0F0F2)),
                 elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
             ) {
@@ -472,7 +488,7 @@ fun ProfileScreen(
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFF0F0F2))
             ) {
                 Column(modifier = Modifier.padding(18.dp)) {
@@ -837,7 +853,7 @@ fun ProfileScreen(
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(24.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 border = BorderStroke(1.dp, Color(0xFFF0F0F2)),
                 elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
             ) {
@@ -972,7 +988,7 @@ fun ProfileScreen(
                     .fillMaxWidth()
                     .testTag("profile_check_after_card"),
                 shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 border = BorderStroke(1.dp, Color(0xFFF0F0F2)),
                 elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
             ) {
@@ -1128,7 +1144,7 @@ fun ProfileScreen(
                     .clickable { onNavigateToCloudBackup() }
                     .testTag("profile_cloud_backup_card"),
                 shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 border = BorderStroke(1.dp, Color(0xFFF0F0F2)),
                 elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
             ) {
@@ -1454,7 +1470,7 @@ fun ProfileScreen(
                     if (uiState.isUpdating) {
                         CircularProgressIndicator(
                             modifier = Modifier.size(16.dp),
-                            color = Color.White,
+                            color = MaterialTheme.colorScheme.surface,
                             strokeWidth = 2.dp
                         )
                         Spacer(modifier = Modifier.width(8.dp))
@@ -1634,4 +1650,7 @@ fun ProfileScreen(
         }
     )
 }
+
+
+
 

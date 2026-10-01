@@ -66,7 +66,7 @@ fun MemoriesScreen(
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.White
+                    containerColor = MaterialTheme.colorScheme.surface
                 )
             )
         },
@@ -89,7 +89,7 @@ fun MemoriesScreen(
                 )
             }
         },
-        containerColor = Color.White
+        containerColor = MaterialTheme.colorScheme.surface
     ) { paddingValues ->
         if (uiState.memories.isEmpty()) {
             Box(
@@ -336,3 +336,4 @@ fun AddMemoryDialog(
         }
     )
 }
+

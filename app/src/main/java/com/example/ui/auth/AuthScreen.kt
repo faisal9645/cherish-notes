@@ -104,7 +104,7 @@ fun AuthScreen(
 
     Surface(
         modifier = modifier.fillMaxSize(),
-        color = Color.White
+        color = MaterialTheme.colorScheme.surface
     ) {
         Box(
             modifier = Modifier.fillMaxSize(),
@@ -172,7 +172,7 @@ fun AuthScreen(
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(26.dp),
-                        colors = CardDefaults.cardColors(containerColor = Color.White),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                         border = BorderStroke(1.dp, Color(0xFFF0F0F2)),
                         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                     ) {
@@ -395,7 +395,7 @@ fun AuthScreen(
                                     ) {
                                         Text(
                                             text = "Enter in Direct / Offline Mode",
-                                            color = Color.White,
+                                            color = MaterialTheme.colorScheme.surface,
                                             fontWeight = FontWeight.Bold,
                                             fontSize = 13.sp
                                         )
@@ -427,7 +427,7 @@ fun AuthScreen(
                             ) {
                                 if (uiState is AuthUiState.Loading) {
                                     CircularProgressIndicator(
-                                        color = Color.White,
+                                        color = MaterialTheme.colorScheme.surface,
                                         modifier = Modifier.size(22.dp),
                                         strokeWidth = 2.dp
                                     )
@@ -443,7 +443,7 @@ fun AuthScreen(
                                         text = "Enter Our Space",
                                         fontSize = 15.sp,
                                         fontWeight = FontWeight.Bold,
-                                        color = Color.White
+                                        color = MaterialTheme.colorScheme.surface
                                     )
                                 }
                             }
@@ -510,7 +510,7 @@ fun GoogleBrandIcon(modifier: Modifier = Modifier) {
         modifier = modifier
             .size(24.dp)
             .clip(CircleShape)
-            .background(Color.White)
+            .background(MaterialTheme.colorScheme.surface)
             .border(BorderStroke(1.dp, Color(0xFFE2E4E9)), CircleShape),
         contentAlignment = Alignment.Center
     ) {
@@ -522,3 +522,5 @@ fun GoogleBrandIcon(modifier: Modifier = Modifier) {
         )
     }
 }
+
+

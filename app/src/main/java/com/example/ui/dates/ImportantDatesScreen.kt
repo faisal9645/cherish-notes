@@ -61,7 +61,7 @@ fun ImportantDatesScreen(
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.White
+                    containerColor = MaterialTheme.colorScheme.surface
                 )
             )
         },
@@ -84,7 +84,7 @@ fun ImportantDatesScreen(
                 )
             }
         },
-        containerColor = Color.White
+        containerColor = MaterialTheme.colorScheme.surface
     ) { paddingValues ->
         LazyColumn(
             modifier = Modifier
@@ -308,3 +308,4 @@ fun AddDateDialog(
         }
     )
 }
+

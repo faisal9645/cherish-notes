@@ -94,11 +94,11 @@ fun LifetimeJourneyScreen(
                         )
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White),
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface),
                 windowInsets = WindowInsets.statusBars
             )
         },
-        containerColor = Color.White
+        containerColor = MaterialTheme.colorScheme.surface
     ) { paddingValues ->
         LazyColumn(
             modifier = Modifier
@@ -135,14 +135,14 @@ fun LifetimeJourneyScreen(
                                     Text(
                                         text = "Our Lifetime Sanctuary",
                                         fontSize = 12.sp,
-                                        color = Color.White.copy(alpha = 0.85f),
+                                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
                                         fontWeight = FontWeight.Medium
                                     )
                                     Text(
                                         text = "Year ${uiState.totalYearsTogether} of Our Eternal Bond",
                                         fontSize = 18.sp,
                                         fontWeight = FontWeight.Bold,
-                                        color = Color.White
+                                        color = MaterialTheme.colorScheme.surface
                                     )
                                 }
                             }
@@ -169,7 +169,7 @@ fun LifetimeJourneyScreen(
                         ) {
                             Surface(
                                 shape = RoundedCornerShape(14.dp),
-                                color = Color.White.copy(alpha = 0.22f),
+                                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.22f),
                                 modifier = Modifier.weight(1f)
                             ) {
                                 Column(
@@ -179,20 +179,20 @@ fun LifetimeJourneyScreen(
                                     Text(
                                         text = "Your Age Today",
                                         fontSize = 11.sp,
-                                        color = Color.White.copy(alpha = 0.85f)
+                                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f)
                                     )
                                     Text(
                                         text = "${uiState.myCurrentAge} Years",
                                         fontSize = 17.sp,
                                         fontWeight = FontWeight.Bold,
-                                        color = Color.White
+                                        color = MaterialTheme.colorScheme.surface
                                     )
                                 }
                             }
 
                             Surface(
                                 shape = RoundedCornerShape(14.dp),
-                                color = Color.White.copy(alpha = 0.22f),
+                                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.22f),
                                 modifier = Modifier.weight(1f)
                             ) {
                                 Column(
@@ -202,13 +202,13 @@ fun LifetimeJourneyScreen(
                                     Text(
                                         text = "Partner's Age Today",
                                         fontSize = 11.sp,
-                                        color = Color.White.copy(alpha = 0.85f)
+                                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f)
                                     )
                                     Text(
                                         text = "${uiState.partnerCurrentAge} Years",
                                         fontSize = 17.sp,
                                         fontWeight = FontWeight.Bold,
-                                        color = Color.White
+                                        color = MaterialTheme.colorScheme.surface
                                     )
                                 }
                             }
@@ -408,7 +408,7 @@ fun YearlyJourneyCard(
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(22.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         border = BorderStroke(1.dp, Color(0xFFF0F0F2)),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
@@ -598,7 +598,7 @@ fun LifetimeMilestonesCard() {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(22.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         border = BorderStroke(1.dp, Color(0xFFF0F0F2)),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
@@ -710,7 +710,7 @@ fun YearlyJourneyEditorDialog(
                 modifier = Modifier
                     .fillMaxWidth()
                     .heightIn(max = 420.dp)
-                    .background(Color.White)
+                    .background(MaterialTheme.colorScheme.surface)
             ) {
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     item {
@@ -903,3 +903,5 @@ fun EditLifetimeProfileDialog(
         }
     )
 }
+
+

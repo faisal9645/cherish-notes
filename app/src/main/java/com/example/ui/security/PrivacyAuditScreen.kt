@@ -143,10 +143,10 @@ fun PrivacyAuditScreen(
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White)
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
             )
         },
-        containerColor = Color.White
+        containerColor = MaterialTheme.colorScheme.surface
     ) { paddingValues ->
         Column(
             modifier = modifier
@@ -216,7 +216,7 @@ fun PrivacyAuditScreen(
             // Quick Inactivity Auto-Lock Settings
             Card(
                 shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 border = BorderStroke(1.dp, Color(0xFFF0F0F2)),
                 elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
                 modifier = Modifier.fillMaxWidth()
@@ -280,7 +280,7 @@ fun PrivacyAuditScreen(
             // Panic Gesture Protection Card
             Card(
                 shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 border = BorderStroke(1.dp, Color(0xFFF0F0F2)),
                 elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
                 modifier = Modifier.fillMaxWidth()
@@ -352,7 +352,7 @@ fun PrivacyAuditScreen(
             checks.forEach { check ->
                 Surface(
                     shape = RoundedCornerShape(16.dp),
-                    color = Color.White,
+                    color = MaterialTheme.colorScheme.surface,
                     border = BorderStroke(1.dp, Color(0xFFF0F0F2)),
                     shadowElevation = 1.dp,
                     modifier = Modifier.fillMaxWidth()
@@ -436,3 +436,5 @@ fun PrivacyAuditScreen(
         }
     }
 }
+
+

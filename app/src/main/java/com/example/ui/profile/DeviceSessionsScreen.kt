@@ -79,10 +79,10 @@ fun DeviceSessionsScreen(
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White)
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
             )
         },
-        containerColor = Color.White
+        containerColor = MaterialTheme.colorScheme.surface
     ) { paddingValues ->
         LazyColumn(
             modifier = modifier
@@ -123,7 +123,7 @@ fun DeviceSessionsScreen(
             items(sessions, key = { it.id }) { session ->
                 Card(
                     shape = RoundedCornerShape(20.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                     border = BorderStroke(1.dp, if (session.isCurrent) RoseGoldPrimary.copy(alpha = 0.4f) else Color(0xFFF0F0F2)),
                     elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
                     modifier = Modifier.fillMaxWidth()
@@ -165,7 +165,7 @@ fun DeviceSessionsScreen(
                                     ) {
                                         Text(
                                             "This Phone",
-                                            color = Color.White,
+                                            color = MaterialTheme.colorScheme.surface,
                                             fontSize = 9.sp,
                                             fontWeight = FontWeight.Bold,
                                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
@@ -194,3 +194,5 @@ fun DeviceSessionsScreen(
         }
     }
 }
+
+

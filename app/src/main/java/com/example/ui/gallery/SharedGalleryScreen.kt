@@ -189,7 +189,7 @@ fun SharedGalleryScreen(
                         }
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White)
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
             )
         },
         containerColor = Color(0xFFF9F9FB)
@@ -209,7 +209,7 @@ fun SharedGalleryScreen(
                 ) {
                     Surface(
                         shape = RoundedCornerShape(24.dp),
-                        color = Color.White,
+                        color = MaterialTheme.colorScheme.surface,
                         shadowElevation = 4.dp,
                         modifier = Modifier.fillMaxWidth()
                     ) {
@@ -272,7 +272,7 @@ fun SharedGalleryScreen(
                 // Primary Tab Row
                 PrimaryTabRow(
                     selectedTabIndex = selectedTab,
-                    containerColor = Color.White,
+                    containerColor = MaterialTheme.colorScheme.surface,
                     contentColor = RoseGoldPrimary
                 ) {
                     tabs.forEachIndexed { index, title ->
@@ -362,7 +362,7 @@ fun SharedGalleryScreen(
 
                                     Surface(
                                         shape = RoundedCornerShape(16.dp),
-                                        color = Color.White,
+                                        color = MaterialTheme.colorScheme.surface,
                                         shadowElevation = 1.5.dp,
                                         modifier = Modifier.fillMaxWidth()
                                     ) {
@@ -512,7 +512,7 @@ fun SharedGalleryScreen(
                                 items(extractedLinks, key = { "${it.messageId}_${it.url}" }) { item ->
                                     Surface(
                                         shape = RoundedCornerShape(16.dp),
-                                        color = Color.White,
+                                        color = MaterialTheme.colorScheme.surface,
                                         shadowElevation = 1.5.dp,
                                         modifier = Modifier.fillMaxWidth()
                                     ) {
@@ -673,7 +673,7 @@ fun SharedGalleryScreen(
                                 items(starredMessages, key = { it.id }) { msg ->
                                     Surface(
                                         shape = RoundedCornerShape(16.dp),
-                                        color = Color.White,
+                                        color = MaterialTheme.colorScheme.surface,
                                         shadowElevation = 1.5.dp,
                                         modifier = Modifier.fillMaxWidth()
                                     ) {
@@ -804,3 +804,6 @@ private fun getDomainBadgeColor(host: String): Color {
         else -> Color(0xFF6366F1)
     }
 }
+
+
+

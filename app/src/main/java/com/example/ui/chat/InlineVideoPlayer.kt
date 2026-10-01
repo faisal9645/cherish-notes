@@ -197,7 +197,7 @@ fun InlineYouTubeCard(
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
                         text = "YouTube • Inline Player",
-                        color = Color.White,
+                        color = MaterialTheme.colorScheme.surface,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold
                     )
@@ -290,7 +290,7 @@ fun InlineYouTubeCard(
                     ) {
                         Text(
                             text = "▶ Tap to play inline",
-                            color = Color.White,
+                            color = MaterialTheme.colorScheme.surface,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Medium
                         )
@@ -300,7 +300,7 @@ fun InlineYouTubeCard(
                             contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
                             modifier = Modifier.height(26.dp),
                             colors = ButtonDefaults.filledTonalButtonColors(
-                                containerColor = Color.White.copy(alpha = 0.2f),
+                                containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.2f),
                                 contentColor = Color.White
                             )
                         ) {
@@ -345,7 +345,7 @@ fun InlineVideoTheaterModal(
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
                             text = "Cherish Theater",
-                            color = Color.White,
+                            color = MaterialTheme.colorScheme.surface,
                             fontWeight = FontWeight.Bold,
                             fontSize = 16.sp
                         )
@@ -451,3 +451,6 @@ fun LinkPreviewCard(
         }
     }
 }
+
+
+

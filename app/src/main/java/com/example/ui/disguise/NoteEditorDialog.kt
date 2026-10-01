@@ -94,7 +94,7 @@ fun NoteEditorScreen(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(Color.White)
+                    .background(MaterialTheme.colorScheme.surface)
                     .statusBarsPadding()
             ) {
                 // Top App Bar / Actions
@@ -155,7 +155,7 @@ fun NoteEditorScreen(
         },
         bottomBar = {
             Surface(
-                color = Color.White,
+                color = MaterialTheme.colorScheme.surface,
                 tonalElevation = 0.dp,
                 shadowElevation = 16.dp,
                 modifier = Modifier
@@ -165,7 +165,7 @@ fun NoteEditorScreen(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(Color.White)
+                        .background(MaterialTheme.colorScheme.surface)
                         .navigationBarsPadding()
                 ) {
                     HorizontalDivider(color = Color(0xFFEEEEF0), thickness = 1.dp)
@@ -235,7 +235,7 @@ fun NoteEditorScreen(
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
                                     text = "Save Note",
-                                    color = Color.White,
+                                    color = MaterialTheme.colorScheme.surface,
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 15.sp
                                 )
@@ -245,7 +245,7 @@ fun NoteEditorScreen(
                 }
             }
         },
-        containerColor = Color.White
+        containerColor = MaterialTheme.colorScheme.surface
     ) { paddingValues ->
         Column(
             modifier = Modifier
@@ -562,3 +562,5 @@ fun NoteEditorDialog(
         onToast = onToast
     )
 }
+
+

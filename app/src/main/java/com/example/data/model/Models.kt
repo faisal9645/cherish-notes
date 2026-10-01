@@ -68,7 +68,7 @@ data class User(
     val isActivityHidden: Boolean = false
 ) {
     fun isEffectivelyOnline(): Boolean {
-        if (isOnline) return true
+        if (!isOnline) return false
         if (typingInChat || recordingAudioInChat) return true
         val diff = System.currentTimeMillis() - lastSeen
         return diff in 0..60_000L

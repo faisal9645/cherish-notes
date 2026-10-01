@@ -73,7 +73,7 @@ fun LoveNudgesBar(
     Card(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         border = BorderStroke(1.dp, Color(0xFFF0F0F2)),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
@@ -249,7 +249,7 @@ fun DailyQuestionCard(
     Card(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         border = BorderStroke(1.dp, Color(0xFFF0F0F2)),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
@@ -454,7 +454,7 @@ fun LoveJarCard(
     Card(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         border = BorderStroke(1.dp, Color(0xFFF0F0F2)),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
@@ -517,7 +517,7 @@ fun BucketListCard(
     Card(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         border = BorderStroke(1.dp, Color(0xFFF0F0F2)),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
@@ -804,3 +804,4 @@ fun AddBucketItemDialog(
         }
     )
 }
+

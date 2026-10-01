@@ -142,7 +142,7 @@ fun OpenWhenScreen(
                         Icon(Icons.Default.AddCircleOutline, contentDescription = "Add Envelope", tint = RoseGoldPrimary)
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White)
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
             )
         },
         containerColor = Color(0xFFFAF9FC)
@@ -209,7 +209,7 @@ fun EnvelopeCard(
 ) {
     Surface(
         shape = RoundedCornerShape(20.dp),
-        color = Color.White,
+        color = MaterialTheme.colorScheme.surface,
         border = BorderStroke(1.dp, if (letter.isOpened) RoseGoldPrimary.copy(alpha = 0.4f) else Color(0xFFE8E5EE)),
         shadowElevation = 2.dp,
         modifier = Modifier
@@ -432,3 +432,5 @@ fun CreateEnvelopeDialog(
         }
     )
 }
+
+

@@ -61,7 +61,7 @@ fun SharedNotesScreen(
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.White
+                    containerColor = MaterialTheme.colorScheme.surface
                 )
             )
         },
@@ -87,7 +87,7 @@ fun SharedNotesScreen(
                 )
             }
         },
-        containerColor = Color.White
+        containerColor = MaterialTheme.colorScheme.surface
     ) { paddingValues ->
         val sortedNotes = remember(uiState.notes) {
             uiState.notes.sortedWith(compareByDescending<SharedNote> { it.isPinned }.thenByDescending { it.updatedAt })
@@ -294,3 +294,4 @@ fun NoteEditDialog(
         }
     )
 }
+
