@@ -10,8 +10,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -97,14 +95,9 @@ fun MessageComposer(
         label = "shimmer_offset"
     )
 
-    val micScale by animateFloatAsState(
-        targetValue = if (isRecordingVoice && !isLockedRecording) 1.25f else 1f,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
-        label = "mic_scale"
-    )
-
     val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
     val barBg = if (isDark) TrueDarkSurface else Color.White
+
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -160,54 +153,11 @@ fun MessageComposer(
             }
         }
 
-        // Quick Love Emojis Strip
-        AnimatedVisibility(visible = showEmojiQuickBar) {
-            Surface(
-                color = Color.Transparent,
-                tonalElevation = 0.dp,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 8.dp, vertical = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    val quickEmojis = listOf(
-                        listOf("❤️", "🩷", "🧡", "💛", "💚", "🩵", "💙", "💜"),
-                        listOf("🤎", "🖤", "🩶", "🤍", "💖", "💗", "💓", "💞"),
-                        listOf("💕", "💘", "💝", "💟", "🥰", "😍", "😘", "😚"),
-                        listOf("😻", "💋", "🫂", "🤗", "🫶", "💌", "🌹", "🧸")
-                    )
-                    
-                    quickEmojis.forEach { rowEmojis ->
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceEvenly,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            rowEmojis.forEach { emoji ->
-                                Text(
-                                    text = emoji,
-                                    fontSize = 26.sp,
-                                    modifier = Modifier
-                                        .clickable {
-                                            onTextChanged(text + emoji)
-                                        }
-                                        .padding(4.dp)
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
         // Composer Input / Recording Action Row
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 8.dp),
+                .padding(horizontal = 8.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             // LEFT / CENTER AREA
@@ -226,7 +176,7 @@ fun MessageComposer(
                     ) {
                         Box(
                             modifier = Modifier
-                                .size(36.dp)
+                                .size(38.dp)
                                 .clip(CircleShape)
                                 .background(HeartRed.copy(alpha = 0.12f)),
                             contentAlignment = Alignment.Center
@@ -235,7 +185,7 @@ fun MessageComposer(
                                 imageVector = Icons.Default.Delete,
                                 contentDescription = "Cancel voice note",
                                 tint = HeartRed,
-                                modifier = Modifier.size(22.dp)
+                                modifier = Modifier.size(20.dp)
                             )
                         }
                     }
@@ -271,19 +221,16 @@ fun MessageComposer(
                             modifier = Modifier.weight(1f)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
+                        // Locked Indicator Icon
                         Icon(
-                            imageVector = Icons.Default.StopCircle,
-                            contentDescription = "Stop recording",
-                            tint = HeartRed,
-                            modifier = Modifier
-                                .size(24.dp)
-                                .clickable {
-                                    Toast.makeText(context, "Stop/Pause preview coming soon", Toast.LENGTH_SHORT).show()
-                                }
+                            imageVector = Icons.Default.Lock,
+                            contentDescription = "Hands-free locked",
+                            tint = RoseGoldPrimary,
+                            modifier = Modifier.size(18.dp)
                         )
                     }
                 } else {
-                    // --- Case 2: Active Hold-to-Record Mode with Slide-to-Cancel ---
+                    // --- Case 2: Active Hold-to-Record Mode with Slide-to-Cancel & Slide-to-Lock ---
                     Row(
                         modifier = Modifier
                             .weight(1f)
@@ -367,28 +314,14 @@ fun MessageComposer(
                         .weight(1f)
                         .clip(RoundedCornerShape(24.dp))
                         .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
-                        .padding(horizontal = 4.dp, vertical = 4.dp),
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Quick Emojis toggle button on Left
-                    IconButton(
-                        onClick = { showEmojiQuickBar = !showEmojiQuickBar },
-                        modifier = Modifier
-                            .size(38.dp)
-                            .testTag("composer_emoji_button")
-                    ) {
-                        Icon(
-                            imageVector = Icons.Outlined.Mood,
-                            contentDescription = "Quick emojis",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-
                     // Text Input Field in Center
                     Box(
                         modifier = Modifier
                             .weight(1f)
-                            .padding(horizontal = 4.dp, vertical = 8.dp),
+                            .padding(horizontal = 8.dp, vertical = 8.dp),
                         contentAlignment = Alignment.CenterStart
                     ) {
                         if (text.isEmpty()) {
@@ -444,73 +377,97 @@ fun MessageComposer(
 
             Spacer(modifier = Modifier.width(6.dp))
 
-            // RIGHT ACTION BUTTON
-            // RIGHT ACTION BUTTON
-            AnimatedContent(
-                targetState = when {
-                    text.isNotBlank() -> "SEND_TEXT"
-                    isRecordingVoice && isLockedRecording -> "SEND_VOICE"
-                    else -> "MIC"
-                },
-                transitionSpec = {
-                    (scaleIn(initialScale = 0.8f) + fadeIn()) togetherWith (scaleOut(targetScale = 0.8f) + fadeOut())
-                },
-                label = "right_action_btn"
-            ) { state ->
-                when (state) {
-                    "SEND_TEXT" -> {
-                        // Case A: Send Text Button
-                        Box(
-                            modifier = Modifier
-                                .size(46.dp)
-                                .appGradientShadow(CircleShape)
-                                .clip(CircleShape)
-                                .background(appHorizontalGradient())
-                                .clickable { 
-                                    onSendText() 
-                                    showEmojiQuickBar = false
-                                }
-                                .testTag("composer_send_button"),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Send,
-                                contentDescription = "Send message",
-                                tint = Color.White,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
+            // RIGHT ACTION BUTTON (Send Text / Send Voice / Hold-to-Record Mic)
+            Box(
+                contentAlignment = Alignment.BottomCenter
+            ) {
+                // Floating Lock indicator shown while holding Mic
+                if (isRecordingVoice && !isLockedRecording) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier
+                            .offset { IntOffset(0, -68.dp.roundToPx() + (dragOffsetY * 0.35f).roundToInt()) }
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(MaterialTheme.colorScheme.surface)
+                            .border(1.dp, if (dragOffsetY < -50f) RoseGoldPrimary else MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(16.dp))
+                            .padding(horizontal = 10.dp, vertical = 6.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (dragOffsetY < -50f) Icons.Default.LockOpen else Icons.Default.Lock,
+                            contentDescription = "Slide up to lock",
+                            tint = if (dragOffsetY < -50f) RoseGoldPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Icon(
+                            imageVector = Icons.Default.KeyboardArrowUp,
+                            contentDescription = null,
+                            tint = if (dragOffsetY < -50f) RoseGoldPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(14.dp)
+                        )
                     }
-                    "SEND_VOICE" -> {
-                        // Case B: Send Locked Voice Note Button
-                        Box(
-                            modifier = Modifier
-                                .size(46.dp)
-                                .appGradientShadow(CircleShape)
-                                .clip(CircleShape)
-                                .background(appHorizontalGradient())
-                                .clickable {
-                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    isLockedRecording = false
-                                    onStopAndSendVoiceRecord()
-                                }
-                                .testTag("composer_send_locked_voice_button"),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Send,
-                                contentDescription = "Send voice note",
-                                tint = Color.White,
-                                modifier = Modifier.size(20.dp)
-                            )
+                }
+
+                AnimatedContent(
+                    targetState = when {
+                        text.isNotBlank() -> "SEND_TEXT"
+                        isRecordingVoice && isLockedRecording -> "SEND_VOICE"
+                        else -> "MIC"
+                    },
+                    transitionSpec = {
+                        (scaleIn(initialScale = 0.8f) + fadeIn()) togetherWith (scaleOut(targetScale = 0.8f) + fadeOut())
+                    },
+                    label = "right_action_btn"
+                ) { state ->
+                    when (state) {
+                        "SEND_TEXT" -> {
+                            // Case A: Send Text Button
+                            Box(
+                                modifier = Modifier
+                                    .size(46.dp)
+                                    .appGradientShadow(CircleShape)
+                                    .clip(CircleShape)
+                                    .background(appHorizontalGradient())
+                                    .clickable { 
+                                        onSendText() 
+                                        showEmojiQuickBar = false
+                                    }
+                                    .testTag("composer_send_button"),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Send,
+                                    contentDescription = "Send message",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
                         }
-                    }
-                    "MIC" -> {
-                        // Case C: Persistent Hold-to-Record Mic Button cleanly aligned without top overlap (Issue 2)
-                        Box(
-                            contentAlignment = Alignment.Center,
-                            modifier = Modifier.size(46.dp)
-                        ) {
+                        "SEND_VOICE" -> {
+                            // Case B: Send Locked Voice Note Button
+                            Box(
+                                modifier = Modifier
+                                    .size(46.dp)
+                                    .appGradientShadow(CircleShape)
+                                    .clip(CircleShape)
+                                    .background(appHorizontalGradient())
+                                    .clickable {
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        isLockedRecording = false
+                                        onStopAndSendVoiceRecord()
+                                    }
+                                    .testTag("composer_send_locked_voice_button"),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Send,
+                                    contentDescription = "Send voice note",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
+                        "MIC" -> {
+                            // Case C: Persistent Hold-to-Record Mic Button with Slide-Up-to-Lock
                             Box(
                                 modifier = Modifier
                                     .size(46.dp)
@@ -537,6 +494,7 @@ fun MessageComposer(
                                             onStartVoiceRecord()
 
                                             var hasTriggeredCancelHaptic = false
+                                            var hasLocked = false
 
                                             while (true) {
                                                 val event = awaitPointerEvent()
@@ -548,6 +506,15 @@ fun MessageComposer(
                                                 
                                                 val delta = change.position - down.position
                                                 dragOffsetX = delta.x.coerceIn(-240f, 0f)
+                                                dragOffsetY = delta.y.coerceIn(-180f, 0f)
+
+                                                // Slide UP to lock hands-free recording
+                                                if (dragOffsetY < -65f && !hasLocked) {
+                                                    hasLocked = true
+                                                    isLockedRecording = true
+                                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                    break
+                                                }
 
                                                 if (dragOffsetX < -100f && !hasTriggeredCancelHaptic) {
                                                     hasTriggeredCancelHaptic = true
@@ -557,18 +524,21 @@ fun MessageComposer(
                                                 }
                                             }
 
-                                            val elapsed = System.currentTimeMillis() - startTime
-                                            if (dragOffsetX < -100f) {
-                                                // Swiped left to cancel
-                                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                                onCancelVoiceRecord()
-                                            } else if (elapsed < 500L) {
-                                                // Tapped too quickly: cancel and instruct
-                                                onCancelVoiceRecord()
-                                                Toast.makeText(context, "Hold to record, release to send", Toast.LENGTH_SHORT).show()
-                                            } else {
-                                                // Normal release: stop and send audio note
-                                                onStopAndSendVoiceRecord()
+                                            // If locked, hands-free recording remains active on finger release
+                                            if (!hasLocked && !isLockedRecording) {
+                                                val elapsed = System.currentTimeMillis() - startTime
+                                                if (dragOffsetX < -100f) {
+                                                    // Swiped left to cancel
+                                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                    onCancelVoiceRecord()
+                                                } else if (elapsed < 500L) {
+                                                    // Tapped too quickly: cancel and instruct
+                                                    onCancelVoiceRecord()
+                                                    Toast.makeText(context, "Hold to record, release to send", Toast.LENGTH_SHORT).show()
+                                                } else {
+                                                    // Normal release: stop and send audio note
+                                                    onStopAndSendVoiceRecord()
+                                                }
                                             }
                                         }
                                     }
@@ -587,6 +557,88 @@ fun MessageComposer(
                 }
             }
         }
+
+        // WhatsApp-Style Centered Emoji Tab Button Below Typing Input
+        if (!isRecordingVoice) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 2.dp, bottom = 6.dp),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(18.dp),
+                    color = if (showEmojiQuickBar) RoseGoldPrimary.copy(alpha = 0.12f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                    border = BorderStroke(1.dp, if (showEmojiQuickBar) RoseGoldPrimary.copy(alpha = 0.4f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+                    modifier = Modifier
+                        .clickable { showEmojiQuickBar = !showEmojiQuickBar }
+                        .testTag("composer_emoji_button")
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 5.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Icon(
+                            imageVector = if (showEmojiQuickBar) Icons.Default.Keyboard else Icons.Outlined.Mood,
+                            contentDescription = "Toggle emoji bar",
+                            tint = if (showEmojiQuickBar) RoseGoldPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(17.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = if (showEmojiQuickBar) "Keyboard" else "Emojis",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = if (showEmojiQuickBar) RoseGoldPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+        }
+
+        // Quick Love Emojis Strip Below the Emoji Tab Button
+        AnimatedVisibility(visible = showEmojiQuickBar && !isRecordingVoice) {
+            Surface(
+                color = Color.Transparent,
+                tonalElevation = 0.dp,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp, vertical = 6.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    val quickEmojis = listOf(
+                        listOf("❤️", "🩷", "🧡", "💛", "💚", "🩵", "💙", "💜"),
+                        listOf("🤎", "🖤", "🤍", "💖", "💗", "💓", "💞", "💕"),
+                        listOf("💘", "💝", "💟", "🥰", "😍", "😘", "😚", "😻"),
+                        listOf("💋", "🫂", "🤗", "🫶", "💌", "🌹", "🧸", "✨")
+                    )
+                    
+                    quickEmojis.forEach { rowEmojis ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceEvenly,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            rowEmojis.forEach { emoji ->
+                                Text(
+                                    text = emoji,
+                                    fontSize = 24.sp,
+                                    modifier = Modifier
+                                        .clickable {
+                                            onTextChanged(text + emoji)
+                                        }
+                                        .padding(3.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }
-

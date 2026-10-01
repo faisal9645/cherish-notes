@@ -1,4 +1,4 @@
-﻿package com.example.ui.navigation
+package com.example.ui.navigation
 
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
@@ -162,9 +162,7 @@ fun CherishNavGraph(
             ChatScreen(
                 viewModel = chatViewModel,
                 onNavigateBack = {
-                    if (!navController.popBackStack()) {
-                        navController.navigate(Screen.Home.route)
-                    }
+                    app.securityPreferences.reDisguise()
                 },
                 onNavigateToGallery = {
                     app.securityPreferences.ignoreChatNavigation = true

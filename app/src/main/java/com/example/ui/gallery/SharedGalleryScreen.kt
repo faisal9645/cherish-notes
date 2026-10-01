@@ -16,6 +16,8 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -45,6 +47,7 @@ import com.example.ui.theme.RoseGoldPrimary
 import com.example.ui.theme.appHorizontalGradient
 import java.text.SimpleDateFormat
 import java.util.*
+import kotlinx.coroutines.launch
 
 data class GalleryLinkItem(
     val messageId: String,
@@ -83,7 +86,9 @@ fun SharedGalleryScreen(
 ) {
     val context = LocalContext.current
     val chatState by chatViewModel.uiState.collectAsState()
-    var selectedTab by remember { mutableIntStateOf(0) }
+    val tabs = listOf("Media", "Voice Notes", "Links", "Starred")
+    val pagerState = rememberPagerState(initialPage = 0, pageCount = { tabs.size })
+    val coroutineScope = rememberCoroutineScope()
     var selectedMediaUrl by remember { mutableStateOf<String?>(null) }
     var selectedMessageIdForViewer by remember { mutableStateOf<String?>(null) }
     var selectedDateMillis by remember { mutableStateOf<Long?>(null) }
@@ -97,7 +102,7 @@ fun SharedGalleryScreen(
 
     val currentUserId = chatState.currentUser?.id ?: "user_me"
 
-    val tabs = listOf("Media", "Voice Notes", "Links", "Starred")
+
 
     val filteredMessages = remember(chatState.messages, selectedDateMillis) {
         var list = chatState.messages.filter { !it.isDeleted }
@@ -186,7 +191,7 @@ fun SharedGalleryScreen(
                             fontSize = 18.sp,
                             color = MaterialTheme.colorScheme.onSurface
                         )
-                        val countText = when (selectedTab) {
+                        val countText = when (pagerState.currentPage) {
                             0 -> "${mediaMessages.size} photos & videos"
                             1 -> "${voiceMessages.size} voice notes"
                             2 -> "${extractedLinks.size} shared links"
@@ -318,18 +323,22 @@ fun SharedGalleryScreen(
 
             // Primary Tab Row
             PrimaryTabRow(
-                selectedTabIndex = selectedTab,
+                selectedTabIndex = pagerState.currentPage,
                 containerColor = MaterialTheme.colorScheme.surface,
                 contentColor = RoseGoldPrimary
             ) {
                 tabs.forEachIndexed { index, title ->
                     Tab(
-                        selected = selectedTab == index,
-                        onClick = { selectedTab = index },
+                        selected = pagerState.currentPage == index,
+                        onClick = {
+                            coroutineScope.launch {
+                                pagerState.animateScrollToPage(index)
+                            }
+                        },
                         text = {
                             Text(
                                 title,
-                                fontWeight = if (selectedTab == index) FontWeight.Bold else FontWeight.Normal,
+                                fontWeight = if (pagerState.currentPage == index) FontWeight.Bold else FontWeight.Normal,
                                 fontSize = 13.sp
                             )
                         }
@@ -337,7 +346,13 @@ fun SharedGalleryScreen(
                 }
             }
 
-                when (selectedTab) {
+            HorizontalPager(
+                state = pagerState,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+            ) { page ->
+                when (page) {
                     // TAB 0: Media (Photos & Videos)
                     0 -> {
                         if (mediaMessages.isEmpty()) {
@@ -819,6 +834,7 @@ fun SharedGalleryScreen(
                         }
                     }
                 }
+            }
         }
     }
 

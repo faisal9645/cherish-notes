@@ -240,14 +240,14 @@ fun ChatScreen(
         }
     }
 
-    // Android back button & gesture: stay strictly inside Chat experience (Issue 8 & 11)
+    // Android back button & gesture: return directly to normal Notes app (Issue Back Button)
     BackHandler {
         if (uiState.isSearching) {
             viewModel.setSearching(false)
         } else if (showChatMenu) {
             showChatMenu = false
         } else {
-            onNavigateBack()
+            onQuickDisguise()
         }
     }
 
@@ -302,8 +302,8 @@ fun ChatScreen(
                 onDragStart = { _ -> dragAccumulator = 0f },
                 onDragEnd = {
                     if (dragAccumulator > 80f) {
-                        // Swipe Right -> Home
-                        onNavigateBack()
+                        // Swipe Right -> Notes App / Quick Disguise
+                        onQuickDisguise()
                     } else if (dragAccumulator < -80f) {
                         // Swipe Left -> Profile
                         onNavigateToProfile()
@@ -403,7 +403,7 @@ fun ChatScreen(
                             if (uiState.isSearching) {
                                 viewModel.setSearching(false)
                             } else {
-                                onNavigateBack()
+                                onQuickDisguise()
                             }
                         },
                         modifier = Modifier.testTag("chat_back_button")

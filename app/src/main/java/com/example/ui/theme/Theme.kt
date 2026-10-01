@@ -12,17 +12,17 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 
 private val PureWhiteColorScheme = lightColorScheme(
-    primary = RoseGoldPrimary,
+    primary = DayBluePrimary,
     onPrimary = RoseGoldOnPrimary,
-    primaryContainer = RoseGoldContainer,
+    primaryContainer = Color(0xFFEFF4FF),
     onPrimaryContainer = OnRoseGoldContainer,
-    secondary = ChampagneSecondary,
+    secondary = DayBlueSecondary,
     onSecondary = ChampagneOnSecondary,
-    secondaryContainer = ChampagneContainer,
+    secondaryContainer = Color(0xFFE0E7FF),
     onSecondaryContainer = OnChampagneContainer,
-    tertiary = AmethystTertiary,
+    tertiary = DayBlueTertiary,
     onTertiary = AmethystOnTertiary,
-    tertiaryContainer = AmethystContainer,
+    tertiaryContainer = Color(0xFFDBEAFE),
     onTertiaryContainer = OnAmethystContainer,
     background = Color.White,
     onBackground = LightOnBackground,
@@ -41,15 +41,15 @@ private val PureWhiteColorScheme = lightColorScheme(
 )
 
 private val TrueDarkColorScheme = darkColorScheme(
-    primary = Color(0xFF1D4ED8), // Deeper Dark Royal Blue
+    primary = DarkBluePrimary, // Deeper Dark Royal Blue
     onPrimary = Color.White,
     primaryContainer = Color(0xFF0F172A), // Dark Slate Navy Container
     onPrimaryContainer = Color(0xFF93C5FD),
-    secondary = Color(0xFF1E40AF), // Deep Accent Blue
+    secondary = DarkBlueSecondary, // Deep Accent Blue
     onSecondary = Color.White,
     secondaryContainer = Color(0xFF172554),
     onSecondaryContainer = Color(0xFFBFDBFE),
-    tertiary = Color(0xFF2563EB),
+    tertiary = DarkBlueTertiary,
     onTertiary = Color.White,
     tertiaryContainer = Color(0xFF0F172A),
     onTertiaryContainer = Color(0xFFDBEAFE),

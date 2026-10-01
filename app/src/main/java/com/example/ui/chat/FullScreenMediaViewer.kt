@@ -19,6 +19,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -82,9 +84,9 @@ fun FullScreenMediaViewer(
         else listOf(mediaUrl) + allMediaUrls
     }
 
-    var currentIndex by remember {
-        mutableIntStateOf(mediaList.indexOf(mediaUrl).coerceAtLeast(0))
-    }
+    val initialIdx = remember { mediaList.indexOf(mediaUrl).coerceAtLeast(0) }
+    val pagerState = rememberPagerState(initialPage = initialIdx, pageCount = { mediaList.size })
+    var currentIndex by remember { mutableIntStateOf(initialIdx) }
 
     val currentUrl = remember(currentIndex, mediaList) {
         mediaList.getOrNull(currentIndex) ?: mediaUrl
@@ -94,23 +96,25 @@ fun FullScreenMediaViewer(
     var scale by remember(currentIndex) { mutableFloatStateOf(1f) }
     var offset by remember(currentIndex) { mutableStateOf(Offset.Zero) }
     var swipeOffsetY by remember(currentIndex) { mutableFloatStateOf(0f) }
-    var horizontalSwipeX by remember(currentIndex) { mutableFloatStateOf(0f) }
     var isChromeVisible by remember { mutableStateOf(true) }
 
     val filmstripListState = rememberLazyListState()
 
-    // Auto-scroll filmstrip to active thumbnail
-    LaunchedEffect(currentIndex) {
+    // Sync pager and filmstrip
+    LaunchedEffect(pagerState.currentPage) {
+        currentIndex = pagerState.currentPage
         if (mediaList.isNotEmpty() && currentIndex in mediaList.indices) {
             filmstripListState.animateScrollToItem(currentIndex)
         }
+        scale = 1f
+        offset = Offset.Zero
+        swipeOffsetY = 0f
     }
 
     fun resetZoom() {
         scale = 1f
         offset = Offset.Zero
         swipeOffsetY = 0f
-        horizontalSwipeX = 0f
     }
 
     fun zoomIn() {
@@ -215,72 +219,69 @@ fun FullScreenMediaViewer(
                 .background(Color.Black.copy(alpha = backgroundAlpha))
                 .testTag("full_screen_media_dialog")
         ) {
-            // Main Interactive Zoomable & Pannable Photo
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .pointerInput(currentIndex) {
-                        detectTapGestures(
-                            onTap = {
-                                isChromeVisible = !isChromeVisible
-                            },
-                            onDoubleTap = { tapOffset ->
-                                toggleMaxMinZoom(tapOffset)
-                            }
-                        )
-                    }
-                    .pointerInput(currentIndex) {
-                        detectTransformGestures { _, pan, zoom, _ ->
-                            val newScale = (scale * zoom).coerceIn(0.75f, 5.0f)
-                            scale = newScale
-
-                            if (scale > 1.05f) {
-                                // Pan bounded
-                                val maxBound = (scale - 1f) * 600f
-                                offset = Offset(
-                                    x = (offset.x + pan.x).coerceIn(-maxBound, maxBound),
-                                    y = (offset.y + pan.y).coerceIn(-maxBound, maxBound)
-                                )
-                            } else {
-                                // Swipe down to dismiss gesture when at min scale
-                                if (pan.y > 0 || swipeOffsetY > 0) {
-                                    swipeOffsetY += pan.y
-                                    if (swipeOffsetY > 160f) {
-                                        onDismiss()
-                                    }
-                                } else {
-                                    swipeOffsetY = 0f
-                                }
-
-                                // Horizontal swipe between images when at 1x
-                                if (mediaList.size > 1 && abs(pan.y) < 15f) {
-                                    horizontalSwipeX += pan.x
-                                    if (horizontalSwipeX < -80f && currentIndex < mediaList.size - 1) {
-                                        currentIndex++
-                                        resetZoom()
-                                    } else if (horizontalSwipeX > 80f && currentIndex > 0) {
-                                        currentIndex--
-                                        resetZoom()
-                                    }
-                                }
-                            }
-                        }
-                    },
-                contentAlignment = Alignment.Center
-            ) {
-                AsyncImage(
-                    model = currentUrl,
-                    contentDescription = "Full-screen media photo",
-                    contentScale = ContentScale.Fit,
+            // Main Interactive Zoomable & Pannable Photo with Horizontal Pager
+            HorizontalPager(
+                state = pagerState,
+                userScrollEnabled = scale <= 1.05f,
+                modifier = Modifier.fillMaxSize()
+            ) { page ->
+                val pageUrl = mediaList.getOrNull(page) ?: currentUrl
+                Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .graphicsLayer {
-                            scaleX = scale
-                            scaleY = scale
-                            translationX = offset.x
-                            translationY = offset.y + swipeOffsetY
+                        .pointerInput(page) {
+                            detectTapGestures(
+                                onTap = {
+                                    isChromeVisible = !isChromeVisible
+                                },
+                                onDoubleTap = { tapOffset ->
+                                    toggleMaxMinZoom(tapOffset)
+                                }
+                            )
                         }
-                )
+                        .pointerInput(page) {
+                            detectTransformGestures { _, pan, zoom, _ ->
+                                val newScale = (scale * zoom).coerceIn(0.75f, 5.0f)
+                                scale = newScale
+
+                                if (scale > 1.05f) {
+                                    // Pan bounded
+                                    val maxBound = (scale - 1f) * 600f
+                                    offset = Offset(
+                                        x = (offset.x + pan.x).coerceIn(-maxBound, maxBound),
+                                        y = (offset.y + pan.y).coerceIn(-maxBound, maxBound)
+                                    )
+                                } else {
+                                    // Swipe down to dismiss gesture when at min scale
+                                    if (pan.y > 0 || swipeOffsetY > 0) {
+                                        swipeOffsetY += pan.y
+                                        if (swipeOffsetY > 160f) {
+                                            onDismiss()
+                                        }
+                                    } else {
+                                        swipeOffsetY = 0f
+                                    }
+                                }
+                            }
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    AsyncImage(
+                        model = pageUrl,
+                        contentDescription = "Full-screen media photo",
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .graphicsLayer {
+                                if (page == pagerState.currentPage) {
+                                    scaleX = scale
+                                    scaleY = scale
+                                    translationX = offset.x
+                                    translationY = offset.y + swipeOffsetY
+                                }
+                            }
+                    )
+                }
             }
 
             // Top App Bar (Telegram style: Counter, Download, Share, Close)
@@ -496,8 +497,9 @@ fun FullScreenMediaViewer(
                                     modifier = Modifier
                                         .size(48.dp)
                                         .clickable {
-                                            currentIndex = index
-                                            resetZoom()
+                                            scope.launch {
+                                                pagerState.animateScrollToPage(index)
+                                            }
                                         }
                                 ) {
                                     AsyncImage(

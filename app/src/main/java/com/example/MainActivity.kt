@@ -1,9 +1,8 @@
-﻿package com.example
+package com.example
 
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
-import android.graphics.Color as AndroidColor
 import android.os.Bundle
 import android.view.WindowManager
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -16,7 +15,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -34,6 +32,10 @@ class MainActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         androidx.core.view.WindowCompat.setDecorFitsSystemWindows(window, false)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            window.isStatusBarContrastEnforced = false
+            window.isNavigationBarContrastEnforced = false
+        }
         enableEdgeToEdge(
             statusBarStyle = SystemBarStyle.auto(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT),
             navigationBarStyle = SystemBarStyle.auto(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT)
@@ -60,6 +62,7 @@ class MainActivity : FragmentActivity() {
                 val insetsController = androidx.core.view.WindowCompat.getInsetsController(window, window.decorView)
                 insetsController.isAppearanceLightStatusBars = !useDarkTheme
                 insetsController.isAppearanceLightNavigationBars = !useDarkTheme
+                insetsController.show(androidx.core.view.WindowInsetsCompat.Type.systemBars())
                 window.decorView.setBackgroundColor(if (useDarkTheme) android.graphics.Color.BLACK else android.graphics.Color.WHITE)
                 onDispose {}
             }
@@ -114,14 +117,16 @@ class MainActivity : FragmentActivity() {
                 intent.hasExtra("conversationId")
         if (isFromNotification) {
             // Only reveal in-memory for this session - do NOT persist to SharedPreferences.
-            // On next cold launch, the disguise re-activates correctly.
+            // On next cold launch or minimize, the disguise re-activates correctly.
             app.securityPreferences.revealSecretApp()
         }
     }
 
     override fun onResume() {
         super.onResume()
-        // Do NOT call revealSecretApp() here - that would bypass the Notes disguise on every resume.
+        androidx.core.view.WindowCompat.setDecorFitsSystemWindows(window, false)
+        val insetsController = androidx.core.view.WindowCompat.getInsetsController(window, window.decorView)
+        insetsController.show(androidx.core.view.WindowInsetsCompat.Type.systemBars())
         applyScreenshotProtection()
         app.authRepository.onAppForegroundStateChanged(true)
         app.securityPreferences.ignoreNextPause = false
@@ -129,27 +134,32 @@ class MainActivity : FragmentActivity() {
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
-        // Keep user strictly inside Chat - do not switch to Notes on focus changes
+        if (hasFocus) {
+            val insetsController = androidx.core.view.WindowCompat.getInsetsController(window, window.decorView)
+            insetsController.show(androidx.core.view.WindowInsetsCompat.Type.systemBars())
+        }
     }
 
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
-        // Do not auto-switch to Notes on leaving hint
+        // When Secret/Chat app is minimized, re-activate Notes disguise
+        if (!app.securityPreferences.ignoreNextPause) {
+            app.securityPreferences.reDisguise()
+        }
     }
 
     override fun onPause() {
         super.onPause()
-        // Stable lifecycle: do not toggle window secure flags or force disguise on pause
     }
 
     override fun onStop() {
         super.onStop()
         app.authRepository.onAppForegroundStateChanged(false)
-        // Re-activate Notes disguise when backgrounded, UNLESS we are navigating
-        // within Chat sub-screens (Profile, Settings etc.) - ignoreChatNavigation guards that.
-        if (!app.securityPreferences.ignoreChatNavigation) {
+        // Re-activate Notes disguise when backgrounded/minimized
+        if (!app.securityPreferences.ignoreNextPause) {
             app.securityPreferences.reDisguise()
         }
+        app.securityPreferences.ignoreNextPause = false
         app.googleDriveBackupManager.triggerImmediateAutoBackup()
     }
 
@@ -199,4 +209,3 @@ class MainActivity : FragmentActivity() {
         } catch (_: Exception) {}
     }
 }
-
