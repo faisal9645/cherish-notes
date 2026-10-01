@@ -243,9 +243,23 @@ fun ChatScreen(
 
     var highlightedMessageId by remember { mutableStateOf<String?>(null) }
 
-    // Android back button & gesture: instantly switch to real Notes app
+    // User presence: Show as online only while actively inside the Chat tab (Issue 5)
+    DisposableEffect(Unit) {
+        viewModel.setInChatTab(true)
+        onDispose {
+            viewModel.setInChatTab(false)
+        }
+    }
+
+    // Android back button & gesture: stay strictly inside Chat experience (Issue 8 & 11)
     BackHandler {
-        onQuickDisguise()
+        if (uiState.isSearching) {
+            viewModel.setSearching(false)
+        } else if (showChatMenu) {
+            showChatMenu = false
+        } else {
+            onNavigateBack()
+        }
     }
 
     // Scroll to target message when navigating from gallery ("Show in chat")
@@ -274,20 +288,7 @@ fun ChatScreen(
 
         val listener = object : android.hardware.SensorEventListener {
             override fun onSensorChanged(event: android.hardware.SensorEvent?) {
-                if (event == null) return
-                val x = event.values[0]
-                val y = event.values[1]
-                val z = event.values[2]
-                val delta = kotlin.math.abs(x + y + z - lastX - lastY - lastZ)
-                val now = System.currentTimeMillis()
-                if (delta > 25f && now - lastShakeTime > 1500L) {
-                    lastShakeTime = now
-                    viewModel.hideSecretHistory()
-                    onQuickDisguise()
-                }
-                lastX = x
-                lastY = y
-                lastZ = z
+                // Sensor listener kept without auto-switching to Notes (Issue 8 & 11)
             }
             override fun onAccuracyChanged(sensor: android.hardware.Sensor?, accuracy: Int) {}
         }
@@ -306,6 +307,7 @@ fun ChatScreen(
     var dragAccumulator by remember { mutableFloatStateOf(0f) }
 
     Scaffold(
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         modifier = Modifier.pointerInput(Unit) {
             detectHorizontalDragGestures(
                 onDragStart = { _ -> dragAccumulator = 0f },
@@ -547,7 +549,6 @@ fun ChatScreen(
                         .navigationBarsPadding()
                         .imePadding()
                 ) {
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, thickness = 1.dp)
                 // Partner typing / recording animated bubble
                 AnimatedVisibility(
                     visible = uiState.isPartnerRecordingAudio || uiState.isPartnerTyping,
@@ -589,15 +590,6 @@ fun ChatScreen(
                             }
                         }
                     }
-                }
-
-                // Media upload progress bar
-                if (uiState.isUploadingMedia) {
-                    LinearProgressIndicator(
-                        progress = { uiState.uploadProgress },
-                        modifier = Modifier.fillMaxWidth(),
-                        color = RoseGoldPrimary
-                    )
                 }
 
                 MessageComposer(
@@ -714,15 +706,7 @@ fun ChatScreen(
                 val reversedMessages = displayedMessages.reversed()
                 LazyColumn(
                     state = listState,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .pointerInput(Unit) {
-                            detectTapGestures(
-                                onDoubleTap = {
-                                    onQuickDisguise()
-                                }
-                            )
-                        },
+                    modifier = Modifier.fillMaxSize(),
                     reverseLayout = true,
                     contentPadding = PaddingValues(vertical = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp)

@@ -58,6 +58,8 @@ fun NoteEditorScreen(
 ) {
     BackHandler(onBack = onDismiss)
     val context = LocalContext.current
+    val isDark = MaterialTheme.colorScheme.background == Color.Black ||
+            MaterialTheme.colorScheme.surface == Color.Black
 
     var title by remember { mutableStateOf(initialNote?.title ?: "") }
     var content by remember { mutableStateOf(initialNote?.content ?: "") }
@@ -168,7 +170,10 @@ fun NoteEditorScreen(
                         .background(MaterialTheme.colorScheme.surface)
                         .navigationBarsPadding()
                 ) {
-                    HorizontalDivider(color = Color(0xFFEEEEF0), thickness = 1.dp)
+                    HorizontalDivider(
+                        color = if (isDark) Color(0xFF1E293B) else Color(0xFFEEEEF0),
+                        thickness = 1.dp
+                    )
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -179,7 +184,7 @@ fun NoteEditorScreen(
                         // Cancel Button: Modern Soft Rounded Pill
                         Surface(
                             shape = RoundedCornerShape(16.dp),
-                            color = Color(0xFFF2F4F8),
+                            color = if (isDark) Color(0xFF1E293B) else Color(0xFFF2F4F8),
                             modifier = Modifier
                                 .weight(1f)
                                 .height(50.dp)
@@ -192,7 +197,7 @@ fun NoteEditorScreen(
                             ) {
                                 Text(
                                     text = "Cancel",
-                                    color = Color(0xFF4A4E5A),
+                                    color = if (isDark) Color(0xFFF1F5F9) else Color(0xFF4A4E5A),
                                     fontWeight = FontWeight.SemiBold,
                                     fontSize = 15.sp
                                 )
@@ -235,7 +240,7 @@ fun NoteEditorScreen(
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
                                     text = "Save Note",
-                                    color = MaterialTheme.colorScheme.surface,
+                                    color = Color.White,
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 15.sp
                                 )
@@ -251,7 +256,6 @@ fun NoteEditorScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .verticalScroll(rememberScrollState())
                 .padding(horizontal = 20.dp, vertical = 14.dp)
         ) {
             // Title Input
@@ -275,7 +279,9 @@ fun NoteEditorScreen(
                     .testTag("note_editor_title_input"),
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedBorderColor = Color.Transparent,
-                    unfocusedBorderColor = Color.Transparent
+                    unfocusedBorderColor = Color.Transparent,
+                    focusedTextColor = if (isDark) Color(0xFFF8FAFC) else Color(0xFF0F172A),
+                    unfocusedTextColor = if (isDark) Color(0xFFF8FAFC) else Color(0xFF0F172A)
                 )
             )
 
@@ -395,7 +401,7 @@ fun NoteEditorScreen(
                             Text(
                                 text = item.text,
                                 fontSize = 14.sp,
-                                color = MaterialTheme.colorScheme.onBackground,
+                                color = if (isDark) Color(0xFFF8FAFC) else Color(0xFF0F172A),
                                 modifier = Modifier.weight(1f)
                             )
 
@@ -441,7 +447,15 @@ fun NoteEditorScreen(
                                 }
                             }),
                             shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier.weight(1f),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = if (isDark) Color(0xFFF8FAFC) else Color(0xFF0F172A),
+                                unfocusedTextColor = if (isDark) Color(0xFFF8FAFC) else Color(0xFF0F172A),
+                                focusedContainerColor = if (isDark) Color(0xFF070B16) else MaterialTheme.colorScheme.surfaceVariant,
+                                unfocusedContainerColor = if (isDark) Color(0xFF070B16) else MaterialTheme.colorScheme.surfaceVariant,
+                                focusedBorderColor = RoseGoldPrimary,
+                                unfocusedBorderColor = if (isDark) Color(0xFF1E293B) else MaterialTheme.colorScheme.outline
+                            )
                         )
 
                         Spacer(modifier = Modifier.width(8.dp))
@@ -490,14 +504,18 @@ fun NoteEditorScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
                     )
                 },
-                minLines = 8,
                 shape = RoundedCornerShape(14.dp),
                 modifier = Modifier
                     .fillMaxWidth()
+                    .weight(1f)
                     .testTag("note_editor_content_input"),
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedBorderColor = RoseGoldPrimary,
-                    unfocusedBorderColor = MaterialTheme.colorScheme.outline
+                    unfocusedBorderColor = if (isDark) Color(0xFF1E293B) else MaterialTheme.colorScheme.outline,
+                    focusedTextColor = if (isDark) Color(0xFFF8FAFC) else Color(0xFF0F172A),
+                    unfocusedTextColor = if (isDark) Color(0xFFF8FAFC) else Color(0xFF0F172A),
+                    focusedContainerColor = if (isDark) Color(0xFF070B16) else Color(0xFFF8FAFC),
+                    unfocusedContainerColor = if (isDark) Color(0xFF070B16) else Color(0xFFF8FAFC)
                 )
             )
 

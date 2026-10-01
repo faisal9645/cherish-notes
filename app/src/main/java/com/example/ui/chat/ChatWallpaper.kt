@@ -56,12 +56,7 @@ fun NormalWallpaper(
 ) {
     val gradientBrush = remember(isDark) {
         if (isDark) {
-            Brush.verticalGradient(
-                listOf(
-                    Color(0xFF0E1016),
-                    Color(0xFF090A0E)
-                )
-            )
+            androidx.compose.ui.graphics.SolidColor(Color.Black)
         } else {
             androidx.compose.ui.graphics.SolidColor(Color.White)
         }
@@ -237,12 +232,7 @@ fun CosmicConstellationWallpaper(
 ) {
     val bgBrush = remember(isDark) {
         if (isDark) {
-            Brush.verticalGradient(
-                listOf(
-                    Color(0xFF090B14),
-                    Color(0xFF05070D)
-                )
-            )
+            androidx.compose.ui.graphics.SolidColor(Color.Black)
         } else {
             Brush.verticalGradient(
                 listOf(

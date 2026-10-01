@@ -8,13 +8,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.unit.dp
 
-// User Specified Gradient:
-// background: linear-gradient(90deg, #258BE8 0%, #3048F5 55%, #3630F2 100%);
-// box-shadow: 0 8px 18px rgba(48, 72, 245, 0.25);
-val AppGradientStart = Color(0xFF258BE8)
-val AppGradientMid = Color(0xFF3048F5)
-val AppGradientEnd = Color(0xFF3630F2)
-val AppGradientShadow = Color(0x403048F5) // rgba(48, 72, 245, 0.25)
+// Deeper Royal Blue Gradient:
+val AppGradientStart = Color(0xFF1E40AF) // Deep Sapphire Blue
+val AppGradientMid = Color(0xFF1D4ED8)   // Rich Royal Blue
+val AppGradientEnd = Color(0xFF172554)   // Midnight Navy Blue
+val AppGradientShadow = Color(0x35172554)
 
 val AppGradientColors = listOf(
     AppGradientStart,
@@ -44,21 +42,21 @@ fun Modifier.appGradientShadow(shape: Shape = RoundedCornerShape(16.dp)): Modifi
         spotColor = AppGradientShadow
     )
 
-// Cherish & Notes Theme - Electric Blue Gradient & Modern Clean Surface Palette
-val RoseGoldPrimary = Color(0xFF3048F5)
+// Cherish & Notes Theme - Deep Blue & Modern Clean Surface Palette
+val RoseGoldPrimary = Color(0xFF1D4ED8) // Deep Dark Royal Blue
 val RoseGoldOnPrimary = Color(0xFFFFFFFF)
-val RoseGoldContainer = Color(0xFFE8EEFF)
-val OnRoseGoldContainer = Color(0xFF101C6B)
+val RoseGoldContainer = Color(0xFFE2E8F0)
+val OnRoseGoldContainer = Color(0xFF0F172A)
 
-val ChampagneSecondary = Color(0xFF258BE8)
+val ChampagneSecondary = Color(0xFF1E40AF)
 val ChampagneOnSecondary = Color(0xFFFFFFFF)
-val ChampagneContainer = Color(0xFFE3F2FD)
-val OnChampagneContainer = Color(0xFF042852)
+val ChampagneContainer = Color(0xFFE0E7FF)
+val OnChampagneContainer = Color(0xFF0A1033)
 
-val AmethystTertiary = Color(0xFF3630F2)
+val AmethystTertiary = Color(0xFF172554)
 val AmethystOnTertiary = Color(0xFFFFFFFF)
-val AmethystContainer = Color(0xFFECEBFF)
-val OnAmethystContainer = Color(0xFF130E66)
+val AmethystContainer = Color(0xFFDBEAFE)
+val OnAmethystContainer = Color(0xFF0F172A)
 
 // Clean Pure White Background & Surface Palette
 val WhiteBackground = Color(0xFFFFFFFF)
@@ -71,15 +69,23 @@ val DarkOnSurfaceVariant = Color(0xFF52609A)
 val SoftBorderOutline = Color(0xFFE2E8F0)
 val SoftBorderOutlineVariant = Color(0xFFEDF2F7)
 
-// Dark Palette mapped to True Dark Aesthetic
+// True AMOLED / Pure Black Dark Palette (strictly #000000 background and surface)
 val TrueDarkBackground = Color(0xFF000000)
-val TrueDarkSurface = Color(0xFF121212)
-val TrueDarkSurfaceVariant = Color(0xFF1E1E1E)
+val TrueDarkSurface = Color(0xFF000000)
+val TrueDarkSurfaceVariant = Color(0xFF060A14) // Ultra-deep midnight pure black tint
 val TrueDarkOnBackground = Color(0xFFFFFFFF)
 val TrueDarkOnSurface = Color(0xFFFFFFFF)
-val TrueDarkOnSurfaceVariant = Color(0xFFA6B0DF)
-val TrueDarkOutline = Color(0xFF333333)
-val TrueDarkOutlineVariant = Color(0xFF222222)
+val TrueDarkOnSurfaceVariant = Color(0xFFCBD5E1) // High contrast clean slate
+val TrueDarkOutline = Color(0xFF1E293B) // Dark subtle border
+val TrueDarkOutlineVariant = Color(0xFF0A0F1D) // Ultra dark border
+
+// Deep Blue / Dark Blue Accents for Night Mode (deeper, darker blues)
+val DarkBluePrimary = Color(0xFF1D4ED8)
+val DarkBluePrimaryContainer = Color(0xFF0F172A)
+val DarkBlueSecondary = Color(0xFF1E40AF)
+val DarkBlueSecondaryContainer = Color(0xFF172554)
+val DarkBlueTertiary = Color(0xFF2563EB)
+
 
 // Light Palette
 val LightBackground = Color(0xFFFFFFFF)

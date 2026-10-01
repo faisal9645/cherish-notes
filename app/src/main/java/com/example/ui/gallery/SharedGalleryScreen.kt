@@ -86,6 +86,7 @@ fun SharedGalleryScreen(
     var selectedTab by remember { mutableIntStateOf(0) }
     var selectedMediaUrl by remember { mutableStateOf<String?>(null) }
     var selectedMessageIdForViewer by remember { mutableStateOf<String?>(null) }
+    var selectedDateMillis by remember { mutableStateOf<Long?>(null) }
 
     val voicePlayerHelper = chatViewModel.voicePlayerHelper
     val currentTrackId by voicePlayerHelper.currentTrackId.collectAsState()
@@ -98,11 +99,49 @@ fun SharedGalleryScreen(
 
     val tabs = listOf("Media", "Voice Notes", "Links", "Starred")
 
-    // Extract links from all messages
-    val extractedLinks = remember(chatState.messages, currentUserId) {
+    val todayMorning6am = remember {
+        val cal = Calendar.getInstance()
+        if (cal.get(Calendar.HOUR_OF_DAY) < 6) {
+            cal.add(Calendar.DAY_OF_YEAR, -1)
+        }
+        cal.set(Calendar.HOUR_OF_DAY, 6)
+        cal.set(Calendar.MINUTE, 0)
+        cal.set(Calendar.SECOND, 0)
+        cal.set(Calendar.MILLISECOND, 0)
+        cal.timeInMillis
+    }
+
+    val filteredMessages = remember(chatState.messages, chatState.isSecretHistoryRevealed, selectedDateMillis) {
+        var list = chatState.messages.filter { !it.isDeleted }
+
+        // Privacy rule: Unless "Recover & Show" was enabled in Settings, show ONLY today from 6:00 AM
+        if (!chatState.isSecretHistoryRevealed) {
+            list = list.filter { it.timestamp >= todayMorning6am }
+        }
+
+        // Calendar Date Search rule
+        if (selectedDateMillis != null) {
+            val cal = Calendar.getInstance().apply {
+                timeInMillis = selectedDateMillis!!
+                set(Calendar.HOUR_OF_DAY, 0)
+                set(Calendar.MINUTE, 0)
+                set(Calendar.SECOND, 0)
+                set(Calendar.MILLISECOND, 0)
+            }
+            val startOfDay = cal.timeInMillis
+            cal.add(Calendar.DAY_OF_YEAR, 1)
+            val endOfDay = cal.timeInMillis
+            list = list.filter { it.timestamp in startOfDay until endOfDay }
+        }
+
+        list
+    }
+
+    // Extract links from filtered messages
+    val extractedLinks = remember(filteredMessages, currentUserId) {
         val list = mutableListOf<GalleryLinkItem>()
-        chatState.messages.forEach { msg ->
-            if (!msg.isDeleted && msg.text.isNotBlank()) {
+        filteredMessages.forEach { msg ->
+            if (msg.text.isNotBlank()) {
                 val matches = URL_REGEX.findAll(msg.text)
                 for (m in matches) {
                     val raw = m.value
@@ -129,18 +168,18 @@ fun SharedGalleryScreen(
         list.sortedByDescending { it.timestamp }
     }
 
-    val mediaMessages = remember(chatState.messages) {
-        chatState.messages.filter { it.mediaUrl != null && !it.isDeleted && it.getTypedType() == MessageType.IMAGE }
+    val mediaMessages = remember(filteredMessages) {
+        filteredMessages.filter { it.mediaUrl != null && it.getTypedType() == MessageType.IMAGE }
             .sortedByDescending { it.timestamp }
     }
 
-    val voiceMessages = remember(chatState.messages) {
-        chatState.messages.filter { it.getTypedType() == MessageType.AUDIO && !it.isDeleted }
+    val voiceMessages = remember(filteredMessages) {
+        filteredMessages.filter { it.getTypedType() == MessageType.AUDIO }
             .sortedByDescending { it.timestamp }
     }
 
-    val starredMessages = remember(chatState.messages) {
-        chatState.messages.filter { it.isStarred && !it.isDeleted }
+    val starredMessages = remember(filteredMessages) {
+        filteredMessages.filter { it.isStarred }
             .sortedByDescending { it.timestamp }
     }
 
@@ -155,13 +194,22 @@ fun SharedGalleryScreen(
                             fontSize = 18.sp,
                             color = MaterialTheme.colorScheme.onSurface
                         )
+                        val countText = when (selectedTab) {
+                            0 -> "${mediaMessages.size} photos & videos"
+                            1 -> "${voiceMessages.size} voice notes"
+                            2 -> "${extractedLinks.size} shared links"
+                            else -> "${starredMessages.size} starred items"
+                        }
+                        val subtitle = if (!chatState.isSecretHistoryRevealed) {
+                            "$countText • Today from 6:00 AM"
+                        } else if (selectedDateMillis != null) {
+                            val sdf = SimpleDateFormat("MMM d, yyyy", Locale.getDefault())
+                            "$countText • ${sdf.format(Date(selectedDateMillis!!))}"
+                        } else {
+                            "$countText • All history"
+                        }
                         Text(
-                            when (selectedTab) {
-                                0 -> "${mediaMessages.size} photos & videos"
-                                1 -> "${voiceMessages.size} voice notes"
-                                2 -> "${extractedLinks.size} shared links"
-                                else -> "${starredMessages.size} starred items"
-                            },
+                            text = subtitle,
                             fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -176,15 +224,47 @@ fun SharedGalleryScreen(
                     }
                 },
                 actions = {
-                    if (chatState.isSecretHistoryRevealed) {
+                    IconButton(
+                        onClick = {
+                            val cal = Calendar.getInstance()
+                            selectedDateMillis?.let { cal.timeInMillis = it }
+                            android.app.DatePickerDialog(
+                                context,
+                                { _, year, month, dayOfMonth ->
+                                    val selectedCal = Calendar.getInstance().apply {
+                                        set(Calendar.YEAR, year)
+                                        set(Calendar.MONTH, month)
+                                        set(Calendar.DAY_OF_MONTH, dayOfMonth)
+                                        set(Calendar.HOUR_OF_DAY, 0)
+                                        set(Calendar.MINUTE, 0)
+                                        set(Calendar.SECOND, 0)
+                                        set(Calendar.MILLISECOND, 0)
+                                    }
+                                    selectedDateMillis = selectedCal.timeInMillis
+                                },
+                                cal.get(Calendar.YEAR),
+                                cal.get(Calendar.MONTH),
+                                cal.get(Calendar.DAY_OF_MONTH)
+                            ).show()
+                        },
+                        modifier = Modifier.testTag("gallery_calendar_search_button")
+                    ) {
+                        Icon(
+                            imageVector = if (selectedDateMillis != null) Icons.Default.EventAvailable else Icons.Default.CalendarMonth,
+                            contentDescription = "Search by Date",
+                            tint = if (selectedDateMillis != null) RoseGoldPrimary else MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+
+                    if (selectedDateMillis != null) {
                         IconButton(
-                            onClick = { chatViewModel.hideSecretHistory() },
-                            modifier = Modifier.testTag("gallery_shield_toggle")
+                            onClick = { selectedDateMillis = null },
+                            modifier = Modifier.testTag("gallery_clear_date_button")
                         ) {
                             Icon(
-                                imageVector = Icons.Default.Shield,
-                                contentDescription = "Shield Gallery",
-                                tint = RoseGoldPrimary
+                                Icons.Default.Close,
+                                contentDescription = "Clear Date Filter",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
@@ -199,102 +279,87 @@ fun SharedGalleryScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            // Privacy Shield View: When secret history is locked/shielded
-            if (!chatState.isSecretHistoryRevealed) {
-                Box(
+            // Calendar Date Filter Chip
+            if (selectedDateMillis != null) {
+                Surface(
+                    color = RoseGoldPrimary.copy(alpha = 0.12f),
+                    shape = RoundedCornerShape(12.dp),
                     modifier = Modifier
-                        .fillMaxSize()
-                        .padding(24.dp),
-                    contentAlignment = Alignment.Center
+                        .fillMaxWidth()
+                        .padding(horizontal = 14.dp, vertical = 6.dp)
                 ) {
-                    Surface(
-                        shape = RoundedCornerShape(24.dp),
-                        color = MaterialTheme.colorScheme.surface,
-                        shadowElevation = 4.dp,
-                        modifier = Modifier.fillMaxWidth()
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Column(
-                            modifier = Modifier.padding(28.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(68.dp)
-                                    .clip(CircleShape)
-                                    .background(appHorizontalGradient()),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Lock,
-                                    contentDescription = null,
-                                    tint = Color.White,
-                                    modifier = Modifier.size(32.dp)
-                                )
-                            }
-                            Spacer(modifier = Modifier.height(16.dp))
-                            Text(
-                                text = "Gallery Shielded for Privacy",
-                                fontSize = 18.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.CalendarToday,
+                                contentDescription = null,
+                                tint = RoseGoldPrimary,
+                                modifier = Modifier.size(16.dp)
                             )
-                            Spacer(modifier = Modifier.height(8.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            val sdf = remember { SimpleDateFormat("MMMM d, yyyy", Locale.getDefault()) }
                             Text(
-                                text = "Photos, videos, voice notes, and links are hidden until you unlock the secret space.",
+                                text = "Date: ${sdf.format(Date(selectedDateMillis!!))}",
                                 fontSize = 13.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                                lineHeight = 18.sp
+                                fontWeight = FontWeight.SemiBold,
+                                color = RoseGoldPrimary
                             )
-                            Spacer(modifier = Modifier.height(24.dp))
-                            Button(
-                                onClick = { chatViewModel.revealSecretHistory() },
-                                colors = ButtonDefaults.buttonColors(containerColor = RoseGoldPrimary),
-                                shape = RoundedCornerShape(16.dp),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(48.dp)
-                                    .testTag("gallery_recover_button")
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.LockOpen,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text("Recover & Show Gallery", fontWeight = FontWeight.Bold)
-                            }
+                        }
+                        IconButton(
+                            onClick = { selectedDateMillis = null },
+                            modifier = Modifier.size(24.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Clear Date Filter",
+                                tint = RoseGoldPrimary,
+                                modifier = Modifier.size(16.dp)
+                            )
                         }
                     }
                 }
-            } else {
-                // Primary Tab Row
-                PrimaryTabRow(
-                    selectedTabIndex = selectedTab,
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    contentColor = RoseGoldPrimary
-                ) {
-                    tabs.forEachIndexed { index, title ->
-                        Tab(
-                            selected = selectedTab == index,
-                            onClick = { selectedTab = index },
-                            text = {
-                                Text(
-                                    title,
-                                    fontWeight = if (selectedTab == index) FontWeight.Bold else FontWeight.Normal,
-                                    fontSize = 13.sp
-                                )
-                            }
-                        )
-                    }
+            }
+
+            // Primary Tab Row
+            PrimaryTabRow(
+                selectedTabIndex = selectedTab,
+                containerColor = MaterialTheme.colorScheme.surface,
+                contentColor = RoseGoldPrimary
+            ) {
+                tabs.forEachIndexed { index, title ->
+                    Tab(
+                        selected = selectedTab == index,
+                        onClick = { selectedTab = index },
+                        text = {
+                            Text(
+                                title,
+                                fontWeight = if (selectedTab == index) FontWeight.Bold else FontWeight.Normal,
+                                fontSize = 13.sp
+                            )
+                        }
+                    )
                 }
+            }
 
                 when (selectedTab) {
                     // TAB 0: Media (Photos & Videos)
                     0 -> {
                         if (mediaMessages.isEmpty()) {
-                            EmptyGalleryNotice("No shared photos or videos yet 💕")
+                            val emptyText = if (selectedDateMillis != null) {
+                                val sdf = SimpleDateFormat("MMM d, yyyy", Locale.getDefault())
+                                "No photos or videos found on ${sdf.format(Date(selectedDateMillis!!))} 📅"
+                            } else if (!chatState.isSecretHistoryRevealed) {
+                                "No photos or videos shared today from 6:00 AM 💕\n\n(Tap 'Recover & Show' in Settings to view past media)"
+                            } else {
+                                "No shared photos or videos yet 💕"
+                            }
+                            EmptyGalleryNotice(emptyText)
                         } else {
                             LazyVerticalGrid(
                                 columns = GridCells.Fixed(3),
@@ -347,7 +412,15 @@ fun SharedGalleryScreen(
                     // TAB 1: Voice Notes (Playable with audio player and Show in Chat)
                     1 -> {
                         if (voiceMessages.isEmpty()) {
-                            EmptyGalleryNotice("No shared voice notes yet 🎙️")
+                            val emptyText = if (selectedDateMillis != null) {
+                                val sdf = SimpleDateFormat("MMM d, yyyy", Locale.getDefault())
+                                "No voice notes found on ${sdf.format(Date(selectedDateMillis!!))} 📅"
+                            } else if (!chatState.isSecretHistoryRevealed) {
+                                "No voice notes shared today from 6:00 AM 🎙️\n\n(Tap 'Recover & Show' in Settings to view past media)"
+                            } else {
+                                "No shared voice notes yet 🎙️"
+                            }
+                            EmptyGalleryNotice(emptyText)
                         } else {
                             LazyColumn(
                                 modifier = Modifier
@@ -501,7 +574,15 @@ fun SharedGalleryScreen(
                     // TAB 2: Links (WhatsApp Style with dates, times, and actions)
                     2 -> {
                         if (extractedLinks.isEmpty()) {
-                            EmptyGalleryNotice("No shared links yet 🔗\nAny links shared in your secret chat will automatically appear here.")
+                            val emptyText = if (selectedDateMillis != null) {
+                                val sdf = SimpleDateFormat("MMM d, yyyy", Locale.getDefault())
+                                "No links found on ${sdf.format(Date(selectedDateMillis!!))} 📅"
+                            } else if (!chatState.isSecretHistoryRevealed) {
+                                "No links shared today from 6:00 AM 🔗\n\n(Tap 'Recover & Show' in Settings to view past media)"
+                            } else {
+                                "No shared links yet 🔗\nAny links shared in your secret chat will automatically appear here."
+                            }
+                            EmptyGalleryNotice(emptyText)
                         } else {
                             LazyColumn(
                                 modifier = Modifier
@@ -662,7 +743,15 @@ fun SharedGalleryScreen(
                     // TAB 3: Starred
                     3 -> {
                         if (starredMessages.isEmpty()) {
-                            EmptyGalleryNotice("No starred messages or media yet ⭐")
+                            val emptyText = if (selectedDateMillis != null) {
+                                val sdf = SimpleDateFormat("MMM d, yyyy", Locale.getDefault())
+                                "No starred items found on ${sdf.format(Date(selectedDateMillis!!))} 📅"
+                            } else if (!chatState.isSecretHistoryRevealed) {
+                                "No starred items shared today from 6:00 AM ⭐\n\n(Tap 'Recover & Show' in Settings to view past media)"
+                            } else {
+                                "No starred messages or media yet ⭐"
+                            }
+                            EmptyGalleryNotice(emptyText)
                         } else {
                             LazyColumn(
                                 modifier = Modifier
@@ -741,7 +830,6 @@ fun SharedGalleryScreen(
                         }
                     }
                 }
-            }
         }
     }
 

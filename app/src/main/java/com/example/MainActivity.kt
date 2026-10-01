@@ -33,10 +33,19 @@ class MainActivity : FragmentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
+        androidx.core.view.WindowCompat.setDecorFitsSystemWindows(window, false)
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.auto(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT),
+            navigationBarStyle = SystemBarStyle.auto(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT)
+        )
         setHighRefreshRate()
-
         applyScreenshotProtection()
+        if (app.securityPreferences.isDisguiseModeEnabled()) {
+            app.securityPreferences.reDisguise()
+        } else {
+            app.securityPreferences.revealSecretApp()
+        }
+        handleNotificationIntent(intent)
 
         setContent {
             val themeMode by app.securityPreferences.themeMode.collectAsState(initial = 0)
@@ -47,21 +56,11 @@ class MainActivity : FragmentActivity() {
                 else -> isSystemDark
             }
 
-            DisposableEffect(themeMode, useDarkTheme) {
-                val style = if (useDarkTheme) {
-                    SystemBarStyle.dark(android.graphics.Color.TRANSPARENT)
-                } else {
-                    SystemBarStyle.light(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT)
-                }
-                enableEdgeToEdge(
-                    statusBarStyle = style,
-                    navigationBarStyle = style
-                )
-                val bgColor = if (themeMode == 3) android.graphics.Color.BLACK
-                else if (useDarkTheme) android.graphics.Color.parseColor("#121318") // TrueDarkBackground roughly
-                else android.graphics.Color.WHITE
-                
-                window.decorView.setBackgroundColor(bgColor)
+            DisposableEffect(useDarkTheme) {
+                val insetsController = androidx.core.view.WindowCompat.getInsetsController(window, window.decorView)
+                insetsController.isAppearanceLightStatusBars = !useDarkTheme
+                insetsController.isAppearanceLightNavigationBars = !useDarkTheme
+                window.decorView.setBackgroundColor(if (useDarkTheme) android.graphics.Color.BLACK else android.graphics.Color.WHITE)
                 onDispose {}
             }
 
@@ -102,72 +101,48 @@ class MainActivity : FragmentActivity() {
         }
     }
 
-    private var lastBackgroundTimestamp: Long = 0L
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleNotificationIntent(intent)
+    }
+
+    private fun handleNotificationIntent(intent: android.content.Intent?) {
+        if (intent == null) return
+        val isFromNotification = intent.getBooleanExtra("from_notification", false) ||
+                intent.getBooleanExtra("open_chat", false) ||
+                intent.hasExtra("conversationId")
+        if (isFromNotification) {
+            app.securityPreferences.revealSecretApp()
+        }
+    }
 
     override fun onResume() {
         super.onResume()
-        setHighRefreshRate()
+        app.securityPreferences.revealSecretApp()
         applyScreenshotProtection()
         app.authRepository.onAppForegroundStateChanged(true)
-        // Reset the ignore flag when returning to the app
         app.securityPreferences.ignoreNextPause = false
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
-        if (!hasFocus && !app.securityPreferences.ignoreNextPause) {
-            if (app.securityPreferences.isDisguiseModeEnabled()) {
-                app.securityPreferences.reDisguise()
-            }
-            if (app.securityPreferences.hasPin() && app.securityPreferences.isAppLockEnabled()) {
-                app.securityPreferences.lockApp()
-            }
-        }
+        // Keep user strictly inside Chat - do not switch to Notes on focus changes
     }
 
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
-        if (!app.securityPreferences.ignoreNextPause) {
-            if (app.securityPreferences.isDisguiseModeEnabled()) {
-                app.securityPreferences.reDisguise()
-            }
-            if (app.securityPreferences.hasPin() && app.securityPreferences.isAppLockEnabled()) {
-                app.securityPreferences.lockApp()
-            }
-        }
+        // Do not auto-switch to Notes on leaving hint
     }
 
     override fun onPause() {
         super.onPause()
-        lastBackgroundTimestamp = System.currentTimeMillis()
-
-        if (!app.securityPreferences.ignoreNextPause) {
-            // Immediate Disguise Protection: Revert to real Notes app as soon as the app is minimized
-            if (app.securityPreferences.isDisguiseModeEnabled()) {
-                app.securityPreferences.reDisguise()
-            }
-            if (app.securityPreferences.hasPin() && app.securityPreferences.isAppLockEnabled()) {
-                app.securityPreferences.lockApp()
-            }
-        }
-
-        // Temporarily clear FLAG_SECURE so the Android system captures the real Notes Disguise snapshot
-        // in the multitasking/recents carousel without showing a black box.
-        window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
-        window.decorView.postInvalidate()
+        // Stable lifecycle: do not toggle window secure flags or force disguise on pause
     }
 
     override fun onStop() {
         super.onStop()
         app.authRepository.onAppForegroundStateChanged(false)
-        if (!app.securityPreferences.ignoreNextPause) {
-            if (app.securityPreferences.isDisguiseModeEnabled()) {
-                app.securityPreferences.reDisguise()
-            }
-            if (app.securityPreferences.hasPin() && app.securityPreferences.isAppLockEnabled()) {
-                app.securityPreferences.lockApp()
-            }
-        }
     }
 
     override fun onDestroy() {
@@ -177,13 +152,14 @@ class MainActivity : FragmentActivity() {
 
     private fun applyScreenshotProtection() {
         val isProtected = app.securityPreferences.isScreenshotProtectionEnabled()
-        if (isProtected) {
-            window.setFlags(
-                WindowManager.LayoutParams.FLAG_SECURE,
-                WindowManager.LayoutParams.FLAG_SECURE
-            )
-        } else {
-            window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        val currentFlags = window.attributes.flags
+        val hasSecure = (currentFlags and WindowManager.LayoutParams.FLAG_SECURE) != 0
+        if (isProtected != hasSecure) {
+            if (isProtected) {
+                window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+            } else {
+                window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+            }
         }
     }
 

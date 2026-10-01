@@ -41,61 +41,32 @@ private val PureWhiteColorScheme = lightColorScheme(
 )
 
 private val TrueDarkColorScheme = darkColorScheme(
-    primary = RoseGoldPrimary,
-    onPrimary = RoseGoldOnPrimary,
-    primaryContainer = Color(0xFF152060),
-    onPrimaryContainer = Color(0xFFD6E0FF),
-    secondary = ChampagneSecondary,
-    onSecondary = ChampagneOnSecondary,
-    secondaryContainer = Color(0xFF0B3A6E),
-    onSecondaryContainer = Color(0xFFD3E8FF),
-    tertiary = AmethystTertiary,
-    onTertiary = AmethystOnTertiary,
-    tertiaryContainer = Color(0xFF181570),
-    onTertiaryContainer = Color(0xFFE2E0FF),
-    background = TrueDarkBackground,
-    onBackground = TrueDarkOnBackground,
-    surface = TrueDarkSurface,
-    onSurface = TrueDarkOnSurface,
-    surfaceVariant = TrueDarkSurfaceVariant,
-    onSurfaceVariant = TrueDarkOnSurfaceVariant,
-    surfaceTint = Color.Transparent,
-    surfaceContainer = TrueDarkSurface,
-    surfaceContainerLow = TrueDarkBackground,
-    surfaceContainerLowest = TrueDarkBackground,
-    surfaceContainerHigh = TrueDarkSurfaceVariant,
-    surfaceContainerHighest = Color(0xFF2C2D33),
-    outline = TrueDarkOutline,
-    outlineVariant = TrueDarkOutlineVariant
-)
-
-private val OledDarkColorScheme = darkColorScheme(
-    primary = Color(0xFFC7789A), // Dimmed Rose Gold
-    onPrimary = Color.Black,
-    primaryContainer = Color(0xFF101840), // Very dark blue
-    onPrimaryContainer = Color(0xFFA0B4EF), // Muted light blue
-    secondary = Color(0xFFA69A73), // Dimmed Champagne
-    onSecondary = Color.Black,
-    secondaryContainer = Color(0xFF08254A), // Very dark secondary
-    onSecondaryContainer = Color(0xFFA5C5E6),
-    tertiary = Color(0xFF7E6AA3), // Dimmed Amethyst
-    onTertiary = Color.Black,
-    tertiaryContainer = Color(0xFF100E4A),
-    onTertiaryContainer = Color(0xFFB5B3E6),
-    background = Color.Black,
-    onBackground = Color(0xFFD4D6DD), // Slightly dimmed text
-    surface = Color.Black,
-    onSurface = Color(0xFFD4D6DD),
-    surfaceVariant = Color(0xFF0A0C14), // Almost black for bubbles
-    onSurfaceVariant = Color(0xFFB0B3BC),
+    primary = Color(0xFF1D4ED8), // Deeper Dark Royal Blue
+    onPrimary = Color.White,
+    primaryContainer = Color(0xFF0F172A), // Dark Slate Navy Container
+    onPrimaryContainer = Color(0xFF93C5FD),
+    secondary = Color(0xFF1E40AF), // Deep Accent Blue
+    onSecondary = Color.White,
+    secondaryContainer = Color(0xFF172554),
+    onSecondaryContainer = Color(0xFFBFDBFE),
+    tertiary = Color(0xFF2563EB),
+    onTertiary = Color.White,
+    tertiaryContainer = Color(0xFF0F172A),
+    onTertiaryContainer = Color(0xFFDBEAFE),
+    background = Color.Black, // Strict AMOLED pure black #000000
+    onBackground = Color.White,
+    surface = Color.Black, // Strict AMOLED pure black #000000
+    onSurface = Color.White,
+    surfaceVariant = Color(0xFF060A14), // Ultra-deep midnight black for inputs and cards
+    onSurfaceVariant = Color(0xFFCBD5E1),
     surfaceTint = Color.Transparent,
     surfaceContainer = Color.Black,
     surfaceContainerLow = Color.Black,
     surfaceContainerLowest = Color.Black,
-    surfaceContainerHigh = Color(0xFF08090C),
-    surfaceContainerHighest = Color(0xFF12141A),
-    outline = Color(0xFF2C2F3B),
-    outlineVariant = Color(0xFF1A1C25)
+    surfaceContainerHigh = Color(0xFF070B16),
+    surfaceContainerHighest = Color(0xFF0C1220),
+    outline = Color(0xFF1E293B),
+    outlineVariant = Color(0xFF0A0F1D)
 )
 
 @Composable
@@ -106,8 +77,7 @@ fun CherishTheme(
     val isSystemDark = isSystemInDarkTheme()
     val colorScheme = when (themeMode) {
         1 -> PureWhiteColorScheme
-        2 -> TrueDarkColorScheme
-        3 -> OledDarkColorScheme
+        2, 3 -> TrueDarkColorScheme
         else -> if (isSystemDark) TrueDarkColorScheme else PureWhiteColorScheme
     }
 

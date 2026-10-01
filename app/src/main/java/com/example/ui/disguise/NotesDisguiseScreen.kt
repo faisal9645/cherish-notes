@@ -17,7 +17,9 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.ui.res.painterResource
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -291,21 +293,13 @@ fun NotesDisguiseScreen(
                                     .clip(RoundedCornerShape(12.dp))
                                     .testTag("notes_header")
                             ) {
-                                Box(
+                                Image(
+                                    painter = painterResource(com.example.R.drawable.notes_entrance_logo_512),
+                                    contentDescription = "Notes",
                                     modifier = Modifier
                                         .size(38.dp)
-                                        .appGradientShadow(CircleShape)
-                                        .clip(CircleShape)
-                                        .background(appHorizontalGradient()),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Filled.EditNote,
-                                        contentDescription = "Notes",
-                                        tint = Color.White,
-                                        modifier = Modifier.size(24.dp)
-                                    )
-                                }
+                                        .clip(RoundedCornerShape(8.dp))
+                                )
                                 Spacer(modifier = Modifier.width(10.dp))
                                 Text(
                                     text = "Notes",
@@ -443,7 +437,9 @@ fun NotesDisguiseScreen(
                             focusedBorderColor = RoseGoldPrimary,
                             unfocusedBorderColor = MaterialTheme.colorScheme.outline,
                             focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-                            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant
+                            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                            focusedTextColor = MaterialTheme.colorScheme.onBackground,
+                            unfocusedTextColor = MaterialTheme.colorScheme.onBackground
                         ),
                         modifier = Modifier
                             .fillMaxWidth()
@@ -827,7 +823,7 @@ fun NotesDisguiseScreen(
                             text = "Opening Cherish...",
                             fontSize = 14.sp,
                             fontWeight = FontWeight.SemiBold,
-                            color = Color(0xFF1E293B)
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                     }
                 }

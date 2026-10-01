@@ -49,6 +49,10 @@ class AuthRepository(private val context: Context) {
 
     private var partnerListener: ListenerRegistration? = null
     private var currentUserListener: ListenerRegistration? = null
+    private var coupleListener: ListenerRegistration? = null
+    private var isAppInForeground: Boolean = false
+    private var isActivelyInChatTab: Boolean = false
+    private var heartbeatJob: kotlinx.coroutines.Job? = null
 
     init {
         loadLocalUserSession()
@@ -56,13 +60,19 @@ class AuthRepository(private val context: Context) {
         if (localUser != null) {
             listenToCurrentUser(localUser.id)
             connectPartnerListener()
-            setOnline(true)
+            localUser.coupleId?.let { listenToCoupleRoom(it, localUser.id) }
         } else {
             val currentFirebaseUser = auth?.currentUser
             if (currentFirebaseUser != null) {
                 listenToCurrentUser(currentFirebaseUser.uid)
                 connectPartnerListener()
-                setOnline(true)
+            }
+        }
+
+        // When disguise state changes (e.g. entering Notes), update presence immediately (Issue 5)
+        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main).launch {
+            securityPrefs.isDisguiseActive.collect {
+                updatePresence()
             }
         }
     }
@@ -73,6 +83,161 @@ class AuthRepository(private val context: Context) {
 
     fun getCurrentUserId(): String {
         return _currentUserState.value?.id ?: auth?.currentUser?.uid ?: "local_user_a"
+    }
+
+    fun setInChatTab(inChat: Boolean) {
+        isActivelyInChatTab = inChat
+        updatePresence()
+    }
+
+    fun onAppForegroundStateChanged(inForeground: Boolean) {
+        isAppInForeground = inForeground
+        updatePresence()
+        if (inForeground) {
+            startHeartbeat()
+        } else {
+            heartbeatJob?.cancel()
+        }
+    }
+
+    fun updatePresence() {
+        val isDisguised = securityPrefs.isDisguiseActive.value
+        // Show Online ONLY when actively inside the Chat tab, in foreground, and not in disguise (Issue 5)
+        val shouldBeOnline = isAppInForeground && isActivelyInChatTab && !isDisguised
+        setOnline(shouldBeOnline)
+    }
+
+    fun listenToCoupleRoom(coupleId: String, currentUid: String) {
+        coupleListener?.remove()
+        coupleListener = firestore?.collection("couples")?.document(coupleId)
+            ?.addSnapshotListener { snapshot, e ->
+                if (e != null || snapshot == null || !snapshot.exists()) return@addSnapshotListener
+                val p1 = snapshot.getString("partner1Id")
+                val p2 = snapshot.getString("partner2Id")
+                val otherId = if (p1 != null && p1 != currentUid) p1 else if (p2 != null && p2 != currentUid) p2 else null
+                if (!otherId.isNullOrBlank() && _currentUserState.value?.partnerId != otherId) {
+                    val updated = _currentUserState.value?.copy(partnerId = otherId)
+                    if (updated != null) {
+                        _currentUserState.value = updated
+                        saveLocalUserSession(updated)
+                        listenToPartner(otherId)
+                    }
+                }
+            }
+    }
+
+    suspend fun loginWithCoupleCredentials(
+        username: String,
+        partnerName: String,
+        secretCode: String
+    ): Result<User> {
+        val cleanUser = username.trim().lowercase().filter { it.isLetterOrDigit() || it == '_' }.ifBlank { "partner_a" }
+        val cleanPartner = partnerName.trim().lowercase().filter { it.isLetterOrDigit() || it == '_' }.ifBlank { "partner_b" }
+        val cleanCode = secretCode.trim().lowercase().filter { it.isLetterOrDigit() || it == '_' }.ifBlank { "cherish_couple" }
+
+        val coupleId = "couple_$cleanCode"
+        val uid = "user_$cleanUser"
+        val fallbackPartnerId = "user_$cleanPartner"
+
+        val displayName = username.trim()
+        val partnerDisplayName = partnerName.trim()
+        val virtualEmail = "$cleanUser@cherish.app"
+        val partnerVirtualEmail = "$cleanPartner@cherish.app"
+
+        var finalPartnerId = fallbackPartnerId
+
+        try {
+            auth?.signInAnonymously()?.await()
+        } catch (_: Exception) {}
+
+        val fs = firestore
+        if (fs != null) {
+            try {
+                val coupleDocRef = fs.collection("couples").document(coupleId)
+                val coupleSnap = coupleDocRef.get().await()
+                if (!coupleSnap.exists()) {
+                    coupleDocRef.set(
+                        mapOf(
+                            "coupleId" to coupleId,
+                            "secretCode" to cleanCode,
+                            "partner1Id" to uid,
+                            "partner1Name" to displayName,
+                            "partner2Name" to partnerDisplayName,
+                            "createdAt" to System.currentTimeMillis(),
+                            "updatedAt" to System.currentTimeMillis()
+                        ),
+                        com.google.firebase.firestore.SetOptions.merge()
+                    ).await()
+                } else {
+                    val p1Id = coupleSnap.getString("partner1Id")
+                    val p2Id = coupleSnap.getString("partner2Id")
+                    if (p1Id != null && p1Id != uid) {
+                        finalPartnerId = p1Id
+                        coupleDocRef.update(
+                            mapOf(
+                                "partner2Id" to uid,
+                                "partner2Name" to displayName,
+                                "updatedAt" to System.currentTimeMillis()
+                            )
+                        ).await()
+                        try {
+                            fs.collection("users").document(p1Id).update(mapOf("partnerId" to uid))
+                        } catch (_: Exception) {}
+                    } else if (p2Id != null && p2Id != uid) {
+                        finalPartnerId = p2Id
+                    }
+                }
+            } catch (e: Exception) {
+                Log.w("AuthRepository", "Couple linking: ${e.message}")
+            }
+        }
+
+        val finalUser = User(
+            id = uid,
+            email = virtualEmail,
+            displayName = displayName,
+            partnerId = finalPartnerId,
+            partnerEmail = partnerVirtualEmail,
+            coupleId = coupleId,
+            isOnline = false,
+            lastSeen = System.currentTimeMillis(),
+            createdAt = System.currentTimeMillis()
+        )
+
+        _currentUserState.value = finalUser
+        saveLocalUserSession(finalUser)
+        securityPrefs.setApprovedPartnerEmail(partnerVirtualEmail)
+        securityPrefs.setCoupleSecretKey(coupleId)
+
+        listenToCurrentUser(uid)
+        listenToPartner(finalPartnerId)
+        listenToCoupleRoom(coupleId, uid)
+
+        if (fs != null) {
+            kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                try {
+                    val userDocRef = fs.collection("users").document(uid)
+                    val updates = mutableMapOf<String, Any>(
+                        "id" to uid,
+                        "email" to virtualEmail,
+                        "displayName" to displayName,
+                        "partnerId" to finalPartnerId,
+                        "partnerName" to partnerDisplayName,
+                        "partnerEmail" to partnerVirtualEmail,
+                        "coupleId" to coupleId,
+                        "secretCode" to cleanCode,
+                        "isOnline" to false,
+                        "lastSeen" to System.currentTimeMillis()
+                    )
+                    userDocRef.set(updates, com.google.firebase.firestore.SetOptions.merge()).await()
+                    updateFcmToken(uid)
+                } catch (e: Exception) {
+                    Log.w("AuthRepository", "User doc sync: ${e.message}")
+                }
+            }
+        }
+
+        return Result.success(finalUser)
     }
 
     fun computeCoupleId(userStr: String, partnerStr: String, keyStr: String): String {
@@ -434,26 +599,15 @@ class AuthRepository(private val context: Context) {
         }
     }
 
-    private var isAppInForeground: Boolean = false
-    private var heartbeatJob: kotlinx.coroutines.Job? = null
-
-    fun onAppForegroundStateChanged(inForeground: Boolean) {
-        isAppInForeground = inForeground
-        setOnline(inForeground)
-        if (inForeground) {
-            startHeartbeat()
-        } else {
-            heartbeatJob?.cancel()
-        }
-    }
-
     private fun startHeartbeat() {
         heartbeatJob?.cancel()
         heartbeatJob = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
             while (isAppInForeground) {
                 kotlinx.coroutines.delay(20_000L)
-                if (isAppInForeground) {
-                    val uid = getCurrentUserId()
+                val isDisguised = securityPrefs.isDisguiseActive.value
+                val shouldBeOnline = isAppInForeground && isActivelyInChatTab && !isDisguised
+                val uid = getCurrentUserId()
+                if (shouldBeOnline) {
                     if (uid.isNotBlank() && uid != "local_user_a") {
                         val updates = mapOf<String, Any>(
                             "isOnline" to true,
@@ -467,6 +621,8 @@ class AuthRepository(private val context: Context) {
                             )
                         } catch (_: Exception) {}
                     }
+                } else {
+                    setOnline(false)
                 }
             }
         }

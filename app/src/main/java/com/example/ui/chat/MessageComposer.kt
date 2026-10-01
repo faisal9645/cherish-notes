@@ -502,136 +502,87 @@ fun MessageComposer(
                         }
                     }
                     "MIC" -> {
-                        // Case C: Persistent Hold-to-Record Mic Button with Dynamic Lock Pill Overhead
-                        Box(contentAlignment = Alignment.Center) {
-                    // Lock pill overhead (animates upward and locks as you slide up)
-                    androidx.compose.animation.AnimatedVisibility(
-                        visible = isRecordingVoice && !isLockedRecording,
-                        enter = fadeIn() + slideInVertically { it / 2 },
-                        exit = fadeOut() + slideOutVertically { it / 2 }
-                    ) {
-                        val isNearLock = dragOffsetY < -80f
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            modifier = Modifier
-                                .offset(y = (-64).dp + (dragOffsetY * 0.35f).coerceIn(-40f, 0f).dp)
-                                .clip(RoundedCornerShape(16.dp))
-                                .background(if (isNearLock) RoseGoldPrimary else Color.White)
-                                .border(
-                                    BorderStroke(1.dp, if (isNearLock) RoseGoldPrimary else Color(0xFFE8E8EC)),
-                                    RoundedCornerShape(16.dp)
-                                )
-                                .padding(horizontal = 8.dp, vertical = 6.dp)
+                        // Case C: Persistent Hold-to-Record Mic Button cleanly aligned without top overlap (Issue 2)
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier.size(46.dp)
                         ) {
-                            Icon(
-                                imageVector = if (isNearLock) Icons.Default.Lock else Icons.Outlined.Lock,
-                                contentDescription = null,
-                                tint = if (isNearLock) Color.White else RoseGoldPrimary,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Icon(
-                                imageVector = Icons.Default.KeyboardArrowUp,
-                                contentDescription = null,
-                                tint = if (isNearLock) Color.White else RoseGoldPrimary,
-                                modifier = Modifier.size(14.dp)
-                            )
-                        }
-                    }
-
-                    // Pulsing/Reactive Mic Button
-                    Box(
-                        modifier = Modifier
-                            .offset { 
-                                IntOffset(
-                                    (dragOffsetX * 0.4f).roundToInt(),
-                                    (dragOffsetY * 0.4f).roundToInt()
-                                ) 
-                            }
-                            .scale(micScale)
-                            .size(46.dp)
-                            .then(
-                                if (isRecordingVoice) {
-                                    Modifier
-                                        .appGradientShadow(CircleShape)
-                                        .clip(CircleShape)
-                                        .background(appHorizontalGradient())
-                                } else {
-                                    Modifier
-                                        .clip(CircleShape)
-                                        .background(MaterialTheme.colorScheme.primaryContainer)
-                                }
-                            )
-                            .pointerInput(Unit) {
-                                awaitEachGesture {
-                                    val down = awaitFirstDown(requireUnconsumed = false)
-                                    down.consume()
-                                    val startTime = System.currentTimeMillis()
-                                    dragOffsetX = 0f
-                                    dragOffsetY = 0f
-                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    onStartVoiceRecord()
-
-                                    var hasLocked = false
-                                    var hasTriggeredCancelHaptic = false
-
-                                    while (true) {
-                                        val event = awaitPointerEvent()
-                                        val change = event.changes.firstOrNull { it.id == down.id }
-                                        if (change == null || !change.pressed) {
-                                            break
+                            Box(
+                                modifier = Modifier
+                                    .size(46.dp)
+                                    .then(
+                                        if (isRecordingVoice) {
+                                            Modifier
+                                                .appGradientShadow(CircleShape)
+                                                .clip(CircleShape)
+                                                .background(appHorizontalGradient())
+                                        } else {
+                                            Modifier
+                                                .clip(CircleShape)
+                                                .background(MaterialTheme.colorScheme.primaryContainer)
                                         }
-                                        change.consume()
-                                        
-                                        val delta = change.position - down.position
-                                        dragOffsetX = delta.x.coerceIn(-240f, 0f)
-                                        dragOffsetY = delta.y.coerceIn(-180f, 0f)
-
-                                        if (dragOffsetY < -80f && !hasLocked) {
-                                            hasLocked = true
+                                    )
+                                    .pointerInput(Unit) {
+                                        awaitEachGesture {
+                                            val down = awaitFirstDown(requireUnconsumed = false)
+                                            down.consume()
+                                            val startTime = System.currentTimeMillis()
+                                            dragOffsetX = 0f
+                                            dragOffsetY = 0f
                                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                        }
+                                            onStartVoiceRecord()
 
-                                        if (dragOffsetX < -100f && !hasTriggeredCancelHaptic) {
-                                            hasTriggeredCancelHaptic = true
-                                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                        } else if (dragOffsetX >= -100f) {
-                                            hasTriggeredCancelHaptic = false
+                                            var hasTriggeredCancelHaptic = false
+
+                                            while (true) {
+                                                val event = awaitPointerEvent()
+                                                val change = event.changes.firstOrNull { it.id == down.id }
+                                                if (change == null || !change.pressed) {
+                                                    break
+                                                }
+                                                change.consume()
+                                                
+                                                val delta = change.position - down.position
+                                                dragOffsetX = delta.x.coerceIn(-240f, 0f)
+
+                                                if (dragOffsetX < -100f && !hasTriggeredCancelHaptic) {
+                                                    hasTriggeredCancelHaptic = true
+                                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                                } else if (dragOffsetX >= -100f) {
+                                                    hasTriggeredCancelHaptic = false
+                                                }
+                                            }
+
+                                            val elapsed = System.currentTimeMillis() - startTime
+                                            if (dragOffsetX < -100f) {
+                                                // Swiped left to cancel
+                                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                onCancelVoiceRecord()
+                                            } else if (elapsed < 500L) {
+                                                // Tapped too quickly: cancel and instruct
+                                                onCancelVoiceRecord()
+                                                Toast.makeText(context, "Hold to record, release to send", Toast.LENGTH_SHORT).show()
+                                            } else {
+                                                // Normal release: stop and send audio note
+                                                onStopAndSendVoiceRecord()
+                                            }
                                         }
                                     }
-
-                                    val elapsed = System.currentTimeMillis() - startTime
-                                    if (hasLocked) {
-                                        // User locked into hands-free mode: do not stop or send!
-                                        isLockedRecording = true
-                                    } else if (dragOffsetX < -100f) {
-                                        // Swiped left to cancel
-                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                        onCancelVoiceRecord()
-                                    } else if (elapsed < 500L) {
-                                        // Tapped too quickly: cancel and instruct
-                                        onCancelVoiceRecord()
-                                        Toast.makeText(context, "Hold to record, release to send", Toast.LENGTH_SHORT).show()
-                                    } else {
-                                        // Normal release: stop and send audio note
-                                        onStopAndSendVoiceRecord()
-                                    }
-                                }
+                                    .testTag("composer_voice_button"),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Mic,
+                                    contentDescription = "Hold to record voice note",
+                                    tint = if (isRecordingVoice) Color.White else MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(22.dp)
+                                )
                             }
-                            .testTag("composer_voice_button"),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Mic,
-                            contentDescription = "Hold to record voice note",
-                            tint = if (isRecordingVoice) Color.White else MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(if (isRecordingVoice) 24.dp else 22.dp)
-                        )
                         }
                     }
                 }
             }
         }
     }
-}
 }
 

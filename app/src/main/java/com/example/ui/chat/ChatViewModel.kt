@@ -127,6 +127,10 @@ class ChatViewModel(
         }
     }
 
+    fun setInChatTab(inChat: Boolean) {
+        authRepository.setInChatTab(inChat)
+    }
+
     fun onTypingChanged(isTyping: Boolean) {
         authRepository.setTyping(isTyping)
     }

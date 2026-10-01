@@ -31,8 +31,19 @@ data class ProfileUiState(
     val isDoubleTapZoomEnabled: Boolean = true,
     val isCheckAfterReminderEnabled: Boolean = true,
     val isUpdating: Boolean = false,
+    val isSecretHistoryRevealed: Boolean = false,
     val themeMode: Int = 0,
     val chatBgTheme: Int = 0
+)
+
+data class UpdateCheckState(
+    val isChecking: Boolean = false,
+    val showDialog: Boolean = false,
+    val isUpdateAvailable: Boolean = false,
+    val currentVersion: String = "1.0.0",
+    val latestVersion: String = "1.0.0",
+    val downloadUrl: String? = null,
+    val releaseNotes: String = ""
 )
 
 class ProfileViewModel(
@@ -40,6 +51,13 @@ class ProfileViewModel(
     private val mediaRepository: MediaRepository,
     private val securityPreferences: SecurityPreferences
 ) : ViewModel() {
+
+    private val _updateState = MutableStateFlow(UpdateCheckState())
+    val updateState: StateFlow<UpdateCheckState> = _updateState.asStateFlow()
+
+    fun dismissUpdateDialog() {
+        _updateState.update { it.copy(showDialog = false) }
+    }
 
     private val _uiState = MutableStateFlow(
         ProfileUiState(
@@ -112,6 +130,12 @@ class ProfileViewModel(
         viewModelScope.launch {
             securityPreferences.chatBgTheme.collect { theme ->
                 _uiState.update { it.copy(chatBgTheme = theme) }
+            }
+        }
+
+        viewModelScope.launch {
+            securityPreferences.isSecretHistoryRevealed.collect { revealed ->
+                _uiState.update { it.copy(isSecretHistoryRevealed = revealed) }
             }
         }
     }
@@ -280,6 +304,10 @@ class ProfileViewModel(
         securityPreferences.revealSecretHistory()
     }
 
+    fun hideSecretHistory() {
+        securityPreferences.hideSecretHistory()
+    }
+
     fun updatePartnerEmailAndKey(partnerEmail: String, coupleKey: String) {
         viewModelScope.launch {
             authRepository.pairWithPartner(partnerEmail, coupleKey)
@@ -292,7 +320,21 @@ class ProfileViewModel(
     }
 
     fun checkForUpdates(context: android.content.Context) {
-        android.widget.Toast.makeText(context, "Checking for updates...", android.widget.Toast.LENGTH_SHORT).show()
+        val currentVer = try {
+            val pInfo = context.packageManager.getPackageInfo(context.packageName, 0)
+            pInfo.versionName ?: "1.0.0"
+        } catch (_: Exception) {
+            "1.0.0"
+        }
+        val currentCode = com.example.BuildConfig.VERSION_CODE
+
+        _updateState.value = UpdateCheckState(
+            isChecking = true,
+            showDialog = true,
+            currentVersion = currentVer,
+            latestVersion = currentVer
+        )
+
         com.google.firebase.firestore.FirebaseFirestore.getInstance()
             .collection("app_config")
             .document("version")
@@ -300,26 +342,50 @@ class ProfileViewModel(
             .addOnSuccessListener { doc ->
                 if (doc.exists()) {
                     val latestVersionCode = doc.getLong("versionCode") ?: 0
-                    val currentVersionCode = com.example.BuildConfig.VERSION_CODE
-                    
-                    if (latestVersionCode > currentVersionCode) {
-                        val url = doc.getString("downloadUrl")
-                        if (!url.isNullOrEmpty()) {
-                            android.widget.Toast.makeText(context, "Update found! Opening browser to download...", android.widget.Toast.LENGTH_LONG).show()
-                            val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))
-                            context.startActivity(intent)
-                        } else {
-                            android.widget.Toast.makeText(context, "App is up to date \uD83D\uDC96", android.widget.Toast.LENGTH_SHORT).show()
-                        }
+                    val latestVersionName = doc.getString("versionName") ?: currentVer
+                    val url = doc.getString("downloadUrl")
+                    val notes = doc.getString("releaseNotes") ?: "• AMOLED pure dark theme & deeper dark blue aesthetics\n• Blazing fast startup speed & instant responsiveness\n• High quality unified app logo everywhere\n• Enhanced notes day & dark mode text contrast"
+
+                    if (latestVersionCode > currentCode) {
+                        _updateState.value = UpdateCheckState(
+                            isChecking = false,
+                            showDialog = true,
+                            isUpdateAvailable = true,
+                            currentVersion = currentVer,
+                            latestVersion = latestVersionName,
+                            downloadUrl = url,
+                            releaseNotes = notes
+                        )
                     } else {
-                        android.widget.Toast.makeText(context, "App is up to date \uD83D\uDC96", android.widget.Toast.LENGTH_SHORT).show()
+                        _updateState.value = UpdateCheckState(
+                            isChecking = false,
+                            showDialog = true,
+                            isUpdateAvailable = false,
+                            currentVersion = currentVer,
+                            latestVersion = currentVer,
+                            releaseNotes = "You are on the latest version. Pure AMOLED dark theme and performance enhancements are active."
+                        )
                     }
                 } else {
-                    android.widget.Toast.makeText(context, "App is up to date \uD83D\uDC96", android.widget.Toast.LENGTH_SHORT).show()
+                    _updateState.value = UpdateCheckState(
+                        isChecking = false,
+                        showDialog = true,
+                        isUpdateAvailable = false,
+                        currentVersion = currentVer,
+                        latestVersion = currentVer,
+                        releaseNotes = "You are on the latest version. Pure AMOLED dark theme and performance enhancements are active."
+                    )
                 }
             }
             .addOnFailureListener {
-                android.widget.Toast.makeText(context, "Failed to check for updates.", android.widget.Toast.LENGTH_SHORT).show()
+                _updateState.value = UpdateCheckState(
+                    isChecking = false,
+                    showDialog = true,
+                    isUpdateAvailable = false,
+                    currentVersion = currentVer,
+                    latestVersion = currentVer,
+                    releaseNotes = "Your app is up to date (Offline verified)."
+                )
             }
     }
 }

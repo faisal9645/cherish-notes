@@ -16,11 +16,10 @@ class SecurityPreferences(context: Context) {
     var ignoreNextPause: Boolean = false
 
 
-    private val _isDisguiseActive = MutableStateFlow(true)
+    private val _isDisguiseActive = MutableStateFlow(false)
     val isDisguiseActive: StateFlow<Boolean> = _isDisguiseActive.asStateFlow()
 
     init {
-        // If disguise mode is enabled, start disguised
         _isDisguiseActive.value = isDisguiseModeEnabled()
 
         // If app lock is enabled and PIN is set, default to locked on cold start
@@ -29,7 +28,7 @@ class SecurityPreferences(context: Context) {
         }
     }
 
-    fun isDisguiseModeEnabled(): Boolean = prefs.getBoolean(KEY_DISGUISE_ENABLED, true)
+    fun isDisguiseModeEnabled(): Boolean = prefs.getBoolean(KEY_DISGUISE_ENABLED, false)
 
     fun setDisguiseModeEnabled(enabled: Boolean) {
         prefs.edit().putBoolean(KEY_DISGUISE_ENABLED, enabled).apply()
@@ -41,9 +40,7 @@ class SecurityPreferences(context: Context) {
     }
 
     fun reDisguise() {
-        if (isDisguiseModeEnabled()) {
-            _isDisguiseActive.value = true
-        }
+        _isDisguiseActive.value = true
     }
 
     private val _isSecretHistoryRevealed = MutableStateFlow(false)
@@ -60,8 +57,11 @@ class SecurityPreferences(context: Context) {
     private val _themeMode = MutableStateFlow(getThemeMode())
     val themeMode: StateFlow<Int> = _themeMode.asStateFlow()
 
-    // 0 = System, 1 = Light, 2 = Dark
-    fun getThemeMode(): Int = prefs.getInt("theme_mode", 0)
+    // 0 = System, 1 = Light / Day, 2 = Dark
+    fun getThemeMode(): Int {
+        val mode = prefs.getInt("theme_mode", 0)
+        return if (mode > 2) 2 else mode
+    }
 
     fun setThemeMode(mode: Int) {
         prefs.edit().putInt("theme_mode", mode).apply()

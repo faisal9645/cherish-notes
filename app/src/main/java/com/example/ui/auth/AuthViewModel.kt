@@ -21,6 +21,40 @@ class AuthViewModel(private val authRepository: AuthRepository) : ViewModel() {
     private val _uiState = MutableStateFlow<AuthUiState>(AuthUiState.Idle)
     val uiState: StateFlow<AuthUiState> = _uiState.asStateFlow()
 
+    fun loginCouple(
+        username: String,
+        partnerName: String,
+        coupleSecretCode: String
+    ) {
+        val cleanUser = username.trim()
+        val cleanPartner = partnerName.trim()
+        val cleanCode = coupleSecretCode.trim()
+        if (cleanUser.isBlank()) {
+            _uiState.value = AuthUiState.Error("Please enter your username")
+            return
+        }
+        if (cleanPartner.isBlank()) {
+            _uiState.value = AuthUiState.Error("Please enter your partner's name")
+            return
+        }
+        if (cleanCode.isBlank()) {
+            _uiState.value = AuthUiState.Error("Please enter the Couple Secret Code")
+            return
+        }
+        viewModelScope.launch {
+            _uiState.value = AuthUiState.Loading
+            val result = authRepository.loginWithCoupleCredentials(
+                username = cleanUser,
+                partnerName = cleanPartner,
+                secretCode = cleanCode
+            )
+            result.fold(
+                onSuccess = { _uiState.value = AuthUiState.Success(it) },
+                onFailure = { _uiState.value = AuthUiState.Error(it.localizedMessage ?: "Login failed") }
+            )
+        }
+    }
+
     fun login(
         username: String,
         pass: String,

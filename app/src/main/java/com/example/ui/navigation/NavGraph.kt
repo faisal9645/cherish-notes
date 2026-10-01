@@ -2,12 +2,23 @@ package com.example.ui.navigation
 
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -64,6 +75,12 @@ fun CherishNavGraph(
 
     val notesDisguiseViewModel = remember {
         NotesDisguiseViewModel(app.notesRepository)
+    }
+
+    var isEntranceVisible by remember { mutableStateOf(true) }
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay(200)
+        isEntranceVisible = false
     }
 
     Box(modifier = modifier.fillMaxSize()) {
@@ -303,6 +320,45 @@ fun CherishNavGraph(
             },
             modifier = Modifier.fillMaxSize()
         )
+    }
+
+    // High Quality Entrance Splash Screen with centered picture logo
+    val isEntranceDark = MaterialTheme.colorScheme.background == Color.Black ||
+            MaterialTheme.colorScheme.surface == Color.Black
+
+    AnimatedVisibility(
+        visible = isEntranceVisible,
+        enter = EnterTransition.None,
+        exit = fadeOut(animationSpec = tween(220, easing = FastOutSlowInEasing)),
+        modifier = Modifier.fillMaxSize()
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(if (isEntranceDark) Color.Black else Color.White),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                Image(
+                    painter = painterResource(com.example.R.drawable.notes_entrance_logo_512),
+                    contentDescription = "Notes",
+                    modifier = Modifier
+                        .size(132.dp)
+                        .clip(RoundedCornerShape(26.dp))
+                )
+                Spacer(modifier = Modifier.height(18.dp))
+                Text(
+                    text = "Notes",
+                    fontSize = 28.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = if (isEntranceDark) Color.White else Color(0xFF0F172A),
+                    letterSpacing = (-0.5).sp
+                )
+            }
+        }
     }
 }
 }

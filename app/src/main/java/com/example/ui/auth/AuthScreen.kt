@@ -48,53 +48,9 @@ fun AuthScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
-    var myUsername by remember { mutableStateOf("faisal") }
-    var password by remember { mutableStateOf("cherish123") }
-    var partnerUsername by remember { mutableStateOf("shali") }
-    var couplePasscode by remember { mutableStateOf("faisal-shali") }
-    var passwordVisible by remember { mutableStateOf(false) }
-
-    val context = LocalContext.current
-    val coroutineScope = rememberCoroutineScope()
-    var isGoogleSigningIn by remember { mutableStateOf(false) }
-
-    fun triggerGoogleSignIn() {
-        coroutineScope.launch {
-            try {
-                isGoogleSigningIn = true
-                val credentialManager = CredentialManager.create(context)
-                val googleIdOption = GetGoogleIdOption.Builder()
-                    .setFilterByAuthorizedAccounts(false)
-                    .setServerClientId("589800064404-tggb6b8jqfrm6vo9p0skl6f2fr23hle4.apps.googleusercontent.com")
-                    .setAutoSelectEnabled(false)
-                    .build()
-
-                val request = GetCredentialRequest.Builder()
-                    .addCredentialOption(googleIdOption)
-                    .build()
-
-                val result = credentialManager.getCredential(context = context, request = request)
-                val credential = result.credential
-                if (credential is CustomCredential && credential.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL) {
-                    val googleIdTokenCredential = GoogleIdTokenCredential.createFrom(credential.data)
-                    val idToken = googleIdTokenCredential.idToken
-                    viewModel.loginWithGoogle(
-                        idToken = idToken,
-                        partnerUsernameOrEmail = partnerUsername,
-                        coupleKey = couplePasscode
-                    )
-                } else {
-                    Toast.makeText(context, "Unexpected credential returned", Toast.LENGTH_SHORT).show()
-                }
-            } catch (e: GetCredentialCancellationException) {
-                // User cancelled the prompt
-            } catch (e: Exception) {
-                Toast.makeText(context, "Google Sign-In: ${e.localizedMessage ?: e.message}", Toast.LENGTH_LONG).show()
-            } finally {
-                isGoogleSigningIn = false
-            }
-        }
-    }
+    var myUsername by remember { mutableStateOf("") }
+    var partnerName by remember { mutableStateOf("") }
+    var coupleSecretCode by remember { mutableStateOf("") }
 
     LaunchedEffect(uiState) {
         if (uiState is AuthUiState.Success) {
@@ -104,7 +60,7 @@ fun AuthScreen(
 
     Surface(
         modifier = modifier.fillMaxSize(),
-        color = MaterialTheme.colorScheme.surface
+        color = MaterialTheme.colorScheme.background
     ) {
         Box(
             modifier = Modifier.fillMaxSize(),
@@ -194,37 +150,35 @@ fun AuthScreen(
                                 Icon(
                                     imageVector = Icons.Default.Lock,
                                     contentDescription = null,
-                                    tint = RoseGoldPrimary,
+                                    tint = MaterialTheme.colorScheme.primary,
                                     modifier = Modifier.size(20.dp)
                                 )
                                 Spacer(modifier = Modifier.width(10.dp))
                                 Column {
                                     Text(
-                                        text = "Account Sign-In",
+                                        text = "Couple Account Login",
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 13.sp,
                                         color = MaterialTheme.colorScheme.onBackground
                                     )
                                     Text(
-                                        text = "Private couple chat with your partner",
+                                        text = "Log in independently with shared Secret Code",
                                         fontSize = 11.sp,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
                             }
 
-                            Spacer(modifier = Modifier.height(18.dp))
+                            Spacer(modifier = Modifier.height(20.dp))
 
-
-
-                            // Your Username
+                            // Field 1: Your Username
                             OutlinedTextField(
                                 value = myUsername,
                                 onValueChange = { myUsername = it },
-                                label = { Text("Your Username") },
-                                placeholder = { Text("e.g. faisal") },
+                                label = { Text("Username") },
+                                placeholder = { Text("Your name or nickname") },
                                 leadingIcon = {
-                                    Icon(Icons.Default.Person, contentDescription = null, tint = RoseGoldPrimary)
+                                    Icon(Icons.Default.Person, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                                 },
                                 singleLine = true,
                                 shape = RoundedCornerShape(14.dp),
@@ -235,81 +189,14 @@ fun AuthScreen(
 
                             Spacer(modifier = Modifier.height(14.dp))
 
-                            // Password
+                            // Field 2: Partner Name
                             OutlinedTextField(
-                                value = password,
-                                onValueChange = { password = it },
-                                label = { Text("Password") },
+                                value = partnerName,
+                                onValueChange = { partnerName = it },
+                                label = { Text("Partner Name") },
+                                placeholder = { Text("Your partner's name") },
                                 leadingIcon = {
-                                    Icon(Icons.Default.Lock, contentDescription = null, tint = RoseGoldPrimary)
-                                },
-                                trailingIcon = {
-                                    IconButton(onClick = { passwordVisible = !passwordVisible }) {
-                                        Icon(
-                                            imageVector = if (passwordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
-                                            contentDescription = "Toggle password"
-                                        )
-                                    }
-                                },
-                                visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                                singleLine = true,
-                                shape = RoundedCornerShape(14.dp),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .testTag("input_password")
-                            )
-
-                            Spacer(modifier = Modifier.height(14.dp))
-
-                            // Quick Swap Button for 2nd Phone
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 4.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = "Connecting 2 phones?",
-                                    fontSize = 12.sp,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                TextButton(
-                                    onClick = {
-                                        val temp = myUsername
-                                        myUsername = partnerUsername
-                                        partnerUsername = temp
-                                    },
-                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.SwapVert,
-                                        contentDescription = null,
-                                        tint = RoseGoldPrimary,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text(
-                                        text = "⇄ Swap for 2nd Phone",
-                                        fontSize = 12.sp,
-                                        color = RoseGoldPrimary,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
-                            }
-
-                            Spacer(modifier = Modifier.height(6.dp))
-
-                            // Partner's Username
-                            OutlinedTextField(
-                                value = partnerUsername,
-                                onValueChange = { partnerUsername = it },
-                                label = { Text("Partner's Username") },
-                                placeholder = { Text("e.g. karthik") },
-                                supportingText = { Text("Only this partner connects to your space") },
-                                leadingIcon = {
-                                    Icon(Icons.Default.Favorite, contentDescription = null, tint = HeartRed)
+                                    Icon(Icons.Default.Favorite, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                                 },
                                 singleLine = true,
                                 shape = RoundedCornerShape(14.dp),
@@ -320,15 +207,15 @@ fun AuthScreen(
 
                             Spacer(modifier = Modifier.height(14.dp))
 
-                            // Couple Passcode / Room Code
+                            // Field 3: Couple Secret Code
                             OutlinedTextField(
-                                value = couplePasscode,
-                                onValueChange = { couplePasscode = it },
-                                label = { Text("Couple Secret Passcode") },
-                                placeholder = { Text("cherish-love") },
-                                supportingText = { Text("Shared passcode between you two") },
+                                value = coupleSecretCode,
+                                onValueChange = { coupleSecretCode = it },
+                                label = { Text("Couple Secret Code") },
+                                placeholder = { Text("e.g. forever-together") },
+                                supportingText = { Text("Enter the same shared code on both phones") },
                                 leadingIcon = {
-                                    Icon(Icons.Default.VpnKey, contentDescription = null, tint = RoseGoldPrimary)
+                                    Icon(Icons.Default.VpnKey, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                                 },
                                 singleLine = true,
                                 shape = RoundedCornerShape(14.dp),
@@ -337,87 +224,41 @@ fun AuthScreen(
                                     .testTag("input_couple_passcode")
                             )
 
-                            Spacer(modifier = Modifier.height(14.dp))
-
-                            // 2-Phone Pairing Info Box
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(10.dp))
-                                    .background(Color(0xFFF9F0F3))
-                                    .padding(horizontal = 12.dp, vertical = 8.dp)
-                            ) {
-                                Column {
-                                    Text(
-                                        text = "💡 How to connect both phones:",
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.onBackground
-                                    )
-                                    Text(
-                                        text = "• Phone 1: You: ${myUsername.ifBlank { "User A" }} | Partner: ${partnerUsername.ifBlank { "User B" }}\n• Phone 2: You: ${partnerUsername.ifBlank { "User B" }} | Partner: ${myUsername.ifBlank { "User A" }}",
-                                        fontSize = 11.sp,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                            }
-
                             Spacer(modifier = Modifier.height(18.dp))
 
                             if (uiState is AuthUiState.Error) {
                                 val errorMsg = (uiState as AuthUiState.Error).message
-                                Column(
-                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                Box(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(bottom = 12.dp)
-                                        .background(Color(0xFFFFF0F2), RoundedCornerShape(10.dp))
-                                        .padding(12.dp)
+                                        .padding(bottom = 14.dp)
+                                        .background(MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.2f), RoundedCornerShape(10.dp))
+                                        .padding(12.dp),
+                                    contentAlignment = Alignment.Center
                                 ) {
                                     Text(
                                         text = errorMsg,
-                                        color = HeartRed,
+                                        color = MaterialTheme.colorScheme.error,
                                         style = MaterialTheme.typography.bodySmall,
                                         textAlign = TextAlign.Center
                                     )
-                                    Spacer(modifier = Modifier.height(8.dp))
-                                    Button(
-                                        onClick = {
-                                            viewModel.continueOffline(
-                                                username = myUsername,
-                                                partnerUsername = partnerUsername,
-                                                coupleKey = couplePasscode
-                                            )
-                                        },
-                                        colors = ButtonDefaults.buttonColors(containerColor = RoseGoldPrimary),
-                                        shape = RoundedCornerShape(8.dp),
-                                        modifier = Modifier.fillMaxWidth()
-                                    ) {
-                                        Text(
-                                            text = "Enter in Direct / Offline Mode",
-                                            color = MaterialTheme.colorScheme.surface,
-                                            fontWeight = FontWeight.Bold,
-                                            fontSize = 13.sp
-                                        )
-                                    }
                                 }
                             }
 
-                            // Enter / Sign In Native Button
+                            // Connect & Enter Chat Button
                             Button(
                                 onClick = {
-                                    viewModel.login(
+                                    viewModel.loginCouple(
                                         username = myUsername,
-                                        pass = password,
-                                        partnerUsername = partnerUsername,
-                                        coupleKey = couplePasscode
+                                        partnerName = partnerName,
+                                        coupleSecretCode = coupleSecretCode
                                     )
                                 },
                                 enabled = uiState !is AuthUiState.Loading,
                                 shape = RoundedCornerShape(14.dp),
                                 colors = ButtonDefaults.buttonColors(
-                                    containerColor = RoseGoldPrimary,
-                                    disabledContainerColor = RoseGoldPrimary.copy(alpha = 0.6f)
+                                    containerColor = MaterialTheme.colorScheme.primary,
+                                    disabledContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
                                 ),
                                 elevation = ButtonDefaults.buttonElevation(defaultElevation = 2.dp),
                                 modifier = Modifier
@@ -427,7 +268,7 @@ fun AuthScreen(
                             ) {
                                 if (uiState is AuthUiState.Loading) {
                                     CircularProgressIndicator(
-                                        color = MaterialTheme.colorScheme.surface,
+                                        color = Color.White,
                                         modifier = Modifier.size(22.dp),
                                         strokeWidth = 2.dp
                                     )
@@ -440,32 +281,12 @@ fun AuthScreen(
                                     )
                                     Spacer(modifier = Modifier.width(10.dp))
                                     Text(
-                                        text = "Enter Our Space",
+                                        text = "Connect & Enter Chat",
                                         fontSize = 15.sp,
                                         fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.surface
+                                        color = Color.White
                                     )
                                 }
-                            }
-
-                            Spacer(modifier = Modifier.height(8.dp))
-
-                            TextButton(
-                                onClick = {
-                                    viewModel.continueOffline(
-                                        username = myUsername,
-                                        partnerUsername = partnerUsername,
-                                        coupleKey = couplePasscode
-                                    )
-                                },
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Text(
-                                    text = "Or Skip & Enter in Direct / Offline Mode",
-                                    color = RoseGoldPrimary,
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.SemiBold
-                                )
                             }
                         }
                     }
@@ -485,7 +306,7 @@ fun AuthScreen(
                         Icon(
                             imageVector = Icons.Default.Shield,
                             contentDescription = null,
-                            tint = RoseGoldPrimary,
+                            tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(18.dp)
                         )
                         Spacer(modifier = Modifier.width(8.dp))

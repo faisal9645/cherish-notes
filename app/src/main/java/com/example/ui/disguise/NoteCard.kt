@@ -50,11 +50,18 @@ fun NoteCard(
 ) {
     var showMenu by remember { mutableStateOf(false) }
     val checklist = remember(note.checklistJson) { note.getChecklist() }
-    val cardColor = remember(note.colorHex) {
-        try {
-            Color(android.graphics.Color.parseColor(note.colorHex))
-        } catch (_: Exception) {
-            Color(0xFFEFF5FF)
+    val isDark = MaterialTheme.colorScheme.background == Color.Black ||
+            MaterialTheme.colorScheme.surface == Color.Black
+
+    val cardColor = remember(note.colorHex, isDark) {
+        if (isDark) {
+            Color(0xFF070B16) // Pure AMOLED deep dark card background
+        } else {
+            try {
+                Color(android.graphics.Color.parseColor(note.colorHex))
+            } catch (_: Exception) {
+                Color(0xFFEFF5FF)
+            }
         }
     }
 
@@ -88,7 +95,7 @@ fun NoteCard(
         colors = CardDefaults.cardColors(containerColor = cardColor),
         border = BorderStroke(
             width = if (isSelected) 2.5.dp else if (note.isPinned) 1.5.dp else 1.dp,
-            color = if (isSelected) RoseGoldPrimary else if (note.isPinned) RoseGoldPrimary.copy(alpha = 0.5f) else MaterialTheme.colorScheme.outline
+            color = if (isSelected) RoseGoldPrimary else if (note.isPinned) RoseGoldPrimary.copy(alpha = 0.5f) else if (isDark) Color(0xFF1E293B) else MaterialTheme.colorScheme.outline
         ),
         elevation = CardDefaults.cardElevation(defaultElevation = if (isSelected) 6.dp else if (note.isPinned) 3.dp else 1.dp)
     ) {
@@ -106,14 +113,14 @@ fun NoteCard(
                 // Category Tag
                 Surface(
                     shape = RoundedCornerShape(8.dp),
-                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.8f),
-                    border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline)
+                    color = if (isDark) Color(0xFF0F172A) else MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
+                    border = BorderStroke(0.5.dp, if (isDark) Color(0xFF1E293B) else MaterialTheme.colorScheme.outline)
                 ) {
                     Text(
                         text = note.category,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = RoseGoldPrimary,
+                        color = if (isDark) Color(0xFF93C5FD) else RoseGoldPrimary,
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
                     )
                 }
@@ -253,7 +260,7 @@ fun NoteCard(
                     text = note.title,
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onBackground,
+                    color = if (isDark) Color(0xFFF8FAFC) else Color(0xFF0F172A),
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -265,7 +272,7 @@ fun NoteCard(
                 Text(
                     text = note.content,
                     fontSize = 13.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = if (isDark) Color(0xFFCBD5E1) else Color(0xFF334155),
                     maxLines = if (checklist.isNotEmpty()) 2 else 4,
                     overflow = TextOverflow.Ellipsis,
                     lineHeight = 18.sp
@@ -286,7 +293,7 @@ fun NoteCard(
                         text = "$doneItems of $totalItems completed",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Medium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
                     )
                     Text(
                         text = "${(progress * 100).toInt()}%",
@@ -304,7 +311,7 @@ fun NoteCard(
                         .height(4.dp)
                         .clip(CircleShape),
                     color = RoseGoldPrimary,
-                    trackColor = Color.White.copy(alpha = 0.6f)
+                    trackColor = if (isDark) Color(0xFF1E293B) else Color.White.copy(alpha = 0.6f)
                 )
 
                 Spacer(modifier = Modifier.height(8.dp))
@@ -325,11 +332,11 @@ fun NoteCard(
                                 .size(18.dp)
                                 .clip(RoundedCornerShape(5.dp))
                                 .background(
-                                    if (item.isDone) RoseGoldPrimary else Color.White
+                                    if (item.isDone) RoseGoldPrimary else if (isDark) Color(0xFF0F172A) else Color.White
                                 )
                                 .border(
                                     width = 1.dp,
-                                    color = if (item.isDone) RoseGoldPrimary else MaterialTheme.colorScheme.outline,
+                                    color = if (item.isDone) RoseGoldPrimary else if (isDark) Color(0xFF334155) else MaterialTheme.colorScheme.outline,
                                     shape = RoundedCornerShape(5.dp)
                                 ),
                             contentAlignment = Alignment.Center
@@ -349,7 +356,11 @@ fun NoteCard(
                         Text(
                             text = item.text,
                             fontSize = 13.sp,
-                            color = if (item.isDone) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f) else MaterialTheme.colorScheme.onBackground,
+                            color = if (item.isDone) {
+                                if (isDark) Color(0xFF64748B) else Color(0xFF94A3B8)
+                            } else {
+                                if (isDark) Color(0xFFF1F5F9) else Color(0xFF0F172A)
+                            },
                             textDecoration = if (item.isDone) TextDecoration.LineThrough else null,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
@@ -379,7 +390,7 @@ fun NoteCard(
                 Text(
                     text = formattedDate,
                     fontSize = 11.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                    color = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
                 )
 
                 if (checklist.isNotEmpty()) {
@@ -387,14 +398,14 @@ fun NoteCard(
                         Icon(
                             imageVector = Icons.Default.Checklist,
                             contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                            tint = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B),
                             modifier = Modifier.size(14.dp)
                         )
                         Spacer(modifier = Modifier.width(3.dp))
                         Text(
                             text = "$totalItems",
                             fontSize = 11.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                            color = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
                         )
                     }
                 }

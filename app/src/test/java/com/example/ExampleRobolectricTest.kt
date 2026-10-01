@@ -33,6 +33,10 @@ class ExampleRobolectricTest {
   fun `test disguise mode and passcode verification`() {
     val context = ApplicationProvider.getApplicationContext<Context>()
     val securityPrefs = SecurityPreferences(context)
+    // App defaults directly to Chat tab (Issue 10)
+    org.junit.Assert.assertFalse(securityPrefs.isDisguiseActive.value)
+
+    securityPrefs.setDisguiseModeEnabled(true)
     assertTrue(securityPrefs.isDisguiseModeEnabled())
     assertTrue(securityPrefs.isDisguiseActive.value)
     

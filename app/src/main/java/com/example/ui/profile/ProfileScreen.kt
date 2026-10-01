@@ -9,6 +9,7 @@ import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -38,6 +39,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -63,6 +65,7 @@ fun ProfileScreen(
 ) {
     val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsState()
+    val updateState by viewModel.updateState.collectAsState()
     val user = uiState.currentUser
     val partner = uiState.partnerUser
     
@@ -686,21 +689,50 @@ fun ProfileScreen(
                         
                         Spacer(modifier = Modifier.height(4.dp))
 
-                        // Recover & Show Everything Button
-                        OutlinedButton(
-                            onClick = { 
-                                viewModel.revealSecretHistory() 
-                                Toast.makeText(context, "Chat history recovered", Toast.LENGTH_SHORT).show()
-                                onNavigateBack()
-                            },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 4.dp),
-                            shape = RoundedCornerShape(12.dp)
-                        ) {
-                            Icon(Icons.Outlined.Visibility, contentDescription = null, modifier = Modifier.size(18.dp), tint = GoldMilestone)
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Recover & Show Everything", color = GoldMilestone)
+                        // Recover & Show Everything Button (Past Gallery & Chat)
+                        if (!uiState.isSecretHistoryRevealed) {
+                            Button(
+                                onClick = { 
+                                    viewModel.revealSecretHistory() 
+                                    Toast.makeText(context, "Full gallery & chat history unlocked ✨", Toast.LENGTH_SHORT).show()
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = RoseGoldPrimary),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Icon(Icons.Outlined.Visibility, contentDescription = null, modifier = Modifier.size(18.dp), tint = Color.White)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Recover & Show Everything", color = Color.White, fontWeight = FontWeight.Bold)
+                            }
+                            Text(
+                                text = "Currently showing today's items from 6:00 AM. Tap above to show all previous gallery media & chat history.",
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                            )
+                        } else {
+                            OutlinedButton(
+                                onClick = { 
+                                    viewModel.hideSecretHistory() 
+                                    Toast.makeText(context, "Past gallery hidden (Showing today from 6 AM only)", Toast.LENGTH_SHORT).show()
+                                },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Icon(Icons.Outlined.VisibilityOff, contentDescription = null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Hide Past Gallery (Show Today Only)", fontWeight = FontWeight.SemiBold)
+                            }
+                            Text(
+                                text = "All past gallery items and chat are currently visible. Tap above to re-shield past history and display today from 6:00 AM only.",
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                            )
                         }
 
                         HorizontalDivider(
@@ -726,9 +758,8 @@ fun ProfileScreen(
                     ) {
                         listOf(
                             0 to "System",
-                            1 to "Light",
-                            2 to "Dark",
-                            3 to "Pitch Black"
+                            1 to "Day",
+                            2 to "Dark"
                         ).forEach { (mode, label) ->
                             val isSelected = uiState.themeMode == mode
                             Box(
@@ -1195,7 +1226,7 @@ fun ProfileScreen(
                 },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(50.dp)
+                    .height(52.dp)
                     .testTag("update_button"),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = MaterialTheme.colorScheme.surfaceVariant,
@@ -1203,8 +1234,14 @@ fun ProfileScreen(
                 ),
                 shape = RoundedCornerShape(14.dp)
             ) {
-                Icon(Icons.Default.SystemUpdate, contentDescription = null)
-                Spacer(modifier = Modifier.width(8.dp))
+                Image(
+                    painter = painterResource(com.example.R.drawable.notes_entrance_logo_512),
+                    contentDescription = "Main App Logo",
+                    modifier = Modifier
+                        .size(26.dp)
+                        .clip(RoundedCornerShape(6.dp))
+                )
+                Spacer(modifier = Modifier.width(10.dp))
                 Text("Check for Updates", fontWeight = FontWeight.SemiBold)
             }
             
@@ -1233,6 +1270,129 @@ fun ProfileScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
         }
+    }
+
+    // App Updates Dialog (Logo matches main entrance logo)
+    if (updateState.showDialog) {
+        AlertDialog(
+            onDismissRequest = { viewModel.dismissUpdateDialog() },
+            title = null,
+            text = {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 10.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    // Center high quality picture logo matching main entrance logo
+                    Surface(
+                        shape = RoundedCornerShape(22.dp),
+                        shadowElevation = 8.dp,
+                        color = Color.Transparent
+                    ) {
+                        Image(
+                            painter = painterResource(com.example.R.drawable.notes_entrance_logo_512),
+                            contentDescription = "Main App Logo",
+                            modifier = Modifier
+                                .size(76.dp)
+                                .clip(RoundedCornerShape(22.dp))
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Text(
+                        text = if (updateState.isChecking) {
+                            "Checking for Updates..."
+                        } else if (updateState.isUpdateAvailable) {
+                            "Update Available!"
+                        } else {
+                            "App is Up to Date"
+                        },
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        textAlign = TextAlign.Center
+                    )
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    Text(
+                        text = "Version ${updateState.latestVersion}",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = RoseGoldPrimary
+                    )
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    if (updateState.isChecking) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(32.dp),
+                            color = RoseGoldPrimary,
+                            strokeWidth = 3.dp
+                        )
+                    } else {
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(14.dp)) {
+                                Text(
+                                    text = if (updateState.isUpdateAvailable) "What's New in this update:" else "Status:",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Text(
+                                    text = updateState.releaseNotes,
+                                    fontSize = 13.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    lineHeight = 19.sp
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                if (updateState.isUpdateAvailable && !updateState.downloadUrl.isNullOrEmpty()) {
+                    Button(
+                        onClick = {
+                            viewModel.dismissUpdateDialog()
+                            val intent = android.content.Intent(
+                                android.content.Intent.ACTION_VIEW,
+                                android.net.Uri.parse(updateState.downloadUrl)
+                            )
+                            context.startActivity(intent)
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = RoseGoldPrimary),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text("Download Update", fontWeight = FontWeight.Bold)
+                    }
+                } else if (!updateState.isChecking) {
+                    Button(
+                        onClick = { viewModel.dismissUpdateDialog() },
+                        colors = ButtonDefaults.buttonColors(containerColor = RoseGoldPrimary),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text("OK", fontWeight = FontWeight.Bold)
+                    }
+                }
+            },
+            dismissButton = {
+                if (updateState.isUpdateAvailable) {
+                    TextButton(onClick = { viewModel.dismissUpdateDialog() }) {
+                        Text("Later", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            },
+            shape = RoundedCornerShape(24.dp),
+            containerColor = MaterialTheme.colorScheme.surface
+        )
     }
 
     // Avatar Options Dialog (Camera, Gallery, Remove)
