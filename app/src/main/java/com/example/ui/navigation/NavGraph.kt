@@ -66,12 +66,12 @@ fun CherishNavGraph(
 
     val appAlpha by animateFloatAsState(
         targetValue = if (isDisguiseActive) 0f else 1f,
-        animationSpec = if (isDisguiseActive) snap() else tween(380, easing = FastOutSlowInEasing),
+        animationSpec = if (isDisguiseActive) snap() else tween(160, easing = FastOutSlowInEasing),
         label = "app_reveal_alpha"
     )
     val appScale by animateFloatAsState(
-        targetValue = if (isDisguiseActive) 0.94f else 1f,
-        animationSpec = if (isDisguiseActive) snap() else tween(420, easing = FastOutSlowInEasing),
+        targetValue = if (isDisguiseActive) 0.96f else 1f,
+        animationSpec = if (isDisguiseActive) snap() else tween(160, easing = FastOutSlowInEasing),
         label = "app_reveal_scale"
     )
 
@@ -103,20 +103,20 @@ fun CherishNavGraph(
                     scaleY = appScale
                 },
         enterTransition = {
-            fadeIn(animationSpec = tween(220, easing = FastOutSlowInEasing)) +
-            slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Start, tween(220, easing = FastOutSlowInEasing))
+            fadeIn(animationSpec = tween(160, easing = FastOutSlowInEasing)) +
+            slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Start, tween(160, easing = FastOutSlowInEasing))
         },
         exitTransition = {
-            fadeOut(animationSpec = tween(180, easing = FastOutLinearInEasing)) +
-            slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Start, tween(180, easing = FastOutLinearInEasing))
+            fadeOut(animationSpec = tween(130, easing = FastOutLinearInEasing)) +
+            slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Start, tween(130, easing = FastOutLinearInEasing))
         },
         popEnterTransition = {
-            fadeIn(animationSpec = tween(220, easing = FastOutSlowInEasing)) +
-            slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.End, tween(220, easing = FastOutSlowInEasing))
+            fadeIn(animationSpec = tween(160, easing = FastOutSlowInEasing)) +
+            slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.End, tween(160, easing = FastOutSlowInEasing))
         },
         popExitTransition = {
-            fadeOut(animationSpec = tween(180, easing = FastOutLinearInEasing)) +
-            slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.End, tween(180, easing = FastOutLinearInEasing))
+            fadeOut(animationSpec = tween(130, easing = FastOutLinearInEasing)) +
+            slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.End, tween(130, easing = FastOutLinearInEasing))
         }
     ) {
         composable(Screen.Auth.route) {
@@ -348,8 +348,8 @@ fun CherishNavGraph(
     AnimatedVisibility(
         visible = isDisguiseActive,
         enter = EnterTransition.None,
-        exit = fadeOut(animationSpec = tween(380, easing = FastOutSlowInEasing)) +
-               scaleOut(targetScale = 1.08f, animationSpec = tween(380, easing = FastOutSlowInEasing)),
+        exit = fadeOut(animationSpec = tween(160, easing = FastOutSlowInEasing)) +
+               scaleOut(targetScale = 1.04f, animationSpec = tween(160, easing = FastOutSlowInEasing)),
         modifier = Modifier.fillMaxSize()
     ) {
         NotesDisguiseScreen(

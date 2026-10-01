@@ -23,6 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -178,21 +179,24 @@ fun HomeScreen(
             )
         },
         bottomBar = {
+            val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+            val barBg = if (isDark) TrueDarkSurface else Color.White
             Surface(
-                color = MaterialTheme.colorScheme.surface,
-                tonalElevation = 2.dp,
+                color = barBg,
+                tonalElevation = 0.dp,
                 shadowElevation = 8.dp,
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .background(barBg)
                         .navigationBarsPadding()
                 ) {
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, thickness = 1.dp)
+                    HorizontalDivider(color = if (isDark) TrueDarkOutline else Color(0xFFE2E8F0), thickness = 0.8.dp)
                     // Streamlined 3-tab navigation focused on strictly 2-person chat, daily growth, and ironclad security
                     NavigationBar(
-                        containerColor = Color.Transparent,
+                        containerColor = barBg,
                         tonalElevation = 0.dp,
                         windowInsets = WindowInsets(0.dp)
                     ) {
@@ -203,7 +207,10 @@ fun HomeScreen(
                             label = { Text("Love & Us") },
                             colors = NavigationBarItemDefaults.colors(
                                 selectedIconColor = MaterialTheme.colorScheme.primary,
-                                indicatorColor = MaterialTheme.colorScheme.primaryContainer
+                                selectedTextColor = MaterialTheme.colorScheme.primary,
+                                indicatorColor = if (isDark) MaterialTheme.colorScheme.primaryContainer else Color(0xFFEFF4FF),
+                                unselectedIconColor = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B),
+                                unselectedTextColor = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
                             )
                         )
                         NavigationBarItem(
@@ -222,13 +229,27 @@ fun HomeScreen(
                                     Icon(Icons.Outlined.ChatBubble, contentDescription = "Chat")
                                 }
                             },
-                            label = { Text("Private Chat") }
+                            label = { Text("Private Chat") },
+                            colors = NavigationBarItemDefaults.colors(
+                                selectedIconColor = MaterialTheme.colorScheme.primary,
+                                selectedTextColor = MaterialTheme.colorScheme.primary,
+                                indicatorColor = if (isDark) MaterialTheme.colorScheme.primaryContainer else Color(0xFFEFF4FF),
+                                unselectedIconColor = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B),
+                                unselectedTextColor = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
+                            )
                         )
                         NavigationBarItem(
                             selected = false,
                             onClick = onNavigateToProfile,
                             icon = { Icon(Icons.Outlined.Person, contentDescription = "Profile") },
-                            label = { Text("Profile") }
+                            label = { Text("Profile") },
+                            colors = NavigationBarItemDefaults.colors(
+                                selectedIconColor = MaterialTheme.colorScheme.primary,
+                                selectedTextColor = MaterialTheme.colorScheme.primary,
+                                indicatorColor = if (isDark) MaterialTheme.colorScheme.primaryContainer else Color(0xFFEFF4FF),
+                                unselectedIconColor = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B),
+                                unselectedTextColor = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
+                            )
                         )
                     }
                 }

@@ -1439,10 +1439,12 @@ fun ProfileScreen(
         }
     }
 
-    // App Updates Dialog (Modern System Update Icon)
+    // In-App OTA Updates Dialog (Downloads and installs directly in app)
     if (updateState.showDialog) {
         AlertDialog(
-            onDismissRequest = { viewModel.dismissUpdateDialog() },
+            onDismissRequest = {
+                if (!updateState.isDownloading) viewModel.dismissUpdateDialog()
+            },
             title = null,
             text = {
                 Column(
@@ -1453,15 +1455,20 @@ fun ProfileScreen(
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(72.dp)
+                            .size(70.dp)
                             .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
+                            .background(RoseGoldPrimary.copy(alpha = 0.12f)),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
-                            imageVector = Icons.Default.SystemUpdate,
+                            imageVector = when {
+                                updateState.isDownloading -> Icons.Default.CloudDownload
+                                updateState.isReadyToInstall -> Icons.Default.CheckCircle
+                                updateState.isUpdateAvailable -> Icons.Default.SystemUpdate
+                                else -> Icons.Default.CheckCircle
+                            },
                             contentDescription = "System Update",
-                            tint = MaterialTheme.colorScheme.primary,
+                            tint = RoseGoldPrimary,
                             modifier = Modifier.size(36.dp)
                         )
                     }
@@ -1469,14 +1476,14 @@ fun ProfileScreen(
                     Spacer(modifier = Modifier.height(16.dp))
 
                     Text(
-                        text = if (updateState.isChecking) {
-                            "Checking for Updates..."
-                        } else if (updateState.isUpdateAvailable) {
-                            "Update Available!"
-                        } else {
-                            "App is Up to Date"
+                        text = when {
+                            updateState.isChecking -> "Checking for Updates..."
+                            updateState.isDownloading -> "Downloading Update..."
+                            updateState.isReadyToInstall -> "Update Ready to Install!"
+                            updateState.isUpdateAvailable -> "Update Available! 🚀"
+                            else -> "Cherish is Up to Date ✨"
                         },
-                        fontSize = 20.sp,
+                        fontSize = 19.sp,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface,
                         textAlign = TextAlign.Center
@@ -1485,7 +1492,7 @@ fun ProfileScreen(
                     Spacer(modifier = Modifier.height(6.dp))
 
                     Text(
-                        text = "Version ${updateState.latestVersion}",
+                        text = "Version ${if (updateState.isUpdateAvailable) updateState.latestVersion else updateState.currentVersion}",
                         fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = RoseGoldPrimary
@@ -1495,10 +1502,48 @@ fun ProfileScreen(
 
                     if (updateState.isChecking) {
                         CircularProgressIndicator(
-                            modifier = Modifier.size(32.dp),
+                            modifier = Modifier.size(36.dp),
                             color = RoseGoldPrimary,
                             strokeWidth = 3.dp
                         )
+                    } else if (updateState.isDownloading) {
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            LinearProgressIndicator(
+                                progress = { updateState.downloadProgress },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(8.dp)
+                                    .clip(RoundedCornerShape(4.dp)),
+                                color = RoseGoldPrimary,
+                                trackColor = MaterialTheme.colorScheme.surfaceVariant
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            val pct = (updateState.downloadProgress * 100).toInt()
+                            val dlMb = updateState.downloadedBytes / (1024f * 1024f)
+                            val totMb = updateState.totalBytes / (1024f * 1024f)
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text("$pct%", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = RoseGoldPrimary)
+                                if (totMb > 0) {
+                                    Text(
+                                        String.format(java.util.Locale.US, "%.1f MB / %.1f MB", dlMb, totMb),
+                                        fontSize = 12.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                "Downloading directly inside Cherish...",
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     } else {
                         Surface(
                             shape = RoundedCornerShape(12.dp),
@@ -1514,46 +1559,76 @@ fun ProfileScreen(
                                 )
                                 Spacer(modifier = Modifier.height(6.dp))
                                 Text(
-                                    text = updateState.releaseNotes,
+                                    text = updateState.releaseNotes.ifBlank { "Performance improvements and bug fixes." },
                                     fontSize = 13.sp,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     lineHeight = 19.sp
                                 )
+                                if (updateState.errorMessage != null) {
+                                    Spacer(modifier = Modifier.height(6.dp))
+                                    Text(
+                                        text = "Note: ${updateState.errorMessage}",
+                                        fontSize = 12.sp,
+                                        color = HeartRed
+                                    )
+                                }
                             }
                         }
                     }
                 }
             },
             confirmButton = {
-                if (updateState.isUpdateAvailable && !updateState.downloadUrl.isNullOrEmpty()) {
-                    Button(
-                        onClick = {
-                            viewModel.dismissUpdateDialog()
-                            val intent = android.content.Intent(
-                                android.content.Intent.ACTION_VIEW,
-                                android.net.Uri.parse(updateState.downloadUrl)
-                            )
-                            context.startActivity(intent)
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = RoseGoldPrimary),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Text("Download Update", fontWeight = FontWeight.Bold)
+                when {
+                    updateState.isDownloading -> {
+                        // Progress bar active
                     }
-                } else if (!updateState.isChecking) {
-                    Button(
-                        onClick = { viewModel.dismissUpdateDialog() },
-                        colors = ButtonDefaults.buttonColors(containerColor = RoseGoldPrimary),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Text("OK", fontWeight = FontWeight.Bold)
+                    updateState.isReadyToInstall -> {
+                        Button(
+                            onClick = { viewModel.triggerInstall(context) },
+                            colors = ButtonDefaults.buttonColors(containerColor = RoseGoldPrimary),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Icon(Icons.Default.SystemUpdate, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Install Now", fontWeight = FontWeight.Bold)
+                        }
+                    }
+                    updateState.isUpdateAvailable -> {
+                        Button(
+                            onClick = { viewModel.downloadAndInstallUpdate(context) },
+                            colors = ButtonDefaults.buttonColors(containerColor = RoseGoldPrimary),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Icon(Icons.Default.CloudDownload, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Download & Install", fontWeight = FontWeight.Bold)
+                        }
+                    }
+                    !updateState.isChecking -> {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            if (!updateState.downloadUrl.isNullOrBlank()) {
+                                OutlinedButton(
+                                    onClick = { viewModel.downloadAndInstallUpdate(context) },
+                                    shape = RoundedCornerShape(12.dp)
+                                ) {
+                                    Text("Re-download Build", fontSize = 12.sp)
+                                }
+                            }
+                            Button(
+                                onClick = { viewModel.dismissUpdateDialog() },
+                                colors = ButtonDefaults.buttonColors(containerColor = RoseGoldPrimary),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Text("OK", fontWeight = FontWeight.Bold)
+                            }
+                        }
                     }
                 }
             },
             dismissButton = {
-                if (updateState.isUpdateAvailable) {
+                if (!updateState.isDownloading) {
                     TextButton(onClick = { viewModel.dismissUpdateDialog() }) {
-                        Text("Later", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(if (updateState.isUpdateAvailable) "Later" else "Close", color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             },

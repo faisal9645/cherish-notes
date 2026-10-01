@@ -43,7 +43,7 @@ data class ChatUiState(
     val theaterVideoId: String? = null,
     val filterStarredOnly: Boolean = false,
     val voicePlaybackSpeed: Float = 1.0f,
-    val isSecretHistoryRevealed: Boolean = false,
+    val isSecretHistoryRevealed: Boolean = true,
     val targetScrollMessageId: String? = null,
     val chatBgTheme: Int = 0
 )

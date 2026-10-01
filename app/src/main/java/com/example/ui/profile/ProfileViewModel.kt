@@ -40,10 +40,17 @@ data class UpdateCheckState(
     val isChecking: Boolean = false,
     val showDialog: Boolean = false,
     val isUpdateAvailable: Boolean = false,
-    val currentVersion: String = "1.0.0",
-    val latestVersion: String = "1.0.0",
+    val isDownloading: Boolean = false,
+    val downloadProgress: Float = 0f,
+    val downloadedBytes: Long = 0L,
+    val totalBytes: Long = 0L,
+    val isReadyToInstall: Boolean = false,
+    val apkFile: java.io.File? = null,
+    val currentVersion: String = com.example.BuildConfig.VERSION_NAME,
+    val latestVersion: String = com.example.BuildConfig.VERSION_NAME,
     val downloadUrl: String? = null,
-    val releaseNotes: String = ""
+    val releaseNotes: String = "",
+    val errorMessage: String? = null
 )
 
 class ProfileViewModel(
@@ -365,13 +372,8 @@ class ProfileViewModel(
     }
 
     fun checkForUpdates(context: android.content.Context) {
-        val currentVer = try {
-            val pInfo = context.packageManager.getPackageInfo(context.packageName, 0)
-            pInfo.versionName ?: "1.0.0"
-        } catch (_: Exception) {
-            "1.0.0"
-        }
-        val currentCode = com.example.BuildConfig.VERSION_CODE
+        val otaManager = com.example.update.OtaUpdateManager.getInstance(context)
+        val currentVer = com.example.BuildConfig.VERSION_NAME
 
         _updateState.value = UpdateCheckState(
             isChecking = true,
@@ -380,37 +382,19 @@ class ProfileViewModel(
             latestVersion = currentVer
         )
 
-        com.google.firebase.firestore.FirebaseFirestore.getInstance()
-            .collection("app_config")
-            .document("version")
-            .get()
-            .addOnSuccessListener { doc ->
-                if (doc.exists()) {
-                    val latestVersionCode = doc.getLong("versionCode") ?: 0
-                    val latestVersionName = doc.getString("versionName") ?: currentVer
-                    val url = doc.getString("downloadUrl")
-                    val notes = doc.getString("releaseNotes") ?: "• AMOLED pure dark theme & deeper dark blue aesthetics\n• Blazing fast startup speed & instant responsiveness\n• High quality unified app logo everywhere\n• Enhanced notes day & dark mode text contrast"
-
-                    if (latestVersionCode > currentCode) {
-                        _updateState.value = UpdateCheckState(
-                            isChecking = false,
-                            showDialog = true,
-                            isUpdateAvailable = true,
-                            currentVersion = currentVer,
-                            latestVersion = latestVersionName,
-                            downloadUrl = url,
-                            releaseNotes = notes
-                        )
-                    } else {
-                        _updateState.value = UpdateCheckState(
-                            isChecking = false,
-                            showDialog = true,
-                            isUpdateAvailable = false,
-                            currentVersion = currentVer,
-                            latestVersion = currentVer,
-                            releaseNotes = "You are on the latest version. Pure AMOLED dark theme and performance enhancements are active."
-                        )
-                    }
+        viewModelScope.launch {
+            val info = otaManager.checkForUpdates(silent = false)
+            if (info != null) {
+                if (info.hasUpdate) {
+                    _updateState.value = UpdateCheckState(
+                        isChecking = false,
+                        showDialog = true,
+                        isUpdateAvailable = true,
+                        currentVersion = currentVer,
+                        latestVersion = info.latestVersionName.ifBlank { "v$currentVer" },
+                        downloadUrl = info.downloadUrl,
+                        releaseNotes = info.releaseNotes
+                    )
                 } else {
                     _updateState.value = UpdateCheckState(
                         isChecking = false,
@@ -418,19 +402,73 @@ class ProfileViewModel(
                         isUpdateAvailable = false,
                         currentVersion = currentVer,
                         latestVersion = currentVer,
-                        releaseNotes = "You are on the latest version. Pure AMOLED dark theme and performance enhancements are active."
+                        downloadUrl = info.downloadUrl,
+                        releaseNotes = "You are on the latest version of Cherish ($currentVer). Pure white day theme, instant OTA updates, and all chat features are active ✨"
                     )
                 }
-            }
-            .addOnFailureListener {
+            } else {
                 _updateState.value = UpdateCheckState(
                     isChecking = false,
                     showDialog = true,
                     isUpdateAvailable = false,
                     currentVersion = currentVer,
                     latestVersion = currentVer,
-                    releaseNotes = "Your app is up to date (Offline verified)."
+                    releaseNotes = "Your app is up to date (Version $currentVer)."
                 )
             }
+        }
+    }
+
+    fun downloadAndInstallUpdate(context: android.content.Context) {
+        val otaManager = com.example.update.OtaUpdateManager.getInstance(context)
+        val info = otaManager.latestUpdateInfo.value ?: return
+
+        _updateState.update { it.copy(isDownloading = true, errorMessage = null) }
+
+        viewModelScope.launch {
+            val job = launch {
+                otaManager.updateState.collect { state ->
+                    when (state) {
+                        is com.example.update.UpdateState.Downloading -> {
+                            _updateState.update {
+                                it.copy(
+                                    isDownloading = true,
+                                    downloadProgress = state.progress,
+                                    downloadedBytes = state.downloadedBytes,
+                                    totalBytes = state.totalBytes
+                                )
+                            }
+                        }
+                        is com.example.update.UpdateState.ReadyToInstall -> {
+                            _updateState.update {
+                                it.copy(
+                                    isDownloading = false,
+                                    isReadyToInstall = true,
+                                    apkFile = state.apkFile
+                                )
+                            }
+                        }
+                        is com.example.update.UpdateState.Error -> {
+                            _updateState.update {
+                                it.copy(
+                                    isDownloading = false,
+                                    errorMessage = state.message
+                                )
+                            }
+                        }
+                        else -> {}
+                    }
+                }
+            }
+
+            otaManager.downloadAndInstallUpdate(context, info)
+            job.cancel()
+        }
+    }
+
+    fun triggerInstall(context: android.content.Context) {
+        val file = _updateState.value.apkFile ?: return
+        val otaManager = com.example.update.OtaUpdateManager.getInstance(context)
+        otaManager.installApk(context, file)
     }
 }

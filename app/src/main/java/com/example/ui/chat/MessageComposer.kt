@@ -26,6 +26,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
@@ -41,6 +42,7 @@ import com.example.data.model.Message
 import com.example.ui.components.WaveformView
 import com.example.ui.theme.HeartRed
 import com.example.ui.theme.RoseGoldPrimary
+import com.example.ui.theme.TrueDarkSurface
 import com.example.ui.theme.appGradientShadow
 import com.example.ui.theme.appHorizontalGradient
 import kotlin.math.roundToInt
@@ -101,10 +103,12 @@ fun MessageComposer(
         label = "mic_scale"
     )
 
+    val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+    val barBg = if (isDark) TrueDarkSurface else Color.White
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.surface)
+            .background(barBg)
     ) {
         // Reply bar preview
         AnimatedVisibility(visible = replyingTo != null) {

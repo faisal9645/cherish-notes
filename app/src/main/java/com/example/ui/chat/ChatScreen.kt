@@ -217,27 +217,15 @@ fun ChatScreen(
         if (partnerHasCheckAfter) CheckAfterHelper.calculateRemaining(partnerCheckAfterTarget).first else ""
     }
 
-    // Filter messages for search query, starred filter, and privacy shield
-    val displayedMessages = remember(uiState.messages, uiState.searchQuery, uiState.filterStarredOnly, uiState.isSecretHistoryRevealed) {
+    // Filter messages for search query and starred filter - all messages preserved
+    val displayedMessages = remember(uiState.messages, uiState.searchQuery, uiState.filterStarredOnly) {
         var list = uiState.messages
-        if (!uiState.isSecretHistoryRevealed) {
-            val cal = java.util.Calendar.getInstance()
-            if (cal.get(java.util.Calendar.HOUR_OF_DAY) < 6) {
-                cal.add(java.util.Calendar.DAY_OF_YEAR, -1)
-            }
-            cal.set(java.util.Calendar.HOUR_OF_DAY, 6)
-            cal.set(java.util.Calendar.MINUTE, 0)
-            cal.set(java.util.Calendar.SECOND, 0)
-            cal.set(java.util.Calendar.MILLISECOND, 0)
-            val todayStart = cal.timeInMillis
-            list = list.filter { it.timestamp >= todayStart }
-        }
-        
         if (uiState.filterStarredOnly) {
             list = list.filter { it.isStarred }
         }
         if (uiState.searchQuery.isNotBlank()) {
-            list = list.filter { it.text.contains(uiState.searchQuery, ignoreCase = true) }
+            val q = uiState.searchQuery.trim()
+            list = list.filter { it.text.contains(q, ignoreCase = true) }
         }
         list
     }
@@ -538,15 +526,18 @@ fun ChatScreen(
             )
         },
         bottomBar = {
+            val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+            val barBg = if (isDark) TrueDarkSurface else Color.White
             Surface(
-                color = MaterialTheme.colorScheme.surface,
-                tonalElevation = 2.dp,
+                color = barBg,
+                tonalElevation = 0.dp,
                 shadowElevation = 8.dp,
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .background(barBg)
                         .navigationBarsPadding()
                         .imePadding()
                 ) {
