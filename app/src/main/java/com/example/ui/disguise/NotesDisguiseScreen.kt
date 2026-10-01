@@ -13,6 +13,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.luminance
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import androidx.compose.foundation.BorderStroke
@@ -91,7 +92,7 @@ fun NotesDisguiseScreen(
         label = "fab_press_scale"
     )
 
-    val categories = listOf("All", "📌 Pinned", "Lists", "Personal", "Work", "Ideas", "Journal")
+    val categories = listOf("All", "📌 Pinned", "Lists", "Personal", "Work", "Ideas")
 
     // Handle Back press in Selection Mode
     BackHandler(enabled = uiState.isSelectionMode) {
@@ -293,11 +294,20 @@ fun NotesDisguiseScreen(
                                     .clip(RoundedCornerShape(12.dp))
                                     .testTag("notes_header")
                             ) {
-                                Image(
-                                    painter = painterResource(com.example.R.drawable.notes_entrance_logo),
-                                    contentDescription = "Notes",
-                                    modifier = Modifier.size(38.dp)
-                                )
+                                Box(
+                                    modifier = Modifier
+                                        .size(38.dp)
+                                        .clip(CircleShape)
+                                        .background(appHorizontalGradient()),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Filled.EditNote,
+                                        contentDescription = "Notes",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                }
                                 Spacer(modifier = Modifier.width(10.dp))
                                 Text(
                                     text = "Notes",
@@ -454,22 +464,31 @@ fun NotesDisguiseScreen(
                     ) {
                         items(categories) { cat ->
                             val isSelected = uiState.selectedCategory == cat
+                            val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
                             Box(
                                 modifier = Modifier
                                     .then(if (isSelected) Modifier.appGradientShadow(RoundedCornerShape(14.dp)) else Modifier)
                                     .clip(RoundedCornerShape(14.dp))
                                     .background(
-                                        if (isSelected) appHorizontalGradient() else androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.surfaceVariant)
+                                        if (isSelected) appHorizontalGradient()
+                                        else if (isDark) androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.surfaceVariant)
+                                        else androidx.compose.ui.graphics.SolidColor(Color.White)
                                     )
-                                    .then(if (!isSelected) Modifier.border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(14.dp)) else Modifier)
+                                    .then(
+                                        if (!isSelected) Modifier.border(
+                                            1.dp,
+                                            if (isDark) MaterialTheme.colorScheme.outline else Color(0xFFE2E8F0),
+                                            RoundedCornerShape(14.dp)
+                                        ) else Modifier
+                                    )
                                     .clickable { viewModel.setSelectedCategory(cat) }
                                     .padding(horizontal = 16.dp, vertical = 7.dp)
                             ) {
                                 Text(
                                     text = cat,
-                                    color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    color = if (isSelected) Color.White else if (isDark) MaterialTheme.colorScheme.onSurfaceVariant else Color(0xFF475569),
                                     fontSize = 13.sp,
-                                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
+                                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium
                                 )
                             }
                         }
