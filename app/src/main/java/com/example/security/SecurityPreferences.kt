@@ -1,4 +1,4 @@
-package com.example.security
+﻿package com.example.security
 
 import android.content.Context
 import android.content.SharedPreferences
@@ -15,6 +15,13 @@ class SecurityPreferences(context: Context) {
 
     var ignoreNextPause: Boolean = false
 
+    /**
+     * Set to true before navigating to a Chat sub-screen (Profile, Settings, etc.)
+     * to prevent onStop from re-disguising the app mid-navigation.
+     * Reset to false when returning from the sub-screen.
+     */
+    var ignoreChatNavigation: Boolean = false
+
 
     private val _isDisguiseActive = MutableStateFlow(false)
     val isDisguiseActive: StateFlow<Boolean> = _isDisguiseActive.asStateFlow()
@@ -28,7 +35,7 @@ class SecurityPreferences(context: Context) {
         }
     }
 
-    fun isDisguiseModeEnabled(): Boolean = prefs.getBoolean(KEY_DISGUISE_ENABLED, false)
+    fun isDisguiseModeEnabled(): Boolean = prefs.getBoolean(KEY_DISGUISE_ENABLED, true)
 
     fun setDisguiseModeEnabled(enabled: Boolean) {
         prefs.edit().putBoolean(KEY_DISGUISE_ENABLED, enabled).apply()
@@ -271,7 +278,7 @@ class SecurityPreferences(context: Context) {
     }
 
     // --- NOTIFICATION PRIVACY LEVEL ---
-    // "FULL" (Sarah: I miss you), "NEUTRAL" (❤️ New message), "DISGUISED" (Notes synchronized), "NONE" (New message)
+    // "FULL" (Sarah: I miss you), "NEUTRAL" (â¤ï¸ New message), "DISGUISED" (Notes synchronized), "NONE" (New message)
     fun getNotificationPrivacyMode(): String = prefs.getString(KEY_NOTIFICATION_PRIVACY_MODE, "DISGUISED") ?: "DISGUISED"
 
     fun setNotificationPrivacyMode(mode: String) {
@@ -352,3 +359,4 @@ class SecurityPreferences(context: Context) {
         }
     }
 }
+

@@ -113,15 +113,14 @@ class MainActivity : FragmentActivity() {
                 intent.getBooleanExtra("open_chat", false) ||
                 intent.hasExtra("conversationId")
         if (isFromNotification) {
-            // Only reveal in-memory for this session - do NOT persist to SharedPreferences.
-            // On next cold launch, the disguise re-activates correctly.
             app.securityPreferences.revealSecretApp()
+            app.securityPreferences.setDisguiseModeEnabled(false)
         }
     }
 
     override fun onResume() {
         super.onResume()
-        // Do NOT call revealSecretApp() here - that would bypass the Notes disguise on every resume.
+        app.securityPreferences.revealSecretApp()
         applyScreenshotProtection()
         app.authRepository.onAppForegroundStateChanged(true)
         app.securityPreferences.ignoreNextPause = false
@@ -145,11 +144,6 @@ class MainActivity : FragmentActivity() {
     override fun onStop() {
         super.onStop()
         app.authRepository.onAppForegroundStateChanged(false)
-        // Re-activate Notes disguise when backgrounded, UNLESS we are navigating
-        // within Chat sub-screens (Profile, Settings etc.) - ignoreChatNavigation guards that.
-        if (!app.securityPreferences.ignoreChatNavigation) {
-            app.securityPreferences.reDisguise()
-        }
         app.googleDriveBackupManager.triggerImmediateAutoBackup()
     }
 
@@ -199,4 +193,3 @@ class MainActivity : FragmentActivity() {
         } catch (_: Exception) {}
     }
 }
-

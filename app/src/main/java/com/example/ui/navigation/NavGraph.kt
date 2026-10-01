@@ -1,4 +1,4 @@
-package com.example.ui.navigation
+﻿package com.example.ui.navigation
 
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
@@ -166,9 +166,15 @@ fun CherishNavGraph(
                         navController.navigate(Screen.Home.route)
                     }
                 },
-                onNavigateToGallery = { navController.navigate(Screen.SharedGallery.route) },
+                onNavigateToGallery = {
+                    app.securityPreferences.ignoreChatNavigation = true
+                    navController.navigate(Screen.SharedGallery.route)
+                },
                 onQuickDisguise = { app.securityPreferences.reDisguise() },
-                onNavigateToProfile = { navController.navigate(Screen.Profile.route) },
+                onNavigateToProfile = {
+                    app.securityPreferences.ignoreChatNavigation = true
+                    navController.navigate(Screen.Profile.route)
+                },
                 onLoggedOut = {
                     navController.navigate(Screen.Auth.route) {
                         popUpTo(0) { inclusive = true }
@@ -219,7 +225,10 @@ fun CherishNavGraph(
             }
             SharedGalleryScreen(
                 chatViewModel = chatViewModel,
-                onNavigateBack = { navController.popBackStack() },
+                onNavigateBack = {
+                    app.securityPreferences.ignoreChatNavigation = false
+                    navController.popBackStack()
+                },
                 onNavigateToMessage = { messageId ->
                     chatViewModel.navigateToMessageInChat(messageId)
                     navController.popBackStack()
@@ -238,12 +247,30 @@ fun CherishNavGraph(
             }
             ProfileScreen(
                 viewModel = profileViewModel,
-                onNavigateBack = { navController.popBackStack() },
-                onNavigateToCloudBackup = { navController.navigate(Screen.CloudBackup.route) },
-                onNavigateToPrivacyAudit = { navController.navigate(Screen.PrivacyAudit.route) },
-                onNavigateToStorageManager = { navController.navigate(Screen.StorageManager.route) },
-                onNavigateToDeviceSessions = { navController.navigate(Screen.DeviceSessions.route) },
-                onNavigateToOpenWhen = { navController.navigate(Screen.OpenWhen.route) },
+                onNavigateBack = {
+                    app.securityPreferences.ignoreChatNavigation = false
+                    navController.popBackStack()
+                },
+                onNavigateToCloudBackup = {
+                    app.securityPreferences.ignoreChatNavigation = true
+                    navController.navigate(Screen.CloudBackup.route)
+                },
+                onNavigateToPrivacyAudit = {
+                    app.securityPreferences.ignoreChatNavigation = true
+                    navController.navigate(Screen.PrivacyAudit.route)
+                },
+                onNavigateToStorageManager = {
+                    app.securityPreferences.ignoreChatNavigation = true
+                    navController.navigate(Screen.StorageManager.route)
+                },
+                onNavigateToDeviceSessions = {
+                    app.securityPreferences.ignoreChatNavigation = true
+                    navController.navigate(Screen.DeviceSessions.route)
+                },
+                onNavigateToOpenWhen = {
+                    app.securityPreferences.ignoreChatNavigation = true
+                    navController.navigate(Screen.OpenWhen.route)
+                },
                 onLoggedOut = {
                     navController.navigate(Screen.Auth.route) {
                         popUpTo(0) { inclusive = true }
@@ -336,3 +363,6 @@ fun CherishNavGraph(
     }
 }
 }
+
+
+
