@@ -43,11 +43,11 @@ class MainActivity : FragmentActivity() {
             val isSystemDark = androidx.compose.foundation.isSystemInDarkTheme()
             val useDarkTheme = when (themeMode) {
                 1 -> false
-                2 -> true
+                2, 3 -> true
                 else -> isSystemDark
             }
 
-            DisposableEffect(useDarkTheme) {
+            DisposableEffect(themeMode, useDarkTheme) {
                 val style = if (useDarkTheme) {
                     SystemBarStyle.dark(android.graphics.Color.TRANSPARENT)
                 } else {
@@ -57,11 +57,15 @@ class MainActivity : FragmentActivity() {
                     statusBarStyle = style,
                     navigationBarStyle = style
                 )
-                window.decorView.setBackgroundColor(if (useDarkTheme) android.graphics.Color.BLACK else android.graphics.Color.WHITE)
+                val bgColor = if (themeMode == 3) android.graphics.Color.BLACK
+                else if (useDarkTheme) android.graphics.Color.parseColor("#121318") // TrueDarkBackground roughly
+                else android.graphics.Color.WHITE
+                
+                window.decorView.setBackgroundColor(bgColor)
                 onDispose {}
             }
 
-            CherishTheme(darkTheme = useDarkTheme) {
+            CherishTheme(themeMode = themeMode) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = androidx.compose.material3.MaterialTheme.colorScheme.background
@@ -99,34 +103,6 @@ class MainActivity : FragmentActivity() {
     }
 
     private var lastBackgroundTimestamp: Long = 0L
-    private var disguiseView: android.view.View? = null
-
-    private fun showRecentsDisguise() {
-        if (disguiseView == null) {
-            disguiseView = android.view.LayoutInflater.from(this).inflate(R.layout.layout_recents_disguise, null)
-        }
-        val decorView = window.decorView as? android.view.ViewGroup
-        if (disguiseView?.parent == null) {
-            decorView?.addView(disguiseView)
-        }
-    }
-
-    private fun hideRecentsDisguise() {
-        val decorView = window.decorView as? android.view.ViewGroup
-        disguiseView?.let { view ->
-            decorView?.removeView(view)
-        }
-    }
-
-    override fun onWindowFocusChanged(hasFocus: Boolean) {
-        super.onWindowFocusChanged(hasFocus)
-        if (!hasFocus && !app.securityPreferences.ignoreNextPause) {
-            // Triggered instantly when user starts swiping up for Recents gesture
-            showRecentsDisguise()
-        } else if (hasFocus) {
-            hideRecentsDisguise()
-        }
-    }
 
     override fun onResume() {
         super.onResume()
@@ -135,7 +111,30 @@ class MainActivity : FragmentActivity() {
         app.authRepository.onAppForegroundStateChanged(true)
         // Reset the ignore flag when returning to the app
         app.securityPreferences.ignoreNextPause = false
-        hideRecentsDisguise()
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (!hasFocus && !app.securityPreferences.ignoreNextPause) {
+            if (app.securityPreferences.isDisguiseModeEnabled()) {
+                app.securityPreferences.reDisguise()
+            }
+            if (app.securityPreferences.hasPin() && app.securityPreferences.isAppLockEnabled()) {
+                app.securityPreferences.lockApp()
+            }
+        }
+    }
+
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        if (!app.securityPreferences.ignoreNextPause) {
+            if (app.securityPreferences.isDisguiseModeEnabled()) {
+                app.securityPreferences.reDisguise()
+            }
+            if (app.securityPreferences.hasPin() && app.securityPreferences.isAppLockEnabled()) {
+                app.securityPreferences.lockApp()
+            }
+        }
     }
 
     override fun onPause() {
@@ -143,21 +142,19 @@ class MainActivity : FragmentActivity() {
         lastBackgroundTimestamp = System.currentTimeMillis()
 
         if (!app.securityPreferences.ignoreNextPause) {
-            // Immediate Disguise Protection: Revert to normal notes as soon as the app is minimized
+            // Immediate Disguise Protection: Revert to real Notes app as soon as the app is minimized
             if (app.securityPreferences.isDisguiseModeEnabled()) {
                 app.securityPreferences.reDisguise()
             }
             if (app.securityPreferences.hasPin() && app.securityPreferences.isAppLockEnabled()) {
                 app.securityPreferences.lockApp()
             }
-            
-            // Show Native Notes layout over the screen for the Recents Snapshot
-            showRecentsDisguise()
         }
 
-        // Temporarily clear FLAG_SECURE so the Android system can take a snapshot of the Disguise View
-        // instead of showing a black/blank screen in the multitasking menu.
+        // Temporarily clear FLAG_SECURE so the Android system captures the real Notes Disguise snapshot
+        // in the multitasking/recents carousel without showing a black box.
         window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        window.decorView.postInvalidate()
     }
 
     override fun onStop() {
@@ -176,7 +173,6 @@ class MainActivity : FragmentActivity() {
     override fun onDestroy() {
         super.onDestroy()
         app.authRepository.onAppForegroundStateChanged(false)
-        hideRecentsDisguise()
     }
 
     private fun applyScreenshotProtection() {

@@ -683,6 +683,25 @@ fun ProfileScreen(
                             Spacer(modifier = Modifier.width(8.dp))
                             Text("Lock to Notes Disguise Now")
                         }
+                        
+                        Spacer(modifier = Modifier.height(4.dp))
+
+                        // Recover & Show Everything Button
+                        OutlinedButton(
+                            onClick = { 
+                                viewModel.revealSecretHistory() 
+                                Toast.makeText(context, "Chat history recovered", Toast.LENGTH_SHORT).show()
+                                onNavigateBack()
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Icon(Icons.Outlined.Visibility, contentDescription = null, modifier = Modifier.size(18.dp), tint = GoldMilestone)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Recover & Show Everything", color = GoldMilestone)
+                        }
 
                         HorizontalDivider(
                             modifier = Modifier.padding(vertical = 10.dp),
@@ -707,8 +726,9 @@ fun ProfileScreen(
                     ) {
                         listOf(
                             0 to "System",
-                            1 to "Light (Day)",
-                            2 to "Dark (Night)"
+                            1 to "Light",
+                            2 to "Dark",
+                            3 to "Pitch Black"
                         ).forEach { (mode, label) ->
                             val isSelected = uiState.themeMode == mode
                             Box(
@@ -1167,6 +1187,28 @@ fun ProfileScreen(
                     }
                 )
             }
+
+            // App Update Button
+            Button(
+                onClick = {
+                    viewModel.checkForUpdates(context)
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(50.dp)
+                    .testTag("update_button"),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    contentColor = RoseGoldPrimary
+                ),
+                shape = RoundedCornerShape(14.dp)
+            ) {
+                Icon(Icons.Default.SystemUpdate, contentDescription = null)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Check for Updates", fontWeight = FontWeight.SemiBold)
+            }
+            
+            Spacer(modifier = Modifier.height(12.dp))
 
             // Logout Button
             Button(

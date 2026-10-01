@@ -22,6 +22,7 @@ import com.example.ui.backup.GoogleDriveBackupViewModel
 import com.example.ui.dates.ImportantDatesScreen
 import com.example.ui.dates.ImportantDatesViewModel
 import com.example.ui.disguise.NotesDisguiseScreen
+import com.example.ui.disguise.NotesDisguiseViewModel
 import com.example.ui.gallery.SharedGalleryScreen
 import com.example.ui.home.HomeScreen
 import com.example.ui.home.HomeViewModel
@@ -52,14 +53,18 @@ fun CherishNavGraph(
 
     val appAlpha by animateFloatAsState(
         targetValue = if (isDisguiseActive) 0f else 1f,
-        animationSpec = tween(380, easing = FastOutSlowInEasing),
+        animationSpec = if (isDisguiseActive) snap() else tween(380, easing = FastOutSlowInEasing),
         label = "app_reveal_alpha"
     )
     val appScale by animateFloatAsState(
         targetValue = if (isDisguiseActive) 0.94f else 1f,
-        animationSpec = tween(420, easing = FastOutSlowInEasing),
+        animationSpec = if (isDisguiseActive) snap() else tween(420, easing = FastOutSlowInEasing),
         label = "app_reveal_scale"
     )
+
+    val notesDisguiseViewModel = remember {
+        NotesDisguiseViewModel(app.notesRepository)
+    }
 
     Box(modifier = modifier.fillMaxSize()) {
         NavHost(
@@ -282,16 +287,16 @@ fun CherishNavGraph(
         )
     }
 
-    // Real Notes Disguise screen with smooth solid transition
+    // Real Notes Disguise screen - instant zero-latency snap on disguise, elegant smooth reveal on unlock
     AnimatedVisibility(
         visible = isDisguiseActive,
-        enter = fadeIn(animationSpec = tween(280, easing = FastOutSlowInEasing)) +
-                scaleIn(initialScale = 0.96f, animationSpec = tween(280, easing = FastOutSlowInEasing)),
+        enter = EnterTransition.None,
         exit = fadeOut(animationSpec = tween(380, easing = FastOutSlowInEasing)) +
                scaleOut(targetScale = 1.08f, animationSpec = tween(380, easing = FastOutSlowInEasing)),
         modifier = Modifier.fillMaxSize()
     ) {
         NotesDisguiseScreen(
+            viewModel = notesDisguiseViewModel,
             securityPreferences = app.securityPreferences,
             onSecretGestureTriggered = {
                 app.securityPreferences.revealSecretApp()

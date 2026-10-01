@@ -23,6 +23,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
@@ -109,7 +110,7 @@ fun MessageComposer(
         AnimatedVisibility(visible = replyingTo != null) {
             if (replyingTo != null) {
                 Surface(
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                    color = Color.Transparent,
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Row(
@@ -158,8 +159,8 @@ fun MessageComposer(
         // Quick Love Emojis Strip
         AnimatedVisibility(visible = showEmojiQuickBar) {
             Surface(
-                color = MaterialTheme.colorScheme.surface,
-                tonalElevation = 1.dp,
+                color = Color.Transparent,
+                tonalElevation = 0.dp,
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(
@@ -239,7 +240,7 @@ fun MessageComposer(
                         modifier = Modifier
                             .weight(1f)
                             .clip(RoundedCornerShape(24.dp))
-                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.8f))
+                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
                             .padding(horizontal = 12.dp, vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -265,6 +266,17 @@ fun MessageComposer(
                             height = 20.dp,
                             modifier = Modifier.weight(1f)
                         )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Icon(
+                            imageVector = Icons.Default.StopCircle,
+                            contentDescription = "Stop recording",
+                            tint = HeartRed,
+                            modifier = Modifier
+                                .size(24.dp)
+                                .clickable {
+                                    Toast.makeText(context, "Stop/Pause preview coming soon", Toast.LENGTH_SHORT).show()
+                                }
+                        )
                     }
                 } else {
                     // --- Case 2: Active Hold-to-Record Mode with Slide-to-Cancel ---
@@ -272,7 +284,8 @@ fun MessageComposer(
                         modifier = Modifier
                             .weight(1f)
                             .clip(RoundedCornerShape(24.dp))
-                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.85f))
+                            .background(Color.Transparent)
+                            .border(BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant), RoundedCornerShape(24.dp))
                             .padding(horizontal = 14.dp, vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -290,7 +303,19 @@ fun MessageComposer(
                             fontSize = 14.sp
                         )
 
-                        Spacer(modifier = Modifier.weight(1f))
+                        val dragProgress = (dragOffsetX / -150f).coerceIn(0f, 1f)
+                        
+                        Box(modifier = Modifier.weight(1f).padding(horizontal = 8.dp), contentAlignment = Alignment.CenterEnd) {
+                            if (dragProgress < 1f) {
+                                WaveformView(
+                                    amplitudes = recordingAmplitudes,
+                                    progress = 1f,
+                                    activeColor = HeartRed.copy(alpha = 1f - dragProgress),
+                                    height = 20.dp,
+                                    modifier = Modifier.fillMaxWidth().graphicsLayer { alpha = 1f - dragProgress }
+                                )
+                            }
+                        }
 
                         val isNearCancel = dragOffsetX < -100f
                         if (isNearCancel) {
@@ -337,8 +362,8 @@ fun MessageComposer(
                     modifier = Modifier
                         .weight(1f)
                         .clip(RoundedCornerShape(24.dp))
-                        .background(MaterialTheme.colorScheme.surfaceVariant)
-                        .padding(horizontal = 4.dp, vertical = 2.dp),
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
+                        .padding(horizontal = 4.dp, vertical = 4.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     // Quick Emojis toggle button on Left
@@ -416,54 +441,69 @@ fun MessageComposer(
             Spacer(modifier = Modifier.width(6.dp))
 
             // RIGHT ACTION BUTTON
-            if (text.isNotBlank()) {
-                // Case A: Send Text Button
-                Box(
-                    modifier = Modifier
-                        .size(46.dp)
-                        .appGradientShadow(CircleShape)
-                        .clip(CircleShape)
-                        .background(appHorizontalGradient())
-                        .clickable { 
-                            onSendText() 
-                            showEmojiQuickBar = false
+            // RIGHT ACTION BUTTON
+            AnimatedContent(
+                targetState = when {
+                    text.isNotBlank() -> "SEND_TEXT"
+                    isRecordingVoice && isLockedRecording -> "SEND_VOICE"
+                    else -> "MIC"
+                },
+                transitionSpec = {
+                    (scaleIn(initialScale = 0.8f) + fadeIn()) togetherWith (scaleOut(targetScale = 0.8f) + fadeOut())
+                },
+                label = "right_action_btn"
+            ) { state ->
+                when (state) {
+                    "SEND_TEXT" -> {
+                        // Case A: Send Text Button
+                        Box(
+                            modifier = Modifier
+                                .size(46.dp)
+                                .appGradientShadow(CircleShape)
+                                .clip(CircleShape)
+                                .background(appHorizontalGradient())
+                                .clickable { 
+                                    onSendText() 
+                                    showEmojiQuickBar = false
+                                }
+                                .testTag("composer_send_button"),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Send,
+                                contentDescription = "Send message",
+                                tint = Color.White,
+                                modifier = Modifier.size(20.dp)
+                            )
                         }
-                        .testTag("composer_send_button"),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Send,
-                        contentDescription = "Send message",
-                        tint = Color.White,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-            } else if (isRecordingVoice && isLockedRecording) {
-                // Case B: Send Locked Voice Note Button
-                Box(
-                    modifier = Modifier
-                        .size(46.dp)
-                        .appGradientShadow(CircleShape)
-                        .clip(CircleShape)
-                        .background(appHorizontalGradient())
-                        .clickable {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            isLockedRecording = false
-                            onStopAndSendVoiceRecord()
+                    }
+                    "SEND_VOICE" -> {
+                        // Case B: Send Locked Voice Note Button
+                        Box(
+                            modifier = Modifier
+                                .size(46.dp)
+                                .appGradientShadow(CircleShape)
+                                .clip(CircleShape)
+                                .background(appHorizontalGradient())
+                                .clickable {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    isLockedRecording = false
+                                    onStopAndSendVoiceRecord()
+                                }
+                                .testTag("composer_send_locked_voice_button"),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Send,
+                                contentDescription = "Send voice note",
+                                tint = Color.White,
+                                modifier = Modifier.size(20.dp)
+                            )
                         }
-                        .testTag("composer_send_locked_voice_button"),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Send,
-                        contentDescription = "Send voice note",
-                        tint = Color.White,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-            } else {
-                // Case C: Persistent Hold-to-Record Mic Button with Dynamic Lock Pill Overhead
-                Box(contentAlignment = Alignment.Center) {
+                    }
+                    "MIC" -> {
+                        // Case C: Persistent Hold-to-Record Mic Button with Dynamic Lock Pill Overhead
+                        Box(contentAlignment = Alignment.Center) {
                     // Lock pill overhead (animates upward and locks as you slide up)
                     androidx.compose.animation.AnimatedVisibility(
                         visible = isRecordingVoice && !isLockedRecording,
@@ -501,7 +541,12 @@ fun MessageComposer(
                     // Pulsing/Reactive Mic Button
                     Box(
                         modifier = Modifier
-                            .offset { IntOffset((dragOffsetX * 0.35f).roundToInt(), 0) }
+                            .offset { 
+                                IntOffset(
+                                    (dragOffsetX * 0.4f).roundToInt(),
+                                    (dragOffsetY * 0.4f).roundToInt()
+                                ) 
+                            }
                             .scale(micScale)
                             .size(46.dp)
                             .then(
@@ -581,10 +626,12 @@ fun MessageComposer(
                             tint = if (isRecordingVoice) Color.White else MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(if (isRecordingVoice) 24.dp else 22.dp)
                         )
+                        }
                     }
                 }
             }
         }
     }
+}
 }
 

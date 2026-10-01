@@ -83,74 +83,27 @@ fun DoodleWallpaper(
     isDark: Boolean,
     modifier: Modifier = Modifier
 ) {
-    val bgBrush = remember(isDark) {
-        if (isDark) {
-            Brush.verticalGradient(
-                listOf(
-                    Color(0xFF0E121B),
-                    Color(0xFF090C14)
-                )
-            )
-        } else {
-            Brush.verticalGradient(
-                listOf(
-                    Color(0xFFEAEFF5),
-                    Color(0xFFE2E8F1)
-                )
-            )
-        }
-    }
-
-    val strokeColor = remember(isDark) {
-        if (isDark) {
-            Color(0xFF7A94B8).copy(alpha = 0.085f)
-        } else {
-            Color(0xFF4A5568).copy(alpha = 0.075f)
-        }
-    }
-
-    val accentDotColor = remember(isDark) {
-        if (isDark) {
-            Color(0xFF8CA5C8).copy(alpha = 0.065f)
-        } else {
-            Color(0xFF3B485A).copy(alpha = 0.055f)
-        }
-    }
-
-    Canvas(
-        modifier = modifier
-            .fillMaxSize()
-            .background(bgBrush)
-    ) {
-        val tileSize = 140.dp.toPx()
-        val cols = (size.width / tileSize).toInt() + 1
-        val rows = (size.height / tileSize).toInt() + 1
-
-        val stroke = Stroke(
-            width = 1.6f,
-            cap = StrokeCap.Round,
-            join = StrokeJoin.Round
+    Box(modifier = modifier.fillMaxSize()) {
+        androidx.compose.foundation.Image(
+            painter = androidx.compose.ui.res.painterResource(id = com.example.R.drawable.chat_bg_theme_1),
+            contentDescription = "Chat Background",
+            contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+            modifier = Modifier.fillMaxSize()
         )
-
-        for (r in 0 until rows) {
-            for (c in 0 until cols) {
-                val originX = c * tileSize
-                val originY = r * tileSize
-
-                // Stagger alternate rows for organic distribution
-                val offsetX = if (r % 2 == 1) tileSize * 0.5f else 0f
-                val finalOriginX = originX + offsetX
-
-                drawDoodleTile(
-                    originX = finalOriginX,
-                    originY = originY,
-                    tileSize = tileSize,
-                    strokeColor = strokeColor,
-                    dotColor = accentDotColor,
-                    stroke = stroke,
-                    variant = (r * 3 + c) % 4
-                )
-            }
+        
+        // Overlay for day/night mode adaptation
+        if (isDark) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.75f))
+            )
+        } else {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.White.copy(alpha = 0.4f))
+            )
         }
     }
 }

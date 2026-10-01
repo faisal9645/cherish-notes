@@ -69,13 +69,47 @@ private val TrueDarkColorScheme = darkColorScheme(
     outlineVariant = TrueDarkOutlineVariant
 )
 
+private val OledDarkColorScheme = darkColorScheme(
+    primary = Color(0xFFC7789A), // Dimmed Rose Gold
+    onPrimary = Color.Black,
+    primaryContainer = Color(0xFF101840), // Very dark blue
+    onPrimaryContainer = Color(0xFFA0B4EF), // Muted light blue
+    secondary = Color(0xFFA69A73), // Dimmed Champagne
+    onSecondary = Color.Black,
+    secondaryContainer = Color(0xFF08254A), // Very dark secondary
+    onSecondaryContainer = Color(0xFFA5C5E6),
+    tertiary = Color(0xFF7E6AA3), // Dimmed Amethyst
+    onTertiary = Color.Black,
+    tertiaryContainer = Color(0xFF100E4A),
+    onTertiaryContainer = Color(0xFFB5B3E6),
+    background = Color.Black,
+    onBackground = Color(0xFFD4D6DD), // Slightly dimmed text
+    surface = Color.Black,
+    onSurface = Color(0xFFD4D6DD),
+    surfaceVariant = Color(0xFF0A0C14), // Almost black for bubbles
+    onSurfaceVariant = Color(0xFFB0B3BC),
+    surfaceTint = Color.Transparent,
+    surfaceContainer = Color.Black,
+    surfaceContainerLow = Color.Black,
+    surfaceContainerLowest = Color.Black,
+    surfaceContainerHigh = Color(0xFF08090C),
+    surfaceContainerHighest = Color(0xFF12141A),
+    outline = Color(0xFF2C2F3B),
+    outlineVariant = Color(0xFF1A1C25)
+)
+
 @Composable
 fun CherishTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
-    dynamicColor: Boolean = false,
+    themeMode: Int = 0,
     content: @Composable () -> Unit
 ) {
-    val colorScheme = if (darkTheme) TrueDarkColorScheme else PureWhiteColorScheme
+    val isSystemDark = isSystemInDarkTheme()
+    val colorScheme = when (themeMode) {
+        1 -> PureWhiteColorScheme
+        2 -> TrueDarkColorScheme
+        3 -> OledDarkColorScheme
+        else -> if (isSystemDark) TrueDarkColorScheme else PureWhiteColorScheme
+    }
 
     MaterialTheme(
         colorScheme = colorScheme,

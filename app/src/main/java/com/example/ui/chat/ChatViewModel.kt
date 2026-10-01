@@ -109,6 +109,12 @@ class ChatViewModel(
         }
 
         viewModelScope.launch {
+            securityPreferences.isSecretHistoryRevealed.collect { revealed ->
+                _uiState.update { it.copy(isSecretHistoryRevealed = revealed) }
+            }
+        }
+
+        viewModelScope.launch {
             voicePlayerHelper.playbackSpeed.collect { speed ->
                 _uiState.update { it.copy(voicePlaybackSpeed = speed) }
             }
@@ -131,7 +137,7 @@ class ChatViewModel(
         val replyTo = _uiState.value.replyingToMessage
 
         viewModelScope.launch {
-            _uiState.update { it.copy(replyingToMessage = null, isSecretHistoryRevealed = true) }
+            _uiState.update { it.copy(replyingToMessage = null) }
             chatRepository.sendMessage(
                 text = trimmed,
                 type = MessageType.TEXT,
@@ -360,21 +366,25 @@ class ChatViewModel(
 
     // --- SECRET HISTORY PROTECTION & RECOVERY ---
     fun revealSecretHistory() {
-        _uiState.update { it.copy(isSecretHistoryRevealed = true) }
+        securityPreferences.revealSecretHistory()
     }
 
     fun hideSecretHistory() {
-        _uiState.update { it.copy(isSecretHistoryRevealed = false) }
+        securityPreferences.hideSecretHistory()
     }
 
     fun toggleSecretHistory() {
-        _uiState.update { it.copy(isSecretHistoryRevealed = !it.isSecretHistoryRevealed) }
+        if (_uiState.value.isSecretHistoryRevealed) {
+            securityPreferences.hideSecretHistory()
+        } else {
+            securityPreferences.revealSecretHistory()
+        }
     }
 
     fun navigateToMessageInChat(messageId: String) {
+        securityPreferences.revealSecretHistory()
         _uiState.update {
             it.copy(
-                isSecretHistoryRevealed = true,
                 targetScrollMessageId = messageId
             )
         }

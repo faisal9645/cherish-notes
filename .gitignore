@@ -37,3 +37,6 @@ debug.keystore
 *.keystore
 !debug.keystore.base64
 
+
+github_token.txt
+firebase_admin_key.json

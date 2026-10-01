@@ -7,6 +7,7 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -242,6 +243,11 @@ fun ChatScreen(
 
     var highlightedMessageId by remember { mutableStateOf<String?>(null) }
 
+    // Android back button & gesture: instantly switch to real Notes app
+    BackHandler {
+        onQuickDisguise()
+    }
+
     // Scroll to target message when navigating from gallery ("Show in chat")
     LaunchedEffect(uiState.targetScrollMessageId, displayedMessages.size) {
         val targetId = uiState.targetScrollMessageId
@@ -363,11 +369,7 @@ fun ChatScreen(
                                     overflow = TextOverflow.Ellipsis
                                 )
                                 Text(
-                                    text = if (uiState.isPartnerRecordingAudio) {
-                                        "recording voice note... 🎙️"
-                                    } else if (uiState.isPartnerTyping) {
-                                        "typing sweet words..."
-                                    } else if (partnerHasCheckAfter) {
+                                    text = if (partnerHasCheckAfter) {
                                         if (headerRemaining.startsWith("✨")) "✨ Reconnecting now"
                                         else "🌙 Quiet time until ${CheckAfterHelper.formatTargetTime(partnerCheckAfterTarget)}"
                                     } else if (isPartnerOnline) {
@@ -387,14 +389,14 @@ fun ChatScreen(
                                         }
                                     },
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = if (uiState.isPartnerRecordingAudio || uiState.isPartnerTyping || partnerHasCheckAfter) {
+                                    color = if (partnerHasCheckAfter) {
                                         RoseGoldPrimary
                                     } else if (isPartnerOnline) {
                                         Color(0xFF2E7D32)
                                     } else {
                                         MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f)
                                     },
-                                    fontWeight = if (partnerHasCheckAfter || uiState.isPartnerRecordingAudio || uiState.isPartnerTyping || isPartnerOnline) {
+                                    fontWeight = if (partnerHasCheckAfter || isPartnerOnline) {
                                         FontWeight.SemiBold
                                     } else {
                                         FontWeight.Normal
@@ -449,21 +451,7 @@ fun ChatScreen(
                                 tint = if (partnerHasCheckAfter || iHaveCheckAfter) RoseGoldPrimary else MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
-                        if (uiState.isSecretHistoryRevealed) {
-                            IconButton(
-                                onClick = {
-                                    viewModel.hideSecretHistory()
-                                    Toast.makeText(context, "Chat history shielded for privacy", Toast.LENGTH_SHORT).show()
-                                },
-                                modifier = Modifier.testTag("chat_shield_button")
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Shield,
-                                    contentDescription = "Shield Chat History",
-                                    tint = RoseGoldPrimary
-                                )
-                            }
-                        }
+
                         Box {
                             IconButton(
                                 onClick = { showChatMenu = true },
@@ -485,22 +473,7 @@ fun ChatScreen(
                                         Icon(Icons.Filled.HourglassTop, null, tint = RoseGoldPrimary)
                                     }
                                 )
-                                if (!uiState.isSecretHistoryRevealed) {
-                                    DropdownMenuItem(
-                                        text = { Text("Recover & Show Everything") },
-                                        onClick = {
-                                            showChatMenu = false
-                                            viewModel.revealSecretHistory()
-                                        },
-                                        leadingIcon = {
-                                            Icon(
-                                                Icons.Outlined.Visibility,
-                                                null,
-                                                tint = GoldMilestone
-                                            )
-                                        }
-                                    )
-                                }
+
                                 DropdownMenuItem(
                                     text = { Text(if (uiState.filterStarredOnly) "Show All Messages" else "Starred Messages ⭐") },
                                     onClick = {
@@ -511,20 +484,7 @@ fun ChatScreen(
                                         Icon(if (uiState.filterStarredOnly) Icons.Filled.Star else Icons.Outlined.StarOutline, null, tint = GoldMilestone)
                                     }
                                 )
-                                DropdownMenuItem(
-                                    text = { Text("Stealth Mode (Open Notes App)") },
-                                    onClick = {
-                                        showChatMenu = false
-                                        onQuickDisguise()
-                                    },
-                                    leadingIcon = {
-                                        Icon(
-                                            Icons.Outlined.EditNote,
-                                            null,
-                                            tint = RoseGoldPrimary
-                                        )
-                                    }
-                                )
+
                                 DropdownMenuItem(
                                     text = { Text("Profile & Partner Settings") },
                                     onClick = {
@@ -588,38 +548,45 @@ fun ChatScreen(
                         .imePadding()
                 ) {
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, thickness = 1.dp)
-                    // Partner typing / recording animated banner
-                AnimatedVisibility(visible = uiState.isPartnerRecordingAudio || uiState.isPartnerTyping) {
+                // Partner typing / recording animated bubble
+                AnimatedVisibility(
+                    visible = uiState.isPartnerRecordingAudio || uiState.isPartnerTyping,
+                    enter = slideInVertically(initialOffsetY = { it / 2 }) + fadeIn(),
+                    exit = slideOutVertically(targetOffsetY = { it / 2 }) + fadeOut()
+                ) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
                             .padding(horizontal = 16.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                        horizontalArrangement = Arrangement.Start
                     ) {
-                        if (uiState.isPartnerRecordingAudio) {
-                            Icon(
-                                imageVector = Icons.Default.Mic,
-                                contentDescription = null,
-                                tint = RoseGoldPrimary,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = "$partnerName is recording a voice note... 🎙️",
-                                fontSize = 12.sp,
-                                color = RoseGoldPrimary,
-                                fontWeight = FontWeight.Medium
-                            )
-                        } else {
-                            BouncingDots()
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "$partnerName is typing...",
-                                fontSize = 12.sp,
-                                color = RoseGoldPrimary,
-                                fontWeight = FontWeight.Medium
-                            )
+                        Surface(
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
+                            shape = RoundedCornerShape(18.dp, 18.dp, 18.dp, 4.dp),
+                            shadowElevation = 0.dp
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                if (uiState.isPartnerRecordingAudio) {
+                                    Icon(
+                                        imageVector = Icons.Default.Mic,
+                                        contentDescription = null,
+                                        tint = RoseGoldPrimary,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = "recording audio...",
+                                        fontSize = 13.sp,
+                                        color = RoseGoldPrimary,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                } else {
+                                    BouncingDots()
+                                }
+                            }
                         }
                     }
                 }
@@ -768,7 +735,7 @@ fun ChatScreen(
                         val isFromMe = message.senderId == currentUserId
                         val isFirstOfDay = index == reversedMessages.lastIndex || !isSameDay(reversedMessages[index + 1].timestamp, message.timestamp)
 
-                        Column {
+                        Column(modifier = Modifier.animateItem()) {
                             if (isFirstOfDay) {
                                 Box(
                                     modifier = Modifier

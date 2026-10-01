@@ -340,20 +340,24 @@ fun MessageBubble(
                                         Surface(
                                             shape = RoundedCornerShape(10.dp),
                                             color = (if (isFromMe) Color.White else MaterialTheme.colorScheme.primary).copy(alpha = 0.2f),
-                                            modifier = Modifier.clickable { onToggleVoiceSpeed() }
+                                            modifier = Modifier
+                                                .clickable { onToggleVoiceSpeed() }
+                                                .defaultMinSize(minWidth = 36.dp)
                                         ) {
                                             val speedLabel = when (voicePlaybackSpeed) {
                                                 1.5f -> "1.5x"
                                                 2.0f -> "2x"
                                                 else -> "1x"
                                             }
-                                            Text(
-                                                text = speedLabel,
-                                                fontSize = 10.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                color = textColor,
-                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                            )
+                                            Box(contentAlignment = Alignment.Center) {
+                                                Text(
+                                                    text = speedLabel,
+                                                    fontSize = 10.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = textColor,
+                                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                                )
+                                            }
                                         }
                                     }
                                 }

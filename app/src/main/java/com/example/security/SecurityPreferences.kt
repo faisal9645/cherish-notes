@@ -46,6 +46,17 @@ class SecurityPreferences(context: Context) {
         }
     }
 
+    private val _isSecretHistoryRevealed = MutableStateFlow(false)
+    val isSecretHistoryRevealed: StateFlow<Boolean> = _isSecretHistoryRevealed.asStateFlow()
+
+    fun revealSecretHistory() {
+        _isSecretHistoryRevealed.value = true
+    }
+
+    fun hideSecretHistory() {
+        _isSecretHistoryRevealed.value = false
+    }
+
     private val _themeMode = MutableStateFlow(getThemeMode())
     val themeMode: StateFlow<Int> = _themeMode.asStateFlow()
 

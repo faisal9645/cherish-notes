@@ -276,6 +276,10 @@ class ProfileViewModel(
         securityPreferences.reDisguise()
     }
 
+    fun revealSecretHistory() {
+        securityPreferences.revealSecretHistory()
+    }
+
     fun updatePartnerEmailAndKey(partnerEmail: String, coupleKey: String) {
         viewModelScope.launch {
             authRepository.pairWithPartner(partnerEmail, coupleKey)
@@ -285,5 +289,37 @@ class ProfileViewModel(
 
     fun logout() {
         authRepository.logout()
+    }
+
+    fun checkForUpdates(context: android.content.Context) {
+        android.widget.Toast.makeText(context, "Checking for updates...", android.widget.Toast.LENGTH_SHORT).show()
+        com.google.firebase.firestore.FirebaseFirestore.getInstance()
+            .collection("app_config")
+            .document("version")
+            .get()
+            .addOnSuccessListener { doc ->
+                if (doc.exists()) {
+                    val latestVersionCode = doc.getLong("versionCode") ?: 0
+                    val currentVersionCode = com.example.BuildConfig.VERSION_CODE
+                    
+                    if (latestVersionCode > currentVersionCode) {
+                        val url = doc.getString("downloadUrl")
+                        if (!url.isNullOrEmpty()) {
+                            android.widget.Toast.makeText(context, "Update found! Opening browser to download...", android.widget.Toast.LENGTH_LONG).show()
+                            val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))
+                            context.startActivity(intent)
+                        } else {
+                            android.widget.Toast.makeText(context, "App is up to date \uD83D\uDC96", android.widget.Toast.LENGTH_SHORT).show()
+                        }
+                    } else {
+                        android.widget.Toast.makeText(context, "App is up to date \uD83D\uDC96", android.widget.Toast.LENGTH_SHORT).show()
+                    }
+                } else {
+                    android.widget.Toast.makeText(context, "App is up to date \uD83D\uDC96", android.widget.Toast.LENGTH_SHORT).show()
+                }
+            }
+            .addOnFailureListener {
+                android.widget.Toast.makeText(context, "Failed to check for updates.", android.widget.Toast.LENGTH_SHORT).show()
+            }
     }
 }

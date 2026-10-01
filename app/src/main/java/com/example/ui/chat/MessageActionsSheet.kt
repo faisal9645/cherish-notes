@@ -65,7 +65,7 @@ fun MessageActionsSheet(
                         modifier = Modifier
                             .size(46.dp)
                             .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f))
+                            .background(Color.Transparent)
                             .clickable {
                                 onReaction(emoji)
                                 onDismiss()
