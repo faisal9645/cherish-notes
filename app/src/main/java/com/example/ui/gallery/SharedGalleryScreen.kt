@@ -116,11 +116,11 @@ fun SharedGalleryScreen(
             !(hasToday && (hasStart || has6Am))
         }
 
-        // Calendar Date Search rule
+        // Calendar Date Search rule (6:00 AM daily boundary)
         if (selectedDateMillis != null) {
             val cal = Calendar.getInstance().apply {
                 timeInMillis = selectedDateMillis!!
-                set(Calendar.HOUR_OF_DAY, 0)
+                set(Calendar.HOUR_OF_DAY, 6)
                 set(Calendar.MINUTE, 0)
                 set(Calendar.SECOND, 0)
                 set(Calendar.MILLISECOND, 0)

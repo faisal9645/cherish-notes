@@ -106,7 +106,8 @@ class ChatRepository(
         mediaSize: Long = 0L,
         durationSeconds: Int = 0,
         waveform: List<Float> = emptyList(),
-        replyTo: Message? = null
+        replyTo: Message? = null,
+        mediaUrls: List<String> = emptyList()
     ): Result<Message> {
         val currentUser = authRepository.currentUserState.value
         val partner = authRepository.partnerUserState.value
@@ -130,7 +131,8 @@ class ChatRepository(
             status = MessageStatus.SENT.name,
             replyToMessageId = replyTo?.id,
             replyToText = replyTo?.text?.take(80),
-            replyToSenderName = replyTo?.senderName
+            replyToSenderName = replyTo?.senderName,
+            mediaUrls = mediaUrls
         )
 
         // Optimistically add to local state

@@ -893,7 +893,7 @@ fun ChatScreen(
                         val isFromMe = message.senderId == currentUserId
                         val isFirstOfDay = index == reversedMessages.lastIndex || !isSameDay(reversedMessages[index + 1].timestamp, message.timestamp)
 
-                        Column(modifier = Modifier.animateItem()) {
+                        Column {
                             val dateSep = formatDateSeparator(message.timestamp)
                             if (isFirstOfDay && dateSep.isNotEmpty()) {
                                 Row(
@@ -1023,7 +1023,8 @@ fun ChatScreen(
                                             }
                                         }
                                     },
-                                    isPrivateMode = isPrivate
+                                    isPrivateMode = isPrivate,
+                                    senderPhotoUrl = if (isFromMe) uiState.currentUser?.photoUrl else uiState.partnerUser?.photoUrl
                                 )
                             }
                         }

@@ -79,7 +79,8 @@ fun MessageBubble(
     onToggleVoiceSpeed: (() -> Unit)? = null,
     isHighlighted: Boolean = false,
     onReplyQuoteClick: ((replyToMessageId: String?) -> Unit)? = null,
-    isPrivateMode: Boolean = false
+    isPrivateMode: Boolean = false,
+    senderPhotoUrl: String? = null
 ) {
     val bubbleShape = if (isPrivateMode) {
         if (isFromMe) {
@@ -355,6 +356,17 @@ fun MessageBubble(
                                 .fillMaxWidth()
                                 .padding(vertical = 4.dp, horizontal = 2.dp)
                         ) {
+                            if (!isPrivateMode) {
+                                com.example.ui.components.AvatarView(
+                                    photoUrl = senderPhotoUrl,
+                                    name = message.senderName,
+                                    size = 42.dp,
+                                    isOnline = false,
+                                    showOnlineBadge = false
+                                )
+                                Spacer(modifier = Modifier.width(10.dp))
+                            }
+
                             IconButton(
                                 onClick = onPlayAudio,
                                 modifier = Modifier

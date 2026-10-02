@@ -286,16 +286,7 @@ fun MessageComposer(
                             .padding(horizontal = 8.dp, vertical = 6.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // User profile avatar (small)
-                        com.example.ui.components.AvatarView(
-                            photoUrl = myPhotoUrl,
-                            name = myName,
-                            size = 34.dp,
-                            isOnline = false,
-                            showOnlineBadge = false
-                        )
-
-                        Spacer(modifier = Modifier.width(6.dp))
+                        // Removed profile avatar during active recording as per requirements
 
                         // Pulsing red dot
                         Box(

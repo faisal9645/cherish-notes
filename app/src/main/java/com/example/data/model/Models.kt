@@ -134,6 +134,9 @@ data class Message(
     fun getAllMediaUrls(): List<String> {
         if (mediaUrls.isNotEmpty()) return mediaUrls.distinct()
         if (!mediaUrl.isNullOrBlank()) {
+            if (mediaUrl.startsWith("data:")) {
+                return listOf(mediaUrl)
+            }
             return if (mediaUrl.contains(",")) {
                 mediaUrl.split(",").map { it.trim() }.filter { it.isNotEmpty() }.distinct()
             } else {

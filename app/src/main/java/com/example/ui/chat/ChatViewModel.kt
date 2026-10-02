@@ -228,7 +228,7 @@ class ChatViewModel(
                     chatRepository.sendMessage(
                         text = if (uploadedUrls.size == 1) "Sent a photo" else "Sent ${uploadedUrls.size} photos",
                         type = MessageType.IMAGE,
-                        mediaUrl = uploadedUrls.joinToString(","),
+                        mediaUrls = uploadedUrls,
                         replyTo = _uiState.value.replyingToMessage
                     )
                     _uiState.update { it.copy(replyingToMessage = null) }

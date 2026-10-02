@@ -178,7 +178,7 @@ fun CheckAfterChatBanner(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 10.dp)
+                .padding(horizontal = 12.dp, vertical = 6.dp)
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -229,7 +229,7 @@ fun CheckAfterChatBanner(
                 }
             }
 
-            Spacer(modifier = Modifier.height(4.dp))
+            Spacer(modifier = Modifier.height(2.dp))
 
             if (!isExpired) {
                 Text(
@@ -243,7 +243,7 @@ fun CheckAfterChatBanner(
                     lineHeight = 15.sp
                 )
 
-                Spacer(modifier = Modifier.height(6.dp))
+                Spacer(modifier = Modifier.height(4.dp))
 
                 Row(
                     verticalAlignment = Alignment.CenterVertically,

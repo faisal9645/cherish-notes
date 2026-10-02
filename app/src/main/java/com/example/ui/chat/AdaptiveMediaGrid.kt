@@ -9,6 +9,7 @@ import androidx.compose.material.icons.filled.Image
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -291,9 +292,21 @@ private fun MediaTile(
             modifier = Modifier.size(36.dp)
         )
         if (url.isNotBlank()) {
+            val modelData = remember(url) {
+                if (url.startsWith("data:image")) {
+                    try {
+                        val base64 = url.substringAfter("base64,")
+                        android.util.Base64.decode(base64, android.util.Base64.DEFAULT)
+                    } catch (e: Exception) {
+                        url
+                    }
+                } else {
+                    url
+                }
+            }
             AsyncImage(
                 model = ImageRequest.Builder(context)
-                    .data(url)
+                    .data(modelData)
                     .crossfade(200)
                     .build(),
                 contentDescription = "Photo",

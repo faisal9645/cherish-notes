@@ -41,7 +41,7 @@ class MainActivity : FragmentActivity() {
             navigationBarStyle = SystemBarStyle.auto(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT)
         )
         setHighRefreshRate()
-        applyScreenshotProtection()
+        // Screenshot protection removed per user request — FLAG_SECURE is never applied
         // Only apply default state on cold start.
         // SecurityPreferences init already sets the default state based on isDisguiseModeEnabled().
         // Do not force re-disguise here, as it overrides the in-memory state during Activity recreation.
@@ -124,7 +124,7 @@ class MainActivity : FragmentActivity() {
         super.onResume()
         // Do NOT re-call setDecorFitsSystemWindows here — already set in onCreate.
         // Re-calling it causes a layout recalculation that shifts content after minimize/reopen.
-        applyScreenshotProtection()
+        // Screenshot protection removed — no FLAG_SECURE applied
         app.authRepository.onAppForegroundStateChanged(true)
         app.securityPreferences.ignoreNextPause = false
     }
@@ -150,9 +150,11 @@ class MainActivity : FragmentActivity() {
     override fun onStop() {
         super.onStop()
         app.authRepository.onAppForegroundStateChanged(false)
-        // Only re-disguise if NOT during in-app sub-navigation (Profile, Gallery, etc.)
-        // and NOT during system interactions (camera, file picker)
-        if (!app.securityPreferences.ignoreNextPause && !app.securityPreferences.ignoreChatNavigation) {
+        // ALWAYS re-disguise when the Activity stops (user backgrounded the app).
+        // Reset ignoreChatNavigation so sub-screen navigation flags don't persist
+        // across minimize/reopen cycles — ensures reopening always shows Notes.
+        if (!app.securityPreferences.ignoreNextPause) {
+            app.securityPreferences.ignoreChatNavigation = false
             app.securityPreferences.reDisguise()
         }
         app.securityPreferences.ignoreNextPause = false
@@ -164,18 +166,8 @@ class MainActivity : FragmentActivity() {
         app.authRepository.onAppForegroundStateChanged(false)
     }
 
-    private fun applyScreenshotProtection() {
-        val isProtected = app.securityPreferences.isScreenshotProtectionEnabled()
-        val currentFlags = window.attributes.flags
-        val hasSecure = (currentFlags and WindowManager.LayoutParams.FLAG_SECURE) != 0
-        if (isProtected != hasSecure) {
-            if (isProtected) {
-                window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
-            } else {
-                window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
-            }
-        }
-    }
+    // Screenshot protection removed — applyScreenshotProtection() has been deleted.
+    // FLAG_SECURE is never set. Users can freely take screenshots and screen recordings.
 
     private fun setHighRefreshRate() {
         try {
