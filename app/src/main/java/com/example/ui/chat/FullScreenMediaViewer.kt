@@ -226,7 +226,6 @@ fun FullScreenMediaViewer(
             HorizontalPager(
                 state = pagerState,
                 userScrollEnabled = scale <= 1.05f,
-                beyondBoundsPageCount = 1,
                 key = { it },
                 modifier = Modifier.fillMaxSize()
             ) { page ->

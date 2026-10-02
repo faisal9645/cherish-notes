@@ -10,14 +10,14 @@ plugins {
 
 android {
   namespace = "com.example"
-  compileSdk { version = release(36) { minorApiLevel = 1 } }
+  compileSdk = 35
 
   defaultConfig {
     applicationId = "com.cherish.notes"
     minSdk = 24
-    targetSdk = 36
-    versionCode = 13
-    versionName = "1.1.2"
+    targetSdk = 35
+    versionCode = 14
+    versionName = "1.1.3"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     resourceConfigurations += listOf("en")
@@ -66,6 +66,8 @@ android {
     includeInBundle = true
   }
 }
+
+
 
 // Configure the Secrets Gradle Plugin to use .env and .env.example files
 // to match the convention used in Web projects.

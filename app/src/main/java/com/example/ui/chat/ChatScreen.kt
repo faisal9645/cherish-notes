@@ -26,7 +26,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.ui.input.pointer.awaitPointerEvent
+import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -357,7 +357,14 @@ fun ChatScreen(
                         OutlinedTextField(
                             value = uiState.searchQuery,
                             onValueChange = { viewModel.setSearchQuery(it) },
-                            placeholder = { Text("Search our chat...") },
+                            placeholder = { 
+                                Text(
+                                    if (uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE) 
+                                        "Search messages..." 
+                                    else 
+                                        "Search our chat..."
+                                ) 
+                            },
                             singleLine = true,
                             colors = OutlinedTextFieldDefaults.colors(
                                 focusedBorderColor = Color.Transparent,
@@ -368,69 +375,92 @@ fun ChatScreen(
                                 .testTag("chat_search_input")
                         )
                     } else {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(10.dp))
-                                .clickable { onNavigateToProfile() }
-                                .padding(horizontal = 4.dp, vertical = 2.dp)
-                        ) {
-                            AvatarView(
-                                photoUrl = partner?.photoUrl,
-                                name = partnerName,
-                                size = 36.dp,
-                                isOnline = isPartnerOnline,
-                                showOnlineBadge = !partnerHasCheckAfter
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Column(
-                                modifier = Modifier.widthIn(max = 160.dp),
-                                verticalArrangement = Arrangement.Center
+                        val isPrivate = uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE
+                        
+                        if (isPrivate) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
                             ) {
+                                Icon(
+                                    imageVector = Icons.Default.Lock,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
                                 Text(
-                                    text = partnerName,
-                                    fontSize = 15.sp,
+                                    text = "Private Chat",
+                                    fontSize = 16.sp,
                                     fontWeight = FontWeight.Bold,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
                                     color = MaterialTheme.colorScheme.onSurface
                                 )
-                                Text(
-                                    text = if (partnerHasCheckAfter) {
-                                        if (headerRemaining.startsWith("✨")) "✨ Reconnecting now"
-                                        else "🌙 Quiet time (${CheckAfterHelper.formatTargetTime(partnerCheckAfterTarget)})"
-                                    } else if (isPartnerOnline) {
-                                        "Online"
-                                    } else {
-                                        val lastSeen = partner?.lastSeen ?: 0L
-                                        if (lastSeen > 0L) {
-                                            val diffSec = ((System.currentTimeMillis() - lastSeen) / 1000).coerceAtLeast(0)
-                                            when {
-                                                diffSec < 60 -> "Last seen just now"
-                                                diffSec < 3600 -> "Last seen ${diffSec / 60}m ago"
-                                                diffSec < 86400 -> "Last seen ${diffSec / 3600}h ago"
-                                                else -> "Offline"
-                                            }
-                                        } else {
-                                            "Offline"
-                                        }
-                                    },
-                                    fontSize = 11.sp,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    color = if (partnerHasCheckAfter) {
-                                        MaterialTheme.colorScheme.primary
-                                    } else if (isPartnerOnline) {
-                                        OnlineGreen
-                                    } else {
-                                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f)
-                                    },
-                                    fontWeight = if (partnerHasCheckAfter || isPartnerOnline) {
-                                        FontWeight.SemiBold
-                                    } else {
-                                        FontWeight.Normal
-                                    }
+                            }
+                        } else {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .clickable { onNavigateToProfile() }
+                                    .padding(horizontal = 4.dp, vertical = 2.dp)
+                            ) {
+                                AvatarView(
+                                    photoUrl = partner?.photoUrl,
+                                    name = partnerName,
+                                    size = 36.dp,
+                                    isOnline = isPartnerOnline,
+                                    showOnlineBadge = !partnerHasCheckAfter
                                 )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Column(
+                                    modifier = Modifier.widthIn(max = 160.dp),
+                                    verticalArrangement = Arrangement.Center
+                                ) {
+                                    Text(
+                                        text = partnerName,
+                                        fontSize = 15.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Text(
+                                        text = if (partnerHasCheckAfter) {
+                                            if (headerRemaining.startsWith("✨")) "✨ Reconnecting now"
+                                            else "🌙 Quiet time (${CheckAfterHelper.formatTargetTime(partnerCheckAfterTarget)})"
+                                        } else if (isPartnerOnline) {
+                                            "Online"
+                                        } else {
+                                            val lastSeen = partner?.lastSeen ?: 0L
+                                            if (lastSeen > 0L) {
+                                                val diffSec = ((System.currentTimeMillis() - lastSeen) / 1000).coerceAtLeast(0)
+                                                when {
+                                                    diffSec < 60 -> "Last seen just now"
+                                                    diffSec < 3600 -> "Last seen ${diffSec / 60}m ago"
+                                                    diffSec < 86400 -> "Last seen ${diffSec / 3600}h ago"
+                                                    else -> "Offline"
+                                                }
+                                            } else {
+                                                "Offline"
+                                            }
+                                        },
+                                        fontSize = 11.sp,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        color = if (partnerHasCheckAfter) {
+                                            MaterialTheme.colorScheme.primary
+                                        } else if (isPartnerOnline) {
+                                            OnlineGreen
+                                        } else {
+                                            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f)
+                                        },
+                                        fontWeight = if (partnerHasCheckAfter || isPartnerOnline) {
+                                            FontWeight.SemiBold
+                                        } else {
+                                            FontWeight.Normal
+                                        }
+                                    )
+                                }
                             }
                         }
                     }
@@ -530,7 +560,14 @@ fun ChatScreen(
                                 )
 
                                 DropdownMenuItem(
-                                    text = { Text("Profile & Partner Settings") },
+                                    text = { 
+                                        Text(
+                                            if (uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE) 
+                                                "Settings" 
+                                            else 
+                                                "Profile & Partner Settings"
+                                        ) 
+                                    },
                                     onClick = {
                                         showChatMenu = false
                                         onNavigateToProfile()
@@ -624,12 +661,24 @@ fun ChatScreen(
                                     )
                                     Spacer(modifier = Modifier.width(6.dp))
                                     Text(
-                                        text = "recording audio...",
+                                        text = if (uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE)
+                                            "recording audio..."
+                                        else
+                                            "$partnerName is recording...",
                                         fontSize = 13.sp,
                                         color = RoseGoldPrimary,
                                         fontWeight = FontWeight.Medium
                                     )
                                 } else {
+                                    if (uiState.chatExperienceMode != com.example.ui.chat.ChatExperienceMode.PRIVATE) {
+                                        Text(
+                                            text = "$partnerName is typing",
+                                            fontSize = 13.sp,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                    }
                                     BouncingDots()
                                 }
                             }
@@ -669,7 +718,11 @@ fun ChatScreen(
                     onCancelVoiceRecord = { viewModel.cancelVoiceRecording() },
                     onTakePhoto = triggerCameraSnap,
                     onPickAttachment = { showAttachmentSheet = true },
-                    placeholder = if (uiState.isStealthCurtainActive) "Add a note..." else "Message your love..."
+                    placeholder = when {
+                        uiState.isStealthCurtainActive -> "Add a note..."
+                        uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE -> "Type a message..."
+                        else -> "Type something sweet to $partnerName... ❤️"
+                    }
                 )
             }
         }
@@ -936,7 +989,10 @@ fun ChatScreen(
                                     }
                                     Spacer(modifier = Modifier.height(4.dp))
                                     Text(
-                                        text = "Messages, voice notes, and photos are strictly between you and $partnerName. No third parties can ever join or view this chat.",
+                                        text = if (uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE)
+                                            "Messages are end-to-end private between you and your partner."
+                                        else
+                                            "Messages, voice notes, and photos are strictly between you and $partnerName. No third parties can ever join or view this chat.",
                                         fontSize = 11.sp,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         textAlign = androidx.compose.ui.text.style.TextAlign.Center,

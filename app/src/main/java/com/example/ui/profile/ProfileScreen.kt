@@ -881,6 +881,76 @@ fun ProfileScreen(
                     }
                 )
             }
+            // Chat Experience Mode Selector
+            SettingsSection(title = "Chat Experience", icon = Icons.Default.ChatBubble) {
+                val currentMode = uiState.chatExperienceMode
+
+                // ❤️ Normal Mode option
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = if (currentMode == com.example.ui.chat.ChatExperienceMode.NORMAL)
+                        RoseGoldPrimary.copy(alpha = 0.12f) 
+                    else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                    border = if (currentMode == com.example.ui.chat.ChatExperienceMode.NORMAL)
+                        BorderStroke(2.dp, RoseGoldPrimary)
+                    else BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { viewModel.setChatExperienceMode(com.example.ui.chat.ChatExperienceMode.NORMAL) }
+                ) {
+                    Row(modifier = Modifier.padding(14.dp), verticalAlignment = Alignment.Top) {
+                        RadioButton(
+                            selected = currentMode == com.example.ui.chat.ChatExperienceMode.NORMAL,
+                            onClick = { viewModel.setChatExperienceMode(com.example.ui.chat.ChatExperienceMode.NORMAL) },
+                            colors = RadioButtonDefaults.colors(selectedColor = RoseGoldPrimary)
+                        )
+                        Column(modifier = Modifier.padding(start = 8.dp)) {
+                            Text("❤️ Normal Mode", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                            Text(
+                                "Your full Cherish couple experience with partner identity, " +
+                                "presence and personalized love-focused interactions.",
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                lineHeight = 16.sp
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // 🔒 Private Mode option
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = if (currentMode == com.example.ui.chat.ChatExperienceMode.PRIVATE)
+                        MaterialTheme.colorScheme.primary.copy(alpha = 0.12f) 
+                    else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                    border = if (currentMode == com.example.ui.chat.ChatExperienceMode.PRIVATE)
+                        BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
+                    else BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { viewModel.setChatExperienceMode(com.example.ui.chat.ChatExperienceMode.PRIVATE) }
+                ) {
+                    Row(modifier = Modifier.padding(14.dp), verticalAlignment = Alignment.Top) {
+                        RadioButton(
+                            selected = currentMode == com.example.ui.chat.ChatExperienceMode.PRIVATE,
+                            onClick = { viewModel.setChatExperienceMode(com.example.ui.chat.ChatExperienceMode.PRIVATE) },
+                            colors = RadioButtonDefaults.colors(selectedColor = MaterialTheme.colorScheme.primary)
+                        )
+                        Column(modifier = Modifier.padding(start = 8.dp)) {
+                            Text("🔒 Private Mode", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                            Text(
+                                "Keep the complete chat experience while minimizing " +
+                                "partner identity and presence information.",
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                lineHeight = 16.sp
+                            )
+                        }
+                    }
+                }
+            }
 
             // 5. Check-After & Shared Presence Section
             SettingsSection(

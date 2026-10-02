@@ -1,4 +1,4 @@
-﻿package com.example.security
+package com.example.security
 
 import android.content.Context
 import android.content.SharedPreferences
@@ -300,6 +300,16 @@ class SecurityPreferences(context: Context) {
 
     fun getGalleryDensity(): Float = prefs.getFloat(KEY_GALLERY_DENSITY, 0.5f)
 
+    fun getChatExperienceMode(): com.example.ui.chat.ChatExperienceMode {
+        val key = prefs.getString(KEY_CHAT_EXPERIENCE_MODE, com.example.ui.chat.ChatExperienceMode.NORMAL.key) 
+                  ?: com.example.ui.chat.ChatExperienceMode.NORMAL.key
+        return com.example.ui.chat.ChatExperienceMode.fromKey(key)
+    }
+
+    fun setChatExperienceMode(mode: com.example.ui.chat.ChatExperienceMode) {
+        prefs.edit().putString(KEY_CHAT_EXPERIENCE_MODE, mode.key).apply()
+    }
+
     fun setGalleryDensity(density: Float) {
         prefs.edit().putFloat(KEY_GALLERY_DENSITY, density.coerceIn(0f, 1f)).apply()
     }
@@ -341,6 +351,7 @@ class SecurityPreferences(context: Context) {
         private const val KEY_AUTO_LOCK_TIMEOUT_SEC = "auto_lock_timeout_sec"
         private const val KEY_PANIC_GESTURE = "panic_gesture_type"
         private const val KEY_CHAT_THEME_MODE = "chat_theme_mode"
+        private const val KEY_CHAT_EXPERIENCE_MODE = "chat_experience_mode"
         private const val KEY_CUSTOM_CHAT_TITLE = "custom_chat_title"
         private const val KEY_NOTIFICATION_PRIVACY_MODE = "notification_privacy_mode"
         private const val KEY_DURESS_PIN_HASH = "duress_pin_hash"

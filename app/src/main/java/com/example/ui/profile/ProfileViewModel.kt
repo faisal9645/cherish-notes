@@ -33,7 +33,8 @@ data class ProfileUiState(
     val isUpdating: Boolean = false,
     val isSecretHistoryRevealed: Boolean = false,
     val themeMode: Int = 0,
-    val chatBgTheme: Int = 0
+    val chatBgTheme: Int = 0,
+    val chatExperienceMode: com.example.ui.chat.ChatExperienceMode = com.example.ui.chat.ChatExperienceMode.NORMAL
 )
 
 data class UpdateCheckState(
@@ -130,7 +131,8 @@ class ProfileViewModel(
             isDoubleTapZoomEnabled = securityPreferences.isDoubleTapZoomEnabled(),
             isCheckAfterReminderEnabled = securityPreferences.isCheckAfterReminderEnabled(),
             themeMode = securityPreferences.getThemeMode(),
-            chatBgTheme = securityPreferences.getChatBgTheme()
+            chatBgTheme = securityPreferences.getChatBgTheme(),
+            chatExperienceMode = securityPreferences.getChatExperienceMode()
         )
     )
     val uiState: StateFlow<ProfileUiState> = _uiState.asStateFlow()
@@ -155,7 +157,8 @@ class ProfileViewModel(
                 isDoubleTapZoomEnabled = securityPreferences.isDoubleTapZoomEnabled(),
                 isCheckAfterReminderEnabled = securityPreferences.isCheckAfterReminderEnabled(),
                 themeMode = securityPreferences.getThemeMode(),
-                chatBgTheme = securityPreferences.getChatBgTheme()
+                chatBgTheme = securityPreferences.getChatBgTheme(),
+                chatExperienceMode = securityPreferences.getChatExperienceMode()
             )
         }
     }
@@ -470,5 +473,10 @@ class ProfileViewModel(
         val file = _updateState.value.apkFile ?: return
         val otaManager = com.example.update.OtaUpdateManager.getInstance(context)
         otaManager.installApk(context, file)
+    }
+
+    fun setChatExperienceMode(mode: com.example.ui.chat.ChatExperienceMode) {
+        securityPreferences.setChatExperienceMode(mode)
+        _uiState.update { it.copy(chatExperienceMode = mode) }
     }
 }

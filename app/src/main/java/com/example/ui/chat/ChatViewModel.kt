@@ -45,7 +45,8 @@ data class ChatUiState(
     val voicePlaybackSpeed: Float = 1.0f,
     val isSecretHistoryRevealed: Boolean = true,
     val targetScrollMessageId: String? = null,
-    val chatBgTheme: Int = 0
+    val chatBgTheme: Int = 0,
+    val chatExperienceMode: ChatExperienceMode = ChatExperienceMode.NORMAL
 )
 
 class ChatViewModel(
@@ -60,7 +61,8 @@ class ChatViewModel(
     private val _uiState = MutableStateFlow(
         ChatUiState(
             gallerySize = securityPreferences.getImageGallerySize(),
-            chatBgTheme = securityPreferences.getChatBgTheme()
+            chatBgTheme = securityPreferences.getChatBgTheme(),
+            chatExperienceMode = securityPreferences.getChatExperienceMode()
         )
 
     )
@@ -126,6 +128,9 @@ class ChatViewModel(
     }
 
     fun setInChatTab(inChat: Boolean) {
+        if (inChat) {
+            _uiState.update { it.copy(chatExperienceMode = securityPreferences.getChatExperienceMode()) }
+        }
         authRepository.setInChatTab(inChat)
     }
 
