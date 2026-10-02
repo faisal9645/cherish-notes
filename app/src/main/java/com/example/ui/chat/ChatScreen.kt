@@ -415,28 +415,29 @@ fun ChatScreen(
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(10.dp))
                                     .clickable { onNavigateToProfile() }
-                                    .padding(horizontal = 4.dp, vertical = 2.dp)
+                                    .padding(start = 2.dp, end = 8.dp, top = 4.dp, bottom = 4.dp)
                             ) {
                                 AvatarView(
                                     photoUrl = partner?.photoUrl,
                                     name = partnerName,
-                                    size = 42.dp,
+                                    size = 40.dp,
                                     isOnline = isPartnerOnline,
                                     showOnlineBadge = !partnerHasCheckAfter
                                 )
-                                Spacer(modifier = Modifier.width(12.dp))
+                                Spacer(modifier = Modifier.width(10.dp))
                                 Column(
-                                    modifier = Modifier.widthIn(max = 180.dp),
+                                    modifier = Modifier.widthIn(max = 200.dp),
                                     verticalArrangement = Arrangement.Center
                                 ) {
                                     Text(
                                         text = partnerName,
-                                        fontSize = 19.sp,
-                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 17.sp,
+                                        fontWeight = FontWeight.SemiBold,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis,
                                         color = if (isDark) Color.White else Color(0xFF0F172A)
                                     )
+                                    Spacer(modifier = Modifier.height(1.dp))
                                     Text(
                                         text = if (partnerHasCheckAfter) {
                                             if (headerRemaining.startsWith("✨")) "✨ Reconnecting now"
@@ -448,16 +449,16 @@ fun ChatScreen(
                                             if (lastSeen > 0L) {
                                                 val diffSec = ((System.currentTimeMillis() - lastSeen) / 1000).coerceAtLeast(0)
                                                 when {
-                                                    diffSec < 60 -> "Last seen just now"
-                                                    diffSec < 3600 -> "Last seen ${diffSec / 60}m ago"
-                                                    diffSec < 86400 -> "Last seen ${diffSec / 3600}h ago"
-                                                    else -> "Offline"
+                                                    diffSec < 60 -> "last seen just now"
+                                                    diffSec < 3600 -> "last seen ${diffSec / 60}m ago"
+                                                    diffSec < 86400 -> "last seen ${diffSec / 3600}h ago"
+                                                    else -> "offline"
                                                 }
                                             } else {
-                                                "Offline"
+                                                "offline"
                                             }
                                         },
-                                        fontSize = 12.sp,
+                                        fontSize = 13.sp,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis,
                                         color = if (partnerHasCheckAfter) {
@@ -465,7 +466,7 @@ fun ChatScreen(
                                         } else if (isPartnerOnline) {
                                             OnlineGreen
                                         } else {
-                                            Color(0xFF3B82F6)
+                                            MaterialTheme.colorScheme.onSurfaceVariant
                                         },
                                         fontWeight = FontWeight.Normal
                                     )
