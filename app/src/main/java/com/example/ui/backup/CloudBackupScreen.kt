@@ -212,60 +212,7 @@ fun CloudBackupScreen(
                 }
             }
 
-            // 3. Primary Actions: Backup Now & Restore
-            item {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Button(
-                        onClick = { viewModel.backupNow() },
-                        enabled = !uiState.isBackingUp && !uiState.isRestoring,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(52.dp)
-                            .testTag("backup_now_button"),
-                        shape = RoundedCornerShape(16.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-                    ) {
-                        if (uiState.isBackingUp) {
-                            CircularProgressIndicator(
-                                color = MaterialTheme.colorScheme.surface,
-                                modifier = Modifier.size(20.dp),
-                                strokeWidth = 2.dp
-                            )
-                            Spacer(modifier = Modifier.width(10.dp))
-                            Text("Backing up to Google Drive...")
-                        } else {
-                            Icon(Icons.Default.CloudUpload, contentDescription = null)
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Backup Everything to Google Drive Now", fontWeight = FontWeight.Bold)
-                        }
-                    }
 
-                    OutlinedButton(
-                        onClick = { showRestoreConfirmDialog = true },
-                        enabled = !uiState.isBackingUp && !uiState.isRestoring,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(52.dp)
-                            .testTag("restore_now_button"),
-                        shape = RoundedCornerShape(16.dp),
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.primary)
-                    ) {
-                        if (uiState.isRestoring) {
-                            CircularProgressIndicator(
-                                color = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(20.dp),
-                                strokeWidth = 2.dp
-                            )
-                            Spacer(modifier = Modifier.width(10.dp))
-                            Text("Restoring from Google Drive...")
-                        } else {
-                            Icon(Icons.Default.CloudDownload, contentDescription = null)
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Restore to This Mobile Device", fontWeight = FontWeight.Bold)
-                        }
-                    }
-                }
-            }
 
             // 4. Step-by-Step New Mobile Transfer Guide
             item {

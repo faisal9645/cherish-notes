@@ -183,8 +183,13 @@ fun ChatScreen(
     val prevMessageCount = remember { mutableIntStateOf(uiState.messages.size) }
     LaunchedEffect(uiState.messages.size) {
         val isNearBottom = listState.firstVisibleItemIndex <= 3
-        if (uiState.messages.size > prevMessageCount.intValue && isNearBottom) {
-            listState.animateScrollToItem(0)
+        val newestMessage = uiState.messages.lastOrNull()
+        val iSentIt = newestMessage?.senderId == currentUserId
+
+        if (uiState.messages.size > prevMessageCount.intValue) {
+            if (isNearBottom || iSentIt) {
+                listState.animateScrollToItem(0)
+            }
         }
         prevMessageCount.intValue = uiState.messages.size
     }
@@ -1675,7 +1680,7 @@ fun isSameDay(t1: Long, t2: Long): Boolean {
 
 fun formatDateSeparator(timestamp: Long): String {
     val now = System.currentTimeMillis()
-    if (isSameDay(timestamp, now)) return ""
+    if (isSameDay(timestamp, now)) return "Today"
     if (isSameDay(timestamp, now - 86400000L)) return "Yesterday"
     
     val offset = 6 * 60 * 60 * 1000L

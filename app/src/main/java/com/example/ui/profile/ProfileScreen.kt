@@ -110,6 +110,7 @@ fun ProfileScreen(
     onNavigateToStorageManager: () -> Unit = {},
     onNavigateToDeviceSessions: () -> Unit = {},
     onNavigateToOpenWhen: () -> Unit = {},
+    onNavigateToChat: () -> Unit = {},
     onLoggedOut: () -> Unit
 ) {
     val context = LocalContext.current
@@ -930,12 +931,18 @@ fun ProfileScreen(
                     else BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable { viewModel.setChatExperienceMode(com.example.ui.chat.ChatExperienceMode.NORMAL) }
+                        .clickable { 
+                            viewModel.setChatExperienceMode(com.example.ui.chat.ChatExperienceMode.NORMAL) 
+                            onNavigateToChat()
+                        }
                 ) {
                     Row(modifier = Modifier.padding(14.dp), verticalAlignment = Alignment.Top) {
                         RadioButton(
                             selected = currentMode == com.example.ui.chat.ChatExperienceMode.NORMAL,
-                            onClick = { viewModel.setChatExperienceMode(com.example.ui.chat.ChatExperienceMode.NORMAL) },
+                            onClick = { 
+                                viewModel.setChatExperienceMode(com.example.ui.chat.ChatExperienceMode.NORMAL) 
+                                onNavigateToChat()
+                            },
                             colors = RadioButtonDefaults.colors(selectedColor = RoseGoldPrimary)
                         )
                         Column(modifier = Modifier.padding(start = 8.dp)) {
@@ -964,12 +971,18 @@ fun ProfileScreen(
                     else BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable { viewModel.setChatExperienceMode(com.example.ui.chat.ChatExperienceMode.PRIVATE) }
+                        .clickable { 
+                            viewModel.setChatExperienceMode(com.example.ui.chat.ChatExperienceMode.PRIVATE) 
+                            onNavigateToChat()
+                        }
                 ) {
                     Row(modifier = Modifier.padding(14.dp), verticalAlignment = Alignment.Top) {
                         RadioButton(
                             selected = currentMode == com.example.ui.chat.ChatExperienceMode.PRIVATE,
-                            onClick = { viewModel.setChatExperienceMode(com.example.ui.chat.ChatExperienceMode.PRIVATE) },
+                            onClick = { 
+                                viewModel.setChatExperienceMode(com.example.ui.chat.ChatExperienceMode.PRIVATE) 
+                                onNavigateToChat()
+                            },
                             colors = RadioButtonDefaults.colors(selectedColor = MaterialTheme.colorScheme.primary)
                         )
                         Column(modifier = Modifier.padding(start = 8.dp)) {

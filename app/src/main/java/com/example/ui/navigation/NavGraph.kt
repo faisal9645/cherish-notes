@@ -253,6 +253,13 @@ fun CherishNavGraph(
                     app.securityPreferences.ignoreChatNavigation = false
                     navController.popBackStack()
                 },
+                onNavigateToChat = {
+                    navController.navigate(Screen.Chat.route) {
+                        popUpTo(Screen.Home.route) { saveState = true }
+                        launchSingleTop = true
+                        restoreState = true
+                    }
+                },
                 onNavigateToCloudBackup = {
                     navController.navigate(Screen.CloudBackup.route) { launchSingleTop = true }
                 },
