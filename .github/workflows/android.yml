@@ -76,6 +76,8 @@ jobs:
   release-build:
     name: Build Release APK (Conditional)
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     timeout-minutes: 25
     needs: build-and-test
     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
@@ -117,3 +119,22 @@ jobs:
           name: notes-release-apk
           path: app/build/outputs/apk/release/*.apk
           retention-days: 30
+
+      - name: Create GitHub Release for OTA
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION_NAME=$(grep -oP 'versionName\s*=\s*"\K[^"]+' app/build.gradle.kts)
+          VERSION_CODE=$(grep -oP 'versionCode\s*=\s*\K[0-9]+' app/build.gradle.kts)
+          TAG_NAME="v${VERSION_NAME}-${VERSION_CODE}"
+          
+          # Check if release already exists
+          if gh release view "$TAG_NAME" > /dev/null 2>&1; then
+            echo "Release $TAG_NAME already exists, skipping creation."
+          else
+            echo "Creating new release $TAG_NAME..."
+            gh release create "$TAG_NAME" \
+              --title "Release $TAG_NAME" \
+              --notes "Automated OTA update for version $VERSION_NAME (Build $VERSION_CODE)" \
+              app/build/outputs/apk/release/*.apk
+          fi
