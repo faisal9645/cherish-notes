@@ -37,38 +37,8 @@ private val PureWhiteColorScheme = lightColorScheme(
     outlineVariant = Color(0xFFEDF2F7)
 )
 
-// Normal Dark Mode: Dark background (#0B0F19), deep blue accents, no rose/pink, highly readable text
-private val NormalDarkColorScheme = darkColorScheme(
-    primary = DarkBluePrimary, // Deep Dark Blue (0xFF1D4ED8)
-    onPrimary = Color.White,
-    primaryContainer = Color(0xFF1E293B), // Dark Slate Navy Container
-    onPrimaryContainer = Color(0xFF93C5FD),
-    secondary = DarkBlueSecondary, // Deep Accent Blue (0xFF1E40AF)
-    onSecondary = Color.White,
-    secondaryContainer = Color(0xFF172554),
-    onSecondaryContainer = Color(0xFFBFDBFE),
-    tertiary = DarkBlueTertiary,
-    onTertiary = Color.White,
-    tertiaryContainer = Color(0xFF0F172A),
-    onTertiaryContainer = Color(0xFFDBEAFE),
-    background = Color(0xFF0B0F19), // Dark background
-    onBackground = Color(0xFFF8FAFC),
-    surface = Color(0xFF111827), // Very dark surface
-    onSurface = Color(0xFFF8FAFC),
-    surfaceVariant = Color(0xFF1E293B), // Dark cards / containers
-    onSurfaceVariant = Color(0xFFCBD5E1),
-    surfaceTint = Color.Transparent,
-    surfaceContainer = Color(0xFF111827),
-    surfaceContainerLow = Color(0xFF0B0F19),
-    surfaceContainerLowest = Color(0xFF080C14),
-    surfaceContainerHigh = Color(0xFF1E293B),
-    surfaceContainerHighest = Color(0xFF334155),
-    outline = Color(0xFF334155),
-    outlineVariant = Color(0xFF1E293B)
-)
-
-// AMOLED Mode: Strict #000000 pure black background & surface, deep blue accents, no rose/pink, crisp white text
-private val TrueAmoledColorScheme = darkColorScheme(
+// Dark Mode (AMOLED-Style): Strict #000000 pure black background & surface, deep blue accents, no rose/pink, crisp white text
+private val DarkColorScheme = darkColorScheme(
     primary = DarkBluePrimary, // Deep Dark Blue (0xFF1D4ED8)
     onPrimary = Color.White,
     primaryContainer = Color(0xFF0F172A),
@@ -105,9 +75,8 @@ fun CherishTheme(
     val isSystemDark = isSystemInDarkTheme()
     val colorScheme = when (themeMode) {
         1 -> PureWhiteColorScheme
-        2 -> NormalDarkColorScheme
-        3 -> TrueAmoledColorScheme
-        else -> if (isSystemDark) NormalDarkColorScheme else PureWhiteColorScheme
+        2, 3 -> DarkColorScheme
+        else -> if (isSystemDark) DarkColorScheme else PureWhiteColorScheme
     }
 
     MaterialTheme(

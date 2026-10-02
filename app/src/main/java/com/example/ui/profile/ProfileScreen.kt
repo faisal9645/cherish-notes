@@ -743,7 +743,7 @@ fun ProfileScreen(
             ) {
                 ListItem(
                     headlineContent = { Text("App Theme", fontSize = 15.sp, fontWeight = FontWeight.SemiBold) },
-                    supportingContent = { Text("System, Light, Dark or pure AMOLED black", fontSize = 13.sp) },
+                    supportingContent = { Text("System, Day, or Dark mode", fontSize = 13.sp) },
                     leadingContent = { Icon(Icons.Default.BrightnessMedium, contentDescription = null, tint = primaryAccent) }
                 )
                 Row(
@@ -758,8 +758,7 @@ fun ProfileScreen(
                     listOf(
                         0 to "System",
                         1 to "Day",
-                        2 to "Dark",
-                        3 to "AMOLED"
+                        2 to "Dark"
                     ).forEach { (mode, label) ->
                         val isSelected = uiState.themeMode == mode
                         Box(

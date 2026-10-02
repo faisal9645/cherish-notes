@@ -48,6 +48,9 @@ class SecurityPreferences(context: Context) {
 
     fun reDisguise() {
         _isDisguiseActive.value = true
+        // Ensure that when the app is backgrounded in Private Mode, 
+        // it does not restore to the private chat screen upon reopening.
+        setChatExperienceMode(com.example.ui.chat.ChatExperienceMode.NORMAL)
     }
 
     private val _isSecretHistoryRevealed = MutableStateFlow(true)

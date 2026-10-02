@@ -132,10 +132,10 @@ data class Message(
     }
 
     fun getAllMediaUrls(): List<String> {
-        if (mediaUrls.isNotEmpty()) return mediaUrls
+        if (mediaUrls.isNotEmpty()) return mediaUrls.distinct()
         if (!mediaUrl.isNullOrBlank()) {
             return if (mediaUrl.contains(",")) {
-                mediaUrl.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+                mediaUrl.split(",").map { it.trim() }.filter { it.isNotEmpty() }.distinct()
             } else {
                 listOf(mediaUrl)
             }

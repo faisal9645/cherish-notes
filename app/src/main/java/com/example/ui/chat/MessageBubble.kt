@@ -392,7 +392,7 @@ fun MessageBubble(
                                     inactiveColor = if (isPrivateMode) textColor.copy(alpha = 0.35f) 
                                                     else if (isFromMe) Color.White.copy(alpha = 0.5f) 
                                                     else MaterialTheme.colorScheme.primary.copy(alpha = 0.35f),
-                                    height = 24.dp
+                                    height = 40.dp
                                 )
                                 Spacer(modifier = Modifier.height(6.dp))
                                 Row(

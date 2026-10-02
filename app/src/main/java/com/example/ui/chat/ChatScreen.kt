@@ -99,11 +99,12 @@ fun ChatScreen(
     val photoPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickMultipleVisualMedia(maxItems = 10)
     ) { uris: List<Uri> ->
-        if (uris.isNotEmpty()) {
-            if (uris.size == 1) {
-                viewModel.sendMediaFile(uris[0], MessageType.IMAGE)
+        val distinctUris = uris.distinct()
+        if (distinctUris.isNotEmpty()) {
+            if (distinctUris.size == 1) {
+                viewModel.sendMediaFile(distinctUris[0], MessageType.IMAGE)
             } else {
-                viewModel.sendMultipleImages(uris)
+                viewModel.sendMultipleImages(distinctUris)
             }
         }
     }
@@ -1179,7 +1180,7 @@ fun ChatScreen(
                     text = "Share with your love",
                     fontSize = 17.sp,
                     fontWeight = FontWeight.Bold,
-                    color = Color(0xFF222228),
+                    color = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.padding(bottom = 20.dp)
                 )
 
@@ -1713,7 +1714,7 @@ private fun AttachmentOptionItem(
             text = label,
             fontSize = 13.sp,
             fontWeight = FontWeight.Medium,
-            color = Color(0xFF222228)
+            color = MaterialTheme.colorScheme.onSurface
         )
     }
 }

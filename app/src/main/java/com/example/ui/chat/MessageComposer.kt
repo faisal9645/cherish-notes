@@ -133,7 +133,6 @@ fun MessageComposer(
         modifier = modifier
             .fillMaxWidth()
             .background(barBg)
-            .navigationBarsPadding()
     ) {
         // Reply bar preview
         AnimatedVisibility(visible = replyingTo != null) {
@@ -188,79 +187,14 @@ fun MessageComposer(
             }
         }
 
-        // 22. WhatsApp-Style Emoji Panel: Sits DIRECTLY ABOVE the composer
-        AnimatedVisibility(
-            visible = showEmojiPanel && !isRecordingVoice,
-            enter = expandVertically(animationSpec = tween(200)) + fadeIn(tween(200)),
-            exit = shrinkVertically(animationSpec = tween(160)) + fadeOut(tween(160))
-        ) {
-            Surface(
-                color = if (isDark) MaterialTheme.colorScheme.surfaceVariant else Color(0xFFF8FAFC),
-                border = BorderStroke(1.dp, pillBorder),
-                shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    // Issue 15: Fixed height matches a typical soft keyboard so the layout
-                    // doesn't jump when switching between keyboard and emoji panel.
-                    .height(240.dp)
-            ) {
-                Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 2.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "Couple Emojis 💕",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        IconButton(
-                            onClick = { showEmojiPanel = false },
-                            modifier = Modifier.size(24.dp)
-                        ) {
-                            Icon(
-                                Icons.Default.Close,
-                                contentDescription = "Close",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(16.dp)
-                            )
-                        }
-                    }
-
-                    LazyVerticalGrid(
-                        columns = GridCells.Fixed(8),
-                        modifier = Modifier.fillMaxWidth().weight(1f, fill = false),
-                        contentPadding = PaddingValues(4.dp),
-                        horizontalArrangement = Arrangement.SpaceEvenly,
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        items(emojiList, key = { it }) { emoji ->
-                            Box(
-                                modifier = Modifier
-                                    .clip(CircleShape)
-                                    .clickable {
-                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                        onTextChanged(text + emoji)
-                                    }
-                                    .padding(vertical = 4.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(text = emoji, fontSize = 22.sp)
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
         // 23. WhatsApp-Style Composer Row:
         // [ 🙂 | Message your love... | 📎 | 📷 ]    [ 🎤 / ✈️ ]
         Row(
             modifier = Modifier
+                .widthIn(max = 600.dp)
                 .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 6.dp),
+                .align(Alignment.CenterHorizontally)
+                .padding(horizontal = 16.dp, vertical = 8.dp),
             verticalAlignment = Alignment.Bottom
         ) {
             // Main Input Pill / Active Recording Bar
@@ -318,7 +252,7 @@ fun MessageComposer(
                             amplitudes = recordingAmplitudes,
                             progress = 1f,
                             activeColor = MaterialTheme.colorScheme.primary,
-                            height = 14.dp,
+                            height = 24.dp,
                             modifier = Modifier.weight(1f)
                         )
 
@@ -709,6 +643,73 @@ fun MessageComposer(
                                     tint = micTint,
                                     modifier = Modifier.size(22.dp)
                                 )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 22. WhatsApp-Style Emoji Panel: Sits DIRECTLY BELOW the composer
+        AnimatedVisibility(
+            visible = showEmojiPanel && !isRecordingVoice,
+            enter = expandVertically(animationSpec = tween(200)) + fadeIn(tween(200)),
+            exit = shrinkVertically(animationSpec = tween(160)) + fadeOut(tween(160))
+        ) {
+            Surface(
+                color = if (isDark) MaterialTheme.colorScheme.surfaceVariant else Color(0xFFF8FAFC),
+                border = BorderStroke(1.dp, pillBorder),
+                shape = RoundedCornerShape(bottomStart = 16.dp, bottomEnd = 16.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    // Issue 15: Fixed height matches a typical soft keyboard so the layout
+                    // doesn't jump when switching between keyboard and emoji panel.
+                    .height(240.dp)
+            ) {
+                Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 2.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Couple Emojis 💕",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        IconButton(
+                            onClick = { showEmojiPanel = false },
+                            modifier = Modifier.size(24.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Close,
+                                contentDescription = "Close",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    }
+
+                    LazyVerticalGrid(
+                        columns = GridCells.Fixed(8),
+                        modifier = Modifier.fillMaxWidth().weight(1f, fill = false),
+                        contentPadding = PaddingValues(4.dp),
+                        horizontalArrangement = Arrangement.SpaceEvenly,
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        items(emojiList, key = { it }) { emoji ->
+                            Box(
+                                modifier = Modifier
+                                    .clip(CircleShape)
+                                    .clickable {
+                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                        onTextChanged(text + emoji)
+                                    }
+                                    .padding(vertical = 4.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(text = emoji, fontSize = 22.sp)
                             }
                         }
                     }
