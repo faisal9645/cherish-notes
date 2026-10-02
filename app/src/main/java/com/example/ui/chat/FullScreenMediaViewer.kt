@@ -9,6 +9,7 @@ import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
@@ -75,6 +76,7 @@ fun FullScreenMediaViewer(
     onShowInChat: ((url: String) -> Unit)? = null,
     onDismiss: () -> Unit
 ) {
+    BackHandler(onBack = onDismiss)
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 

@@ -4,6 +4,7 @@ import android.app.Activity
 import android.net.Uri
 import android.view.WindowManager
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -200,6 +201,11 @@ fun ProfileScreen(
         }
     }
 
+    // Android back button & edge gesture: re-disguise directly to Notes app for security
+    BackHandler {
+        onNavigateBack()
+    }
+
     var dragAccumulator by remember { mutableFloatStateOf(0f) }
 
     Scaffold(
@@ -231,8 +237,9 @@ fun ProfileScreen(
                 }
 
                 if (directionLocked && isHorizontal) {
-                    if (accX > 80f) {
-                        onNavigateBack()
+                    // Swiping horizontally on Settings tab smoothly transitions back to Chat tab
+                    if (kotlin.math.abs(accX) > 80f) {
+                        onNavigateToChat()
                     }
                 }
             }
@@ -248,7 +255,7 @@ fun ProfileScreen(
                 },
                 navigationIcon = {
                     IconButton(
-                        onClick = onNavigateBack,
+                        onClick = onNavigateToChat,
                         modifier = Modifier.testTag("profile_back_button")
                     ) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")

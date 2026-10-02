@@ -1,5 +1,5 @@
 package com.example.ui.navigation
-
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Image
@@ -135,6 +135,11 @@ fun CherishNavGraph(
 
     LaunchedEffect(Unit) {
         profileViewModel.silentCheckForUpdates(context)
+    }
+
+    // Inside Cherish app (unlocked): Android system back button & edge gesture returns to Notes app for security
+    BackHandler(enabled = !isDisguiseActive) {
+        app.securityPreferences.reDisguise()
     }
 
     Box(
