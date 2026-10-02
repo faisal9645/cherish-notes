@@ -9,7 +9,7 @@
         <item name="android:windowLightNavigationBar">true</item>
         <!-- Android 12+ Splash Screen with centered high quality sharp Cherish logo -->
         <item name="android:windowSplashScreenBackground">#FFFFFF</item>
-        <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_cherish_logo</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@mipmap/ic_launcher</item>
         <item name="android:windowSplashScreenIconBackgroundColor">#FFFFFF</item>
     </style>
 </resources>
