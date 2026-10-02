@@ -184,7 +184,7 @@ fun ChatScreen(
     LaunchedEffect(uiState.messages.size) {
         val isNearBottom = listState.firstVisibleItemIndex <= 3
         val newestMessage = uiState.messages.lastOrNull()
-        val iSentIt = newestMessage?.senderId == currentUserId
+        val iSentIt = newestMessage?.senderId == uiState.currentUser?.id
 
         if (uiState.messages.size > prevMessageCount.intValue) {
             if (isNearBottom || iSentIt) {
