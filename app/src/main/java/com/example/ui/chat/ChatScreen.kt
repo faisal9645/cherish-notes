@@ -371,8 +371,9 @@ fun ChatScreen(
             }
         },
         topBar = {
-            TopAppBar(
-                title = {
+            Column {
+                TopAppBar(
+                    title = {
                     if (uiState.isSearching) {
                         OutlinedTextField(
                             value = uiState.searchQuery,
@@ -410,18 +411,18 @@ fun ChatScreen(
                                 AvatarView(
                                     photoUrl = partner?.photoUrl,
                                     name = partnerName,
-                                    size = 40.dp,
+                                    size = 42.dp,
                                     isOnline = isPartnerOnline,
                                     showOnlineBadge = !partnerHasCheckAfter
                                 )
-                                Spacer(modifier = Modifier.width(10.dp))
+                                Spacer(modifier = Modifier.width(12.dp))
                                 Column(
-                                    modifier = Modifier.widthIn(max = 160.dp),
+                                    modifier = Modifier.widthIn(max = 180.dp),
                                     verticalArrangement = Arrangement.Center
                                 ) {
                                     Text(
                                         text = partnerName,
-                                        fontSize = 17.sp,
+                                        fontSize = 19.sp,
                                         fontWeight = FontWeight.Bold,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis,
@@ -484,7 +485,7 @@ fun ChatScreen(
                                 MaterialTheme.colorScheme.onSurface
                             else
                                 MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.size(24.dp)
+                            modifier = Modifier.size(26.dp)
                         )
                     }
                 },
@@ -492,9 +493,9 @@ fun ChatScreen(
                     if (uiState.isSearching) {
                         IconButton(
                             onClick = { viewModel.setSearching(false) },
-                            modifier = Modifier.size(38.dp)
+                            modifier = Modifier.size(42.dp)
                         ) {
-                            Icon(Icons.Default.Close, contentDescription = "Close search", modifier = Modifier.size(20.dp))
+                            Icon(Icons.Default.Close, contentDescription = "Close search", modifier = Modifier.size(24.dp))
                         }
                     } else {
                         val isPrivate = uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE
@@ -503,30 +504,30 @@ fun ChatScreen(
                             IconButton(
                                 onClick = { viewModel.setSearching(true) },
                                 modifier = Modifier
-                                    .size(38.dp)
+                                    .size(42.dp)
                                     .testTag("chat_search_button")
                             ) {
-                                Icon(Icons.Default.Search, contentDescription = "Search messages", tint = iconTint, modifier = Modifier.size(22.dp))
+                                Icon(Icons.Default.Search, contentDescription = "Search messages", tint = iconTint, modifier = Modifier.size(24.dp))
                             }
                             IconButton(
                                 onClick = onNavigateToGallery,
                                 modifier = Modifier
-                                    .size(38.dp)
+                                    .size(42.dp)
                                     .testTag("chat_gallery_button")
                             ) {
-                                Icon(Icons.Outlined.PhotoLibrary, contentDescription = "Couple Media Gallery", tint = iconTint, modifier = Modifier.size(22.dp))
+                                Icon(Icons.Outlined.PhotoLibrary, contentDescription = "Couple Media Gallery", tint = iconTint, modifier = Modifier.size(24.dp))
                             }
                             IconButton(
                                 onClick = { viewModel.openCheckAfterSheet() },
                                 modifier = Modifier
-                                    .size(38.dp)
+                                    .size(42.dp)
                                     .testTag("chat_check_after_button")
                             ) {
                                 Icon(
                                     imageVector = if (partnerHasCheckAfter || iHaveCheckAfter) Icons.Filled.HourglassTop else Icons.Outlined.HourglassTop,
                                     contentDescription = "Check After Timer",
                                     tint = if (partnerHasCheckAfter || iHaveCheckAfter) MaterialTheme.colorScheme.primary else iconTint,
-                                    modifier = Modifier.size(22.dp)
+                                    modifier = Modifier.size(24.dp)
                                 )
                             }
                         }
@@ -535,10 +536,10 @@ fun ChatScreen(
                             IconButton(
                                 onClick = { showChatMenu = true },
                                 modifier = Modifier
-                                    .size(38.dp)
+                                    .size(42.dp)
                                     .testTag("chat_more_menu_button")
                             ) {
-                                Icon(Icons.Default.MoreVert, contentDescription = "More options", tint = iconTint, modifier = Modifier.size(22.dp))
+                                Icon(Icons.Default.MoreVert, contentDescription = "More options", tint = iconTint, modifier = Modifier.size(24.dp))
                             }
                             DropdownMenu(
                                 expanded = showChatMenu,
@@ -623,6 +624,8 @@ fun ChatScreen(
                 ),
                 windowInsets = WindowInsets.statusBars
             )
+            HorizontalDivider(thickness = 1.dp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+            }
         },
         bottomBar = {
             val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
