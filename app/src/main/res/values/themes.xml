@@ -9,6 +9,6 @@
         <item name="android:windowLightNavigationBar">true</item>
         <!-- Splash Screen with centered high quality sharp note app logo -->
         <item name="android:windowSplashScreenBackground" tools:targetApi="s">#FFFFFF</item>
-        <item name="android:windowSplashScreenAnimatedIcon" tools:targetApi="s">@mipmap/ic_launcher</item>
+        <item name="android:windowSplashScreenAnimatedIcon" tools:targetApi="s">@drawable/splash_icon</item>
     </style>
 </resources>

@@ -9,6 +9,6 @@
         <item name="android:windowLightNavigationBar">true</item>
         <!-- Android 12+ Splash Screen in Dark / AMOLED Mode -->
         <item name="android:windowSplashScreenBackground">#000000</item>
-        <item name="android:windowSplashScreenAnimatedIcon">@mipmap/ic_launcher</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_icon</item>
     </style>
 </resources>
