@@ -76,8 +76,14 @@ class ChatRepository(
                 return@addSnapshotListener
             }
             if (snapshot != null) {
-                val messages = snapshot.documents.mapNotNull { it.toObject(Message::class.java) }
-                _messagesFlow.value = messages
+                val firestoreMessages = snapshot.documents.mapNotNull { it.toObject(Message::class.java) }
+                val firestoreIds = firestoreMessages.map { it.id }.toSet()
+                // Keep optimistic in-memory messages that Firestore hasn't confirmed yet (avoids blank flash)
+                val pendingOptimistic = _messagesFlow.value.filter { it.id !in firestoreIds }
+                // Merge: confirmed Firestore messages + any still-pending optimistic ones
+                _messagesFlow.value = (firestoreMessages + pendingOptimistic)
+                    .sortedBy { it.timestamp }
+                    .distinctBy { it.id }
             }
         }
     }

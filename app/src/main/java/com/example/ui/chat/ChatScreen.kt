@@ -96,18 +96,27 @@ fun ChatScreen(
     val recordingAmplitudes by viewModel.voiceRecorderHelper.amplitudes.collectAsState()
 
     // Activity result launchers for media selection (supports multiple photo selection)
+    var isHandlingMedia by remember { mutableStateOf(false) }
     val photoPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickMultipleVisualMedia(maxItems = 10)
     ) { uris: List<Uri> ->
+        if (isHandlingMedia) return@rememberLauncherForActivityResult
         val distinctUris = uris.distinct()
         if (distinctUris.isNotEmpty()) {
+            isHandlingMedia = true
             if (distinctUris.size == 1) {
                 viewModel.sendMediaFile(distinctUris[0], MessageType.IMAGE)
             } else {
                 viewModel.sendMultipleImages(distinctUris)
             }
+            // Reset after a brief window
+            scope.launch {
+                delay(2000)
+                isHandlingMedia = false
+            }
         }
     }
+
 
 
 
@@ -731,6 +740,8 @@ fun ChatScreen(
                     onCancelVoiceRecord = { viewModel.cancelVoiceRecording() },
                     onTakePhoto = triggerCameraSnap,
                     onPickAttachment = { showAttachmentSheet = true },
+                    myPhotoUrl = myUser?.photoUrl,
+                    myName = myUser?.displayName ?: "Me",
                     placeholder = when {
                         uiState.isStealthCurtainActive -> "Add a note..."
                         uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE -> "Type a message..."
@@ -738,6 +749,7 @@ fun ChatScreen(
                     },
                     isPrivateMode = (uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE)
                 )
+
             }
         }
     },

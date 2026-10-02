@@ -68,6 +68,8 @@ fun MessageComposer(
     onCancelVoiceRecord: () -> Unit,
     onTakePhoto: () -> Unit,
     onPickAttachment: () -> Unit,
+    myPhotoUrl: String? = null,
+    myName: String = "Me",
     placeholder: String = "Message your love...",
     isPrivateMode: Boolean = false,
     modifier: Modifier = Modifier
@@ -199,26 +201,27 @@ fun MessageComposer(
         ) {
             // Main Input Pill / Active Recording Bar
             if (isRecordingVoice) {
-                // Recording Mode
+                // ---- WhatsApp-Style Recording Bar ----
                 if (isLockedRecording) {
-                    // Locked hands-free mode
+                    // LOCKED hands-free mode: [ Avatar | 🔴 timer | waveform | 🔒 ] [ 🗑 ]
                     Row(
                         modifier = Modifier
                             .weight(1f)
-                            .heightIn(min = 46.dp)
-                            .clip(RoundedCornerShape(24.dp))
-                            .background(pillBg)
-                            .border(BorderStroke(1.dp, pillBorder), RoundedCornerShape(24.dp))
-                            .padding(horizontal = 10.dp, vertical = 8.dp),
+                            .heightIn(min = 52.dp)
+                            .clip(RoundedCornerShape(26.dp))
+                            .background(if (isDark) Color(0xFF1E2638) else Color.White)
+                            .border(BorderStroke(1.dp, pillBorder), RoundedCornerShape(26.dp))
+                            .padding(horizontal = 8.dp, vertical = 6.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
+                        // Trash to cancel
                         IconButton(
                             onClick = {
                                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                 isLockedRecording = false
                                 onCancelVoiceRecord()
                             },
-                            modifier = Modifier.size(34.dp)
+                            modifier = Modifier.size(32.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Delete,
@@ -228,97 +231,135 @@ fun MessageComposer(
                             )
                         }
 
-                        Spacer(modifier = Modifier.width(6.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
 
+                        // Pulsing red dot
                         Box(
                             modifier = Modifier
-                                .size(8.dp)
-                                .scale(1f + pulseAlpha * 0.25f)
+                                .size(9.dp)
+                                .graphicsLayer { scaleX = 1f + pulseAlpha * 0.3f; scaleY = 1f + pulseAlpha * 0.3f }
                                 .background(Color(0xFFE11D48), CircleShape)
                         )
 
                         Spacer(modifier = Modifier.width(6.dp))
 
+                        // Timer
                         Text(
-                            text = "${recordingDurationSec / 60}:%02d".format(recordingDurationSec % 60),
+                            text = "%d:%02d".format(recordingDurationSec / 60, recordingDurationSec % 60),
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface,
-                            fontSize = 13.sp
+                            fontSize = 14.sp
                         )
 
                         Spacer(modifier = Modifier.width(8.dp))
 
+                        // Live waveform
                         WaveformView(
                             amplitudes = recordingAmplitudes,
                             progress = 1f,
                             activeColor = MaterialTheme.colorScheme.primary,
-                            height = 24.dp,
+                            height = 28.dp,
                             modifier = Modifier.weight(1f)
                         )
 
                         Spacer(modifier = Modifier.width(6.dp))
 
+                        // Lock icon
                         Icon(
                             imageVector = Icons.Default.Lock,
-                            contentDescription = "Locked",
+                            contentDescription = "Locked recording",
                             tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(16.dp)
                         )
+
+                        Spacer(modifier = Modifier.width(4.dp))
                     }
                 } else {
-                    // Slide-to-cancel / Slide-to-lock hold recording
+                    // HOLD mode: [ Avatar | 🔴 timer | waveform grows | ‹‹ Slide to cancel ]
                     Row(
                         modifier = Modifier
                             .weight(1f)
-                            .heightIn(min = 46.dp)
-                            .clip(RoundedCornerShape(24.dp))
-                            .background(pillBg)
-                            .border(BorderStroke(1.dp, pillBorder), RoundedCornerShape(24.dp))
-                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                            .heightIn(min = 52.dp)
+                            .clip(RoundedCornerShape(26.dp))
+                            .background(if (isDark) Color(0xFF1E2638) else Color.White)
+                            .border(BorderStroke(1.dp, pillBorder), RoundedCornerShape(26.dp))
+                            .padding(horizontal = 8.dp, vertical = 6.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .size(8.dp)
-                                .background(Color(0xFFE11D48).copy(alpha = pulseAlpha), CircleShape)
+                        // User profile avatar (small)
+                        com.example.ui.components.AvatarView(
+                            photoUrl = myPhotoUrl,
+                            name = myName,
+                            size = 34.dp,
+                            isOnline = false,
+                            showOnlineBadge = false
                         )
 
                         Spacer(modifier = Modifier.width(6.dp))
 
+                        // Pulsing red dot
+                        Box(
+                            modifier = Modifier
+                                .size(9.dp)
+                                .graphicsLayer { scaleX = 1f + pulseAlpha * 0.3f; scaleY = 1f + pulseAlpha * 0.3f }
+                                .background(Color(0xFFE11D48).copy(alpha = 0.9f + pulseAlpha * 0.1f), CircleShape)
+                        )
+
+                        Spacer(modifier = Modifier.width(5.dp))
+
+                        // Timer
                         Text(
-                            text = "${recordingDurationSec / 60}:%02d".format(recordingDurationSec % 60),
+                            text = "%d:%02d".format(recordingDurationSec / 60, recordingDurationSec % 60),
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface,
                             fontSize = 13.sp
                         )
 
-                        Spacer(modifier = Modifier.width(8.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
 
+                        // Growing waveform (takes available space)
+                        WaveformView(
+                            amplitudes = recordingAmplitudes,
+                            progress = 1f,
+                            activeColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
+                            height = 26.dp,
+                            modifier = Modifier.weight(1f)
+                        )
+
+                        Spacer(modifier = Modifier.width(6.dp))
+
+                        // Slide-to-cancel hint or "release to cancel" flash
                         if (dragOffsetX < -80f) {
-                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
-                                Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(16.dp))
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text("Release to cancel", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.error)
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.offset { IntOffset((dragOffsetX * 0.4f).roundToInt(), 0) }
+                            ) {
+                                Icon(
+                                    Icons.Default.Delete,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.error,
+                                    modifier = Modifier.size(15.dp)
+                                )
                             }
                         } else {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
                                 modifier = Modifier
-                                    .weight(1f)
                                     .offset { IntOffset((dragOffsetX * 0.35f).roundToInt(), 0) }
                             ) {
+                                // Animated chevrons
                                 Text(
-                                    text = "‹‹‹",
-                                    fontSize = 12.sp,
+                                    text = "‹‹",
+                                    fontSize = 13.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f + pulseAlpha * 0.3f),
                                     modifier = Modifier.offset { IntOffset(shimmerOffset.roundToInt(), 0) }
                                 )
-                                Spacer(modifier = Modifier.width(4.dp))
+                                Spacer(modifier = Modifier.width(3.dp))
                                 Text(
-                                    text = "Slide to cancel",
+                                    text = "Cancel",
                                     fontSize = 12.sp,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f)
                                 )
                             }
                         }
@@ -549,7 +590,7 @@ fun MessageComposer(
                                 } else {
                                     if (isDark) Color(0xFF2E2F33) else Color(0xFFE5E7EB)
                                 }
-                            } else null
+                            } else if (isRecordingVoice) Color(0xFFE11D48) else null
                             val micTint = if (isPrivateMode) {
                                 if (isRecordingVoice) {
                                     if (isDark) Color(0xFF111827) else Color.White
@@ -560,10 +601,19 @@ fun MessageComposer(
 
                             Box(
                                 modifier = Modifier
-                                    .size(48.dp)
+                                    .size(52.dp)
                                     .then(
-                                        if (isPrivateMode) {
-                                            Modifier.clip(CircleShape).background(micBg!!)
+                                        if (isRecordingVoice && !isPrivateMode) {
+                                            // WhatsApp-style: Red pulsing mic circle
+                                            Modifier
+                                                .graphicsLayer {
+                                                    scaleX = 1f + pulseAlpha * 0.1f
+                                                    scaleY = 1f + pulseAlpha * 0.1f
+                                                }
+                                                .clip(CircleShape)
+                                                .background(Color(0xFFE11D48))
+                                        } else if (isPrivateMode) {
+                                            Modifier.clip(CircleShape).background(micBg ?: Color.Gray)
                                         } else {
                                             Modifier
                                                 .appGradientShadow(CircleShape)
@@ -641,7 +691,7 @@ fun MessageComposer(
                                     imageVector = Icons.Default.Mic,
                                     contentDescription = "Hold to record voice note",
                                     tint = micTint,
-                                    modifier = Modifier.size(22.dp)
+                                    modifier = Modifier.size(24.dp)
                                 )
                             }
                         }
