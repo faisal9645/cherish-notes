@@ -70,6 +70,7 @@ fun ChatScreen(
     onNavigateBack: () -> Unit,
     onNavigateToGallery: () -> Unit,
     onQuickDisguise: () -> Unit = {},
+    onNavigateToHome: () -> Unit = {},
     onNavigateToProfile: () -> Unit = {},
     onLoggedOut: () -> Unit = {}
 ) {
@@ -344,7 +345,7 @@ fun ChatScreen(
 
                 if (directionLocked && isHorizontal) {
                     when {
-                        accX > 90f -> onQuickDisguise()       // Swipe right → disguise
+                        accX > 90f -> onNavigateToHome()      // Swipe right → home (Love & Us)
                         accX < -90f -> onNavigateToProfile()  // Swipe left → profile
                     }
                 }

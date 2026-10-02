@@ -6,7 +6,9 @@ import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.ui.input.pointer.pointerInput
@@ -96,18 +98,38 @@ fun HomeScreen(
 
     Scaffold(
         modifier = Modifier.pointerInput(Unit) {
-            detectHorizontalDragGestures(
-                onDragStart = { _ -> dragAccumulator = 0f },
-                onDragEnd = {
-                    if (dragAccumulator < -80f) {
+            awaitEachGesture {
+                val down = awaitFirstDown(requireUnconsumed = false)
+                var accX = 0f
+                var accY = 0f
+                var directionLocked = false
+                var isHorizontal = false
+
+                while (true) {
+                    val event = awaitPointerEvent()
+                    val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                    if (!change.pressed) break
+
+                    val delta = change.positionChange()
+                    accX += delta.x
+                    accY += delta.y
+
+                    if (!directionLocked && (kotlin.math.abs(accX) > 10f || kotlin.math.abs(accY) > 10f)) {
+                        isHorizontal = kotlin.math.abs(accX) > kotlin.math.abs(accY)
+                        directionLocked = true
+                    }
+
+                    if (directionLocked && isHorizontal) {
+                        change.consume()
+                    }
+                }
+
+                if (directionLocked && isHorizontal) {
+                    if (accX < -80f) {
                         onNavigateToChat()
                     }
-                    dragAccumulator = 0f
-                },
-                onHorizontalDrag = { _, dragAmount ->
-                    dragAccumulator += dragAmount
                 }
-            )
+            }
         },
         topBar = {
             TopAppBar(

@@ -42,11 +42,9 @@ class MainActivity : FragmentActivity() {
         )
         setHighRefreshRate()
         applyScreenshotProtection()
-        if (app.securityPreferences.isDisguiseModeEnabled()) {
-            app.securityPreferences.reDisguise()
-        } else {
-            app.securityPreferences.revealSecretApp()
-        }
+        // Only apply default state on cold start.
+        // SecurityPreferences init already sets the default state based on isDisguiseModeEnabled().
+        // Do not force re-disguise here, as it overrides the in-memory state during Activity recreation.
         handleNotificationIntent(intent)
 
         setContent {

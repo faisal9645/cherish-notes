@@ -651,6 +651,7 @@ class AuthRepository(private val context: Context) {
         try {
             val updates = mutableMapOf<String, Any>(
                 "isOnline" to online,
+                "online" to online,
                 "lastSeen" to System.currentTimeMillis()
             )
             if (!online) {

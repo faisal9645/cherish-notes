@@ -192,6 +192,12 @@ fun CherishNavGraph(
                     navController.navigate(Screen.SharedGallery.route)
                 },
                 onQuickDisguise = { app.securityPreferences.reDisguise() },
+                onNavigateToHome = {
+                    navController.navigate(Screen.Home.route) {
+                        popUpTo(Screen.Home.route) { inclusive = false }
+                        launchSingleTop = true
+                    }
+                },
                 onNavigateToProfile = {
                     app.securityPreferences.ignoreChatNavigation = true
                     navController.navigate(Screen.Profile.route)
