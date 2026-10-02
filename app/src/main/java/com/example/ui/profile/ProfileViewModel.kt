@@ -435,6 +435,26 @@ class ProfileViewModel(
         }
     }
 
+    fun silentCheckForUpdates(context: android.content.Context) {
+        val otaManager = com.example.update.OtaUpdateManager.getInstance(context)
+        val currentVer = com.example.BuildConfig.VERSION_NAME
+
+        viewModelScope.launch {
+            val info = otaManager.checkForUpdates(silent = true)
+            if (info != null && info.hasUpdate) {
+                _updateState.value = UpdateCheckState(
+                    isChecking = false,
+                    showDialog = true,
+                    isUpdateAvailable = true,
+                    currentVersion = currentVer,
+                    latestVersion = info.latestVersionName.ifBlank { "v$currentVer" },
+                    downloadUrl = info.downloadUrl,
+                    releaseNotes = info.releaseNotes
+                )
+            }
+        }
+    }
+
     fun downloadAndInstallUpdate(context: android.content.Context) {
         val otaManager = com.example.update.OtaUpdateManager.getInstance(context)
         val info = otaManager.latestUpdateInfo.value ?: return
