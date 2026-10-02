@@ -220,9 +220,14 @@ fun FullScreenMediaViewer(
                 .testTag("full_screen_media_dialog")
         ) {
             // Main Interactive Zoomable & Pannable Photo with Horizontal Pager
+            // Issue 11: beyondBoundsPageCount=1 pre-loads the adjacent images so swiping
+            // left/right is instant with no load delay. userScrollEnabled=false while zoomed
+            // prevents accidental page swipes during pinch-zoom.
             HorizontalPager(
                 state = pagerState,
                 userScrollEnabled = scale <= 1.05f,
+                beyondBoundsPageCount = 1,
+                key = { it },
                 modifier = Modifier.fillMaxSize()
             ) { page ->
                 val pageUrl = mediaList.getOrNull(page) ?: currentUrl

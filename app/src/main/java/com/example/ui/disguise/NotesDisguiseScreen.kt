@@ -462,7 +462,7 @@ fun NotesDisguiseScreen(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        items(categories) { cat ->
+                        items(categories, key = { it }) { cat ->
                             val isSelected = uiState.selectedCategory == cat
                             val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
                             Box(
@@ -505,7 +505,10 @@ fun NotesDisguiseScreen(
             floatingActionButton = {
                 if (!uiState.isSelectionMode) {
                     // Floating Action Button: Tap to add note, hold to unlock secret chat
-                    Box(contentAlignment = Alignment.Center) {
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier.padding(bottom = 20.dp, end = 6.dp)
+                    ) {
                         // Immediately once selected seconds complete, circular animation loads
                         if (isUnlockingAnimationPlaying) {
                             // Expanding bloom circular ripple

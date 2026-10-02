@@ -7,9 +7,9 @@
         <item name="android:navigationBarColor">#FFFFFF</item>
         <item name="android:windowLightStatusBar">true</item>
         <item name="android:windowLightNavigationBar">true</item>
-        <!-- Android 12+ Splash Screen pure white entrance in Dark Mode -->
-        <item name="android:windowSplashScreenBackground">#FFFFFF</item>
-        <item name="android:windowSplashScreenAnimatedIcon">@drawable/notes_entrance_logo</item>
-        <item name="android:windowSplashScreenIconBackgroundColor">#FFFFFF</item>
+        <!-- Android 12+ Splash Screen in Dark / AMOLED Mode -->
+        <item name="android:windowSplashScreenBackground">#000000</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_cherish_logo</item>
+        <item name="android:windowSplashScreenIconBackgroundColor">#000000</item>
     </style>
 </resources>

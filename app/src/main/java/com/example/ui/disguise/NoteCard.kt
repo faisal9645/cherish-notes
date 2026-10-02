@@ -50,18 +50,13 @@ fun NoteCard(
 ) {
     var showMenu by remember { mutableStateOf(false) }
     val checklist = remember(note.checklistJson) { note.getChecklist() }
-    val isDark = MaterialTheme.colorScheme.background == Color.Black ||
-            MaterialTheme.colorScheme.surface == Color.Black
+    val isDark = isAppInDark()
 
-    val cardColor = remember(note.colorHex, isDark) {
+    val cardColor = remember(isDark) {
         if (isDark) {
-            Color(0xFF070B16) // Pure AMOLED deep dark card background
+            Color(0xFF0F172A)
         } else {
-            try {
-                Color(android.graphics.Color.parseColor(note.colorHex))
-            } catch (_: Exception) {
-                Color(0xFFEFF5FF)
-            }
+            Color.White
         }
     }
 

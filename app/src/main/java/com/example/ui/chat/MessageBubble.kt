@@ -80,9 +80,9 @@ fun MessageBubble(
     onReplyQuoteClick: ((replyToMessageId: String?) -> Unit)? = null
 ) {
     val bubbleShape = if (isFromMe) {
-        RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp, bottomStart = 18.dp, bottomEnd = 4.dp)
+        RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 16.dp, bottomEnd = 4.dp)
     } else {
-        RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp, bottomStart = 4.dp, bottomEnd = 18.dp)
+        RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 4.dp, bottomEnd = 16.dp)
     }
 
     val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
@@ -192,7 +192,7 @@ fun MessageBubble(
         ) {
             Box(
                 modifier = Modifier
-                    .widthIn(min = 80.dp, max = 310.dp)
+                    .widthIn(min = 60.dp, max = 295.dp)
                     .then(
                         if (isFromMe) Modifier.appGradientShadow(bubbleShape)
                         else Modifier.shadow(1.dp, bubbleShape)
@@ -234,7 +234,7 @@ fun MessageBubble(
                     }
                     .testTag("message_bubble_${message.id}")
             ) {
-            Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
+            Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)) {
                 // Reply Quote Preview
                 if (!message.replyToText.isNullOrEmpty()) {
                     Surface(
@@ -297,12 +297,12 @@ fun MessageBubble(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(vertical = 4.dp)
+                                .padding(vertical = 2.dp)
                         ) {
                             IconButton(
                                 onClick = onPlayAudio,
                                 modifier = Modifier
-                                    .size(42.dp)
+                                    .size(36.dp)
                                     .background(
                                         (if (isFromMe) Color.White else MaterialTheme.colorScheme.primary).copy(alpha = 0.2f),
                                         CircleShape
@@ -312,51 +312,77 @@ fun MessageBubble(
                                     imageVector = if (isPlayingAudio) Icons.Default.Pause else Icons.Default.PlayArrow,
                                     contentDescription = if (isPlayingAudio) "Pause voice message" else "Play voice message",
                                     tint = textColor,
-                                    modifier = Modifier.size(24.dp)
+                                    modifier = Modifier.size(20.dp)
                                 )
                             }
 
                             Spacer(modifier = Modifier.width(8.dp))
 
                             Column(modifier = Modifier.weight(1f)) {
-                                    WaveformView(
-                                        amplitudes = message.waveform,
-                                        progress = audioProgress(),
+                                WaveformView(
+                                    amplitudes = message.waveform,
+                                    progress = audioProgress(),
                                     activeColor = if (isFromMe) Color.White else MaterialTheme.colorScheme.primary,
                                     inactiveColor = textColor.copy(alpha = 0.35f),
-                                    height = 24.dp
+                                    height = 14.dp
                                 )
+                                Spacer(modifier = Modifier.height(3.dp))
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.fillMaxWidth().padding(top = 2.dp)
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    modifier = Modifier.fillMaxWidth()
                                 ) {
-                                    Text(
-                                        text = "${message.durationSeconds}s • Voice note",
-                                        fontSize = 10.sp,
-                                        color = textColor.copy(alpha = 0.7f),
-                                        modifier = Modifier.weight(1f)
-                                    )
-                                    if (isPlayingAudio && onToggleVoiceSpeed != null) {
-                                        Surface(
-                                            shape = RoundedCornerShape(10.dp),
-                                            color = (if (isFromMe) Color.White else MaterialTheme.colorScheme.primary).copy(alpha = 0.2f),
-                                            modifier = Modifier
-                                                .clickable { onToggleVoiceSpeed() }
-                                                .defaultMinSize(minWidth = 36.dp)
-                                        ) {
-                                            val speedLabel = when (voicePlaybackSpeed) {
-                                                1.5f -> "1.5x"
-                                                2.0f -> "2x"
-                                                else -> "1x"
-                                            }
-                                            Box(contentAlignment = Alignment.Center) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(
+                                            text = "${message.durationSeconds} sec",
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Medium,
+                                            color = textColor.copy(alpha = 0.8f)
+                                        )
+                                        if (isPlayingAudio && onToggleVoiceSpeed != null) {
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Surface(
+                                                shape = RoundedCornerShape(6.dp),
+                                                color = (if (isFromMe) Color.White else MaterialTheme.colorScheme.primary).copy(alpha = 0.2f),
+                                                modifier = Modifier.clickable { onToggleVoiceSpeed() }
+                                            ) {
+                                                val speedLabel = when (voicePlaybackSpeed) {
+                                                    1.5f -> "1.5x"
+                                                    2.0f -> "2x"
+                                                    else -> "1x"
+                                                }
                                                 Text(
                                                     text = speedLabel,
                                                     fontSize = 10.sp,
                                                     fontWeight = FontWeight.Bold,
                                                     color = textColor,
-                                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
                                                 )
+                                            }
+                                        }
+                                    }
+
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(
+                                            text = formatMessageTime(message.timestamp),
+                                            fontSize = 10.sp,
+                                            color = textColor.copy(alpha = 0.65f)
+                                        )
+                                        if (isFromMe) {
+                                            Spacer(modifier = Modifier.width(3.dp))
+                                            when (message.getTypedStatus()) {
+                                                MessageStatus.SENDING -> {
+                                                    Icon(Icons.Default.AccessTime, "Sending", tint = textColor.copy(alpha = 0.5f), modifier = Modifier.size(11.dp))
+                                                }
+                                                MessageStatus.SENT -> {
+                                                    Icon(Icons.Default.Check, "Sent", tint = textColor.copy(alpha = 0.7f), modifier = Modifier.size(12.dp))
+                                                }
+                                                MessageStatus.DELIVERED -> {
+                                                    Icon(Icons.Default.DoneAll, "Delivered", tint = textColor.copy(alpha = 0.75f), modifier = Modifier.size(13.dp))
+                                                }
+                                                MessageStatus.READ -> {
+                                                    Icon(Icons.Default.DoneAll, "Read", tint = Color.White, modifier = Modifier.size(13.dp))
+                                                }
                                             }
                                         }
                                     }
@@ -422,83 +448,85 @@ fun MessageBubble(
                     }
                 }
 
-                // Bubble Footer: Time, Status Ticks, Pin, Star, Edit Label
-                Row(
-                    modifier = Modifier
-                        .align(Alignment.End)
-                        .padding(top = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    if (message.isPinned) {
-                        Icon(
-                            imageVector = Icons.Filled.PushPin,
-                            contentDescription = "Pinned",
-                            tint = if (isFromMe) Color.White.copy(alpha = 0.9f) else MaterialTheme.colorScheme.primary,
-                            modifier = Modifier
-                                .size(12.dp)
-                                .padding(end = 4.dp)
-                        )
-                    }
+                // Bubble Footer: Time, Status Ticks, Pin, Star, Edit Label (for non-audio messages)
+                if (message.getTypedType() != MessageType.AUDIO) {
+                    Row(
+                        modifier = Modifier
+                            .align(Alignment.End)
+                            .padding(top = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        if (message.isPinned) {
+                            Icon(
+                                imageVector = Icons.Filled.PushPin,
+                                contentDescription = "Pinned",
+                                tint = if (isFromMe) Color.White.copy(alpha = 0.9f) else MaterialTheme.colorScheme.primary,
+                                modifier = Modifier
+                                    .size(12.dp)
+                                    .padding(end = 4.dp)
+                            )
+                        }
 
-                    if (message.isStarred) {
-                        Icon(
-                            imageVector = Icons.Default.Star,
-                            contentDescription = "Starred",
-                            tint = GoldMilestone,
-                            modifier = Modifier
-                                .size(12.dp)
-                                .padding(end = 4.dp)
-                        )
-                    }
+                        if (message.isStarred) {
+                            Icon(
+                                imageVector = Icons.Default.Star,
+                                contentDescription = "Starred",
+                                tint = GoldMilestone,
+                                modifier = Modifier
+                                    .size(12.dp)
+                                    .padding(end = 4.dp)
+                            )
+                        }
 
-                    if (message.isEdited) {
+                        if (message.isEdited) {
+                            Text(
+                                text = "edited • ",
+                                fontSize = 10.sp,
+                                color = textColor.copy(alpha = 0.6f)
+                            )
+                        }
+
                         Text(
-                            text = "edited • ",
+                            text = formatMessageTime(message.timestamp),
                             fontSize = 10.sp,
-                            color = textColor.copy(alpha = 0.6f)
+                            color = textColor.copy(alpha = 0.65f)
                         )
-                    }
 
-                    Text(
-                        text = formatMessageTime(message.timestamp),
-                        fontSize = 10.sp,
-                        color = textColor.copy(alpha = 0.65f)
-                    )
-
-                    if (isFromMe) {
-                        Spacer(modifier = Modifier.width(4.dp))
-                        when (message.getTypedStatus()) {
-                            MessageStatus.SENDING -> {
-                                Icon(
-                                    imageVector = Icons.Default.AccessTime,
-                                    contentDescription = "Sending",
-                                    tint = textColor.copy(alpha = 0.5f),
-                                    modifier = Modifier.size(11.dp)
-                                )
-                            }
-                            MessageStatus.SENT -> {
-                                Icon(
-                                    imageVector = Icons.Default.Check,
-                                    contentDescription = "Sent",
-                                    tint = textColor.copy(alpha = 0.7f),
-                                    modifier = Modifier.size(12.dp)
-                                )
-                            }
-                            MessageStatus.DELIVERED -> {
-                                Icon(
-                                    imageVector = Icons.Default.DoneAll,
-                                    contentDescription = "Delivered",
-                                    tint = textColor.copy(alpha = 0.75f),
-                                    modifier = Modifier.size(13.dp)
-                                )
-                            }
-                            MessageStatus.READ -> {
-                                Icon(
-                                    imageVector = Icons.Default.DoneAll,
-                                    contentDescription = "Read",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(13.dp)
-                                )
+                        if (isFromMe) {
+                            Spacer(modifier = Modifier.width(4.dp))
+                            when (message.getTypedStatus()) {
+                                MessageStatus.SENDING -> {
+                                    Icon(
+                                        imageVector = Icons.Default.AccessTime,
+                                        contentDescription = "Sending",
+                                        tint = textColor.copy(alpha = 0.5f),
+                                        modifier = Modifier.size(11.dp)
+                                    )
+                                }
+                                MessageStatus.SENT -> {
+                                    Icon(
+                                        imageVector = Icons.Default.Check,
+                                        contentDescription = "Sent",
+                                        tint = textColor.copy(alpha = 0.7f),
+                                        modifier = Modifier.size(12.dp)
+                                    )
+                                }
+                                MessageStatus.DELIVERED -> {
+                                    Icon(
+                                        imageVector = Icons.Default.DoneAll,
+                                        contentDescription = "Delivered",
+                                        tint = textColor.copy(alpha = 0.75f),
+                                        modifier = Modifier.size(13.dp)
+                                    )
+                                }
+                                MessageStatus.READ -> {
+                                    Icon(
+                                        imageVector = Icons.Default.DoneAll,
+                                        contentDescription = "Read",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(13.dp)
+                                    )
+                                }
                             }
                         }
                     }

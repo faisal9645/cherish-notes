@@ -5,12 +5,10 @@ import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -33,7 +31,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.ui.theme.*
 import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.util.*
@@ -85,7 +82,6 @@ object CheckAfterHelper {
 
     fun getTonightMillis(): Long {
         val cal = Calendar.getInstance()
-        // If before 10:00 PM, set to 10:00 PM tonight. Else set to 11:30 PM tonight or next day 8:00 AM
         if (cal.get(Calendar.HOUR_OF_DAY) < 22) {
             cal.set(Calendar.HOUR_OF_DAY, 22)
             cal.set(Calendar.MINUTE, 0)
@@ -97,7 +93,6 @@ object CheckAfterHelper {
             cal.set(Calendar.SECOND, 0)
             cal.set(Calendar.MILLISECOND, 0)
         } else {
-            // Next morning 8 AM
             cal.add(Calendar.DAY_OF_YEAR, 1)
             cal.set(Calendar.HOUR_OF_DAY, 8)
             cal.set(Calendar.MINUTE, 0)
@@ -109,7 +104,7 @@ object CheckAfterHelper {
 }
 
 /**
- * Romantic Chat Banner for active Check-After status
+ * Compact, elegant Chat Banner for active Check-After status
  */
 @Composable
 fun CheckAfterChatBanner(
@@ -141,7 +136,7 @@ fun CheckAfterChatBanner(
     val infiniteTransition = rememberInfiniteTransition(label = "banner_pulse")
     val heartScale by infiniteTransition.animateFloat(
         initialValue = 1f,
-        targetValue = 1.14f,
+        targetValue = 1.12f,
         animationSpec = infiniteRepeatable(
             animation = tween(900, easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Reverse
@@ -150,6 +145,7 @@ fun CheckAfterChatBanner(
     )
 
     val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+    val primaryAccent = MaterialTheme.colorScheme.primary
 
     val bannerBgGradient = if (isExpired) {
         Brush.horizontalGradient(
@@ -158,7 +154,7 @@ fun CheckAfterChatBanner(
     } else {
         if (isDark) {
             Brush.horizontalGradient(
-                colors = listOf(Color(0xFF0F172A), Color(0xFF1E293B))
+                colors = listOf(Color(0xFF0B132B), Color(0xFF1C2541))
             )
         } else {
             Brush.horizontalGradient(
@@ -167,22 +163,22 @@ fun CheckAfterChatBanner(
         }
     }
 
-    val borderColor = if (isExpired) Color(0xFF4CAF50) else RoseGoldPrimary.copy(alpha = 0.4f)
+    val borderColor = if (isExpired) Color(0xFF4CAF50) else primaryAccent.copy(alpha = 0.35f)
 
     Surface(
-        shape = RoundedCornerShape(18.dp),
+        shape = RoundedCornerShape(16.dp),
         color = Color.Transparent,
         border = BorderStroke(1.dp, borderColor),
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(18.dp))
+            .clip(RoundedCornerShape(16.dp))
             .background(bannerBgGradient)
             .testTag("check_after_chat_banner")
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(14.dp)
+                .padding(horizontal = 14.dp, vertical = 10.dp)
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -196,9 +192,9 @@ fun CheckAfterChatBanner(
                     Icon(
                         imageVector = if (isExpired) Icons.Filled.CheckCircle else Icons.Filled.Favorite,
                         contentDescription = null,
-                        tint = if (isExpired) Color(0xFF2E7D32) else RoseGoldPrimary,
+                        tint = if (isExpired) Color(0xFF2E7D32) else primaryAccent,
                         modifier = Modifier
-                            .size(20.dp)
+                            .size(18.dp)
                             .scale(if (isExpired) 1f else heartScale)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
@@ -206,7 +202,7 @@ fun CheckAfterChatBanner(
                         text = if (isExpired) {
                             "✨ You can check now"
                         } else if (isSetByMe) {
-                            "❤️ Your Check-After is active"
+                            "❤️ Check-After is active"
                         } else {
                             "❤️ Check after ${CheckAfterHelper.formatTargetTime(targetMillis)}"
                         },
@@ -219,16 +215,15 @@ fun CheckAfterChatBanner(
                 }
 
                 if (!isSetByMe && !isExpired) {
-                    // Quick Reminder Toggle Icon
                     IconButton(
                         onClick = onToggleReminder,
-                        modifier = Modifier.size(28.dp)
+                        modifier = Modifier.size(26.dp)
                     ) {
                         Icon(
                             imageVector = if (isReminderEnabled) Icons.Filled.NotificationsActive else Icons.Outlined.NotificationsNone,
                             contentDescription = "Toggle reminder",
-                            tint = if (isReminderEnabled) RoseGoldPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(18.dp)
+                            tint = if (isReminderEnabled) primaryAccent else MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(16.dp)
                         )
                     }
                 }
@@ -239,55 +234,55 @@ fun CheckAfterChatBanner(
             if (!isExpired) {
                 Text(
                     text = if (isSetByMe) {
-                        "You're taking peaceful quiet time until ${CheckAfterHelper.formatTargetTime(targetMillis)}. $partnerName knows you'll be back soon 💕."
+                        "Quiet time until ${CheckAfterHelper.formatTargetTime(targetMillis)}. $partnerName knows you'll be back soon."
                     } else {
-                        "$partnerName is taking some quiet time until ${CheckAfterHelper.formatTargetTime(targetMillis)} 🌙. Leave a sweet thought for when they return."
+                        "$partnerName is taking quiet time until ${CheckAfterHelper.formatTargetTime(targetMillis)}. Leave a sweet note for them."
                     },
-                    fontSize = 12.sp,
+                    fontSize = 11.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    lineHeight = 16.sp
+                    lineHeight = 15.sp
                 )
 
                 Spacer(modifier = Modifier.height(6.dp))
 
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        color = RoseGoldPrimary.copy(alpha = 0.12f)
+                        shape = RoundedCornerShape(10.dp),
+                        color = primaryAccent.copy(alpha = 0.12f)
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.Outlined.HourglassEmpty,
                                 contentDescription = null,
-                                tint = RoseGoldPrimary,
-                                modifier = Modifier.size(13.dp)
+                                tint = primaryAccent,
+                                modifier = Modifier.size(12.dp)
                             )
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
                                 text = remainingText,
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.SemiBold,
-                                color = RoseGoldPrimary
+                                color = primaryAccent
                             )
                         }
                     }
 
                     if (note.isNotBlank()) {
                         Surface(
-                            shape = RoundedCornerShape(12.dp),
+                            shape = RoundedCornerShape(10.dp),
                             color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
                         ) {
                             Text(
                                 text = note,
                                 fontSize = 11.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
@@ -295,20 +290,19 @@ fun CheckAfterChatBanner(
                     }
                 }
 
-                // If set by me, show quick controls: Extend, Change, Cancel
                 if (isSetByMe) {
-                    Spacer(modifier = Modifier.height(10.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         FilledTonalButton(
                             onClick = onExtend30m,
-                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                            modifier = Modifier.height(30.dp),
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                            modifier = Modifier.height(28.dp),
                             colors = ButtonDefaults.filledTonalButtonColors(
-                                containerColor = RoseGoldPrimary.copy(alpha = 0.15f),
-                                contentColor = RoseGoldPrimary
+                                containerColor = primaryAccent.copy(alpha = 0.15f),
+                                contentColor = primaryAccent
                             )
                         ) {
                             Text("+30m", fontSize = 11.sp, fontWeight = FontWeight.Bold)
@@ -316,11 +310,11 @@ fun CheckAfterChatBanner(
 
                         FilledTonalButton(
                             onClick = onExtend1h,
-                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                            modifier = Modifier.height(30.dp),
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                            modifier = Modifier.height(28.dp),
                             colors = ButtonDefaults.filledTonalButtonColors(
-                                containerColor = RoseGoldPrimary.copy(alpha = 0.15f),
-                                contentColor = RoseGoldPrimary
+                                containerColor = primaryAccent.copy(alpha = 0.15f),
+                                contentColor = primaryAccent
                             )
                         ) {
                             Text("+1h", fontSize = 11.sp, fontWeight = FontWeight.Bold)
@@ -328,17 +322,17 @@ fun CheckAfterChatBanner(
 
                         OutlinedButton(
                             onClick = onChangeTime,
-                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                            modifier = Modifier.height(30.dp),
-                            border = BorderStroke(1.dp, RoseGoldPrimary.copy(alpha = 0.4f))
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                            modifier = Modifier.height(28.dp),
+                            border = BorderStroke(1.dp, primaryAccent.copy(alpha = 0.4f))
                         ) {
                             Text("Change", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface)
                         }
 
                         TextButton(
                             onClick = onCancel,
-                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                            modifier = Modifier.height(30.dp)
+                            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
+                            modifier = Modifier.height(28.dp)
                         ) {
                             Text("Cancel", fontSize = 11.sp, color = Color(0xFFD32F2F))
                         }
@@ -346,7 +340,7 @@ fun CheckAfterChatBanner(
                 }
             } else {
                 Text(
-                    text = "$partnerName's check-after period has completed! You can check in or send a warm message 💕",
+                    text = "$partnerName's check-after period is done. Feel free to check in!",
                     fontSize = 12.sp,
                     color = Color(0xFF2E7D32)
                 )
@@ -356,7 +350,7 @@ fun CheckAfterChatBanner(
 }
 
 /**
- * Beautiful Check-After Bottom Sheet allowing partners to pick presets, custom time, and notes
+ * Compact, streamlined Check-After Bottom Sheet
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -378,25 +372,31 @@ fun CheckAfterBottomSheet(
 
     val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
+    val primaryAccent = MaterialTheme.colorScheme.primary
 
-    val presetDurations = listOf(
-        "1h" to (1 * 3600 * 1000L),
-        "2h" to (2 * 3600 * 1000L),
-        "3h" to (3 * 3600 * 1000L),
-        "5h" to (5 * 3600 * 1000L),
-        "8h" to (8 * 3600 * 1000L),
-        "Tonight" to -1L,
-        "Custom" to -2L
-    )
+    val presetDurations = remember {
+        listOf(
+            "30m" to (30 * 60 * 1000L),
+            "1h" to (1 * 3600 * 1000L),
+            "2h" to (2 * 3600 * 1000L),
+            "3h" to (3 * 3600 * 1000L),
+            "5h" to (5 * 3600 * 1000L),
+            "8h" to (8 * 3600 * 1000L),
+            "Tonight" to -1L,
+            "Custom" to -2L
+        )
+    }
 
-    val quickNotes = listOf(
-        "Focusing on work 💻",
-        "Taking a nap 😴",
-        "Study session 📚",
-        "Family time 🏡",
-        "Quiet me-time 🧘",
-        "Driving / Travel 🚗"
-    )
+    val quickNotes = remember {
+        listOf(
+            "Focusing 💻",
+            "Napping 😴",
+            "Studying 📚",
+            "Family 🏡",
+            "Quiet time 🧘",
+            "Driving 🚗"
+        )
+    }
 
     var selectedPreset by remember { mutableStateOf("2h") }
     var selectedNote by remember { mutableStateOf(currentNote ?: "") }
@@ -416,12 +416,13 @@ fun CheckAfterBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
         containerColor = MaterialTheme.colorScheme.surface,
-        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+        dragHandle = { BottomSheetDefaults.DragHandle(height = 4.dp, width = 36.dp) }
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 22.dp, vertical = 12.dp)
+                .padding(horizontal = 20.dp, vertical = 6.dp)
                 .navigationBarsPadding(),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
@@ -434,84 +435,101 @@ fun CheckAfterBottomSheet(
                 Icon(
                     imageVector = Icons.Filled.HourglassTop,
                     contentDescription = null,
-                    tint = RoseGoldPrimary,
-                    modifier = Modifier.size(24.dp)
+                    tint = primaryAccent,
+                    modifier = Modifier.size(20.dp)
                 )
-                Spacer(modifier = Modifier.width(8.dp))
+                Spacer(modifier = Modifier.width(6.dp))
                 Text(
                     text = "Check After",
-                    style = MaterialTheme.typography.titleLarge,
+                    style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface
                 )
             }
 
-            Spacer(modifier = Modifier.height(4.dp))
+            Spacer(modifier = Modifier.height(2.dp))
             Text(
-                text = "Help your partner avoid repeatedly checking your status with a peaceful, shared countdown.",
-                fontSize = 12.sp,
+                text = "Set a peaceful countdown so your partner knows when you'll be back.",
+                fontSize = 11.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center
             )
 
-            Spacer(modifier = Modifier.height(18.dp))
+            Spacer(modifier = Modifier.height(10.dp))
 
-            // Currently Active Card (if already active)
+            // Currently Active Card (prominent active-state hierarchy)
             if (isCurrentlyActive && currentTargetMillis != null && currentTargetMillis > System.currentTimeMillis()) {
                 Surface(
-                    shape = RoundedCornerShape(16.dp),
+                    shape = RoundedCornerShape(14.dp),
                     color = MaterialTheme.colorScheme.surfaceVariant,
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+                    border = BorderStroke(1.dp, primaryAccent.copy(alpha = 0.4f)),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Column(modifier = Modifier.padding(14.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Filled.Favorite,
-                                contentDescription = null,
-                                tint = RoseGoldPrimary,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Filled.Favorite,
+                                    contentDescription = null,
+                                    tint = primaryAccent,
+                                    modifier = Modifier.size(15.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "Active: ${CheckAfterHelper.formatTargetTime(currentTargetMillis)}",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 12.sp,
+                                    color = primaryAccent
+                                )
+                            }
+                            val (remaining, _) = CheckAfterHelper.calculateRemaining(currentTargetMillis)
                             Text(
-                                text = "Active Check-After",
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 12.sp,
+                                text = "⏳ $remaining",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                         }
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = "Target: ${CheckAfterHelper.formatTargetTime(currentTargetMillis)}",
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = RoseGoldPrimary
-                        )
-                        val (remaining, _) = CheckAfterHelper.calculateRemaining(currentTargetMillis)
-                        Text(
-                            text = "⏳ $remaining",
-                            fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
 
-                        Spacer(modifier = Modifier.height(10.dp))
+                        Spacer(modifier = Modifier.height(8.dp))
                         Row(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
                             modifier = Modifier.fillMaxWidth()
                         ) {
+                            FilledTonalButton(
+                                onClick = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    onExtend(15 * 60 * 1000L)
+                                    onDismiss()
+                                },
+                                modifier = Modifier.weight(1f).height(32.dp),
+                                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp),
+                                colors = ButtonDefaults.filledTonalButtonColors(
+                                    containerColor = primaryAccent.copy(alpha = 0.12f),
+                                    contentColor = primaryAccent
+                                )
+                            ) {
+                                Text("+15m", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
+
                             FilledTonalButton(
                                 onClick = {
                                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                     onExtend(30 * 60 * 1000L)
                                     onDismiss()
                                 },
-                                modifier = Modifier.weight(1f),
+                                modifier = Modifier.weight(1f).height(32.dp),
+                                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp),
                                 colors = ButtonDefaults.filledTonalButtonColors(
-                                    containerColor = RoseGoldPrimary.copy(alpha = 0.12f),
-                                    contentColor = RoseGoldPrimary
+                                    containerColor = primaryAccent.copy(alpha = 0.12f),
+                                    contentColor = primaryAccent
                                 )
                             ) {
-                                Text("+30 Mins", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                Text("+30m", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                             }
 
                             FilledTonalButton(
@@ -520,13 +538,14 @@ fun CheckAfterBottomSheet(
                                     onExtend(60 * 60 * 1000L)
                                     onDismiss()
                                 },
-                                modifier = Modifier.weight(1f),
+                                modifier = Modifier.weight(1f).height(32.dp),
+                                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp),
                                 colors = ButtonDefaults.filledTonalButtonColors(
-                                    containerColor = RoseGoldPrimary.copy(alpha = 0.12f),
-                                    contentColor = RoseGoldPrimary
+                                    containerColor = primaryAccent.copy(alpha = 0.12f),
+                                    contentColor = primaryAccent
                                 )
                             ) {
-                                Text("+1 Hour", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                Text("+1h", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                             }
 
                             OutlinedButton(
@@ -535,45 +554,39 @@ fun CheckAfterBottomSheet(
                                     onCancelCheckAfter()
                                     onDismiss()
                                 },
+                                modifier = Modifier.height(32.dp),
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
                                 border = BorderStroke(1.dp, Color(0xFFD32F2F).copy(alpha = 0.4f))
                             ) {
-                                Text("Cancel", fontSize = 12.sp, color = Color(0xFFD32F2F))
+                                Text("Cancel", fontSize = 11.sp, color = Color(0xFFD32F2F))
                             }
                         }
                     }
                 }
-                Spacer(modifier = Modifier.height(16.dp))
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, thickness = 1.dp)
-                Spacer(modifier = Modifier.height(14.dp))
-                Text(
-                    text = "Or Set a New Time",
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 13.sp,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.fillMaxWidth()
-                )
+                Spacer(modifier = Modifier.height(10.dp))
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, thickness = 0.8.dp)
                 Spacer(modifier = Modifier.height(8.dp))
             }
 
-            // Quick Preset Buttons: 1h | 2h | 3h | 5h | 8h | Tonight | Custom
+            // Presets
             Text(
-                text = "Quick Presets",
+                text = "Select Duration",
                 fontSize = 12.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.fillMaxWidth()
             )
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(6.dp))
 
             LazyRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                items(presetDurations) { (label, duration) ->
+                items(presetDurations, key = { it.first }) { (label, duration) ->
                     val isSelected = selectedPreset == label
                     Surface(
-                        shape = RoundedCornerShape(14.dp),
-                        color = if (isSelected) RoseGoldPrimary else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                        shape = RoundedCornerShape(10.dp),
+                        color = if (isSelected) primaryAccent else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
                         border = if (isSelected) null else BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
                         modifier = Modifier
                             .clickable {
@@ -584,7 +597,6 @@ fun CheckAfterBottomSheet(
                                         targetMillis = CheckAfterHelper.getTonightMillis()
                                     }
                                     "Custom" -> {
-                                        // Open standard time picker dialog
                                         val cal = Calendar.getInstance()
                                         TimePickerDialog(
                                             context,
@@ -594,7 +606,6 @@ fun CheckAfterBottomSheet(
                                                     set(Calendar.MINUTE, minute)
                                                     set(Calendar.SECOND, 0)
                                                     set(Calendar.MILLISECOND, 0)
-                                                    // If chosen time is already past today, roll to tomorrow
                                                     if (timeInMillis <= System.currentTimeMillis()) {
                                                         add(Calendar.DAY_OF_YEAR, 1)
                                                     }
@@ -614,54 +625,52 @@ fun CheckAfterBottomSheet(
                     ) {
                         Text(
                             text = label,
-                            fontSize = 13.sp,
+                            fontSize = 12.sp,
                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                             color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
+                            modifier = Modifier.padding(horizontal = 11.dp, vertical = 6.dp)
                         )
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
             // Calculated Target Time Preview Box
             Surface(
-                shape = RoundedCornerShape(16.dp),
+                shape = RoundedCornerShape(12.dp),
                 color = MaterialTheme.colorScheme.surfaceVariant,
-                border = BorderStroke(1.dp, RoseGoldPrimary.copy(alpha = 0.3f)),
+                border = BorderStroke(1.dp, primaryAccent.copy(alpha = 0.25f)),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.AccessTime,
                         contentDescription = null,
-                        tint = RoseGoldPrimary,
-                        modifier = Modifier.size(20.dp)
+                        tint = primaryAccent,
+                        modifier = Modifier.size(18.dp)
                     )
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Column {
-                        Text(
-                            text = "Don't check until",
-                            fontSize = 11.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Text(
-                            text = CheckAfterHelper.formatTargetTime(targetMillis),
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Check after: ",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = CheckAfterHelper.formatTargetTime(targetMillis),
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
                 }
             }
 
-            Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
-            // Quick Activity / Mood Tags
+            // Reason Chips
             Text(
                 text = "Reason / Mood (Optional)",
                 fontSize = 12.sp,
@@ -669,20 +678,20 @@ fun CheckAfterBottomSheet(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.fillMaxWidth()
             )
-            Spacer(modifier = Modifier.height(6.dp))
+            Spacer(modifier = Modifier.height(4.dp))
 
             LazyRow(
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                items(quickNotes) { noteTag ->
+                items(quickNotes, key = { it }) { noteTag ->
                     val isTagSelected = selectedNote == noteTag
                     Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        color = if (isTagSelected) RoseGoldPrimary.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant,
+                        shape = RoundedCornerShape(10.dp),
+                        color = if (isTagSelected) primaryAccent.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant,
                         border = BorderStroke(
                             1.dp,
-                            if (isTagSelected) RoseGoldPrimary else MaterialTheme.colorScheme.outlineVariant
+                            if (isTagSelected) primaryAccent else MaterialTheme.colorScheme.outlineVariant
                         ),
                         modifier = Modifier.clickable {
                             selectedNote = if (isTagSelected) "" else noteTag
@@ -691,28 +700,28 @@ fun CheckAfterBottomSheet(
                         Text(
                             text = noteTag,
                             fontSize = 11.sp,
-                            color = if (isTagSelected) RoseGoldPrimary else MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                            color = if (isTagSelected) primaryAccent else MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp)
                         )
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(6.dp))
 
             // Custom note input field
             OutlinedTextField(
                 value = selectedNote,
                 onValueChange = { selectedNote = it },
-                placeholder = { Text("Or enter a custom sweet note...") },
+                placeholder = { Text("Or custom note...", fontSize = 12.sp) },
                 singleLine = true,
-                shape = RoundedCornerShape(14.dp),
+                shape = RoundedCornerShape(12.dp),
                 modifier = Modifier.fillMaxWidth()
             )
 
-            Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
-            // Reminder Toggle Switch
+            // Compact Reminder Toggle Switch
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -722,65 +731,55 @@ fun CheckAfterBottomSheet(
                     Icon(
                         imageVector = Icons.Outlined.Notifications,
                         contentDescription = null,
-                        tint = RoseGoldPrimary,
-                        modifier = Modifier.size(18.dp)
+                        tint = primaryAccent,
+                        modifier = Modifier.size(16.dp)
                     )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Column {
-                        Text(
-                            text = "Notification Reminder",
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Text(
-                            text = "Get a discreet reminder when time arrives",
-                            fontSize = 11.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "Discreet Arrival Notification",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
                 }
                 Switch(
                     checked = isReminderEnabled,
                     onCheckedChange = { onToggleReminder(it) },
+                    modifier = Modifier.scale(0.8f),
                     colors = SwitchDefaults.colors(
                         checkedThumbColor = Color.White,
-                        checkedTrackColor = RoseGoldPrimary
+                        checkedTrackColor = primaryAccent
                     )
                 )
             }
 
-            Spacer(modifier = Modifier.height(18.dp))
+            Spacer(modifier = Modifier.height(10.dp))
 
-            // Save / Set Button
+            // Save / Set Button (compact 42dp height)
             Button(
                 onClick = {
                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                     onSaveCheckAfter(targetMillis, selectedNote)
                     onDismiss()
                 },
-                shape = RoundedCornerShape(16.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = RoseGoldPrimary),
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = primaryAccent),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(50.dp)
+                    .height(42.dp)
                     .testTag("set_check_after_button")
             ) {
                 Icon(Icons.Filled.Favorite, contentDescription = null, modifier = Modifier.size(16.dp))
-                Spacer(modifier = Modifier.width(8.dp))
+                Spacer(modifier = Modifier.width(6.dp))
                 Text(
                     text = "Set Check-After",
-                    fontSize = 15.sp,
+                    fontSize = 14.sp,
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.surface
+                    color = Color.White
                 )
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(4.dp))
         }
     }
 }
-
-
-
-

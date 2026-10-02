@@ -10,6 +10,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.unit.dp
 
 // Day Mode Blues (Vibrant electric royal blues matching screenshots)
@@ -26,7 +27,10 @@ val DarkBlueBubble = Color(0xFF1D4ED8)
 @Composable
 @ReadOnlyComposable
 fun isAppInDark(): Boolean {
-    return isSystemInDarkTheme() || MaterialTheme.colorScheme.background == Color.Black
+    return isSystemInDarkTheme() ||
+            MaterialTheme.colorScheme.background == Color.Black ||
+            MaterialTheme.colorScheme.background == Color(0xFF0B0F19) ||
+            MaterialTheme.colorScheme.surface.luminance() < 0.5f
 }
 
 // Electric Royal Blue Gradient matching screenshots (dynamic based on theme):

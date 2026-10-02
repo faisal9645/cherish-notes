@@ -4,8 +4,7 @@ import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -59,9 +58,13 @@ fun CherishNavGraph(
     val isAppLocked by app.securityPreferences.isAppLocked.collectAsState()
     val isUserLoggedIn = remember { app.authRepository.isUserLoggedIn() }
 
-    val startDestination = when {
-        !isUserLoggedIn -> Screen.Auth.route
-        else -> Screen.Chat.route
+    // Stable start destination: computed once per process, survives recomposition
+    // and Activity recreation so navigation state is never accidentally reset
+    val startDestination = rememberSaveable {
+        when {
+            !isUserLoggedIn -> Screen.Auth.route
+            else -> Screen.Chat.route
+        }
     }
 
     val appAlpha by animateFloatAsState(
@@ -79,18 +82,50 @@ fun CherishNavGraph(
         NotesDisguiseViewModel(app.notesRepository)
     }
 
+    // Share a single ChatViewModel instance across Chat and its sub-screens
+    val sharedChatViewModel = remember {
+        ChatViewModel(
+            app.authRepository,
+            app.chatRepository,
+            app.mediaRepository,
+            app.voiceRecorderHelper,
+            app.voicePlayerHelper
+        )
+    }
+
+    // Issue 12: All ViewModels hoisted here so they survive tab switching.
+    // Creating VMs inside composable{} lambdas destroys and recreates them on
+    // every navigation, causing Firestore re-requests and scroll position resets.
+    val homeViewModel = remember {
+        HomeViewModel(app.authRepository, app.chatRepository, app.coupleFeaturesRepository)
+    }
+    val memoriesViewModel = remember {
+        MemoriesViewModel(app.coupleFeaturesRepository, app.mediaRepository)
+    }
+    val importantDatesViewModel = remember {
+        ImportantDatesViewModel(app.coupleFeaturesRepository)
+    }
+    val notesViewModel = remember {
+        SharedNotesViewModel(app.coupleFeaturesRepository)
+    }
+    val profileViewModel = remember {
+        ProfileViewModel(
+            app.authRepository,
+            app.mediaRepository,
+            app.securityPreferences,
+            app.googleDriveBackupManager
+        )
+    }
+    val lifetimeViewModel = remember {
+        LifetimeJourneyViewModel(app.coupleFeaturesRepository)
+    }
+    val backupViewModel = remember {
+        GoogleDriveBackupViewModel(app.googleDriveBackupManager)
+    }
+
     Box(
         modifier = modifier
             .fillMaxSize()
-            .pointerInput(isDisguiseActive) {
-                if (!isDisguiseActive) {
-                    detectTapGestures(
-                        onDoubleTap = {
-                            app.securityPreferences.reDisguise()
-                        }
-                    )
-                }
-            }
     ) {
         NavHost(
             navController = navController,
@@ -132,35 +167,23 @@ fun CherishNavGraph(
         }
 
         composable(Screen.Home.route) {
-            val homeViewModel = remember {
-                HomeViewModel(app.authRepository, app.chatRepository, app.coupleFeaturesRepository)
-            }
             HomeScreen(
                 viewModel = homeViewModel,
-                onNavigateToChat = { navController.navigate(Screen.Chat.route) },
-                onNavigateToMemories = { navController.navigate(Screen.Memories.route) },
-                onNavigateToDates = { navController.navigate(Screen.ImportantDates.route) },
-                onNavigateToNotes = { navController.navigate(Screen.SharedNotes.route) },
-                onNavigateToGallery = { navController.navigate(Screen.SharedGallery.route) },
-                onNavigateToProfile = { navController.navigate(Screen.Profile.route) },
-                onNavigateToLifetimeJourney = { navController.navigate(Screen.LifetimeJourney.route) },
-                onNavigateToCloudBackup = { navController.navigate(Screen.CloudBackup.route) },
+                onNavigateToChat = { navController.navigate(Screen.Chat.route) { launchSingleTop = true } },
+                onNavigateToMemories = { navController.navigate(Screen.Memories.route) { launchSingleTop = true } },
+                onNavigateToDates = { navController.navigate(Screen.ImportantDates.route) { launchSingleTop = true } },
+                onNavigateToNotes = { navController.navigate(Screen.SharedNotes.route) { launchSingleTop = true } },
+                onNavigateToGallery = { navController.navigate(Screen.SharedGallery.route) { launchSingleTop = true } },
+                onNavigateToProfile = { navController.navigate(Screen.Profile.route) { launchSingleTop = true } },
+                onNavigateToLifetimeJourney = { navController.navigate(Screen.LifetimeJourney.route) { launchSingleTop = true } },
+                onNavigateToCloudBackup = { navController.navigate(Screen.CloudBackup.route) { launchSingleTop = true } },
                 onQuickDisguise = { app.securityPreferences.reDisguise() }
             )
         }
 
         composable(Screen.Chat.route) {
-            val chatViewModel = remember {
-                ChatViewModel(
-                    app.authRepository,
-                    app.chatRepository,
-                    app.mediaRepository,
-                    app.voiceRecorderHelper,
-                    app.voicePlayerHelper
-                )
-            }
             ChatScreen(
-                viewModel = chatViewModel,
+                viewModel = sharedChatViewModel,
                 onNavigateBack = {
                     app.securityPreferences.reDisguise()
                 },
@@ -182,9 +205,6 @@ fun CherishNavGraph(
         }
 
         composable(Screen.Memories.route) {
-            val memoriesViewModel = remember {
-                MemoriesViewModel(app.coupleFeaturesRepository, app.mediaRepository)
-            }
             MemoriesScreen(
                 viewModel = memoriesViewModel,
                 onNavigateBack = { navController.popBackStack() }
@@ -192,19 +212,13 @@ fun CherishNavGraph(
         }
 
         composable(Screen.ImportantDates.route) {
-            val datesViewModel = remember {
-                ImportantDatesViewModel(app.coupleFeaturesRepository)
-            }
             ImportantDatesScreen(
-                viewModel = datesViewModel,
+                viewModel = importantDatesViewModel,
                 onNavigateBack = { navController.popBackStack() }
             )
         }
 
         composable(Screen.SharedNotes.route) {
-            val notesViewModel = remember {
-                SharedNotesViewModel(app.coupleFeaturesRepository)
-            }
             SharedNotesScreen(
                 viewModel = notesViewModel,
                 onNavigateBack = { navController.popBackStack() }
@@ -212,37 +226,21 @@ fun CherishNavGraph(
         }
 
         composable(Screen.SharedGallery.route) {
-            val chatViewModel = remember {
-                ChatViewModel(
-                    app.authRepository,
-                    app.chatRepository,
-                    app.mediaRepository,
-                    app.voiceRecorderHelper,
-                    app.voicePlayerHelper
-                )
-            }
             SharedGalleryScreen(
-                chatViewModel = chatViewModel,
+                chatViewModel = sharedChatViewModel,
                 onNavigateBack = {
                     app.securityPreferences.ignoreChatNavigation = false
                     navController.popBackStack()
                 },
                 onNavigateToMessage = { messageId ->
-                    chatViewModel.navigateToMessageInChat(messageId)
+                    sharedChatViewModel.navigateToMessageInChat(messageId)
+                    app.securityPreferences.ignoreChatNavigation = false
                     navController.popBackStack()
                 }
             )
         }
 
         composable(Screen.Profile.route) {
-            val profileViewModel = remember {
-                ProfileViewModel(
-                    app.authRepository,
-                    app.mediaRepository,
-                    app.securityPreferences,
-                    app.googleDriveBackupManager
-                )
-            }
             ProfileScreen(
                 viewModel = profileViewModel,
                 onNavigateBack = {
@@ -250,26 +248,22 @@ fun CherishNavGraph(
                     navController.popBackStack()
                 },
                 onNavigateToCloudBackup = {
-                    app.securityPreferences.ignoreChatNavigation = true
-                    navController.navigate(Screen.CloudBackup.route)
+                    navController.navigate(Screen.CloudBackup.route) { launchSingleTop = true }
                 },
                 onNavigateToPrivacyAudit = {
-                    app.securityPreferences.ignoreChatNavigation = true
-                    navController.navigate(Screen.PrivacyAudit.route)
+                    navController.navigate(Screen.PrivacyAudit.route) { launchSingleTop = true }
                 },
                 onNavigateToStorageManager = {
-                    app.securityPreferences.ignoreChatNavigation = true
-                    navController.navigate(Screen.StorageManager.route)
+                    navController.navigate(Screen.StorageManager.route) { launchSingleTop = true }
                 },
                 onNavigateToDeviceSessions = {
-                    app.securityPreferences.ignoreChatNavigation = true
-                    navController.navigate(Screen.DeviceSessions.route)
+                    navController.navigate(Screen.DeviceSessions.route) { launchSingleTop = true }
                 },
                 onNavigateToOpenWhen = {
-                    app.securityPreferences.ignoreChatNavigation = true
-                    navController.navigate(Screen.OpenWhen.route)
+                    navController.navigate(Screen.OpenWhen.route) { launchSingleTop = true }
                 },
                 onLoggedOut = {
+                    app.securityPreferences.ignoreChatNavigation = false
                     navController.navigate(Screen.Auth.route) {
                         popUpTo(0) { inclusive = true }
                     }
@@ -278,9 +272,6 @@ fun CherishNavGraph(
         }
 
         composable(Screen.LifetimeJourney.route) {
-            val lifetimeViewModel = remember {
-                LifetimeJourneyViewModel(app.coupleFeaturesRepository)
-            }
             LifetimeJourneyScreen(
                 viewModel = lifetimeViewModel,
                 onNavigateBack = { navController.popBackStack() }
@@ -288,9 +279,6 @@ fun CherishNavGraph(
         }
 
         composable(Screen.CloudBackup.route) {
-            val backupViewModel = remember {
-                GoogleDriveBackupViewModel(app.googleDriveBackupManager)
-            }
             CloudBackupScreen(
                 viewModel = backupViewModel,
                 onNavigateBack = { navController.popBackStack() }
@@ -361,6 +349,3 @@ fun CherishNavGraph(
     }
 }
 }
-
-
-

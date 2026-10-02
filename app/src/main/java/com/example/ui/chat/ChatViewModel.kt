@@ -67,21 +67,19 @@ class ChatViewModel(
     val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
 
     init {
+        // Collect messages from the single global listener in ChatRepository.
+        // No duplicate listener creation — ChatRepository.init manages the Firestore listener
+        // and switches it when coupleId changes via its own collectLatest.
         viewModelScope.launch {
-            authRepository.currentUserState
-                .map { it?.coupleId ?: "couple_cherish_love" }
-                .distinctUntilChanged()
-                .collectLatest { convId ->
-                    chatRepository.listenToMessages(convId).collect { msgList ->
-                        val pinned = msgList.lastOrNull { it.isPinned && !it.isDeleted }
-                        _uiState.update {
-                            it.copy(
-                                messages = msgList,
-                                pinnedMessage = pinned
-                            )
-                        }
-                    }
+            chatRepository.messagesFlow.collect { msgList ->
+                val pinned = msgList.lastOrNull { it.isPinned && !it.isDeleted }
+                _uiState.update {
+                    it.copy(
+                        messages = msgList,
+                        pinnedMessage = pinned
+                    )
                 }
+            }
         }
 
         viewModelScope.launch {
@@ -483,6 +481,17 @@ class ChatViewModel(
 
     fun logout() {
         authRepository.logout()
+    }
+
+    /**
+     * Safely stop voice recording when the app goes to background.
+     * Prevents the recording UI from remaining stuck on resume.
+     */
+    fun safeStopRecordingForBackground() {
+        if (voiceRecorderHelper.isRecording.value) {
+            authRepository.setRecordingAudio(false)
+            voiceRecorderHelper.safeStopForBackground()
+        }
     }
 
     override fun onCleared() {

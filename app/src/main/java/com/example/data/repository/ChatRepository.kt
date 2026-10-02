@@ -12,7 +12,6 @@ import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.Query
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
@@ -61,7 +60,10 @@ class ChatRepository(
     }
 
     private fun startGlobalMessagesListener(conversationId: String) {
+        // Prevent duplicate listener for the same conversation
+        if (currentActiveConversationId == conversationId && globalMessagesListener != null) return
         globalMessagesListener?.remove()
+        currentActiveConversationId = conversationId
         val fs = firestore ?: return
         val query = fs.collection("conversations")
             .document(conversationId)
@@ -80,17 +82,14 @@ class ChatRepository(
         }
     }
 
-    fun listenToMessages(conversationId: String): Flow<List<Message>> = callbackFlow {
-        currentActiveConversationId = conversationId
-        startGlobalMessagesListener(conversationId)
-        val job = CoroutineScope(Dispatchers.IO).launch {
-            _messagesFlow.collect {
-                trySend(it)
-            }
-        }
-        awaitClose {
-            job.cancel()
-        }
+    /**
+     * Returns a flow of messages for the given conversation.
+     * Does NOT re-create the Firestore listener — the single global listener
+     * set up in init handles all realtime updates. This just bridges to the
+     * shared _messagesFlow so callers get the same stream.
+     */
+    fun listenToMessages(conversationId: String): Flow<List<Message>> {
+        return _messagesFlow.asStateFlow()
     }
 
     suspend fun sendMessage(

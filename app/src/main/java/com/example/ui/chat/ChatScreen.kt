@@ -23,8 +23,10 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.awaitPointerEvent
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -104,11 +106,7 @@ fun ChatScreen(
         }
     }
 
-    val docPickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
-    ) { uri: Uri? ->
-        uri?.let { viewModel.sendMediaFile(it, MessageType.DOCUMENT) }
-    }
+
 
     // Mic permission launcher
     val micPermissionLauncher = rememberLauncherForActivityResult(
@@ -177,12 +175,18 @@ fun ChatScreen(
         }
     }
 
-    // Scroll to bottom (index 0) when new messages arrive
+    // Issue 13: Only auto-scroll to bottom when a genuinely new message arrives
+    // AND the user is already near the bottom — don't hijack scroll mid-history.
+    val prevMessageCount = remember { mutableIntStateOf(uiState.messages.size) }
     LaunchedEffect(uiState.messages.size) {
-        if (uiState.messages.isNotEmpty()) {
+        val isNearBottom = listState.firstVisibleItemIndex <= 3
+        if (uiState.messages.size > prevMessageCount.intValue && isNearBottom) {
             listState.animateScrollToItem(0)
         }
+        prevMessageCount.intValue = uiState.messages.size
     }
+
+
 
     // Clear disguised notifications upon entering chat
     LaunchedEffect(Unit) {
@@ -198,6 +202,16 @@ fun ChatScreen(
         ?: "My Partner"
     val isPartnerOnline = partner?.isEffectivelyOnline() ?: false
     val currentUserId = viewModel.uiState.value.currentUser?.id ?: "user_me"
+
+    // Issue 13: Batch read-marking outside LazyColumn — prevents Firestore writes during scroll
+    val unreadIds = remember(uiState.messages, currentUserId) {
+        uiState.messages
+            .filter { it.senderId != currentUserId && it.getTypedStatus() != com.example.data.model.MessageStatus.READ && !it.isDeleted }
+            .map { it.id }
+    }
+    LaunchedEffect(unreadIds) {
+        unreadIds.forEach { viewModel.markMessageAsRead(it) }
+    }
 
     val partnerHasCheckAfter = partner?.hasActiveCheckAfter() == true
     val partnerCheckAfterTarget = partner?.checkAfterTimeMillis ?: 0L
@@ -289,31 +303,52 @@ fun ChatScreen(
         onDispose {
             sensorManager?.unregisterListener(listener)
             viewModel.cancelVoiceRecording()
+            viewModel.safeStopRecordingForBackground()
             viewModel.hideSecretHistory()
         }
     }
 
-    var dragAccumulator by remember { mutableFloatStateOf(0f) }
-
+    // Issue 10: Zero-latency swipe — awaitEachGesture starts tracking immediately on touch down.
+    // detectHorizontalDragGestures adds a slop delay before the first onDrag fires, making the
+    // screen feel disconnected from the finger. This approach decides direction early and consumes
+    // only horizontal events, leaving vertical scroll events free for the message list.
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         modifier = Modifier.pointerInput(Unit) {
-            detectHorizontalDragGestures(
-                onDragStart = { _ -> dragAccumulator = 0f },
-                onDragEnd = {
-                    if (dragAccumulator > 80f) {
-                        // Swipe Right -> Notes App / Quick Disguise
-                        onQuickDisguise()
-                    } else if (dragAccumulator < -80f) {
-                        // Swipe Left -> Profile
-                        onNavigateToProfile()
+            awaitEachGesture {
+                val down = awaitFirstDown(requireUnconsumed = false)
+                var accX = 0f
+                var accY = 0f
+                var directionLocked = false
+                var isHorizontal = false
+
+                while (true) {
+                    val event = awaitPointerEvent()
+                    val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                    if (!change.pressed) break
+
+                    val delta = change.positionChange()
+                    accX += delta.x
+                    accY += delta.y
+
+                    // Lock direction once movement exceeds 10px in any axis
+                    if (!directionLocked && (kotlin.math.abs(accX) > 10f || kotlin.math.abs(accY) > 10f)) {
+                        isHorizontal = kotlin.math.abs(accX) > kotlin.math.abs(accY)
+                        directionLocked = true
                     }
-                    dragAccumulator = 0f
-                },
-                onHorizontalDrag = { _, dragAmount ->
-                    dragAccumulator += dragAmount
+
+                    if (directionLocked && isHorizontal) {
+                        change.consume()
+                    }
                 }
-            )
+
+                if (directionLocked && isHorizontal) {
+                    when {
+                        accX > 90f -> onQuickDisguise()       // Swipe right → disguise
+                        accX < -90f -> onNavigateToProfile()  // Swipe left → profile
+                    }
+                }
+            }
         },
         topBar = {
             TopAppBar(
@@ -335,34 +370,35 @@ fun ChatScreen(
                     } else {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.clickable {
-                                if (partnerHasCheckAfter || iHaveCheckAfter) {
-                                    viewModel.openCheckAfterSheet()
-                                } else {
-                                    onNavigateToGallery()
-                                }
-                            }
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(10.dp))
+                                .clickable { onNavigateToProfile() }
+                                .padding(horizontal = 4.dp, vertical = 2.dp)
                         ) {
                             AvatarView(
                                 photoUrl = partner?.photoUrl,
                                 name = partnerName,
-                                size = 40.dp,
+                                size = 36.dp,
                                 isOnline = isPartnerOnline,
                                 showOnlineBadge = !partnerHasCheckAfter
                             )
-                            Spacer(modifier = Modifier.width(10.dp))
-                            Column {
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Column(
+                                modifier = Modifier.widthIn(max = 160.dp),
+                                verticalArrangement = Arrangement.Center
+                            ) {
                                 Text(
                                     text = partnerName,
-                                    style = MaterialTheme.typography.titleMedium,
+                                    fontSize = 15.sp,
                                     fontWeight = FontWeight.Bold,
                                     maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
+                                    overflow = TextOverflow.Ellipsis,
+                                    color = MaterialTheme.colorScheme.onSurface
                                 )
                                 Text(
                                     text = if (partnerHasCheckAfter) {
                                         if (headerRemaining.startsWith("✨")) "✨ Reconnecting now"
-                                        else "🌙 Quiet time until ${CheckAfterHelper.formatTargetTime(partnerCheckAfterTarget)}"
+                                        else "🌙 Quiet time (${CheckAfterHelper.formatTargetTime(partnerCheckAfterTarget)})"
                                     } else if (isPartnerOnline) {
                                         "Online"
                                     } else {
@@ -379,13 +415,15 @@ fun ChatScreen(
                                             "Offline"
                                         }
                                     },
-                                    style = MaterialTheme.typography.bodySmall,
+                                    fontSize = 11.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
                                     color = if (partnerHasCheckAfter) {
-                                        RoseGoldPrimary
+                                        MaterialTheme.colorScheme.primary
                                     } else if (isPartnerOnline) {
-                                        Color(0xFF2E7D32)
+                                        OnlineGreen
                                     } else {
-                                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f)
+                                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f)
                                     },
                                     fontWeight = if (partnerHasCheckAfter || isPartnerOnline) {
                                         FontWeight.SemiBold
@@ -406,49 +444,64 @@ fun ChatScreen(
                                 onQuickDisguise()
                             }
                         },
-                        modifier = Modifier.testTag("chat_back_button")
+                        modifier = Modifier
+                            .size(40.dp)
+                            .testTag("chat_back_button")
                     ) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back"
+                            contentDescription = "Back",
+                            modifier = Modifier.size(22.dp)
                         )
                     }
                 },
                 actions = {
                     if (uiState.isSearching) {
-                        IconButton(onClick = { viewModel.setSearching(false) }) {
-                            Icon(Icons.Default.Close, contentDescription = "Close search")
+                        IconButton(
+                            onClick = { viewModel.setSearching(false) },
+                            modifier = Modifier.size(38.dp)
+                        ) {
+                            Icon(Icons.Default.Close, contentDescription = "Close search", modifier = Modifier.size(20.dp))
                         }
                     } else {
                         IconButton(
                             onClick = { viewModel.setSearching(true) },
-                            modifier = Modifier.testTag("chat_search_button")
+                            modifier = Modifier
+                                .size(38.dp)
+                                .testTag("chat_search_button")
                         ) {
-                            Icon(Icons.Default.Search, contentDescription = "Search messages")
+                            Icon(Icons.Default.Search, contentDescription = "Search messages", modifier = Modifier.size(20.dp))
                         }
                         IconButton(
                             onClick = onNavigateToGallery,
-                            modifier = Modifier.testTag("chat_gallery_button")
+                            modifier = Modifier
+                                .size(38.dp)
+                                .testTag("chat_gallery_button")
                         ) {
-                            Icon(Icons.Outlined.PhotoLibrary, contentDescription = "Couple Media Gallery")
+                            Icon(Icons.Outlined.PhotoLibrary, contentDescription = "Couple Media Gallery", modifier = Modifier.size(20.dp))
                         }
                         IconButton(
                             onClick = { viewModel.openCheckAfterSheet() },
-                            modifier = Modifier.testTag("chat_check_after_button")
+                            modifier = Modifier
+                                .size(38.dp)
+                                .testTag("chat_check_after_button")
                         ) {
                             Icon(
                                 imageVector = if (partnerHasCheckAfter || iHaveCheckAfter) Icons.Filled.HourglassTop else Icons.Outlined.HourglassTop,
                                 contentDescription = "Check After Timer",
-                                tint = if (partnerHasCheckAfter || iHaveCheckAfter) RoseGoldPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                                tint = if (partnerHasCheckAfter || iHaveCheckAfter) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(20.dp)
                             )
                         }
 
                         Box {
                             IconButton(
                                 onClick = { showChatMenu = true },
-                                modifier = Modifier.testTag("chat_more_menu_button")
+                                modifier = Modifier
+                                    .size(38.dp)
+                                    .testTag("chat_more_menu_button")
                             ) {
-                                Icon(Icons.Default.MoreVert, contentDescription = "More options")
+                                Icon(Icons.Default.MoreVert, contentDescription = "More options", modifier = Modifier.size(20.dp))
                             }
                             DropdownMenu(
                                 expanded = showChatMenu,
@@ -677,6 +730,52 @@ fun ChatScreen(
                 }
             }
 
+            // Issue 8: Check-After banner — FIXED position below profile header,
+            // NOT inside LazyColumn. The banner stays pinned while messages scroll underneath.
+            if (!uiState.isStealthCurtainActive) {
+                if (partnerHasCheckAfter) {
+                    CheckAfterChatBanner(
+                        targetMillis = partnerCheckAfterTarget,
+                        note = partner?.checkAfterNote ?: "",
+                        isSetByMe = false,
+                        partnerName = partnerName,
+                        isReminderEnabled = uiState.isCheckAfterReminderEnabled,
+                        onToggleReminder = { viewModel.toggleCheckAfterReminder(!uiState.isCheckAfterReminderEnabled) },
+                        onExtend30m = {},
+                        onExtend1h = {},
+                        onChangeTime = { viewModel.openCheckAfterSheet() },
+                        onCancel = {},
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
+                    )
+                } else if (iHaveCheckAfter) {
+                    CheckAfterChatBanner(
+                        targetMillis = myCheckAfterTarget,
+                        note = myUser?.checkAfterNote ?: "",
+                        isSetByMe = true,
+                        partnerName = partnerName,
+                        isReminderEnabled = false,
+                        onToggleReminder = {},
+                        onExtend30m = { viewModel.extendCheckAfter(30 * 60 * 1000L) },
+                        onExtend1h = { viewModel.extendCheckAfter(60 * 60 * 1000L) },
+                        onChangeTime = { viewModel.openCheckAfterSheet() },
+                        onCancel = { viewModel.cancelCheckAfter() },
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
+                    )
+                }
+            }
+
+            // Mutual Consent Deletion Banner — fixed position (not scrolling)
+            if (!uiState.isStealthCurtainActive && uiState.deletionRequest != null) {
+                MutualConsentDeletionBanner(
+                    request = uiState.deletionRequest!!,
+                    isFromMe = (uiState.deletionRequest!!.requestedByUserId == currentUserId),
+                    partnerName = partnerName,
+                    onAccept = { viewModel.acceptMutualChatDeletion() },
+                    onDecline = { viewModel.declineMutualChatDeletion() },
+                    onCancel = { viewModel.cancelMutualChatDeletion() }
+                )
+            }
+
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -695,7 +794,7 @@ fun ChatScreen(
                         onRestore = onQuickDisguise
                     )
             } else {
-                val reversedMessages = displayedMessages.reversed()
+                val reversedMessages = remember(displayedMessages) { displayedMessages.reversed() }
                 LazyColumn(
                     state = listState,
                     modifier = Modifier.fillMaxSize(),
@@ -735,11 +834,8 @@ fun ChatScreen(
                                 }
                             }
 
-                            LaunchedEffect(message.id) {
-                                if (!isFromMe && message.getTypedStatus() != com.example.data.model.MessageStatus.READ) {
-                                    viewModel.markMessageAsRead(message.id)
-                                }
-                            }
+                            // Read marking is handled in the batched LaunchedEffect above the Scaffold.
+                            // Do NOT put Firestore writes inside LazyColumn items — they fire on every scroll.
 
                             val isHighlighted = (highlightedMessageId == message.id)
                             Box(
@@ -806,7 +902,7 @@ fun ChatScreen(
                         }
                     }
 
-                    item {
+                    item(key = "info_card", contentType = "info_card") {
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -851,53 +947,8 @@ fun ChatScreen(
                         }
                     }
 
-                    if (partnerHasCheckAfter) {
-                        item {
-                            CheckAfterChatBanner(
-                                targetMillis = partnerCheckAfterTarget,
-                                note = partner?.checkAfterNote ?: "",
-                                isSetByMe = false,
-                                partnerName = partnerName,
-                                isReminderEnabled = uiState.isCheckAfterReminderEnabled,
-                                onToggleReminder = { viewModel.toggleCheckAfterReminder(!uiState.isCheckAfterReminderEnabled) },
-                                onExtend30m = {},
-                                onExtend1h = {},
-                                onChangeTime = { viewModel.openCheckAfterSheet() },
-                                onCancel = {},
-                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
-                            )
-                        }
-                    } else if (iHaveCheckAfter) {
-                        item {
-                            CheckAfterChatBanner(
-                                targetMillis = myCheckAfterTarget,
-                                note = myUser?.checkAfterNote ?: "",
-                                isSetByMe = true,
-                                partnerName = partnerName,
-                                isReminderEnabled = false,
-                                onToggleReminder = {},
-                                onExtend30m = { viewModel.extendCheckAfter(30 * 60 * 1000L) },
-                                onExtend1h = { viewModel.extendCheckAfter(60 * 60 * 1000L) },
-                                onChangeTime = { viewModel.openCheckAfterSheet() },
-                                onCancel = { viewModel.cancelCheckAfter() },
-                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
-                            )
-                        }
-                    }
-
-                    if (uiState.deletionRequest != null) {
-                        item {
-                            MutualConsentDeletionBanner(
-                                request = uiState.deletionRequest!!,
-                                isFromMe = (uiState.deletionRequest!!.requestedByUserId == currentUserId),
-                                partnerName = partnerName,
-                                onAccept = { viewModel.acceptMutualChatDeletion() },
-                                onDecline = { viewModel.declineMutualChatDeletion() },
-                                onCancel = { viewModel.cancelMutualChatDeletion() }
-                            )
-                        }
-                    }
                 }
+
 
             // Floating scroll to bottom button
             val showScrollButton by remember {
@@ -1044,17 +1095,6 @@ fun ChatScreen(
                         onClick = {
                             showAttachmentSheet = false
                             triggerCameraSnap()
-                        }
-                    )
-
-                    AttachmentOptionItem(
-                        icon = Icons.Default.InsertDriveFile,
-                        label = "Document",
-                        color = Color(0xFF0984E3),
-                        onClick = {
-                            showAttachmentSheet = false
-                            com.example.security.SecurityPreferences.getInstance(context).ignoreNextPause = true
-                            docPickerLauncher.launch("*/*")
                         }
                     )
                 }

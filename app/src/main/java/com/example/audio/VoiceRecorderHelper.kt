@@ -136,4 +136,15 @@ class VoiceRecorderHelper(private val context: Context) {
         _recordingDurationSec.value = 0
         _amplitudes.value = emptyList()
     }
+
+    /**
+     * Safely stop recording when the app goes to background.
+     * Returns the recorded file and duration if a valid recording was in progress,
+     * or null/0 if nothing useful was recorded.
+     * This prevents the recording state from remaining stuck on resume.
+     */
+    fun safeStopForBackground(): Pair<File?, Int> {
+        if (!_isRecording.value) return Pair(null, 0)
+        return stopRecording()
+    }
 }

@@ -21,6 +21,11 @@ class AuthViewModel(private val authRepository: AuthRepository) : ViewModel() {
     private val _uiState = MutableStateFlow<AuthUiState>(AuthUiState.Idle)
     val uiState: StateFlow<AuthUiState> = _uiState.asStateFlow()
 
+    /**
+     * The only login flow:
+     *   Username + Partner Name + Couple Secret Code → Firebase pairing
+     *   Partner A waits → Partner B enters matching details → auto-connect
+     */
     fun loginCouple(
         username: String,
         partnerName: String,
@@ -51,84 +56,6 @@ class AuthViewModel(private val authRepository: AuthRepository) : ViewModel() {
             result.fold(
                 onSuccess = { _uiState.value = AuthUiState.Success(it) },
                 onFailure = { _uiState.value = AuthUiState.Error(it.localizedMessage ?: "Login failed") }
-            )
-        }
-    }
-
-    fun login(
-        username: String,
-        pass: String,
-        partnerUsername: String = "",
-        coupleKey: String = ""
-    ) {
-        val cleanUser = username.trim()
-        val cleanPass = pass.trim()
-        if (cleanUser.isBlank() || cleanPass.isBlank()) {
-            _uiState.value = AuthUiState.Error("Please enter your username and password")
-            return
-        }
-        if (cleanPass.length < 4) {
-            _uiState.value = AuthUiState.Error("Password must be at least 4 characters")
-            return
-        }
-        viewModelScope.launch {
-            _uiState.value = AuthUiState.Loading
-            val result = authRepository.loginWithUsernameAndPassword(
-                username = cleanUser,
-                pass = cleanPass,
-                partnerUsername = partnerUsername.trim(),
-                coupleKey = coupleKey.trim()
-            )
-            result.fold(
-                onSuccess = { _uiState.value = AuthUiState.Success(it) },
-                onFailure = { _uiState.value = AuthUiState.Error(it.localizedMessage ?: "Login failed") }
-            )
-        }
-    }
-
-    fun continueOffline(
-        username: String,
-        partnerUsername: String = "",
-        coupleKey: String = ""
-    ) {
-        val cleanUser = username.trim().ifBlank { "me" }
-        val user = authRepository.loginOffline(
-            username = cleanUser,
-            partnerUsername = partnerUsername.trim(),
-            coupleKey = coupleKey.trim()
-        )
-        _uiState.value = AuthUiState.Success(user)
-    }
-
-    fun loginWithGoogle(
-        idToken: String,
-        partnerUsernameOrEmail: String = "",
-        coupleKey: String = ""
-    ) {
-        viewModelScope.launch {
-            _uiState.value = AuthUiState.Loading
-            val result = authRepository.loginWithGoogleIdToken(
-                idToken = idToken,
-                partnerUsernameOrEmail = partnerUsernameOrEmail.trim(),
-                coupleKey = coupleKey.trim()
-            )
-            result.fold(
-                onSuccess = { _uiState.value = AuthUiState.Success(it) },
-                onFailure = { _uiState.value = AuthUiState.Error(it.localizedMessage ?: "Google sign-in failed") }
-            )
-        }
-    }
-
-    fun sendPasswordReset(email: String, onDone: (Boolean, String) -> Unit) {
-        if (email.isBlank()) {
-            onDone(false, "Please enter your username")
-            return
-        }
-        viewModelScope.launch {
-            val res = authRepository.sendPasswordReset(email)
-            res.fold(
-                onSuccess = { onDone(true, "Reset link sent!") },
-                onFailure = { onDone(false, it.localizedMessage ?: "Failed to reset") }
             )
         }
     }

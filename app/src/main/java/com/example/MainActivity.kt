@@ -124,9 +124,8 @@ class MainActivity : FragmentActivity() {
 
     override fun onResume() {
         super.onResume()
-        androidx.core.view.WindowCompat.setDecorFitsSystemWindows(window, false)
-        val insetsController = androidx.core.view.WindowCompat.getInsetsController(window, window.decorView)
-        insetsController.show(androidx.core.view.WindowInsetsCompat.Type.systemBars())
+        // Do NOT re-call setDecorFitsSystemWindows here — already set in onCreate.
+        // Re-calling it causes a layout recalculation that shifts content after minimize/reopen.
         applyScreenshotProtection()
         app.authRepository.onAppForegroundStateChanged(true)
         app.securityPreferences.ignoreNextPause = false
@@ -134,16 +133,14 @@ class MainActivity : FragmentActivity() {
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
-        if (hasFocus) {
-            val insetsController = androidx.core.view.WindowCompat.getInsetsController(window, window.decorView)
-            insetsController.show(androidx.core.view.WindowInsetsCompat.Type.systemBars())
-        }
+        // Do NOT force show system bars here - it causes content jumps on resume
     }
 
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
-        // When Secret/Chat app is minimized, re-activate Notes disguise
-        if (!app.securityPreferences.ignoreNextPause) {
+        // When user intentionally leaves the app (home button, task switcher)
+        // but NOT during in-app navigation (camera, gallery picker, etc.)
+        if (!app.securityPreferences.ignoreNextPause && !app.securityPreferences.ignoreChatNavigation) {
             app.securityPreferences.reDisguise()
         }
     }
@@ -155,8 +152,9 @@ class MainActivity : FragmentActivity() {
     override fun onStop() {
         super.onStop()
         app.authRepository.onAppForegroundStateChanged(false)
-        // Re-activate Notes disguise when backgrounded/minimized
-        if (!app.securityPreferences.ignoreNextPause) {
+        // Only re-disguise if NOT during in-app sub-navigation (Profile, Gallery, etc.)
+        // and NOT during system interactions (camera, file picker)
+        if (!app.securityPreferences.ignoreNextPause && !app.securityPreferences.ignoreChatNavigation) {
             app.securityPreferences.reDisguise()
         }
         app.securityPreferences.ignoreNextPause = false

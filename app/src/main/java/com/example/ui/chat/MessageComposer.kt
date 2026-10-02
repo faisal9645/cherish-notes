@@ -10,6 +10,9 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -21,15 +24,17 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -38,12 +43,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.Message
 import com.example.ui.components.WaveformView
+import com.example.ui.theme.DarkBluePrimary
+import com.example.ui.theme.DayBluePrimary
 import com.example.ui.theme.HeartRed
-import com.example.ui.theme.RoseGoldPrimary
-import com.example.ui.theme.TrueDarkSurface
 import com.example.ui.theme.appGradientShadow
 import com.example.ui.theme.appHorizontalGradient
 import kotlin.math.roundToInt
+import kotlinx.coroutines.withTimeoutOrNull
 
 @Composable
 fun MessageComposer(
@@ -65,8 +71,10 @@ fun MessageComposer(
 ) {
     val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val focusManager = LocalFocusManager.current
 
-    var showEmojiQuickBar by remember { mutableStateOf(false) }
+    var showEmojiPanel by remember { mutableStateOf(false) }
     var isLockedRecording by remember { mutableStateOf(false) }
     var dragOffsetX by remember { mutableFloatStateOf(0f) }
     var dragOffsetY by remember { mutableFloatStateOf(0f) }
@@ -80,10 +88,10 @@ fun MessageComposer(
         }
     }
 
-    // Pulsing animations for active recording (Telegram/WhatsApp style)
+    // Pulsing animations for active recording
     val infiniteTransition = rememberInfiniteTransition(label = "recording_fx")
     val pulseAlpha by infiniteTransition.animateFloat(
-        initialValue = 0.25f,
+        initialValue = 0.3f,
         targetValue = 1f,
         animationSpec = infiniteRepeatable(tween(550, easing = FastOutSlowInEasing), RepeatMode.Reverse),
         label = "pulse_alpha"
@@ -96,31 +104,47 @@ fun MessageComposer(
     )
 
     val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
-    val barBg = if (isDark) TrueDarkSurface else Color.White
+    val barBg = MaterialTheme.colorScheme.surface
+    val pillBg = if (isDark) MaterialTheme.colorScheme.surfaceVariant else Color(0xFFF1F5F9)
+    val pillBorder = if (isDark) Color(0xFF1E293B) else Color(0xFFE2E8F0)
+
+    val emojiList = remember {
+        listOf(
+            "❤️", "💖", "💕", "💞", "💓", "💗", "💘", "💝",
+            "🥰", "😍", "😘", "😚", "😻", "🤗", "🫂", "🫶",
+            "💋", "💌", "🌹", "💐", "🧸", "✨", "💫", "⭐",
+            "😊", "🥺", "😇", "🥳", "😌", "🤤", "🔥", "👑",
+            "💍", "🥂", "🍫", "🍓", "🍰", "🌙", "☀️", "🌈"
+        )
+    }
 
     Column(
         modifier = modifier
             .fillMaxWidth()
             .background(barBg)
+            .navigationBarsPadding()
     ) {
         // Reply bar preview
         AnimatedVisibility(visible = replyingTo != null) {
             if (replyingTo != null) {
                 Surface(
-                    color = Color.Transparent,
-                    modifier = Modifier.fillMaxWidth()
+                    color = pillBg,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                    shape = RoundedCornerShape(12.dp)
                 ) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 6.dp),
+                            .padding(horizontal = 12.dp, vertical = 6.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Box(
                             modifier = Modifier
                                 .width(3.dp)
                                 .height(32.dp)
-                                .background(RoseGoldPrimary, CircleShape)
+                                .background(MaterialTheme.colorScheme.primary, CircleShape)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Column(modifier = Modifier.weight(1f)) {
@@ -128,7 +152,7 @@ fun MessageComposer(
                                 text = "Replying to ${replyingTo.senderName ?: "Partner"}",
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = RoseGoldPrimary
+                                color = MaterialTheme.colorScheme.primary
                             )
                             Text(
                                 text = replyingTo.text,
@@ -153,182 +177,258 @@ fun MessageComposer(
             }
         }
 
-        // Composer Input / Recording Action Row
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically
+        // 22. WhatsApp-Style Emoji Panel: Sits DIRECTLY ABOVE the composer
+        AnimatedVisibility(
+            visible = showEmojiPanel && !isRecordingVoice,
+            enter = expandVertically(animationSpec = tween(200)) + fadeIn(tween(200)),
+            exit = shrinkVertically(animationSpec = tween(160)) + fadeOut(tween(160))
         ) {
-            // LEFT / CENTER AREA
-            if (isRecordingVoice) {
-                if (isLockedRecording) {
-                    // --- Case 1: Locked Hands-Free Recording Mode ---
-                    IconButton(
-                        onClick = {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            isLockedRecording = false
-                            onCancelVoiceRecord()
-                        },
-                        modifier = Modifier
-                            .size(44.dp)
-                            .testTag("composer_cancel_record_button")
+            Surface(
+                color = if (isDark) MaterialTheme.colorScheme.surfaceVariant else Color(0xFFF8FAFC),
+                border = BorderStroke(1.dp, pillBorder),
+                shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    // Issue 15: Fixed height matches a typical soft keyboard so the layout
+                    // doesn't jump when switching between keyboard and emoji panel.
+                    .height(240.dp)
+            ) {
+                Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 2.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .size(38.dp)
-                                .clip(CircleShape)
-                                .background(HeartRed.copy(alpha = 0.12f)),
-                            contentAlignment = Alignment.Center
+                        Text(
+                            text = "Couple Emojis 💕",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        IconButton(
+                            onClick = { showEmojiPanel = false },
+                            modifier = Modifier.size(24.dp)
                         ) {
                             Icon(
-                                imageVector = Icons.Default.Delete,
-                                contentDescription = "Cancel voice note",
-                                tint = HeartRed,
-                                modifier = Modifier.size(20.dp)
+                                Icons.Default.Close,
+                                contentDescription = "Close",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(16.dp)
                             )
                         }
                     }
 
+                    LazyVerticalGrid(
+                        columns = GridCells.Fixed(8),
+                        modifier = Modifier.fillMaxWidth().weight(1f, fill = false),
+                        contentPadding = PaddingValues(4.dp),
+                        horizontalArrangement = Arrangement.SpaceEvenly,
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        items(emojiList, key = { it }) { emoji ->
+                            Box(
+                                modifier = Modifier
+                                    .clip(CircleShape)
+                                    .clickable {
+                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                        onTextChanged(text + emoji)
+                                    }
+                                    .padding(vertical = 4.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(text = emoji, fontSize = 22.sp)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 23. WhatsApp-Style Composer Row:
+        // [ 🙂 | Message your love... | 📎 | 📷 ]    [ 🎤 / ✈️ ]
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.Bottom
+        ) {
+            // Main Input Pill / Active Recording Bar
+            if (isRecordingVoice) {
+                // Recording Mode
+                if (isLockedRecording) {
+                    // Locked hands-free mode
                     Row(
                         modifier = Modifier
                             .weight(1f)
+                            .heightIn(min = 46.dp)
                             .clip(RoundedCornerShape(24.dp))
-                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
-                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                            .background(pillBg)
+                            .border(BorderStroke(1.dp, pillBorder), RoundedCornerShape(24.dp))
+                            .padding(horizontal = 10.dp, vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // Pulsing red recording dot
+                        IconButton(
+                            onClick = {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                isLockedRecording = false
+                                onCancelVoiceRecord()
+                            },
+                            modifier = Modifier.size(34.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Delete,
+                                contentDescription = "Cancel voice note",
+                                tint = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.width(6.dp))
+
                         Box(
                             modifier = Modifier
-                                .size(10.dp)
-                                .scale(1f + pulseAlpha * 0.2f)
-                                .background(HeartRed.copy(alpha = pulseAlpha), CircleShape)
+                                .size(8.dp)
+                                .scale(1f + pulseAlpha * 0.25f)
+                                .background(Color(0xFFE11D48), CircleShape)
                         )
-                        Spacer(modifier = Modifier.width(8.dp))
+
+                        Spacer(modifier = Modifier.width(6.dp))
+
                         Text(
                             text = "${recordingDurationSec / 60}:%02d".format(recordingDurationSec % 60),
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface,
                             fontSize = 13.sp
                         )
-                        Spacer(modifier = Modifier.width(10.dp))
+
+                        Spacer(modifier = Modifier.width(8.dp))
+
                         WaveformView(
                             amplitudes = recordingAmplitudes,
                             progress = 1f,
-                            activeColor = HeartRed,
-                            height = 20.dp,
+                            activeColor = MaterialTheme.colorScheme.primary,
+                            height = 14.dp,
                             modifier = Modifier.weight(1f)
                         )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        // Locked Indicator Icon
+
+                        Spacer(modifier = Modifier.width(6.dp))
+
                         Icon(
                             imageVector = Icons.Default.Lock,
-                            contentDescription = "Hands-free locked",
-                            tint = RoseGoldPrimary,
-                            modifier = Modifier.size(18.dp)
+                            contentDescription = "Locked",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(16.dp)
                         )
                     }
                 } else {
-                    // --- Case 2: Active Hold-to-Record Mode with Slide-to-Cancel & Slide-to-Lock ---
+                    // Slide-to-cancel / Slide-to-lock hold recording
                     Row(
                         modifier = Modifier
                             .weight(1f)
+                            .heightIn(min = 46.dp)
                             .clip(RoundedCornerShape(24.dp))
-                            .background(Color.Transparent)
-                            .border(BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant), RoundedCornerShape(24.dp))
-                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                            .background(pillBg)
+                            .border(BorderStroke(1.dp, pillBorder), RoundedCornerShape(24.dp))
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // Pulsing record indicator
                         Box(
                             modifier = Modifier
-                                .size(10.dp)
-                                .background(HeartRed.copy(alpha = pulseAlpha), CircleShape)
+                                .size(8.dp)
+                                .background(Color(0xFFE11D48).copy(alpha = pulseAlpha), CircleShape)
                         )
-                        Spacer(modifier = Modifier.width(8.dp))
+
+                        Spacer(modifier = Modifier.width(6.dp))
+
                         Text(
                             text = "${recordingDurationSec / 60}:%02d".format(recordingDurationSec % 60),
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface,
-                            fontSize = 14.sp
+                            fontSize = 13.sp
                         )
 
-                        val dragProgress = (dragOffsetX / -150f).coerceIn(0f, 1f)
-                        
-                        Box(modifier = Modifier.weight(1f).padding(horizontal = 8.dp), contentAlignment = Alignment.CenterEnd) {
-                            if (dragProgress < 1f) {
-                                WaveformView(
-                                    amplitudes = recordingAmplitudes,
-                                    progress = 1f,
-                                    activeColor = HeartRed.copy(alpha = 1f - dragProgress),
-                                    height = 20.dp,
-                                    modifier = Modifier.fillMaxWidth().graphicsLayer { alpha = 1f - dragProgress }
-                                )
-                            }
-                        }
+                        Spacer(modifier = Modifier.width(8.dp))
 
-                        val isNearCancel = dragOffsetX < -100f
-                        if (isNearCancel) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    Icons.Default.Delete,
-                                    contentDescription = null,
-                                    tint = HeartRed,
-                                    modifier = Modifier.size(16.dp)
-                                )
+                        if (dragOffsetX < -80f) {
+                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                                Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(16.dp))
                                 Spacer(modifier = Modifier.width(4.dp))
-                                Text(
-                                    text = "Release to cancel",
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = HeartRed
-                                )
+                                Text("Release to cancel", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.error)
                             }
                         } else {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.offset { IntOffset((dragOffsetX * 0.4f).roundToInt(), 0) }
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .offset { IntOffset((dragOffsetX * 0.35f).roundToInt(), 0) }
                             ) {
                                 Text(
                                     text = "‹‹‹",
-                                    fontSize = 13.sp,
+                                    fontSize = 12.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
                                     modifier = Modifier.offset { IntOffset(shimmerOffset.roundToInt(), 0) }
                                 )
-                                Spacer(modifier = Modifier.width(6.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
                                 Text(
                                     text = "Slide to cancel",
                                     fontSize = 12.sp,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f)
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
                                 )
                             }
                         }
                     }
                 }
             } else {
-                // --- Normal Text Input & Media Tools ---
+                // WhatsApp-Style Text Input Pill:
+                // [ 🙂 | Message your love... | 📎 | 📷 ]
                 Row(
                     modifier = Modifier
                         .weight(1f)
+                        .heightIn(min = 46.dp)
                         .clip(RoundedCornerShape(24.dp))
-                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
-                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                        .background(pillBg)
+                        .border(BorderStroke(1.dp, pillBorder), RoundedCornerShape(24.dp))
+                        .padding(start = 4.dp, end = 4.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Text Input Field in Center
+                    // Far Left: 🙂 Emoji button
+                    // Issue 15: Hide keyboard when opening emoji panel; restore focus when closing.
+                    IconButton(
+                        onClick = {
+                            if (showEmojiPanel) {
+                                showEmojiPanel = false
+                                // Keyboard will re-appear when TextField regains focus
+                            } else {
+                                // Hide keyboard before showing emoji panel to avoid double-push
+                                keyboardController?.hide()
+                                showEmojiPanel = true
+                            }
+                        },
+                        modifier = Modifier
+                            .size(38.dp)
+                            .testTag("composer_emoji_button")
+                    ) {
+                        Icon(
+                            imageVector = if (showEmojiPanel) Icons.Default.Keyboard else Icons.Outlined.Mood,
+                            contentDescription = "Toggle emoji panel",
+                            tint = if (showEmojiPanel) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+
+                    // Center: Auto-expanding text input
                     Box(
                         modifier = Modifier
                             .weight(1f)
-                            .padding(horizontal = 8.dp, vertical = 8.dp),
+                            .padding(horizontal = 4.dp, vertical = 8.dp),
                         contentAlignment = Alignment.CenterStart
                     ) {
                         if (text.isEmpty()) {
                             Text(
                                 text = placeholder,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                                style = MaterialTheme.typography.bodyMedium
+                                fontSize = 15.sp
                             )
                         }
                         BasicTextField(
@@ -336,40 +436,44 @@ fun MessageComposer(
                             onValueChange = onTextChanged,
                             textStyle = TextStyle(
                                 color = MaterialTheme.colorScheme.onSurface,
-                                fontSize = 15.sp
+                                fontSize = 15.sp,
+                                lineHeight = 20.sp
                             ),
                             cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                            maxLines = 5,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .testTag("composer_text_input")
                         )
                     }
 
-                    // Attachment Icon on Right side
+                    // Right inside pill: 📎 Attachment button
                     IconButton(
                         onClick = onPickAttachment,
                         modifier = Modifier
-                            .size(38.dp)
+                            .size(36.dp)
                             .testTag("composer_attach_button")
                     ) {
                         Icon(
                             imageVector = Icons.Outlined.AttachFile,
                             contentDescription = "Attach file or photo",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(21.dp)
                         )
                     }
 
-                    // Real-time Camera Snap Icon on Right side
+                    // Right inside pill: 📷 Real-time Camera button
                     IconButton(
                         onClick = onTakePhoto,
                         modifier = Modifier
-                            .size(38.dp)
+                            .size(36.dp)
                             .testTag("composer_camera_button")
                     ) {
                         Icon(
                             imageVector = Icons.Default.CameraAlt,
-                            contentDescription = "Real-time camera snap",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            contentDescription = "Camera",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(20.dp)
                         )
                     }
                 }
@@ -377,31 +481,29 @@ fun MessageComposer(
 
             Spacer(modifier = Modifier.width(6.dp))
 
-            // RIGHT ACTION BUTTON (Send Text / Send Voice / Hold-to-Record Mic)
-            Box(
-                contentAlignment = Alignment.BottomCenter
-            ) {
-                // Floating Lock indicator shown while holding Mic
+            // Right-Side Action Circle: 🎤 Mic button (transitions to ✈️ Send button)
+            Box(contentAlignment = Alignment.BottomCenter) {
+                // Lock indicator shown while holding Mic
                 if (isRecordingVoice && !isLockedRecording) {
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         modifier = Modifier
-                            .offset { IntOffset(0, -68.dp.roundToPx() + (dragOffsetY * 0.35f).roundToInt()) }
-                            .clip(RoundedCornerShape(16.dp))
+                            .offset { IntOffset(0, -64.dp.roundToPx() + (dragOffsetY * 0.3f).roundToInt()) }
+                            .clip(RoundedCornerShape(14.dp))
                             .background(MaterialTheme.colorScheme.surface)
-                            .border(1.dp, if (dragOffsetY < -50f) RoseGoldPrimary else MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(16.dp))
-                            .padding(horizontal = 10.dp, vertical = 6.dp)
+                            .border(1.dp, if (dragOffsetY < -45f) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(14.dp))
+                            .padding(horizontal = 8.dp, vertical = 6.dp)
                     ) {
                         Icon(
-                            imageVector = if (dragOffsetY < -50f) Icons.Default.LockOpen else Icons.Default.Lock,
-                            contentDescription = "Slide up to lock",
-                            tint = if (dragOffsetY < -50f) RoseGoldPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            imageVector = if (dragOffsetY < -45f) Icons.Default.LockOpen else Icons.Default.Lock,
+                            contentDescription = "Lock",
+                            tint = if (dragOffsetY < -45f) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(16.dp)
                         )
                         Icon(
                             imageVector = Icons.Default.KeyboardArrowUp,
                             contentDescription = null,
-                            tint = if (dragOffsetY < -50f) RoseGoldPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            tint = if (dragOffsetY < -45f) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(14.dp)
                         )
                     }
@@ -420,30 +522,28 @@ fun MessageComposer(
                 ) { state ->
                     when (state) {
                         "SEND_TEXT" -> {
-                            // Case A: Send Text Button
                             Box(
                                 modifier = Modifier
                                     .size(46.dp)
                                     .appGradientShadow(CircleShape)
                                     .clip(CircleShape)
                                     .background(appHorizontalGradient())
-                                    .clickable { 
-                                        onSendText() 
-                                        showEmojiQuickBar = false
+                                    .clickable {
+                                        onSendText()
+                                        showEmojiPanel = false
                                     }
                                     .testTag("composer_send_button"),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Send,
-                                    contentDescription = "Send message",
+                                    contentDescription = "Send",
                                     tint = Color.White,
                                     modifier = Modifier.size(20.dp)
                                 )
                             }
                         }
                         "SEND_VOICE" -> {
-                            // Case B: Send Locked Voice Note Button
                             Box(
                                 modifier = Modifier
                                     .size(46.dp)
@@ -467,7 +567,6 @@ fun MessageComposer(
                             }
                         }
                         "MIC" -> {
-                            // Case C: Persistent Hold-to-Record Mic Button with Slide-Up-to-Lock
                             Box(
                                 modifier = Modifier
                                     .size(46.dp)
@@ -487,56 +586,60 @@ fun MessageComposer(
                                         awaitEachGesture {
                                             val down = awaitFirstDown(requireUnconsumed = false)
                                             down.consume()
-                                            val startTime = System.currentTimeMillis()
                                             dragOffsetX = 0f
                                             dragOffsetY = 0f
+
+                                            // Issue 14: Wait up to 220ms before starting recording.
+                                            // If the finger lifts in that time it's a tap, not a hold.
+                                            // This prevents false starts and the cancel/restart flicker.
+                                            var liftedEarly = false
+                                            withTimeoutOrNull(220L) {
+                                                while (true) {
+                                                    val ev = awaitPointerEvent()
+                                                    val ch = ev.changes.firstOrNull { it.id == down.id }
+                                                    if (ch == null || !ch.pressed) {
+                                                        liftedEarly = true
+                                                        break
+                                                    }
+                                                }
+                                            }
+
+                                            if (liftedEarly) {
+                                                // Quick tap — show hint, do not record
+                                                Toast.makeText(context, "Hold to record, release to send", Toast.LENGTH_SHORT).show()
+                                                return@awaitEachGesture
+                                            }
+
+                                            // Confirmed hold — start recording
+                                            val startTime = System.currentTimeMillis()
                                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                             onStartVoiceRecord()
 
-                                            var hasTriggeredCancelHaptic = false
                                             var hasLocked = false
 
                                             while (true) {
                                                 val event = awaitPointerEvent()
                                                 val change = event.changes.firstOrNull { it.id == down.id }
-                                                if (change == null || !change.pressed) {
-                                                    break
-                                                }
+                                                if (change == null || !change.pressed) break
                                                 change.consume()
-                                                
+
                                                 val delta = change.position - down.position
                                                 dragOffsetX = delta.x.coerceIn(-240f, 0f)
                                                 dragOffsetY = delta.y.coerceIn(-180f, 0f)
 
-                                                // Slide UP to lock hands-free recording
-                                                if (dragOffsetY < -65f && !hasLocked) {
+                                                if (dragOffsetY < -55f && !hasLocked) {
                                                     hasLocked = true
                                                     isLockedRecording = true
                                                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                                     break
                                                 }
-
-                                                if (dragOffsetX < -100f && !hasTriggeredCancelHaptic) {
-                                                    hasTriggeredCancelHaptic = true
-                                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                                } else if (dragOffsetX >= -100f) {
-                                                    hasTriggeredCancelHaptic = false
-                                                }
                                             }
 
-                                            // If locked, hands-free recording remains active on finger release
                                             if (!hasLocked && !isLockedRecording) {
-                                                val elapsed = System.currentTimeMillis() - startTime
-                                                if (dragOffsetX < -100f) {
-                                                    // Swiped left to cancel
+                                                if (dragOffsetX < -90f) {
                                                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                                     onCancelVoiceRecord()
-                                                } else if (elapsed < 500L) {
-                                                    // Tapped too quickly: cancel and instruct
-                                                    onCancelVoiceRecord()
-                                                    Toast.makeText(context, "Hold to record, release to send", Toast.LENGTH_SHORT).show()
                                                 } else {
-                                                    // Normal release: stop and send audio note
                                                     onStopAndSendVoiceRecord()
                                                 }
                                             }
@@ -550,89 +653,6 @@ fun MessageComposer(
                                     contentDescription = "Hold to record voice note",
                                     tint = if (isRecordingVoice) Color.White else MaterialTheme.colorScheme.primary,
                                     modifier = Modifier.size(22.dp)
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // WhatsApp-Style Centered Emoji Tab Button Below Typing Input
-        if (!isRecordingVoice) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 2.dp, bottom = 6.dp),
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Surface(
-                    shape = RoundedCornerShape(18.dp),
-                    color = if (showEmojiQuickBar) RoseGoldPrimary.copy(alpha = 0.12f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                    border = BorderStroke(1.dp, if (showEmojiQuickBar) RoseGoldPrimary.copy(alpha = 0.4f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
-                    modifier = Modifier
-                        .clickable { showEmojiQuickBar = !showEmojiQuickBar }
-                        .testTag("composer_emoji_button")
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 5.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center
-                    ) {
-                        Icon(
-                            imageVector = if (showEmojiQuickBar) Icons.Default.Keyboard else Icons.Outlined.Mood,
-                            contentDescription = "Toggle emoji bar",
-                            tint = if (showEmojiQuickBar) RoseGoldPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(17.dp)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = if (showEmojiQuickBar) "Keyboard" else "Emojis",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = if (showEmojiQuickBar) RoseGoldPrimary else MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-            }
-        }
-
-        // Quick Love Emojis Strip Below the Emoji Tab Button
-        AnimatedVisibility(visible = showEmojiQuickBar && !isRecordingVoice) {
-            Surface(
-                color = Color.Transparent,
-                tonalElevation = 0.dp,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 8.dp, vertical = 6.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    val quickEmojis = listOf(
-                        listOf("❤️", "🩷", "🧡", "💛", "💚", "🩵", "💙", "💜"),
-                        listOf("🤎", "🖤", "🤍", "💖", "💗", "💓", "💞", "💕"),
-                        listOf("💘", "💝", "💟", "🥰", "😍", "😘", "😚", "😻"),
-                        listOf("💋", "🫂", "🤗", "🫶", "💌", "🌹", "🧸", "✨")
-                    )
-                    
-                    quickEmojis.forEach { rowEmojis ->
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceEvenly,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            rowEmojis.forEach { emoji ->
-                                Text(
-                                    text = emoji,
-                                    fontSize = 24.sp,
-                                    modifier = Modifier
-                                        .clickable {
-                                            onTextChanged(text + emoji)
-                                        }
-                                        .padding(3.dp)
                                 )
                             }
                         }

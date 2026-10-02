@@ -54,22 +54,32 @@ class AuthRepository(private val context: Context) {
     private var isActivelyInChatTab: Boolean = false
     private var heartbeatJob: kotlinx.coroutines.Job? = null
 
+    // Track which partner ID we're currently listening to, to prevent duplicate listeners
+    private var currentListeningPartnerId: String? = null
+    private var currentListeningUserId: String? = null
+    private var currentListeningCoupleId: String? = null
+
+    // Track partner discovery listeners to prevent duplicate creation
+    private var partnerEmailQueryListener: ListenerRegistration? = null
+    private var partnerCoupleQueryListener: ListenerRegistration? = null
+    private var discoverySetupForCoupleId: String? = null
+
     init {
         loadLocalUserSession()
         val localUser = _currentUserState.value
         if (localUser != null) {
             listenToCurrentUser(localUser.id)
-            connectPartnerListener()
+            connectPartnerListenerOnce()
             localUser.coupleId?.let { listenToCoupleRoom(it, localUser.id) }
         } else {
             val currentFirebaseUser = auth?.currentUser
             if (currentFirebaseUser != null) {
                 listenToCurrentUser(currentFirebaseUser.uid)
-                connectPartnerListener()
+                connectPartnerListenerOnce()
             }
         }
 
-        // When disguise state changes (e.g. entering Notes), update presence immediately (Issue 5)
+        // When disguise state changes (e.g. entering Notes), update presence immediately
         kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main).launch {
             securityPrefs.isDisguiseActive.collect {
                 updatePresence()
@@ -102,13 +112,16 @@ class AuthRepository(private val context: Context) {
 
     fun updatePresence() {
         val isDisguised = securityPrefs.isDisguiseActive.value
-        // Show Online ONLY when actively inside the Chat tab, in foreground, and not in disguise (Issue 5)
+        // Show Online ONLY when actively inside the Chat tab, in foreground, and not in disguise
         val shouldBeOnline = isAppInForeground && isActivelyInChatTab && !isDisguised
         setOnline(shouldBeOnline)
     }
 
     fun listenToCoupleRoom(coupleId: String, currentUid: String) {
+        // Prevent duplicate listener for same couple
+        if (currentListeningCoupleId == coupleId) return
         coupleListener?.remove()
+        currentListeningCoupleId = coupleId
         coupleListener = firestore?.collection("couples")?.document(coupleId)
             ?.addSnapshotListener { snapshot, e ->
                 if (e != null || snapshot == null || !snapshot.exists()) return@addSnapshotListener
@@ -318,7 +331,7 @@ class AuthRepository(private val context: Context) {
 
         // Connect real-time listeners right away
         listenToCurrentUser(uid)
-        connectPartnerListener()
+        connectPartnerListenerOnce()
         setOnline(true)
 
         // Sync with Firestore in background without blocking login
@@ -474,7 +487,7 @@ class AuthRepository(private val context: Context) {
             securityPrefs.setCoupleSecretKey(coupleId)
 
             listenToCurrentUser(uid)
-            connectPartnerListener()
+            connectPartnerListenerOnce()
             setOnline(true)
 
             val fs = firestore
@@ -651,10 +664,6 @@ class AuthRepository(private val context: Context) {
         } catch (e: Exception) {
             Log.w("AuthRepository", "Failed to update online status", e)
         }
-
-        if (online) {
-            connectPartnerListener()
-        }
     }
 
     fun setTyping(typing: Boolean) {
@@ -731,11 +740,11 @@ class AuthRepository(private val context: Context) {
         setCheckAfter(newTarget, _currentUserState.value?.checkAfterNote ?: "")
     }
 
-    private var partnerEmailQueryListener: ListenerRegistration? = null
-    private var partnerCoupleQueryListener: ListenerRegistration? = null
-
     private fun listenToCurrentUser(uid: String) {
+        // Prevent duplicate listener for same user
+        if (currentListeningUserId == uid) return
         currentUserListener?.remove()
+        currentListeningUserId = uid
         currentUserListener = firestore?.collection("users")?.document(uid)
             ?.addSnapshotListener { snapshot, error ->
                 if (error != null) {
@@ -746,24 +755,39 @@ class AuthRepository(private val context: Context) {
                     val user = snapshot.toObject(User::class.java)
                     _currentUserState.value = user
                     user?.let { saveLocalUserSession(it) }
-                    connectPartnerListener()
+                    // Only connect partner listener if partner ID changed
+                    val newPartnerId = user?.partnerId
+                    if (!newPartnerId.isNullOrBlank() && newPartnerId != currentListeningPartnerId) {
+                        listenToPartner(newPartnerId)
+                    }
                 }
             }
     }
 
-    fun connectPartnerListener() {
+    /**
+     * Connect partner listener exactly once per unique partner/couple configuration.
+     * Prevents duplicate listeners during recomposition or tab switching.
+     */
+    fun connectPartnerListenerOnce() {
         val user = _currentUserState.value ?: return
         val partnerId = user.partnerId
-        if (!partnerId.isNullOrBlank() && partnerId != _partnerUserState.value?.id) {
+        if (!partnerId.isNullOrBlank() && partnerId != currentListeningPartnerId) {
             listenToPartner(partnerId)
         }
-        // Always also actively discover partner by coupleId and email in Firestore
-        findAndListenToPartner(user.partnerEmail, user.coupleId, user.id)
+        // Set up discovery listeners only once per couple
+        val coupleId = user.coupleId
+        if (coupleId != null && coupleId != discoverySetupForCoupleId) {
+            discoverySetupForCoupleId = coupleId
+            findAndListenToPartner(user.partnerEmail, coupleId, user.id)
+        }
     }
 
     fun listenToPartner(partnerId: String) {
         if (partnerId.isBlank()) return
+        // Skip if already listening to this exact partner
+        if (currentListeningPartnerId == partnerId) return
         partnerListener?.remove()
+        currentListeningPartnerId = partnerId
         partnerListener = firestore?.collection("users")?.document(partnerId)
             ?.addSnapshotListener { snapshot, error ->
                 if (error != null) {
@@ -815,7 +839,7 @@ class AuthRepository(private val context: Context) {
         val cleanEmail = partnerEmail?.trim()?.lowercase()
         if (!cleanEmail.isNullOrBlank()) {
             val partnerUid = if (cleanEmail.contains("@")) "user_${cleanEmail.substringBefore("@")}" else "user_$cleanEmail"
-            if (_partnerUserState.value == null) {
+            if (_partnerUserState.value == null && currentListeningPartnerId != partnerUid) {
                 listenToPartner(partnerUid)
             }
 
@@ -902,6 +926,12 @@ class AuthRepository(private val context: Context) {
         partnerListener?.remove()
         partnerEmailQueryListener?.remove()
         partnerCoupleQueryListener?.remove()
+        coupleListener?.remove()
+        // Reset tracking state
+        currentListeningUserId = null
+        currentListeningPartnerId = null
+        currentListeningCoupleId = null
+        discoverySetupForCoupleId = null
         try {
             auth?.signOut()
         } catch (e: Exception) {
