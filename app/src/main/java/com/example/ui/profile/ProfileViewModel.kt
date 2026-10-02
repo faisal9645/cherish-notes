@@ -32,6 +32,7 @@ data class ProfileUiState(
     val isCheckAfterReminderEnabled: Boolean = true,
     val isUpdating: Boolean = false,
     val isSecretHistoryRevealed: Boolean = false,
+    val showPreviousChats: Boolean = false,
     val themeMode: Int = 0,
     val chatBgTheme: Int = 0,
     val chatExperienceMode: com.example.ui.chat.ChatExperienceMode = com.example.ui.chat.ChatExperienceMode.NORMAL
@@ -193,11 +194,19 @@ class ProfileViewModel(
                 _uiState.update { it.copy(isSecretHistoryRevealed = revealed) }
             }
         }
+
+        viewModelScope.launch {
+            securityPreferences.showPreviousChats.collect { show ->
+                _uiState.update { it.copy(showPreviousChats = show) }
+            }
+        }
     }
 
     fun setThemeMode(mode: Int) {
         securityPreferences.setThemeMode(mode)
     }
+
+
 
     fun setChatBgTheme(theme: Int) {
         securityPreferences.setChatBgTheme(theme)
@@ -361,6 +370,10 @@ class ProfileViewModel(
 
     fun hideSecretHistory() {
         securityPreferences.hideSecretHistory()
+    }
+
+    fun setShowPreviousChatsEnabled(enabled: Boolean) {
+        securityPreferences.setShowPreviousChatsEnabled(enabled)
     }
 
     fun updatePartnerEmailAndKey(partnerEmail: String, coupleKey: String) {

@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.example.ui.theme.OnlineGreen
 import com.example.ui.theme.RoseGoldPrimary
+import com.example.ui.theme.appHorizontalGradient
 
 @Composable
 fun AvatarView(
@@ -37,15 +38,13 @@ fun AvatarView(
         modifier = modifier.size(size),
         contentAlignment = Alignment.Center
     ) {
-        // Glowing romantic ring around avatar
+        // Glowing vibrant royal blue ring around avatar
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .border(
-                    width = 2.dp,
-                    brush = Brush.linearGradient(
-                        listOf(RoseGoldPrimary, MaterialTheme.colorScheme.secondary)
-                    ),
+                    width = 2.5.dp,
+                    brush = appHorizontalGradient(),
                     shape = CircleShape
                 )
                 .padding(2.dp)

@@ -25,6 +25,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
@@ -67,6 +69,7 @@ fun MessageComposer(
     onTakePhoto: () -> Unit,
     onPickAttachment: () -> Unit,
     placeholder: String = "Message your love...",
+    isPrivateMode: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -105,8 +108,16 @@ fun MessageComposer(
 
     val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
     val barBg = MaterialTheme.colorScheme.surface
-    val pillBg = if (isDark) MaterialTheme.colorScheme.surfaceVariant else Color(0xFFF1F5F9)
-    val pillBorder = if (isDark) Color(0xFF1E293B) else Color(0xFFE2E8F0)
+    val pillBg = if (isPrivateMode) {
+        if (isDark) Color(0xFF212124) else Color(0xFFF3F4F6)
+    } else {
+        if (isDark) Color(0xFF1E2638) else Color.White
+    }
+    val pillBorder = if (isPrivateMode) {
+        if (isDark) Color(0xFF2E2F33) else Color(0xFFE5E7EB)
+    } else {
+        if (isDark) Color(0xFF2A364F) else Color(0xFFE2E8F0)
+    }
 
     val emojiList = remember {
         listOf(
@@ -144,7 +155,7 @@ fun MessageComposer(
                             modifier = Modifier
                                 .width(3.dp)
                                 .height(32.dp)
-                                .background(MaterialTheme.colorScheme.primary, CircleShape)
+                                .background(if (isPrivateMode) (if (isDark) Color(0xFF9CA3AF) else Color(0xFF6B7280)) else MaterialTheme.colorScheme.primary, CircleShape)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Column(modifier = Modifier.weight(1f)) {
@@ -152,7 +163,7 @@ fun MessageComposer(
                                 text = "Replying to ${replyingTo.senderName ?: "Partner"}",
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.primary
+                                color = if (isPrivateMode) (if (isDark) Color(0xFFECECEC) else Color(0xFF111827)) else MaterialTheme.colorScheme.primary
                             )
                             Text(
                                 text = replyingTo.text,
@@ -385,36 +396,35 @@ fun MessageComposer(
                 Row(
                     modifier = Modifier
                         .weight(1f)
-                        .heightIn(min = 46.dp)
-                        .clip(RoundedCornerShape(24.dp))
+                        .heightIn(min = 48.dp)
+                        .clip(RoundedCornerShape(26.dp))
                         .background(pillBg)
-                        .border(BorderStroke(1.dp, pillBorder), RoundedCornerShape(24.dp))
-                        .padding(start = 4.dp, end = 4.dp),
+                        .border(BorderStroke(1.dp, pillBorder), RoundedCornerShape(26.dp))
+                        .padding(start = if (isPrivateMode) 16.dp else 4.dp, end = if (isPrivateMode) 12.dp else 4.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Far Left: 🙂 Emoji button
-                    // Issue 15: Hide keyboard when opening emoji panel; restore focus when closing.
-                    IconButton(
-                        onClick = {
-                            if (showEmojiPanel) {
-                                showEmojiPanel = false
-                                // Keyboard will re-appear when TextField regains focus
-                            } else {
-                                // Hide keyboard before showing emoji panel to avoid double-push
-                                keyboardController?.hide()
-                                showEmojiPanel = true
-                            }
-                        },
-                        modifier = Modifier
-                            .size(38.dp)
-                            .testTag("composer_emoji_button")
-                    ) {
-                        Icon(
-                            imageVector = if (showEmojiPanel) Icons.Default.Keyboard else Icons.Outlined.Mood,
-                            contentDescription = "Toggle emoji panel",
-                            tint = if (showEmojiPanel) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(22.dp)
-                        )
+                    if (!isPrivateMode) {
+                        // Far Left: 🙂 Emoji button
+                        IconButton(
+                            onClick = {
+                                if (showEmojiPanel) {
+                                    showEmojiPanel = false
+                                } else {
+                                    keyboardController?.hide()
+                                    showEmojiPanel = true
+                                }
+                            },
+                            modifier = Modifier
+                                .size(38.dp)
+                                .testTag("composer_emoji_button")
+                        ) {
+                            Icon(
+                                imageVector = if (showEmojiPanel) Icons.Default.Keyboard else Icons.Outlined.Mood,
+                                contentDescription = "Toggle emoji panel",
+                                tint = if (showEmojiPanel) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
                     }
 
                     // Center: Auto-expanding text input
@@ -427,19 +437,27 @@ fun MessageComposer(
                         if (text.isEmpty()) {
                             Text(
                                 text = placeholder,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                                fontSize = 15.sp
+                                color = if (isPrivateMode) {
+                                    if (isDark) Color(0xFF9CA3AF) else Color(0xFF6B7280)
+                                } else {
+                                    Color(0xFF64748B)
+                                },
+                                fontSize = 14.sp
                             )
                         }
                         BasicTextField(
                             value = text,
                             onValueChange = onTextChanged,
                             textStyle = TextStyle(
-                                color = MaterialTheme.colorScheme.onSurface,
+                                color = if (isPrivateMode) {
+                                    if (isDark) Color(0xFFECECEC) else Color(0xFF111827)
+                                } else {
+                                    if (isDark) Color.White else Color(0xFF0F172A)
+                                },
                                 fontSize = 15.sp,
                                 lineHeight = 20.sp
                             ),
-                            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                            cursorBrush = SolidColor(if (isPrivateMode) (if (isDark) Color(0xFFD1D5DB) else Color(0xFF374151)) else DayBluePrimary),
                             maxLines = 5,
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -447,34 +465,36 @@ fun MessageComposer(
                         )
                     }
 
-                    // Right inside pill: 📎 Attachment button
-                    IconButton(
-                        onClick = onPickAttachment,
-                        modifier = Modifier
-                            .size(36.dp)
-                            .testTag("composer_attach_button")
-                    ) {
-                        Icon(
-                            imageVector = Icons.Outlined.AttachFile,
-                            contentDescription = "Attach file or photo",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(21.dp)
-                        )
-                    }
+                    if (!isPrivateMode) {
+                        // Right inside pill: 📎 Attachment button
+                        IconButton(
+                            onClick = onPickAttachment,
+                            modifier = Modifier
+                                .size(36.dp)
+                                .testTag("composer_attach_button")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.AttachFile,
+                                contentDescription = "Attach file or photo",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
 
-                    // Right inside pill: 📷 Real-time Camera button
-                    IconButton(
-                        onClick = onTakePhoto,
-                        modifier = Modifier
-                            .size(36.dp)
-                            .testTag("composer_camera_button")
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.CameraAlt,
-                            contentDescription = "Camera",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(20.dp)
-                        )
+                        // Right inside pill: 📷 Real-time Camera button
+                        IconButton(
+                            onClick = onTakePhoto,
+                            modifier = Modifier
+                                .size(36.dp)
+                                .testTag("composer_camera_button")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.CameraAlt,
+                                contentDescription = "Camera",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
                     }
                 }
             }
@@ -522,12 +542,23 @@ fun MessageComposer(
                 ) { state ->
                     when (state) {
                         "SEND_TEXT" -> {
+                            val sendBg = if (isPrivateMode) {
+                                if (isDark) Color(0xFFECECEC) else Color(0xFF1F2937)
+                            } else null
+                            val sendTint = if (isPrivateMode) {
+                                if (isDark) Color(0xFF111827) else Color.White
+                            } else Color.White
+
                             Box(
                                 modifier = Modifier
-                                    .size(46.dp)
-                                    .appGradientShadow(CircleShape)
-                                    .clip(CircleShape)
-                                    .background(appHorizontalGradient())
+                                    .size(48.dp)
+                                    .then(
+                                        if (isPrivateMode) Modifier.clip(CircleShape).background(sendBg!!)
+                                        else Modifier
+                                            .appGradientShadow(CircleShape)
+                                            .clip(CircleShape)
+                                            .background(appHorizontalGradient())
+                                    )
                                     .clickable {
                                         onSendText()
                                         showEmojiPanel = false
@@ -536,20 +567,31 @@ fun MessageComposer(
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
-                                    imageVector = Icons.Default.Send,
+                                    imageVector = if (isPrivateMode) Icons.Default.ArrowUpward else Icons.Default.Send,
                                     contentDescription = "Send",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(20.dp)
+                                    tint = sendTint,
+                                    modifier = Modifier.size(22.dp)
                                 )
                             }
                         }
                         "SEND_VOICE" -> {
+                            val sendBg = if (isPrivateMode) {
+                                if (isDark) Color(0xFFECECEC) else Color(0xFF1F2937)
+                            } else null
+                            val sendTint = if (isPrivateMode) {
+                                if (isDark) Color(0xFF111827) else Color.White
+                            } else Color.White
+
                             Box(
                                 modifier = Modifier
-                                    .size(46.dp)
-                                    .appGradientShadow(CircleShape)
-                                    .clip(CircleShape)
-                                    .background(appHorizontalGradient())
+                                    .size(48.dp)
+                                    .then(
+                                        if (isPrivateMode) Modifier.clip(CircleShape).background(sendBg!!)
+                                        else Modifier
+                                            .appGradientShadow(CircleShape)
+                                            .clip(CircleShape)
+                                            .background(appHorizontalGradient())
+                                    )
                                     .clickable {
                                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                         isLockedRecording = false
@@ -559,27 +601,40 @@ fun MessageComposer(
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
-                                    imageVector = Icons.Default.Send,
+                                    imageVector = if (isPrivateMode) Icons.Default.ArrowUpward else Icons.Default.Send,
                                     contentDescription = "Send voice note",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(20.dp)
+                                    tint = sendTint,
+                                    modifier = Modifier.size(22.dp)
                                 )
                             }
                         }
                         "MIC" -> {
+                            val micBg = if (isPrivateMode) {
+                                if (isRecordingVoice) {
+                                    if (isDark) Color(0xFFE5E7EB) else Color(0xFF374151)
+                                } else {
+                                    if (isDark) Color(0xFF2E2F33) else Color(0xFFE5E7EB)
+                                }
+                            } else null
+                            val micTint = if (isPrivateMode) {
+                                if (isRecordingVoice) {
+                                    if (isDark) Color(0xFF111827) else Color.White
+                                } else {
+                                    if (isDark) Color(0xFFD1D5DB) else Color(0xFF374151)
+                                }
+                            } else Color.White
+
                             Box(
                                 modifier = Modifier
-                                    .size(46.dp)
+                                    .size(48.dp)
                                     .then(
-                                        if (isRecordingVoice) {
+                                        if (isPrivateMode) {
+                                            Modifier.clip(CircleShape).background(micBg!!)
+                                        } else {
                                             Modifier
                                                 .appGradientShadow(CircleShape)
                                                 .clip(CircleShape)
                                                 .background(appHorizontalGradient())
-                                        } else {
-                                            Modifier
-                                                .clip(CircleShape)
-                                                .background(MaterialTheme.colorScheme.primaryContainer)
                                         }
                                     )
                                     .pointerInput(Unit) {
@@ -651,7 +706,7 @@ fun MessageComposer(
                                 Icon(
                                     imageVector = Icons.Default.Mic,
                                     contentDescription = "Hold to record voice note",
-                                    tint = if (isRecordingVoice) Color.White else MaterialTheme.colorScheme.primary,
+                                    tint = micTint,
                                     modifier = Modifier.size(22.dp)
                                 )
                             }

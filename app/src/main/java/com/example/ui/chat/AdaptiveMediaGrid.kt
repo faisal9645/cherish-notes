@@ -4,6 +4,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Image
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -18,6 +21,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import com.example.ui.theme.DayBlueSecondary
 
 /**
  * Telegram-style Adaptive Media Grid for Chat & Memories.
@@ -72,8 +76,8 @@ fun AdaptiveMediaGrid(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(gridHeight),
-                    horizontalArrangement = Arrangement.spacedBy(spacing)
+                        .height(135.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     MediaTile(
                         url = urls[0],
@@ -81,6 +85,7 @@ fun AdaptiveMediaGrid(
                         modifier = Modifier
                             .weight(1f)
                             .fillMaxHeight()
+                            .clip(RoundedCornerShape(12.dp))
                             .clickable { onImageClick(0, urls[0]) }
                     )
                     MediaTile(
@@ -89,6 +94,7 @@ fun AdaptiveMediaGrid(
                         modifier = Modifier
                             .weight(1f)
                             .fillMaxHeight()
+                            .clip(RoundedCornerShape(12.dp))
                             .clickable { onImageClick(1, urls[1]) }
                     )
                 }
@@ -272,14 +278,30 @@ private fun MediaTile(
     contentScale: ContentScale = ContentScale.Crop
 ) {
     val context = LocalContext.current
-    AsyncImage(
-        model = ImageRequest.Builder(context)
-            .data(url)
-            .crossfade(200)
-            .build(),
-        contentDescription = "Photo",
-        contentScale = contentScale,
+    Box(
         modifier = modifier
-            .background(Color(0xFFEBEBEF))
-    )
+            .background(Color(0xFFE2E8F0))
+            .clip(RoundedCornerShape(12.dp)),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = Icons.Default.Image,
+            contentDescription = "Photo placeholder",
+            tint = DayBlueSecondary.copy(alpha = 0.6f),
+            modifier = Modifier.size(36.dp)
+        )
+        if (url.isNotBlank()) {
+            AsyncImage(
+                model = ImageRequest.Builder(context)
+                    .data(url)
+                    .crossfade(200)
+                    .build(),
+                contentDescription = "Photo",
+                contentScale = contentScale,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clip(RoundedCornerShape(12.dp))
+            )
+        }
+    }
 }

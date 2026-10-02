@@ -61,6 +61,16 @@ class SecurityPreferences(context: Context) {
         _isSecretHistoryRevealed.value = false
     }
 
+    private val _showPreviousChats = MutableStateFlow(isShowPreviousChatsEnabled())
+    val showPreviousChats: StateFlow<Boolean> = _showPreviousChats.asStateFlow()
+
+    fun isShowPreviousChatsEnabled(): Boolean = prefs.getBoolean(KEY_SHOW_PREVIOUS_CHATS, false)
+
+    fun setShowPreviousChatsEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_SHOW_PREVIOUS_CHATS, enabled).apply()
+        _showPreviousChats.value = enabled
+    }
+
     private val _themeMode = MutableStateFlow(getThemeMode())
     val themeMode: StateFlow<Int> = _themeMode.asStateFlow()
 
@@ -359,6 +369,7 @@ class SecurityPreferences(context: Context) {
         private const val KEY_HAS_SEEN_STEALTH_SHIELD_TIP = "has_seen_stealth_shield_tip"
         private const val KEY_REQUIRE_PHONE_LOCK_AFTER_HOLD = "require_phone_lock_after_hold"
         private const val KEY_INITIAL_PERMS_REQUESTED = "initial_perms_requested"
+        private const val KEY_SHOW_PREVIOUS_CHATS = "show_previous_chats"
 
         @Volatile
         private var INSTANCE: SecurityPreferences? = null

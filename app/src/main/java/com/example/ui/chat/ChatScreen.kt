@@ -79,6 +79,7 @@ fun ChatScreen(
     val scope = rememberCoroutineScope()
     val uiState by viewModel.uiState.collectAsState()
     val listState = rememberLazyListState()
+    val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
 
     var composerText by remember { mutableStateOf("") }
     var editingMessage by remember { mutableStateOf<Message?>(null) }
@@ -233,10 +234,22 @@ fun ChatScreen(
     }
 
     // Filter messages for search query and starred filter - all messages preserved
-    val displayedMessages = remember(uiState.messages, uiState.searchQuery, uiState.filterStarredOnly) {
+    val displayedMessages = remember(uiState.messages, uiState.searchQuery, uiState.filterStarredOnly, uiState.showPreviousChats) {
         var list = uiState.messages
         if (uiState.filterStarredOnly) {
             list = list.filter { it.isStarred }
+        }
+        if (!uiState.showPreviousChats) {
+            val now = java.util.Calendar.getInstance()
+            if (now.get(java.util.Calendar.HOUR_OF_DAY) < 6) {
+                now.add(java.util.Calendar.DAY_OF_YEAR, -1)
+            }
+            now.set(java.util.Calendar.HOUR_OF_DAY, 6)
+            now.set(java.util.Calendar.MINUTE, 0)
+            now.set(java.util.Calendar.SECOND, 0)
+            now.set(java.util.Calendar.MILLISECOND, 0)
+            val today6am = now.timeInMillis
+            list = list.filter { it.timestamp >= today6am }
         }
         if (uiState.searchQuery.isNotBlank()) {
             val q = uiState.searchQuery.trim()
@@ -379,24 +392,7 @@ fun ChatScreen(
                         val isPrivate = uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE
                         
                         if (isPrivate) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Lock,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = "Private Chat",
-                                    fontSize = 16.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                            }
+                            // ChatGPT screen style: Hide title and lock icon completely
                         } else {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
@@ -408,22 +404,22 @@ fun ChatScreen(
                                 AvatarView(
                                     photoUrl = partner?.photoUrl,
                                     name = partnerName,
-                                    size = 36.dp,
+                                    size = 40.dp,
                                     isOnline = isPartnerOnline,
                                     showOnlineBadge = !partnerHasCheckAfter
                                 )
-                                Spacer(modifier = Modifier.width(8.dp))
+                                Spacer(modifier = Modifier.width(10.dp))
                                 Column(
                                     modifier = Modifier.widthIn(max = 160.dp),
                                     verticalArrangement = Arrangement.Center
                                 ) {
                                     Text(
                                         text = partnerName,
-                                        fontSize = 15.sp,
+                                        fontSize = 17.sp,
                                         fontWeight = FontWeight.Bold,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis,
-                                        color = MaterialTheme.colorScheme.onSurface
+                                        color = if (isDark) Color.White else Color(0xFF0F172A)
                                     )
                                     Text(
                                         text = if (partnerHasCheckAfter) {
@@ -445,21 +441,17 @@ fun ChatScreen(
                                                 "Offline"
                                             }
                                         },
-                                        fontSize = 11.sp,
+                                        fontSize = 12.sp,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis,
                                         color = if (partnerHasCheckAfter) {
-                                            MaterialTheme.colorScheme.primary
+                                            Color(0xFF3B82F6)
                                         } else if (isPartnerOnline) {
                                             OnlineGreen
                                         } else {
-                                            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f)
+                                            Color(0xFF3B82F6)
                                         },
-                                        fontWeight = if (partnerHasCheckAfter || isPartnerOnline) {
-                                            FontWeight.SemiBold
-                                        } else {
-                                            FontWeight.Normal
-                                        }
+                                        fontWeight = FontWeight.Normal
                                     )
                                 }
                             }
@@ -482,7 +474,11 @@ fun ChatScreen(
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Back",
-                            modifier = Modifier.size(22.dp)
+                            tint = if (uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE)
+                                MaterialTheme.colorScheme.onSurface
+                            else
+                                MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.size(24.dp)
                         )
                     }
                 },
@@ -495,34 +491,38 @@ fun ChatScreen(
                             Icon(Icons.Default.Close, contentDescription = "Close search", modifier = Modifier.size(20.dp))
                         }
                     } else {
-                        IconButton(
-                            onClick = { viewModel.setSearching(true) },
-                            modifier = Modifier
-                                .size(38.dp)
-                                .testTag("chat_search_button")
-                        ) {
-                            Icon(Icons.Default.Search, contentDescription = "Search messages", modifier = Modifier.size(20.dp))
-                        }
-                        IconButton(
-                            onClick = onNavigateToGallery,
-                            modifier = Modifier
-                                .size(38.dp)
-                                .testTag("chat_gallery_button")
-                        ) {
-                            Icon(Icons.Outlined.PhotoLibrary, contentDescription = "Couple Media Gallery", modifier = Modifier.size(20.dp))
-                        }
-                        IconButton(
-                            onClick = { viewModel.openCheckAfterSheet() },
-                            modifier = Modifier
-                                .size(38.dp)
-                                .testTag("chat_check_after_button")
-                        ) {
-                            Icon(
-                                imageVector = if (partnerHasCheckAfter || iHaveCheckAfter) Icons.Filled.HourglassTop else Icons.Outlined.HourglassTop,
-                                contentDescription = "Check After Timer",
-                                tint = if (partnerHasCheckAfter || iHaveCheckAfter) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(20.dp)
-                            )
+                        val isPrivate = uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE
+                        val iconTint = if (isPrivate) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface
+                        if (!isPrivate) {
+                            IconButton(
+                                onClick = { viewModel.setSearching(true) },
+                                modifier = Modifier
+                                    .size(38.dp)
+                                    .testTag("chat_search_button")
+                            ) {
+                                Icon(Icons.Default.Search, contentDescription = "Search messages", tint = iconTint, modifier = Modifier.size(22.dp))
+                            }
+                            IconButton(
+                                onClick = onNavigateToGallery,
+                                modifier = Modifier
+                                    .size(38.dp)
+                                    .testTag("chat_gallery_button")
+                            ) {
+                                Icon(Icons.Outlined.PhotoLibrary, contentDescription = "Couple Media Gallery", tint = iconTint, modifier = Modifier.size(22.dp))
+                            }
+                            IconButton(
+                                onClick = { viewModel.openCheckAfterSheet() },
+                                modifier = Modifier
+                                    .size(38.dp)
+                                    .testTag("chat_check_after_button")
+                            ) {
+                                Icon(
+                                    imageVector = if (partnerHasCheckAfter || iHaveCheckAfter) Icons.Filled.HourglassTop else Icons.Outlined.HourglassTop,
+                                    contentDescription = "Check After Timer",
+                                    tint = if (partnerHasCheckAfter || iHaveCheckAfter) MaterialTheme.colorScheme.primary else iconTint,
+                                    modifier = Modifier.size(22.dp)
+                                )
+                            }
                         }
 
                         Box {
@@ -532,22 +532,24 @@ fun ChatScreen(
                                     .size(38.dp)
                                     .testTag("chat_more_menu_button")
                             ) {
-                                Icon(Icons.Default.MoreVert, contentDescription = "More options", modifier = Modifier.size(20.dp))
+                                Icon(Icons.Default.MoreVert, contentDescription = "More options", tint = iconTint, modifier = Modifier.size(22.dp))
                             }
                             DropdownMenu(
                                 expanded = showChatMenu,
                                 onDismissRequest = { showChatMenu = false }
                             ) {
-                                DropdownMenuItem(
-                                    text = { Text("Check After Timer") },
-                                    onClick = {
-                                        showChatMenu = false
-                                        viewModel.openCheckAfterSheet()
-                                    },
-                                    leadingIcon = {
-                                        Icon(Icons.Filled.HourglassTop, null, tint = RoseGoldPrimary)
-                                    }
-                                )
+                                if (!isPrivate) {
+                                    DropdownMenuItem(
+                                        text = { Text("Check After Timer") },
+                                        onClick = {
+                                            showChatMenu = false
+                                            viewModel.openCheckAfterSheet()
+                                        },
+                                        leadingIcon = {
+                                            Icon(Icons.Filled.HourglassTop, null, tint = RoseGoldPrimary)
+                                        }
+                                    )
+                                }
 
                                 DropdownMenuItem(
                                     text = { Text(if (uiState.filterStarredOnly) "Show All Messages" else "Starred Messages ⭐") },
@@ -577,7 +579,7 @@ fun ChatScreen(
                                         Icon(
                                             Icons.Default.Person,
                                             null,
-                                            tint = RoseGoldPrimary
+                                            tint = if (isPrivate) MaterialTheme.colorScheme.onSurfaceVariant else RoseGoldPrimary
                                         )
                                     }
                                 )
@@ -653,25 +655,26 @@ fun ChatScreen(
                                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
+                                val isPrivate = uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE
                                 if (uiState.isPartnerRecordingAudio) {
                                     Icon(
                                         imageVector = Icons.Default.Mic,
                                         contentDescription = null,
-                                        tint = RoseGoldPrimary,
+                                        tint = if (isPrivate) MaterialTheme.colorScheme.onSurfaceVariant else RoseGoldPrimary,
                                         modifier = Modifier.size(16.dp)
                                     )
                                     Spacer(modifier = Modifier.width(6.dp))
                                     Text(
-                                        text = if (uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE)
+                                        text = if (isPrivate)
                                             "recording audio..."
                                         else
                                             "$partnerName is recording...",
                                         fontSize = 13.sp,
-                                        color = RoseGoldPrimary,
+                                        color = if (isPrivate) MaterialTheme.colorScheme.onSurfaceVariant else RoseGoldPrimary,
                                         fontWeight = FontWeight.Medium
                                     )
                                 } else {
-                                    if (uiState.chatExperienceMode != com.example.ui.chat.ChatExperienceMode.PRIVATE) {
+                                    if (!isPrivate) {
                                         Text(
                                             text = "$partnerName is typing",
                                             fontSize = 13.sp,
@@ -680,7 +683,7 @@ fun ChatScreen(
                                         )
                                         Spacer(modifier = Modifier.width(6.dp))
                                     }
-                                    BouncingDots()
+                                    BouncingDots(color = if (isPrivate) MaterialTheme.colorScheme.onSurfaceVariant else RoseGoldPrimary)
                                 }
                             }
                         }
@@ -723,7 +726,8 @@ fun ChatScreen(
                         uiState.isStealthCurtainActive -> "Add a note..."
                         uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE -> "Type a message..."
                         else -> "Type something sweet to $partnerName... ❤️"
-                    }
+                    },
+                    isPrivateMode = (uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE)
                 )
             }
         }
@@ -786,7 +790,7 @@ fun ChatScreen(
 
             // Issue 8: Check-After banner — FIXED position below profile header,
             // NOT inside LazyColumn. The banner stays pinned while messages scroll underneath.
-            if (!uiState.isStealthCurtainActive) {
+            if (!uiState.isStealthCurtainActive && uiState.chatExperienceMode != com.example.ui.chat.ChatExperienceMode.PRIVATE) {
                 if (partnerHasCheckAfter) {
                     CheckAfterChatBanner(
                         targetMillis = partnerCheckAfterTarget,
@@ -835,7 +839,7 @@ fun ChatScreen(
                     .fillMaxWidth()
                     .weight(1f)
             ) {
-                if (!uiState.isStealthCurtainActive) {
+                if (!uiState.isStealthCurtainActive && uiState.chatExperienceMode != com.example.ui.chat.ChatExperienceMode.PRIVATE) {
                     ChatWallpaper(
                         chatBgTheme = uiState.chatBgTheme,
                         modifier = Modifier.fillMaxSize()
@@ -851,7 +855,11 @@ fun ChatScreen(
                 val reversedMessages = remember(displayedMessages) { displayedMessages.reversed() }
                 LazyColumn(
                     state = listState,
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier.fillMaxSize().pointerInput(Unit) {
+                        detectTapGestures(
+                            onDoubleTap = { onQuickDisguise() }
+                        )
+                    },
                     reverseLayout = true,
                     contentPadding = PaddingValues(vertical = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp)
@@ -865,24 +873,65 @@ fun ChatScreen(
                         val isFirstOfDay = index == reversedMessages.lastIndex || !isSameDay(reversedMessages[index + 1].timestamp, message.timestamp)
 
                         Column(modifier = Modifier.animateItem()) {
-                            if (isFirstOfDay) {
-                                Box(
+                            val dateSep = formatDateSeparator(message.timestamp)
+                            if (isFirstOfDay && dateSep.isNotEmpty()) {
+                                Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(vertical = 12.dp),
-                                    contentAlignment = Alignment.Center
+                                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                                    verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Surface(
-                                        shape = CircleShape,
-                                        color = MaterialTheme.colorScheme.surfaceVariant,
-                                        tonalElevation = 1.dp
-                                    ) {
-                                        Text(
-                                            text = formatDateSeparator(message.timestamp),
-                                            fontSize = 11.sp,
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+                                    if (uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE) {
+                                        Box(
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .height(1.dp)
+                                                .background(if (isDark) Color(0xFF2E2F33) else Color(0xFFE5E7EB))
+                                        )
+                                        Surface(
+                                            shape = CircleShape,
+                                            color = if (isDark) Color(0xFF25262B) else Color(0xFFF3F4F6),
+                                            modifier = Modifier.padding(horizontal = 8.dp)
+                                        ) {
+                                            Text(
+                                                text = dateSep,
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Medium,
+                                                color = if (isDark) Color(0xFF9CA3AF) else Color(0xFF6B7280),
+                                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp)
+                                            )
+                                        }
+                                        Box(
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .height(1.dp)
+                                                .background(if (isDark) Color(0xFF2E2F33) else Color(0xFFE5E7EB))
+                                        )
+                                    } else {
+                                        Box(
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .height(1.dp)
+                                                .background(DayBlueSecondary.copy(alpha = if (isDark) 0.35f else 0.25f))
+                                        )
+                                        Surface(
+                                            shape = CircleShape,
+                                            color = DayBlueSecondary.copy(alpha = if (isDark) 0.2f else 0.12f),
+                                            modifier = Modifier.padding(horizontal = 8.dp)
+                                        ) {
+                                            Text(
+                                                text = dateSep,
+                                                fontSize = 12.sp,
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = if (isDark) DayBlueSecondary else DayBluePrimary,
+                                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 4.dp)
+                                            )
+                                        }
+                                        Box(
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .height(1.dp)
+                                                .background(DayBlueSecondary.copy(alpha = if (isDark) 0.35f else 0.25f))
                                         )
                                     }
                                 }
@@ -891,15 +940,17 @@ fun ChatScreen(
                             // Read marking is handled in the batched LaunchedEffect above the Scaffold.
                             // Do NOT put Firestore writes inside LazyColumn items — they fire on every scroll.
 
+                            val isPrivate = uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE
                             val isHighlighted = (highlightedMessageId == message.id)
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .then(
                                         if (isHighlighted) {
+                                            val hColor = if (isPrivate) (if (isDark) Color(0xFF6B7280) else Color(0xFF9CA3AF)) else RoseGoldPrimary
                                             Modifier
-                                                .background(RoseGoldPrimary.copy(alpha = 0.15f), RoundedCornerShape(16.dp))
-                                                .border(2.dp, RoseGoldPrimary, RoundedCornerShape(16.dp))
+                                                .background(hColor.copy(alpha = 0.15f), RoundedCornerShape(16.dp))
+                                                .border(2.dp, hColor, RoundedCornerShape(16.dp))
                                                 .padding(4.dp)
                                         } else Modifier
                                     )
@@ -950,14 +1001,17 @@ fun ChatScreen(
                                                 }
                                             }
                                         }
-                                    }
+                                    },
+                                    isPrivateMode = isPrivate
                                 )
                             }
                         }
                     }
 
                     item(key = "info_card", contentType = "info_card") {
-                        Column(
+                        val isPrivate = uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE
+                        if (!isPrivate) {
+                            Column(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(horizontal = 20.dp, vertical = 10.dp),
@@ -1003,8 +1057,8 @@ fun ChatScreen(
                             }
                         }
                     }
-
                 }
+            }
 
 
             // Floating scroll to bottom button
@@ -1020,6 +1074,7 @@ fun ChatScreen(
                     .align(Alignment.BottomEnd)
                     .padding(16.dp)
             ) {
+                val isPrivate = uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE
                 SmallFloatingActionButton(
                     onClick = {
                         scope.launch {
@@ -1028,8 +1083,8 @@ fun ChatScreen(
                             }
                         }
                     },
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                    containerColor = if (isPrivate) (if (isDark) Color(0xFF2E2F33) else Color(0xFFE5E7EB)) else MaterialTheme.colorScheme.primaryContainer,
+                    contentColor = if (isPrivate) (if (isDark) Color(0xFFECECEC) else Color(0xFF1F2937)) else MaterialTheme.colorScheme.onPrimaryContainer,
                     shape = CircleShape
                 ) {
                     Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Scroll to bottom")
@@ -1563,7 +1618,7 @@ fun StealthDisguiseNotesView(
 }
 
 @Composable
-fun BouncingDots() {
+fun BouncingDots(color: Color = RoseGoldPrimary) {
     val infiniteTransition = rememberInfiniteTransition(label = "bouncing_dots")
     val dot1 by infiniteTransition.animateFloat(
         initialValue = 0f,
@@ -1597,9 +1652,9 @@ fun BouncingDots() {
         horizontalArrangement = Arrangement.spacedBy(3.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Box(modifier = Modifier.offset(y = dot1.dp).size(6.dp).background(RoseGoldPrimary, CircleShape))
-        Box(modifier = Modifier.offset(y = dot2.dp).size(6.dp).background(RoseGoldPrimary, CircleShape))
-        Box(modifier = Modifier.offset(y = dot3.dp).size(6.dp).background(RoseGoldPrimary, CircleShape))
+        Box(modifier = Modifier.offset(y = dot1.dp).size(6.dp).background(color, CircleShape))
+        Box(modifier = Modifier.offset(y = dot2.dp).size(6.dp).background(color, CircleShape))
+        Box(modifier = Modifier.offset(y = dot3.dp).size(6.dp).background(color, CircleShape))
     }
 }
 
@@ -1619,7 +1674,7 @@ fun isSameDay(t1: Long, t2: Long): Boolean {
 
 fun formatDateSeparator(timestamp: Long): String {
     val now = System.currentTimeMillis()
-    if (isSameDay(timestamp, now)) return "Today"
+    if (isSameDay(timestamp, now)) return ""
     if (isSameDay(timestamp, now - 86400000L)) return "Yesterday"
     
     val offset = 6 * 60 * 60 * 1000L

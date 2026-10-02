@@ -480,6 +480,19 @@ fun ProfileScreen(
                 title = "Privacy & Stealth Vault",
                 icon = Icons.Default.Security
             ) {
+                ListItem(
+                    headlineContent = { Text("Show Previous Chats", fontSize = 15.sp, fontWeight = FontWeight.SemiBold) },
+                    supportingContent = { Text("Show chats from previous days (before 6 AM today)", fontSize = 13.sp) },
+                    leadingContent = { Icon(Icons.Default.History, contentDescription = null, tint = primaryAccent) },
+                    trailingContent = {
+                        Switch(
+                            checked = uiState.showPreviousChats,
+                            onCheckedChange = { viewModel.setShowPreviousChatsEnabled(it) }
+                        )
+                    }
+                )
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), thickness = 0.6.dp)
+
                 // Notes Disguise Toggle
                 ListItem(
                     headlineContent = { Text("Disguise as Notes App", fontSize = 15.sp, fontWeight = FontWeight.SemiBold) },

@@ -44,6 +44,7 @@ data class ChatUiState(
     val filterStarredOnly: Boolean = false,
     val voicePlaybackSpeed: Float = 1.0f,
     val isSecretHistoryRevealed: Boolean = true,
+    val showPreviousChats: Boolean = false,
     val targetScrollMessageId: String? = null,
     val chatBgTheme: Int = 0,
     val chatExperienceMode: ChatExperienceMode = ChatExperienceMode.NORMAL
@@ -111,6 +112,12 @@ class ChatViewModel(
         viewModelScope.launch {
             securityPreferences.isSecretHistoryRevealed.collect { revealed ->
                 _uiState.update { it.copy(isSecretHistoryRevealed = revealed) }
+            }
+        }
+
+        viewModelScope.launch {
+            securityPreferences.showPreviousChats.collect { show ->
+                _uiState.update { it.copy(showPreviousChats = show) }
             }
         }
 
