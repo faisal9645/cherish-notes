@@ -432,49 +432,9 @@ fun ProfileScreen(
                         Icon(Icons.Default.Key, contentDescription = null, tint = primaryAccent)
                     }
                 )
-
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 14.dp, vertical = 10.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Button(
-                        onClick = { showPairDialog = true },
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(42.dp)
-                            .testTag("manage_login_credentials_button"),
-                        shape = RoundedCornerShape(10.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                            contentColor = primaryAccent
-                        )
-                    ) {
-                        Icon(Icons.Default.ManageAccounts, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("Edit Login", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
-                    }
-
-                    OutlinedButton(
-                        onClick = {
-                            viewModel.logout()
-                            onLoggedOut()
-                        },
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(42.dp)
-                            .testTag("settings_logout_button"),
-                        shape = RoundedCornerShape(10.dp),
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.5f))
-                    ) {
-                        Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null, modifier = Modifier.size(15.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("Switch Account", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
-                    }
-                }
             }
+
+
 
             // 3. Privacy, Stealth Disguise & Vault
             SettingsSection(

@@ -301,7 +301,7 @@ private fun MediaTile(
                         url
                     }
                 } else {
-                    url
+                    android.net.Uri.parse(url)
                 }
             }
             AsyncImage(

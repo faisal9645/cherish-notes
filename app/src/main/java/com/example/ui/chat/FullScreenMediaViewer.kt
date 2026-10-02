@@ -270,8 +270,23 @@ fun FullScreenMediaViewer(
                         },
                     contentAlignment = Alignment.Center
                 ) {
+                    val modelData = remember(pageUrl) {
+                        if (pageUrl.startsWith("data:image")) {
+                            try {
+                                val base64 = pageUrl.substringAfter("base64,")
+                                android.util.Base64.decode(base64, android.util.Base64.DEFAULT)
+                            } catch (e: Exception) {
+                                pageUrl
+                            }
+                        } else {
+                            android.net.Uri.parse(pageUrl)
+                        }
+                    }
+
                     AsyncImage(
-                        model = pageUrl,
+                        model = coil.request.ImageRequest.Builder(androidx.compose.ui.platform.LocalContext.current)
+                            .data(modelData)
+                            .build(),
                         contentDescription = "Full-screen media photo",
                         contentScale = ContentScale.Fit,
                         modifier = Modifier
@@ -405,7 +420,7 @@ fun FullScreenMediaViewer(
                             )
                         )
                         .navigationBarsPadding()
-                        .padding(bottom = 12.dp),
+                        .padding(bottom = 40.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     // Zoom Max & Min Controls Pill

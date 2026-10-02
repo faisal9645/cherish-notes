@@ -104,8 +104,21 @@ fun SharedGalleryScreen(
 
 
 
-    val filteredMessages = remember(chatState.messages, selectedDateMillis) {
+    val filteredMessages = remember(chatState.messages, selectedDateMillis, chatState.showPreviousChats) {
         var list = chatState.messages.filter { !it.isDeleted }
+
+        if (!chatState.showPreviousChats) {
+            val now = Calendar.getInstance()
+            if (now.get(Calendar.HOUR_OF_DAY) < 6) {
+                now.add(Calendar.DAY_OF_YEAR, -1)
+            }
+            now.set(Calendar.HOUR_OF_DAY, 6)
+            now.set(Calendar.MINUTE, 0)
+            now.set(Calendar.SECOND, 0)
+            now.set(Calendar.MILLISECOND, 0)
+            val today6am = now.timeInMillis
+            list = list.filter { it.timestamp >= today6am }
+        }
 
         // Filter out any messages containing "today start 6 am" or similar variations
         list = list.filter { msg ->
@@ -382,8 +395,24 @@ fun SharedGalleryScreen(
                                                 selectedMessageIdForViewer = msg.id
                                             }
                                     ) {
+                                        val modelData = remember(msg.mediaUrl) {
+                                            val url = msg.mediaUrl ?: ""
+                                            if (url.startsWith("data:image")) {
+                                                try {
+                                                    val base64 = url.substringAfter("base64,")
+                                                    android.util.Base64.decode(base64, android.util.Base64.DEFAULT)
+                                                } catch (e: Exception) {
+                                                    url
+                                                }
+                                            } else {
+                                                android.net.Uri.parse(url)
+                                            }
+                                        }
+
                                         AsyncImage(
-                                            model = msg.mediaUrl,
+                                            model = coil.request.ImageRequest.Builder(androidx.compose.ui.platform.LocalContext.current)
+                                                .data(modelData)
+                                                .build(),
                                             contentDescription = "Shared photo",
                                             contentScale = ContentScale.Crop,
                                             modifier = Modifier.fillMaxSize()

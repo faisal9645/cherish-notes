@@ -356,7 +356,7 @@ fun MessageBubble(
                                 .fillMaxWidth()
                                 .padding(vertical = 4.dp, horizontal = 2.dp)
                         ) {
-                            if (!isPrivateMode) {
+                            if (!isPrivateMode && !isFromMe) {
                                 com.example.ui.components.AvatarView(
                                     photoUrl = senderPhotoUrl,
                                     name = message.senderName,
@@ -469,6 +469,17 @@ fun MessageBubble(
                                         }
                                     }
                                 }
+                            }
+
+                            if (!isPrivateMode && isFromMe) {
+                                Spacer(modifier = Modifier.width(10.dp))
+                                com.example.ui.components.AvatarView(
+                                    photoUrl = senderPhotoUrl,
+                                    name = message.senderName,
+                                    size = 42.dp,
+                                    isOnline = false,
+                                    showOnlineBadge = false
+                                )
                             }
                         }
                     }

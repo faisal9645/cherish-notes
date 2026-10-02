@@ -595,14 +595,15 @@ fun MessageComposer(
                                     .size(52.dp)
                                     .then(
                                         if (isRecordingVoice && !isPrivateMode) {
-                                            // WhatsApp-style: Red pulsing mic circle
+                                            // Pulses but keeps the original pink gradient
                                             Modifier
                                                 .graphicsLayer {
                                                     scaleX = 1f + pulseAlpha * 0.1f
                                                     scaleY = 1f + pulseAlpha * 0.1f
                                                 }
+                                                .appGradientShadow(CircleShape)
                                                 .clip(CircleShape)
-                                                .background(Color(0xFFE11D48))
+                                                .background(appHorizontalGradient())
                                         } else if (isPrivateMode) {
                                             Modifier.clip(CircleShape).background(micBg ?: Color.Gray)
                                         } else {

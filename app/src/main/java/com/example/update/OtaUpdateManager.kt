@@ -1,4 +1,4 @@
-﻿package com.example.update
+package com.example.update
 
 import android.content.Context
 import android.content.Intent
@@ -93,8 +93,8 @@ class OtaUpdateManager private constructor(private val appContext: Context) {
             }
 
             val currentCode = BuildConfig.VERSION_CODE
-            val isNewer = remoteVersionCode > currentCode || 
-                (remoteVersionCode == currentCode && isSemanticVersionNewer(remoteVersionName, BuildConfig.VERSION_NAME))
+            val isNewer = isSemanticVersionNewer(remoteVersionName, BuildConfig.VERSION_NAME) || 
+                (remoteVersionName == BuildConfig.VERSION_NAME && remoteVersionCode > currentCode)
 
             val info = UpdateInfo(
                 hasUpdate = isNewer && apkDownloadUrl.isNotBlank(),
@@ -220,21 +220,11 @@ class OtaUpdateManager private constructor(private val appContext: Context) {
 
     private fun parseVersionCode(tag: String): Int {
         val clean = tag.removePrefix("v").removePrefix("V")
-        // Check for "-<build>" format e.g. "1.1.1-12"
         if (clean.contains("-")) {
             val buildPart = clean.substringAfterLast("-")
             buildPart.toIntOrNull()?.let { return it }
         }
-        // Fallback: parse 1.1.0 -> 10100
-        val parts = clean.split(".")
-        return try {
-            val major = parts.getOrNull(0)?.toIntOrNull() ?: 1
-            val minor = parts.getOrNull(1)?.toIntOrNull() ?: 0
-            val patch = parts.getOrNull(2)?.substringBefore("-")?.toIntOrNull() ?: 0
-            major * 10000 + minor * 100 + patch
-        } catch (_: Exception) {
-            1
-        }
+        return -1
     }
 
     private fun parseVersionName(tag: String): String {

@@ -412,7 +412,7 @@ fun NoteEditorScreen(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .weight(1f)
+                        .weight(1f, fill = false)
                         .verticalScroll(rememberScrollState())
                 ) {
                     checklistItems.forEachIndexed { index, item ->
@@ -515,14 +515,16 @@ fun NoteEditorScreen(
                         }
                     }
                 }
-            } else {
-                // Full-Height Expansive Note Body Text Box
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f)
-                ) {
-                    BasicTextField(
+            }
+            
+            // Note Body Text Box (Always visible)
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+                    .padding(top = if (isChecklistMode) 16.dp else 0.dp)
+            ) {
+                BasicTextField(
                         value = content,
                         onValueChange = { content = it },
                         textStyle = TextStyle(
@@ -550,7 +552,6 @@ fun NoteEditorScreen(
             }
         }
     }
-}
 
 // Backward-compatible alias for NoteEditorDialog
 @Composable

@@ -265,13 +265,12 @@ fun CherishNavGraph(
                 viewModel = profileViewModel,
                 onNavigateBack = {
                     app.securityPreferences.ignoreChatNavigation = false
-                    navController.popBackStack()
+                    app.securityPreferences.reDisguise()
                 },
                 onNavigateToChat = {
+                    navController.popBackStack(Screen.Home.route, inclusive = false)
                     navController.navigate(Screen.Chat.route) {
-                        popUpTo(Screen.Home.route) { saveState = true }
                         launchSingleTop = true
-                        restoreState = true
                     }
                 },
                 onNavigateToCloudBackup = {
@@ -315,7 +314,7 @@ fun CherishNavGraph(
         composable(Screen.PrivacyAudit.route) {
             com.example.ui.security.PrivacyAuditScreen(
                 securityPreferences = app.securityPreferences,
-                onNavigateBack = { navController.popBackStack() },
+                onNavigateBack = { app.securityPreferences.reDisguise() },
                 onNavigateToBackup = { navController.navigate(Screen.CloudBackup.route) }
             )
         }
