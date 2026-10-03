@@ -46,6 +46,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
@@ -181,63 +182,83 @@ fun NotesDisguiseScreen(
         }
     }
 
-    // Full-screen Note Editor Screen (fixes overlapping Save Note button issue by using real window insets)
-    if (showEditorDialog) {
-        NoteEditorScreen(
-            initialNote = selectedNoteForEdit,
-            onDismiss = {
-                showEditorDialog = false
-                selectedNoteForEdit = null
-            },
-            onSave = { id, title, content, cat, hex, checklist, pinned, reminder ->
-                viewModel.saveNote(
-                    id = id,
-                    title = title,
-                    content = content,
-                    category = cat,
-                    colorHex = hex,
-                    checklist = checklist,
-                    isPinned = pinned,
-                    reminderTime = reminder
-                )
-            },
-            onDelete = { noteId ->
-                viewModel.deleteNote(noteId)
-            },
-            onShare = { note ->
-                viewModel.shareNote(context, note)
-            },
-            onToast = { msg ->
-                viewModel.showToastMessage(msg)
-            }
+    val isDark = isAppInDark()
+    val currentColorScheme = MaterialTheme.colorScheme
+    val notesColorScheme = if (isDark) {
+        currentColorScheme.copy(
+            primary = DayBluePrimary,
+            secondary = DayBlueSecondary,
+            tertiary = DayBlueTertiary,
+            primaryContainer = Color(0xFF172554),
+            onPrimaryContainer = Color(0xFFDBEAFE)
         )
-        return
+    } else {
+        currentColorScheme
     }
 
-    // Snackbar Host State
-    val snackbarHostState = remember { SnackbarHostState() }
-    LaunchedEffect(uiState.snackbarMessage) {
-        uiState.snackbarMessage?.let { msg ->
-            snackbarHostState.showSnackbar(msg)
-            viewModel.clearSnackbar()
-        }
-    }
+    val notesHorizontalGradient = androidx.compose.ui.graphics.Brush.horizontalGradient(
+        listOf(DayBlueSecondary, DayBluePrimary, DayBlueTertiary)
+    )
 
-    Box(modifier = modifier.fillMaxSize()) {
-        Surface(
-            modifier = Modifier.fillMaxSize(),
-            color = MaterialTheme.colorScheme.surface
-        ) {
-        Scaffold(
-            snackbarHost = { SnackbarHost(snackbarHostState) },
-            topBar = {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(MaterialTheme.colorScheme.surface)
-                        .statusBarsPadding()
-                        .padding(horizontal = 16.dp, vertical = 8.dp)
+    MaterialTheme(
+        colorScheme = notesColorScheme,
+        typography = MaterialTheme.typography
+    ) {
+        // Full-screen Note Editor Screen (fixes overlapping Save Note button issue by using real window insets)
+        if (showEditorDialog) {
+            NoteEditorScreen(
+                initialNote = selectedNoteForEdit,
+                onDismiss = {
+                    showEditorDialog = false
+                    selectedNoteForEdit = null
+                },
+                onSave = { id, title, content, cat, hex, checklist, pinned, reminder ->
+                    viewModel.saveNote(
+                        id = id,
+                        title = title,
+                        content = content,
+                        category = cat,
+                        colorHex = hex,
+                        checklist = checklist,
+                        isPinned = pinned,
+                        reminderTime = reminder
+                    )
+                },
+                onDelete = { noteId ->
+                    viewModel.deleteNote(noteId)
+                },
+                onShare = { note ->
+                    viewModel.shareNote(context, note)
+                },
+                onToast = { msg ->
+                    viewModel.showToastMessage(msg)
+                }
+            )
+        } else {
+            // Snackbar Host State
+            val snackbarHostState = remember { SnackbarHostState() }
+            LaunchedEffect(uiState.snackbarMessage) {
+                uiState.snackbarMessage?.let { msg ->
+                    snackbarHostState.showSnackbar(msg)
+                    viewModel.clearSnackbar()
+                }
+            }
+
+            Box(modifier = modifier.fillMaxSize()) {
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = MaterialTheme.colorScheme.surface
                 ) {
+                Scaffold(
+                    snackbarHost = { SnackbarHost(snackbarHostState) },
+                    topBar = {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(MaterialTheme.colorScheme.surface)
+                                .statusBarsPadding()
+                                .padding(horizontal = 16.dp, vertical = 8.dp)
+                        ) {
                     if (uiState.isSelectionMode) {
                         // Contextual Multi-Selection Action Bar
                         Row(
@@ -273,7 +294,7 @@ fun NotesDisguiseScreen(
                                 ) {
                                     Text(
                                         text = if (allSelected) "Deselect All" else "Select All",
-                                        color = RoseGoldPrimary,
+                                        color = MaterialTheme.colorScheme.primary,
                                         fontWeight = FontWeight.SemiBold
                                     )
                                 }
@@ -310,7 +331,7 @@ fun NotesDisguiseScreen(
                                     modifier = Modifier
                                         .size(38.dp)
                                         .clip(CircleShape)
-                                        .background(appHorizontalGradient()),
+                                        .background(notesHorizontalGradient),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Icon(
@@ -374,7 +395,7 @@ fun NotesDisguiseScreen(
                                             },
                                             trailingIcon = {
                                                 if (uiState.sortOrder == NotesSortOrder.RECENT) {
-                                                    Icon(Icons.Default.Check, contentDescription = null, tint = RoseGoldPrimary)
+                                                    Icon(Icons.Default.Check, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                                                 }
                                             }
                                         )
@@ -386,7 +407,7 @@ fun NotesDisguiseScreen(
                                             },
                                             trailingIcon = {
                                                 if (uiState.sortOrder == NotesSortOrder.ALPHABETICAL) {
-                                                    Icon(Icons.Default.Check, contentDescription = null, tint = RoseGoldPrimary)
+                                                    Icon(Icons.Default.Check, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                                                 }
                                             }
                                         )
@@ -398,7 +419,7 @@ fun NotesDisguiseScreen(
                                             },
                                             trailingIcon = {
                                                 if (uiState.sortOrder == NotesSortOrder.CATEGORY) {
-                                                    Icon(Icons.Default.Check, contentDescription = null, tint = RoseGoldPrimary)
+                                                    Icon(Icons.Default.Check, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                                                 }
                                             }
                                         )
@@ -491,10 +512,10 @@ fun NotesDisguiseScreen(
                             val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
                             Box(
                                 modifier = Modifier
-                                    .then(if (isSelected) Modifier.appGradientShadow(RoundedCornerShape(14.dp)) else Modifier)
+                                    .then(if (isSelected) Modifier.shadow(8.dp, RoundedCornerShape(14.dp), ambientColor = Color(0x353048F5), spotColor = Color(0x353048F5)) else Modifier)
                                     .clip(RoundedCornerShape(14.dp))
                                     .background(
-                                        if (isSelected) appHorizontalGradient()
+                                        if (isSelected) notesHorizontalGradient
                                         else if (isDark) androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.surfaceVariant)
                                         else androidx.compose.ui.graphics.SolidColor(Color.White)
                                     )
@@ -545,7 +566,7 @@ fun NotesDisguiseScreen(
                                     .border(
                                         width = 3.dp,
                                         brush = androidx.compose.ui.graphics.Brush.sweepGradient(
-                                            listOf(AppGradientStart, AppGradientMid, AppGradientEnd, AppGradientStart)
+                                            listOf(DayBlueSecondary, DayBluePrimary, DayBlueTertiary, DayBlueSecondary)
                                         ),
                                         shape = CircleShape
                                     )
@@ -554,9 +575,9 @@ fun NotesDisguiseScreen(
                             // Circular loader ring
                             CircularProgressIndicator(
                                 modifier = Modifier.size(66.dp),
-                                color = RoseGoldPrimary,
+                                color = DayBluePrimary,
                                 strokeWidth = 3.5.dp,
-                                trackColor = RoseGoldPrimary.copy(alpha = 0.2f)
+                                trackColor = DayBluePrimary.copy(alpha = 0.2f)
                             )
                         }
 
@@ -565,9 +586,9 @@ fun NotesDisguiseScreen(
                                 .testTag("add_note_fab")
                                 .size(56.dp)
                                 .scale(fabScale)
-                                .appGradientShadow(CircleShape)
+                                .shadow(6.dp, CircleShape, ambientColor = Color(0x353048F5), spotColor = Color(0x353048F5))
                                 .clip(CircleShape)
-                                .background(appHorizontalGradient())
+                                .background(notesHorizontalGradient)
                                 .pointerInput(Unit) {
                                     awaitEachGesture {
                                         val down = awaitFirstDown(requireUnconsumed = false)
@@ -835,7 +856,7 @@ fun NotesDisguiseScreen(
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .background(appHorizontalGradient()),
+                            .background(notesHorizontalGradient),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
@@ -862,7 +883,7 @@ fun NotesDisguiseScreen(
                     ) {
                         CircularProgressIndicator(
                             modifier = Modifier.size(16.dp),
-                            color = RoseGoldPrimary,
+                            color = DayBluePrimary,
                             strokeWidth = 2.2.dp
                         )
                         Text(
@@ -876,19 +897,21 @@ fun NotesDisguiseScreen(
             }
         }
     }
+}
+}
+}
 
-    if (showNotesSettingsDialog) {
-        NotesSettingsDialog(
-            isReminderEnabled = uiState.isNoteRemindersEnabled,
-            upcomingRemindersCount = uiState.upcomingRemindersCount,
-            onToggleReminder = { enabled ->
-                viewModel.setNoteRemindersEnabled(enabled)
-            },
-            onDismiss = { showNotesSettingsDialog = false }
-        )
+        if (showNotesSettingsDialog) {
+            NotesSettingsDialog(
+                isReminderEnabled = uiState.isNoteRemindersEnabled,
+                upcomingRemindersCount = uiState.upcomingRemindersCount,
+                onToggleReminder = { enabled ->
+                    viewModel.setNoteRemindersEnabled(enabled)
+                },
+                onDismiss = { showNotesSettingsDialog = false }
+            )
+        }
     }
-}
-}
 }
 
 @Composable

@@ -50,10 +50,10 @@ fun resolveNoteCardColors(colorHex: String?, isDark: Boolean): NoteCardThemeColo
         when (cleanHex) {
             "#EFF5FF" -> NoteCardThemeColors( // Blue Tint
                 containerColor = Color(0xFF131F33),
-                borderColor = Color(0xFF2563EB).copy(alpha = 0.35f),
-                accentPrimary = Color(0xFF60A5FA),
-                accentContainer = Color(0xFF1E3A8A).copy(alpha = 0.45f),
-                categoryBadgeText = Color(0xFF93C5FD),
+                borderColor = DayBluePrimary.copy(alpha = 0.5f),
+                accentPrimary = DayBluePrimary, // Same day mode blue in notes app
+                accentContainer = DayBluePrimary.copy(alpha = 0.22f),
+                categoryBadgeText = DayBlueSecondary,
                 titleColor = Color(0xFFF8FAFC),
                 contentColor = Color(0xFFCBD5E1),
                 secondaryTextColor = Color(0xFF94A3B8)
@@ -71,9 +71,9 @@ fun resolveNoteCardColors(colorHex: String?, isDark: Boolean): NoteCardThemeColo
             "#F8FAFC", "#FFFFFF" -> NoteCardThemeColors( // Clean Tint
                 containerColor = Color(0xFF0F172A),
                 borderColor = Color(0xFF334155).copy(alpha = 0.6f),
-                accentPrimary = Color(0xFF38BDF8),
-                accentContainer = Color(0xFF1E293B),
-                categoryBadgeText = Color(0xFF7DD3FC),
+                accentPrimary = DayBluePrimary, // Same day mode blue in notes app
+                accentContainer = DayBluePrimary.copy(alpha = 0.2f),
+                categoryBadgeText = DayBlueSecondary,
                 titleColor = Color(0xFFF8FAFC),
                 contentColor = Color(0xFFCBD5E1),
                 secondaryTextColor = Color(0xFF94A3B8)
@@ -109,13 +109,14 @@ fun resolveNoteCardColors(colorHex: String?, isDark: Boolean): NoteCardThemeColo
                 secondaryTextColor = Color(0xFF94A3B8)
             )
             else -> { // Dynamic Fallback for any other hex in dark mode
-                val parsed = try { Color(android.graphics.Color.parseColor(cleanHex)) } catch (_: Exception) { Color(0xFF3B82F6) }
+                val parsed = try { Color(android.graphics.Color.parseColor(cleanHex)) } catch (_: Exception) { DayBluePrimary }
+                val accent = if (cleanHex == "#EFF5FF" || cleanHex == "#3B82F6") DayBluePrimary else parsed
                 NoteCardThemeColors(
-                    containerColor = parsed.copy(alpha = 0.16f).compositeOver(Color(0xFF0B1324)),
-                    borderColor = parsed.copy(alpha = 0.35f),
-                    accentPrimary = parsed,
-                    accentContainer = parsed.copy(alpha = 0.25f),
-                    categoryBadgeText = parsed,
+                    containerColor = accent.copy(alpha = 0.16f).compositeOver(Color(0xFF0B1324)),
+                    borderColor = accent.copy(alpha = 0.35f),
+                    accentPrimary = accent,
+                    accentContainer = accent.copy(alpha = 0.25f),
+                    categoryBadgeText = accent,
                     titleColor = Color(0xFFF8FAFC),
                     contentColor = Color(0xFFCBD5E1),
                     secondaryTextColor = Color(0xFF94A3B8)
@@ -128,9 +129,9 @@ fun resolveNoteCardColors(colorHex: String?, isDark: Boolean): NoteCardThemeColo
             "#EFF5FF" -> NoteCardThemeColors( // Blue Tint
                 containerColor = Color(0xFFEFF5FF),
                 borderColor = Color(0xFFBFDBFE),
-                accentPrimary = Color(0xFF2563EB),
+                accentPrimary = DayBluePrimary,
                 accentContainer = Color(0xFFDBEAFE),
-                categoryBadgeText = Color(0xFF1D4ED8),
+                categoryBadgeText = DayBluePrimary,
                 titleColor = Color(0xFF0F172A),
                 contentColor = Color(0xFF334155),
                 secondaryTextColor = Color(0xFF64748B)
@@ -148,9 +149,9 @@ fun resolveNoteCardColors(colorHex: String?, isDark: Boolean): NoteCardThemeColo
             "#F8FAFC", "#FFFFFF" -> NoteCardThemeColors( // Clean Tint
                 containerColor = Color.White,
                 borderColor = Color(0xFFE2E8F0),
-                accentPrimary = Color(0xFF3B82F6),
+                accentPrimary = DayBluePrimary,
                 accentContainer = Color(0xFFEFF6FF),
-                categoryBadgeText = Color(0xFF2563EB),
+                categoryBadgeText = DayBluePrimary,
                 titleColor = Color(0xFF0F172A),
                 contentColor = Color(0xFF334155),
                 secondaryTextColor = Color(0xFF64748B)
@@ -186,13 +187,13 @@ fun resolveNoteCardColors(colorHex: String?, isDark: Boolean): NoteCardThemeColo
                 secondaryTextColor = Color(0xFF64748B)
             )
             else -> { // Dynamic Fallback for any other hex in day mode
-                val parsed = try { Color(android.graphics.Color.parseColor(cleanHex)) } catch (_: Exception) { Color(0xFFEFF5FF) }
+                val parsed = try { Color(android.graphics.Color.parseColor(cleanHex)) } catch (_: Exception) { DayBluePrimary }
                 NoteCardThemeColors(
                     containerColor = parsed,
                     borderColor = Color(0xFF000000).copy(alpha = 0.12f),
-                    accentPrimary = Color(0xFF2563EB),
+                    accentPrimary = DayBluePrimary,
                     accentContainer = parsed.copy(alpha = 0.5f),
-                    categoryBadgeText = Color(0xFF1D4ED8),
+                    categoryBadgeText = DayBluePrimary,
                     titleColor = Color(0xFF0F172A),
                     contentColor = Color(0xFF334155),
                     secondaryTextColor = Color(0xFF64748B)
