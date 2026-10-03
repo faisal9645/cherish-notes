@@ -4,9 +4,12 @@ import android.content.Context
 import android.content.Intent
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.CherishApplication
 import com.example.data.local.notes.ChecklistItem
 import com.example.data.local.notes.NoteEntity
 import com.example.data.local.notes.NotesRepository
+import com.example.notifications.NoteReminderScheduler
+import com.example.security.SecurityPreferences
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -31,7 +34,9 @@ data class NotesUiState(
     val sortOrder: NotesSortOrder = NotesSortOrder.RECENT,
     val snackbarMessage: String? = null,
     val selectedNoteIds: Set<String> = emptySet(),
-    val isSelectionMode: Boolean = false
+    val isSelectionMode: Boolean = false,
+    val isNoteRemindersEnabled: Boolean = true,
+    val upcomingRemindersCount: Int = 0
 )
 
 private data class FilterState(
@@ -47,7 +52,8 @@ private data class SelectionState(
 )
 
 class NotesDisguiseViewModel(
-    private val repository: NotesRepository
+    private val repository: NotesRepository,
+    private val securityPreferences: SecurityPreferences = SecurityPreferences.getInstance(CherishApplication.instance)
 ) : ViewModel() {
 
     private val _searchQuery = MutableStateFlow("")
@@ -78,8 +84,9 @@ class NotesDisguiseViewModel(
         repository.allNotes,
         _filterState,
         _selectionState,
-        _snackbarMessage
-    ) { allNotes, filter, selection, snackbar ->
+        _snackbarMessage,
+        securityPreferences.isNoteRemindersEnabled
+    ) { allNotes, filter, selection, snackbar, remindersEnabled ->
         val filtered = allNotes.filter { note ->
             val matchesCategory = when (filter.category) {
                 "All" -> true
@@ -109,7 +116,9 @@ class NotesDisguiseViewModel(
             sortOrder = filter.sort,
             snackbarMessage = snackbar,
             selectedNoteIds = selection.selectedIds,
-            isSelectionMode = selection.isSelectionMode
+            isSelectionMode = selection.isSelectionMode,
+            isNoteRemindersEnabled = remindersEnabled,
+            upcomingRemindersCount = allNotes.count { it.hasActiveReminder() }
         )
     }.stateIn(
         scope = viewModelScope,
@@ -141,6 +150,11 @@ class NotesDisguiseViewModel(
         _snackbarMessage.value = msg
     }
 
+    fun setNoteRemindersEnabled(enabled: Boolean) {
+        securityPreferences.setNoteRemindersEnabled(enabled)
+        _snackbarMessage.value = if (enabled) "Reminder notifications enabled 🔔" else "Reminder notifications disabled 🔕"
+    }
+
     fun saveNote(
         id: String? = null,
         title: String,
@@ -148,7 +162,8 @@ class NotesDisguiseViewModel(
         category: String,
         colorHex: String,
         checklist: List<ChecklistItem> = emptyList(),
-        isPinned: Boolean = false
+        isPinned: Boolean = false,
+        reminderTime: Long? = null
     ) {
         if (title.isBlank() && content.isBlank() && checklist.isEmpty()) return
 
@@ -161,11 +176,30 @@ class NotesDisguiseViewModel(
                 category = category,
                 colorHex = colorHex,
                 checklistJson = NoteEntity.encodeChecklist(checklist),
+                reminderTime = reminderTime,
                 isPinned = isPinned,
                 updatedAt = System.currentTimeMillis()
             )
             repository.insertNote(note)
-            _snackbarMessage.value = if (id == null) "Note created" else "Note updated"
+
+            val context = CherishApplication.instance
+            if (reminderTime != null && reminderTime > System.currentTimeMillis()) {
+                NoteReminderScheduler.scheduleReminder(
+                    context = context,
+                    noteId = noteId,
+                    title = note.title,
+                    content = if (content.isNotBlank()) content else "${checklist.size} checklist items",
+                    reminderTimeMillis = reminderTime
+                )
+            } else {
+                NoteReminderScheduler.cancelReminder(context, noteId)
+            }
+
+            _snackbarMessage.value = if (id == null) {
+                if (reminderTime != null) "Note created with reminder ⏰" else "Note created"
+            } else {
+                if (reminderTime != null) "Note & reminder saved ⏰" else "Note updated"
+            }
         }
     }
 
@@ -179,6 +213,7 @@ class NotesDisguiseViewModel(
     fun deleteNote(noteId: String) {
         viewModelScope.launch {
             repository.deleteNote(noteId)
+            NoteReminderScheduler.cancelReminder(CherishApplication.instance, noteId)
             _snackbarMessage.value = "Note deleted"
         }
     }
@@ -193,6 +228,35 @@ class NotesDisguiseViewModel(
     fun toggleChecklistItem(noteId: String, itemId: String, isDone: Boolean) {
         viewModelScope.launch {
             repository.updateChecklistItem(noteId, itemId, isDone)
+        }
+    }
+
+    fun updateNoteReminder(note: NoteEntity, reminderTime: Long?) {
+        viewModelScope.launch {
+            repository.updateReminder(note.id, reminderTime)
+            val context = CherishApplication.instance
+            if (reminderTime != null && reminderTime > System.currentTimeMillis()) {
+                NoteReminderScheduler.scheduleReminder(
+                    context = context,
+                    noteId = note.id,
+                    title = note.title,
+                    content = note.content,
+                    reminderTimeMillis = reminderTime
+                )
+                _snackbarMessage.value = "Reminder set for note ⏰"
+            } else {
+                NoteReminderScheduler.cancelReminder(context, note.id)
+                _snackbarMessage.value = "Reminder removed"
+            }
+        }
+    }
+
+    fun loadNoteForEdit(id: String, onLoaded: (NoteEntity) -> Unit) {
+        viewModelScope.launch {
+            val note = repository.getNoteById(id)
+            if (note != null) {
+                onLoaded(note)
+            }
         }
     }
 
@@ -222,6 +286,8 @@ class NotesDisguiseViewModel(
         val toDelete = _selectedNoteIds.value.toList()
         if (toDelete.isEmpty()) return
         viewModelScope.launch {
+            val context = CherishApplication.instance
+            toDelete.forEach { NoteReminderScheduler.cancelReminder(context, it) }
             repository.deleteNotes(toDelete)
             val count = toDelete.size
             _selectedNoteIds.value = emptySet()

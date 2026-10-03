@@ -40,6 +40,15 @@ interface NoteDao {
     @Query("UPDATE notes SET checklistJson = :checklistJson, updatedAt = :updatedAt WHERE id = :id")
     suspend fun updateChecklist(id: String, checklistJson: String, updatedAt: Long = System.currentTimeMillis())
 
+    @Query("UPDATE notes SET reminderTime = :reminderTime, updatedAt = :updatedAt WHERE id = :id")
+    suspend fun updateReminder(id: String, reminderTime: Long?, updatedAt: Long = System.currentTimeMillis())
+
+    @Query("SELECT * FROM notes WHERE reminderTime IS NOT NULL AND reminderTime > :currentTime ORDER BY reminderTime ASC")
+    suspend fun getUpcomingReminders(currentTime: Long = System.currentTimeMillis()): List<NoteEntity>
+
+    @Query("SELECT COUNT(*) FROM notes WHERE reminderTime IS NOT NULL AND reminderTime > :currentTime")
+    fun getUpcomingRemindersCount(currentTime: Long = System.currentTimeMillis()): Flow<Int>
+
     @Query("SELECT COUNT(*) FROM notes")
     suspend fun getCount(): Int
 }

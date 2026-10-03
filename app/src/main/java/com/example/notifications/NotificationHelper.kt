@@ -158,5 +158,61 @@ object NotificationHelper {
             // Handled if POST_NOTIFICATIONS runtime permission not yet prompted
         }
     }
+
+    /**
+     * Show a native notification when a note reminder triggers.
+     * When tapped, opens the app in Notes mode and directly loads the targeted note.
+     */
+    fun showNoteReminderNotification(
+        context: Context,
+        noteId: String,
+        title: String,
+        content: String
+    ) {
+        val prefs = SecurityPreferences.getInstance(context)
+        if (!prefs.isNoteRemindersEnabled()) return
+
+        val intent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            putExtra("open_note_id", noteId)
+            putExtra("from_notification", true)
+        }
+
+        val pendingIntent = PendingIntent.getActivity(
+            context,
+            noteId.hashCode(),
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val displayTitle = title.ifBlank { "Note Reminder" }
+        val displayText = if (content.isNotBlank()) content else "You have a scheduled note reminder."
+
+        val notification = NotificationCompat.Builder(context, CHANNEL_MESSAGES_ID)
+            .setSmallIcon(R.mipmap.ic_launcher)
+            .setContentTitle(displayTitle)
+            .setContentText(displayText)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(displayText))
+            .setSubText("Notes")
+            .setAutoCancel(true)
+            .setContentIntent(pendingIntent)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setCategory(NotificationCompat.CATEGORY_REMINDER)
+            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+            .build()
+
+        try {
+            NotificationManagerCompat.from(context).notify(noteId.hashCode(), notification)
+        } catch (_: SecurityException) {
+            // Handled if POST_NOTIFICATIONS runtime permission not yet prompted
+        }
+    }
+
+    fun cancelNoteReminderNotification(context: Context, noteId: String) {
+        try {
+            NotificationManagerCompat.from(context).cancel(noteId.hashCode())
+        } catch (_: Exception) {}
+    }
 }
+
 

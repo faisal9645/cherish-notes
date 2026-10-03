@@ -82,6 +82,17 @@ fun NotesDisguiseScreen(
     var selectedNoteForEdit by remember { mutableStateOf<NoteEntity?>(null) }
     var showSortMenu by remember { mutableStateOf(false) }
     var showBatchDeleteDialog by remember { mutableStateOf(false) }
+    var showNotesSettingsDialog by remember { mutableStateOf(false) }
+
+    val pendingNoteId by CherishApplication.instance.pendingNoteIdFlow.collectAsStateWithLifecycle()
+    LaunchedEffect(pendingNoteId) {
+        val noteId = pendingNoteId ?: return@LaunchedEffect
+        CherishApplication.instance.pendingNoteIdFlow.value = null
+        viewModel.loadNoteForEdit(noteId) { note ->
+            selectedNoteForEdit = note
+            showEditorDialog = true
+        }
+    }
 
     // State for the 2-second hold on the '+' FAB
     val holdProgress = remember { Animatable(0f) }
@@ -178,7 +189,7 @@ fun NotesDisguiseScreen(
                 showEditorDialog = false
                 selectedNoteForEdit = null
             },
-            onSave = { id, title, content, cat, hex, checklist, pinned ->
+            onSave = { id, title, content, cat, hex, checklist, pinned, reminder ->
                 viewModel.saveNote(
                     id = id,
                     title = title,
@@ -186,7 +197,8 @@ fun NotesDisguiseScreen(
                     category = cat,
                     colorHex = hex,
                     checklist = checklist,
-                    isPinned = pinned
+                    isPinned = pinned,
+                    reminderTime = reminder
                 )
             },
             onDelete = { noteId ->
@@ -391,6 +403,18 @@ fun NotesDisguiseScreen(
                                             }
                                         )
                                     }
+                                }
+
+                                // Notes Settings Button
+                                IconButton(
+                                    onClick = { showNotesSettingsDialog = true },
+                                    modifier = Modifier.testTag("notes_settings_button")
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.Settings,
+                                        contentDescription = "Notes Settings",
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
                                 }
                             }
                         }
@@ -852,9 +876,193 @@ fun NotesDisguiseScreen(
             }
         }
     }
+
+    if (showNotesSettingsDialog) {
+        NotesSettingsDialog(
+            isReminderEnabled = uiState.isNoteRemindersEnabled,
+            upcomingRemindersCount = uiState.upcomingRemindersCount,
+            onToggleReminder = { enabled ->
+                viewModel.setNoteRemindersEnabled(enabled)
+            },
+            onDismiss = { showNotesSettingsDialog = false }
+        )
+    }
 }
 }
 }
+
+@Composable
+fun NotesSettingsDialog(
+    isReminderEnabled: Boolean,
+    upcomingRemindersCount: Int,
+    onToggleReminder: (Boolean) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val isDark = isAppInDark()
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.primaryContainer),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Settings,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Text(
+                        text = "Notes Settings",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 18.sp,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+
+                IconButton(onClick = onDismiss, modifier = Modifier.size(32.dp)) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Close",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                Text(
+                    text = "Notification & Reminder Preferences",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                // Setting Item: Reminder Notifications
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = if (isDark) Color(0xFF1E293B) else Color(0xFFF8FAFC),
+                    border = BorderStroke(1.dp, if (isDark) Color(0xFF334155) else MaterialTheme.colorScheme.outlineVariant)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            modifier = Modifier.weight(1f),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(38.dp)
+                                    .clip(CircleShape)
+                                    .background(
+                                        if (isReminderEnabled) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = if (isReminderEnabled) Icons.Default.NotificationsActive else Icons.Default.NotificationsOff,
+                                    contentDescription = null,
+                                    tint = if (isReminderEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column(modifier = Modifier.padding(end = 8.dp)) {
+                                Text(
+                                    text = "Reminder Notifications",
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = if (isReminderEnabled) "Receive alert notifications when scheduled note reminders are due" else "Notifications muted. Scheduled note reminders will not ring.",
+                                    fontSize = 11.5.sp,
+                                    lineHeight = 16.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+
+                        Switch(
+                            checked = isReminderEnabled,
+                            onCheckedChange = onToggleReminder,
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = Color.White,
+                                checkedTrackColor = MaterialTheme.colorScheme.primary
+                            )
+                        )
+                    }
+                }
+
+                // Summary info card
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Alarm,
+                            contentDescription = null,
+                            tint = if (upcomingRemindersCount > 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = if (upcomingRemindersCount > 0) {
+                                "$upcomingRemindersCount upcoming reminder(s) scheduled"
+                            } else {
+                                "No active scheduled reminders"
+                            },
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = onDismiss,
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Done", fontWeight = FontWeight.Bold)
+            }
+        },
+        shape = RoundedCornerShape(24.dp),
+        containerColor = MaterialTheme.colorScheme.surface
+    )
+}
+
 
 
 

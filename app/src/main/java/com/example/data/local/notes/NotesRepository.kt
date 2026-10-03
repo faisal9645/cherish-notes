@@ -20,6 +20,18 @@ class NotesRepository(
         noteDao.updateNote(note.copy(updatedAt = System.currentTimeMillis()))
     }
 
+    suspend fun getNoteById(id: String): NoteEntity? = noteDao.getNoteById(id)
+
+    suspend fun updateReminder(id: String, reminderTime: Long?) {
+        noteDao.updateReminder(id, reminderTime)
+    }
+
+    suspend fun getUpcomingReminders(currentTime: Long = System.currentTimeMillis()): List<NoteEntity> =
+        noteDao.getUpcomingReminders(currentTime)
+
+    fun getUpcomingRemindersCount(currentTime: Long = System.currentTimeMillis()): Flow<Int> =
+        noteDao.getUpcomingRemindersCount(currentTime)
+
     suspend fun deleteNote(id: String) {
         noteDao.deleteById(id)
     }

@@ -23,9 +23,13 @@ data class NoteEntity(
     val isPinned: Boolean = false,
     val isArchived: Boolean = false,
     val checklistJson: String = "[]",
+    val reminderTime: Long? = null,
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis()
 ) {
+    fun hasActiveReminder(): Boolean = reminderTime != null && reminderTime > System.currentTimeMillis()
+    fun isReminderPast(): Boolean = reminderTime != null && reminderTime <= System.currentTimeMillis()
+
     fun getChecklist(): List<ChecklistItem> {
         if (checklistJson.isBlank() || checklistJson == "[]") return emptyList()
         return try {

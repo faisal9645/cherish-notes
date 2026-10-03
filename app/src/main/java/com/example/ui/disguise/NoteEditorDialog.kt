@@ -40,6 +40,10 @@ import androidx.compose.ui.unit.sp
 import com.example.data.local.notes.ChecklistItem
 import com.example.data.local.notes.NoteEntity
 import com.example.ui.theme.*
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Date
+import java.util.Locale
 import java.util.UUID
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -54,7 +58,8 @@ fun NoteEditorScreen(
         category: String,
         colorHex: String,
         checklist: List<ChecklistItem>,
-        isPinned: Boolean
+        isPinned: Boolean,
+        reminderTime: Long?
     ) -> Unit,
     onDelete: ((String) -> Unit)? = null,
     onShare: ((NoteEntity) -> Unit)? = null,
@@ -71,6 +76,8 @@ fun NoteEditorScreen(
     var category by remember { mutableStateOf(initialNote?.category ?: "Personal") }
     var colorHex by remember { mutableStateOf(initialNote?.colorHex ?: "#EFF5FF") }
     var isPinned by remember { mutableStateOf(initialNote?.isPinned ?: false) }
+    var reminderTime by remember { mutableStateOf(initialNote?.reminderTime) }
+    var showReminderDialog by remember { mutableStateOf(false) }
 
     var isChecklistMode by remember {
         mutableStateOf(initialNote?.getChecklist()?.isNotEmpty() == true)
@@ -133,6 +140,15 @@ fun NoteEditorScreen(
                                 imageVector = if (isPinned) Icons.Filled.PushPin else Icons.Outlined.PushPin,
                                 contentDescription = if (isPinned) "Unpin" else "Pin",
                                 tint = if (isPinned) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+
+                        // Reminder Toggle / Picker
+                        IconButton(onClick = { showReminderDialog = true }) {
+                            Icon(
+                                imageVector = if (reminderTime != null) Icons.Filled.NotificationsActive else Icons.Outlined.Notifications,
+                                contentDescription = "Set Reminder",
+                                tint = if (reminderTime != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
 
@@ -335,7 +351,8 @@ fun NoteEditorScreen(
                                             category,
                                             colorHex,
                                             checklistItems,
-                                            isPinned
+                                            isPinned,
+                                            reminderTime
                                         )
                                         onDismiss()
                                     }
@@ -376,6 +393,58 @@ fun NoteEditorScreen(
                 .padding(paddingValues)
                 .padding(horizontal = 20.dp, vertical = 8.dp)
         ) {
+            // Active Reminder Chip Banner
+            if (reminderTime != null) {
+                val isPast = reminderTime!! <= System.currentTimeMillis()
+                val reminderFormatted = remember(reminderTime) {
+                    val sdf = SimpleDateFormat("EEE, MMM d • h:mm a", Locale.getDefault())
+                    sdf.format(Date(reminderTime!!))
+                }
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = if (isPast) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f),
+                    border = BorderStroke(0.5.dp, if (isPast) MaterialTheme.colorScheme.outline else MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 8.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .clickable { showReminderDialog = true }
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = if (isPast) Icons.Default.NotificationsOff else Icons.Filled.NotificationsActive,
+                            contentDescription = null,
+                            tint = if (isPast) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Reminder: $reminderFormatted" + if (isPast) " (Passed)" else "",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = if (isPast) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Remove reminder",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier
+                                .size(20.dp)
+                                .clip(CircleShape)
+                                .clickable {
+                                    reminderTime = null
+                                    onToast("Reminder removed")
+                                }
+                                .padding(2.dp)
+                        )
+                    }
+                }
+            }
+
             // Note Title Input
             BasicTextField(
                 value = title,
@@ -551,9 +620,295 @@ fun NoteEditorScreen(
                 }
             }
         }
+
+        if (showReminderDialog) {
+        NoteReminderPickerDialog(
+            currentReminderTime = reminderTime,
+            onReminderSelected = { selectedTime ->
+                reminderTime = selectedTime
+                onToast("Reminder set ⏰")
+            },
+            onClearReminder = {
+                reminderTime = null
+                onToast("Reminder removed")
+            },
+            onDismiss = { showReminderDialog = false }
+        )
     }
+}
+
+@Composable
+fun NoteReminderPickerDialog(
+    currentReminderTime: Long?,
+    onReminderSelected: (Long) -> Unit,
+    onClearReminder: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    val context = LocalContext.current
+    val calendar = remember { Calendar.getInstance() }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Default.Alarm,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(22.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Set Reminder",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp
+                )
+            }
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(
+                    text = "Get notified at the chosen time for this note.",
+                    fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+
+                // Option 1: In 3 hours (Later Today)
+                ReminderPresetOption(
+                    title = "Later Today (+3 hours)",
+                    subtitle = remember {
+                        val cal = Calendar.getInstance().apply { add(Calendar.HOUR_OF_DAY, 3) }
+                        SimpleDateFormat("h:mm a", Locale.getDefault()).format(cal.time)
+                    },
+                    icon = Icons.Outlined.AccessTime,
+                    onClick = {
+                        val cal = Calendar.getInstance().apply { add(Calendar.HOUR_OF_DAY, 3) }
+                        onReminderSelected(cal.timeInMillis)
+                        onDismiss()
+                    }
+                )
+
+                // Option 2: Tonight (8:00 PM)
+                ReminderPresetOption(
+                    title = "Tonight (8:00 PM)",
+                    subtitle = remember {
+                        val cal = Calendar.getInstance().apply {
+                            set(Calendar.HOUR_OF_DAY, 20)
+                            set(Calendar.MINUTE, 0)
+                            set(Calendar.SECOND, 0)
+                            if (timeInMillis <= System.currentTimeMillis()) {
+                                add(Calendar.DAY_OF_YEAR, 1)
+                            }
+                        }
+                        val sdf = SimpleDateFormat("EEE, h:mm a", Locale.getDefault())
+                        sdf.format(cal.time)
+                    },
+                    icon = Icons.Outlined.Nightlight,
+                    onClick = {
+                        val cal = Calendar.getInstance().apply {
+                            set(Calendar.HOUR_OF_DAY, 20)
+                            set(Calendar.MINUTE, 0)
+                            set(Calendar.SECOND, 0)
+                            if (timeInMillis <= System.currentTimeMillis()) {
+                                add(Calendar.DAY_OF_YEAR, 1)
+                            }
+                        }
+                        onReminderSelected(cal.timeInMillis)
+                        onDismiss()
+                    }
+                )
+
+                // Option 3: Tomorrow Morning (9:00 AM)
+                ReminderPresetOption(
+                    title = "Tomorrow Morning (9:00 AM)",
+                    subtitle = remember {
+                        val cal = Calendar.getInstance().apply {
+                            add(Calendar.DAY_OF_YEAR, 1)
+                            set(Calendar.HOUR_OF_DAY, 9)
+                            set(Calendar.MINUTE, 0)
+                            set(Calendar.SECOND, 0)
+                        }
+                        val sdf = SimpleDateFormat("EEE, MMM d • 9:00 AM", Locale.getDefault())
+                        sdf.format(cal.time)
+                    },
+                    icon = Icons.Outlined.WbSunny,
+                    onClick = {
+                        val cal = Calendar.getInstance().apply {
+                            add(Calendar.DAY_OF_YEAR, 1)
+                            set(Calendar.HOUR_OF_DAY, 9)
+                            set(Calendar.MINUTE, 0)
+                            set(Calendar.SECOND, 0)
+                        }
+                        onReminderSelected(cal.timeInMillis)
+                        onDismiss()
+                    }
+                )
+
+                // Option 4: Custom Date & Time
+                ReminderPresetOption(
+                    title = "Pick Custom Date & Time",
+                    subtitle = "Select exact date & time",
+                    icon = Icons.Outlined.CalendarMonth,
+                    onClick = {
+                        onDismiss()
+                        val currentYear = calendar.get(Calendar.YEAR)
+                        val currentMonth = calendar.get(Calendar.MONTH)
+                        val currentDay = calendar.get(Calendar.DAY_OF_MONTH)
+                        val currentHour = calendar.get(Calendar.HOUR_OF_DAY)
+                        val currentMinute = calendar.get(Calendar.MINUTE)
+
+                        android.app.DatePickerDialog(
+                            context,
+                            { _, year, month, dayOfMonth ->
+                                android.app.TimePickerDialog(
+                                    context,
+                                    { _, hourOfDay, minute ->
+                                        val pickedCal = Calendar.getInstance().apply {
+                                            set(Calendar.YEAR, year)
+                                            set(Calendar.MONTH, month)
+                                            set(Calendar.DAY_OF_MONTH, dayOfMonth)
+                                            set(Calendar.HOUR_OF_DAY, hourOfDay)
+                                            set(Calendar.MINUTE, minute)
+                                            set(Calendar.SECOND, 0)
+                                        }
+                                        if (pickedCal.timeInMillis > System.currentTimeMillis()) {
+                                            onReminderSelected(pickedCal.timeInMillis)
+                                        }
+                                    },
+                                    currentHour,
+                                    currentMinute,
+                                    false
+                                ).show()
+                            },
+                            currentYear,
+                            currentMonth,
+                            currentDay
+                        ).show()
+                    }
+                )
+
+                if (currentReminderTime != null) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    OutlinedButton(
+                        onClick = {
+                            onClearReminder()
+                            onDismiss()
+                        },
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.5f)),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Default.DeleteOutline, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Clear Reminder", fontWeight = FontWeight.SemiBold)
+                    }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        },
+        shape = RoundedCornerShape(20.dp),
+        containerColor = MaterialTheme.colorScheme.surface
+    )
+}
+
+@Composable
+private fun ReminderPresetOption(
+    title: String,
+    subtitle: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    onClick: () -> Unit
+) {
+    Surface(
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .clickable(onClick = onClick)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(34.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primaryContainer),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+            Spacer(modifier = Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = subtitle,
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Icon(
+                imageVector = Icons.Default.ChevronRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                modifier = Modifier.size(18.dp)
+            )
+        }
+    }
+}
 
 // Backward-compatible alias for NoteEditorDialog
+@Composable
+fun NoteEditorDialog(
+    initialNote: NoteEntity? = null,
+    onDismiss: () -> Unit,
+    onSave: (
+        id: String?,
+        title: String,
+        content: String,
+        category: String,
+        colorHex: String,
+        checklist: List<ChecklistItem>,
+        isPinned: Boolean,
+        reminderTime: Long?
+    ) -> Unit,
+    onDelete: ((String) -> Unit)? = null,
+    onShare: ((NoteEntity) -> Unit)? = null,
+    onToast: (String) -> Unit
+) {
+    NoteEditorScreen(
+        initialNote = initialNote,
+        onDismiss = onDismiss,
+        onSave = onSave,
+        onDelete = onDelete,
+        onShare = onShare,
+        onToast = onToast
+    )
+}
+
 @Composable
 fun NoteEditorDialog(
     initialNote: NoteEntity? = null,
@@ -574,9 +929,12 @@ fun NoteEditorDialog(
     NoteEditorScreen(
         initialNote = initialNote,
         onDismiss = onDismiss,
-        onSave = onSave,
+        onSave = { id, title, content, category, colorHex, checklist, isPinned, _ ->
+            onSave(id, title, content, category, colorHex, checklist, isPinned)
+        },
         onDelete = onDelete,
         onShare = onShare,
         onToast = onToast
     )
 }
+

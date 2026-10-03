@@ -42,6 +42,8 @@ class CherishApplication : Application() {
     lateinit var googleDriveBackupManager: com.example.backup.GoogleDriveBackupManager
         private set
 
+    val pendingNoteIdFlow = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
+
     override fun onCreate() {
         super.onCreate()
         instance = this

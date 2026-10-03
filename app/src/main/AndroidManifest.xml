@@ -57,6 +57,10 @@
             android:name=".notifications.CheckAfterReminderReceiver"
             android:exported="false" />
 
+        <receiver
+            android:name=".notifications.NoteReminderReceiver"
+            android:exported="false" />
+
 
         <provider
             android:name="androidx.core.content.FileProvider"

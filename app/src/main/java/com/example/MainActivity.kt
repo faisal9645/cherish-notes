@@ -110,6 +110,12 @@ class MainActivity : FragmentActivity() {
 
     private fun handleNotificationIntent(intent: android.content.Intent?) {
         if (intent == null) return
+        val openNoteId = intent.getStringExtra("open_note_id")
+        if (!openNoteId.isNullOrBlank()) {
+            app.securityPreferences.reDisguise()
+            app.pendingNoteIdFlow.value = openNoteId
+            return
+        }
         val isFromNotification = intent.getBooleanExtra("from_notification", false) ||
                 intent.getBooleanExtra("open_chat", false) ||
                 intent.hasExtra("conversationId")

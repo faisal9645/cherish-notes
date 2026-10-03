@@ -374,6 +374,51 @@ fun NoteCard(
                 }
             }
 
+            // Reminder Badge Chip
+            if (note.reminderTime != null) {
+                val isPast = note.isReminderPast()
+                val reminderFormatted = remember(note.reminderTime) {
+                    val sdf = SimpleDateFormat("MMM d • h:mm a", Locale.getDefault())
+                    sdf.format(Date(note.reminderTime))
+                }
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = if (isPast) {
+                        if (isDark) Color(0xFF1E293B) else Color(0xFFF1F5F9)
+                    } else {
+                        if (isDark) RoseGoldPrimary.copy(alpha = 0.2f) else RoseGoldPrimary.copy(alpha = 0.12f)
+                    },
+                    modifier = Modifier.padding(top = 6.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = if (isPast) Icons.Default.NotificationsOff else Icons.Filled.NotificationsActive,
+                            contentDescription = null,
+                            tint = if (isPast) {
+                                if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
+                            } else {
+                                RoseGoldPrimary
+                            },
+                            modifier = Modifier.size(12.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = reminderFormatted + if (isPast) " (Passed)" else "",
+                            fontSize = 10.5.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = if (isPast) {
+                                if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
+                            } else {
+                                RoseGoldPrimary
+                            }
+                        )
+                    }
+                }
+            }
+
             Spacer(modifier = Modifier.height(10.dp))
 
             // Footer: Timestamp

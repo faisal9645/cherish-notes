@@ -92,6 +92,16 @@ class SecurityPreferences(context: Context) {
         _showPreviousChats.value = enabled
     }
 
+    private val _isNoteRemindersEnabled = MutableStateFlow(isNoteRemindersEnabled())
+    val isNoteRemindersEnabled: StateFlow<Boolean> = _isNoteRemindersEnabled.asStateFlow()
+
+    fun isNoteRemindersEnabled(): Boolean = prefs.getBoolean(KEY_NOTE_REMINDERS_ENABLED, true)
+
+    fun setNoteRemindersEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_NOTE_REMINDERS_ENABLED, enabled).apply()
+        _isNoteRemindersEnabled.value = enabled
+    }
+
     private val _themeMode = MutableStateFlow(getThemeMode())
     val themeMode: StateFlow<Int> = _themeMode.asStateFlow()
 
@@ -391,6 +401,7 @@ class SecurityPreferences(context: Context) {
         private const val KEY_REQUIRE_PHONE_LOCK_AFTER_HOLD = "require_phone_lock_after_hold"
         private const val KEY_INITIAL_PERMS_REQUESTED = "initial_perms_requested"
         private const val KEY_SHOW_PREVIOUS_CHATS = "show_previous_chats"
+        private const val KEY_NOTE_REMINDERS_ENABLED = "note_reminders_enabled"
 
         @Volatile
         private var INSTANCE: SecurityPreferences? = null
