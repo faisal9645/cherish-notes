@@ -64,7 +64,7 @@ def create_github_release(token: str, version_code: int, version_name: str) -> d
     payload = {
         "tag_name": tag,
         "name": f"v{version_name} (build {version_code})",
-        "body": f"Cherish v{version_name} (Build {version_code}):\n• Pure white day background & dark AMOLED black night background for chat\n• Smooth today's chat scrolling with dedicated previous chat pagination\n• Refined date separators and strictly 2-person channel header\n• Automatic OTA updates suppressed in Notes disguise mode",
+        "body": f"Cherish v{version_name} (Build {version_code}):\n• Fixed swipe right to reply on chat messages (smooth, touch-reliable, works on any message)\n• Pure white day background & dark AMOLED black night background for chat\n• Smooth today's chat scrolling with dedicated previous chat pagination\n• Automatic OTA updates suppressed in Notes disguise mode",
         "draft": False,
         "prerelease": False,
     }

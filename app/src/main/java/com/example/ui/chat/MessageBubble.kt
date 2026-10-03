@@ -138,8 +138,9 @@ fun MessageBubble(
     // Swipe-to-reply interactive state
     val swipeOffset = remember { Animatable(0f) }
     val replyIconAlpha by remember {
-        derivedStateOf { (abs(swipeOffset.value) / 45f).coerceIn(0f, 1f) }
+        derivedStateOf { (abs(swipeOffset.value) / 36f).coerceIn(0f, 1f) }
     }
+    var hasTriggeredThresholdHaptic by remember { mutableStateOf(false) }
 
     fun triggerHeartBurst() {
         if (isPrivateMode) return
@@ -174,14 +175,22 @@ fun MessageBubble(
             .padding(horizontal = 6.dp, vertical = 2.5.dp),
         contentAlignment = if (isFromMe) Alignment.CenterEnd else Alignment.CenterStart
     ) {
-        if (!isFromMe && onSwipeToReply != null) {
+        val replyColor = if (isPrivateMode) {
+            if (isDark) Color(0xFF9CA3AF) else Color(0xFF6B7280)
+        } else {
+            RoseGoldPrimary
+        }
+
+        // Reply icon on the left (revealed when swiping right on ANY message)
+        if (onSwipeToReply != null && (swipeOffset.value > 0f || !isFromMe)) {
             Icon(
                 imageVector = Icons.AutoMirrored.Filled.Reply,
                 contentDescription = "Swipe to reply",
-                tint = if (isPrivateMode) (if (isDark) Color(0xFF9CA3AF) else Color(0xFF6B7280)) else RoseGoldPrimary.copy(alpha = replyIconAlpha),
+                tint = replyColor.copy(alpha = replyIconAlpha),
                 modifier = Modifier
+                    .align(Alignment.CenterStart)
                     .padding(start = 12.dp)
-                    .size(22.dp)
+                    .size(24.dp)
                     .graphicsLayer {
                         scaleX = replyIconAlpha
                         scaleY = replyIconAlpha
@@ -190,14 +199,16 @@ fun MessageBubble(
             )
         }
 
-        if (isFromMe && onSwipeToReply != null) {
+        // Reply icon on the right (revealed when swiping left on outgoing message)
+        if (onSwipeToReply != null && swipeOffset.value < 0f) {
             Icon(
                 imageVector = Icons.AutoMirrored.Filled.Reply,
                 contentDescription = "Swipe to reply",
-                tint = if (isPrivateMode) (if (isDark) Color(0xFF9CA3AF) else Color(0xFF6B7280)) else RoseGoldPrimary.copy(alpha = replyIconAlpha),
+                tint = replyColor.copy(alpha = replyIconAlpha),
                 modifier = Modifier
+                    .align(Alignment.CenterEnd)
                     .padding(end = 12.dp)
-                    .size(22.dp)
+                    .size(24.dp)
                     .graphicsLayer {
                         scaleX = replyIconAlpha
                         scaleY = replyIconAlpha
@@ -210,28 +221,47 @@ fun MessageBubble(
             horizontalAlignment = if (isFromMe) Alignment.End else Alignment.Start,
             modifier = Modifier
                 .offset { androidx.compose.ui.unit.IntOffset(swipeOffset.value.roundToInt(), 0) }
-                .pointerInput(message.id) {
+                .pointerInput(message.id, onSwipeToReply) {
                     if (onSwipeToReply != null) {
                         detectHorizontalDragGestures(
+                            onDragStart = {
+                                hasTriggeredThresholdHaptic = false
+                            },
                             onDragEnd = {
-                                if (abs(swipeOffset.value) > 42f) {
-                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                if (abs(swipeOffset.value) >= 36f) {
+                                    try {
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    } catch (_: Exception) {}
                                     onSwipeToReply()
                                 }
+                                hasTriggeredThresholdHaptic = false
                                 scope.launch {
                                     swipeOffset.animateTo(0f, spring(dampingRatio = Spring.DampingRatioMediumBouncy))
                                 }
                             },
                             onDragCancel = {
-                                scope.launch { swipeOffset.animateTo(0f) }
-                            },
-                            onHorizontalDrag = { _, dragAmount ->
-                                val target = if (isFromMe) {
-                                    (swipeOffset.value + dragAmount).coerceIn(-65f, 0f)
-                                } else {
-                                    (swipeOffset.value + dragAmount).coerceIn(0f, 65f)
+                                hasTriggeredThresholdHaptic = false
+                                scope.launch {
+                                    swipeOffset.animateTo(0f, spring(dampingRatio = Spring.DampingRatioMediumBouncy))
                                 }
-                                scope.launch { swipeOffset.snapTo(target) }
+                            },
+                            onHorizontalDrag = { change, dragAmount ->
+                                change.consume()
+                                val current = swipeOffset.value
+                                val newTarget = if (isFromMe) {
+                                    (current + dragAmount).coerceIn(-80f, 80f)
+                                } else {
+                                    (current + dragAmount).coerceIn(0f, 80f)
+                                }
+                                if (abs(newTarget) >= 36f && !hasTriggeredThresholdHaptic) {
+                                    hasTriggeredThresholdHaptic = true
+                                    try {
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    } catch (_: Exception) {}
+                                } else if (abs(newTarget) < 36f) {
+                                    hasTriggeredThresholdHaptic = false
+                                }
+                                scope.launch { swipeOffset.snapTo(newTarget) }
                             }
                         )
                     }
@@ -727,21 +757,6 @@ fun MessageBubble(
             }
         }
 
-        }
-
-        if (isFromMe && onSwipeToReply != null) {
-            Icon(
-                imageVector = Icons.AutoMirrored.Filled.Reply,
-                contentDescription = "Swipe to reply",
-                tint = if (isPrivateMode) (if (isDark) Color(0xFF9CA3AF) else Color(0xFF6B7280)) else RoseGoldPrimary.copy(alpha = replyIconAlpha),
-                modifier = Modifier
-                    .size(22.dp)
-                    .graphicsLayer {
-                        scaleX = replyIconAlpha
-                        scaleY = replyIconAlpha
-                    }
-                    .padding(start = 4.dp)
-            )
         }
     }
 }

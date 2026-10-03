@@ -339,48 +339,8 @@ fun ChatScreen(
         }
     }
 
-    // Issue 10: Zero-latency swipe — awaitEachGesture starts tracking immediately on touch down.
-    // detectHorizontalDragGestures adds a slop delay before the first onDrag fires, making the
-    // screen feel disconnected from the finger. This approach decides direction early and consumes
-    // only horizontal events, leaving vertical scroll events free for the message list.
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
-        modifier = Modifier.pointerInput(Unit) {
-            awaitEachGesture {
-                val down = awaitFirstDown(requireUnconsumed = false)
-                var accX = 0f
-                var accY = 0f
-                var directionLocked = false
-                var isHorizontal = false
-
-                while (true) {
-                    val event = awaitPointerEvent()
-                    val change = event.changes.firstOrNull { it.id == down.id } ?: break
-                    if (!change.pressed) break
-
-                    val delta = change.positionChange()
-                    accX += delta.x
-                    accY += delta.y
-
-                    // Lock direction once movement exceeds 10px in any axis
-                    if (!directionLocked && (kotlin.math.abs(accX) > 10f || kotlin.math.abs(accY) > 10f)) {
-                        isHorizontal = kotlin.math.abs(accX) > kotlin.math.abs(accY)
-                        directionLocked = true
-                    }
-
-                    if (directionLocked && isHorizontal) {
-                        change.consume()
-                    }
-                }
-
-                if (directionLocked && isHorizontal) {
-                    when {
-                        accX > 90f -> onNavigateToHome()      // Swipe right → home (Love & Us)
-                        accX < -90f -> onNavigateToProfile()  // Swipe left → profile
-                    }
-                }
-            }
-        },
         topBar = {
             Column {
                 TopAppBar(
