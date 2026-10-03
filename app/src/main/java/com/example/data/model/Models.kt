@@ -69,9 +69,17 @@ data class User(
 ) {
     fun isEffectivelyOnline(): Boolean {
         if (!isOnline) return false
-        if (typingInChat || recordingAudioInChat) return true
         val diff = System.currentTimeMillis() - lastSeen
-        return diff in 0..60_000L
+        if (diff > 60_000L) return false
+        return true
+    }
+
+    fun isEffectivelyTyping(): Boolean {
+        return typingInChat && isEffectivelyOnline()
+    }
+
+    fun isEffectivelyRecording(): Boolean {
+        return recordingAudioInChat && isEffectivelyOnline()
     }
 
     fun hasActiveCheckAfter(): Boolean {

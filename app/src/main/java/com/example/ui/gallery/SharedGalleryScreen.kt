@@ -435,6 +435,24 @@ fun SharedGalleryScreen(
                                                 modifier = Modifier.size(14.dp)
                                             )
                                         }
+
+                                        // Overlay "Delete" button on top edge
+                                        Box(
+                                            modifier = Modifier
+                                                .align(Alignment.TopEnd)
+                                                .padding(4.dp)
+                                                .clip(CircleShape)
+                                                .background(Color.Black.copy(alpha = 0.55f))
+                                                .clickable { chatViewModel.deleteMessage(msg.id) }
+                                                .padding(6.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Delete,
+                                                contentDescription = "Delete",
+                                                tint = Color.White,
+                                                modifier = Modifier.size(14.dp)
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -519,6 +537,16 @@ fun SharedGalleryScreen(
                                                     )
                                                     Spacer(modifier = Modifier.width(4.dp))
                                                     Text("Show in chat", fontSize = 11.sp, color = RoseGoldPrimary)
+                                                }
+                                                
+                                                Spacer(modifier = Modifier.width(8.dp))
+                                                
+                                                // Delete button
+                                                IconButton(
+                                                    onClick = { chatViewModel.deleteMessage(msg.id) },
+                                                    modifier = Modifier.size(32.dp)
+                                                ) {
+                                                    Icon(Icons.Default.DeleteOutline, contentDescription = "Delete", tint = Color.Red, modifier = Modifier.size(18.dp))
                                                 }
                                             }
 
@@ -713,15 +741,18 @@ fun SharedGalleryScreen(
                                                 verticalAlignment = Alignment.CenterVertically
                                             ) {
                                                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                                    // Open button
                                                     FilledTonalButton(
                                                         onClick = {
-                                                            try {
-                                                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(item.url)).apply {
-                                                                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                                                                }
-                                                                context.startActivity(intent)
-                                                            } catch (_: Exception) {}
+                                                            if (item.url.contains("youtube.com") || item.url.contains("youtu.be")) {
+                                                                onNavigateToMessage(item.messageId)
+                                                            } else {
+                                                                try {
+                                                                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(item.url)).apply {
+                                                                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                                                                    }
+                                                                    context.startActivity(intent)
+                                                                } catch (_: Exception) {}
+                                                            }
                                                         },
                                                         shape = RoundedCornerShape(12.dp),
                                                         contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
@@ -760,6 +791,16 @@ fun SharedGalleryScreen(
                                                     Icon(Icons.Default.Chat, contentDescription = null, tint = Color.White, modifier = Modifier.size(13.dp))
                                                     Spacer(modifier = Modifier.width(4.dp))
                                                     Text("Show in chat", fontSize = 11.sp, color = Color.White, fontWeight = FontWeight.SemiBold)
+                                                }
+                                                
+                                                Spacer(modifier = Modifier.width(8.dp))
+                                                
+                                                // Delete button
+                                                IconButton(
+                                                    onClick = { chatViewModel.deleteMessage(item.messageId) },
+                                                    modifier = Modifier.size(30.dp)
+                                                ) {
+                                                    Icon(Icons.Default.DeleteOutline, contentDescription = "Delete", tint = Color.Red, modifier = Modifier.size(18.dp))
                                                 }
                                             }
                                         }
@@ -862,6 +903,27 @@ fun SharedGalleryScreen(
                             }
                         }
                     }
+                }
+            }
+        }
+
+        // Floating "Load More" Button for Gallery
+        androidx.compose.animation.AnimatedVisibility(
+            visible = !chatViewModel.isQueryExhausted,
+            modifier = Modifier.padding(bottom = 16.dp, top = 8.dp)
+        ) {
+            Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                FilledTonalButton(
+                    onClick = { chatViewModel.loadMoreMessages() },
+                    elevation = ButtonDefaults.filledTonalButtonElevation(defaultElevation = 6.dp),
+                    colors = ButtonDefaults.filledTonalButtonColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                        contentColor = RoseGoldPrimary
+                    )
+                ) {
+                    Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Load Older History", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                 }
             }
         }

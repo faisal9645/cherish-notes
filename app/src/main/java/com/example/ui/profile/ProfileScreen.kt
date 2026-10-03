@@ -1087,18 +1087,7 @@ fun ProfileScreen(
                     modifier = Modifier.clickable { onNavigateToPrivacyAudit() }
                 )
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), thickness = 0.6.dp)
-                ListItem(
-                    headlineContent = { Text("Open When... Envelopes 💌", fontSize = 15.sp, fontWeight = FontWeight.SemiBold) },
-                    supportingContent = { Text("Sealed love letters locked until the right emotional moment", fontSize = 13.sp) },
-                    leadingContent = {
-                        Icon(Icons.Filled.MarkEmailRead, contentDescription = null, tint = primaryAccent)
-                    },
-                    trailingContent = {
-                        Icon(Icons.Default.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                    },
-                    modifier = Modifier.clickable { onNavigateToOpenWhen() }
-                )
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), thickness = 0.6.dp)
+
                 ListItem(
                     headlineContent = { Text("Authorized Devices & Sessions", fontSize = 15.sp, fontWeight = FontWeight.SemiBold) },
                     supportingContent = { Text("View active logins, manage pairing & remote logout", fontSize = 13.sp) },

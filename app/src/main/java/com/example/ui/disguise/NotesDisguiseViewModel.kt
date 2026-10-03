@@ -23,6 +23,7 @@ enum class NotesSortOrder {
 
 data class NotesUiState(
     val notes: List<NoteEntity> = emptyList(),
+    val isLoading: Boolean = true,
     val totalCount: Int = 0,
     val searchQuery: String = "",
     val selectedCategory: String = "All",
@@ -100,6 +101,7 @@ class NotesDisguiseViewModel(
 
         NotesUiState(
             notes = filtered,
+            isLoading = false,
             totalCount = allNotes.size,
             searchQuery = filter.query,
             selectedCategory = filter.category,

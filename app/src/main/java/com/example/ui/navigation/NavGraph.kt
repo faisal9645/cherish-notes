@@ -192,6 +192,7 @@ fun CherishNavGraph(
                 onNavigateToMemories = { navController.navigate(Screen.Memories.route) { launchSingleTop = true } },
                 onNavigateToDates = { navController.navigate(Screen.ImportantDates.route) { launchSingleTop = true } },
                 onNavigateToNotes = { navController.navigate(Screen.SharedNotes.route) { launchSingleTop = true } },
+                onNavigateToOpenWhen = { navController.navigate(Screen.OpenWhen.route) { launchSingleTop = true } },
                 onNavigateToGallery = { navController.navigate(Screen.SharedGallery.route) { launchSingleTop = true } },
                 onNavigateToProfile = { navController.navigate(Screen.Profile.route) { launchSingleTop = true } },
                 onNavigateToLifetimeJourney = { navController.navigate(Screen.LifetimeJourney.route) { launchSingleTop = true } },

@@ -13,6 +13,7 @@ import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -63,7 +64,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun ChatScreen(
     viewModel: ChatViewModel,
@@ -217,7 +218,7 @@ fun ChatScreen(
         ?: myUser?.partnerEmail?.substringBefore("@")?.replaceFirstChar { it.uppercase() }
         ?: myUser?.partnerId?.removePrefix("user_")?.replaceFirstChar { it.uppercase() }
         ?: "My Partner"
-    val isPartnerOnline = partner?.isEffectivelyOnline() ?: false
+    val isPartnerOnline = uiState.isPartnerOnline
     val currentUserId = viewModel.uiState.value.currentUser?.id ?: "user_me"
 
     // Issue 13: Batch read-marking outside LazyColumn — prevents Firestore writes during scroll
@@ -410,34 +411,34 @@ fun ChatScreen(
                         if (isPrivate) {
                             // ChatGPT screen style: Hide title and lock icon completely
                         } else {
+                            val isPartnerOnline = uiState.isPartnerOnline
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(10.dp))
                                     .clickable { onNavigateToProfile() }
-                                    .padding(start = 2.dp, end = 8.dp, top = 4.dp, bottom = 4.dp)
+                                    .padding(start = 4.dp, end = 8.dp, top = 4.dp, bottom = 4.dp)
                             ) {
                                 AvatarView(
                                     photoUrl = partner?.photoUrl,
                                     name = partnerName,
-                                    size = 40.dp,
+                                    size = 46.dp,
                                     isOnline = isPartnerOnline,
                                     showOnlineBadge = !partnerHasCheckAfter
                                 )
-                                Spacer(modifier = Modifier.width(10.dp))
+                                Spacer(modifier = Modifier.width(12.dp))
                                 Column(
-                                    modifier = Modifier.widthIn(max = 200.dp),
+                                    modifier = Modifier.widthIn(max = 220.dp),
                                     verticalArrangement = Arrangement.Center
                                 ) {
                                     Text(
                                         text = partnerName,
-                                        fontSize = 17.sp,
-                                        fontWeight = FontWeight.SemiBold,
+                                        fontSize = 19.sp,
+                                        fontWeight = FontWeight.Bold,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis,
                                         color = if (isDark) Color.White else Color(0xFF0F172A)
                                     )
-                                    Spacer(modifier = Modifier.height(1.dp))
                                     Text(
                                         text = if (partnerHasCheckAfter) {
                                             if (headerRemaining.startsWith("✨")) "✨ Reconnecting now"
@@ -458,7 +459,7 @@ fun ChatScreen(
                                                 "offline"
                                             }
                                         },
-                                        fontSize = 13.sp,
+                                        fontSize = 14.sp,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis,
                                         color = if (partnerHasCheckAfter) {
@@ -468,7 +469,7 @@ fun ChatScreen(
                                         } else {
                                             MaterialTheme.colorScheme.onSurfaceVariant
                                         },
-                                        fontWeight = FontWeight.Normal
+                                        fontWeight = FontWeight.Medium
                                     )
                                 }
                             }
@@ -485,7 +486,7 @@ fun ChatScreen(
                             }
                         },
                         modifier = Modifier
-                            .size(40.dp)
+                            .size(48.dp)
                             .testTag("chat_back_button")
                     ) {
                         Icon(
@@ -495,7 +496,7 @@ fun ChatScreen(
                                 MaterialTheme.colorScheme.onSurface
                             else
                                 MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.size(26.dp)
+                            modifier = Modifier.size(28.dp)
                         )
                     }
                 },
@@ -514,30 +515,30 @@ fun ChatScreen(
                             IconButton(
                                 onClick = { viewModel.setSearching(true) },
                                 modifier = Modifier
-                                    .size(42.dp)
+                                    .size(46.dp)
                                     .testTag("chat_search_button")
                             ) {
-                                Icon(Icons.Default.Search, contentDescription = "Search messages", tint = iconTint, modifier = Modifier.size(24.dp))
+                                Icon(Icons.Default.Search, contentDescription = "Search messages", tint = iconTint, modifier = Modifier.size(26.dp))
                             }
                             IconButton(
                                 onClick = onNavigateToGallery,
                                 modifier = Modifier
-                                    .size(42.dp)
+                                    .size(46.dp)
                                     .testTag("chat_gallery_button")
                             ) {
-                                Icon(Icons.Outlined.PhotoLibrary, contentDescription = "Couple Media Gallery", tint = iconTint, modifier = Modifier.size(24.dp))
+                                Icon(Icons.Outlined.PhotoLibrary, contentDescription = "Couple Media Gallery", tint = iconTint, modifier = Modifier.size(26.dp))
                             }
                             IconButton(
                                 onClick = { viewModel.openCheckAfterSheet() },
                                 modifier = Modifier
-                                    .size(42.dp)
+                                    .size(46.dp)
                                     .testTag("chat_check_after_button")
                             ) {
                                 Icon(
                                     imageVector = if (partnerHasCheckAfter || iHaveCheckAfter) Icons.Filled.HourglassTop else Icons.Outlined.HourglassTop,
                                     contentDescription = "Check After Timer",
                                     tint = if (partnerHasCheckAfter || iHaveCheckAfter) MaterialTheme.colorScheme.primary else iconTint,
-                                    modifier = Modifier.size(24.dp)
+                                    modifier = Modifier.size(26.dp)
                                 )
                             }
                         }
@@ -546,10 +547,10 @@ fun ChatScreen(
                             IconButton(
                                 onClick = { showChatMenu = true },
                                 modifier = Modifier
-                                    .size(42.dp)
+                                    .size(46.dp)
                                     .testTag("chat_more_menu_button")
                             ) {
-                                Icon(Icons.Default.MoreVert, contentDescription = "More options", tint = iconTint, modifier = Modifier.size(24.dp))
+                                Icon(Icons.Default.MoreVert, contentDescription = "More options", tint = iconTint, modifier = Modifier.size(26.dp))
                             }
                             DropdownMenu(
                                 expanded = showChatMenu,
@@ -875,6 +876,20 @@ fun ChatScreen(
                     )
             } else {
                 val reversedMessages = remember(displayedMessages) { displayedMessages.reversed() }
+                
+                val shouldLoadMore by remember {
+                    derivedStateOf {
+                        val totalItems = listState.layoutInfo.totalItemsCount
+                        val lastVisibleItem = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
+                        totalItems > 0 && lastVisibleItem >= totalItems - 10
+                    }
+                }
+                LaunchedEffect(shouldLoadMore) {
+                    if (shouldLoadMore) {
+                        viewModel.loadMoreMessages()
+                    }
+                }
+
                 LazyColumn(
                     state = listState,
                     modifier = Modifier.fillMaxSize().pointerInput(Unit) {
@@ -894,7 +909,16 @@ fun ChatScreen(
                         val isFromMe = message.senderId == currentUserId
                         val isFirstOfDay = index == reversedMessages.lastIndex || !isSameDay(reversedMessages[index + 1].timestamp, message.timestamp)
 
-                        Column {
+                        Column(
+                            modifier = Modifier.animateItem(
+                                fadeInSpec = null,
+                                fadeOutSpec = null,
+                                placementSpec = spring(
+                                    dampingRatio = Spring.DampingRatioNoBouncy,
+                                    stiffness = Spring.StiffnessMediumLow
+                                )
+                            )
+                        ) {
                             val dateSep = formatDateSeparator(message.timestamp)
                             if (isFirstOfDay && dateSep.isNotEmpty()) {
                                 Row(
@@ -967,6 +991,7 @@ fun ChatScreen(
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
+                                    .padding(horizontal = 16.dp)
                                     .then(
                                         if (isHighlighted) {
                                             val hColor = if (isPrivate) (if (isDark) Color(0xFF6B7280) else Color(0xFF9CA3AF)) else RoseGoldPrimary

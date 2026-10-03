@@ -40,6 +40,10 @@ class ChatRepository(
 
     private var globalMessagesListener: ListenerRegistration? = null
     private var currentActiveConversationId: String? = null
+    
+    private var messageLimit = 50L
+    var isQueryExhausted = false
+
 
     init {
         _messagesFlow.value = emptyList()
@@ -48,6 +52,8 @@ class ChatRepository(
                 .map { it?.coupleId ?: "couple_cherish_love" }
                 .distinctUntilChanged()
                 .collectLatest { convId ->
+                    messageLimit = 50L
+                    isQueryExhausted = false
                     startGlobalMessagesListener(convId)
                 }
         }
@@ -59,16 +65,30 @@ class ChatRepository(
         return coupleId
     }
 
-    private fun startGlobalMessagesListener(conversationId: String) {
+    fun loadMoreMessages() {
+        if (isQueryExhausted) return
+        messageLimit += 50
+        currentActiveConversationId?.let { startGlobalMessagesListener(it, forceRestart = true) }
+    }
+
+    fun expandLimitForSearch() {
+        if (messageLimit < 500L) {
+            messageLimit = 500L
+            currentActiveConversationId?.let { startGlobalMessagesListener(it, forceRestart = true) }
+        }
+    }
+
+    private fun startGlobalMessagesListener(conversationId: String, forceRestart: Boolean = false) {
         // Prevent duplicate listener for the same conversation
-        if (currentActiveConversationId == conversationId && globalMessagesListener != null) return
+        if (!forceRestart && currentActiveConversationId == conversationId && globalMessagesListener != null) return
         globalMessagesListener?.remove()
         currentActiveConversationId = conversationId
         val fs = firestore ?: return
         val query = fs.collection("conversations")
             .document(conversationId)
             .collection("messages")
-            .orderBy("timestamp", Query.Direction.ASCENDING)
+            .orderBy("timestamp", Query.Direction.DESCENDING)
+            .limit(messageLimit)
 
         globalMessagesListener = query.addSnapshotListener { snapshot, error ->
             if (error != null) {
@@ -76,10 +96,19 @@ class ChatRepository(
                 return@addSnapshotListener
             }
             if (snapshot != null) {
+                if (snapshot.documents.size < messageLimit) {
+                    isQueryExhausted = true
+                }
                 val firestoreMessages = snapshot.documents.mapNotNull { it.toObject(Message::class.java) }
                 val firestoreIds = firestoreMessages.map { it.id }.toSet()
-                // Keep optimistic in-memory messages that Firestore hasn't confirmed yet (avoids blank flash)
-                val pendingOptimistic = _messagesFlow.value.filter { it.id !in firestoreIds }
+                
+                val maxFirestoreTimestamp = firestoreMessages.maxOfOrNull { it.timestamp } ?: 0L
+                
+                // Keep optimistic in-memory messages that are newer than the latest server message
+                val pendingOptimistic = _messagesFlow.value.filter { 
+                    it.timestamp > maxFirestoreTimestamp && it.id !in firestoreIds 
+                }
+                
                 // Merge: confirmed Firestore messages + any still-pending optimistic ones
                 _messagesFlow.value = (firestoreMessages + pendingOptimistic)
                     .sortedBy { it.timestamp }
@@ -142,7 +171,7 @@ class ChatRepository(
             val fs = firestore
             if (fs != null) {
                 val convRef = fs.collection("conversations").document(convId)
-                convRef.collection("messages").document(messageId).set(newMessage).await()
+                convRef.collection("messages").document(messageId).set(newMessage)
 
                 // Update conversation summary
                 val summary = mapOf(
@@ -151,7 +180,7 @@ class ChatRepository(
                     "lastMessageSenderId" to newMessage.senderId,
                     "lastMessageTimestamp" to newMessage.timestamp
                 )
-                convRef.set(summary, com.google.firebase.firestore.SetOptions.merge()).await()
+                convRef.set(summary, com.google.firebase.firestore.SetOptions.merge())
             }
             try {
                 com.example.CherishApplication.instance.googleDriveBackupManager.triggerImmediateAutoBackup()

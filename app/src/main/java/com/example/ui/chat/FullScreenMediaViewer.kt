@@ -215,6 +215,16 @@ fun FullScreenMediaViewer(
             decorFitsSystemWindows = false
         )
     ) {
+        val view = androidx.compose.ui.platform.LocalView.current
+        SideEffect {
+            val window = (view.parent as? androidx.compose.ui.window.DialogWindowProvider)?.window
+            if (window != null) {
+                window.statusBarColor = android.graphics.Color.TRANSPARENT
+                window.navigationBarColor = android.graphics.Color.TRANSPARENT
+                androidx.core.view.WindowCompat.setDecorFitsSystemWindows(window, false)
+            }
+        }
+        
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -228,6 +238,7 @@ fun FullScreenMediaViewer(
             HorizontalPager(
                 state = pagerState,
                 userScrollEnabled = scale <= 1.05f,
+                beyondViewportPageCount = 1,
                 key = { it },
                 modifier = Modifier.fillMaxSize()
             ) { page ->
@@ -493,43 +504,36 @@ fun FullScreenMediaViewer(
                         }
                     }
 
-                    // Telegram Bottom Filmstrip Carousel (if multiple photos)
+                    // Page indicator dots (if multiple images)
                     if (mediaList.size > 1) {
-                        LazyRow(
-                            state = filmstripListState,
-                            contentPadding = PaddingValues(horizontal = 16.dp),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(56.dp)
+                                .padding(bottom = 8.dp),
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            itemsIndexed(mediaList) { index, itemUrl ->
+                            val displayCount = mediaList.size.coerceAtMost(20)
+                            repeat(displayCount) { index ->
                                 val isSelected = index == currentIndex
-                                val thumbBorder = if (isSelected) {
-                                    androidx.compose.foundation.BorderStroke(2.5.dp, RoseGoldPrimary)
-                                } else {
-                                    androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.25f))
-                                }
-
-                                Surface(
-                                    shape = RoundedCornerShape(8.dp),
-                                    border = thumbBorder,
-                                    color = Color.DarkGray,
+                                Box(
                                     modifier = Modifier
-                                        .size(48.dp)
-                                        .clickable {
-                                            scope.launch {
-                                                pagerState.animateScrollToPage(index)
-                                            }
-                                        }
-                                ) {
-                                    AsyncImage(
-                                        model = itemUrl,
-                                        contentDescription = "Thumbnail $index",
-                                        contentScale = ContentScale.Crop,
-                                        modifier = Modifier.fillMaxSize()
-                                    )
-                                }
+                                        .padding(horizontal = 3.dp)
+                                        .size(if (isSelected) 8.dp else 6.dp)
+                                        .clip(CircleShape)
+                                        .background(
+                                            if (isSelected) RoseGoldPrimary
+                                            else Color.White.copy(alpha = 0.4f)
+                                        )
+                                )
+                            }
+                            if (mediaList.size > 20) {
+                                Text(
+                                    text = "+${mediaList.size - 20}",
+                                    color = Color.White.copy(alpha = 0.5f),
+                                    fontSize = 10.sp,
+                                    modifier = Modifier.padding(start = 4.dp)
+                                )
                             }
                         }
                     }

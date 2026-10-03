@@ -609,7 +609,9 @@ fun NotesDisguiseScreen(
                     .fillMaxSize()
                     .padding(paddingValues)
             ) {
-                if (uiState.notes.isEmpty()) {
+                if (uiState.isLoading) {
+                    Box(modifier = Modifier.fillMaxSize())
+                } else if (uiState.notes.isEmpty()) {
                     // Empty State
                     Box(
                         modifier = Modifier

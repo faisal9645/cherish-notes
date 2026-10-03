@@ -23,6 +23,7 @@ data class HomeUiState(
     val unreadCount: Int = 0,
     val daysTogether: Long = 280L,
     val isPartnerTyping: Boolean = false,
+    val isPartnerOnline: Boolean = false,
     val dailyQuestion: DailyQuestion = DailyQuestion(),
     val loveJarNotes: List<LoveJarNote> = emptyList(),
     val bucketList: List<BucketListItem> = emptyList(),
@@ -50,7 +51,7 @@ class HomeViewModel(
                 _uiState.update {
                     it.copy(
                         partnerUser = partner,
-                        isPartnerTyping = partner?.typingInChat ?: false
+                        isPartnerTyping = partner?.isEffectivelyTyping() ?: false
                     )
                 }
             }
@@ -87,6 +88,19 @@ class HomeViewModel(
         viewModelScope.launch {
             coupleFeaturesRepository.bucketListFlow.collect { items ->
                 _uiState.update { it.copy(bucketList = items) }
+            }
+        }
+
+        viewModelScope.launch {
+            while (true) {
+                kotlinx.coroutines.delay(1000L)
+                _uiState.update { state ->
+                    val partner = state.partnerUser
+                    state.copy(
+                        isPartnerOnline = partner?.isEffectivelyOnline() ?: false,
+                        isPartnerTyping = partner?.isEffectivelyTyping() ?: false
+                    )
+                }
             }
         }
     }

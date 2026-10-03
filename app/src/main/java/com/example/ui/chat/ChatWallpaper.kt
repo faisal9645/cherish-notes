@@ -21,6 +21,8 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.animation.animateColor
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.unit.dp
 
 /**
@@ -41,31 +43,60 @@ fun ChatWallpaper(
 
     when (chatBgTheme) {
         1 -> DoodleWallpaper(isDark = isDark, modifier = modifier)
-        2 -> CosmicConstellationWallpaper(isDark = isDark, modifier = modifier)
+        2 -> LoveImmersiveWallpaper(isDark = isDark, modifier = modifier)
         else -> NormalWallpaper(isDark = isDark, modifier = modifier)
     }
 }
 
 /**
- * Clean minimalist wallpaper (Theme 0)
+ * Clean minimalist wallpaper (Theme 0) - Reverted to solid default
  */
 @Composable
 fun NormalWallpaper(
     isDark: Boolean,
     modifier: Modifier = Modifier
 ) {
-    val gradientBrush = remember(isDark) {
-        if (isDark) {
-            androidx.compose.ui.graphics.SolidColor(Color.Black)
-        } else {
-            androidx.compose.ui.graphics.SolidColor(Color.White)
-        }
-    }
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .background(if (isDark) Color(0xFF1E1E1E) else Color(0xFFF5F5F5))
+    )
+}
+
+/**
+ * Animated Immersive Love Wallpaper (Theme 2)
+ */
+@Composable
+fun LoveImmersiveWallpaper(
+    isDark: Boolean,
+    modifier: Modifier = Modifier
+) {
+    val infiniteTransition = androidx.compose.animation.core.rememberInfiniteTransition(label = "love_bg")
+    
+    val color1 by infiniteTransition.animateColor(
+        initialValue = if (isDark) Color(0xFF180A12) else Color(0xFFFFF0F5),
+        targetValue = if (isDark) Color(0xFF28111B) else Color(0xFFFFE4E1),
+        animationSpec = androidx.compose.animation.core.infiniteRepeatable(
+            animation = androidx.compose.animation.core.tween(6000, easing = androidx.compose.animation.core.FastOutSlowInEasing),
+            repeatMode = androidx.compose.animation.core.RepeatMode.Reverse
+        ),
+        label = "c1"
+    )
+    
+    val color2 by infiniteTransition.animateColor(
+        initialValue = if (isDark) Color(0xFF0F060A) else Color(0xFFFFF8F8),
+        targetValue = if (isDark) Color(0xFF1C0A11) else Color(0xFFFFEBF0),
+        animationSpec = androidx.compose.animation.core.infiniteRepeatable(
+            animation = androidx.compose.animation.core.tween(4500, easing = androidx.compose.animation.core.FastOutSlowInEasing),
+            repeatMode = androidx.compose.animation.core.RepeatMode.Reverse
+        ),
+        label = "c2"
+    )
 
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(gradientBrush)
+            .background(Brush.verticalGradient(listOf(color1, color2)))
     )
 }
 

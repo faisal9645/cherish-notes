@@ -168,12 +168,11 @@ fun MessageBubble(
         }
     }
 
-    Row(
+    Box(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 2.5.dp),
-        horizontalArrangement = if (isFromMe) Arrangement.End else Arrangement.Start,
-        verticalAlignment = Alignment.CenterVertically
+            .padding(horizontal = 6.dp, vertical = 2.5.dp),
+        contentAlignment = if (isFromMe) Alignment.CenterEnd else Alignment.CenterStart
     ) {
         if (!isFromMe && onSwipeToReply != null) {
             Icon(
@@ -181,12 +180,29 @@ fun MessageBubble(
                 contentDescription = "Swipe to reply",
                 tint = if (isPrivateMode) (if (isDark) Color(0xFF9CA3AF) else Color(0xFF6B7280)) else RoseGoldPrimary.copy(alpha = replyIconAlpha),
                 modifier = Modifier
+                    .padding(start = 12.dp)
                     .size(22.dp)
                     .graphicsLayer {
                         scaleX = replyIconAlpha
                         scaleY = replyIconAlpha
+                        alpha = replyIconAlpha
                     }
-                    .padding(end = 4.dp)
+            )
+        }
+
+        if (isFromMe && onSwipeToReply != null) {
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.Reply,
+                contentDescription = "Swipe to reply",
+                tint = if (isPrivateMode) (if (isDark) Color(0xFF9CA3AF) else Color(0xFF6B7280)) else RoseGoldPrimary.copy(alpha = replyIconAlpha),
+                modifier = Modifier
+                    .padding(end = 12.dp)
+                    .size(22.dp)
+                    .graphicsLayer {
+                        scaleX = replyIconAlpha
+                        scaleY = replyIconAlpha
+                        alpha = replyIconAlpha
+                    }
             )
         }
 
@@ -356,16 +372,7 @@ fun MessageBubble(
                                 .fillMaxWidth()
                                 .padding(vertical = 4.dp, horizontal = 2.dp)
                         ) {
-                            if (!isPrivateMode && !isFromMe) {
-                                com.example.ui.components.AvatarView(
-                                    photoUrl = senderPhotoUrl,
-                                    name = message.senderName,
-                                    size = 42.dp,
-                                    isOnline = false,
-                                    showOnlineBadge = false
-                                )
-                                Spacer(modifier = Modifier.width(10.dp))
-                            }
+                            // Opponent avatar moved to the right side after waveform
 
                             IconButton(
                                 onClick = onPlayAudio,
@@ -471,7 +478,7 @@ fun MessageBubble(
                                 }
                             }
 
-                            if (!isPrivateMode && isFromMe) {
+                            if (!isPrivateMode) {
                                 Spacer(modifier = Modifier.width(10.dp))
                                 com.example.ui.components.AvatarView(
                                     photoUrl = senderPhotoUrl,

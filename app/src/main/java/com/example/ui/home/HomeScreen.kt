@@ -47,6 +47,7 @@ fun HomeScreen(
     onNavigateToNotes: () -> Unit,
     onNavigateToGallery: () -> Unit,
     onNavigateToProfile: () -> Unit,
+    onNavigateToOpenWhen: () -> Unit = {},
     onNavigateToLifetimeJourney: () -> Unit = {},
     onNavigateToCloudBackup: () -> Unit = {},
     onQuickDisguise: () -> Unit = {}
@@ -63,7 +64,7 @@ fun HomeScreen(
         ?: "My Partner"
     val partnerEmail = partner?.email?.ifBlank { "partner@cherish.app" } ?: "partner@cherish.app"
     val myEmail = currentUser?.email?.ifBlank { "you@cherish.app" } ?: "you@cherish.app"
-    val isOnline = partner?.isEffectivelyOnline() ?: false
+    val isOnline = uiState.isPartnerOnline
     val statusText = partner?.statusMessage ?: "Together forever & always 💕"
 
     val partnerHasCheckAfter = partner?.hasActiveCheckAfter() == true
@@ -581,6 +582,67 @@ fun HomeScreen(
                             )
                             Text(
                                 text = "Track our love across every age & milestone",
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+
+                    Icon(
+                        imageVector = Icons.Default.ChevronRight,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+
+            // Open When... Envelopes Card
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onNavigateToOpenWhen() }
+                    .testTag("open_when_card"),
+                shape = RoundedCornerShape(18.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(38.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.MarkEmailRead,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column {
+                            Text(
+                                text = "Open When... Envelopes 💌",
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = "Sealed letters locked until the right moment",
                                 fontSize = 12.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )

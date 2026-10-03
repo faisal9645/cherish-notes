@@ -52,15 +52,21 @@ fun MessageActionsSheet(
                 .padding(horizontal = 20.dp, vertical = 8.dp)
                 .navigationBarsPadding()
         ) {
-            // Emoji reaction row
-            val reactionEmojis = listOf("❤️", "🥰", "😘", "🔥", "🥺", "👍", "🌹")
-            Row(
+            // Emoji reaction row (Scrollable like WhatsApp/Telegram)
+            val reactionEmojis = listOf(
+                "❤️", "🥰", "😘", "🔥", "🥺", "👍", "🌹", "😂", "🤣", 
+                "😊", "😍", "😒", "😎", "😔", "😜", "😡", "😭", "😤", "🤫", 
+                "💑", "👩‍❤️‍👨", "👨‍❤️‍👨", "👩‍❤️‍👩", "💍", "💌", "💖", "💘"
+            )
+            androidx.compose.foundation.lazy.LazyRow(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(vertical = 12.dp),
-                horizontalArrangement = Arrangement.SpaceAround
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                contentPadding = PaddingValues(horizontal = 4.dp)
             ) {
-                reactionEmojis.forEach { emoji ->
+                items(reactionEmojis.size) { index ->
+                    val emoji = reactionEmojis[index]
                     Box(
                         modifier = Modifier
                             .size(46.dp)
@@ -72,7 +78,7 @@ fun MessageActionsSheet(
                             },
                         contentAlignment = Alignment.Center
                     ) {
-                        Text(text = emoji, fontSize = 24.sp)
+                        Text(text = emoji, fontSize = 28.sp)
                     }
                 }
             }

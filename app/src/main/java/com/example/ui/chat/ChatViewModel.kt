@@ -39,6 +39,7 @@ data class ChatUiState(
     val isCheckAfterSheetOpen: Boolean = false,
     val isCheckAfterReminderEnabled: Boolean = true,
     val isPartnerRecordingAudio: Boolean = false,
+    val isPartnerOnline: Boolean = false,
     val pinnedMessage: Message? = null,
     val theaterVideoId: String? = null,
     val filterStarredOnly: Boolean = false,
@@ -96,8 +97,8 @@ class ChatViewModel(
                 _uiState.update {
                     it.copy(
                         partnerUser = partner,
-                        isPartnerTyping = partner?.typingInChat ?: false,
-                        isPartnerRecordingAudio = partner?.recordingAudioInChat ?: false
+                        isPartnerTyping = partner?.isEffectivelyTyping() ?: false,
+                        isPartnerRecordingAudio = partner?.isEffectivelyRecording() ?: false
                     )
                 }
             }
@@ -132,6 +133,21 @@ class ChatViewModel(
                 _uiState.update { it.copy(deletionRequest = req) }
             }
         }
+        
+        // Ticker to continuously evaluate effective online/typing status
+        viewModelScope.launch {
+            while (true) {
+                kotlinx.coroutines.delay(1000L)
+                _uiState.update { state ->
+                    val partner = state.partnerUser
+                    state.copy(
+                        isPartnerOnline = partner?.isEffectivelyOnline() ?: false,
+                        isPartnerTyping = partner?.isEffectivelyTyping() ?: false,
+                        isPartnerRecordingAudio = partner?.isEffectivelyRecording() ?: false
+                    )
+                }
+            }
+        }
     }
 
     fun setInChatTab(inChat: Boolean) {
@@ -140,6 +156,13 @@ class ChatViewModel(
         }
         authRepository.setInChatTab(inChat)
     }
+
+    fun loadMoreMessages() {
+        chatRepository.loadMoreMessages()
+    }
+
+    val isQueryExhausted: Boolean
+        get() = chatRepository.isQueryExhausted
 
     fun onTypingChanged(isTyping: Boolean) {
         authRepository.setTyping(isTyping)
@@ -397,6 +420,7 @@ class ChatViewModel(
 
     fun navigateToMessageInChat(messageId: String) {
         securityPreferences.revealSecretHistory()
+        chatRepository.expandLimitForSearch()
         _uiState.update {
             it.copy(
                 targetScrollMessageId = messageId

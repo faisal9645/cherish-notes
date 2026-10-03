@@ -9,6 +9,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -121,13 +122,101 @@ fun MessageComposer(
         if (isDark) Color(0xFF2A364F) else Color(0xFFE2E8F0)
     }
 
-    val emojiList = remember {
+    // Comprehensive emoji categories like WhatsApp / Telegram
+    var selectedEmojiTab by remember { mutableIntStateOf(0) }
+    val emojiTabs = remember { listOf("💕", "😊", "👤", "🐾", "🍔", "⚽", "💡", "🏳️") }
+    val emojiCategories = remember {
         listOf(
-            "❤️", "💖", "💕", "💞", "💓", "💗", "💘", "💝",
-            "🥰", "😍", "😘", "😚", "😻", "🤗", "🫂", "🫶",
-            "💋", "💌", "🌹", "💐", "🧸", "✨", "💫", "⭐",
-            "😊", "🥺", "😇", "🥳", "😌", "🤤", "🔥", "👑",
-            "💍", "🥂", "🍫", "🍓", "🍰", "🌙", "☀️", "🌈"
+            // 0: Couple / Love (always first)
+            listOf(
+                "❤️", "🧡", "💛", "💚", "💙", "💜", "🖤", "🤍", "🤎", "💔",
+                "❣️", "💕", "💞", "💓", "💗", "💖", "💘", "💝", "💟", "♥️",
+                "🥰", "😍", "😘", "😚", "😻", "💋", "💌", "💍", "💐", "🌹",
+                "🫶", "🫂", "🤗", "👩‍❤️‍👨", "💑", "👩‍❤️‍💋‍👨", "👫", "🧸", "✨", "💫"
+            ),
+            // 1: Smileys & Faces  
+            listOf(
+                "😀", "😃", "😄", "😁", "😆", "😅", "🤣", "😂", "🙂", "🙃",
+                "😉", "😊", "😇", "😍", "🤩", "😘", "😗", "😚", "😙", "🥲",
+                "😋", "😛", "😜", "🤪", "😝", "🤑", "🤗", "🤭", "🤫", "🤔",
+                "🫡", "🤐", "🤨", "😐", "😑", "😶", "🫥", "😏", "😒", "🙄",
+                "😬", "🤥", "😌", "😔", "😪", "🤤", "😴", "😷", "🤒", "🤕",
+                "🤢", "🤮", "🥵", "🥶", "🥴", "😵", "🤯", "🤠", "🥳", "🥸",
+                "😎", "🤓", "🧐", "😕", "🫤", "😟", "🙁", "😮", "😯", "😲",
+                "😳", "🥺", "🥹", "😦", "😧", "😨", "😰", "😥", "😢", "😭",
+                "😱", "😖", "😣", "😞", "😓", "😩", "😫", "🥱", "😤", "😡",
+                "😠", "🤬", "😈", "👿", "💀", "☠️", "💩", "🤡", "👹", "👺",
+                "👻", "👽", "👾", "🤖", "😺", "😸", "😹", "😻", "😼", "😽",
+                "🙀", "😿", "😾", "🙈", "🙉", "🙊"
+            ),
+            // 2: People & Hands
+            listOf(
+                "👋", "🤚", "🖐️", "✋", "🖖", "🫱", "🫲", "🫳", "🫴", "👌",
+                "🤌", "🤏", "✌️", "🤞", "🫰", "🤟", "🤘", "🤙", "👈", "👉",
+                "👆", "🖕", "👇", "☝️", "🫵", "👍", "👎", "✊", "👊", "🤛",
+                "🤜", "👏", "🙌", "🫶", "👐", "🤲", "🤝", "🙏", "✍️", "💅",
+                "🤳", "💪", "🦾", "🦿", "🦵", "🦶", "👂", "🦻", "👃", "🧠",
+                "👶", "🧒", "👦", "👧", "🧑", "👱", "👨", "🧔", "👩", "🧓",
+                "👴", "👵", "🙍", "🙎", "🙅", "🙆", "💁", "🙋", "🧏", "🙇",
+                "🤦", "🤷", "👮", "🕵️", "💂", "🥷", "👷", "🫅", "🤴", "👸"
+            ),
+            // 3: Animals & Nature
+            listOf(
+                "🐶", "🐱", "🐭", "🐹", "🐰", "🦊", "🐻", "🐼", "🐻‍❄️", "🐨",
+                "🐯", "🦁", "🐮", "🐷", "🐽", "🐸", "🐵", "🙈", "🙉", "🙊",
+                "🐒", "🐔", "🐧", "🐦", "🐤", "🐣", "🐥", "🦆", "🦅", "🦉",
+                "🦇", "🐺", "🐗", "🐴", "🦄", "🐝", "🪱", "🐛", "🦋", "🐌",
+                "🐞", "🐜", "🪰", "🪲", "🪳", "🦟", "🦗", "🕷️", "🦂", "🐢",
+                "🐍", "🦎", "🦖", "🦕", "🐙", "🦑", "🦐", "🦞", "🦀", "🐡",
+                "🐠", "🐟", "🐬", "🐳", "🐋", "🦈", "🪸", "🐊", "🐅", "🐆",
+                "🌸", "💮", "🏵️", "🌹", "🥀", "🌺", "🌻", "🌼", "🌷", "🌱",
+                "🪴", "🌲", "🌳", "🌴", "🌵", "🌾", "🌿", "☘️", "🍀", "🍁"
+            ),
+            // 4: Food & Drink
+            listOf(
+                "🍇", "🍈", "🍉", "🍊", "🍋", "🍌", "🍍", "🥭", "🍎", "🍏",
+                "🍐", "🍑", "🍒", "🍓", "🫐", "🥝", "🍅", "🫒", "🥥", "🥑",
+                "🍆", "🥔", "🥕", "🌽", "🌶️", "🫑", "🥒", "🥬", "🥦", "🧄",
+                "🍞", "🥐", "🥖", "🫓", "🥨", "🥯", "🥞", "🧇", "🧀", "🍖",
+                "🍗", "🥩", "🥓", "🍔", "🍟", "🍕", "🌭", "🥪", "🌮", "🌯",
+                "🫔", "🥙", "🧆", "🥚", "🍳", "🥘", "🍲", "🫕", "🥣", "🥗",
+                "🍿", "🧈", "🧂", "🥫", "🍱", "🍘", "🍙", "🍚", "🍛", "🍜",
+                "🍝", "🍠", "🍢", "🍣", "🍤", "🍥", "🥮", "🍡", "🥟", "🥠",
+                "☕", "🍵", "🫖", "🍶", "🍾", "🍷", "🍸", "🍹", "🍺", "🥂"
+            ),
+            // 5: Activities & Sports
+            listOf(
+                "⚽", "🏀", "🏈", "⚾", "🥎", "🎾", "🏐", "🏉", "🥏", "🎱",
+                "🪀", "🏓", "🏸", "🏒", "🏑", "🥍", "🏏", "🪃", "🥅", "⛳",
+                "🪁", "🏹", "🎣", "🤿", "🥊", "🥋", "🎽", "🛹", "🛼", "🛷",
+                "⛸️", "🥌", "🎿", "⛷️", "🏂", "🪂", "🏋️", "🤼", "🤸", "🤺",
+                "⛹️", "🏇", "🧘", "🏄", "🏊", "🤽", "🚣", "🧗", "🚴", "🏆",
+                "🥇", "🥈", "🥉", "🏅", "🎖️", "🏵️", "🎗️", "🎫", "🎟️", "🎪",
+                "🎭", "🎨", "🎬", "🎤", "🎧", "🎼", "🎹", "🥁", "🪘", "🎷",
+                "🎺", "🪗", "🎸", "🎻", "🪕", "🎲", "♟️", "🎯", "🎳", "🎮"
+            ),
+            // 6: Objects
+            listOf(
+                "⌚", "📱", "📲", "💻", "⌨️", "🖥️", "🖨️", "🖱️", "🖲️", "🕹️",
+                "🗜️", "💽", "💾", "💿", "📀", "📼", "📷", "📸", "📹", "🎥",
+                "📽️", "🎞️", "📞", "☎️", "📟", "📠", "📺", "📻", "🎙️", "🎚️",
+                "🎛️", "🧭", "⏱️", "⏲️", "⏰", "🕰️", "⌛", "⏳", "📡", "🔋",
+                "💡", "🔦", "🕯️", "🪔", "🧯", "🗑️", "🛒", "🚬", "⚰️", "🪦",
+                "🔑", "🗝️", "🔐", "🔒", "🔓", "❤️‍🔥", "🪄", "🔮", "🧿", "🪬",
+                "🎀", "🎁", "🎈", "🎊", "🎉", "🎎", "🏮", "🎐", "🧧", "✉️"
+            ),
+            // 7: Symbols & Flags
+            listOf(
+                "❤️", "🧡", "💛", "💚", "💙", "💜", "🖤", "🤍", "🤎", "💔",
+                "❤️‍🔥", "❤️‍🩹", "♥️", "💘", "💝", "💖", "💗", "💓", "💞", "💕",
+                "❣️", "💟", "☮️", "✝️", "☪️", "🕉️", "☸️", "✡️", "🔯", "🕎",
+                "☯️", "☦️", "🛐", "⛎", "♈", "♉", "♊", "♋", "♌", "♍",
+                "♎", "♏", "♐", "♑", "♒", "♓", "🆔", "⚛️", "🉑", "☢️",
+                "☣️", "📴", "📳", "🈶", "🈚", "🈸", "🈺", "🈷️", "✴️", "🆚",
+                "💮", "🉐", "㊙️", "㊗️", "🈴", "🈵", "🈹", "🈲", "🅰️", "🅱️",
+                "🆎", "🆑", "🅾️", "🆘", "❌", "⭕", "🛑", "⛔", "📛", "🚫",
+                "✅", "☑️", "✔️", "❎", "➕", "➖", "➗", "➰", "➿", "〽️"
+            )
         )
     }
 
@@ -525,7 +614,7 @@ fun MessageComposer(
                                             .clip(CircleShape)
                                             .background(appHorizontalGradient())
                                     )
-                                    .clickable {
+                                    .bounceClick {
                                         onSendText()
                                         showEmojiPanel = false
                                     }
@@ -558,7 +647,7 @@ fun MessageComposer(
                                             .clip(CircleShape)
                                             .background(appHorizontalGradient())
                                     )
-                                    .clickable {
+                                    .bounceClick {
                                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                         isLockedRecording = false
                                         onStopAndSendVoiceRecord()
@@ -692,7 +781,7 @@ fun MessageComposer(
             }
         }
 
-        // 22. WhatsApp-Style Emoji Panel: Sits DIRECTLY BELOW the composer
+        // 22. WhatsApp/Telegram-Style Tabbed Emoji Panel
         AnimatedVisibility(
             visible = showEmojiPanel && !isRecordingVoice,
             enter = expandVertically(animationSpec = tween(200)) + fadeIn(tween(200)),
@@ -704,25 +793,43 @@ fun MessageComposer(
                 shape = RoundedCornerShape(bottomStart = 16.dp, bottomEnd = 16.dp),
                 modifier = Modifier
                     .fillMaxWidth()
-                    // Issue 15: Fixed height matches a typical soft keyboard so the layout
-                    // doesn't jump when switching between keyboard and emoji panel.
-                    .height(240.dp)
+                    .height(280.dp)
             ) {
-                Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp)) {
+                Column(modifier = Modifier.fillMaxSize()) {
+                    // Category Tab Row (bottom-style like WhatsApp)
                     Row(
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 2.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(if (isDark) Color(0xFF1A1C22) else Color(0xFFF1F3F5))
+                            .padding(horizontal = 4.dp, vertical = 2.dp),
+                        horizontalArrangement = Arrangement.SpaceEvenly,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            text = "Couple Emojis 💕",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                        emojiTabs.forEachIndexed { index, tabEmoji ->
+                            val isSelected = selectedEmojiTab == index
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(
+                                        if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                                        else Color.Transparent
+                                    )
+                                    .clickable { selectedEmojiTab = index }
+                                    .padding(vertical = 6.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = tabEmoji,
+                                    fontSize = if (isSelected) 20.sp else 17.sp
+                                )
+                            }
+                        }
+                        
+                        // Close button at end
                         IconButton(
                             onClick = { showEmojiPanel = false },
-                            modifier = Modifier.size(24.dp)
+                            modifier = Modifier.size(32.dp)
                         ) {
                             Icon(
                                 Icons.Default.Close,
@@ -733,17 +840,21 @@ fun MessageComposer(
                         }
                     }
 
+                    // Emoji grid for selected category
+                    val currentEmojis = emojiCategories.getOrElse(selectedEmojiTab) { emptyList() }
                     LazyVerticalGrid(
                         columns = GridCells.Fixed(8),
-                        modifier = Modifier.fillMaxWidth().weight(1f, fill = false),
-                        contentPadding = PaddingValues(4.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f),
+                        contentPadding = PaddingValues(6.dp),
                         horizontalArrangement = Arrangement.SpaceEvenly,
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                        verticalArrangement = Arrangement.spacedBy(2.dp)
                     ) {
-                        items(emojiList, key = { it }) { emoji ->
+                        items(currentEmojis, key = { "${selectedEmojiTab}_$it" }) { emoji ->
                             Box(
                                 modifier = Modifier
-                                    .clip(CircleShape)
+                                    .clip(RoundedCornerShape(8.dp))
                                     .clickable {
                                         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                         onTextChanged(text + emoji)
@@ -751,7 +862,7 @@ fun MessageComposer(
                                     .padding(vertical = 4.dp),
                                 contentAlignment = Alignment.Center
                             ) {
-                                Text(text = emoji, fontSize = 22.sp)
+                                Text(text = emoji, fontSize = 24.sp)
                             }
                         }
                     }
@@ -759,4 +870,33 @@ fun MessageComposer(
             }
         }
     }
+}
+
+@Composable
+fun Modifier.bounceClick(
+    scaleDown: Float = 0.88f,
+    onClick: () -> Unit
+): Modifier {
+    var isPressed by remember { mutableStateOf(false) }
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) scaleDown else 1f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow),
+        label = "bounceClick"
+    )
+    
+    return this
+        .graphicsLayer {
+            scaleX = scale
+            scaleY = scale
+        }
+        .pointerInput(Unit) {
+            detectTapGestures(
+                onPress = {
+                    isPressed = true
+                    tryAwaitRelease()
+                    isPressed = false
+                },
+                onTap = { onClick() }
+            )
+        }
 }
