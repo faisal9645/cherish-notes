@@ -23,11 +23,18 @@ class SecurityPreferences(context: Context) {
     var ignoreChatNavigation: Boolean = false
 
 
-    private val _isDisguiseActive = MutableStateFlow(false)
+    private val _isDisguiseActive = MutableStateFlow(prefs.getBoolean(KEY_DISGUISE_ENABLED, true))
     val isDisguiseActive: StateFlow<Boolean> = _isDisguiseActive.asStateFlow()
 
+    private val _hasRevealedSecretAppInSession = MutableStateFlow(!prefs.getBoolean(KEY_DISGUISE_ENABLED, true))
+    val hasRevealedSecretAppInSession: StateFlow<Boolean> = _hasRevealedSecretAppInSession.asStateFlow()
+
     init {
-        _isDisguiseActive.value = isDisguiseModeEnabled()
+        val disguiseEnabled = isDisguiseModeEnabled()
+        _isDisguiseActive.value = disguiseEnabled
+        if (!disguiseEnabled) {
+            _hasRevealedSecretAppInSession.value = true
+        }
 
         // If app lock is enabled and PIN is set, default to locked on cold start
         if (isAppLockEnabled() && hasPin()) {
@@ -37,18 +44,27 @@ class SecurityPreferences(context: Context) {
 
     fun isDisguiseActive(): Boolean = _isDisguiseActive.value
 
+    fun hasRevealedSecretApp(): Boolean = _hasRevealedSecretAppInSession.value
+
     fun isDisguiseModeEnabled(): Boolean = prefs.getBoolean(KEY_DISGUISE_ENABLED, true)
 
     fun setDisguiseModeEnabled(enabled: Boolean) {
         prefs.edit().putBoolean(KEY_DISGUISE_ENABLED, enabled).apply()
         _isDisguiseActive.value = enabled
+        if (enabled) {
+            _hasRevealedSecretAppInSession.value = false
+        } else {
+            _hasRevealedSecretAppInSession.value = true
+        }
     }
 
     fun revealSecretApp() {
+        _hasRevealedSecretAppInSession.value = true
         _isDisguiseActive.value = false
     }
 
     fun reDisguise() {
+        _hasRevealedSecretAppInSession.value = false
         _isDisguiseActive.value = true
         // Ensure that when the app is backgrounded in Private Mode, 
         // it does not restore to the private chat screen upon reopening.

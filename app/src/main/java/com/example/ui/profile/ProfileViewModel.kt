@@ -388,6 +388,9 @@ class ProfileViewModel(
     }
 
     fun checkForUpdates(context: android.content.Context) {
+        val secPrefs = com.example.CherishApplication.instance.securityPreferences
+        if (secPrefs.isDisguiseActive() || !secPrefs.hasRevealedSecretApp()) return
+
         val otaManager = com.example.update.OtaUpdateManager.getInstance(context)
         val currentVer = com.example.BuildConfig.VERSION_NAME
 
@@ -400,6 +403,11 @@ class ProfileViewModel(
 
         viewModelScope.launch {
             val info = otaManager.checkForUpdates(silent = false)
+            if (secPrefs.isDisguiseActive() || !secPrefs.hasRevealedSecretApp()) {
+                _updateState.value = UpdateCheckState(showDialog = false)
+                return@launch
+            }
+
             if (info != null) {
                 if (info.hasUpdate) {
                     _updateState.value = UpdateCheckState(
@@ -437,7 +445,7 @@ class ProfileViewModel(
 
     fun silentCheckForUpdates(context: android.content.Context) {
         val secPrefs = com.example.CherishApplication.instance.securityPreferences
-        if (secPrefs.isDisguiseActive()) return
+        if (secPrefs.isDisguiseActive() || !secPrefs.hasRevealedSecretApp()) return
 
         val otaManager = com.example.update.OtaUpdateManager.getInstance(context)
         val currentVer = com.example.BuildConfig.VERSION_NAME
@@ -446,7 +454,7 @@ class ProfileViewModel(
             val info = otaManager.checkForUpdates(silent = true)
             if (info != null && info.hasUpdate) {
                 // Ensure disguise mode did not become active during network call
-                if (!secPrefs.isDisguiseActive()) {
+                if (!secPrefs.isDisguiseActive() && secPrefs.hasRevealedSecretApp()) {
                     _updateState.value = UpdateCheckState(
                         isChecking = false,
                         showDialog = true,

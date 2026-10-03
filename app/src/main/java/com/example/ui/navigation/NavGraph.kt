@@ -62,6 +62,7 @@ fun CherishNavGraph(
     modifier: Modifier = Modifier
 ) {
     val isDisguiseActive by app.securityPreferences.isDisguiseActive.collectAsState()
+    val hasRevealedSecretApp by app.securityPreferences.hasRevealedSecretAppInSession.collectAsState()
     val isAppLocked by app.securityPreferences.isAppLocked.collectAsState()
     val isUserLoggedIn = remember { app.authRepository.isUserLoggedIn() }
 
@@ -133,9 +134,11 @@ fun CherishNavGraph(
     val context = LocalContext.current
     val updateState by profileViewModel.updateState.collectAsState()
 
-    LaunchedEffect(isDisguiseActive) {
-        if (!isDisguiseActive) {
+    LaunchedEffect(isDisguiseActive, hasRevealedSecretApp) {
+        if (!isDisguiseActive && hasRevealedSecretApp) {
             profileViewModel.silentCheckForUpdates(context)
+        } else {
+            profileViewModel.dismissUpdateDialog()
         }
     }
 
@@ -382,7 +385,7 @@ fun CherishNavGraph(
         )
     }
     // In-App OTA Updates Dialog: ONLY show inside Cherish app, NEVER inside Notes app
-    if (updateState.showDialog && !isDisguiseActive) {
+    if (updateState.showDialog && !isDisguiseActive && hasRevealedSecretApp) {
         AlertDialog(
             onDismissRequest = {
                 if (!updateState.isDownloading) profileViewModel.dismissUpdateDialog()
