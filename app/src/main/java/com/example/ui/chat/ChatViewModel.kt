@@ -46,6 +46,9 @@ data class ChatUiState(
     val voicePlaybackSpeed: Float = 1.0f,
     val isSecretHistoryRevealed: Boolean = true,
     val showPreviousChats: Boolean = false,
+    val isLoadingMore: Boolean = false,
+    val isPaginationExhausted: Boolean = false,
+    val hasPreviousChatsAvailable: Boolean = true,
     val targetScrollMessageId: String? = null,
     val chatBgTheme: Int = 0,
     val chatExperienceMode: ChatExperienceMode = ChatExperienceMode.NORMAL
@@ -133,6 +136,24 @@ class ChatViewModel(
                 _uiState.update { it.copy(deletionRequest = req) }
             }
         }
+
+        viewModelScope.launch {
+            chatRepository.isLoadingMoreFlow.collect { loading ->
+                _uiState.update { it.copy(isLoadingMore = loading) }
+            }
+        }
+
+        viewModelScope.launch {
+            chatRepository.isQueryExhaustedFlow.collect { exhausted ->
+                _uiState.update { it.copy(isPaginationExhausted = exhausted) }
+            }
+        }
+
+        viewModelScope.launch {
+            chatRepository.hasPreviousChatsAvailableFlow.collect { available ->
+                _uiState.update { it.copy(hasPreviousChatsAvailable = available) }
+            }
+        }
         
         // Ticker to continuously evaluate effective online/typing status
         viewModelScope.launch {
@@ -155,6 +176,10 @@ class ChatViewModel(
             _uiState.update { it.copy(chatExperienceMode = securityPreferences.getChatExperienceMode()) }
         }
         authRepository.setInChatTab(inChat)
+    }
+
+    fun setShowPreviousChats(enabled: Boolean) {
+        securityPreferences.setShowPreviousChatsEnabled(enabled)
     }
 
     fun loadMoreMessages() {

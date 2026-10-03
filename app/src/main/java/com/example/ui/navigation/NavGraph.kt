@@ -133,8 +133,10 @@ fun CherishNavGraph(
     val context = LocalContext.current
     val updateState by profileViewModel.updateState.collectAsState()
 
-    LaunchedEffect(Unit) {
-        profileViewModel.silentCheckForUpdates(context)
+    LaunchedEffect(isDisguiseActive) {
+        if (!isDisguiseActive) {
+            profileViewModel.silentCheckForUpdates(context)
+        }
     }
 
     // Inside Cherish app (unlocked): Android system back button & edge gesture returns to Notes app for security
@@ -379,8 +381,8 @@ fun CherishNavGraph(
             modifier = Modifier.fillMaxSize()
         )
     }
-    // In-App OTA Updates Dialog
-    if (updateState.showDialog) {
+    // In-App OTA Updates Dialog: ONLY show inside Cherish app, NEVER inside Notes app
+    if (updateState.showDialog && !isDisguiseActive) {
         AlertDialog(
             onDismissRequest = {
                 if (!updateState.isDownloading) profileViewModel.dismissUpdateDialog()

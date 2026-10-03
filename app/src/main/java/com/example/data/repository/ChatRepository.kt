@@ -38,12 +38,38 @@ class ChatRepository(
     private val _deletionRequestFlow = MutableStateFlow<com.example.data.model.ChatDeletionRequest?>(null)
     val deletionRequestFlow: StateFlow<com.example.data.model.ChatDeletionRequest?> = _deletionRequestFlow.asStateFlow()
 
-    private var globalMessagesListener: ListenerRegistration? = null
+    private var globalTodayListener: ListenerRegistration? = null
+    private var globalPreviousListener: ListenerRegistration? = null
     private var currentActiveConversationId: String? = null
     
-    private var messageLimit = 50L
-    var isQueryExhausted = false
+    private var previousMessageLimit = 0L
+    private var todayMessages: List<Message> = emptyList()
+    private var previousMessages: List<Message> = emptyList()
 
+    private val _isQueryExhaustedFlow = MutableStateFlow(false)
+    val isQueryExhaustedFlow: StateFlow<Boolean> = _isQueryExhaustedFlow.asStateFlow()
+
+    private val _isLoadingMoreFlow = MutableStateFlow(false)
+    val isLoadingMoreFlow: StateFlow<Boolean> = _isLoadingMoreFlow.asStateFlow()
+
+    private val _hasPreviousChatsAvailableFlow = MutableStateFlow(true)
+    val hasPreviousChatsAvailableFlow: StateFlow<Boolean> = _hasPreviousChatsAvailableFlow.asStateFlow()
+
+    var isQueryExhausted: Boolean
+        get() = _isQueryExhaustedFlow.value
+        set(value) { _isQueryExhaustedFlow.value = value }
+
+    val isLoadingMore: Boolean
+        get() = _isLoadingMoreFlow.value
+
+    fun getStartOfToday(): Long {
+        val cal = java.util.Calendar.getInstance()
+        cal.set(java.util.Calendar.HOUR_OF_DAY, 0)
+        cal.set(java.util.Calendar.MINUTE, 0)
+        cal.set(java.util.Calendar.SECOND, 0)
+        cal.set(java.util.Calendar.MILLISECOND, 0)
+        return cal.timeInMillis
+    }
 
     init {
         _messagesFlow.value = emptyList()
@@ -52,8 +78,12 @@ class ChatRepository(
                 .map { it?.coupleId ?: "couple_cherish_love" }
                 .distinctUntilChanged()
                 .collectLatest { convId ->
-                    messageLimit = 50L
-                    isQueryExhausted = false
+                    previousMessageLimit = 0L
+                    todayMessages = emptyList()
+                    previousMessages = emptyList()
+                    _isQueryExhaustedFlow.value = false
+                    _isLoadingMoreFlow.value = false
+                    _hasPreviousChatsAvailableFlow.value = true
                     startGlobalMessagesListener(convId)
                 }
         }
@@ -66,55 +96,120 @@ class ChatRepository(
     }
 
     fun loadMoreMessages() {
-        if (isQueryExhausted) return
-        messageLimit += 50
-        currentActiveConversationId?.let { startGlobalMessagesListener(it, forceRestart = true) }
+        if (_isQueryExhaustedFlow.value || _isLoadingMoreFlow.value) return
+        _isLoadingMoreFlow.value = true
+        if (previousMessageLimit == 0L) {
+            previousMessageLimit = 40L
+        } else {
+            previousMessageLimit += 40L
+        }
+        currentActiveConversationId?.let { startPreviousMessagesListener(it) }
     }
 
     fun expandLimitForSearch() {
-        if (messageLimit < 500L) {
-            messageLimit = 500L
-            currentActiveConversationId?.let { startGlobalMessagesListener(it, forceRestart = true) }
+        if (previousMessageLimit < 500L) {
+            previousMessageLimit = 500L
+            currentActiveConversationId?.let { startPreviousMessagesListener(it) }
         }
     }
 
     private fun startGlobalMessagesListener(conversationId: String, forceRestart: Boolean = false) {
-        // Prevent duplicate listener for the same conversation
-        if (!forceRestart && currentActiveConversationId == conversationId && globalMessagesListener != null) return
-        globalMessagesListener?.remove()
+        if (!forceRestart && currentActiveConversationId == conversationId && globalTodayListener != null) return
+        globalTodayListener?.remove()
+        globalPreviousListener?.remove()
         currentActiveConversationId = conversationId
-        val fs = firestore ?: return
-        val query = fs.collection("conversations")
+        val fs = firestore
+        if (fs == null) {
+            _isLoadingMoreFlow.value = false
+            _isQueryExhaustedFlow.value = true
+            return
+        }
+
+        val startOfToday = getStartOfToday()
+        val convRef = fs.collection("conversations")
             .document(conversationId)
             .collection("messages")
-            .orderBy("timestamp", Query.Direction.DESCENDING)
-            .limit(messageLimit)
 
-        globalMessagesListener = query.addSnapshotListener { snapshot, error ->
+        // 1. Listen to ALL of today's messages without pagination (flawless smooth scrolling)
+        val todayQuery = convRef
+            .whereGreaterThanOrEqualTo("timestamp", startOfToday)
+            .orderBy("timestamp", Query.Direction.ASCENDING)
+
+        globalTodayListener = todayQuery.addSnapshotListener { snapshot, error ->
             if (error != null) {
-                Log.w("ChatRepository", "Listen messages failed", error)
+                Log.w("ChatRepository", "Listen today messages failed", error)
                 return@addSnapshotListener
             }
             if (snapshot != null) {
-                if (snapshot.documents.size < messageLimit) {
-                    isQueryExhausted = true
+                todayMessages = snapshot.documents.mapNotNull { it.toObject(Message::class.java) }
+                
+                // If today has no messages yet and previous messages haven't been loaded, load initial previous batch
+                if (todayMessages.isEmpty() && previousMessageLimit == 0L) {
+                    previousMessageLimit = 30L
+                    startPreviousMessagesListener(conversationId)
                 }
-                val firestoreMessages = snapshot.documents.mapNotNull { it.toObject(Message::class.java) }
-                val firestoreIds = firestoreMessages.map { it.id }.toSet()
-                
-                val maxFirestoreTimestamp = firestoreMessages.maxOfOrNull { it.timestamp } ?: 0L
-                
-                // Keep optimistic in-memory messages that are newer than the latest server message
-                val pendingOptimistic = _messagesFlow.value.filter { 
-                    it.timestamp > maxFirestoreTimestamp && it.id !in firestoreIds 
-                }
-                
-                // Merge: confirmed Firestore messages + any still-pending optimistic ones
-                _messagesFlow.value = (firestoreMessages + pendingOptimistic)
-                    .sortedBy { it.timestamp }
-                    .distinctBy { it.id }
+                mergeAndEmitMessages()
             }
         }
+
+        // 2. Listen to previous chats (messages before today, loaded with pagination style)
+        if (previousMessageLimit > 0L) {
+            startPreviousMessagesListener(conversationId)
+        } else {
+            convRef.whereLessThan("timestamp", startOfToday)
+                .orderBy("timestamp", Query.Direction.DESCENDING)
+                .limit(1)
+                .get()
+                .addOnSuccessListener { prevSnap ->
+                    val hasPrev = !prevSnap.isEmpty
+                    _hasPreviousChatsAvailableFlow.value = hasPrev
+                    if (!hasPrev) {
+                        _isQueryExhaustedFlow.value = true
+                    }
+                }
+        }
+    }
+
+    private fun startPreviousMessagesListener(conversationId: String) {
+        globalPreviousListener?.remove()
+        val fs = firestore ?: return
+        val startOfToday = getStartOfToday()
+        val convRef = fs.collection("conversations")
+            .document(conversationId)
+            .collection("messages")
+
+        val prevQuery = convRef
+            .whereLessThan("timestamp", startOfToday)
+            .orderBy("timestamp", Query.Direction.DESCENDING)
+            .limit(previousMessageLimit)
+
+        globalPreviousListener = prevQuery.addSnapshotListener { snapshot, error ->
+            _isLoadingMoreFlow.value = false
+            if (error != null) {
+                Log.w("ChatRepository", "Listen previous messages failed", error)
+                return@addSnapshotListener
+            }
+            if (snapshot != null) {
+                _hasPreviousChatsAvailableFlow.value = snapshot.documents.isNotEmpty()
+                _isQueryExhaustedFlow.value = (snapshot.documents.size < previousMessageLimit)
+                previousMessages = snapshot.documents.mapNotNull { it.toObject(Message::class.java) }
+                mergeAndEmitMessages()
+            }
+        }
+    }
+
+    private fun mergeAndEmitMessages() {
+        val firestoreMessages = previousMessages + todayMessages
+        val firestoreIds = firestoreMessages.map { it.id }.toSet()
+        val maxFirestoreTimestamp = firestoreMessages.maxOfOrNull { it.timestamp } ?: 0L
+
+        val pendingOptimistic = _messagesFlow.value.filter {
+            it.timestamp > maxFirestoreTimestamp && it.id !in firestoreIds
+        }
+
+        _messagesFlow.value = (firestoreMessages + pendingOptimistic)
+            .sortedBy { it.timestamp }
+            .distinctBy { it.id }
     }
 
     /**

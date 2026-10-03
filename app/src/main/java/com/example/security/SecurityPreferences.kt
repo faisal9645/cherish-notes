@@ -35,6 +35,8 @@ class SecurityPreferences(context: Context) {
         }
     }
 
+    fun isDisguiseActive(): Boolean = _isDisguiseActive.value
+
     fun isDisguiseModeEnabled(): Boolean = prefs.getBoolean(KEY_DISGUISE_ENABLED, true)
 
     fun setDisguiseModeEnabled(enabled: Boolean) {
@@ -67,7 +69,7 @@ class SecurityPreferences(context: Context) {
     private val _showPreviousChats = MutableStateFlow(isShowPreviousChatsEnabled())
     val showPreviousChats: StateFlow<Boolean> = _showPreviousChats.asStateFlow()
 
-    fun isShowPreviousChatsEnabled(): Boolean = prefs.getBoolean(KEY_SHOW_PREVIOUS_CHATS, false)
+    fun isShowPreviousChatsEnabled(): Boolean = prefs.getBoolean(KEY_SHOW_PREVIOUS_CHATS, true)
 
     fun setShowPreviousChatsEnabled(enabled: Boolean) {
         prefs.edit().putBoolean(KEY_SHOW_PREVIOUS_CHATS, enabled).apply()

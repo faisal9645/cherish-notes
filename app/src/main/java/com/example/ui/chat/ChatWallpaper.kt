@@ -59,7 +59,7 @@ fun NormalWallpaper(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(if (isDark) Color(0xFF1E1E1E) else Color(0xFFF5F5F5))
+            .background(if (isDark) Color(0xFF000000) else Color(0xFFFFFFFF))
     )
 }
 

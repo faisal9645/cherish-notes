@@ -64,7 +64,7 @@ def create_github_release(token: str, version_code: int, version_name: str) -> d
     payload = {
         "tag_name": tag,
         "name": f"v{version_name} (build {version_code})",
-        "body": f"Automatic OTA release — v{version_name} (build {version_code})",
+        "body": f"Cherish v{version_name} (Build {version_code}):\n• Pure white day background & dark AMOLED black night background for chat\n• Smooth today's chat scrolling with dedicated previous chat pagination\n• Refined date separators and strictly 2-person channel header\n• Automatic OTA updates suppressed in Notes disguise mode",
         "draft": False,
         "prerelease": False,
     }
@@ -79,29 +79,58 @@ def create_github_release(token: str, version_code: int, version_name: str) -> d
 def upload_apk_to_release(token: str, release: dict, apk_path: str, version_code: int) -> str:
     upload_url = release["upload_url"].replace("{?name,label}", "")
     asset_name = f"app_update_{version_code}.apk"
-    headers = {
-        "Authorization": f"token {token}",
-        "Content-Type": "application/vnd.android.package-archive",
-    }
+
+    # Refresh release details to get up-to-date asset list
+    try:
+        rel_resp = requests.get(
+            f"{GITHUB_API}/repos/{GITHUB_REPO}/releases/{release['id']}",
+            headers={"Authorization": f"token {token}", "Accept": "application/vnd.github+json"},
+            timeout=15
+        )
+        if rel_resp.status_code == 200:
+            release = rel_resp.json()
+    except Exception as e:
+        print(f"Note: Could not refresh release info: {e}")
 
     # Delete existing asset with same name if present
     for asset in release.get("assets", []):
         if asset["name"] == asset_name:
-            print(f"Deleting existing asset: {asset_name}")
+            print(f"Deleting existing asset: {asset_name} (id {asset['id']})")
             requests.delete(
                 f"{GITHUB_API}/repos/{GITHUB_REPO}/releases/assets/{asset['id']}",
                 headers={"Authorization": f"token {token}", "Accept": "application/vnd.github+json"},
+                timeout=15
             )
 
-    print(f"Uploading {apk_path} -> {asset_name} ...")
-    with open(apk_path, "rb") as f:
-        resp = requests.post(
-            f"{upload_url}?name={asset_name}",
-            headers=headers,
-            data=f,
-        )
-    if resp.status_code not in (200, 201):
-        print(f"ERROR uploading APK: {resp.status_code} — {resp.text}")
+    import subprocess
+    import time
+
+    url_with_param = f"{upload_url}?name={asset_name}"
+    cmd = [
+        "curl.exe",
+        "-f", "-s", "-S",
+        "-X", "POST",
+        "-H", f"Authorization: token {token}",
+        "-H", "Content-Type: application/vnd.android.package-archive",
+        "--data-binary", f"@{apk_path}",
+        url_with_param
+    ]
+
+    success = False
+    for attempt in range(1, 4):
+        print(f"Uploading {apk_path} -> {asset_name} using curl.exe (attempt {attempt}/3)...")
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        if result.returncode == 0:
+            print("curl upload succeeded!")
+            success = True
+            break
+        else:
+            print(f"curl upload attempt {attempt} failed: {result.stderr}")
+            if attempt < 3:
+                time.sleep(3)
+
+    if not success:
+        print("ERROR uploading APK after 3 attempts.")
         sys.exit(1)
 
     # Direct download URL (no login required)

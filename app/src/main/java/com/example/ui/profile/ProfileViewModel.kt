@@ -436,21 +436,27 @@ class ProfileViewModel(
     }
 
     fun silentCheckForUpdates(context: android.content.Context) {
+        val secPrefs = com.example.CherishApplication.instance.securityPreferences
+        if (secPrefs.isDisguiseActive()) return
+
         val otaManager = com.example.update.OtaUpdateManager.getInstance(context)
         val currentVer = com.example.BuildConfig.VERSION_NAME
 
         viewModelScope.launch {
             val info = otaManager.checkForUpdates(silent = true)
             if (info != null && info.hasUpdate) {
-                _updateState.value = UpdateCheckState(
-                    isChecking = false,
-                    showDialog = true,
-                    isUpdateAvailable = true,
-                    currentVersion = currentVer,
-                    latestVersion = info.latestVersionName.ifBlank { "v$currentVer" },
-                    downloadUrl = info.downloadUrl,
-                    releaseNotes = info.releaseNotes
-                )
+                // Ensure disguise mode did not become active during network call
+                if (!secPrefs.isDisguiseActive()) {
+                    _updateState.value = UpdateCheckState(
+                        isChecking = false,
+                        showDialog = true,
+                        isUpdateAvailable = true,
+                        currentVersion = currentVer,
+                        latestVersion = info.latestVersionName.ifBlank { "v$currentVer" },
+                        downloadUrl = info.downloadUrl,
+                        releaseNotes = info.releaseNotes
+                    )
+                }
             }
         }
     }

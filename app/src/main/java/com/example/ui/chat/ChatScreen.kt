@@ -40,6 +40,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.paint
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
@@ -877,11 +878,20 @@ fun ChatScreen(
             } else {
                 val reversedMessages = remember(displayedMessages) { displayedMessages.reversed() }
                 
-                val shouldLoadMore by remember {
+                val hasLoadedPreviousChats = remember(displayedMessages) { displayedMessages.any { !isToday(it.timestamp) } }
+                val hasTodayMessages = remember(displayedMessages) { displayedMessages.any { isToday(it.timestamp) } }
+
+                val canLoadMore = uiState.showPreviousChats && !uiState.isPaginationExhausted && !uiState.isLoadingMore && displayedMessages.isNotEmpty()
+                val shouldLoadMore by remember(canLoadMore, hasLoadedPreviousChats) {
                     derivedStateOf {
+                        if (!canLoadMore) return@derivedStateOf false
                         val totalItems = listState.layoutInfo.totalItemsCount
                         val lastVisibleItem = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
-                        totalItems > 0 && lastVisibleItem >= totalItems - 10
+                        if (!hasLoadedPreviousChats) {
+                            totalItems > 0 && lastVisibleItem >= totalItems - 1
+                        } else {
+                            totalItems > 0 && lastVisibleItem >= totalItems - 4
+                        }
                     }
                 }
                 LaunchedEffect(shouldLoadMore) {
@@ -921,66 +931,11 @@ fun ChatScreen(
                         ) {
                             val dateSep = formatDateSeparator(message.timestamp)
                             if (isFirstOfDay && dateSep.isNotEmpty()) {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(horizontal = 16.dp, vertical = 12.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    if (uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE) {
-                                        Box(
-                                            modifier = Modifier
-                                                .weight(1f)
-                                                .height(1.dp)
-                                                .background(if (isDark) Color(0xFF2E2F33) else Color(0xFFE5E7EB))
-                                        )
-                                        Surface(
-                                            shape = CircleShape,
-                                            color = if (isDark) Color(0xFF25262B) else Color(0xFFF3F4F6),
-                                            modifier = Modifier.padding(horizontal = 8.dp)
-                                        ) {
-                                            Text(
-                                                text = dateSep,
-                                                fontSize = 11.sp,
-                                                fontWeight = FontWeight.Medium,
-                                                color = if (isDark) Color(0xFF9CA3AF) else Color(0xFF6B7280),
-                                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp)
-                                            )
-                                        }
-                                        Box(
-                                            modifier = Modifier
-                                                .weight(1f)
-                                                .height(1.dp)
-                                                .background(if (isDark) Color(0xFF2E2F33) else Color(0xFFE5E7EB))
-                                        )
-                                    } else {
-                                        Box(
-                                            modifier = Modifier
-                                                .weight(1f)
-                                                .height(1.dp)
-                                                .background(DayBlueSecondary.copy(alpha = if (isDark) 0.35f else 0.25f))
-                                        )
-                                        Surface(
-                                            shape = CircleShape,
-                                            color = DayBlueSecondary.copy(alpha = if (isDark) 0.2f else 0.12f),
-                                            modifier = Modifier.padding(horizontal = 8.dp)
-                                        ) {
-                                            Text(
-                                                text = dateSep,
-                                                fontSize = 12.sp,
-                                                fontWeight = FontWeight.SemiBold,
-                                                color = if (isDark) DayBlueSecondary else DayBluePrimary,
-                                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 4.dp)
-                                            )
-                                        }
-                                        Box(
-                                            modifier = Modifier
-                                                .weight(1f)
-                                                .height(1.dp)
-                                                .background(DayBlueSecondary.copy(alpha = if (isDark) 0.35f else 0.25f))
-                                        )
-                                    }
-                                }
+                                DateSeparatorBadge(
+                                    dateText = dateSep,
+                                    isPrivateMode = (uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE),
+                                    isDark = isDark
+                                )
                             }
 
                             // Read marking is handled in the batched LaunchedEffect above the Scaffold.
@@ -1056,56 +1011,148 @@ fun ChatScreen(
                         }
                     }
 
-                    item(key = "info_card", contentType = "info_card") {
-                        val isPrivate = uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE
-                        if (!isPrivate) {
-                            Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 20.dp, vertical = 10.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Surface(
-                                shape = RoundedCornerShape(16.dp),
-                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.85f),
-                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-                                modifier = Modifier.fillMaxWidth()
+                    // 1. Loading older messages indicator (shown at top of list while paginating)
+                    if (uiState.isLoadingMore) {
+                        item(key = "pagination_loader", contentType = "loader") {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 12.dp),
+                                contentAlignment = Alignment.Center
                             ) {
-                                Column(
-                                    modifier = Modifier.padding(12.dp),
-                                    horizontalAlignment = Alignment.CenterHorizontally
+                                Surface(
+                                    shape = RoundedCornerShape(14.dp),
+                                    color = if (isDark) Color(0xFF1E2430).copy(alpha = 0.9f) else Color(0xFFF1F5F9).copy(alpha = 0.95f),
+                                    border = BorderStroke(0.8.dp, if (isDark) Color(0xFF334155).copy(alpha = 0.6f) else Color(0xFFCBD5E1)),
+                                    shadowElevation = 2.dp
                                 ) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Icon(
-                                            imageVector = Icons.Default.Lock,
-                                            contentDescription = null,
-                                            tint = RoseGoldPrimary,
-                                            modifier = Modifier.size(16.dp)
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(13.dp),
+                                            strokeWidth = 2.dp,
+                                            color = RoseGoldPrimary
                                         )
-                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Spacer(modifier = Modifier.width(8.dp))
                                         Text(
-                                            text = "Strictly 2-Person Private Channel",
-                                            fontWeight = FontWeight.Bold,
-                                            fontSize = 12.sp,
-                                            color = MaterialTheme.colorScheme.onSurface
+                                            text = "Loading earlier messages...",
+                                            fontSize = 11.5.sp,
+                                            fontWeight = FontWeight.Medium,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
                                     }
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                    Text(
-                                        text = if (uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE)
-                                            "Messages are end-to-end private between you and your partner."
-                                        else
-                                            "Messages, voice notes, and photos are strictly between you and $partnerName. No third parties can ever join or view this chat.",
-                                        fontSize = 11.sp,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                                        lineHeight = 15.sp
-                                    )
                                 }
                             }
                         }
                     }
-                }
+
+                    // 2. Load Previous Chats Entry Button
+                    // When previous chats have not been loaded yet, provide a sleek button at the top of today's chat
+                    if (!hasLoadedPreviousChats && uiState.hasPreviousChatsAvailable && !uiState.isPaginationExhausted && hasTodayMessages && !uiState.isLoadingMore) {
+                        item(key = "load_previous_chats_entry", contentType = "previous_entry") {
+                            val isPrivate = uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 24.dp, vertical = 12.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Surface(
+                                    shape = RoundedCornerShape(16.dp),
+                                    color = if (isPrivate) {
+                                        if (isDark) Color(0xFF232428).copy(alpha = 0.9f) else Color(0xFFF3F4F6)
+                                    } else {
+                                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = if (isDark) 0.85f else 0.92f)
+                                    },
+                                    border = BorderStroke(
+                                        1.dp,
+                                        if (isPrivate) (if (isDark) Color(0xFF374151) else Color(0xFFE5E7EB)) else RoseGoldPrimary.copy(alpha = 0.35f)
+                                    ),
+                                    shadowElevation = 1.dp,
+                                    modifier = Modifier.clickable {
+                                        viewModel.loadMoreMessages()
+                                    }
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.History,
+                                            contentDescription = null,
+                                            tint = if (isPrivate) (if (isDark) Color(0xFF9CA3AF) else Color(0xFF4B5563)) else RoseGoldPrimary,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(
+                                            text = "Load Previous Chats (Yesterday & earlier)",
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = if (isPrivate) (if (isDark) Color(0xFFD1D5DB) else Color(0xFF374151)) else RoseGoldPrimary
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // 3. If earlier chats hidden by user privacy setting
+                    if (!uiState.showPreviousChats && displayedMessages.isNotEmpty()) {
+                        item(key = "earlier_chats_hidden", contentType = "hidden_notice") {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 20.dp, vertical = 12.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Surface(
+                                    shape = RoundedCornerShape(14.dp),
+                                    color = if (isDark) Color(0xFF1E2430).copy(alpha = 0.9f) else Color(0xFFF1F5F9).copy(alpha = 0.95f),
+                                    border = BorderStroke(0.8.dp, if (isDark) Color(0xFF334155).copy(alpha = 0.6f) else Color(0xFFCBD5E1)),
+                                    modifier = Modifier.clickable {
+                                        viewModel.setShowPreviousChats(true)
+                                    }
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.History,
+                                            contentDescription = null,
+                                            tint = RoseGoldPrimary,
+                                            modifier = Modifier.size(15.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(
+                                            text = "Earlier chats hidden by privacy • Tap to show",
+                                            fontSize = 11.5.sp,
+                                            fontWeight = FontWeight.Medium,
+                                            color = RoseGoldPrimary
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // 4. Strictly 2-Person Beginning of Chat Banner
+                    // Shown ONLY when the user has genuinely reached the beginning of all messages
+                    // (i.e. isPaginationExhausted is true, or chat is empty)
+                    if (uiState.isPaginationExhausted || displayedMessages.isEmpty()) {
+                        item(key = "info_card", contentType = "info_card") {
+                            StrictlyPrivateChatBeginningBanner(
+                                currentUser = uiState.currentUser,
+                                partnerUser = uiState.partnerUser,
+                                partnerName = partnerName,
+                                isPrivateMode = (uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE),
+                                isDark = isDark
+                            )
+                        }
+                    }
             }
 
 
@@ -1706,27 +1753,287 @@ fun BouncingDots(color: Color = RoseGoldPrimary) {
     }
 }
 
-private val dateSeparatorFormat = object : ThreadLocal<SimpleDateFormat>() {
-    override fun initialValue(): SimpleDateFormat {
-        return SimpleDateFormat("EEEE, MMMM d", Locale.getDefault())
-    }
-}
-
 fun isSameDay(t1: Long, t2: Long): Boolean {
-    val offset = 6 * 60 * 60 * 1000L
-    val cal1 = java.util.Calendar.getInstance().apply { timeInMillis = t1 - offset }
-    val cal2 = java.util.Calendar.getInstance().apply { timeInMillis = t2 - offset }
-    return cal1.get(java.util.Calendar.YEAR) == cal2.get(java.util.Calendar.YEAR) &&
+    if (t1 <= 0L || t2 <= 0L) return false
+    val cal1 = java.util.Calendar.getInstance().apply { timeInMillis = t1 }
+    val cal2 = java.util.Calendar.getInstance().apply { timeInMillis = t2 }
+    return cal1.get(java.util.Calendar.ERA) == cal2.get(java.util.Calendar.ERA) &&
+           cal1.get(java.util.Calendar.YEAR) == cal2.get(java.util.Calendar.YEAR) &&
            cal1.get(java.util.Calendar.DAY_OF_YEAR) == cal2.get(java.util.Calendar.DAY_OF_YEAR)
 }
 
+fun isToday(timestamp: Long): Boolean {
+    if (timestamp <= 0L) return false
+    val calMsg = java.util.Calendar.getInstance().apply { timeInMillis = timestamp }
+    val calToday = java.util.Calendar.getInstance()
+    return calMsg.get(java.util.Calendar.ERA) == calToday.get(java.util.Calendar.ERA) &&
+           calMsg.get(java.util.Calendar.YEAR) == calToday.get(java.util.Calendar.YEAR) &&
+           calMsg.get(java.util.Calendar.DAY_OF_YEAR) == calToday.get(java.util.Calendar.DAY_OF_YEAR)
+}
+
+fun isYesterday(timestamp: Long): Boolean {
+    if (timestamp <= 0L) return false
+    val calMsg = java.util.Calendar.getInstance().apply { timeInMillis = timestamp }
+    val calYesterday = java.util.Calendar.getInstance().apply {
+        add(java.util.Calendar.DAY_OF_YEAR, -1)
+    }
+    return calMsg.get(java.util.Calendar.ERA) == calYesterday.get(java.util.Calendar.ERA) &&
+           calMsg.get(java.util.Calendar.YEAR) == calYesterday.get(java.util.Calendar.YEAR) &&
+           calMsg.get(java.util.Calendar.DAY_OF_YEAR) == calYesterday.get(java.util.Calendar.DAY_OF_YEAR)
+}
+
 fun formatDateSeparator(timestamp: Long): String {
-    val now = System.currentTimeMillis()
-    if (isSameDay(timestamp, now)) return "Today"
-    if (isSameDay(timestamp, now - 86400000L)) return "Yesterday"
+    if (timestamp <= 0L) return ""
+    if (isToday(timestamp)) return "Today"
+    if (isYesterday(timestamp)) return "Yesterday"
     
-    val offset = 6 * 60 * 60 * 1000L
-    return dateSeparatorFormat.get()?.format(Date(timestamp - offset)) ?: ""
+    val calMsg = java.util.Calendar.getInstance().apply { timeInMillis = timestamp }
+    val calNow = java.util.Calendar.getInstance()
+    
+    val sameYear = calMsg.get(java.util.Calendar.YEAR) == calNow.get(java.util.Calendar.YEAR)
+    val pattern = if (sameYear) "EEEE, MMMM d" else "EEEE, MMMM d, yyyy"
+    return SimpleDateFormat(pattern, Locale.getDefault()).format(Date(timestamp))
+}
+
+@Composable
+fun DateSeparatorBadge(
+    dateText: String,
+    isPrivateMode: Boolean,
+    isDark: Boolean,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 24.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.Center
+    ) {
+        val lineColor = if (isPrivateMode) {
+            if (isDark) Color(0xFF2A2B30) else Color(0xFFE5E7EB)
+        } else {
+            if (isDark) Color(0xFF334155).copy(alpha = 0.5f) else Color(0xFFCBD5E1).copy(alpha = 0.7f)
+        }
+
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .height(0.8.dp)
+                .background(
+                    Brush.horizontalGradient(
+                        colors = listOf(Color.Transparent, lineColor)
+                    )
+                )
+        )
+
+        Surface(
+            shape = RoundedCornerShape(12.dp),
+            color = if (isPrivateMode) {
+                if (isDark) Color(0xFF232428).copy(alpha = 0.95f) else Color(0xFFF3F4F6)
+            } else {
+                if (isDark) Color(0xFF1E293B).copy(alpha = 0.92f) else Color(0xFFF1F5F9).copy(alpha = 0.95f)
+            },
+            border = BorderStroke(
+                0.8.dp,
+                if (isPrivateMode) {
+                    if (isDark) Color(0xFF374151).copy(alpha = 0.6f) else Color(0xFFE5E7EB)
+                } else {
+                    if (isDark) Color(0xFF475569).copy(alpha = 0.4f) else Color(0xFFE2E8F0)
+                }
+            ),
+            shadowElevation = 1.dp,
+            modifier = Modifier.padding(horizontal = 10.dp)
+        ) {
+            Text(
+                text = dateText,
+                fontSize = 11.5.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = if (isPrivateMode) {
+                    if (isDark) Color(0xFF9CA3AF) else Color(0xFF4B5563)
+                } else {
+                    if (isDark) Color(0xFF94A3B8) else Color(0xFF475569)
+                },
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+            )
+        }
+
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .height(0.8.dp)
+                .background(
+                    Brush.horizontalGradient(
+                        colors = listOf(lineColor, Color.Transparent)
+                    )
+                )
+        )
+    }
+}
+
+@Composable
+fun StrictlyPrivateChatBeginningBanner(
+    currentUser: com.example.data.model.User?,
+    partnerUser: com.example.data.model.User?,
+    partnerName: String,
+    isPrivateMode: Boolean,
+    isDark: Boolean,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp, vertical = 20.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        if (isPrivateMode) {
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = if (isDark) Color(0xFF1E2024).copy(alpha = 0.85f) else Color(0xFFF3F4F6),
+                border = BorderStroke(1.dp, if (isDark) Color(0xFF2E3036) else Color(0xFFE5E7EB)),
+                modifier = Modifier.fillMaxWidth(0.92f)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Lock,
+                            contentDescription = null,
+                            tint = if (isDark) Color(0xFF9CA3AF) else Color(0xFF4B5563),
+                            modifier = Modifier.size(15.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "Strictly 2-Person Private Channel",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 12.5.sp,
+                            color = if (isDark) Color(0xFFE5E7EB) else Color(0xFF1F2937)
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = "Messages, voice notes, and media are strictly between you and $partnerName. End-to-end encrypted.",
+                        fontSize = 11.5.sp,
+                        color = if (isDark) Color(0xFF9CA3AF) else Color(0xFF6B7280),
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                        lineHeight = 16.sp
+                    )
+                }
+            }
+        } else {
+            Surface(
+                shape = RoundedCornerShape(22.dp),
+                color = if (isDark) {
+                    Color(0xFF151D2A).copy(alpha = 0.88f)
+                } else {
+                    Color(0xFFFFFFFF).copy(alpha = 0.92f)
+                },
+                border = BorderStroke(
+                    1.dp,
+                    if (isDark) Color(0xFF2B3954).copy(alpha = 0.6f) else Color(0xFFE2E8F0)
+                ),
+                shadowElevation = 2.dp,
+                modifier = Modifier.fillMaxWidth(0.95f)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp, vertical = 20.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    // Overlapping connected avatars
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            AvatarView(
+                                photoUrl = currentUser?.photoUrl,
+                                name = currentUser?.displayName ?: "Me",
+                                size = 48.dp,
+                                showOnlineBadge = false
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            AvatarView(
+                                photoUrl = partnerUser?.photoUrl,
+                                name = partnerName,
+                                size = 48.dp,
+                                showOnlineBadge = false
+                            )
+                        }
+
+                        // Center glowing lock badge
+                        Surface(
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.surface,
+                            border = BorderStroke(1.5.dp, RoseGoldPrimary),
+                            shadowElevation = 3.dp,
+                            modifier = Modifier
+                                .size(24.dp)
+                                .align(Alignment.BottomCenter)
+                                .offset(y = 6.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.Default.Lock,
+                                    contentDescription = null,
+                                    tint = RoseGoldPrimary,
+                                    modifier = Modifier.size(12.dp)
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    Text(
+                        text = "Strictly 2-Person Private Channel",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.5.sp,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    Text(
+                        text = "Everything shared in this conversation is strictly between you and $partnerName. Zero third parties can ever join or view your messages.",
+                        fontSize = 11.5.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                        lineHeight = 16.sp,
+                        modifier = Modifier.padding(horizontal = 6.dp)
+                    )
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = RoseGoldPrimary.copy(alpha = if (isDark) 0.18f else 0.10f),
+                        border = BorderStroke(0.6.dp, RoseGoldPrimary.copy(alpha = 0.35f))
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.5.dp)
+                        ) {
+                            Text(
+                                text = "🔒 End-to-End Private Space",
+                                fontSize = 10.5.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = RoseGoldPrimary
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
 @Composable
