@@ -67,9 +67,7 @@ fun NoteEditorScreen(
 ) {
     BackHandler(onBack = onDismiss)
     val context = LocalContext.current
-    val isDark = MaterialTheme.colorScheme.background == Color.Black ||
-            MaterialTheme.colorScheme.background == Color(0xFF0B0F19) ||
-            MaterialTheme.colorScheme.surface == Color.Black
+    val isDark = isAppInDark()
 
     var title by remember { mutableStateOf(initialNote?.title ?: "") }
     var content by remember { mutableStateOf(initialNote?.content ?: "") }
@@ -78,6 +76,10 @@ fun NoteEditorScreen(
     var isPinned by remember { mutableStateOf(initialNote?.isPinned ?: false) }
     var reminderTime by remember { mutableStateOf(initialNote?.reminderTime) }
     var showReminderDialog by remember { mutableStateOf(false) }
+
+    val editorTheme = remember(colorHex, isDark) {
+        resolveNoteCardColors(colorHex, isDark)
+    }
 
     var isChecklistMode by remember {
         mutableStateOf(initialNote?.getChecklist()?.isNotEmpty() == true)
@@ -111,7 +113,7 @@ fun NoteEditorScreen(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(MaterialTheme.colorScheme.surface)
+                    .background(editorTheme.containerColor)
                     .statusBarsPadding()
             ) {
                 // Top App Bar / Actions
@@ -123,14 +125,18 @@ fun NoteEditorScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     IconButton(onClick = onDismiss) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Back",
+                            tint = editorTheme.titleColor
+                        )
                     }
 
                     Text(
                         text = if (initialNote == null) "New Note" else "Edit Note",
                         fontSize = 17.sp,
                         fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
+                        color = editorTheme.titleColor
                     )
 
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -139,7 +145,7 @@ fun NoteEditorScreen(
                             Icon(
                                 imageVector = if (isPinned) Icons.Filled.PushPin else Icons.Outlined.PushPin,
                                 contentDescription = if (isPinned) "Unpin" else "Pin",
-                                tint = if (isPinned) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                tint = if (isPinned) editorTheme.accentPrimary else editorTheme.secondaryTextColor
                             )
                         }
 
@@ -148,7 +154,7 @@ fun NoteEditorScreen(
                             Icon(
                                 imageVector = if (reminderTime != null) Icons.Filled.NotificationsActive else Icons.Outlined.Notifications,
                                 contentDescription = "Set Reminder",
-                                tint = if (reminderTime != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                tint = if (reminderTime != null) editorTheme.accentPrimary else editorTheme.secondaryTextColor
                             )
                         }
 
@@ -157,7 +163,7 @@ fun NoteEditorScreen(
                             Icon(
                                 imageVector = if (isChecklistMode) Icons.Filled.Checklist else Icons.Outlined.Checklist,
                                 contentDescription = "Toggle Checklist",
-                                tint = if (isChecklistMode) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                tint = if (isChecklistMode) editorTheme.accentPrimary else editorTheme.secondaryTextColor
                             )
                         }
 
@@ -166,7 +172,7 @@ fun NoteEditorScreen(
                             Icon(
                                 imageVector = Icons.Outlined.Palette,
                                 contentDescription = "Style note",
-                                tint = if (showFormattingBar) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                tint = if (showFormattingBar) editorTheme.accentPrimary else editorTheme.secondaryTextColor
                             )
                         }
 
@@ -185,12 +191,12 @@ fun NoteEditorScreen(
                         }
                     }
                 }
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, thickness = 0.8.dp)
+                HorizontalDivider(color = editorTheme.borderColor, thickness = 0.8.dp)
             }
         },
         bottomBar = {
             Surface(
-                color = MaterialTheme.colorScheme.surface,
+                color = editorTheme.containerColor,
                 tonalElevation = 0.dp,
                 shadowElevation = 8.dp,
                 modifier = Modifier
@@ -200,7 +206,7 @@ fun NoteEditorScreen(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(MaterialTheme.colorScheme.surface)
+                        .background(editorTheme.containerColor)
                         .navigationBarsPadding()
                 ) {
                     // Expandable Styling & Category Bar
@@ -208,7 +214,7 @@ fun NoteEditorScreen(
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
+                                .background(editorTheme.accentContainer.copy(alpha = 0.35f))
                                 .padding(horizontal = 16.dp, vertical = 10.dp)
                         ) {
                             // Category chips
@@ -216,7 +222,7 @@ fun NoteEditorScreen(
                                 text = "Category",
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                color = editorTheme.secondaryTextColor
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             LazyRow(
@@ -227,15 +233,15 @@ fun NoteEditorScreen(
                                     val isSelected = category == cat
                                     Surface(
                                         shape = RoundedCornerShape(10.dp),
-                                        color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface,
-                                        border = if (isSelected) null else BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+                                        color = if (isSelected) editorTheme.accentPrimary else editorTheme.containerColor,
+                                        border = if (isSelected) null else BorderStroke(1.dp, editorTheme.borderColor),
                                         modifier = Modifier
                                             .clip(RoundedCornerShape(10.dp))
                                             .clickable { category = cat }
                                     ) {
                                         Text(
                                             text = cat,
-                                            color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface,
+                                            color = if (isSelected) Color.White else editorTheme.titleColor,
                                             fontSize = 11.sp,
                                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
                                             modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
@@ -251,7 +257,7 @@ fun NoteEditorScreen(
                                 text = "Card Accent Tint",
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                color = editorTheme.secondaryTextColor
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             Row(
@@ -259,30 +265,31 @@ fun NoteEditorScreen(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 colorPalettes.forEach { (hex, label) ->
-                                    val isSelected = colorHex == hex
-                                    val parsed = try {
-                                        Color(android.graphics.Color.parseColor(hex))
-                                    } catch (_: Exception) {
-                                        Color(0xFFEFF5FF)
-                                    }
+                                    val isSelected = colorHex.equals(hex, ignoreCase = true)
+                                    val chipTheme = resolveNoteCardColors(hex, isDark)
                                     Box(
                                         modifier = Modifier
                                             .size(28.dp)
                                             .clip(CircleShape)
-                                            .background(parsed)
+                                            .background(chipTheme.containerColor)
                                             .border(
                                                 width = if (isSelected) 2.dp else 1.dp,
-                                                color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
+                                                color = if (isSelected) chipTheme.accentPrimary else chipTheme.borderColor,
                                                 shape = CircleShape
                                             )
                                             .clickable { colorHex = hex },
                                         contentAlignment = Alignment.Center
                                     ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(10.dp)
+                                                .background(chipTheme.accentPrimary, CircleShape)
+                                        )
                                         if (isSelected) {
                                             Icon(
                                                 imageVector = Icons.Default.Check,
                                                 contentDescription = label,
-                                                tint = MaterialTheme.colorScheme.primary,
+                                                tint = Color.White,
                                                 modifier = Modifier.size(14.dp)
                                             )
                                         }
@@ -293,7 +300,7 @@ fun NoteEditorScreen(
                     }
 
                     HorizontalDivider(
-                        color = MaterialTheme.colorScheme.outlineVariant,
+                        color = editorTheme.borderColor,
                         thickness = 0.8.dp
                     )
 
@@ -308,13 +315,14 @@ fun NoteEditorScreen(
                         // Word Count / Stats pill
                         Surface(
                             shape = RoundedCornerShape(12.dp),
-                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                            color = editorTheme.accentContainer,
+                            border = BorderStroke(0.5.dp, editorTheme.borderColor),
                             modifier = Modifier.padding(end = 8.dp)
                         ) {
                             Text(
                                 text = "$wordCount words • $charCount chars • $category",
                                 fontSize = 11.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                color = editorTheme.categoryBadgeText,
                                 modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
                             )
                         }
@@ -333,20 +341,31 @@ fun NoteEditorScreen(
                                 },
                                 modifier = Modifier.size(36.dp)
                             ) {
-                                Icon(Icons.Default.ContentCopy, contentDescription = "Copy", modifier = Modifier.size(18.dp))
+                                Icon(
+                                    Icons.Default.ContentCopy,
+                                    contentDescription = "Copy",
+                                    tint = editorTheme.secondaryTextColor,
+                                    modifier = Modifier.size(18.dp)
+                                )
                             }
 
-                            // Save Button: Modern Gradient Pill
+                            // Save Button: Styled with Note Accent Primary
                             Box(
                                 modifier = Modifier
                                     .height(42.dp)
-                                    .appGradientShadow(RoundedCornerShape(14.dp))
                                     .clip(RoundedCornerShape(14.dp))
-                                    .background(appHorizontalGradient())
+                                    .background(editorTheme.accentPrimary)
                                     .clickable {
+                                        val finalTitle = title.trim()
+                                        val finalContent = content.trim()
+                                        if (finalTitle.isEmpty() && finalContent.isEmpty() && checklistItems.isEmpty()) {
+                                            onToast("Empty note discarded")
+                                            onDismiss()
+                                            return@clickable
+                                        }
                                         onSave(
                                             initialNote?.id,
-                                            title,
+                                            if (finalTitle.isEmpty()) "Untitled" else finalTitle,
                                             content,
                                             category,
                                             colorHex,
@@ -384,7 +403,7 @@ fun NoteEditorScreen(
                 }
             }
         },
-        containerColor = MaterialTheme.colorScheme.surface
+        containerColor = editorTheme.containerColor
     ) { paddingValues ->
         // Full-Height Expansive Note Content Textbox
         Column(
@@ -402,8 +421,8 @@ fun NoteEditorScreen(
                 }
                 Surface(
                     shape = RoundedCornerShape(10.dp),
-                    color = if (isPast) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f),
-                    border = BorderStroke(0.5.dp, if (isPast) MaterialTheme.colorScheme.outline else MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)),
+                    color = if (isPast) editorTheme.accentContainer.copy(alpha = 0.5f) else editorTheme.accentContainer,
+                    border = BorderStroke(0.5.dp, editorTheme.borderColor),
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(bottom = 8.dp)
@@ -417,7 +436,7 @@ fun NoteEditorScreen(
                         Icon(
                             imageVector = if (isPast) Icons.Default.NotificationsOff else Icons.Filled.NotificationsActive,
                             contentDescription = null,
-                            tint = if (isPast) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.primary,
+                            tint = if (isPast) editorTheme.secondaryTextColor else editorTheme.accentPrimary,
                             modifier = Modifier.size(16.dp)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
@@ -425,13 +444,13 @@ fun NoteEditorScreen(
                             text = "Reminder: $reminderFormatted" + if (isPast) " (Passed)" else "",
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Medium,
-                            color = if (isPast) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.primary,
+                            color = if (isPast) editorTheme.secondaryTextColor else editorTheme.accentPrimary,
                             modifier = Modifier.weight(1f)
                         )
                         Icon(
                             imageVector = Icons.Default.Close,
                             contentDescription = "Remove reminder",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            tint = editorTheme.secondaryTextColor,
                             modifier = Modifier
                                 .size(20.dp)
                                 .clip(CircleShape)
@@ -452,9 +471,9 @@ fun NoteEditorScreen(
                 textStyle = TextStyle(
                     fontSize = 24.sp,
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
+                    color = editorTheme.titleColor
                 ),
-                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                cursorBrush = SolidColor(editorTheme.accentPrimary),
                 singleLine = true,
                 modifier = Modifier
                     .fillMaxWidth()
@@ -466,14 +485,14 @@ fun NoteEditorScreen(
                             text = "Title",
                             fontSize = 24.sp,
                             fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                            color = editorTheme.secondaryTextColor.copy(alpha = 0.5f)
                         )
                     }
                     innerTextField()
                 }
             )
 
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), thickness = 0.5.dp)
+            HorizontalDivider(color = editorTheme.borderColor.copy(alpha = 0.5f), thickness = 0.5.dp)
             Spacer(modifier = Modifier.height(10.dp))
 
             if (isChecklistMode) {
@@ -498,13 +517,17 @@ fun NoteEditorScreen(
                                         it[index] = item.copy(isDone = isChecked)
                                     }
                                 },
-                                colors = CheckboxDefaults.colors(checkedColor = MaterialTheme.colorScheme.primary)
+                                colors = CheckboxDefaults.colors(
+                                    checkedColor = editorTheme.accentPrimary,
+                                    uncheckedColor = editorTheme.borderColor
+                                )
                             )
 
                             Text(
                                 text = item.text,
                                 fontSize = 15.sp,
-                                color = MaterialTheme.colorScheme.onSurface,
+                                color = if (item.isDone) editorTheme.secondaryTextColor else editorTheme.titleColor,
+                                textDecoration = if (item.isDone) androidx.compose.ui.text.style.TextDecoration.LineThrough else null,
                                 modifier = Modifier.weight(1f)
                             )
 
@@ -519,7 +542,7 @@ fun NoteEditorScreen(
                                 Icon(
                                     imageVector = Icons.Default.Close,
                                     contentDescription = "Remove item",
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    tint = editorTheme.secondaryTextColor,
                                     modifier = Modifier.size(16.dp)
                                 )
                             }
@@ -536,7 +559,7 @@ fun NoteEditorScreen(
                         OutlinedTextField(
                             value = newChecklistInput,
                             onValueChange = { newChecklistInput = it },
-                            placeholder = { Text("Add checklist item...") },
+                            placeholder = { Text("Add checklist item...", color = editorTheme.secondaryTextColor.copy(alpha = 0.6f)) },
                             singleLine = true,
                             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                             keyboardActions = KeyboardActions(onDone = {
@@ -552,10 +575,10 @@ fun NoteEditorScreen(
                             shape = RoundedCornerShape(12.dp),
                             modifier = Modifier.weight(1f),
                             colors = OutlinedTextFieldDefaults.colors(
-                                focusedTextColor = MaterialTheme.colorScheme.onSurface,
-                                unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
-                                focusedBorderColor = MaterialTheme.colorScheme.primary,
-                                unfocusedBorderColor = MaterialTheme.colorScheme.outline
+                                focusedTextColor = editorTheme.titleColor,
+                                unfocusedTextColor = editorTheme.titleColor,
+                                focusedBorderColor = editorTheme.accentPrimary,
+                                unfocusedBorderColor = editorTheme.borderColor
                             )
                         )
 
@@ -574,18 +597,18 @@ fun NoteEditorScreen(
                             },
                             modifier = Modifier
                                 .size(48.dp)
-                                .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(12.dp))
+                                .background(editorTheme.accentContainer, RoundedCornerShape(12.dp))
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Add,
                                 contentDescription = "Add",
-                                tint = MaterialTheme.colorScheme.primary
+                                tint = editorTheme.accentPrimary
                             )
                         }
                     }
                 }
             }
-            
+
             // Note Body Text Box (Always visible)
             Box(
                 modifier = Modifier
@@ -594,30 +617,29 @@ fun NoteEditorScreen(
                     .padding(top = if (isChecklistMode) 16.dp else 0.dp)
             ) {
                 BasicTextField(
-                        value = content,
-                        onValueChange = { content = it },
-                        textStyle = TextStyle(
-                            fontSize = 16.sp,
-                            lineHeight = 24.sp,
-                            color = MaterialTheme.colorScheme.onSurface
-                        ),
-                        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .testTag("note_editor_content_input"),
-                        decorationBox = { innerTextField ->
-                            if (content.isEmpty()) {
-                                Text(
-                                    text = "Start typing your note here...",
-                                    fontSize = 16.sp,
-                                    lineHeight = 24.sp,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-                                )
-                            }
-                            innerTextField()
+                    value = content,
+                    onValueChange = { content = it },
+                    textStyle = TextStyle(
+                        fontSize = 16.sp,
+                        lineHeight = 24.sp,
+                        color = editorTheme.contentColor
+                    ),
+                    cursorBrush = SolidColor(editorTheme.accentPrimary),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .testTag("note_editor_content_input"),
+                    decorationBox = { innerTextField ->
+                        if (content.isEmpty()) {
+                            Text(
+                                text = "Start typing your note here...",
+                                fontSize = 16.sp,
+                                lineHeight = 24.sp,
+                                color = editorTheme.secondaryTextColor.copy(alpha = 0.5f)
+                            )
                         }
-                    )
-                }
+                        innerTextField()
+                    }
+                )
             }
         }
 

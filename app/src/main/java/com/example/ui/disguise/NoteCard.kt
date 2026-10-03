@@ -19,6 +19,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
@@ -31,6 +32,175 @@ import com.example.ui.theme.*
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+
+data class NoteCardThemeColors(
+    val containerColor: Color,
+    val borderColor: Color,
+    val accentPrimary: Color,
+    val accentContainer: Color,
+    val categoryBadgeText: Color,
+    val titleColor: Color,
+    val contentColor: Color,
+    val secondaryTextColor: Color
+)
+
+fun resolveNoteCardColors(colorHex: String?, isDark: Boolean): NoteCardThemeColors {
+    val cleanHex = (colorHex ?: "#EFF5FF").trim().uppercase()
+    return if (isDark) {
+        when (cleanHex) {
+            "#EFF5FF" -> NoteCardThemeColors( // Blue Tint
+                containerColor = Color(0xFF131F33),
+                borderColor = Color(0xFF2563EB).copy(alpha = 0.35f),
+                accentPrimary = Color(0xFF60A5FA),
+                accentContainer = Color(0xFF1E3A8A).copy(alpha = 0.45f),
+                categoryBadgeText = Color(0xFF93C5FD),
+                titleColor = Color(0xFFF8FAFC),
+                contentColor = Color(0xFFCBD5E1),
+                secondaryTextColor = Color(0xFF94A3B8)
+            )
+            "#F1F5F9", "#F4F6FB" -> NoteCardThemeColors( // Slate Tint
+                containerColor = Color(0xFF151C28),
+                borderColor = Color(0xFF64748B).copy(alpha = 0.35f),
+                accentPrimary = Color(0xFF94A3B8),
+                accentContainer = Color(0xFF334155).copy(alpha = 0.45f),
+                categoryBadgeText = Color(0xFFCBD5E1),
+                titleColor = Color(0xFFF8FAFC),
+                contentColor = Color(0xFFCBD5E1),
+                secondaryTextColor = Color(0xFF94A3B8)
+            )
+            "#F8FAFC", "#FFFFFF" -> NoteCardThemeColors( // Clean Tint
+                containerColor = Color(0xFF0F172A),
+                borderColor = Color(0xFF334155).copy(alpha = 0.6f),
+                accentPrimary = Color(0xFF38BDF8),
+                accentContainer = Color(0xFF1E293B),
+                categoryBadgeText = Color(0xFF7DD3FC),
+                titleColor = Color(0xFFF8FAFC),
+                contentColor = Color(0xFFCBD5E1),
+                secondaryTextColor = Color(0xFF94A3B8)
+            )
+            "#EBF4FF", "#EBF6FD" -> NoteCardThemeColors( // Sky Tint
+                containerColor = Color(0xFF102338),
+                borderColor = Color(0xFF0284C7).copy(alpha = 0.4f),
+                accentPrimary = Color(0xFF38BDF8),
+                accentContainer = Color(0xFF0369A1).copy(alpha = 0.4f),
+                categoryBadgeText = Color(0xFF7DD3FC),
+                titleColor = Color(0xFFF8FAFC),
+                contentColor = Color(0xFFCBD5E1),
+                secondaryTextColor = Color(0xFF94A3B8)
+            )
+            "#E6F4EA" -> NoteCardThemeColors( // Mint Tint
+                containerColor = Color(0xFF0F261D),
+                borderColor = Color(0xFF059669).copy(alpha = 0.4f),
+                accentPrimary = Color(0xFF34D399),
+                accentContainer = Color(0xFF065F46).copy(alpha = 0.4f),
+                categoryBadgeText = Color(0xFF6EE7B7),
+                titleColor = Color(0xFFF8FAFC),
+                contentColor = Color(0xFFCBD5E1),
+                secondaryTextColor = Color(0xFF94A3B8)
+            )
+            "#F4EBF7", "#ECEBFF", "#F1F0FF" -> NoteCardThemeColors( // Lavender Tint
+                containerColor = Color(0xFF221634),
+                borderColor = Color(0xFF7C3AED).copy(alpha = 0.4f),
+                accentPrimary = Color(0xFFA78BFA),
+                accentContainer = Color(0xFF5B21B6).copy(alpha = 0.4f),
+                categoryBadgeText = Color(0xFFC4B5FD),
+                titleColor = Color(0xFFF8FAFC),
+                contentColor = Color(0xFFCBD5E1),
+                secondaryTextColor = Color(0xFF94A3B8)
+            )
+            else -> { // Dynamic Fallback for any other hex in dark mode
+                val parsed = try { Color(android.graphics.Color.parseColor(cleanHex)) } catch (_: Exception) { Color(0xFF3B82F6) }
+                NoteCardThemeColors(
+                    containerColor = parsed.copy(alpha = 0.16f).compositeOver(Color(0xFF0B1324)),
+                    borderColor = parsed.copy(alpha = 0.35f),
+                    accentPrimary = parsed,
+                    accentContainer = parsed.copy(alpha = 0.25f),
+                    categoryBadgeText = parsed,
+                    titleColor = Color(0xFFF8FAFC),
+                    contentColor = Color(0xFFCBD5E1),
+                    secondaryTextColor = Color(0xFF94A3B8)
+                )
+            }
+        }
+    } else {
+        // DAY MODE (LIGHT MODE)
+        when (cleanHex) {
+            "#EFF5FF" -> NoteCardThemeColors( // Blue Tint
+                containerColor = Color(0xFFEFF5FF),
+                borderColor = Color(0xFFBFDBFE),
+                accentPrimary = Color(0xFF2563EB),
+                accentContainer = Color(0xFFDBEAFE),
+                categoryBadgeText = Color(0xFF1D4ED8),
+                titleColor = Color(0xFF0F172A),
+                contentColor = Color(0xFF334155),
+                secondaryTextColor = Color(0xFF64748B)
+            )
+            "#F1F5F9", "#F4F6FB" -> NoteCardThemeColors( // Slate Tint
+                containerColor = Color(0xFFF1F5F9),
+                borderColor = Color(0xFFCBD5E1),
+                accentPrimary = Color(0xFF475569),
+                accentContainer = Color(0xFFE2E8F0),
+                categoryBadgeText = Color(0xFF334155),
+                titleColor = Color(0xFF0F172A),
+                contentColor = Color(0xFF334155),
+                secondaryTextColor = Color(0xFF64748B)
+            )
+            "#F8FAFC", "#FFFFFF" -> NoteCardThemeColors( // Clean Tint
+                containerColor = Color.White,
+                borderColor = Color(0xFFE2E8F0),
+                accentPrimary = Color(0xFF3B82F6),
+                accentContainer = Color(0xFFEFF6FF),
+                categoryBadgeText = Color(0xFF2563EB),
+                titleColor = Color(0xFF0F172A),
+                contentColor = Color(0xFF334155),
+                secondaryTextColor = Color(0xFF64748B)
+            )
+            "#EBF4FF", "#EBF6FD" -> NoteCardThemeColors( // Sky Tint
+                containerColor = Color(0xFFEBF4FF),
+                borderColor = Color(0xFFBAE6FD),
+                accentPrimary = Color(0xFF0284C7),
+                accentContainer = Color(0xFFE0F2FE),
+                categoryBadgeText = Color(0xFF0369A1),
+                titleColor = Color(0xFF0F172A),
+                contentColor = Color(0xFF334155),
+                secondaryTextColor = Color(0xFF64748B)
+            )
+            "#E6F4EA" -> NoteCardThemeColors( // Mint Tint
+                containerColor = Color(0xFFE6F4EA),
+                borderColor = Color(0xFFA7F3D0),
+                accentPrimary = Color(0xFF059669),
+                accentContainer = Color(0xFFD1FAE5),
+                categoryBadgeText = Color(0xFF047857),
+                titleColor = Color(0xFF0F172A),
+                contentColor = Color(0xFF334155),
+                secondaryTextColor = Color(0xFF64748B)
+            )
+            "#F4EBF7", "#ECEBFF", "#F1F0FF" -> NoteCardThemeColors( // Lavender Tint
+                containerColor = Color(0xFFF4EBF7),
+                borderColor = Color(0xFFDDD6FE),
+                accentPrimary = Color(0xFF7C3AED),
+                accentContainer = Color(0xFFEDE9FE),
+                categoryBadgeText = Color(0xFF6D28D9),
+                titleColor = Color(0xFF0F172A),
+                contentColor = Color(0xFF334155),
+                secondaryTextColor = Color(0xFF64748B)
+            )
+            else -> { // Dynamic Fallback for any other hex in day mode
+                val parsed = try { Color(android.graphics.Color.parseColor(cleanHex)) } catch (_: Exception) { Color(0xFFEFF5FF) }
+                NoteCardThemeColors(
+                    containerColor = parsed,
+                    borderColor = Color(0xFF000000).copy(alpha = 0.12f),
+                    accentPrimary = Color(0xFF2563EB),
+                    accentContainer = parsed.copy(alpha = 0.5f),
+                    categoryBadgeText = Color(0xFF1D4ED8),
+                    titleColor = Color(0xFF0F172A),
+                    contentColor = Color(0xFF334155),
+                    secondaryTextColor = Color(0xFF64748B)
+                )
+            }
+        }
+    }
+}
 
 @OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
@@ -51,13 +221,8 @@ fun NoteCard(
     var showMenu by remember { mutableStateOf(false) }
     val checklist = remember(note.checklistJson) { note.getChecklist() }
     val isDark = isAppInDark()
-
-    val cardColor = remember(isDark) {
-        if (isDark) {
-            Color(0xFF0F172A)
-        } else {
-            Color.White
-        }
+    val themeColors = remember(note.colorHex, isDark) {
+        resolveNoteCardColors(note.colorHex, isDark)
     }
 
     val totalItems = checklist.size
@@ -87,10 +252,10 @@ fun NoteCard(
             )
             .testTag("note_card_${note.id}"),
         shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(containerColor = cardColor),
+        colors = CardDefaults.cardColors(containerColor = themeColors.containerColor),
         border = BorderStroke(
             width = if (isSelected) 2.5.dp else if (note.isPinned) 1.5.dp else 1.dp,
-            color = if (isSelected) RoseGoldPrimary else if (note.isPinned) RoseGoldPrimary.copy(alpha = 0.5f) else if (isDark) Color(0xFF1E293B) else MaterialTheme.colorScheme.outline
+            color = if (isSelected) themeColors.accentPrimary else if (note.isPinned) themeColors.accentPrimary.copy(alpha = 0.6f) else themeColors.borderColor
         ),
         elevation = CardDefaults.cardElevation(defaultElevation = if (isSelected) 6.dp else if (note.isPinned) 3.dp else 1.dp)
     ) {
@@ -108,14 +273,14 @@ fun NoteCard(
                 // Category Tag
                 Surface(
                     shape = RoundedCornerShape(8.dp),
-                    color = if (isDark) Color(0xFF0F172A) else MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
-                    border = BorderStroke(0.5.dp, if (isDark) Color(0xFF1E293B) else MaterialTheme.colorScheme.outline)
+                    color = themeColors.accentContainer,
+                    border = BorderStroke(0.5.dp, themeColors.borderColor)
                 ) {
                     Text(
                         text = note.category,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = if (isDark) Color(0xFF93C5FD) else RoseGoldPrimary,
+                        color = themeColors.categoryBadgeText,
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
                     )
                 }
@@ -127,10 +292,10 @@ fun NoteCard(
                             modifier = Modifier
                                 .size(26.dp)
                                 .clip(CircleShape)
-                                .background(if (isSelected) RoseGoldPrimary else Color.White)
+                                .background(if (isSelected) themeColors.accentPrimary else if (isDark) Color(0xFF0F172A) else Color.White)
                                 .border(
                                     width = if (isSelected) 0.dp else 2.dp,
-                                    color = if (isSelected) RoseGoldPrimary else MaterialTheme.colorScheme.outline,
+                                    color = if (isSelected) themeColors.accentPrimary else themeColors.borderColor,
                                     shape = CircleShape
                                 )
                                 .clickable { onToggleSelect() },
@@ -149,14 +314,14 @@ fun NoteCard(
                         if (note.isPinned) {
                             Surface(
                                 shape = CircleShape,
-                                color = RoseGoldPrimary.copy(alpha = 0.15f),
+                                color = themeColors.accentContainer,
                                 modifier = Modifier.size(24.dp)
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
                                     Icon(
                                         imageVector = Icons.Filled.PushPin,
                                         contentDescription = "Pinned Note",
-                                        tint = RoseGoldPrimary,
+                                        tint = themeColors.accentPrimary,
                                         modifier = Modifier.size(13.dp)
                                     )
                                 }
@@ -174,7 +339,7 @@ fun NoteCard(
                                 Icon(
                                     imageVector = Icons.Default.MoreVert,
                                     contentDescription = "Note actions",
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    tint = themeColors.secondaryTextColor,
                                     modifier = Modifier.size(20.dp)
                                 )
                             }
@@ -255,7 +420,7 @@ fun NoteCard(
                     text = note.title,
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Bold,
-                    color = if (isDark) Color(0xFFF8FAFC) else Color(0xFF0F172A),
+                    color = themeColors.titleColor,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -267,7 +432,7 @@ fun NoteCard(
                 Text(
                     text = note.content,
                     fontSize = 13.sp,
-                    color = if (isDark) Color(0xFFCBD5E1) else Color(0xFF334155),
+                    color = themeColors.contentColor,
                     maxLines = if (checklist.isNotEmpty()) 2 else 4,
                     overflow = TextOverflow.Ellipsis,
                     lineHeight = 18.sp
@@ -288,13 +453,13 @@ fun NoteCard(
                         text = "$doneItems of $totalItems completed",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Medium,
-                        color = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
+                        color = themeColors.secondaryTextColor
                     )
                     Text(
                         text = "${(progress * 100).toInt()}%",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
-                        color = RoseGoldPrimary
+                        color = themeColors.accentPrimary
                     )
                 }
 
@@ -305,8 +470,8 @@ fun NoteCard(
                         .fillMaxWidth()
                         .height(4.dp)
                         .clip(CircleShape),
-                    color = RoseGoldPrimary,
-                    trackColor = if (isDark) Color(0xFF1E293B) else Color.White.copy(alpha = 0.6f)
+                    color = themeColors.accentPrimary,
+                    trackColor = themeColors.accentContainer.copy(alpha = 0.5f)
                 )
 
                 Spacer(modifier = Modifier.height(8.dp))
@@ -327,11 +492,11 @@ fun NoteCard(
                                 .size(18.dp)
                                 .clip(RoundedCornerShape(5.dp))
                                 .background(
-                                    if (item.isDone) RoseGoldPrimary else if (isDark) Color(0xFF0F172A) else Color.White
+                                    if (item.isDone) themeColors.accentPrimary else if (isDark) Color(0xFF0F172A) else Color.White
                                 )
                                 .border(
                                     width = 1.dp,
-                                    color = if (item.isDone) RoseGoldPrimary else if (isDark) Color(0xFF334155) else MaterialTheme.colorScheme.outline,
+                                    color = if (item.isDone) themeColors.accentPrimary else themeColors.borderColor,
                                     shape = RoundedCornerShape(5.dp)
                                 ),
                             contentAlignment = Alignment.Center
@@ -352,9 +517,9 @@ fun NoteCard(
                             text = item.text,
                             fontSize = 13.sp,
                             color = if (item.isDone) {
-                                if (isDark) Color(0xFF64748B) else Color(0xFF94A3B8)
+                                themeColors.secondaryTextColor
                             } else {
-                                if (isDark) Color(0xFFF1F5F9) else Color(0xFF0F172A)
+                                themeColors.titleColor
                             },
                             textDecoration = if (item.isDone) TextDecoration.LineThrough else null,
                             maxLines = 1,
@@ -368,7 +533,7 @@ fun NoteCard(
                         text = "+ ${checklist.size - 4} more items",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = RoseGoldPrimary,
+                        color = themeColors.accentPrimary,
                         modifier = Modifier.padding(top = 4.dp)
                     )
                 }
@@ -386,7 +551,7 @@ fun NoteCard(
                     color = if (isPast) {
                         if (isDark) Color(0xFF1E293B) else Color(0xFFF1F5F9)
                     } else {
-                        if (isDark) RoseGoldPrimary.copy(alpha = 0.2f) else RoseGoldPrimary.copy(alpha = 0.12f)
+                        themeColors.accentContainer
                     },
                     modifier = Modifier.padding(top = 6.dp)
                 ) {
@@ -398,9 +563,9 @@ fun NoteCard(
                             imageVector = if (isPast) Icons.Default.NotificationsOff else Icons.Filled.NotificationsActive,
                             contentDescription = null,
                             tint = if (isPast) {
-                                if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
+                                themeColors.secondaryTextColor
                             } else {
-                                RoseGoldPrimary
+                                themeColors.accentPrimary
                             },
                             modifier = Modifier.size(12.dp)
                         )
@@ -410,9 +575,9 @@ fun NoteCard(
                             fontSize = 10.5.sp,
                             fontWeight = FontWeight.Medium,
                             color = if (isPast) {
-                                if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
+                                themeColors.secondaryTextColor
                             } else {
-                                RoseGoldPrimary
+                                themeColors.accentPrimary
                             }
                         )
                     }
@@ -430,7 +595,7 @@ fun NoteCard(
                 Text(
                     text = formattedDate,
                     fontSize = 11.sp,
-                    color = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
+                    color = themeColors.secondaryTextColor
                 )
 
                 if (checklist.isNotEmpty()) {
@@ -438,14 +603,14 @@ fun NoteCard(
                         Icon(
                             imageVector = Icons.Default.Checklist,
                             contentDescription = null,
-                            tint = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B),
+                            tint = themeColors.secondaryTextColor,
                             modifier = Modifier.size(14.dp)
                         )
                         Spacer(modifier = Modifier.width(3.dp))
                         Text(
                             text = "$totalItems",
                             fontSize = 11.sp,
-                            color = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
+                            color = themeColors.secondaryTextColor
                         )
                     }
                 }
