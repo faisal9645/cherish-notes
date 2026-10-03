@@ -1067,8 +1067,8 @@ fun ChatScreen(
                     }
 
                     // 2. Load Previous Chats Entry Button
-                    // When previous chats have not been loaded yet, provide a sleek button at the top of today's chat
-                    if (!hasLoadedPreviousChats && uiState.hasPreviousChatsAvailable && !uiState.isPaginationExhausted && hasTodayMessages && !uiState.isLoadingMore) {
+                    // When previous chats are enabled in Settings and have not been loaded yet, provide a sleek button at the top of today's chat
+                    if (uiState.showPreviousChats && !hasLoadedPreviousChats && uiState.hasPreviousChatsAvailable && !uiState.isPaginationExhausted && hasTodayMessages && !uiState.isLoadingMore) {
                         item(key = "load_previous_chats_entry", contentType = "previous_entry") {
                             val isPrivate = uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE
                             Box(
@@ -1110,46 +1110,6 @@ fun ChatScreen(
                                             fontSize = 12.sp,
                                             fontWeight = FontWeight.SemiBold,
                                             color = if (isPrivate) (if (isDark) Color(0xFFD1D5DB) else Color(0xFF374151)) else RoseGoldPrimary
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    // 3. If earlier chats hidden by user privacy setting
-                    if (!uiState.showPreviousChats && displayedMessages.isNotEmpty()) {
-                        item(key = "earlier_chats_hidden", contentType = "hidden_notice") {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 20.dp, vertical = 12.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Surface(
-                                    shape = RoundedCornerShape(14.dp),
-                                    color = if (isDark) Color(0xFF1E2430).copy(alpha = 0.9f) else Color(0xFFF1F5F9).copy(alpha = 0.95f),
-                                    border = BorderStroke(0.8.dp, if (isDark) Color(0xFF334155).copy(alpha = 0.6f) else Color(0xFFCBD5E1)),
-                                    modifier = Modifier.clickable {
-                                        viewModel.setShowPreviousChats(true)
-                                    }
-                                ) {
-                                    Row(
-                                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.History,
-                                            contentDescription = null,
-                                            tint = RoseGoldPrimary,
-                                            modifier = Modifier.size(15.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Text(
-                                            text = "Earlier chats hidden by privacy • Tap to show",
-                                            fontSize = 11.5.sp,
-                                            fontWeight = FontWeight.Medium,
-                                            color = RoseGoldPrimary
                                         )
                                     }
                                 }
