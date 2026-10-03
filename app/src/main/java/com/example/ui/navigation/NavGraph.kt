@@ -193,7 +193,12 @@ fun CherishNavGraph(
         composable(Screen.Home.route) {
             HomeScreen(
                 viewModel = homeViewModel,
-                onNavigateToChat = { navController.navigate(Screen.Chat.route) { launchSingleTop = true } },
+                onNavigateToChat = {
+                    val popped = navController.popBackStack(Screen.Chat.route, inclusive = false)
+                    if (!popped) {
+                        navController.navigate(Screen.Chat.route) { launchSingleTop = true }
+                    }
+                },
                 onNavigateToMemories = { navController.navigate(Screen.Memories.route) { launchSingleTop = true } },
                 onNavigateToDates = { navController.navigate(Screen.ImportantDates.route) { launchSingleTop = true } },
                 onNavigateToNotes = { navController.navigate(Screen.SharedNotes.route) { launchSingleTop = true } },
@@ -218,14 +223,22 @@ fun CherishNavGraph(
                 },
                 onQuickDisguise = { app.securityPreferences.reDisguise() },
                 onNavigateToHome = {
-                    navController.navigate(Screen.Home.route) {
-                        popUpTo(Screen.Home.route) { inclusive = false }
-                        launchSingleTop = true
+                    app.securityPreferences.ignoreChatNavigation = true
+                    val popped = navController.popBackStack(Screen.Home.route, inclusive = false)
+                    if (!popped) {
+                        navController.navigate(Screen.Home.route) {
+                            launchSingleTop = true
+                        }
                     }
                 },
                 onNavigateToProfile = {
                     app.securityPreferences.ignoreChatNavigation = true
-                    navController.navigate(Screen.Profile.route)
+                    val popped = navController.popBackStack(Screen.Profile.route, inclusive = false)
+                    if (!popped) {
+                        navController.navigate(Screen.Profile.route) {
+                            launchSingleTop = true
+                        }
+                    }
                 },
                 onLoggedOut = {
                     navController.navigate(Screen.Auth.route) {
@@ -279,9 +292,11 @@ fun CherishNavGraph(
                     app.securityPreferences.reDisguise()
                 },
                 onNavigateToChat = {
-                    navController.popBackStack(Screen.Home.route, inclusive = false)
-                    navController.navigate(Screen.Chat.route) {
-                        launchSingleTop = true
+                    val popped = navController.popBackStack(Screen.Chat.route, inclusive = false)
+                    if (!popped) {
+                        navController.navigate(Screen.Chat.route) {
+                            launchSingleTop = true
+                        }
                     }
                 },
                 onNavigateToCloudBackup = {

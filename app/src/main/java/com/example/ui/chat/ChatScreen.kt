@@ -27,6 +27,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.material.icons.Icons
@@ -722,6 +723,63 @@ fun ChatScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
+                .pointerInput(uiState.isStealthCurtainActive) {
+                    if (uiState.isStealthCurtainActive) return@pointerInput
+                    awaitEachGesture {
+                        val down = awaitFirstDown(requireUnconsumed = false)
+                        var accX = 0f
+                        var accY = 0f
+                        var directionLocked = false
+                        var isHorizontal = false
+                        var wasConsumedByChild = false
+                        var hasNavigated = false
+
+                        while (true) {
+                            val event = awaitPointerEvent(PointerEventPass.Main)
+                            val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                            if (!change.pressed) break
+
+                            if (change.isConsumed) {
+                                wasConsumedByChild = true
+                                break
+                            }
+
+                            val delta = change.positionChange()
+                            accX += delta.x
+                            accY += delta.y
+
+                            if (!directionLocked && (kotlin.math.abs(accX) > 12f || kotlin.math.abs(accY) > 12f)) {
+                                isHorizontal = kotlin.math.abs(accX) > (kotlin.math.abs(accY) * 1.3f)
+                                directionLocked = true
+                                if (!isHorizontal) {
+                                    break
+                                }
+                            }
+
+                            if (directionLocked && isHorizontal) {
+                                if (accX > 80f) {
+                                    change.consume()
+                                    hasNavigated = true
+                                    onNavigateToHome()
+                                    break
+                                } else if (accX < -80f) {
+                                    change.consume()
+                                    hasNavigated = true
+                                    onNavigateToProfile()
+                                    break
+                                }
+                            }
+                        }
+
+                        if (!hasNavigated && directionLocked && isHorizontal && !wasConsumedByChild) {
+                            if (accX > 65f) {
+                                onNavigateToHome()
+                            } else if (accX < -65f) {
+                                onNavigateToProfile()
+                            }
+                        }
+                    }
+                }
         ) {
             // Starred Messages Filter Header Banner
             AnimatedVisibility(visible = uiState.filterStarredOnly) {
