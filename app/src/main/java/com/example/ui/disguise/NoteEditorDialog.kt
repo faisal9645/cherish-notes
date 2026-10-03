@@ -658,6 +658,7 @@ fun NoteEditorScreen(
         )
     }
 }
+}
 
 @Composable
 fun NoteReminderPickerDialog(
