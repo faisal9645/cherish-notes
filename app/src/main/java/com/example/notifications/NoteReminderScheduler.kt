@@ -6,6 +6,10 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.util.Log
+import com.example.data.local.notes.NotesRepository
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 object NoteReminderScheduler {
     private const val TAG = "NoteReminderScheduler"
@@ -82,5 +86,28 @@ object NoteReminderScheduler {
         }
 
         NotificationHelper.cancelNoteReminderNotification(context, noteId)
+    }
+
+    fun rescheduleAllUpcomingReminders(context: Context, repository: NotesRepository) {
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val upcoming = repository.getUpcomingReminders(System.currentTimeMillis())
+                for (note in upcoming) {
+                    val rTime = note.reminderTime ?: continue
+                    if (rTime > System.currentTimeMillis()) {
+                        scheduleReminder(
+                            context = context,
+                            noteId = note.id,
+                            title = note.title,
+                            content = note.content,
+                            reminderTimeMillis = rTime
+                        )
+                    }
+                }
+                Log.d(TAG, "Rescheduled ${upcoming.size} upcoming note reminders")
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to reschedule upcoming note reminders", e)
+            }
+        }
     }
 }

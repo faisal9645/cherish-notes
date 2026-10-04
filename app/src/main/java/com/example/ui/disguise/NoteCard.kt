@@ -45,7 +45,7 @@ data class NoteCardThemeColors(
 )
 
 fun resolveNoteCardColors(colorHex: String?, isDark: Boolean): NoteCardThemeColors {
-    val cleanHex = (colorHex ?: "#EFF5FF").trim().uppercase()
+    val cleanHex = (colorHex ?: "#FFFFFF").trim().uppercase()
     return if (isDark) {
         when (cleanHex) {
             "#EFF5FF" -> NoteCardThemeColors( // Blue Tint

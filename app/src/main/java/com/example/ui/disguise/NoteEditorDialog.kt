@@ -1,9 +1,17 @@
 package com.example.ui.disguise
 
+import android.Manifest
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.content.pm.PackageManager
+import android.os.Build
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -72,7 +80,7 @@ fun NoteEditorScreen(
     var title by remember { mutableStateOf(initialNote?.title ?: "") }
     var content by remember { mutableStateOf(initialNote?.content ?: "") }
     var category by remember { mutableStateOf(initialNote?.category ?: "Personal") }
-    var colorHex by remember { mutableStateOf(initialNote?.colorHex ?: "#EFF5FF") }
+    var colorHex by remember { mutableStateOf(initialNote?.colorHex ?: "#FFFFFF") }
     var isPinned by remember { mutableStateOf(initialNote?.isPinned ?: false) }
     var reminderTime by remember { mutableStateOf(initialNote?.reminderTime) }
     var showReminderDialog by remember { mutableStateOf(false) }
@@ -94,9 +102,9 @@ fun NoteEditorScreen(
     val categories = remember { listOf("Personal", "Work", "Lists", "Ideas", "Journal", "Urgent") }
     val colorPalettes = remember {
         listOf(
+            "#FFFFFF" to "White",
             "#EFF5FF" to "Blue Tint",
             "#F1F5F9" to "Slate Tint",
-            "#F8FAFC" to "Clean Tint",
             "#EBF4FF" to "Sky Tint",
             "#E6F4EA" to "Mint Tint",
             "#F4EBF7" to "Lavender Tint"
@@ -289,7 +297,7 @@ fun NoteEditorScreen(
                                             Icon(
                                                 imageVector = Icons.Default.Check,
                                                 contentDescription = label,
-                                                tint = Color.White,
+                                                tint = if (chipTheme.containerColor.luminance() > 0.5f) chipTheme.accentPrimary else Color.White,
                                                 modifier = Modifier.size(14.dp)
                                             )
                                         }
@@ -670,6 +678,22 @@ fun NoteReminderPickerDialog(
     val context = LocalContext.current
     val calendar = remember { Calendar.getInstance() }
 
+    val notifPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (!isGranted) {
+            Toast.makeText(context, "Notification permission is needed for reminder alerts", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    val requestNotifPermissionIfNeeded = {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                notifPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }
+    }
+
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
@@ -712,6 +736,7 @@ fun NoteReminderPickerDialog(
                     icon = Icons.Outlined.AccessTime,
                     onClick = {
                         val cal = Calendar.getInstance().apply { add(Calendar.HOUR_OF_DAY, 3) }
+                        requestNotifPermissionIfNeeded()
                         onReminderSelected(cal.timeInMillis)
                         onDismiss()
                     }
@@ -742,6 +767,7 @@ fun NoteReminderPickerDialog(
                                 add(Calendar.DAY_OF_YEAR, 1)
                             }
                         }
+                        requestNotifPermissionIfNeeded()
                         onReminderSelected(cal.timeInMillis)
                         onDismiss()
                     }
@@ -768,6 +794,7 @@ fun NoteReminderPickerDialog(
                             set(Calendar.MINUTE, 0)
                             set(Calendar.SECOND, 0)
                         }
+                        requestNotifPermissionIfNeeded()
                         onReminderSelected(cal.timeInMillis)
                         onDismiss()
                     }
@@ -779,7 +806,6 @@ fun NoteReminderPickerDialog(
                     subtitle = "Select exact date & time",
                     icon = Icons.Outlined.CalendarMonth,
                     onClick = {
-                        onDismiss()
                         val currentYear = calendar.get(Calendar.YEAR)
                         val currentMonth = calendar.get(Calendar.MONTH)
                         val currentDay = calendar.get(Calendar.DAY_OF_MONTH)
@@ -801,7 +827,11 @@ fun NoteReminderPickerDialog(
                                             set(Calendar.SECOND, 0)
                                         }
                                         if (pickedCal.timeInMillis > System.currentTimeMillis()) {
+                                            requestNotifPermissionIfNeeded()
                                             onReminderSelected(pickedCal.timeInMillis)
+                                            onDismiss()
+                                        } else {
+                                            Toast.makeText(context, "Please choose a future date & time for the reminder", Toast.LENGTH_SHORT).show()
                                         }
                                     },
                                     currentHour,

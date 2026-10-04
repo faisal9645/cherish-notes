@@ -19,7 +19,7 @@ data class NoteEntity(
     val title: String,
     val content: String = "",
     val category: String = "Personal",
-    val colorHex: String = "#EFF5FF",
+    val colorHex: String = "#FFFFFF",
     val isPinned: Boolean = false,
     val isArchived: Boolean = false,
     val checklistJson: String = "[]",

@@ -73,7 +73,7 @@ class NotesRepository(
                     title = "Grocery & Pantry Checklist",
                     content = "Weekly grocery replenishment for home and kitchen essentials.",
                     category = "Lists",
-                    colorHex = "#EFF5FF",
+                    colorHex = "#FFFFFF",
                     isPinned = true,
                     checklistJson = NoteEntity.encodeChecklist(
                         listOf(
@@ -91,7 +91,7 @@ class NotesRepository(
                     title = "Work Meeting Summary & Tasks",
                     content = "Reviewed Q3 roadmap and feature timeline. Next sprint starts Tuesday. Submit pull requests by 4 PM. Follow up on database migration benchmarks.",
                     category = "Work",
-                    colorHex = "#F1F0FF",
+                    colorHex = "#FFFFFF",
                     isPinned = false,
                     updatedAt = System.currentTimeMillis() - 1000 * 60 * 60 * 5
                 ),
@@ -100,7 +100,7 @@ class NotesRepository(
                     title = "Book & Podcast Recommendations",
                     content = "1. Designing Data-Intensive Applications by Martin Kleppmann\n2. Atomic Habits by James Clear\n3. Thinking in Systems by Donella Meadows\n4. Huberman Lab - Science of Focus",
                     category = "Ideas",
-                    colorHex = "#EBF6FD",
+                    colorHex = "#FFFFFF",
                     isPinned = false,
                     updatedAt = System.currentTimeMillis() - 1000 * 60 * 60 * 24
                 ),
@@ -109,7 +109,7 @@ class NotesRepository(
                     title = "Apartment Wishlist & Improvements",
                     content = "Ergonomic standing desk lamp, monstera plant ceramic pot, linen bedsheets, coffee beans grinder, noise-cancelling desk pad.",
                     category = "Personal",
-                    colorHex = "#F4F6FB",
+                    colorHex = "#FFFFFF",
                     isPinned = false,
                     updatedAt = System.currentTimeMillis() - 1000 * 60 * 60 * 48
                 ),
@@ -118,7 +118,7 @@ class NotesRepository(
                     title = "Weekly Workout Schedule",
                     content = "Mon: Push (Chest & Shoulders)\nWed: Pull (Back & Biceps)\nFri: Legs & Core\nSun: 5km light recovery jog",
                     category = "Personal",
-                    colorHex = "#ECEBFF",
+                    colorHex = "#FFFFFF",
                     isPinned = false,
                     updatedAt = System.currentTimeMillis() - 1000 * 60 * 60 * 72
                 )

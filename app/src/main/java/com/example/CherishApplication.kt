@@ -85,6 +85,8 @@ class CherishApplication : Application() {
             chatRepository,
             coupleFeaturesRepository
         )
+
+        com.example.notifications.NoteReminderScheduler.rescheduleAllUpcomingReminders(this, notesRepository)
     }
 
     companion object {

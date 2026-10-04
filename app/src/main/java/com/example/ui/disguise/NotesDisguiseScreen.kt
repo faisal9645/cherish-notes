@@ -1,9 +1,15 @@
 package com.example.ui.disguise
 
+import android.Manifest
+import android.content.pm.PackageManager
 import android.os.Build
 import android.os.VibrationEffect
 import android.os.Vibrator
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
+import androidx.core.app.NotificationManagerCompat
 import androidx.compose.animation.*
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -84,6 +90,14 @@ fun NotesDisguiseScreen(
     var showSortMenu by remember { mutableStateOf(false) }
     var showBatchDeleteDialog by remember { mutableStateOf(false) }
     var showNotesSettingsDialog by remember { mutableStateOf(false) }
+
+    val notifPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            viewModel.setNoteRemindersEnabled(true)
+        }
+    }
 
     val pendingNoteId by CherishApplication.instance.pendingNoteIdFlow.collectAsStateWithLifecycle()
     LaunchedEffect(pendingNoteId) {
@@ -902,11 +916,38 @@ fun NotesDisguiseScreen(
 }
 
         if (showNotesSettingsDialog) {
+            val hasNotifPermission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                ContextCompat.checkSelfPermission(
+                    context,
+                    Manifest.permission.POST_NOTIFICATIONS
+                ) == PackageManager.PERMISSION_GRANTED
+            } else {
+                NotificationManagerCompat.from(context).areNotificationsEnabled()
+            }
+
             NotesSettingsDialog(
                 isReminderEnabled = uiState.isNoteRemindersEnabled,
                 upcomingRemindersCount = uiState.upcomingRemindersCount,
+                hasNotificationPermission = hasNotifPermission,
+                onRequestNotificationPermission = {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        notifPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                    }
+                },
                 onToggleReminder = { enabled ->
-                    viewModel.setNoteRemindersEnabled(enabled)
+                    if (enabled && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        val granted = ContextCompat.checkSelfPermission(
+                            context,
+                            Manifest.permission.POST_NOTIFICATIONS
+                        ) == PackageManager.PERMISSION_GRANTED
+                        if (!granted) {
+                            notifPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                        } else {
+                            viewModel.setNoteRemindersEnabled(true)
+                        }
+                    } else {
+                        viewModel.setNoteRemindersEnabled(enabled)
+                    }
                 },
                 onDismiss = { showNotesSettingsDialog = false }
             )
@@ -918,6 +959,8 @@ fun NotesDisguiseScreen(
 fun NotesSettingsDialog(
     isReminderEnabled: Boolean,
     upcomingRemindersCount: Int,
+    hasNotificationPermission: Boolean = true,
+    onRequestNotificationPermission: () -> Unit = {},
     onToggleReminder: (Boolean) -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -971,6 +1014,43 @@ fun NotesSettingsDialog(
                     .padding(vertical = 4.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
+                if (!hasNotificationPermission) {
+                    Surface(
+                        shape = RoundedCornerShape(14.dp),
+                        color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.5f)),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onRequestNotificationPermission() }
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.NotificationsActive,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Notification Permission Needed",
+                                    fontSize = 12.5.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = "Tap here to allow notifications so note reminders can alert you on time.",
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+                }
+
                 Text(
                     text = "Notification & Reminder Preferences",
                     fontSize = 12.sp,

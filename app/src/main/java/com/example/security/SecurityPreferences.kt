@@ -243,7 +243,16 @@ class SecurityPreferences(context: Context) {
     fun hasRequestedInitialPermissions(): Boolean = prefs.getBoolean(KEY_INITIAL_PERMS_REQUESTED, false)
 
     fun setInitialPermissionsRequested(requested: Boolean) {
-        prefs.edit().putBoolean(KEY_INITIAL_PERMS_REQUESTED, requested).apply()
+        prefs.edit()
+            .putBoolean(KEY_INITIAL_PERMS_REQUESTED, requested)
+            .putBoolean(KEY_INITIAL_NOTIF_REQUESTED, requested)
+            .apply()
+    }
+
+    fun hasRequestedInitialNotificationPermission(): Boolean = prefs.getBoolean(KEY_INITIAL_NOTIF_REQUESTED, false)
+
+    fun setInitialNotificationPermissionRequested(requested: Boolean) {
+        prefs.edit().putBoolean(KEY_INITIAL_NOTIF_REQUESTED, requested).apply()
     }
 
     // --- MEDIA & GALLERY PREFERENCES ---
@@ -400,6 +409,7 @@ class SecurityPreferences(context: Context) {
         private const val KEY_HAS_SEEN_STEALTH_SHIELD_TIP = "has_seen_stealth_shield_tip"
         private const val KEY_REQUIRE_PHONE_LOCK_AFTER_HOLD = "require_phone_lock_after_hold"
         private const val KEY_INITIAL_PERMS_REQUESTED = "initial_perms_requested"
+        private const val KEY_INITIAL_NOTIF_REQUESTED = "initial_notif_requested"
         private const val KEY_SHOW_PREVIOUS_CHATS = "show_previous_chats"
         private const val KEY_NOTE_REMINDERS_ENABLED = "note_reminders_enabled"
 

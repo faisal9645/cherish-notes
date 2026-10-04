@@ -20,13 +20,15 @@ import java.util.concurrent.atomic.AtomicInteger
 object NotificationHelper {
     const val CHANNEL_MESSAGES_ID = "notes_sync_channel"
     private const val CHANNEL_MESSAGES_NAME = "Notes & Reminders"
+    const val CHANNEL_REMINDERS_ID = "notes_reminders_channel"
+    private const val CHANNEL_REMINDERS_NAME = "Note Reminders"
     private const val NOTIFICATION_ID_MESSAGE = 1001
 
     private val pendingUnreadCount = AtomicInteger(0)
 
     fun createNotificationChannels(context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
+            val messagesChannel = NotificationChannel(
                 CHANNEL_MESSAGES_ID,
                 CHANNEL_MESSAGES_NAME,
                 NotificationManager.IMPORTANCE_DEFAULT
@@ -38,8 +40,21 @@ object NotificationHelper {
                 lockscreenVisibility = NotificationCompat.VISIBILITY_PRIVATE
             }
 
+            val remindersChannel = NotificationChannel(
+                CHANNEL_REMINDERS_ID,
+                CHANNEL_REMINDERS_NAME,
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = "Time-sensitive alerts for scheduled note reminders"
+                enableVibration(true)
+                setShowBadge(true)
+                enableLights(true)
+                lockscreenVisibility = NotificationCompat.VISIBILITY_PUBLIC
+            }
+
             val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
-            manager?.createNotificationChannel(channel)
+            manager?.createNotificationChannel(messagesChannel)
+            manager?.createNotificationChannel(remindersChannel)
         }
     }
 
@@ -188,7 +203,7 @@ object NotificationHelper {
         val displayTitle = title.ifBlank { "Note Reminder" }
         val displayText = if (content.isNotBlank()) content else "You have a scheduled note reminder."
 
-        val notification = NotificationCompat.Builder(context, CHANNEL_MESSAGES_ID)
+        val notification = NotificationCompat.Builder(context, CHANNEL_REMINDERS_ID)
             .setSmallIcon(R.mipmap.ic_launcher)
             .setContentTitle(displayTitle)
             .setContentText(displayText)
@@ -196,9 +211,10 @@ object NotificationHelper {
             .setSubText("Notes")
             .setAutoCancel(true)
             .setContentIntent(pendingIntent)
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setPriority(NotificationCompat.PRIORITY_MAX)
+            .setDefaults(NotificationCompat.DEFAULT_ALL)
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
-            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .build()
 
         try {

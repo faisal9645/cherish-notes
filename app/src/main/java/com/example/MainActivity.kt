@@ -81,6 +81,12 @@ class MainActivity : FragmentActivity() {
                         }
                     }
 
+                    val notifPermissionLauncher = rememberLauncherForActivityResult(
+                        contract = ActivityResultContracts.RequestPermission()
+                    ) { _ ->
+                        app.securityPreferences.setInitialNotificationPermissionRequested(true)
+                    }
+
                     val permissionLauncher = rememberLauncherForActivityResult(
                         contract = ActivityResultContracts.RequestMultiplePermissions()
                     ) { _ ->
@@ -93,6 +99,14 @@ class MainActivity : FragmentActivity() {
                         }
                         if (ungranted.isNotEmpty() && !app.securityPreferences.hasRequestedInitialPermissions()) {
                             permissionLauncher.launch(ungranted.toTypedArray())
+                        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                            val notifUngranted = ContextCompat.checkSelfPermission(
+                                context,
+                                android.Manifest.permission.POST_NOTIFICATIONS
+                            ) != PackageManager.PERMISSION_GRANTED
+                            if (notifUngranted && !app.securityPreferences.hasRequestedInitialNotificationPermission()) {
+                                notifPermissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                            }
                         }
                     }
 
