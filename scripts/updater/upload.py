@@ -64,7 +64,7 @@ def create_github_release(token: str, version_code: int, version_name: str) -> d
     payload = {
         "tag_name": tag,
         "name": f"v{version_name} (build {version_code})",
-        "body": f"Cherish v{version_name} (Build {version_code}):\n• Notes app card accent tints fully supported in day and night modes\n• Notes app uses vibrant Day Blue in both day and dark mode\n• Secret Cherish app stays in sleek Dark Blue for night mode\n• Polished chat top bar spacing and smooth empty space swipe navigation",
+        "body": f"Cherish v{version_name} (Build {version_code}):\n• Default note card accent tint is now pure white\n• Note reminder timing & high-priority notifications with heads-up alerts\n• Initial notification permission prompt after APK installation\n• Clear Chat clears local screen temporarily without requiring mutual acceptance\n• Recover cleared chats anytime via 'Show Previous & Cleared Chats' in Settings\n• Tap partner avatar to open full profile picture viewer\n• Settings tab accessible exclusively via right swipe",
         "draft": False,
         "prerelease": False,
     }
