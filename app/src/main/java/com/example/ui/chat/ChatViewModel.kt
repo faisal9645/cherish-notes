@@ -50,6 +50,7 @@ data class ChatUiState(
     val isPaginationExhausted: Boolean = false,
     val hasPreviousChatsAvailable: Boolean = true,
     val targetScrollMessageId: String? = null,
+    val temporaryClearTimestamp: Long = 0L,
     val chatBgTheme: Int = 0,
     val chatExperienceMode: ChatExperienceMode = ChatExperienceMode.NORMAL
 )
@@ -127,6 +128,12 @@ class ChatViewModel(
         }
 
         viewModelScope.launch {
+            securityPreferences.temporaryClearTimestamp.collect { ts ->
+                _uiState.update { it.copy(temporaryClearTimestamp = ts) }
+            }
+        }
+
+        viewModelScope.launch {
             voicePlayerHelper.playbackSpeed.collect { speed ->
                 _uiState.update { it.copy(voicePlaybackSpeed = speed) }
             }
@@ -181,6 +188,10 @@ class ChatViewModel(
 
     fun setShowPreviousChats(enabled: Boolean) {
         securityPreferences.setShowPreviousChatsEnabled(enabled)
+    }
+
+    fun clearChatScreenTemporarily() {
+        securityPreferences.clearTemporaryScreen()
     }
 
     fun loadMoreMessages() {

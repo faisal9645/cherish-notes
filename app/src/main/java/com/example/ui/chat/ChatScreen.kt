@@ -88,7 +88,8 @@ fun ChatScreen(
     var editingMessage by remember { mutableStateOf<Message?>(null) }
     var editDialogText by remember { mutableStateOf("") }
     var showDeleteConfirmDialog by remember { mutableStateOf<Message?>(null) }
-    var showMutualDeleteRequestDialog by remember { mutableStateOf(false) }
+    var showClearChatDialog by remember { mutableStateOf(false) }
+    var showFullProfilePicViewer by remember { mutableStateOf(false) }
     var showChatMenu by remember { mutableStateOf(false) }
 
     val currentPlayingId by viewModel.voicePlayerHelper.currentlyPlayingId.collectAsState()
@@ -252,12 +253,19 @@ fun ChatScreen(
     }
 
     // Filter messages for search query and starred filter - all messages preserved
-    val displayedMessages = remember(uiState.messages, uiState.searchQuery, uiState.filterStarredOnly, uiState.showPreviousChats) {
+    val displayedMessages = remember(
+        uiState.messages,
+        uiState.searchQuery,
+        uiState.filterStarredOnly,
+        uiState.showPreviousChats,
+        uiState.temporaryClearTimestamp
+    ) {
         var list = uiState.messages
         if (uiState.filterStarredOnly) {
             list = list.filter { it.isStarred }
         }
         if (!uiState.showPreviousChats) {
+            val clearTime = uiState.temporaryClearTimestamp
             val now = java.util.Calendar.getInstance()
             if (now.get(java.util.Calendar.HOUR_OF_DAY) < 6) {
                 now.add(java.util.Calendar.DAY_OF_YEAR, -1)
@@ -267,7 +275,8 @@ fun ChatScreen(
             now.set(java.util.Calendar.SECOND, 0)
             now.set(java.util.Calendar.MILLISECOND, 0)
             val today6am = now.timeInMillis
-            list = list.filter { it.timestamp >= today6am }
+            val cutoff = maxOf(today6am, clearTime)
+            list = list.filter { it.timestamp > cutoff }
         }
         if (uiState.searchQuery.isNotBlank()) {
             val q = uiState.searchQuery.trim()
@@ -377,17 +386,21 @@ fun ChatScreen(
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
                                 modifier = Modifier
-                                    .clip(RoundedCornerShape(10.dp))
-                                    .clickable { onNavigateToProfile() }
                                     .padding(start = 2.dp, end = 6.dp, top = 2.dp, bottom = 2.dp)
                             ) {
-                                AvatarView(
-                                    photoUrl = partner?.photoUrl,
-                                    name = partnerName,
-                                    size = 40.dp,
-                                    isOnline = isPartnerOnline,
-                                    showOnlineBadge = !partnerHasCheckAfter
-                                )
+                                Box(
+                                    modifier = Modifier
+                                        .clip(CircleShape)
+                                        .clickable { showFullProfilePicViewer = true }
+                                ) {
+                                    AvatarView(
+                                        photoUrl = partner?.photoUrl,
+                                        name = partnerName,
+                                        size = 40.dp,
+                                        isOnline = isPartnerOnline,
+                                        showOnlineBadge = !partnerHasCheckAfter
+                                    )
+                                }
                                 Spacer(modifier = Modifier.width(10.dp))
                                 Column(
                                     modifier = Modifier.weight(1f, fill = false),
@@ -553,24 +566,13 @@ fun ChatScreen(
                                 )
 
                                 DropdownMenuItem(
-                                    text = { 
-                                        Text(
-                                            if (uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE) 
-                                                "Settings" 
-                                            else 
-                                                "Profile & Partner Settings"
-                                        ) 
-                                    },
+                                    text = { Text("Clear Chat", color = MaterialTheme.colorScheme.error) },
                                     onClick = {
                                         showChatMenu = false
-                                        onNavigateToProfile()
+                                        showClearChatDialog = true
                                     },
                                     leadingIcon = {
-                                        Icon(
-                                            Icons.Default.Person,
-                                            null,
-                                            tint = if (isPrivate) MaterialTheme.colorScheme.onSurfaceVariant else RoseGoldPrimary
-                                        )
+                                        Icon(Icons.Default.DeleteSweep, null, tint = MaterialTheme.colorScheme.error)
                                     }
                                 )
                                 DropdownMenuItem(
@@ -586,16 +588,6 @@ fun ChatScreen(
                                             null,
                                             tint = MaterialTheme.colorScheme.error
                                         )
-                                    }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("Clear Chat (Both Must Accept)", color = MaterialTheme.colorScheme.error) },
-                                    onClick = {
-                                        showChatMenu = false
-                                        showMutualDeleteRequestDialog = true
-                                    },
-                                    leadingIcon = {
-                                        Icon(Icons.Default.DeleteSweep, null, tint = MaterialTheme.colorScheme.error)
                                     }
                                 )
                             }
@@ -871,18 +863,6 @@ fun ChatScreen(
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
                     )
                 }
-            }
-
-            // Mutual Consent Deletion Banner — fixed position (not scrolling)
-            if (!uiState.isStealthCurtainActive && uiState.deletionRequest != null) {
-                MutualConsentDeletionBanner(
-                    request = uiState.deletionRequest!!,
-                    isFromMe = (uiState.deletionRequest!!.requestedByUserId == currentUserId),
-                    partnerName = partnerName,
-                    onAccept = { viewModel.acceptMutualChatDeletion() },
-                    onDecline = { viewModel.declineMutualChatDeletion() },
-                    onCancel = { viewModel.cancelMutualChatDeletion() }
-                )
             }
 
             Box(
@@ -1368,40 +1348,111 @@ fun ChatScreen(
         )
     }
 
-    // Mutual Consent Chat Clear Request Dialog
-    if (showMutualDeleteRequestDialog) {
+    // Clear Chat Dialog (clears temporary screen only, recoverable from settings)
+    if (showClearChatDialog) {
         AlertDialog(
-            onDismissRequest = { showMutualDeleteRequestDialog = false },
+            onDismissRequest = { showClearChatDialog = false },
             title = {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Security, contentDescription = null, tint = RoseGoldPrimary)
+                    Icon(Icons.Default.DeleteSweep, contentDescription = null, tint = MaterialTheme.colorScheme.error)
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Mutual Consent Chat Clear", fontWeight = FontWeight.Bold)
+                    Text("Clear Chat from Screen", fontWeight = FontWeight.Bold)
                 }
             },
             text = {
                 Text(
-                    text = "Under our Mutual Protection rule, clearing chat history requires BOTH partners to accept so that precious memories are never erased accidentally or unilaterally.\n\nWould you like to send a deletion request to $partnerName?",
+                    text = "This will temporarily clear the chat screen. All messages remain completely safe and can be restored anytime by going to Settings and switching on 'Show Previous Chats'.",
                     lineHeight = 20.sp
                 )
             },
             confirmButton = {
                 Button(
                     onClick = {
-                        viewModel.requestMutualChatDeletion("ALL_MESSAGES")
-                        showMutualDeleteRequestDialog = false
+                        viewModel.clearChatScreenTemporarily()
+                        showClearChatDialog = false
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
                 ) {
-                    Text("Send Deletion Request")
+                    Text("Clear Screen")
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showMutualDeleteRequestDialog = false }) {
+                TextButton(onClick = { showClearChatDialog = false }) {
                     Text("Cancel")
                 }
             }
         )
+    }
+
+    // Full Profile Picture View (opens full picture view without navigating to settings)
+    if (showFullProfilePicViewer) {
+        val photoUrl = partner?.photoUrl
+        if (!photoUrl.isNullOrBlank()) {
+            FullScreenMediaViewer(
+                mediaUrl = photoUrl,
+                allMediaUrls = listOf(photoUrl),
+                onDismiss = { showFullProfilePicViewer = false }
+            )
+        } else {
+            androidx.compose.ui.window.Dialog(onDismissRequest = { showFullProfilePicViewer = false }) {
+                Surface(
+                    shape = RoundedCornerShape(24.dp),
+                    color = MaterialTheme.colorScheme.surface,
+                    tonalElevation = 6.dp,
+                    modifier = Modifier.padding(16.dp)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .padding(24.dp)
+                            .fillMaxWidth(),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(140.dp)
+                                .clip(CircleShape)
+                                .background(
+                                    Brush.linearGradient(
+                                        listOf(
+                                            RoseGoldPrimary,
+                                            Color(0xFFC04B64)
+                                        )
+                                    )
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = partnerName.take(1).uppercase(),
+                                color = Color.White,
+                                fontSize = 54.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            text = partnerName,
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = if (isPartnerOnline) "Online" else "No profile photo uploaded",
+                            fontSize = 13.sp,
+                            color = if (isPartnerOnline) OnlineGreen else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(20.dp))
+                        Button(
+                            onClick = { showFullProfilePicViewer = false },
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Close")
+                        }
+                    }
+                }
+            }
+        }
     }
 
     // Check-After Setup & Modification Bottom Sheet

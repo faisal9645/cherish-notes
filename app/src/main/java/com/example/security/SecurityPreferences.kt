@@ -88,8 +88,27 @@ class SecurityPreferences(context: Context) {
     fun isShowPreviousChatsEnabled(): Boolean = prefs.getBoolean(KEY_SHOW_PREVIOUS_CHATS, true)
 
     fun setShowPreviousChatsEnabled(enabled: Boolean) {
+        if (enabled) {
+            setTemporaryClearTimestamp(0L)
+        }
         prefs.edit().putBoolean(KEY_SHOW_PREVIOUS_CHATS, enabled).apply()
         _showPreviousChats.value = enabled
+    }
+
+    private val _temporaryClearTimestamp = MutableStateFlow(getTemporaryClearTimestamp())
+    val temporaryClearTimestamp: StateFlow<Long> = _temporaryClearTimestamp.asStateFlow()
+
+    fun getTemporaryClearTimestamp(): Long = prefs.getLong(KEY_TEMPORARY_CLEAR_TIMESTAMP, 0L)
+
+    fun setTemporaryClearTimestamp(timestamp: Long) {
+        prefs.edit().putLong(KEY_TEMPORARY_CLEAR_TIMESTAMP, timestamp).apply()
+        _temporaryClearTimestamp.value = timestamp
+    }
+
+    fun clearTemporaryScreen() {
+        val now = System.currentTimeMillis()
+        setTemporaryClearTimestamp(now)
+        setShowPreviousChatsEnabled(false)
     }
 
     private val _isNoteRemindersEnabled = MutableStateFlow(isNoteRemindersEnabled())
@@ -411,6 +430,7 @@ class SecurityPreferences(context: Context) {
         private const val KEY_INITIAL_PERMS_REQUESTED = "initial_perms_requested"
         private const val KEY_INITIAL_NOTIF_REQUESTED = "initial_notif_requested"
         private const val KEY_SHOW_PREVIOUS_CHATS = "show_previous_chats"
+        private const val KEY_TEMPORARY_CLEAR_TIMESTAMP = "temporary_clear_timestamp"
         private const val KEY_NOTE_REMINDERS_ENABLED = "note_reminders_enabled"
 
         @Volatile

@@ -453,8 +453,8 @@ fun ProfileScreen(
                 icon = Icons.Default.Security
             ) {
                 ListItem(
-                    headlineContent = { Text("Show Previous Chats", fontSize = 15.sp, fontWeight = FontWeight.SemiBold) },
-                    supportingContent = { Text("Show chats from previous days (before 6 AM today)", fontSize = 13.sp) },
+                    headlineContent = { Text("Show Previous & Cleared Chats", fontSize = 15.sp, fontWeight = FontWeight.SemiBold) },
+                    supportingContent = { Text("Restore cleared chats and show earlier message history", fontSize = 13.sp) },
                     leadingContent = { Icon(Icons.Default.History, contentDescription = null, tint = primaryAccent) },
                     trailingContent = {
                         Switch(
