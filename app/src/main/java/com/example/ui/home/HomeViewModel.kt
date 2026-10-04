@@ -51,6 +51,7 @@ class HomeViewModel(
                 _uiState.update {
                     it.copy(
                         partnerUser = partner,
+                        isPartnerOnline = partner?.isEffectivelyOnline() ?: false,
                         isPartnerTyping = partner?.isEffectivelyTyping() ?: false
                     )
                 }

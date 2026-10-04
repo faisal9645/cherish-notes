@@ -122,11 +122,15 @@ fun HomeScreen(
 
                     if (directionLocked && isHorizontal) {
                         change.consume()
+                        if (accX < -70f) {
+                            onNavigateToChat()
+                            break
+                        }
                     }
                 }
 
                 if (directionLocked && isHorizontal) {
-                    if (accX < -80f) {
+                    if (accX < -50f) {
                         onNavigateToChat()
                     }
                 }

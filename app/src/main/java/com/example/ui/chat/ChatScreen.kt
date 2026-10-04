@@ -402,13 +402,15 @@ fun ChatScreen(
                                         overflow = TextOverflow.Ellipsis,
                                         color = if (isDark) Color.White else Color(0xFF0F172A)
                                     )
-                                    Text(
-                                        text = if (partnerHasCheckAfter) {
+                                    val statusText = when {
+                                        partnerHasCheckAfter -> {
                                             if (headerRemaining.startsWith("✨")) "✨ Reconnecting now"
                                             else "🌙 Quiet time (${CheckAfterHelper.formatTargetTime(partnerCheckAfterTarget)})"
-                                        } else if (isPartnerOnline) {
-                                            "Online"
-                                        } else {
+                                        }
+                                        uiState.isPartnerRecordingAudio -> "recording audio..."
+                                        uiState.isPartnerTyping -> "typing..."
+                                        isPartnerOnline -> "Online"
+                                        else -> {
                                             val lastSeen = partner?.lastSeen ?: 0L
                                             if (lastSeen > 0L) {
                                                 val diffSec = ((System.currentTimeMillis() - lastSeen) / 1000).coerceAtLeast(0)
@@ -416,19 +418,25 @@ fun ChatScreen(
                                                     diffSec < 60 -> "last seen just now"
                                                     diffSec < 3600 -> "last seen ${diffSec / 60}m ago"
                                                     diffSec < 86400 -> "last seen ${diffSec / 3600}h ago"
-                                                    else -> "offline"
+                                                    else -> {
+                                                        val sdf = SimpleDateFormat("MMM d, h:mm a", Locale.getDefault())
+                                                        "last seen ${sdf.format(Date(lastSeen))}"
+                                                    }
                                                 }
                                             } else {
                                                 "offline"
                                             }
-                                        },
+                                        }
+                                    }
+                                    Text(
+                                        text = statusText,
                                         fontSize = 12.sp,
                                         lineHeight = 14.sp,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis,
                                         color = if (partnerHasCheckAfter) {
                                             Color(0xFF3B82F6)
-                                        } else if (isPartnerOnline) {
+                                        } else if (uiState.isPartnerRecordingAudio || uiState.isPartnerTyping || isPartnerOnline) {
                                             OnlineGreen
                                         } else {
                                             MaterialTheme.colorScheme.onSurfaceVariant
@@ -759,13 +767,12 @@ fun ChatScreen(
                             }
 
                             if (directionLocked && isHorizontal) {
-                                if (accX > 80f) {
-                                    change.consume()
+                                change.consume()
+                                if (accX > 70f) {
                                     hasNavigated = true
                                     onNavigateToHome()
                                     break
-                                } else if (accX < -80f) {
-                                    change.consume()
+                                } else if (accX < -70f) {
                                     hasNavigated = true
                                     onNavigateToProfile()
                                     break
@@ -774,9 +781,9 @@ fun ChatScreen(
                         }
 
                         if (!hasNavigated && directionLocked && isHorizontal && !wasConsumedByChild) {
-                            if (accX > 65f) {
+                            if (accX > 50f) {
                                 onNavigateToHome()
-                            } else if (accX < -65f) {
+                            } else if (accX < -50f) {
                                 onNavigateToProfile()
                             }
                         }

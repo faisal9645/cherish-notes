@@ -162,20 +162,84 @@ fun CherishNavGraph(
                     scaleY = appScale
                 },
         enterTransition = {
-            fadeIn(animationSpec = tween(160, easing = FastOutSlowInEasing)) +
-            slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Start, tween(160, easing = FastOutSlowInEasing))
+            val fromOrder = getTabOrder(initialState.destination.route)
+            val toOrder = getTabOrder(targetState.destination.route)
+            if (fromOrder >= 0 && toOrder >= 0 && fromOrder != toOrder) {
+                if (toOrder > fromOrder) {
+                    slideIntoContainer(
+                        towards = AnimatedContentTransitionScope.SlideDirection.Left,
+                        animationSpec = tween(280, easing = FastOutSlowInEasing)
+                    ) + fadeIn(animationSpec = tween(200))
+                } else {
+                    slideIntoContainer(
+                        towards = AnimatedContentTransitionScope.SlideDirection.Right,
+                        animationSpec = tween(280, easing = FastOutSlowInEasing)
+                    ) + fadeIn(animationSpec = tween(200))
+                }
+            } else {
+                fadeIn(animationSpec = tween(160, easing = FastOutSlowInEasing)) +
+                slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Start, tween(160, easing = FastOutSlowInEasing))
+            }
         },
         exitTransition = {
-            fadeOut(animationSpec = tween(130, easing = FastOutLinearInEasing)) +
-            slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Start, tween(130, easing = FastOutLinearInEasing))
+            val fromOrder = getTabOrder(initialState.destination.route)
+            val toOrder = getTabOrder(targetState.destination.route)
+            if (fromOrder >= 0 && toOrder >= 0 && fromOrder != toOrder) {
+                if (toOrder > fromOrder) {
+                    slideOutOfContainer(
+                        towards = AnimatedContentTransitionScope.SlideDirection.Left,
+                        animationSpec = tween(280, easing = FastOutSlowInEasing)
+                    ) + fadeOut(animationSpec = tween(180))
+                } else {
+                    slideOutOfContainer(
+                        towards = AnimatedContentTransitionScope.SlideDirection.Right,
+                        animationSpec = tween(280, easing = FastOutSlowInEasing)
+                    ) + fadeOut(animationSpec = tween(180))
+                }
+            } else {
+                fadeOut(animationSpec = tween(130, easing = FastOutLinearInEasing)) +
+                slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Start, tween(130, easing = FastOutLinearInEasing))
+            }
         },
         popEnterTransition = {
-            fadeIn(animationSpec = tween(160, easing = FastOutSlowInEasing)) +
-            slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.End, tween(160, easing = FastOutSlowInEasing))
+            val fromOrder = getTabOrder(initialState.destination.route)
+            val toOrder = getTabOrder(targetState.destination.route)
+            if (fromOrder >= 0 && toOrder >= 0 && fromOrder != toOrder) {
+                if (toOrder > fromOrder) {
+                    slideIntoContainer(
+                        towards = AnimatedContentTransitionScope.SlideDirection.Left,
+                        animationSpec = tween(280, easing = FastOutSlowInEasing)
+                    ) + fadeIn(animationSpec = tween(200))
+                } else {
+                    slideIntoContainer(
+                        towards = AnimatedContentTransitionScope.SlideDirection.Right,
+                        animationSpec = tween(280, easing = FastOutSlowInEasing)
+                    ) + fadeIn(animationSpec = tween(200))
+                }
+            } else {
+                fadeIn(animationSpec = tween(160, easing = FastOutSlowInEasing)) +
+                slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.End, tween(160, easing = FastOutSlowInEasing))
+            }
         },
         popExitTransition = {
-            fadeOut(animationSpec = tween(130, easing = FastOutLinearInEasing)) +
-            slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.End, tween(130, easing = FastOutLinearInEasing))
+            val fromOrder = getTabOrder(initialState.destination.route)
+            val toOrder = getTabOrder(targetState.destination.route)
+            if (fromOrder >= 0 && toOrder >= 0 && fromOrder != toOrder) {
+                if (toOrder > fromOrder) {
+                    slideOutOfContainer(
+                        towards = AnimatedContentTransitionScope.SlideDirection.Left,
+                        animationSpec = tween(280, easing = FastOutSlowInEasing)
+                    ) + fadeOut(animationSpec = tween(180))
+                } else {
+                    slideOutOfContainer(
+                        towards = AnimatedContentTransitionScope.SlideDirection.Right,
+                        animationSpec = tween(280, easing = FastOutSlowInEasing)
+                    ) + fadeOut(animationSpec = tween(180))
+                }
+            } else {
+                fadeOut(animationSpec = tween(130, easing = FastOutLinearInEasing)) +
+                slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.End, tween(130, easing = FastOutLinearInEasing))
+            }
         }
     ) {
         composable(Screen.Auth.route) {
@@ -598,3 +662,13 @@ fun CherishNavGraph(
 
     } // End of Box
 } // End of CherishNavGraph
+
+private fun getTabOrder(route: String?): Int {
+    return when (route) {
+        Screen.Home.route -> 0
+        Screen.Chat.route -> 1
+        Screen.Profile.route -> 2
+        else -> -1
+    }
+}
+

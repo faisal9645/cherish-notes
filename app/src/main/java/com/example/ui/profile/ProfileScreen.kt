@@ -233,12 +233,16 @@ fun ProfileScreen(
 
                     if (directionLocked && isHorizontal) {
                         change.consume()
+                        if (accX > 70f) {
+                            onNavigateToChat()
+                            break
+                        }
                     }
                 }
 
                 if (directionLocked && isHorizontal) {
-                    // Swiping horizontally on Settings tab smoothly transitions back to Chat tab
-                    if (kotlin.math.abs(accX) > 80f) {
+                    // Swiping right on Settings tab smoothly transitions back to Chat tab
+                    if (accX > 50f) {
                         onNavigateToChat()
                     }
                 }

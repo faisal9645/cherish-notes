@@ -112,8 +112,8 @@ class AuthRepository(private val context: Context) {
 
     fun updatePresence() {
         val isDisguised = securityPrefs.isDisguiseActive.value
-        // Show Online ONLY when actively inside the Chat tab, in foreground, and not in disguise
-        val shouldBeOnline = isAppInForeground && isActivelyInChatTab && !isDisguised
+        // Show Online whenever actively in the Cherish app (foreground and not disguised as Notes)
+        val shouldBeOnline = isAppInForeground && !isDisguised
         setOnline(shouldBeOnline)
     }
 
@@ -618,7 +618,7 @@ class AuthRepository(private val context: Context) {
             while (isAppInForeground) {
                 kotlinx.coroutines.delay(20_000L)
                 val isDisguised = securityPrefs.isDisguiseActive.value
-                val shouldBeOnline = isAppInForeground && isActivelyInChatTab && !isDisguised
+                val shouldBeOnline = isAppInForeground && !isDisguised
                 val uid = getCurrentUserId()
                 if (shouldBeOnline) {
                     if (uid.isNotBlank() && uid != "local_user_a") {
@@ -753,7 +753,21 @@ class AuthRepository(private val context: Context) {
                     return@addSnapshotListener
                 }
                 if (snapshot != null && snapshot.exists()) {
-                    val user = snapshot.toObject(User::class.java)
+                    var user = snapshot.toObject(User::class.java)
+                    if (user != null) {
+                        val boolOnline = snapshot.getBoolean("isOnline")
+                            ?: snapshot.getBoolean("online")
+                            ?: user.isOnline
+                        val docLastSeen = snapshot.getLong("lastSeen")
+                            ?: snapshot.getDate("lastSeen")?.time
+                            ?: user.lastSeen
+                        if (user.isOnline != boolOnline || user.lastSeen != docLastSeen) {
+                            user = user.copy(
+                                isOnline = boolOnline,
+                                lastSeen = docLastSeen
+                            )
+                        }
+                    }
                     _currentUserState.value = user
                     user?.let { saveLocalUserSession(it) }
                     // Only connect partner listener if partner ID changed
@@ -796,7 +810,21 @@ class AuthRepository(private val context: Context) {
                     return@addSnapshotListener
                 }
                 if (snapshot != null && snapshot.exists()) {
-                    val partner = snapshot.toObject(User::class.java)
+                    var partner = snapshot.toObject(User::class.java)
+                    if (partner != null) {
+                        val boolOnline = snapshot.getBoolean("isOnline")
+                            ?: snapshot.getBoolean("online")
+                            ?: partner.isOnline
+                        val docLastSeen = snapshot.getLong("lastSeen")
+                            ?: snapshot.getDate("lastSeen")?.time
+                            ?: partner.lastSeen
+                        if (partner.isOnline != boolOnline || partner.lastSeen != docLastSeen) {
+                            partner = partner.copy(
+                                isOnline = boolOnline,
+                                lastSeen = docLastSeen
+                            )
+                        }
+                    }
                     _partnerUserState.value = partner
                     handlePartnerCheckAfterReminder(partner)
                 }
@@ -819,7 +847,21 @@ class AuthRepository(private val context: Context) {
                     }
                     val doc = snapshots?.documents?.firstOrNull { it.id != uid }
                     if (doc != null) {
-                        val partner = doc.toObject(User::class.java)
+                        var partner = doc.toObject(User::class.java)
+                        if (partner != null) {
+                            val boolOnline = doc.getBoolean("isOnline")
+                                ?: doc.getBoolean("online")
+                                ?: partner.isOnline
+                            val docLastSeen = doc.getLong("lastSeen")
+                                ?: doc.getDate("lastSeen")?.time
+                                ?: partner.lastSeen
+                            if (partner.isOnline != boolOnline || partner.lastSeen != docLastSeen) {
+                                partner = partner.copy(
+                                    isOnline = boolOnline,
+                                    lastSeen = docLastSeen
+                                )
+                            }
+                        }
                         _partnerUserState.value = partner
                         handlePartnerCheckAfterReminder(partner)
                         if (_currentUserState.value?.partnerId != doc.id) {

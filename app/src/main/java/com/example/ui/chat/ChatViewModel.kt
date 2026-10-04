@@ -100,6 +100,7 @@ class ChatViewModel(
                 _uiState.update {
                     it.copy(
                         partnerUser = partner,
+                        isPartnerOnline = partner?.isEffectivelyOnline() ?: false,
                         isPartnerTyping = partner?.isEffectivelyTyping() ?: false,
                         isPartnerRecordingAudio = partner?.isEffectivelyRecording() ?: false
                     )

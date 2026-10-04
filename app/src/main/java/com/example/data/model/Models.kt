@@ -70,7 +70,7 @@ data class User(
     fun isEffectivelyOnline(): Boolean {
         if (!isOnline) return false
         val diff = System.currentTimeMillis() - lastSeen
-        if (diff > 60_000L) return false
+        if (diff > 120_000L) return false
         return true
     }
 
