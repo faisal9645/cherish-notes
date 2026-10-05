@@ -11,7 +11,7 @@ class CherishFirebaseMessagingService : FirebaseMessagingService() {
     override fun onNewToken(token: String) {
         super.onNewToken(token)
         Log.d("FCM", "Refreshed token: $token")
-        val currentUserId = FirebaseAuth.getInstance().currentUser?.uid
+        val currentUserId = FirebaseAuth.getInstance().currentUser?.uid?.trim()?.ifBlank { null }
         if (currentUserId != null) {
             try {
                 FirebaseFirestore.getInstance()

@@ -42,7 +42,7 @@ class CoupleFeaturesRepository(
     val notesFlow: StateFlow<List<SharedNote>> = _notesFlow.asStateFlow()
 
     private fun getCoupleId(): String {
-        return authRepository.currentUserState.value?.coupleId ?: "couple_cherish_private"
+        return authRepository.currentUserState.value?.coupleId?.trim()?.ifBlank { null } ?: "couple_faisal_shali"
     }
 
     private fun notifyAutoBackup() {

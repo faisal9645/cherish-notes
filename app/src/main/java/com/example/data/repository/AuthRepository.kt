@@ -47,6 +47,16 @@ class AuthRepository(private val context: Context) {
     private val _partnerUserState = MutableStateFlow<User?>(null)
     val partnerUserState: StateFlow<User?> = _partnerUserState.asStateFlow()
 
+    fun getUserDocRef(uid: String?): com.google.firebase.firestore.DocumentReference? {
+        val clean = uid?.trim()?.ifBlank { null } ?: return null
+        return firestore?.collection("users")?.document(clean)
+    }
+
+    fun getCoupleDocRef(coupleId: String?): com.google.firebase.firestore.DocumentReference? {
+        val clean = coupleId?.trim()?.ifBlank { null } ?: return null
+        return firestore?.collection("couples")?.document(clean)
+    }
+
     private var partnerListener: ListenerRegistration? = null
     private var currentUserListener: ListenerRegistration? = null
     private var coupleListener: ListenerRegistration? = null
@@ -67,14 +77,15 @@ class AuthRepository(private val context: Context) {
     init {
         loadLocalUserSession()
         val localUser = _currentUserState.value
-        if (localUser != null) {
+        if (localUser != null && localUser.id.isNotBlank()) {
             listenToCurrentUser(localUser.id)
             connectPartnerListenerOnce()
-            localUser.coupleId?.let { listenToCoupleRoom(it, localUser.id) }
+            localUser.coupleId?.trim()?.ifBlank { null }?.let { listenToCoupleRoom(it, localUser.id) }
         } else {
             val currentFirebaseUser = auth?.currentUser
-            if (currentFirebaseUser != null) {
-                listenToCurrentUser(currentFirebaseUser.uid)
+            val fbUid = currentFirebaseUser?.uid?.trim()?.ifBlank { null }
+            if (fbUid != null) {
+                listenToCurrentUser(fbUid)
                 connectPartnerListenerOnce()
             }
         }
@@ -92,7 +103,9 @@ class AuthRepository(private val context: Context) {
     }
 
     fun getCurrentUserId(): String {
-        return _currentUserState.value?.id ?: auth?.currentUser?.uid ?: "local_user_a"
+        return _currentUserState.value?.id?.trim()?.ifBlank { null }
+            ?: auth?.currentUser?.uid?.trim()?.ifBlank { null }
+            ?: "user_faisal"
     }
 
     fun setInChatTab(inChat: Boolean) {
@@ -123,12 +136,14 @@ class AuthRepository(private val context: Context) {
     }
 
     fun listenToCoupleRoom(coupleId: String, currentUid: String) {
+        val cleanCoupleId = coupleId.trim().ifBlank { null } ?: return
+        val cleanUid = currentUid.trim().ifBlank { null } ?: return
         // Prevent duplicate listener for same couple
-        if (currentListeningCoupleId == coupleId) return
+        if (currentListeningCoupleId == cleanCoupleId) return
         coupleListener?.remove()
-        currentListeningCoupleId = coupleId
-        coupleListener = firestore?.collection("couples")?.document(coupleId)
-            ?.addSnapshotListener { snapshot, e ->
+        currentListeningCoupleId = cleanCoupleId
+        val docRef = getCoupleDocRef(cleanCoupleId) ?: return
+        coupleListener = docRef.addSnapshotListener { snapshot, e ->
                 if (e != null || snapshot == null || !snapshot.exists()) return@addSnapshotListener
                 val p1 = snapshot.getString("partner1Id")
                 val p2 = snapshot.getString("partner2Id")
@@ -815,12 +830,13 @@ class AuthRepository(private val context: Context) {
     }
 
     private fun listenToCurrentUser(uid: String) {
+        val cleanUid = uid.trim().ifBlank { null } ?: return
         // Prevent duplicate listener for same user
-        if (currentListeningUserId == uid) return
+        if (currentListeningUserId == cleanUid) return
         currentUserListener?.remove()
-        currentListeningUserId = uid
-        currentUserListener = firestore?.collection("users")?.document(uid)
-            ?.addSnapshotListener { snapshot, error ->
+        currentListeningUserId = cleanUid
+        val docRef = getUserDocRef(cleanUid) ?: return
+        currentUserListener = docRef.addSnapshotListener { snapshot, error ->
                 if (error != null) {
                     Log.w("AuthRepository", "Listen to current user failed", error)
                     return@addSnapshotListener
@@ -871,13 +887,13 @@ class AuthRepository(private val context: Context) {
     }
 
     fun listenToPartner(partnerId: String) {
-        if (partnerId.isBlank()) return
+        val cleanPartnerId = partnerId.trim().ifBlank { null } ?: return
         // Skip if already listening to this exact partner
-        if (currentListeningPartnerId == partnerId) return
+        if (currentListeningPartnerId == cleanPartnerId) return
         partnerListener?.remove()
-        currentListeningPartnerId = partnerId
-        partnerListener = firestore?.collection("users")?.document(partnerId)
-            ?.addSnapshotListener { snapshot, error ->
+        currentListeningPartnerId = cleanPartnerId
+        val docRef = getUserDocRef(cleanPartnerId) ?: return
+        partnerListener = docRef.addSnapshotListener { snapshot, error ->
                 if (error != null) {
                     Log.w("AuthRepository", "Listen to partner failed", error)
                     return@addSnapshotListener
@@ -1077,31 +1093,35 @@ class AuthRepository(private val context: Context) {
 
     private fun loadLocalUserSession() {
         val prefs = context.getSharedPreferences("cherish_user_session", Context.MODE_PRIVATE)
-        val uid = prefs.getString("uid", null)
-        if (uid != null) {
+        val rawUid = prefs.getString("uid", null)?.trim()?.ifBlank { null }
+        if (rawUid != null) {
+            val uid = rawUid
             val targetTime = prefs.getLong("checkAfterTimeMillis", 0L)
             val note = prefs.getString("checkAfterNote", "") ?: ""
             val active = prefs.getBoolean("checkAfterActive", false)
-            val photo = prefs.getString("photoUrl", null)?.ifBlank { null }
-            val status = prefs.getString("statusMessage", "Loving every moment with you ✨") ?: "Loving every moment with you ✨"
-            val partnerId = prefs.getString("partnerId", null)?.ifBlank { null }
-            val partnerEmail = prefs.getString("partnerEmail", null)?.ifBlank { null }
-            val coupleId = prefs.getString("coupleId", "couple_faisal_shali") ?: "couple_faisal_shali"
+            val photo = prefs.getString("photoUrl", null)?.trim()?.ifBlank { null }
+            val status = prefs.getString("statusMessage", "Loving every moment with you ✨")?.trim()?.ifBlank { "Loving every moment with you ✨" } ?: "Loving every moment with you ✨"
+            val partnerId = prefs.getString("partnerId", null)?.trim()?.ifBlank { null }
+            val partnerEmail = prefs.getString("partnerEmail", null)?.trim()?.ifBlank { null }
+            val coupleId = prefs.getString("coupleId", "couple_faisal_shali")?.trim()?.ifBlank { "couple_faisal_shali" } ?: "couple_faisal_shali"
+            val defaultName = if (uid == "user_shali") "Shali" else "Faisal"
+            val defaultPartnerId = if (uid == "user_faisal") "user_shali" else "user_faisal"
+            val defaultPartnerEmail = if (uid == "user_faisal") "shalihafais36@gmail.com" else "faisallasiaff@gmail.com"
             val user = User(
                 id = uid,
                 email = prefs.getString("email", "") ?: "",
-                displayName = prefs.getString("displayName", if (uid == "user_shali") "Shali" else "Faisal") ?: "Faisal",
+                displayName = prefs.getString("displayName", defaultName)?.ifBlank { defaultName } ?: defaultName,
                 photoUrl = photo,
                 statusMessage = status,
-                partnerId = partnerId ?: if (uid == "user_faisal") "user_shali" else "user_faisal",
-                partnerEmail = partnerEmail ?: if (uid == "user_faisal") "shalihafais36@gmail.com" else "faisallasiaff@gmail.com",
+                partnerId = partnerId ?: defaultPartnerId,
+                partnerEmail = partnerEmail ?: defaultPartnerEmail,
                 coupleId = coupleId,
                 checkAfterTimeMillis = if (targetTime > 0L) targetTime else null,
                 checkAfterNote = note.ifBlank { null },
                 checkAfterActive = active
             )
             _currentUserState.value = user
-            val partnerUid = user.partnerId ?: if (uid == "user_faisal") "user_shali" else "user_faisal"
+            val partnerUid = user.partnerId?.ifBlank { null } ?: defaultPartnerId
             val partnerName = if (partnerUid == "user_shali") "Shali" else "Faisal"
             val partnerEmailAddr = if (partnerUid == "user_shali") "shalihafais36@gmail.com" else "faisallasiaff@gmail.com"
             if (_partnerUserState.value == null) {

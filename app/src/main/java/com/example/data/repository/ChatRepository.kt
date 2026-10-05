@@ -84,7 +84,7 @@ class ChatRepository(
         _messagesFlow.value = emptyList()
         CoroutineScope(Dispatchers.IO).launch {
             authRepository.currentUserState
-                .map { it?.coupleId ?: "couple_cherish_love" }
+                .map { it?.coupleId?.trim()?.ifBlank { null } ?: "couple_faisal_shali" }
                 .distinctUntilChanged()
                 .collectLatest { convId ->
                     previousMessageLimit = 40L
@@ -100,7 +100,7 @@ class ChatRepository(
 
     fun getConversationId(): String {
         val user = authRepository.currentUserState.value
-        val coupleId = user?.coupleId ?: "couple_cherish_love"
+        val coupleId = user?.coupleId?.trim()?.ifBlank { null } ?: "couple_faisal_shali"
         return coupleId
     }
 
