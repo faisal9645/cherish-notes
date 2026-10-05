@@ -350,8 +350,8 @@ fun ProfileScreen(
                                                 photoUrl = user?.photoUrl,
                                                 name = myName,
                                                 size = 80.dp,
-                                                isOnline = true,
-                                                showOnlineBadge = false,
+                                                isOnline = user?.isOnline == true || user?.isEffectivelyOnline() == true,
+                                                showOnlineBadge = true,
                                                 modifier = Modifier
                                                     .clip(CircleShape)
                                                     .clickable { showAvatarOptionsDialog = true }
@@ -424,6 +424,7 @@ fun ProfileScreen(
                                 Column(
                                     horizontalAlignment = Alignment.CenterHorizontally
                                 ) {
+                                    val isPartnerOnline = partner?.isEffectivelyOnline() == true || partner?.isOnline == true
                                     Surface(
                                         shape = CircleShape,
                                         color = MaterialTheme.colorScheme.surface,
@@ -434,8 +435,8 @@ fun ProfileScreen(
                                             photoUrl = partner?.photoUrl,
                                             name = partnerName,
                                             size = 80.dp,
-                                            isOnline = true,
-                                            showOnlineBadge = false,
+                                            isOnline = isPartnerOnline,
+                                            showOnlineBadge = isPartnerOnline,
                                             modifier = Modifier.clip(CircleShape)
                                         )
                                     }
@@ -448,8 +449,28 @@ fun ProfileScreen(
                                         color = MaterialTheme.colorScheme.onSurface,
                                         maxLines = 1
                                     )
+                                    // Partner presence status
+                                    val partnerLastSeen = partner?.lastSeen ?: 0L
+                                    val partnerStatusText = when {
+                                        isPartnerOnline -> "Online"
+                                        partnerLastSeen > 0L -> {
+                                            val diffSec = ((System.currentTimeMillis() - partnerLastSeen) / 1000).coerceAtLeast(0)
+                                            when {
+                                                diffSec < 60 -> "last seen just now"
+                                                diffSec < 3600 -> "last seen ${diffSec / 60}m ago"
+                                                diffSec < 86400 -> "last seen ${diffSec / 3600}h ago"
+                                                else -> "Offline"
+                                            }
+                                        }
+                                        else -> "Offline"
+                                    }
+                                    Text(
+                                        text = partnerStatusText,
+                                        fontSize = 11.sp,
+                                        color = if (isPartnerOnline) OnlineGreen else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        fontWeight = if (isPartnerOnline) FontWeight.SemiBold else FontWeight.Normal
+                                    )
                                     // Partner live battery: ONLY show when partner is online! Old battery status is hidden.
-                                    val isPartnerOnline = partner?.isEffectivelyOnline() == true || partner?.isOnline == true
                                     val partnerBattery = partner?.batteryLevel
                                     if (isPartnerOnline && partnerBattery != null && partnerBattery in 0..100) {
                                         Row(
@@ -671,7 +692,7 @@ fun ProfileScreen(
                             onClick = {
                                 viewModel.recoverAllChatsAndGallery()
                                 Toast.makeText(context, "All chats & gallery recovered ✨", Toast.LENGTH_SHORT).show()
-                                onNavigateBack()
+                                onNavigateToChat()
                             },
                             shape = RoundedCornerShape(12.dp),
                             contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)

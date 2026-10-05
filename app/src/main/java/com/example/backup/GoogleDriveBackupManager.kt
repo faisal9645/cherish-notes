@@ -85,9 +85,9 @@ class GoogleDriveBackupManager(
 
     init {
         // Continuous Always-On Auto-Backup:
-        // Automatically syncs whenever chat messages, memories, shared notes, or dates are updated
+        // Automatically syncs immediately whenever chat messages, memories, shared notes, or dates are updated
         autoBackupScope.launch {
-            kotlinx.coroutines.delay(5000) // Initial delay on startup
+            kotlinx.coroutines.delay(1000) // Brief startup settle
             kotlinx.coroutines.flow.combine(
                 chatRepository.messagesFlow,
                 coupleFeaturesRepository.memoriesFlow,
@@ -171,8 +171,6 @@ class GoogleDriveBackupManager(
                 .putLong("last_backup_size", size)
                 .putInt("last_backup_items", totalItems)
                 .apply()
-
-            kotlinx.coroutines.delay(800) // Smooth progress feedback
 
             _backupState.value = _backupState.value.copy(
                 isBackingUp = false,

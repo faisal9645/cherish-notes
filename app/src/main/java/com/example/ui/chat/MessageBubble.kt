@@ -292,6 +292,15 @@ fun MessageBubble(
             if (isVideoNote) {
                 // Telegram-Style Big Circular Video Note (standalone round circle without box card)
                 val videoUrl = message.mediaUrl ?: message.mediaUrls.firstOrNull() ?: ""
+                val openBigVideoNote = {
+                    if (videoUrl.isNotBlank()) {
+                        if (onImageClickWithList != null) {
+                            onImageClickWithList(videoUrl, listOf(videoUrl))
+                        } else {
+                            onImageClick(videoUrl)
+                        }
+                    }
+                }
                 Box(
                     modifier = Modifier
                         .size(240.dp)
@@ -299,7 +308,8 @@ fun MessageBubble(
                         .pointerInput(message.id) {
                             detectTapGestures(
                                 onLongPress = { onLongClick() },
-                                onDoubleTap = { triggerHeartBurst() }
+                                onDoubleTap = { triggerHeartBurst() },
+                                onTap = { openBigVideoNote() }
                             )
                         }
                         .testTag("message_bubble_${message.id}"),
@@ -309,6 +319,7 @@ fun MessageBubble(
                         com.example.ui.components.CircularVideoNoteView(
                             videoUrl = videoUrl,
                             durationSeconds = message.durationSeconds,
+                            onExpandClick = openBigVideoNote,
                             modifier = Modifier.fillMaxSize()
                         )
                     }
@@ -507,9 +518,17 @@ fun MessageBubble(
                     MessageType.VIDEO -> {
                         val videoUrl = message.mediaUrl ?: message.mediaUrls.firstOrNull()
                         if (!videoUrl.isNullOrBlank()) {
+                            val openBigVideo = {
+                                if (onImageClickWithList != null) {
+                                    onImageClickWithList(videoUrl, listOf(videoUrl))
+                                } else {
+                                    onImageClick(videoUrl)
+                                }
+                            }
                             com.example.ui.components.CircularVideoNoteView(
                                 videoUrl = videoUrl,
                                 durationSeconds = message.durationSeconds,
+                                onExpandClick = openBigVideo,
                                 modifier = Modifier
                                     .padding(vertical = 4.dp)
                                     .align(Alignment.CenterHorizontally)

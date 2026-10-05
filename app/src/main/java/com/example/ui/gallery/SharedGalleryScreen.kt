@@ -118,35 +118,16 @@ fun SharedGalleryScreen(
 
     val allGalleryItems by chatViewModel.galleryMediaMessages.collectAsState()
 
-    LaunchedEffect(chatState.showPreviousChats) {
-        if (chatState.showPreviousChats) {
-            chatViewModel.loadAllGalleryMedia()
-        }
+    LaunchedEffect(Unit) {
+        chatViewModel.loadAllGalleryMedia()
     }
 
-    val sourceMessages = remember(chatState.messages, allGalleryItems, chatState.showPreviousChats) {
-        if (chatState.showPreviousChats && allGalleryItems.isNotEmpty()) {
-            (chatState.messages + allGalleryItems).distinctBy { it.id }
-        } else {
-            chatState.messages
-        }
+    val sourceMessages = remember(chatState.messages, allGalleryItems) {
+        (chatState.messages + allGalleryItems).distinctBy { it.id }
     }
 
-    val filteredMessages = remember(sourceMessages, selectedDateMillis, chatState.showPreviousChats) {
+    val filteredMessages = remember(sourceMessages, selectedDateMillis) {
         var list = sourceMessages.filter { !it.isDeleted }
-
-        if (!chatState.showPreviousChats) {
-            val now = Calendar.getInstance()
-            if (now.get(Calendar.HOUR_OF_DAY) < 6) {
-                now.add(Calendar.DAY_OF_YEAR, -1)
-            }
-            now.set(Calendar.HOUR_OF_DAY, 6)
-            now.set(Calendar.MINUTE, 0)
-            now.set(Calendar.SECOND, 0)
-            now.set(Calendar.MILLISECOND, 0)
-            val today6am = now.timeInMillis
-            list = list.filter { it.timestamp >= today6am }
-        }
 
         // Filter out any messages containing "today start 6 am" or similar variations
         list = list.filter { msg ->

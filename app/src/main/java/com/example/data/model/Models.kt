@@ -74,7 +74,10 @@ data class User(
     fun isEffectivelyOnline(): Boolean {
         if (!isOnline) return false
         val diff = System.currentTimeMillis() - lastSeen
-        if (diff > 120_000L) return false
+        // Negative diff indicates partner device clock is slightly ahead, which means they are definitely active
+        if (diff < 0L) return true
+        // If last active within 3 minutes (180s), they are considered online
+        if (diff > 180_000L) return false
         return true
     }
 

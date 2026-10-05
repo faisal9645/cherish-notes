@@ -413,7 +413,9 @@ class ProfileViewModel(
         securityPreferences.setShowPreviousChatsEnabled(true)
         securityPreferences.setTemporaryClearTimestamp(0L)
         try {
+            com.example.CherishApplication.instance.chatRepository.recoverAllMessages()
             com.example.CherishApplication.instance.chatRepository.loadAllGalleryMedia()
+            googleDriveBackupManager.triggerImmediateAutoBackup()
         } catch (_: Exception) {}
     }
 

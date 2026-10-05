@@ -41,13 +41,13 @@ fun AvatarView(
         // Glowing vibrant royal blue ring around avatar
         Box(
             modifier = Modifier
-                .fillMaxSize()
+                .size((size - 4.dp).coerceAtLeast(24.dp))
                 .border(
-                    width = 2.5.dp,
+                    width = 2.dp,
                     brush = appHorizontalGradient(),
                     shape = CircleShape
                 )
-                .padding(2.dp)
+                .padding(1.5.dp)
                 .clip(CircleShape)
                 .background(MaterialTheme.colorScheme.surfaceVariant),
             contentAlignment = Alignment.Center
@@ -93,13 +93,15 @@ fun AvatarView(
         }
 
         if (showOnlineBadge && isOnline) {
+            val badgeSize = (size.value * 0.28f).coerceIn(10.dp.value, 13.dp.value).dp
             Box(
                 modifier = Modifier
-                    .size((size.value * 0.28f).coerceAtLeast(10f).dp)
+                    .size(badgeSize)
                     .align(Alignment.BottomEnd)
-                    .offset(x = (-1).dp, y = (-1).dp)
+                    .offset(x = (-1.5).dp, y = (-1.5).dp)
+                    .clip(CircleShape)
+                    .background(OnlineGreen)
                     .border(2.dp, MaterialTheme.colorScheme.surface, CircleShape)
-                    .background(OnlineGreen, CircleShape)
             )
         }
     }

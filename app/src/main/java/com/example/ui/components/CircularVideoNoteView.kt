@@ -3,6 +3,7 @@ package com.example.ui.components
 import android.graphics.Bitmap
 import android.media.MediaPlayer
 import android.net.Uri
+import android.util.Log
 import android.widget.VideoView
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -12,11 +13,14 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.VolumeOff
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
+import androidx.compose.material.icons.filled.OpenInFull
+import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
@@ -47,10 +51,13 @@ import kotlinx.coroutines.isActive
 fun CircularVideoNoteView(
     videoUrl: String,
     durationSeconds: Int = 0,
+    autoPlay: Boolean = false,
+    onExpandClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    var isPlaying by remember { mutableStateOf(false) }
+    var isPlaying by remember { mutableStateOf(autoPlay) }
+    var shouldPlayWhenReady by remember { mutableStateOf(autoPlay) }
     var isMuted by remember { mutableStateOf(false) }
     var progress by remember { mutableFloatStateOf(0f) }
     var videoViewRef by remember { mutableStateOf<VideoView?>(null) }
@@ -60,9 +67,42 @@ fun CircularVideoNoteView(
     var videoWidth by remember { mutableIntStateOf(0) }
     var videoHeight by remember { mutableIntStateOf(0) }
 
+    val parsedUri = remember(videoUrl) {
+        when {
+            videoUrl.startsWith("content://") -> Uri.parse(videoUrl)
+            videoUrl.startsWith("file://") -> Uri.parse(videoUrl)
+            videoUrl.startsWith("/") -> Uri.fromFile(java.io.File(videoUrl))
+            else -> Uri.parse(videoUrl)
+        }
+    }
+
     LaunchedEffect(videoUrl) {
         if (videoUrl.isNotBlank()) {
             thumbnailBitmap = VideoThumbnailHelper.getThumbnail(context, videoUrl)
+        }
+    }
+
+    // Toggle play / pause helper
+    val togglePlayPause: () -> Unit = {
+        videoViewRef?.let { vv ->
+            try {
+                if (vv.isPlaying) {
+                    vv.pause()
+                    isPlaying = false
+                    shouldPlayWhenReady = false
+                } else {
+                    vv.start()
+                    isPlaying = true
+                    shouldPlayWhenReady = true
+                }
+            } catch (e: Exception) {
+                Log.w("CircularVideoNoteView", "Toggle play error", e)
+                isPlaying = !isPlaying
+                shouldPlayWhenReady = isPlaying
+            }
+        } ?: run {
+            isPlaying = !isPlaying
+            shouldPlayWhenReady = isPlaying
         }
     }
 
@@ -70,17 +110,19 @@ fun CircularVideoNoteView(
     LaunchedEffect(isPlaying) {
         while (isActive && isPlaying) {
             videoViewRef?.let { vv ->
-                val cur = vv.currentPosition
-                val dur = vv.duration
-                if (dur > 0) {
-                    progress = (cur.toFloat() / dur.toFloat()).coerceIn(0f, 1f)
-                }
+                try {
+                    val cur = vv.currentPosition
+                    val dur = vv.duration
+                    if (dur > 0) {
+                        progress = (cur.toFloat() / dur.toFloat()).coerceIn(0f, 1f)
+                    }
+                } catch (_: Exception) {}
             }
             delay(50)
         }
     }
 
-    DisposableEffect(Unit) {
+    DisposableEffect(videoUrl) {
         onDispose {
             try {
                 videoViewRef?.stopPlayback()
@@ -91,7 +133,7 @@ fun CircularVideoNoteView(
     val scaleFactor = remember(videoWidth, videoHeight) {
         if (videoWidth > 0 && videoHeight > 0) {
             val aspect = videoWidth.toFloat() / videoHeight.toFloat()
-            // To ensure CenterCrop inside a square without ANY stretch:
+            // CenterCrop inside circle without stretching
             val scaleX = if (aspect < 1f) (1f / aspect) else 1.0f
             val scaleY = if (aspect > 1f) aspect else 1.0f
             Pair(scaleX, scaleY)
@@ -102,28 +144,27 @@ fun CircularVideoNoteView(
 
     Box(
         modifier = modifier
-            .defaultMinSize(minWidth = 240.dp, minHeight = 240.dp)
+            .defaultMinSize(minWidth = 220.dp, minHeight = 220.dp)
             .clip(CircleShape)
             .background(Color.Black)
-            .border(3.dp, RoseGoldPrimary.copy(alpha = 0.5f), CircleShape)
-            .clickable {
-                videoViewRef?.let { vv ->
-                    if (vv.isPlaying) {
-                        vv.pause()
-                        isPlaying = false
-                    } else {
-                        vv.start()
-                        isPlaying = true
-                    }
+            .border(3.5.dp, RoseGoldPrimary.copy(alpha = 0.65f), CircleShape)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null
+            ) {
+                if (onExpandClick != null) {
+                    onExpandClick()
+                } else {
+                    togglePlayPause()
                 }
             },
         contentAlignment = Alignment.Center
     ) {
-        // Video View surface with center-crop to prevent any stretching
+        // Video View surface with center-crop
         AndroidView(
             factory = { ctx ->
                 VideoView(ctx).apply {
-                    setVideoURI(Uri.parse(videoUrl))
+                    setVideoURI(parsedUri)
                     setOnPreparedListener { mp ->
                         mediaPlayerRef = mp
                         mp.isLooping = true
@@ -138,6 +179,20 @@ fun CircularVideoNoteView(
                         } else {
                             mp.setVolume(1f, 1f)
                         }
+                        if (shouldPlayWhenReady || isPlaying) {
+                            try {
+                                mp.start()
+                                isPlaying = true
+                            } catch (e: Exception) {
+                                Log.e("CircularVideoNoteView", "Error auto-starting video", e)
+                            }
+                        }
+                    }
+                    setOnErrorListener { _, what, extra ->
+                        Log.w("CircularVideoNoteView", "VideoView error: what=$what, extra=$extra")
+                        isVideoReady = false
+                        isPlaying = false
+                        true
                     }
                     setOnCompletionListener {
                         progress = 0f
@@ -157,7 +212,7 @@ fun CircularVideoNoteView(
                 .clip(CircleShape)
         )
 
-        // Thumbnail Poster Frame: Displays immediately so circle video is NEVER blank
+        // Thumbnail Poster Frame: Displays immediately so circle video is NEVER blank before playing
         if (!isPlaying || !isVideoReady) {
             val bmp = thumbnailBitmap
             if (bmp != null) {
@@ -172,7 +227,7 @@ fun CircularVideoNoteView(
             } else {
                 AsyncImage(
                     model = ImageRequest.Builder(context)
-                        .data(videoUrl)
+                        .data(parsedUri)
                         .crossfade(true)
                         .build(),
                     contentDescription = "Video note thumbnail",
@@ -186,7 +241,7 @@ fun CircularVideoNoteView(
 
         // Circular progress ring around the edge
         val ringColor = RoseGoldPrimary
-        Canvas(modifier = Modifier.fillMaxSize().padding(1.5.dp)) {
+        Canvas(modifier = Modifier.fillMaxSize().padding(2.dp)) {
             val strokeWidth = 3.5.dp.toPx()
             // Background track
             drawCircle(
@@ -206,29 +261,53 @@ fun CircularVideoNoteView(
             }
         }
 
-        // Center Play / Pause Indicator overlay
-        AnimatedVisibility(
-            visible = !isPlaying,
-            enter = fadeIn(),
-            exit = fadeOut()
+        // Center Play / Pause Button
+        Surface(
+            shape = CircleShape,
+            color = Color.Black.copy(alpha = if (isPlaying) 0.35f else 0.65f),
+            modifier = Modifier
+                .size(56.dp)
+                .clickable {
+                    togglePlayPause()
+                }
         ) {
-            Surface(
-                shape = CircleShape,
-                color = Color.Black.copy(alpha = 0.55f),
-                modifier = Modifier.size(56.dp)
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                    contentDescription = if (isPlaying) "Pause video note" else "Play video note",
+                    tint = Color.White,
+                    modifier = Modifier.size(34.dp)
+                )
+            }
+        }
+
+        // Top-left "Make Big" / Expand icon button (visible in chat to make video big)
+        if (onExpandClick != null) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(12.dp)
             ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        imageVector = Icons.Default.PlayArrow,
-                        contentDescription = "Play circular video note",
-                        tint = Color.White,
-                        modifier = Modifier.size(36.dp)
-                    )
+                Surface(
+                    shape = CircleShape,
+                    color = Color.Black.copy(alpha = 0.6f),
+                    modifier = Modifier
+                        .size(32.dp)
+                        .clickable { onExpandClick() }
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = Icons.Default.OpenInFull,
+                            contentDescription = "Make circle video big",
+                            tint = Color.White,
+                            modifier = Modifier.size(17.dp)
+                        )
+                    }
                 }
             }
         }
 
-        // Top right mute/unmute toggle
+        // Top-right mute/unmute toggle
         Box(
             modifier = Modifier
                 .align(Alignment.TopEnd)
@@ -249,7 +328,7 @@ fun CircularVideoNoteView(
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
                         imageVector = if (isMuted) Icons.AutoMirrored.Filled.VolumeOff else Icons.AutoMirrored.Filled.VolumeUp,
-                        contentDescription = "Mute audio",
+                        contentDescription = if (isMuted) "Unmute audio" else "Mute audio",
                         tint = Color.White,
                         modifier = Modifier.size(17.dp)
                     )

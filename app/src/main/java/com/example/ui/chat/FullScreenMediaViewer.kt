@@ -278,16 +278,19 @@ fun FullScreenMediaViewer(
             ) { page ->
                 val pageUrl = mediaList.getOrNull(page) ?: currentUrl
                 val isVideo = remember(pageUrl) {
-                    pageUrl.endsWith(".mp4", ignoreCase = true) ||
+                    pageUrl.contains(".mp4", ignoreCase = true) ||
                     pageUrl.contains("videonote", ignoreCase = true) ||
-                    (pageUrl.startsWith("content://") && pageUrl.contains("video", ignoreCase = true))
+                    pageUrl.contains("/videos/", ignoreCase = true) ||
+                    pageUrl.contains("video", ignoreCase = true) ||
+                    (pageUrl.startsWith("content://") && pageUrl.contains("video", ignoreCase = true)) ||
+                    (pageUrl.startsWith("data:video"))
                 }
 
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
                         .then(
-                            if (page == pagerState.currentPage) {
+                            if (page == pagerState.currentPage && !isVideo) {
                                 Modifier.pointerInput(page) {
                                     var lastTapTime = 0L
                                     var lastTapOffset = Offset.Zero
@@ -442,7 +445,8 @@ fun FullScreenMediaViewer(
                     if (isVideo) {
                         com.example.ui.components.CircularVideoNoteView(
                             videoUrl = pageUrl,
-                            modifier = Modifier.size(260.dp)
+                            autoPlay = true,
+                            modifier = Modifier.size(340.dp)
                         )
                     } else {
                         val modelData = remember(pageUrl) {

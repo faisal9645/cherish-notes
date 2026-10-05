@@ -87,7 +87,7 @@ class ChatRepository(
                 .map { it?.coupleId ?: "couple_cherish_love" }
                 .distinctUntilChanged()
                 .collectLatest { convId ->
-                    previousMessageLimit = 0L
+                    previousMessageLimit = 40L
                     todayMessages = emptyList()
                     previousMessages = emptyList()
                     _isQueryExhaustedFlow.value = false
@@ -112,7 +112,13 @@ class ChatRepository(
         } else {
             previousMessageLimit += 40L
         }
-        currentActiveConversationId?.let { startPreviousMessagesListener(it) }
+        val convId = currentActiveConversationId ?: getConversationId()
+        if (firestore != null) {
+            startPreviousMessagesListener(convId)
+        } else {
+            _isLoadingMoreFlow.value = false
+            _isQueryExhaustedFlow.value = true
+        }
     }
 
     fun expandLimitForSearch() {
@@ -124,9 +130,25 @@ class ChatRepository(
 
     /**
      * Immediately loads all media messages (photos, videos, audio notes) and starred items
-     * from Firestore for the gallery view so all items appear without manual chat pagination.
+     * from local state and Firestore for the gallery view so all items appear without manual chat pagination.
      */
     fun loadAllGalleryMedia() {
+        // Collect from all currently loaded messages immediately
+        val localMedia = _messagesFlow.value.filter {
+            !it.isDeleted && (
+                it.type.equals(com.example.data.model.MessageType.IMAGE.name, ignoreCase = true) ||
+                it.type.equals(com.example.data.model.MessageType.VIDEO.name, ignoreCase = true) ||
+                it.type.equals(com.example.data.model.MessageType.AUDIO.name, ignoreCase = true) ||
+                it.isStarred ||
+                !it.mediaUrl.isNullOrBlank() ||
+                it.mediaUrls.isNotEmpty()
+            )
+        }
+        if (localMedia.isNotEmpty()) {
+            val combined = (_galleryMediaMessages.value + localMedia).distinctBy { it.id }.sortedByDescending { it.timestamp }
+            _galleryMediaMessages.value = combined
+        }
+
         val convId = currentActiveConversationId ?: getConversationId()
         val fs = firestore ?: return
         val convRef = fs.collection("conversations")
@@ -141,14 +163,35 @@ class ChatRepository(
             val mediaItems = mediaSnap.documents.mapNotNull { it.toObject(Message::class.java) }
             convRef.whereEqualTo("isStarred", true).get().addOnSuccessListener { starSnap ->
                 val starredItems = starSnap.documents.mapNotNull { it.toObject(Message::class.java) }
-                val allItems = (mediaItems + starredItems).distinctBy { it.id }.sortedByDescending { it.timestamp }
+                val allItems = (mediaItems + starredItems + _galleryMediaMessages.value).distinctBy { it.id }.sortedByDescending { it.timestamp }
                 _galleryMediaMessages.value = allItems
             }.addOnFailureListener {
-                _galleryMediaMessages.value = mediaItems.sortedByDescending { it.timestamp }
+                val allItems = (mediaItems + _galleryMediaMessages.value).distinctBy { it.id }.sortedByDescending { it.timestamp }
+                _galleryMediaMessages.value = allItems
             }
         }.addOnFailureListener { e ->
             Log.w("ChatRepository", "Failed loading gallery media", e)
         }
+    }
+
+    fun recoverAllMessages() {
+        // Un-delete all messages in memory
+        _messagesFlow.value = _messagesFlow.value.map {
+            if (it.isDeleted) it.copy(isDeleted = false) else it
+        }
+        todayMessages = todayMessages.map {
+            if (it.isDeleted) it.copy(isDeleted = false) else it
+        }
+        previousMessages = previousMessages.map {
+            if (it.isDeleted) it.copy(isDeleted = false) else it
+        }
+        previousMessageLimit = 500L
+        currentActiveConversationId?.let { startPreviousMessagesListener(it) }
+        loadAllGalleryMedia()
+        mergeAndEmitMessages()
+        try {
+            com.example.CherishApplication.instance.googleDriveBackupManager.triggerImmediateAutoBackup()
+        } catch (_: Exception) {}
     }
 
     fun resetPreviousChats() {
@@ -477,6 +520,9 @@ class ChatRepository(
         } catch (e: Exception) {
             // ignore
         }
+        try {
+            com.example.CherishApplication.instance.googleDriveBackupManager.triggerImmediateAutoBackup()
+        } catch (_: Exception) {}
     }
 
     suspend fun deleteMessage(messageId: String) {
@@ -494,6 +540,9 @@ class ChatRepository(
         } catch (e: Exception) {
             // ignore
         }
+        try {
+            com.example.CherishApplication.instance.googleDriveBackupManager.triggerImmediateAutoBackup()
+        } catch (_: Exception) {}
     }
 
     // --- DUAL-CONSENT CHAT DELETION (Both must accept before chat can be deleted) ---

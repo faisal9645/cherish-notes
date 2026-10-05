@@ -153,7 +153,14 @@ fun ChatScreen(
 
 
 
-    // Mic permission launcher
+    // Video picker launcher for sharing videos
+    val videoPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            viewModel.sendMediaFile(uri, MessageType.VIDEO)
+        }
+    }
     val micPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
     ) { isGranted ->
@@ -285,31 +292,19 @@ fun ChatScreen(
         if (partnerHasCheckAfter) CheckAfterHelper.calculateRemaining(partnerCheckAfterTarget).first else ""
     }
 
-    // Filter messages for search query and starred filter - all messages preserved
+    // Filter messages for search query and starred filter - all messages preserved and displayed based on pagination scroll
     val displayedMessages = remember(
         uiState.messages,
         uiState.searchQuery,
         uiState.filterStarredOnly,
-        uiState.showPreviousChats,
         uiState.temporaryClearTimestamp
     ) {
         var list = uiState.messages.filter { !it.isDeleted }
         if (uiState.filterStarredOnly) {
             list = list.filter { it.isStarred }
         }
-        if (!uiState.showPreviousChats) {
-            val clearTime = uiState.temporaryClearTimestamp
-            val now = java.util.Calendar.getInstance()
-            if (now.get(java.util.Calendar.HOUR_OF_DAY) < 4) {
-                now.add(java.util.Calendar.DAY_OF_YEAR, -1)
-            }
-            now.set(java.util.Calendar.HOUR_OF_DAY, 4)
-            now.set(java.util.Calendar.MINUTE, 0)
-            now.set(java.util.Calendar.SECOND, 0)
-            now.set(java.util.Calendar.MILLISECOND, 0)
-            val today4am = now.timeInMillis
-            val cutoff = maxOf(today4am, clearTime)
-            list = list.filter { it.timestamp > cutoff }
+        if (uiState.temporaryClearTimestamp > 0L) {
+            list = list.filter { it.timestamp > uiState.temporaryClearTimestamp }
         }
         if (uiState.searchQuery.isNotBlank()) {
             val q = uiState.searchQuery.trim()
@@ -477,13 +472,16 @@ fun ChatScreen(
                             ) {
                                 Box(
                                     modifier = Modifier
-                                        .clip(CircleShape)
-                                        .clickable { showFullProfilePicViewer = true }
+                                        .padding(end = 4.dp, bottom = 2.dp)
+                                        .clickable(
+                                            interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                                            indication = null
+                                        ) { showFullProfilePicViewer = true }
                                 ) {
                                     AvatarView(
                                         photoUrl = partner?.photoUrl,
                                         name = partnerName,
-                                        size = 40.dp,
+                                        size = 42.dp,
                                         isOnline = isPartnerOnline,
                                         showOnlineBadge = !partnerHasCheckAfter
                                     )
@@ -911,6 +909,48 @@ fun ChatScreen(
                 }
             }
 
+            // Partner Heart Touching Banner (when partner touches heart while user is in chat)
+            AnimatedVisibility(visible = uiState.isPartnerHeartTouching && !showHeartbeatTouch) {
+                Surface(
+                    color = HeartRed.copy(alpha = 0.15f),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, HeartRed.copy(alpha = 0.45f)),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 4.dp)
+                        .clickable { showHeartbeatTouch = true }
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 14.dp, vertical = 9.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Favorite,
+                            contentDescription = null,
+                            tint = HeartRed,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text(
+                            text = "❤️ $partnerName is trying to touch your heart, touch $partnerName",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = HeartRed,
+                            modifier = Modifier.weight(1f)
+                        )
+                        FilledTonalButton(
+                            onClick = { showHeartbeatTouch = true },
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Text("Touch", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+
             // Pinned Message Banner
             AnimatedVisibility(visible = uiState.pinnedMessage != null && !uiState.isStealthCurtainActive) {
                 uiState.pinnedMessage?.let { pinned ->
@@ -984,7 +1024,7 @@ fun ChatScreen(
                 val hasLoadedPreviousChats = remember(displayedMessages) { displayedMessages.any { !isToday(it.timestamp) } }
                 val hasTodayMessages = remember(displayedMessages) { displayedMessages.any { isToday(it.timestamp) } }
 
-                val canLoadMore = uiState.showPreviousChats && !uiState.isPaginationExhausted && !uiState.isLoadingMore && displayedMessages.isNotEmpty()
+                val canLoadMore = !uiState.isPaginationExhausted && !uiState.isLoadingMore && displayedMessages.isNotEmpty()
                 val shouldLoadMore by remember(canLoadMore) {
                     derivedStateOf {
                         if (!canLoadMore) return@derivedStateOf false
@@ -1080,20 +1120,30 @@ fun ChatScreen(
                                         }
                                     },
                                     onImageClick = { url ->
-                                        val msgUrls = message.getAllMediaUrls()
-                                        val mediaList = if (msgUrls.size > 1) {
-                                            msgUrls
+                                        val isVideo = message.getTypedType() == MessageType.VIDEO || message.isVideoNote || message.isCircularVideoNote()
+                                        val targetType = if (isVideo) MessageType.VIDEO else MessageType.IMAGE
+                                        val mediaList = if (isVideo) {
+                                            listOf(url)
                                         } else {
-                                            val allChatImages = displayedMessages
-                                                .filter { it.getTypedType() == MessageType.IMAGE }
-                                                .flatMap { it.getAllMediaUrls() }
-                                                .distinct()
-                                            if (allChatImages.isNotEmpty()) allChatImages else listOf(url)
+                                            val msgUrls = message.getAllMediaUrls()
+                                            if (msgUrls.size > 1) {
+                                                msgUrls
+                                            } else {
+                                                val allChatImages = displayedMessages
+                                                    .filter { it.getTypedType() == MessageType.IMAGE }
+                                                    .flatMap { it.getAllMediaUrls() }
+                                                    .distinct()
+                                                if (allChatImages.isNotEmpty()) allChatImages else listOf(url)
+                                            }
                                         }
-                                        viewModel.openFullScreenMedia(url, MessageType.IMAGE, mediaList)
+                                        viewModel.openFullScreenMedia(url, targetType, mediaList)
                                     },
                                     onImageClickWithList = { url, allUrls ->
-                                        val mediaList = if (allUrls.size > 1) {
+                                        val isVideo = message.getTypedType() == MessageType.VIDEO || message.isVideoNote || message.isCircularVideoNote()
+                                        val targetType = if (isVideo) MessageType.VIDEO else MessageType.IMAGE
+                                        val mediaList = if (isVideo) {
+                                            listOf(url)
+                                        } else if (allUrls.size > 1) {
                                             allUrls
                                         } else {
                                             val allChatImages = displayedMessages
@@ -1102,7 +1152,7 @@ fun ChatScreen(
                                                 .distinct()
                                             if (allChatImages.isNotEmpty()) allChatImages else listOf(url)
                                         }
-                                        viewModel.openFullScreenMedia(url, MessageType.IMAGE, mediaList)
+                                        viewModel.openFullScreenMedia(url, targetType, mediaList)
                                     },
                                     onSwipeToReply = {
                                         viewModel.setReplyingTo(message)
@@ -1181,59 +1231,8 @@ fun ChatScreen(
                         }
                     }
 
-                    // 2. Load Earlier Messages Pill (shown when previous chats folded)
-                    if (!uiState.showPreviousChats && uiState.hasPreviousChatsAvailable && displayedMessages.isNotEmpty()) {
-                        item(key = "reveal_previous_chats_pill", contentType = "action_pill") {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 12.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Surface(
-                                    shape = RoundedCornerShape(22.dp),
-                                    color = if (isDark) Color(0xFF1E2430).copy(alpha = 0.95f) else Color.White.copy(alpha = 0.95f),
-                                    border = BorderStroke(
-                                        1.dp,
-                                        if (isDark) Color.White.copy(alpha = 0.14f) else Color.Black.copy(alpha = 0.10f)
-                                    ),
-                                    shadowElevation = 2.dp,
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(22.dp))
-                                        .clickable {
-                                            viewModel.soundEffectsPlayer.playSound(com.example.audio.ChatSoundEffectsPlayer.SoundType.REACTION)
-                                            viewModel.setShowPreviousChats(true)
-                                            viewModel.loadMoreMessages()
-                                        }
-                                        .testTag("load_previous_chats_button")
-                                ) {
-                                    Row(
-                                        modifier = Modifier.padding(horizontal = 18.dp, vertical = 9.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.History,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.primary,
-                                            modifier = Modifier.size(16.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Text(
-                                            text = "Load Earlier Love Notes & Chats",
-                                            fontSize = 12.sp,
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = if (isDark) Color.White else Color(0xFF1E293B)
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    // 3. Strictly 2-Person Beginning of Chat Banner
-                    // Shown ONLY when the user has genuinely reached the beginning of all messages
-                    val showBeginning = (uiState.isPaginationExhausted || displayedMessages.isEmpty()) && 
-                        (uiState.showPreviousChats || !uiState.hasPreviousChatsAvailable)
+                    // Strictly 2-Person Beginning of Chat Banner (shown when pagination is exhausted)
+                    val showBeginning = (uiState.isPaginationExhausted || displayedMessages.isEmpty())
                     if (showBeginning) {
                         item(key = "info_card", contentType = "info_card") {
                             StrictlyPrivateChatBeginningBanner(
@@ -1430,6 +1429,7 @@ fun ChatScreen(
             isPartnerTouching = uiState.isPartnerHeartTouching,
             isPartnerOnline = uiState.isPartnerOnline,
             onTouchChanged = { viewModel.setHeartbeatTouch(it) },
+            onSimulatePartnerTouch = { viewModel.simulatePartnerHeartbeatTouch(it) },
             onDismiss = { showHeartbeatTouch = false }
         )
     }
@@ -1479,18 +1479,21 @@ fun ChatScreen(
                             showAttachmentSheet = false
                             com.example.security.SecurityPreferences.getInstance(context).ignoreNextPause = true
                             photoPickerLauncher.launch(
-                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)
+                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
                             )
                         }
                     )
 
                     AttachmentOptionItem(
-                        icon = Icons.Default.CameraAlt,
-                        label = "Camera",
+                        icon = Icons.Default.Videocam,
+                        label = "Video",
                         color = RoseGoldPrimary,
                         onClick = {
                             showAttachmentSheet = false
-                            triggerCameraSnap()
+                            com.example.security.SecurityPreferences.getInstance(context).ignoreNextPause = true
+                            videoPickerLauncher.launch(
+                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly)
+                            )
                         }
                     )
                 }

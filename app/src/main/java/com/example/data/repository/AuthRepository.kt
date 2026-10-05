@@ -617,14 +617,12 @@ class AuthRepository(private val context: Context) {
                 com.google.firebase.firestore.SetOptions.merge()
             )
         } catch (_: Exception) {}
+    }
 
-        // In offline/demo mode, if partner is online, also sync to partner so live touch connection works immediately
-        if (firestore == null && active) {
-            val partner = _partnerUserState.value
-            if (partner != null && (partner.isOnline || partner.isEffectivelyOnline())) {
-                _partnerUserState.value = partner.copy(heartbeatTouchingTimestamp = timestamp)
-            }
-        }
+    fun simulatePartnerHeartbeatTouch(active: Boolean) {
+        val timestamp = if (active) System.currentTimeMillis() else 0L
+        val partner = _partnerUserState.value ?: return
+        _partnerUserState.value = partner.copy(heartbeatTouchingTimestamp = timestamp)
     }
 
     suspend fun pairWithPartner(partnerUsername: String, coupleSecretKey: String): Result<User> {
@@ -680,11 +678,20 @@ class AuthRepository(private val context: Context) {
         heartbeatJob?.cancel()
         heartbeatJob = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
             while (isAppInForeground) {
-                kotlinx.coroutines.delay(20_000L)
                 val isDisguised = securityPrefs.isDisguiseActive.value
                 val shouldBeOnline = isAppInForeground && !isDisguised
                 val uid = getCurrentUserId()
                 if (shouldBeOnline) {
+                    _currentUserState.value = _currentUserState.value?.copy(
+                        isOnline = true,
+                        lastSeen = System.currentTimeMillis()
+                    )
+                    if (firestore == null) {
+                        val partner = _partnerUserState.value
+                        if (partner != null && partner.isOnline) {
+                            _partnerUserState.value = partner.copy(lastSeen = System.currentTimeMillis())
+                        }
+                    }
                     if (uid.isNotBlank() && uid != "local_user_a") {
                         val updates = mapOf<String, Any>(
                             "isOnline" to true,
@@ -701,17 +708,19 @@ class AuthRepository(private val context: Context) {
                 } else {
                     setOnline(false)
                 }
+                kotlinx.coroutines.delay(20_000L)
             }
         }
     }
 
     fun setOnline(online: Boolean) {
         val uid = getCurrentUserId()
-        if (uid.isBlank() || uid == "local_user_a") return
+        if (uid.isBlank()) return
         _currentUserState.value = _currentUserState.value?.copy(
             isOnline = online,
             lastSeen = System.currentTimeMillis()
         )
+        if (uid == "local_user_a") return
         try {
             val updates = mutableMapOf<String, Any>(
                 "isOnline" to online,

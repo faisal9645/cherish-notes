@@ -80,6 +80,9 @@ class ChatViewModel(
     val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
 
     init {
+        authRepository.connectPartnerListenerOnce()
+        authRepository.updatePresence()
+
         // Collect messages from the single global listener in ChatRepository.
         // No duplicate listener creation — ChatRepository.init manages the Firestore listener
         // and switches it when coupleId changes via its own collectLatest.
@@ -197,7 +200,7 @@ class ChatViewModel(
                 kotlinx.coroutines.delay(2000L)
                 _uiState.update { state ->
                     val partner = state.partnerUser
-                    val partnerTouching = partner?.heartbeatTouchingTimestamp?.let { System.currentTimeMillis() - it < 8000L } ?: false
+                    val partnerTouching = partner?.heartbeatTouchingTimestamp?.let { it > 0L && (System.currentTimeMillis() - it < 8000L) } ?: false
                     val newOnline = partner?.isEffectivelyOnline() ?: false
                     val newTyping = partner?.isEffectivelyTyping() ?: false
                     val newRecording = partner?.isEffectivelyRecording() ?: false
@@ -432,6 +435,10 @@ class ChatViewModel(
         authRepository.setHeartbeatTouch(active)
     }
 
+    fun simulatePartnerHeartbeatTouch(active: Boolean) {
+        authRepository.simulatePartnerHeartbeatTouch(active)
+    }
+
     fun updateMood(mood: String) {
         viewModelScope.launch {
             authRepository.updateMood(mood)
@@ -541,6 +548,13 @@ class ChatViewModel(
     }
 
     // --- SECRET HISTORY PROTECTION & RECOVERY ---
+    fun recoverAllMessagesAndGallery() {
+        securityPreferences.setShowPreviousChatsEnabled(true)
+        securityPreferences.setTemporaryClearTimestamp(0L)
+        chatRepository.recoverAllMessages()
+        chatRepository.loadAllGalleryMedia()
+    }
+
     fun revealSecretHistory() {
         securityPreferences.revealSecretHistory()
         viewModelScope.launch {
