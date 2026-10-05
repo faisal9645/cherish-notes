@@ -42,6 +42,7 @@ import com.example.data.model.Message
 import com.example.data.model.MessageType
 import com.example.ui.chat.ChatViewModel
 import com.example.ui.chat.FullScreenMediaViewer
+import com.example.ui.components.WaveformView
 import com.example.ui.theme.AppGradientStart
 import com.example.ui.theme.RoseGoldPrimary
 import com.example.ui.theme.appHorizontalGradient
@@ -92,6 +93,7 @@ fun SharedGalleryScreen(
     var selectedMediaUrl by remember { mutableStateOf<String?>(null) }
     var selectedMessageIdForViewer by remember { mutableStateOf<String?>(null) }
     var selectedDateMillis by remember { mutableStateOf<Long?>(null) }
+    var messageToDelete by remember { mutableStateOf<Message?>(null) }
 
     val voicePlayerHelper = chatViewModel.voicePlayerHelper
     val currentTrackId by voicePlayerHelper.currentTrackId.collectAsState()
@@ -467,16 +469,18 @@ fun SharedGalleryScreen(
                                             modifier = Modifier
                                                 .align(Alignment.TopEnd)
                                                 .padding(4.dp)
+                                                .size(32.dp)
                                                 .clip(CircleShape)
-                                                .background(Color.Black.copy(alpha = 0.55f))
-                                                .clickable { chatViewModel.deleteMessage(msg.id) }
-                                                .padding(6.dp)
+                                                .background(Color.Black.copy(alpha = 0.65f))
+                                                .clickable { messageToDelete = msg }
+                                                .testTag("gallery_item_delete_${msg.id}"),
+                                            contentAlignment = Alignment.Center
                                         ) {
                                             Icon(
                                                 imageVector = Icons.Default.Delete,
                                                 contentDescription = "Delete",
-                                                tint = Color.White,
-                                                modifier = Modifier.size(14.dp)
+                                                tint = Color(0xFFFF5252),
+                                                modifier = Modifier.size(16.dp)
                                             )
                                         }
                                     }
@@ -569,7 +573,7 @@ fun SharedGalleryScreen(
                                                 
                                                 // Delete button
                                                 IconButton(
-                                                    onClick = { chatViewModel.deleteMessage(msg.id) },
+                                                    onClick = { messageToDelete = msg },
                                                     modifier = Modifier.size(32.dp)
                                                 ) {
                                                     Icon(Icons.Default.DeleteOutline, contentDescription = "Delete", tint = Color.Red, modifier = Modifier.size(18.dp))
@@ -609,16 +613,22 @@ fun SharedGalleryScreen(
 
                                                 Spacer(modifier = Modifier.width(10.dp))
 
-                                                // Progress & scrubber bar
+                                                // Progress & scrubber waveform
                                                 Column(modifier = Modifier.weight(1f)) {
-                                                    LinearProgressIndicator(
-                                                        progress = { if (isThisActive) voiceProgress else 0f },
-                                                        modifier = Modifier
-                                                            .fillMaxWidth()
-                                                            .height(5.dp)
-                                                            .clip(RoundedCornerShape(3.dp)),
-                                                        color = RoseGoldPrimary,
-                                                        trackColor = Color(0xFFE2E2E8)
+                                                    WaveformView(
+                                                        amplitudes = msg.waveform,
+                                                        progress = if (isThisActive) voiceProgress else 0f,
+                                                        isPlaying = isThisPlaying,
+                                                        isRecording = false,
+                                                        activeColor = RoseGoldPrimary,
+                                                        inactiveColor = RoseGoldPrimary.copy(alpha = 0.35f),
+                                                        onSeek = { progress ->
+                                                            if (isThisActive) {
+                                                                voicePlayerHelper.seekTo(progress)
+                                                            }
+                                                        },
+                                                        height = 24.dp,
+                                                        modifier = Modifier.fillMaxWidth()
                                                     )
                                                     Spacer(modifier = Modifier.height(4.dp))
                                                     Row(
@@ -823,7 +833,10 @@ fun SharedGalleryScreen(
                                                 
                                                 // Delete button
                                                 IconButton(
-                                                    onClick = { chatViewModel.deleteMessage(item.messageId) },
+                                                    onClick = {
+                                                        messageToDelete = filteredMessages.find { it.id == item.messageId }
+                                                            ?: Message(id = item.messageId, senderId = currentUserId, text = item.url)
+                                                    },
                                                     modifier = Modifier.size(30.dp)
                                                 ) {
                                                     Icon(Icons.Default.DeleteOutline, contentDescription = "Delete", tint = Color.Red, modifier = Modifier.size(18.dp))
@@ -955,6 +968,36 @@ fun SharedGalleryScreen(
         }
     }
 
+    // Delete Confirmation Dialog for Gallery
+    messageToDelete?.let { msg ->
+        AlertDialog(
+            onDismissRequest = { messageToDelete = null },
+            title = { Text("Delete gallery item?") },
+            text = { Text("This item will be permanently removed from your shared gallery and chat.") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val id = msg.id
+                        chatViewModel.deleteMessage(id)
+                        if (selectedMessageIdForViewer == id || selectedMediaUrl == msg.mediaUrl) {
+                            selectedMediaUrl = null
+                            selectedMessageIdForViewer = null
+                        }
+                        messageToDelete = null
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text("Delete")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { messageToDelete = null }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
     selectedMediaUrl?.let { url ->
         FullScreenMediaViewer(
             mediaUrl = url,
@@ -963,6 +1006,13 @@ fun SharedGalleryScreen(
                 val targetMsg = mediaMessages.find { it.mediaUrl == clickedUrl }
                 if (targetMsg != null) {
                     onNavigateToMessage(targetMsg.id)
+                }
+            },
+            onDeleteMedia = { clickedUrl ->
+                val targetMsg = mediaMessages.find { it.mediaUrl == clickedUrl }
+                    ?: allGalleryItems.find { it.mediaUrl == clickedUrl }
+                if (targetMsg != null) {
+                    chatViewModel.deleteMessage(targetMsg.id)
                 }
             },
             onDismiss = {

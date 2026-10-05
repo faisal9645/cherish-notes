@@ -73,6 +73,7 @@ fun MessageComposer(
     onCancelVoiceRecord: () -> Unit,
     onTakePhoto: () -> Unit,
     onPickAttachment: () -> Unit,
+    onRecordVideoNote: () -> Unit = {},
     myPhotoUrl: String? = null,
     myName: String = "Me",
     placeholder: String = "Message your love...",
@@ -376,6 +377,7 @@ fun MessageComposer(
                         WaveformView(
                             amplitudes = recordingAmplitudes,
                             progress = 1f,
+                            isRecording = true,
                             activeColor = MaterialTheme.colorScheme.primary,
                             height = 28.dp,
                             modifier = Modifier.weight(1f)
@@ -431,45 +433,76 @@ fun MessageComposer(
                         WaveformView(
                             amplitudes = recordingAmplitudes,
                             progress = 1f,
-                            activeColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
+                            isRecording = true,
+                            activeColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.85f),
                             height = 26.dp,
                             modifier = Modifier.weight(1f)
                         )
 
                         Spacer(modifier = Modifier.width(6.dp))
 
-                        // Slide-to-cancel hint or "release to cancel" flash
-                        if (dragOffsetX < -80f) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.offset { IntOffset((dragOffsetX * 0.4f).roundToInt(), 0) }
+                        // Slide-to-cancel with Rubber-band Magnetism & Opening Trash Can Lid
+                        val isNearTrash = dragOffsetX < -55f
+                        val isAtTrash = dragOffsetX < -82f
+                        val trashLidAngle = if (isNearTrash) {
+                            ((-dragOffsetX - 55f) / 30f).coerceIn(0f, 1f) * -35f
+                        } else 0f
+                        val trashMagneticPull = if (isNearTrash) {
+                            (dragOffsetX * 0.28f)
+                        } else 0f
+
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .offset { IntOffset(trashMagneticPull.roundToInt(), 0) }
+                        ) {
+                            // Animated Trash Can with magnetic tilt & pop-open lid
+                            Box(
+                                modifier = Modifier
+                                    .padding(end = 4.dp)
+                                    .graphicsLayer {
+                                        if (isAtTrash) {
+                                            rotationZ = sin(pulseAlpha * PI.toFloat() * 2f) * 6f
+                                        }
+                                    },
+                                contentAlignment = Alignment.Center
                             ) {
                                 Icon(
-                                    Icons.Default.Delete,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.error,
-                                    modifier = Modifier.size(15.dp)
+                                    imageVector = if (isAtTrash) Icons.Default.DeleteForever else Icons.Default.Delete,
+                                    contentDescription = "Cancel recording",
+                                    tint = if (isAtTrash) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier
+                                        .size(17.dp)
+                                        .graphicsLayer {
+                                            rotationZ = trashLidAngle
+                                        }
                                 )
                             }
-                        } else {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier
-                                    .offset { IntOffset((dragOffsetX * 0.35f).roundToInt(), 0) }
-                            ) {
-                                // Animated chevrons
+
+                            if (!isAtTrash) {
+                                // Animated rubber-band chevrons
                                 Text(
                                     text = "‹‹",
                                     fontSize = 13.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f + pulseAlpha * 0.3f),
+                                    color = if (isNearTrash) MaterialTheme.colorScheme.error.copy(alpha = 0.85f)
+                                    else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f + pulseAlpha * 0.3f),
                                     modifier = Modifier.offset { IntOffset(shimmerOffset.roundToInt(), 0) }
                                 )
                                 Spacer(modifier = Modifier.width(3.dp))
                                 Text(
-                                    text = "Cancel",
-                                    fontSize = 12.sp,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f)
+                                    text = if (isNearTrash) "Release to cancel" else "Slide to cancel",
+                                    fontSize = 11.5.sp,
+                                    fontWeight = if (isNearTrash) FontWeight.Bold else FontWeight.Normal,
+                                    color = if (isNearTrash) MaterialTheme.colorScheme.error
+                                    else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f)
+                                )
+                            } else {
+                                Text(
+                                    text = "Release to delete 🗑️",
+                                    fontSize = 11.5.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.error
                                 )
                             }
                         }
@@ -581,6 +614,21 @@ fun MessageComposer(
                                 contentDescription = "Camera",
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.size(22.dp)
+                            )
+                        }
+
+                        // Right inside pill: 📹 Circular Video Note button
+                        IconButton(
+                            onClick = onRecordVideoNote,
+                            modifier = Modifier
+                                .size(36.dp)
+                                .testTag("composer_video_note_button")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Videocam,
+                                contentDescription = "Circular Video Note",
+                                tint = if (isPrivateMode) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(23.dp)
                             )
                         }
                     }
@@ -712,101 +760,146 @@ fun MessageComposer(
                                 }
                             } else Color.White
 
-                            Box(
-                                modifier = Modifier
-                                    .size(52.dp)
-                                    .then(
-                                        if (isRecordingVoice && !isPrivateMode) {
-                                            // Pulses but keeps the original pink gradient
-                                            Modifier
-                                                .graphicsLayer {
-                                                    scaleX = 1f + pulseAlpha * 0.1f
-                                                    scaleY = 1f + pulseAlpha * 0.1f
-                                                }
-                                                .appGradientShadow(CircleShape)
-                                                .clip(CircleShape)
-                                                .background(appHorizontalGradient())
-                                        } else if (isPrivateMode) {
-                                            Modifier.clip(CircleShape).background(micBg ?: Color.Gray)
-                                        } else {
-                                            Modifier
-                                                .appGradientShadow(CircleShape)
-                                                .clip(CircleShape)
-                                                .background(appHorizontalGradient())
-                                        }
+                            Box(contentAlignment = Alignment.Center) {
+                                // Live Concentric Breathing Rings scaled to real voice amplitude
+                                if (isRecordingVoice && !isLockedRecording) {
+                                    val liveAmp = (recordingAmplitudes.lastOrNull() ?: 0.15f).coerceIn(0.1f, 1f)
+                                    val outerRingDp = (52 + liveAmp * 42f + pulseAlpha * 14f).dp
+                                    val innerRingDp = (52 + liveAmp * 22f + pulseAlpha * 8f).dp
+                                    Box(
+                                        modifier = Modifier
+                                            .size(outerRingDp)
+                                            .clip(CircleShape)
+                                            .background(
+                                                if (isPrivateMode) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.08f)
+                                                else MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                                            )
                                     )
-                                    .pointerInput(Unit) {
-                                        awaitEachGesture {
-                                            val down = awaitFirstDown(requireUnconsumed = false)
-                                            down.consume()
-                                            dragOffsetX = 0f
-                                            dragOffsetY = 0f
+                                    Box(
+                                        modifier = Modifier
+                                            .size(innerRingDp)
+                                            .clip(CircleShape)
+                                            .background(
+                                                if (isPrivateMode) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.18f)
+                                                else MaterialTheme.colorScheme.primary.copy(alpha = 0.24f)
+                                            )
+                                    )
+                                }
 
-                                            // Issue 14: Wait up to 220ms before starting recording.
-                                            // If the finger lifts in that time it's a tap, not a hold.
-                                            // This prevents false starts and the cancel/restart flicker.
-                                            var liftedEarly = false
-                                            withTimeoutOrNull(220L) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(52.dp)
+                                        .then(
+                                            if (isRecordingVoice && !isPrivateMode) {
+                                                // Pulses but keeps the original pink gradient
+                                                Modifier
+                                                    .graphicsLayer {
+                                                        scaleX = 1f + pulseAlpha * 0.1f
+                                                        scaleY = 1f + pulseAlpha * 0.1f
+                                                    }
+                                                    .appGradientShadow(CircleShape)
+                                                    .clip(CircleShape)
+                                                    .background(appHorizontalGradient())
+                                            } else if (isPrivateMode) {
+                                                Modifier.clip(CircleShape).background(micBg ?: Color.Gray)
+                                            } else {
+                                                Modifier
+                                                    .appGradientShadow(CircleShape)
+                                                    .clip(CircleShape)
+                                                    .background(appHorizontalGradient())
+                                            }
+                                        )
+                                        .pointerInput(Unit) {
+                                            awaitEachGesture {
+                                                val down = awaitFirstDown(requireUnconsumed = false)
+                                                down.consume()
+                                                dragOffsetX = 0f
+                                                dragOffsetY = 0f
+
+                                                // Issue 14: Wait up to 220ms before starting recording.
+                                                // If the finger lifts in that time it's a tap, not a hold.
+                                                // This prevents false starts and the cancel/restart flicker.
+                                                var liftedEarly = false
+                                                withTimeoutOrNull(220L) {
+                                                    while (true) {
+                                                        val ev = awaitPointerEvent()
+                                                        val ch = ev.changes.firstOrNull { it.id == down.id }
+                                                        if (ch == null || !ch.pressed) {
+                                                            liftedEarly = true
+                                                            break
+                                                        }
+                                                    }
+                                                }
+
+                                                if (liftedEarly) {
+                                                    // Quick tap — show hint, do not record
+                                                    Toast.makeText(context, "Hold to record, release to send", Toast.LENGTH_SHORT).show()
+                                                    return@awaitEachGesture
+                                                }
+
+                                                // Confirmed hold — start recording
+                                                val startTime = System.currentTimeMillis()
+                                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                onStartVoiceRecord()
+
+                                                var hasLocked = false
+                                                var crossedTrashThreshold = false
+
                                                 while (true) {
-                                                    val ev = awaitPointerEvent()
-                                                    val ch = ev.changes.firstOrNull { it.id == down.id }
-                                                    if (ch == null || !ch.pressed) {
-                                                        liftedEarly = true
+                                                    val event = awaitPointerEvent()
+                                                    val change = event.changes.firstOrNull { it.id == down.id }
+                                                    if (change == null || !change.pressed) break
+                                                    change.consume()
+
+                                                    val delta = change.position - down.position
+                                                    val rawDx = delta.x.coerceAtMost(0f)
+                                                    // Progressive rubber-band non-linear damping
+                                                    val dampedDx = if (rawDx >= -70f) {
+                                                        rawDx
+                                                    } else {
+                                                        val excess = -rawDx - 70f
+                                                        -70f - (160f * (excess / (excess + 80f)))
+                                                    }
+                                                    dragOffsetX = dampedDx
+                                                    dragOffsetY = delta.y.coerceIn(-180f, 0f)
+
+                                                    if (dragOffsetX < -82f && !crossedTrashThreshold) {
+                                                        crossedTrashThreshold = true
+                                                        try { haptic.performHapticFeedback(HapticFeedbackType.LongPress) } catch (_: Exception) {}
+                                                    } else if (dragOffsetX >= -82f) {
+                                                        crossedTrashThreshold = false
+                                                    }
+
+                                                    if (dragOffsetY < -55f && !hasLocked) {
+                                                        hasLocked = true
+                                                        isLockedRecording = true
+                                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                                         break
                                                     }
                                                 }
-                                            }
 
-                                            if (liftedEarly) {
-                                                // Quick tap — show hint, do not record
-                                                Toast.makeText(context, "Hold to record, release to send", Toast.LENGTH_SHORT).show()
-                                                return@awaitEachGesture
-                                            }
-
-                                            // Confirmed hold — start recording
-                                            val startTime = System.currentTimeMillis()
-                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                            onStartVoiceRecord()
-
-                                            var hasLocked = false
-
-                                            while (true) {
-                                                val event = awaitPointerEvent()
-                                                val change = event.changes.firstOrNull { it.id == down.id }
-                                                if (change == null || !change.pressed) break
-                                                change.consume()
-
-                                                val delta = change.position - down.position
-                                                dragOffsetX = delta.x.coerceIn(-240f, 0f)
-                                                dragOffsetY = delta.y.coerceIn(-180f, 0f)
-
-                                                if (dragOffsetY < -55f && !hasLocked) {
-                                                    hasLocked = true
-                                                    isLockedRecording = true
-                                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                                    break
-                                                }
-                                            }
-
-                                            if (!hasLocked && !isLockedRecording) {
-                                                if (dragOffsetX < -90f) {
-                                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                                    onCancelVoiceRecord()
-                                                } else {
-                                                    onStopAndSendVoiceRecord()
+                                                if (!hasLocked && !isLockedRecording) {
+                                                    if (dragOffsetX < -82f) {
+                                                        try {
+                                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                        } catch (_: Exception) {}
+                                                        onCancelVoiceRecord()
+                                                    } else {
+                                                        onStopAndSendVoiceRecord()
+                                                    }
                                                 }
                                             }
                                         }
-                                    }
-                                    .testTag("composer_voice_button"),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Mic,
-                                    contentDescription = "Hold to record voice note",
-                                    tint = micTint,
-                                    modifier = Modifier.size(24.dp)
-                                )
+                                        .testTag("composer_voice_button"),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Mic,
+                                        contentDescription = "Hold to record voice note",
+                                        tint = micTint,
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                }
                             }
                         }
                     }

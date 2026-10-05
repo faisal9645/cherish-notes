@@ -65,9 +65,16 @@ class VoiceRecorderHelper(private val context: Context) {
                     } catch (e: Exception) {
                         0
                     }
-                    val normalized = (maxAmp / 32767f).coerceIn(0.15f, 1f)
+                    val rawNormalized = (maxAmp / 32767f)
+                    val normalized = if (rawNormalized > 0.02f) {
+                        (rawNormalized * 2.4f).coerceIn(0.18f, 1.0f)
+                    } else {
+                        // Natural subtle speech rhythm flutter for visual responsiveness
+                        val flutter = (kotlin.math.sin(duration * 4.0 + ampList.size * 0.45).toFloat() * 0.16f + 0.32f).coerceIn(0.18f, 0.65f)
+                        flutter
+                    }
                     ampList.add(normalized)
-                    if (ampList.size > 40) ampList.removeAt(0)
+                    if (ampList.size > 45) ampList.removeAt(0)
                     _amplitudes.value = ampList.toList()
 
                     delay(100)

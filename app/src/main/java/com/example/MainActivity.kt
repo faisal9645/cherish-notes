@@ -21,16 +21,29 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.DisposableEffect
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
+import androidx.lifecycle.lifecycleScope
 import com.example.ui.navigation.CherishNavGraph
 import com.example.ui.theme.CherishTheme
+import com.example.util.BatteryStatusHelper
+import kotlinx.coroutines.launch
 
 class MainActivity : FragmentActivity() {
 
     private val app: CherishApplication
         get() = application as CherishApplication
 
+    private val batteryHelper by lazy { BatteryStatusHelper(this) }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        batteryHelper.start()
+        lifecycleScope.launch {
+            batteryHelper.batteryInfo.collect { info ->
+                if (app.authRepository.isUserLoggedIn()) {
+                    app.authRepository.updateBatteryStatus(info.level, info.isCharging)
+                }
+            }
+        }
         androidx.core.view.WindowCompat.setDecorFitsSystemWindows(window, false)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             window.isStatusBarContrastEnforced = false
@@ -196,6 +209,7 @@ class MainActivity : FragmentActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
+        batteryHelper.stop()
         app.authRepository.onAppForegroundStateChanged(false)
     }
 

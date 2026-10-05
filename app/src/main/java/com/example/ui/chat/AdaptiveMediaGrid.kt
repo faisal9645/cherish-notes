@@ -25,29 +25,29 @@ import coil.request.ImageRequest
 import com.example.ui.theme.DayBlueSecondary
 
 /**
- * Telegram-style Adaptive Media Grid for Chat & Memories.
+ * Adaptive Media Grid for Chat & Memories.
  * Dynamically adjusts column arrangements and dimensions based on
  * number of photos and user-selected thumbnail size (small, medium, large).
  */
 @Composable
 fun AdaptiveMediaGrid(
     urls: List<String>,
-    gallerySize: String = "medium",
+    gallerySize: String = "large",
     onImageClick: (index: Int, url: String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     if (urls.isEmpty()) return
 
     val gridHeight: Dp = when (gallerySize.lowercase()) {
-        "small" -> 160.dp
-        "large" -> 300.dp
-        else -> 225.dp
+        "small" -> 180.dp
+        "medium" -> 250.dp
+        else -> 320.dp
     }
 
     val singleImageHeight: Dp = when (gallerySize.lowercase()) {
-        "small" -> 180.dp
-        "large" -> 330.dp
-        else -> 245.dp
+        "small" -> 200.dp
+        "medium" -> 280.dp
+        else -> 360.dp
     }
 
     val cornerRadius = 14.dp

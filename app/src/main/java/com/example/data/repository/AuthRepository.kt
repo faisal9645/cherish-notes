@@ -568,6 +568,53 @@ class AuthRepository(private val context: Context) {
         }
     }
 
+    suspend fun updateMood(mood: String): Result<Unit> {
+        val uid = getCurrentUserId()
+        val current = _currentUserState.value ?: User(id = uid)
+        val updated = current.copy(mood = mood)
+        _currentUserState.value = updated
+        saveLocalUserSession(updated)
+        return try {
+            firestore?.collection("users")?.document(uid)?.set(
+                mapOf("mood" to mood),
+                com.google.firebase.firestore.SetOptions.merge()
+            )
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Log.w("AuthRepository", "Failed to update mood in Firestore", e)
+            Result.success(Unit)
+        }
+    }
+
+    suspend fun updateBatteryStatus(level: Int, isCharging: Boolean): Result<Unit> {
+        val uid = getCurrentUserId()
+        val current = _currentUserState.value ?: User(id = uid)
+        val updated = current.copy(batteryLevel = level, isCharging = isCharging)
+        _currentUserState.value = updated
+        return try {
+            firestore?.collection("users")?.document(uid)?.set(
+                mapOf("batteryLevel" to level, "isCharging" to isCharging),
+                com.google.firebase.firestore.SetOptions.merge()
+            )
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.success(Unit)
+        }
+    }
+
+    fun setHeartbeatTouch(active: Boolean) {
+        val uid = getCurrentUserId()
+        val timestamp = if (active) System.currentTimeMillis() else 0L
+        val current = _currentUserState.value ?: User(id = uid)
+        _currentUserState.value = current.copy(heartbeatTouchingTimestamp = timestamp)
+        try {
+            firestore?.collection("users")?.document(uid)?.set(
+                mapOf("heartbeatTouchingTimestamp" to timestamp),
+                com.google.firebase.firestore.SetOptions.merge()
+            )
+        } catch (_: Exception) {}
+    }
+
     suspend fun pairWithPartner(partnerUsername: String, coupleSecretKey: String): Result<User> {
         val uid = getCurrentUserId()
         val cleanPartner = partnerUsername.trim().lowercase().replace("@", "_").replace(" ", "_").filter { it.isLetterOrDigit() || it == '_' }

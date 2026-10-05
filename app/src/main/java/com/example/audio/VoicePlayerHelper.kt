@@ -170,6 +170,22 @@ class VoicePlayerHelper(private val context: Context) {
         }
     }
 
+    fun seekTo(progress: Float) {
+        try {
+            mediaPlayer?.let { mp ->
+                val duration = mp.duration
+                if (duration > 0) {
+                    val targetMs = (duration * progress.coerceIn(0f, 1f)).toInt()
+                    mp.seekTo(targetMs)
+                    _playbackProgress.value = progress.coerceIn(0f, 1f)
+                    _currentPositionSec.value = targetMs / 1000
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("VoicePlayerHelper", "Failed to seek audio", e)
+        }
+    }
+
     fun pause() {
         try {
             mediaPlayer?.pause()

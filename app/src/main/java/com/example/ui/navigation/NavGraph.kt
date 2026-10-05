@@ -31,6 +31,19 @@ import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.material.icons.filled.ExitToApp
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.zIndex
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.platform.testTag
+import com.example.ui.theme.HeartRed
+import kotlin.math.roundToInt
 import com.example.CherishApplication
 import com.example.ui.auth.AuthScreen
 import com.example.ui.auth.AuthViewModel
@@ -158,8 +171,8 @@ fun CherishNavGraph(
         }
     }
 
-    // Inside Cherish app (unlocked): Android system back button & edge gesture returns to Notes app for security
-    BackHandler(enabled = !isDisguiseActive) {
+    // Inside Cherish secret app (unlocked): Android system back button & edge gesture returns to Notes app for security
+    BackHandler(enabled = !isDisguiseActive && hasRevealedSecretApp) {
         app.securityPreferences.reDisguise()
     }
 
@@ -694,6 +707,65 @@ fun CherishNavGraph(
             shape = RoundedCornerShape(24.dp),
             containerColor = MaterialTheme.colorScheme.surface
         )
+    }
+
+    // Universal Side Floating Emergency Exit Toggle: available across ALL screens of Cherish app for emergency
+    val isSideEmergencyExitEnabled by app.securityPreferences.isSideEmergencyExitEnabled.collectAsState()
+    val sideEmergencyExitOpacity by app.securityPreferences.sideEmergencyExitOpacity.collectAsState()
+    if (!isDisguiseActive && hasRevealedSecretApp && !isAppLocked && isSideEmergencyExitEnabled) {
+        val exitOpacity = sideEmergencyExitOpacity.coerceIn(0.1f, 1.0f)
+        val haptic = LocalHapticFeedback.current
+        var dragOffsetY by remember { mutableFloatStateOf(0f) }
+        val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .zIndex(999f)
+        ) {
+            Surface(
+                color = if (isDark) Color(0xFF1E2638).copy(alpha = exitOpacity) else Color.White.copy(alpha = exitOpacity),
+                border = BorderStroke(
+                    1.dp,
+                    if (isDark) Color(0xFF2A364F).copy(alpha = exitOpacity) else Color.LightGray.copy(alpha = exitOpacity)
+                ),
+                shadowElevation = if (exitOpacity > 0.3f) 6.dp else 1.dp,
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .offset { IntOffset(0, dragOffsetY.roundToInt()) }
+                    .width(44.dp)
+                    .height(88.dp)
+                    .clip(RoundedCornerShape(topStart = 24.dp, bottomStart = 24.dp, topEnd = 0.dp, bottomEnd = 0.dp))
+                    .pointerInput(Unit) {
+                        detectVerticalDragGestures { change, dragAmount ->
+                            change.consume()
+                            dragOffsetY = (dragOffsetY + dragAmount).coerceIn(-500f, 500f)
+                        }
+                    }
+                    .clickable {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        app.securityPreferences.reDisguise()
+                        try {
+                            navController.popBackStack(Screen.Chat.route, inclusive = false)
+                        } catch (_: Exception) {}
+                    }
+                    .testTag("side_emergency_exit_toggle")
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(end = 4.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.ExitToApp,
+                        contentDescription = "Emergency Exit to Notes",
+                        tint = HeartRed.copy(alpha = exitOpacity.coerceAtLeast(0.45f)),
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+            }
+        }
     }
 
     } // End of Box

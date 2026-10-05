@@ -58,6 +58,7 @@ import com.example.data.model.Message
 import com.example.data.model.MessageType
 import com.example.ui.components.AvatarView
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.ui.zIndex
 import com.example.ui.theme.*
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -92,6 +93,9 @@ fun ChatScreen(
     var showClearChatDialog by remember { mutableStateOf(false) }
     var showFullProfilePicViewer by remember { mutableStateOf(false) }
     var showChatMenu by remember { mutableStateOf(false) }
+    var showVideoNoteRecorder by remember { mutableStateOf(false) }
+    var showHeartbeatTouch by remember { mutableStateOf(false) }
+    var showMoodPicker by remember { mutableStateOf(false) }
 
     val currentPlayingId by viewModel.voicePlayerHelper.currentlyPlayingId.collectAsState()
     val isAudioPlaying by viewModel.voicePlayerHelper.isPlaying.collectAsState()
@@ -265,7 +269,7 @@ fun ChatScreen(
         uiState.showPreviousChats,
         uiState.temporaryClearTimestamp
     ) {
-        var list = uiState.messages
+        var list = uiState.messages.filter { !it.isDeleted }
         if (uiState.filterStarredOnly) {
             list = list.filter { it.isStarred }
         }
@@ -425,15 +429,75 @@ fun ChatScreen(
                                     modifier = Modifier.weight(1f, fill = false),
                                     verticalArrangement = Arrangement.Center
                                 ) {
-                                    Text(
-                                        text = partnerName,
-                                        fontSize = 16.5.sp,
-                                        lineHeight = 19.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                        color = if (isDark) Color.White else Color(0xFF0F172A)
-                                    )
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        Text(
+                                            text = partnerName,
+                                            fontSize = 16.5.sp,
+                                            lineHeight = 19.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                            color = if (isDark) Color.White else Color(0xFF0F172A)
+                                        )
+
+                                        // Partner Mood Pill
+                                        val partnerMood = partner?.mood
+                                        if (!partnerMood.isNullOrBlank()) {
+                                            Surface(
+                                                shape = RoundedCornerShape(10.dp),
+                                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.75f),
+                                                modifier = Modifier.clickable { showMoodPicker = true }
+                                            ) {
+                                                Text(
+                                                    text = partnerMood,
+                                                    fontSize = 10.sp,
+                                                    fontWeight = FontWeight.Medium,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    maxLines = 1,
+                                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                                )
+                                            }
+                                        }
+
+                                        // Partner Battery Status Pill
+                                        val battery = partner?.batteryLevel
+                                        if (battery != null && battery in 0..100) {
+                                            val isCharging = partner.isCharging
+                                            val isLow = battery <= 20
+                                            Surface(
+                                                shape = RoundedCornerShape(8.dp),
+                                                color = when {
+                                                    isCharging -> Color(0xFF10B981).copy(alpha = 0.15f)
+                                                    isLow -> Color(0xFFEF4444).copy(alpha = 0.15f)
+                                                    else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
+                                                }
+                                            ) {
+                                                Row(
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    modifier = Modifier.padding(horizontal = 4.5.dp, vertical = 2.dp)
+                                                ) {
+                                                    val icon = when {
+                                                        isCharging -> "⚡"
+                                                        isLow -> "🪫"
+                                                        else -> "🔋"
+                                                    }
+                                                    Text(
+                                                        text = "$icon $battery%",
+                                                        fontSize = 9.5.sp,
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = when {
+                                                            isCharging -> Color(0xFF10B981)
+                                                            isLow -> Color(0xFFEF4444)
+                                                            else -> MaterialTheme.colorScheme.onSurfaceVariant
+                                                        }
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
                                     val statusText = when {
                                         partnerHasCheckAfter -> {
                                             if (headerRemaining.startsWith("✨")) "✨ Reconnecting now"
@@ -545,6 +609,21 @@ fun ChatScreen(
                                     modifier = Modifier.size(23.dp)
                                 )
                             }
+
+                            // Heartbeat Touch Icon Button
+                            IconButton(
+                                onClick = { showHeartbeatTouch = true },
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .testTag("chat_heartbeat_touch_button")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Favorite,
+                                    contentDescription = "Heartbeat Touch",
+                                    tint = if (uiState.isPartnerHeartTouching) HeartRed else iconTint,
+                                    modifier = Modifier.size(23.dp)
+                                )
+                            }
                         }
 
                         Box {
@@ -560,6 +639,28 @@ fun ChatScreen(
                                 expanded = showChatMenu,
                                 onDismissRequest = { showChatMenu = false }
                             ) {
+                                DropdownMenuItem(
+                                    text = { Text("Set Mood & Status 🥰") },
+                                    onClick = {
+                                        showChatMenu = false
+                                        showMoodPicker = true
+                                    },
+                                    leadingIcon = {
+                                        Icon(Icons.Outlined.Mood, null, tint = RoseGoldPrimary)
+                                    }
+                                )
+
+                                DropdownMenuItem(
+                                    text = { Text("Heartbeat Touch ❤️") },
+                                    onClick = {
+                                        showChatMenu = false
+                                        showHeartbeatTouch = true
+                                    },
+                                    leadingIcon = {
+                                        Icon(Icons.Default.Favorite, null, tint = HeartRed)
+                                    }
+                                )
+
                                 DropdownMenuItem(
                                     text = { Text(if (uiState.filterStarredOnly) "Show All Messages" else "Starred Messages ⭐") },
                                     onClick = {
@@ -635,62 +736,6 @@ fun ChatScreen(
                         .navigationBarsPadding()
                         .imePadding()
                 ) {
-                // Partner typing / recording animated bubble
-                AnimatedVisibility(
-                    visible = uiState.isPartnerRecordingAudio || uiState.isPartnerTyping,
-                    enter = slideInVertically(initialOffsetY = { it / 2 }) + fadeIn(),
-                    exit = slideOutVertically(targetOffsetY = { it / 2 }) + fadeOut()
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 6.dp),
-                        horizontalArrangement = Arrangement.Start
-                    ) {
-                        Surface(
-                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
-                            shape = RoundedCornerShape(18.dp, 18.dp, 18.dp, 4.dp),
-                            shadowElevation = 0.dp
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                val isPrivate = uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE
-                                if (uiState.isPartnerRecordingAudio) {
-                                    Icon(
-                                        imageVector = Icons.Default.Mic,
-                                        contentDescription = null,
-                                        tint = if (isPrivate) MaterialTheme.colorScheme.onSurfaceVariant else RoseGoldPrimary,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text(
-                                        text = if (isPrivate)
-                                            "recording audio..."
-                                        else
-                                            "$partnerName is recording...",
-                                        fontSize = 13.sp,
-                                        color = if (isPrivate) MaterialTheme.colorScheme.onSurfaceVariant else RoseGoldPrimary,
-                                        fontWeight = FontWeight.Medium
-                                    )
-                                } else {
-                                    if (!isPrivate) {
-                                        Text(
-                                            text = "$partnerName is typing",
-                                            fontSize = 13.sp,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            fontWeight = FontWeight.Medium
-                                        )
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                    }
-                                    BouncingDots(color = if (isPrivate) MaterialTheme.colorScheme.onSurfaceVariant else RoseGoldPrimary)
-                                }
-                            }
-                        }
-                    }
-                }
-
                 MessageComposer(
                     text = composerText,
                     onTextChanged = {
@@ -723,6 +768,23 @@ fun ChatScreen(
                     onCancelVoiceRecord = { viewModel.cancelVoiceRecording() },
                     onTakePhoto = triggerCameraSnap,
                     onPickAttachment = { showAttachmentSheet = true },
+                    onRecordVideoNote = {
+                        val hasCam = ContextCompat.checkSelfPermission(
+                            context,
+                            Manifest.permission.CAMERA
+                        ) == PackageManager.PERMISSION_GRANTED
+                        val hasMic = ContextCompat.checkSelfPermission(
+                            context,
+                            Manifest.permission.RECORD_AUDIO
+                        ) == PackageManager.PERMISSION_GRANTED
+                        if (hasCam && hasMic) {
+                            showVideoNoteRecorder = true
+                        } else {
+                            com.example.security.SecurityPreferences.getInstance(context).ignoreNextPause = true
+                            cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+                            showVideoNoteRecorder = true
+                        }
+                    },
                     myPhotoUrl = myUser?.photoUrl,
                     myName = myUser?.displayName ?: "Me",
                     placeholder = when {
@@ -796,10 +858,10 @@ fun ChatScreen(
                 }
             }
 
-            // Telegram-style Pinned Message Banner
+            // Pinned Message Banner
             AnimatedVisibility(visible = uiState.pinnedMessage != null && !uiState.isStealthCurtainActive) {
                 uiState.pinnedMessage?.let { pinned ->
-                    TelegramPinnedBanner(
+                    PinnedMessageBanner(
                         message = pinned,
                         onClick = {
                             val index = displayedMessages.indexOfFirst { it.id == pinned.id }
@@ -952,6 +1014,16 @@ fun ChatScreen(
                                     onPlayAudio = {
                                         message.mediaUrl?.let { url ->
                                             viewModel.playAudio(message.id, url)
+                                        }
+                                    },
+                                    onSeekAudio = { progress ->
+                                        if (currentPlayingId == message.id) {
+                                            viewModel.seekAudio(progress)
+                                        } else {
+                                            message.mediaUrl?.let { url ->
+                                                viewModel.playAudio(message.id, url)
+                                                viewModel.seekAudio(progress)
+                                            }
                                         }
                                     },
                                     onImageClick = { url ->
@@ -1180,63 +1252,64 @@ fun ChatScreen(
                 }
             }
 
-            // Discreet Right-Side Center Screen Floating Emergency Exit Toggle (Full Thumb Size)
-            if (isSideEmergencyExitEnabled) {
-                val exitOpacity = sideEmergencyExitOpacity.coerceIn(0.05f, 1.0f)
+            // Partner typing / recording animated bubble - positioned above the type center bar layout
+            androidx.compose.animation.AnimatedVisibility(
+                visible = (uiState.isPartnerRecordingAudio || uiState.isPartnerTyping) && !uiState.isStealthCurtainActive,
+                enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
+                exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(start = 16.dp, bottom = 8.dp)
+                    .zIndex(10f)
+            ) {
+                val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
                 val isPrivate = uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE
-
                 Surface(
-                    shape = RoundedCornerShape(
-                        topStart = 24.dp,
-                        bottomStart = 24.dp,
-                        topEnd = 0.dp,
-                        bottomEnd = 0.dp
-                    ),
                     color = if (isPrivate) {
-                        if (isDark) Color(0xFF26272B).copy(alpha = exitOpacity)
-                        else Color(0xFFE5E7EB).copy(alpha = exitOpacity)
+                        if (isDark) Color(0xFF26272B) else Color(0xFFE5E7EB)
                     } else {
-                        if (isDark) Color(0xFF2B1D25).copy(alpha = exitOpacity)
-                        else Color(0xFFFFF0F2).copy(alpha = exitOpacity)
+                        if (isDark) Color(0xFF1E2638) else Color.White
                     },
+                    shape = RoundedCornerShape(18.dp, 18.dp, 18.dp, 4.dp),
                     border = BorderStroke(
-                        1.dp,
-                        if (isPrivate) {
-                            if (isDark) Color(0xFF45474E).copy(alpha = exitOpacity)
-                            else Color(0xFF9CA3AF).copy(alpha = exitOpacity)
-                        } else {
-                            HeartRed.copy(alpha = (exitOpacity * 0.75f).coerceIn(0.05f, 0.9f))
-                        }
+                        0.8.dp,
+                        if (isDark) TrueDarkOutline else Color(0xFFE2E8F0)
                     ),
-                    shadowElevation = if (exitOpacity > 0.3f) 4.dp else 0.dp,
-                    modifier = Modifier
-                        .align(Alignment.CenterEnd)
-                        .width(44.dp)
-                        .height(88.dp)
-                        .clip(RoundedCornerShape(topStart = 24.dp, bottomStart = 24.dp, topEnd = 0.dp, bottomEnd = 0.dp))
-                        .clickable {
-                            haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
-                            onQuickDisguise()
-                        }
-                        .testTag("side_emergency_exit_toggle")
+                    shadowElevation = 4.dp
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(end = 4.dp),
-                        contentAlignment = Alignment.Center
+                    Row(
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.ExitToApp,
-                            contentDescription = "Quick Disguise to Notes",
-                            tint = if (isPrivate) {
-                                if (isDark) Color.White.copy(alpha = exitOpacity)
-                                else Color.Black.copy(alpha = exitOpacity)
-                            } else {
-                                HeartRed.copy(alpha = exitOpacity)
-                            },
-                            modifier = Modifier.size(24.dp)
-                        )
+                        if (uiState.isPartnerRecordingAudio) {
+                            Icon(
+                                imageVector = Icons.Default.Mic,
+                                contentDescription = null,
+                                tint = if (isPrivate) MaterialTheme.colorScheme.onSurfaceVariant else RoseGoldPrimary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = if (isPrivate)
+                                    "recording audio..."
+                                else
+                                    "$partnerName is recording...",
+                                fontSize = 12.5.sp,
+                                color = if (isPrivate) MaterialTheme.colorScheme.onSurfaceVariant else RoseGoldPrimary,
+                                fontWeight = FontWeight.Medium
+                            )
+                        } else {
+                            if (!isPrivate) {
+                                Text(
+                                    text = "$partnerName is typing",
+                                    fontSize = 12.5.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    fontWeight = FontWeight.Medium
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                            }
+                            BouncingDots(color = if (isPrivate) MaterialTheme.colorScheme.onSurfaceVariant else RoseGoldPrimary)
+                        }
                     }
                 }
             }
@@ -1266,10 +1339,6 @@ fun ChatScreen(
             onDelete = {
                 showDeleteConfirmDialog = msg
             },
-            onForward = {
-                composerText = "Fwd: ${msg.text}"
-                Toast.makeText(context, "Loaded into composer to forward", Toast.LENGTH_SHORT).show()
-            },
             onSearch = {
                 viewModel.setSearching(true)
             },
@@ -1279,10 +1348,42 @@ fun ChatScreen(
         )
     }
 
-    // Attachment Options Bottom Sheet (Gallery, Camera Snap, Documents)
+    // Circular Video Note Recorder Dialog
+    if (showVideoNoteRecorder) {
+        CircularVideoNoteRecorderDialog(
+            onDismiss = { showVideoNoteRecorder = false },
+            onSendVideoNote = { file, dur ->
+                viewModel.sendVideoNote(file, dur)
+            }
+        )
+    }
+
+    // Simultaneous Heartbeat Touch Dialog (Haptic Sync)
+    if (showHeartbeatTouch) {
+        HeartbeatTouchDialog(
+            partnerName = partnerName,
+            isPartnerTouching = uiState.isPartnerHeartTouching,
+            onTouchChanged = { viewModel.setHeartbeatTouch(it) },
+            onDismiss = { showHeartbeatTouch = false }
+        )
+    }
+
+    // Partner & My Mood Picker Sheet
+    if (showMoodPicker) {
+        MoodPickerSheet(
+            currentMood = myUser?.mood,
+            onSelectMood = { viewModel.updateMood(it) },
+            onClearMood = { viewModel.clearMood() },
+            onDismiss = { showMoodPicker = false }
+        )
+    }
+
+    // Attachment Options Bottom Sheet (Gallery, Camera Snap, Documents) - opens full height
     if (showAttachmentSheet) {
+        val attachmentSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
         ModalBottomSheet(
             onDismissRequest = { showAttachmentSheet = false },
+            sheetState = attachmentSheetState,
             containerColor = MaterialTheme.colorScheme.surface,
             shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
         ) {
@@ -1391,6 +1492,12 @@ fun ChatScreen(
         FullScreenMediaViewer(
             mediaUrl = url,
             allMediaUrls = uiState.allMediaUrlsForViewer,
+            onDeleteMedia = { clickedUrl ->
+                val targetMsg = uiState.messages.find { it.mediaUrl == clickedUrl || it.getAllMediaUrls().contains(clickedUrl) }
+                if (targetMsg != null) {
+                    viewModel.deleteMessage(targetMsg.id)
+                }
+            },
             onDismiss = { viewModel.closeFullScreenMedia() }
         )
     }
@@ -1534,7 +1641,7 @@ fun ChatScreen(
 }
 
 @Composable
-fun TelegramPinnedBanner(
+fun PinnedMessageBanner(
     message: Message,
     onClick: () -> Unit,
     onUnpin: () -> Unit,

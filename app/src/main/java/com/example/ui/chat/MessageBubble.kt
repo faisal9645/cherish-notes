@@ -67,7 +67,7 @@ fun MessageBubble(
     onLongClick: () -> Unit,
     onReactionClick: (String) -> Unit,
     modifier: Modifier = Modifier,
-    gallerySize: String = "medium",
+    gallerySize: String = "large",
     onImageClickWithList: ((String, List<String>) -> Unit)? = null,
     onSwipeToReply: (() -> Unit)? = null,
     onOpenTheaterVideo: ((String) -> Unit)? = null,
@@ -76,7 +76,8 @@ fun MessageBubble(
     isHighlighted: Boolean = false,
     onReplyQuoteClick: ((replyToMessageId: String?) -> Unit)? = null,
     isPrivateMode: Boolean = false,
-    senderPhotoUrl: String? = null
+    senderPhotoUrl: String? = null,
+    onSeekAudio: ((Float) -> Unit)? = null
 ) {
     val bubbleShape = if (isPrivateMode) {
         if (isFromMe) {
@@ -279,11 +280,15 @@ fun MessageBubble(
                     }
             ) {
             val bubbleMinWidth = when (message.getTypedType()) {
-                MessageType.IMAGE, MessageType.AUDIO -> 260.dp
+                MessageType.IMAGE -> 280.dp
+                MessageType.AUDIO -> 260.dp
+                MessageType.VIDEO -> 195.dp
                 else -> 60.dp
             }
             val bubbleMaxWidth = when (message.getTypedType()) {
-                MessageType.IMAGE, MessageType.AUDIO -> 310.dp
+                MessageType.IMAGE -> 340.dp
+                MessageType.AUDIO -> 310.dp
+                MessageType.VIDEO -> 220.dp
                 else -> 295.dp
             }
 
@@ -400,6 +405,18 @@ fun MessageBubble(
                             )
                         }
                     }
+                    MessageType.VIDEO -> {
+                        val videoUrl = message.mediaUrl ?: message.mediaUrls.firstOrNull()
+                        if (!videoUrl.isNullOrBlank()) {
+                            com.example.ui.components.CircularVideoNoteView(
+                                videoUrl = videoUrl,
+                                durationSeconds = message.durationSeconds,
+                                modifier = Modifier
+                                    .padding(vertical = 4.dp)
+                                    .align(Alignment.CenterHorizontally)
+                            )
+                        }
+                    }
                     MessageType.AUDIO -> {
                         val playButtonGradient = if (isPrivateMode) {
                             null
@@ -448,13 +465,16 @@ fun MessageBubble(
                                 WaveformView(
                                     amplitudes = message.waveform,
                                     progress = audioProgress(),
+                                    isPlaying = isPlayingAudio,
+                                    isRecording = false,
                                     activeColor = if (isPrivateMode) textColor 
                                                   else if (isFromMe) Color.White 
                                                   else MaterialTheme.colorScheme.primary,
                                     inactiveColor = if (isPrivateMode) textColor.copy(alpha = 0.35f) 
                                                     else if (isFromMe) Color.White.copy(alpha = 0.5f) 
                                                     else MaterialTheme.colorScheme.primary.copy(alpha = 0.35f),
-                                    height = 40.dp
+                                    onSeek = onSeekAudio,
+                                    height = 36.dp
                                 )
                                 Spacer(modifier = Modifier.height(6.dp))
                                 Row(
@@ -644,8 +664,8 @@ fun MessageBubble(
                     }
                 }
 
-                // Bubble Footer for non-audio, non-image messages
-                if (message.getTypedType() != MessageType.AUDIO && message.getTypedType() != MessageType.IMAGE) {
+                // Bubble Footer for non-audio, non-image, non-video messages
+                if (message.getTypedType() != MessageType.AUDIO && message.getTypedType() != MessageType.IMAGE && message.getTypedType() != MessageType.VIDEO) {
                     Row(
                         modifier = Modifier
                             .align(Alignment.End)
@@ -750,23 +770,32 @@ fun MessageBubble(
 
         // Emoji reactions pill below bubble
         if (message.reactions.isNotEmpty()) {
-            Row(
+            Surface(
                 modifier = Modifier
                     .offset(y = (-6).dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.surface)
-                    .border(1.dp, MaterialTheme.colorScheme.outlineVariant, CircleShape)
-                    .padding(horizontal = 6.dp, vertical = 2.dp),
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                verticalAlignment = Alignment.CenterVertically
+                    .testTag("reactions_pill_${message.id}"),
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.surface,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
+                shadowElevation = 2.dp
             ) {
-                val emojiCounts = message.reactions.values.groupingBy { it }.eachCount()
-                for ((emoji, count) in emojiCounts) {
-                    Text(
-                        text = "$emoji $count",
-                        fontSize = 11.sp,
-                        modifier = Modifier.clickable { onReactionClick(emoji) }
-                    )
+                Row(
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.5.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    val emojiCounts = message.reactions.values.groupingBy { it }.eachCount()
+                    for ((emoji, count) in emojiCounts) {
+                        val label = if (count > 1) "$emoji $count" else emoji
+                        Text(
+                            text = label,
+                            fontSize = 11.5.sp,
+                            modifier = Modifier
+                                .clickable { onReactionClick(emoji) }
+                                .padding(horizontal = 2.dp)
+                                .testTag("reaction_badge_${message.id}_$emoji")
+                        )
+                    }
                 }
             }
         }

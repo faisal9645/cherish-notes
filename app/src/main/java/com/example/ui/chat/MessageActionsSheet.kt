@@ -1,12 +1,12 @@
 package com.example.ui.chat
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Forward
 import androidx.compose.material.icons.automirrored.filled.Reply
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
@@ -37,7 +37,6 @@ fun MessageActionsSheet(
     onPin: () -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
-    onForward: () -> Unit = {},
     onSearch: () -> Unit = {},
     onSaveToMemories: () -> Unit = {}
 ) {
@@ -52,33 +51,54 @@ fun MessageActionsSheet(
                 .padding(horizontal = 20.dp, vertical = 8.dp)
                 .navigationBarsPadding()
         ) {
-            // Emoji reaction row (Scrollable like WhatsApp/Telegram)
+            // Emoji reaction row
+            Text(
+                text = "React with Emoji",
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 4.dp, bottom = 6.dp)
+            )
+
             val reactionEmojis = listOf(
                 "❤️", "🥰", "😘", "🔥", "🥺", "👍", "🌹", "😂", "🤣", 
-                "😊", "😍", "😒", "😎", "😔", "😜", "😡", "😭", "😤", "🤫", 
-                "💑", "👩‍❤️‍👨", "👨‍❤️‍👨", "👩‍❤️‍👩", "💍", "💌", "💖", "💘"
+                "😊", "😍", "✨", "🎉", "👏", "😎", "😔", "😜", "😡", 
+                "😭", "😤", "🤫", "💑", "💍", "💌", "💖", "💘"
             )
-            androidx.compose.foundation.lazy.LazyRow(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 12.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                contentPadding = PaddingValues(horizontal = 4.dp)
+            Surface(
+                shape = RoundedCornerShape(22.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
+                modifier = Modifier.fillMaxWidth()
             ) {
-                items(reactionEmojis.size) { index ->
-                    val emoji = reactionEmojis[index]
-                    Box(
-                        modifier = Modifier
-                            .size(46.dp)
-                            .clip(CircleShape)
-                            .background(Color.Transparent)
-                            .clickable {
-                                onReaction(emoji)
-                                onDismiss()
-                            },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(text = emoji, fontSize = 28.sp)
+                androidx.compose.foundation.lazy.LazyRow(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp, vertical = 6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    contentPadding = PaddingValues(horizontal = 4.dp)
+                ) {
+                    items(reactionEmojis.size) { index ->
+                        val emoji = reactionEmojis[index]
+                        val isSelected = message.reactions.values.contains(emoji)
+                        Box(
+                            modifier = Modifier
+                                .size(46.dp)
+                                .clip(CircleShape)
+                                .background(
+                                    if (isSelected) RoseGoldPrimary.copy(alpha = 0.22f) else Color.Transparent
+                                )
+                                .then(
+                                    if (isSelected) Modifier.border(1.5.dp, RoseGoldPrimary, CircleShape) else Modifier
+                                )
+                                .clickable {
+                                    onReaction(emoji)
+                                    onDismiss()
+                                }
+                                .testTag("reaction_emoji_$emoji"),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(text = emoji, fontSize = 28.sp)
+                        }
                     }
                 }
             }
@@ -124,17 +144,6 @@ fun MessageActionsSheet(
             )
 
             ListItem(
-                headlineContent = { Text("Forward Message", fontWeight = FontWeight.Medium) },
-                leadingContent = { Icon(Icons.AutoMirrored.Filled.Forward, contentDescription = null) },
-                modifier = Modifier
-                    .clickable {
-                        onForward()
-                        onDismiss()
-                    }
-                    .testTag("action_forward")
-            )
-
-            ListItem(
                 headlineContent = { Text(if (message.isStarred) "Remove from Starred" else "Star Message", fontWeight = FontWeight.Medium) },
                 leadingContent = {
                     Icon(
@@ -152,7 +161,7 @@ fun MessageActionsSheet(
             )
 
             ListItem(
-                headlineContent = { Text(if (message.isPinned) "Unpin Message" else "Pin Message (Telegram style)", fontWeight = FontWeight.Medium) },
+                headlineContent = { Text(if (message.isPinned) "Unpin Message" else "Pin Message", fontWeight = FontWeight.Medium) },
                 leadingContent = {
                     Icon(
                         imageVector = if (message.isPinned) Icons.Filled.PushPin else Icons.Outlined.PushPin,

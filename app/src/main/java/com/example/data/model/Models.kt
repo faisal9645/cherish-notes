@@ -65,7 +65,11 @@ data class User(
     val recordingAudioInChat: Boolean = false,
     val activityStatus: String? = null,
     val activityStatusNote: String? = null,
-    val isActivityHidden: Boolean = false
+    val isActivityHidden: Boolean = false,
+    val mood: String? = null,
+    val batteryLevel: Int? = null,
+    val isCharging: Boolean = false,
+    val heartbeatTouchingTimestamp: Long = 0L
 ) {
     fun isEffectivelyOnline(): Boolean {
         if (!isOnline) return false
@@ -129,8 +133,12 @@ data class Message(
     val replyToText: String? = null,
     val replyToSenderName: String? = null,
     val reactions: Map<String, String> = emptyMap(), // userId -> emoji
-    val mediaUrls: List<String> = emptyList()
+    val mediaUrls: List<String> = emptyList(),
+    val isVideoNote: Boolean = false
 ) {
+    fun isCircularVideoNote(): Boolean {
+        return isVideoNote || (getTypedType() == MessageType.VIDEO && (mediaName?.contains("videonote", ignoreCase = true) == true || isVideoNote))
+    }
     fun getTypedType(): MessageType {
         return runCatching { MessageType.valueOf(type) }.getOrDefault(MessageType.TEXT)
     }

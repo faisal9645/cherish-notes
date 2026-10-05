@@ -31,7 +31,7 @@ data class ChatUiState(
     val fullScreenMediaUrl: String? = null,
     val fullScreenMediaType: MessageType? = null,
     val allMediaUrlsForViewer: List<String> = emptyList(),
-    val gallerySize: String = "medium",
+    val gallerySize: String = "large",
     val isUploadingMedia: Boolean = false,
     val uploadProgress: Float = 0f,
     val deletionRequest: com.example.data.model.ChatDeletionRequest? = null,
@@ -41,6 +41,7 @@ data class ChatUiState(
     val isCheckAfterReminderEnabled: Boolean = true,
     val isPartnerRecordingAudio: Boolean = false,
     val isPartnerOnline: Boolean = false,
+    val isPartnerHeartTouching: Boolean = false,
     val pinnedMessage: Message? = null,
     val theaterVideoId: String? = null,
     val filterStarredOnly: Boolean = false,
@@ -211,10 +212,12 @@ class ChatViewModel(
                 kotlinx.coroutines.delay(1000L)
                 _uiState.update { state ->
                     val partner = state.partnerUser
+                    val partnerTouching = partner?.heartbeatTouchingTimestamp?.let { System.currentTimeMillis() - it < 8000L } ?: false
                     state.copy(
                         isPartnerOnline = partner?.isEffectivelyOnline() ?: false,
                         isPartnerTyping = partner?.isEffectivelyTyping() ?: false,
-                        isPartnerRecordingAudio = partner?.isEffectivelyRecording() ?: false
+                        isPartnerRecordingAudio = partner?.isEffectivelyRecording() ?: false,
+                        isPartnerHeartTouching = partnerTouching
                     )
                 }
             }
@@ -397,6 +400,51 @@ class ChatViewModel(
 
     fun playAudio(messageId: String, audioUrl: String) {
         voicePlayerHelper.playAudio(messageId, audioUrl)
+    }
+
+    fun seekAudio(progress: Float) {
+        voicePlayerHelper.seekTo(progress)
+    }
+
+    fun sendVideoNote(videoFile: java.io.File, durationSeconds: Int) {
+        val coupleId = chatRepository.getConversationId()
+        viewModelScope.launch {
+            _uiState.update { it.copy(isUploadingMedia = true, uploadProgress = 0f) }
+            val uploadResult = mediaRepository.uploadFile(
+                file = videoFile,
+                type = MessageType.VIDEO,
+                coupleId = coupleId,
+                onProgress = { p -> _uiState.update { it.copy(uploadProgress = p) } }
+            )
+            _uiState.update { it.copy(isUploadingMedia = false, uploadProgress = 0f) }
+            uploadResult.onSuccess { downloadUrl ->
+                soundEffectsPlayer.playSound(ChatSoundEffectsPlayer.SoundType.SENT)
+                chatRepository.sendMessage(
+                    text = "Video note ($durationSeconds s)",
+                    type = MessageType.VIDEO,
+                    mediaUrl = downloadUrl,
+                    mediaName = "videonote_${System.currentTimeMillis()}.mp4",
+                    durationSeconds = durationSeconds,
+                    isVideoNote = true
+                )
+            }
+        }
+    }
+
+    fun setHeartbeatTouch(active: Boolean) {
+        authRepository.setHeartbeatTouch(active)
+    }
+
+    fun updateMood(mood: String) {
+        viewModelScope.launch {
+            authRepository.updateMood(mood)
+        }
+    }
+
+    fun clearMood() {
+        viewModelScope.launch {
+            authRepository.updateMood("")
+        }
     }
 
     fun markMessageAsRead(messageId: String) {

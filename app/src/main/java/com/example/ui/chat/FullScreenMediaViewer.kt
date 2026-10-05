@@ -64,12 +64,12 @@ import kotlin.math.abs
 import kotlin.math.roundToInt
 
 /**
- * Telegram-style interactive media viewer:
+ * Interactive media viewer:
  * - Smooth Pinch-to-zoom (0.8x min to 5.0x max)
  * - Double-tap to instantly toggle between Fit (1.0x min) and Zoomed (2.8x max)
  * - On-screen Zoom In [+] and Zoom Out [-] controls with percentage badge for easy sizing
- * - Telegram-style Swipe-Down to Dismiss with background fade
- * - Bottom Filmstrip Carousel to swipe through all photos in chat / gallery
+ * - Swipe-Down to Dismiss with background fade
+ * - Bottom indicator to swipe through all photos in chat / gallery
  * - Single-tap to toggle chrome immersion
  * - Save to device gallery with instant feedback toast
  */
@@ -78,11 +78,13 @@ fun FullScreenMediaViewer(
     mediaUrl: String,
     allMediaUrls: List<String> = emptyList(),
     onShowInChat: ((url: String) -> Unit)? = null,
+    onDeleteMedia: ((url: String) -> Unit)? = null,
     onDismiss: () -> Unit
 ) {
     BackHandler(onBack = onDismiss)
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    var showDeleteConfirmDialog by remember { mutableStateOf(false) }
 
     val app = context.applicationContext as? CherishApplication
     val isDisguiseActive by (app?.securityPreferences?.isDisguiseActive ?: kotlinx.coroutines.flow.MutableStateFlow(false)).collectAsState()
@@ -348,7 +350,7 @@ fun FullScreenMediaViewer(
                 }
             }
 
-            // Top App Bar (Telegram style: Counter, Download, Share, Close)
+            // Top App Bar: Counter, Delete, Download, Share, Close
             AnimatedVisibility(
                 visible = isChromeVisible,
                 enter = fadeIn() + slideInVertically { -it },
@@ -459,12 +461,58 @@ fun FullScreenMediaViewer(
                                     modifier = Modifier.size(19.dp)
                                 )
                             }
+
+                            // Delete media button
+                            if (onDeleteMedia != null) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(38.dp)
+                                        .clip(CircleShape)
+                                        .background(Color.Black.copy(alpha = 0.50f))
+                                        .clickable { showDeleteConfirmDialog = true }
+                                        .testTag("full_screen_media_delete"),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Delete,
+                                        contentDescription = "Delete",
+                                        tint = Color(0xFFFF5252),
+                                        modifier = Modifier.size(19.dp)
+                                    )
+                                }
+                            }
                         }
                     }
                 }
             }
 
-            // Bottom Telegram Controls: Zoom Pill + Filmstrip Carousel
+            // Delete Confirmation Dialog
+            if (showDeleteConfirmDialog) {
+                AlertDialog(
+                    onDismissRequest = { showDeleteConfirmDialog = false },
+                    title = { Text("Delete photo?") },
+                    text = { Text("This photo will be permanently deleted from the gallery and chat.") },
+                    confirmButton = {
+                        Button(
+                            onClick = {
+                                showDeleteConfirmDialog = false
+                                onDeleteMedia?.invoke(currentUrl)
+                                onDismiss()
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                        ) {
+                            Text("Delete")
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showDeleteConfirmDialog = false }) {
+                            Text("Cancel")
+                        }
+                    }
+                )
+            }
+
+            // Bottom Controls: Zoom Pill + Media Indicators
             AnimatedVisibility(
                 visible = isChromeVisible,
                 enter = fadeIn() + slideInVertically { it },

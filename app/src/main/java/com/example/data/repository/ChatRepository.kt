@@ -10,6 +10,7 @@ import com.google.firebase.FirebaseApp
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.Query
+import com.google.firebase.firestore.SetOptions
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
@@ -304,7 +305,8 @@ class ChatRepository(
         durationSeconds: Int = 0,
         waveform: List<Float> = emptyList(),
         replyTo: Message? = null,
-        mediaUrls: List<String> = emptyList()
+        mediaUrls: List<String> = emptyList(),
+        isVideoNote: Boolean = false
     ): Result<Message> {
         val currentUser = authRepository.currentUserState.value
         val partner = authRepository.partnerUserState.value
@@ -329,7 +331,8 @@ class ChatRepository(
             replyToMessageId = replyTo?.id,
             replyToText = replyTo?.text?.take(80),
             replyToSenderName = replyTo?.senderName,
-            mediaUrls = mediaUrls
+            mediaUrls = mediaUrls,
+            isVideoNote = isVideoNote
         )
 
         // Optimistically add to local state
@@ -390,7 +393,10 @@ class ChatRepository(
 
     suspend fun toggleReaction(messageId: String, emoji: String) {
         val currentUserId = authRepository.getCurrentUserId()
-        val currentMessage = _messagesFlow.value.find { it.id == messageId } ?: return
+        val currentMessage = _messagesFlow.value.find { it.id == messageId }
+            ?: todayMessages.find { it.id == messageId }
+            ?: previousMessages.find { it.id == messageId }
+            ?: return
 
         val newReactions = currentMessage.reactions.toMutableMap()
         if (newReactions[currentUserId] == emoji) {
@@ -401,16 +407,22 @@ class ChatRepository(
 
         val updated = currentMessage.copy(reactions = newReactions)
         _messagesFlow.value = _messagesFlow.value.map { if (it.id == messageId) updated else it }
+        todayMessages = todayMessages.map { if (it.id == messageId) updated else it }
+        previousMessages = previousMessages.map { if (it.id == messageId) updated else it }
 
         try {
-            val convId = getConversationId()
-            firestore?.collection("conversations")
-                ?.document(convId)
-                ?.collection("messages")
-                ?.document(messageId)
-                ?.update("reactions", newReactions)
+            val convId = currentActiveConversationId ?: getConversationId()
+            val fs = firestore
+            if (fs != null) {
+                fs.collection("conversations")
+                    .document(convId)
+                    .collection("messages")
+                    .document(messageId)
+                    .set(mapOf("reactions" to newReactions), SetOptions.merge())
+                    .await()
+            }
         } catch (e: Exception) {
-            // ignore
+            Log.e("ChatRepository", "Failed to update reaction in Firestore for message $messageId", e)
         }
     }
 
@@ -468,13 +480,9 @@ class ChatRepository(
     }
 
     suspend fun deleteMessage(messageId: String) {
-        val currentMessage = _messagesFlow.value.find { it.id == messageId } ?: return
-        val updated = currentMessage.copy(
-            text = "This message was deleted",
-            isDeleted = true,
-            mediaUrl = null
-        )
-        _messagesFlow.value = _messagesFlow.value.map { if (it.id == messageId) updated else it }
+        // Immediately remove from in-memory message flows so it disappears from UI
+        _messagesFlow.value = _messagesFlow.value.filter { it.id != messageId }
+        _galleryMediaMessages.value = _galleryMediaMessages.value.filter { it.id != messageId }
 
         try {
             val convId = getConversationId()
@@ -482,13 +490,7 @@ class ChatRepository(
                 ?.document(convId)
                 ?.collection("messages")
                 ?.document(messageId)
-                ?.update(
-                    mapOf(
-                        "text" to "This message was deleted",
-                        "isDeleted" to true,
-                        "mediaUrl" to null
-                    )
-                )
+                ?.delete()
         } catch (e: Exception) {
             // ignore
         }

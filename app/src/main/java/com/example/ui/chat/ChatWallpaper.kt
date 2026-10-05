@@ -31,7 +31,7 @@ import androidx.compose.ui.unit.dp
  *
  * Supported Themes:
  * - 0: Normal (Minimalist, modern clean canvas with subtle depth)
- * - 1: Theme 1 (Classic Telegram / WhatsApp Doodle Art Wallpaper)
+ * - 1: Theme 1 (Classic Doodle Art Wallpaper)
  * - 2: Theme 2 (Cosmic Stars & Constellations Wallpaper)
  */
 @Composable

@@ -318,7 +318,7 @@ class SecurityPreferences(context: Context) {
 
     // --- MEDIA & GALLERY PREFERENCES ---
 
-    fun getImageGallerySize(): String = prefs.getString(KEY_IMAGE_GALLERY_SIZE, "medium") ?: "medium"
+    fun getImageGallerySize(): String = prefs.getString(KEY_IMAGE_GALLERY_SIZE, "large") ?: "large"
 
     fun setImageGallerySize(size: String) {
         val validSize = when (size.lowercase()) {
