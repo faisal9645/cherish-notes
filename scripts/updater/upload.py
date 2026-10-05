@@ -56,19 +56,22 @@ def create_github_release(token: str, version_code: int, version_name: str) -> d
         "Accept": "application/vnd.github+json",
     }
     # Check if release already exists
-    check = requests.get(f"{GITHUB_API}/repos/{GITHUB_REPO}/releases/tags/{tag}", headers=headers)
-    if check.status_code == 200:
-        print(f"Release {tag} already exists — reusing it.")
-        return check.json()
+    try:
+        check = requests.get(f"{GITHUB_API}/repos/{GITHUB_REPO}/releases/tags/{tag}", headers=headers, timeout=15)
+        if check.status_code == 200:
+            print(f"Release {tag} already exists — reusing it.")
+            return check.json()
+    except Exception as e:
+        print(f"Warning: Failed to check existing release: {e}")
 
     payload = {
         "tag_name": tag,
         "name": f"v{version_name} (build {version_code})",
-        "body": f"Cherish v{version_name} (Build {version_code}):\n• Default note card accent tint is now pure white\n• Note reminder timing & high-priority notifications with heads-up alerts\n• Initial notification permission prompt after APK installation\n• Clear Chat clears local screen temporarily without requiring mutual acceptance\n• Recover cleared chats anytime via 'Show Previous & Cleared Chats' in Settings\n• Tap partner avatar to open full profile picture viewer\n• Settings tab accessible exclusively via right swipe",
+        "body": f"Cherish v{version_name} (Build {version_code}):\n• Photo Viewer: fixed share & download overlapping buttons and added minimize disguise protection\n• Recover All: single button in settings to restore older chats, cleared chats & all gallery media\n• Today Only default on secret app open\n• Glitch-free smooth chat scrolling pagination\n• Immediate gallery recovery upon clicking Recover All\n• Cherish heart app icon branding inside the app",
         "draft": False,
         "prerelease": False,
     }
-    resp = requests.post(f"{GITHUB_API}/repos/{GITHUB_REPO}/releases", headers=headers, json=payload)
+    resp = requests.post(f"{GITHUB_API}/repos/{GITHUB_REPO}/releases", headers=headers, json=payload, timeout=20)
     if resp.status_code not in (200, 201):
         print(f"ERROR creating GitHub release: {resp.status_code} — {resp.text}")
         sys.exit(1)
@@ -102,35 +105,53 @@ def upload_apk_to_release(token: str, release: dict, apk_path: str, version_code
                 timeout=15
             )
 
-    import subprocess
-    import time
+    class ProgressReader:
+        def __init__(self, path):
+            self.f = open(path, 'rb')
+            self.total = os.path.getsize(path)
+            self.read_bytes = 0
+            self.last_pct = -1
+
+        def read(self, size=-1):
+            chunk = self.f.read(size if size > 0 else 65536)
+            self.read_bytes += len(chunk)
+            pct = int(self.read_bytes * 100 / self.total) if self.total > 0 else 0
+            if pct != self.last_pct and pct % 5 == 0:
+                print(f"Uploading... {pct}% ({self.read_bytes}/{self.total} bytes)", flush=True)
+                self.last_pct = pct
+            return chunk
+
+        def __len__(self):
+            return self.total
 
     url_with_param = f"{upload_url}?name={asset_name}"
-    cmd = [
-        "curl.exe",
-        "-f", "-s", "-S",
-        "-X", "POST",
-        "-H", f"Authorization: token {token}",
-        "-H", "Content-Type: application/vnd.android.package-archive",
-        "--data-binary", f"@{apk_path}",
-        url_with_param
-    ]
-
+    headers = {
+        "Authorization": f"token {token}",
+        "Content-Type": "application/vnd.android.package-archive",
+        "Accept": "application/vnd.github+json",
+    }
+    print(f"Uploading {apk_path} -> {asset_name} ({os.path.getsize(apk_path)} bytes)...", flush=True)
+    
+    import time
     success = False
     for attempt in range(1, 4):
-        print(f"Uploading {apk_path} -> {asset_name} using curl.exe (attempt {attempt}/3)...")
-        result = subprocess.run(cmd, capture_output=True, text=True)
-        if result.returncode == 0:
-            print("curl upload succeeded!")
-            success = True
-            break
-        else:
-            print(f"curl upload attempt {attempt} failed: {result.stderr}")
-            if attempt < 3:
-                time.sleep(3)
-
+        try:
+            print(f"Upload attempt {attempt}/3...", flush=True)
+            resp = requests.post(url_with_param, headers=headers, data=ProgressReader(apk_path), timeout=600)
+            if resp.status_code in (200, 201):
+                print("Upload succeeded!", flush=True)
+                success = True
+                break
+            else:
+                print(f"ERROR uploading APK: {resp.status_code} — {resp.text}", flush=True)
+        except Exception as e:
+            print(f"Exception during upload: {e}", flush=True)
+        
+        if attempt < 3:
+            time.sleep(5)
+            
     if not success:
-        print("ERROR uploading APK after 3 attempts.")
+        print("Upload failed after 3 attempts.", flush=True)
         sys.exit(1)
 
     # Direct download URL (no login required)
@@ -159,6 +180,7 @@ def update_firestore(project_root: str, version_code: int, version_name: str, do
 
 
 def main():
+    sys.stdout.reconfigure(line_buffering=True)
     script_dir   = os.path.dirname(os.path.abspath(__file__))
     project_root = os.path.abspath(os.path.join(script_dir, "..", ".."))
 

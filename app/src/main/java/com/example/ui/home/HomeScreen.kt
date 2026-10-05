@@ -173,9 +173,9 @@ fun HomeScreen(
                         modifier = Modifier.testTag("home_quick_disguise_button")
                     ) {
                         Icon(
-                            imageVector = Icons.Outlined.EditNote,
+                            imageVector = Icons.Default.Favorite,
                             contentDescription = "Quick Disguise as Notes",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            tint = HeartRed
                         )
                     }
                 },

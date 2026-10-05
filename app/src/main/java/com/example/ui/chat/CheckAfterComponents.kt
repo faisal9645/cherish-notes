@@ -38,6 +38,7 @@ import java.util.*
 object CheckAfterHelper {
     fun formatTargetTime(timeMillis: Long): String {
         if (timeMillis <= 0L) return ""
+        if (timeMillis == Long.MAX_VALUE) return "Later"
         val calTarget = Calendar.getInstance().apply { timeInMillis = timeMillis }
         val calNow = Calendar.getInstance()
         val timeFormat = SimpleDateFormat("h:mm a", Locale.getDefault())
@@ -61,6 +62,7 @@ object CheckAfterHelper {
     }
 
     fun calculateRemaining(targetMillis: Long): Pair<String, Boolean> {
+        if (targetMillis == Long.MAX_VALUE) return "Paused until you open" to false
         val now = System.currentTimeMillis()
         val diff = targetMillis - now
         if (diff <= 0) {
@@ -383,6 +385,7 @@ fun CheckAfterBottomSheet(
             "5h" to (5 * 3600 * 1000L),
             "8h" to (8 * 3600 * 1000L),
             "Tonight" to -1L,
+            "Until Open" to -3L,
             "Custom" to -2L
         )
     }
@@ -595,6 +598,9 @@ fun CheckAfterBottomSheet(
                                 when (label) {
                                     "Tonight" -> {
                                         targetMillis = CheckAfterHelper.getTonightMillis()
+                                    }
+                                    "Until Open" -> {
+                                        targetMillis = Long.MAX_VALUE
                                     }
                                     "Custom" -> {
                                         val cal = Calendar.getInstance()

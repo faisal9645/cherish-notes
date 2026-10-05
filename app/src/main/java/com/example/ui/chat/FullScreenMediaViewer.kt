@@ -49,6 +49,10 @@ import coil.ImageLoader
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import coil.request.SuccessResult
+import com.example.CherishApplication
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import com.example.ui.theme.RoseGoldPrimary
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -79,6 +83,29 @@ fun FullScreenMediaViewer(
     BackHandler(onBack = onDismiss)
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+
+    val app = context.applicationContext as? CherishApplication
+    val isDisguiseActive by (app?.securityPreferences?.isDisguiseActive ?: kotlinx.coroutines.flow.MutableStateFlow(false)).collectAsState()
+
+    LaunchedEffect(isDisguiseActive) {
+        if (isDisguiseActive) {
+            onDismiss()
+        }
+    }
+
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_STOP || event == Lifecycle.Event.ON_PAUSE) {
+                onDismiss()
+                app?.securityPreferences?.reDisguise()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
 
     // Ensure initial media is present in media list
     val mediaList = remember(mediaUrl, allMediaUrls) {
@@ -326,11 +353,6 @@ fun FullScreenMediaViewer(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(
-                            Brush.verticalGradient(
-                                colors = listOf(Color.Black.copy(alpha = 0.75f), Color.Transparent)
-                            )
-                        )
                         .statusBarsPadding()
                         .padding(horizontal = 12.dp, vertical = 8.dp)
                 ) {
@@ -340,76 +362,96 @@ fun FullScreenMediaViewer(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            IconButton(
-                                onClick = onDismiss,
-                                modifier = Modifier.testTag("full_screen_media_close")
+                            Box(
+                                modifier = Modifier
+                                    .size(38.dp)
+                                    .clip(CircleShape)
+                                    .background(Color.Black.copy(alpha = 0.50f))
+                                    .clickable { onDismiss() }
+                                    .testTag("full_screen_media_close"),
+                                contentAlignment = Alignment.Center
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Close,
                                     contentDescription = "Close",
                                     tint = Color.White,
-                                    modifier = Modifier.size(24.dp)
+                                    modifier = Modifier.size(20.dp)
                                 )
                             }
-                            Spacer(modifier = Modifier.width(4.dp))
-                            if (mediaList.size > 1) {
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Surface(
+                                shape = RoundedCornerShape(12.dp),
+                                color = Color.Black.copy(alpha = 0.50f)
+                            ) {
                                 Text(
-                                    text = "${currentIndex + 1} of ${mediaList.size}",
-                                    color = Color.White,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 15.sp
-                                )
-                            } else {
-                                Text(
-                                    text = "Photo View",
+                                    text = if (mediaList.size > 1) "${currentIndex + 1} of ${mediaList.size}" else "Photo View",
                                     color = Color.White,
                                     fontWeight = FontWeight.SemiBold,
-                                    fontSize = 15.sp
+                                    fontSize = 13.sp,
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
                                 )
                             }
                         }
 
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
                             if (onShowInChat != null) {
-                                IconButton(
-                                    onClick = {
-                                        onShowInChat(currentUrl)
-                                        onDismiss()
-                                    },
-                                    modifier = Modifier.testTag("full_screen_media_show_in_chat")
+                                Box(
+                                    modifier = Modifier
+                                        .size(38.dp)
+                                        .clip(CircleShape)
+                                        .background(Color.Black.copy(alpha = 0.50f))
+                                        .clickable {
+                                            onShowInChat(currentUrl)
+                                            onDismiss()
+                                        }
+                                        .testTag("full_screen_media_show_in_chat"),
+                                    contentAlignment = Alignment.Center
                                 ) {
                                     Icon(
                                         imageVector = Icons.Default.Chat,
                                         contentDescription = "Show in chat",
                                         tint = Color.White,
-                                        modifier = Modifier.size(22.dp)
+                                        modifier = Modifier.size(18.dp)
                                     )
                                 }
                             }
 
                             // Share
-                            IconButton(
-                                onClick = { shareImage() },
-                                modifier = Modifier.testTag("full_screen_media_share")
+                            Box(
+                                modifier = Modifier
+                                    .size(38.dp)
+                                    .clip(CircleShape)
+                                    .background(Color.Black.copy(alpha = 0.50f))
+                                    .clickable { shareImage() }
+                                    .testTag("full_screen_media_share"),
+                                contentAlignment = Alignment.Center
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Share,
                                     contentDescription = "Share",
                                     tint = Color.White,
-                                    modifier = Modifier.size(22.dp)
+                                    modifier = Modifier.size(18.dp)
                                 )
                             }
 
                             // Download / Save to Gallery
-                            IconButton(
-                                onClick = { saveImageToGallery() },
-                                modifier = Modifier.testTag("full_screen_media_download")
+                            Box(
+                                modifier = Modifier
+                                    .size(38.dp)
+                                    .clip(CircleShape)
+                                    .background(Color.Black.copy(alpha = 0.50f))
+                                    .clickable { saveImageToGallery() }
+                                    .testTag("full_screen_media_download"),
+                                contentAlignment = Alignment.Center
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Download,
                                     contentDescription = "Save to gallery",
                                     tint = Color.White,
-                                    modifier = Modifier.size(24.dp)
+                                    modifier = Modifier.size(19.dp)
                                 )
                             }
                         }

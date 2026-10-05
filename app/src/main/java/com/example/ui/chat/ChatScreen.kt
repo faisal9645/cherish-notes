@@ -27,6 +27,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.input.pointer.pointerInput
@@ -194,17 +195,21 @@ fun ChatScreen(
     // Issue 13: Only auto-scroll to bottom when a genuinely new message arrives
     // AND the user is already near the bottom — don't hijack scroll mid-history.
     val prevMessageCount = remember { mutableIntStateOf(uiState.messages.size) }
-    LaunchedEffect(uiState.messages.size) {
-        val isNearBottom = listState.firstVisibleItemIndex <= 3
-        val newestMessage = uiState.messages.lastOrNull()
+    val prevNewestMessageTimestamp = remember { mutableLongStateOf(0L) }
+    LaunchedEffect(uiState.messages) {
+        val isNearBottom = listState.firstVisibleItemIndex <= 1
+        val newestMessage = uiState.messages.maxByOrNull { it.timestamp }
+        val isNewArrival = newestMessage != null && newestMessage.timestamp > prevNewestMessageTimestamp.longValue
         val iSentIt = newestMessage?.senderId == uiState.currentUser?.id
 
-        if (uiState.messages.size > prevMessageCount.intValue) {
+        if (isNewArrival) {
             if (isNearBottom || iSentIt) {
                 listState.animateScrollToItem(0)
             }
         }
-        prevMessageCount.intValue = uiState.messages.size
+        if (newestMessage != null) {
+            prevNewestMessageTimestamp.longValue = newestMessage.timestamp
+        }
     }
 
 
@@ -286,6 +291,18 @@ fun ChatScreen(
     }
 
     var highlightedMessageId by remember { mutableStateOf<String?>(null) }
+
+    val app = LocalContext.current.applicationContext as com.example.CherishApplication
+    val isDisguiseActive by app.securityPreferences.isDisguiseActive.collectAsState()
+    LaunchedEffect(isDisguiseActive) {
+        if (isDisguiseActive) {
+            viewModel.closeFullScreenMedia()
+            viewModel.closeTheaterVideo()
+            showFullProfilePicViewer = false
+            showClearChatDialog = false
+            showChatMenu = false
+        }
+    }
 
     // User presence: Show as online only while actively inside the Chat tab (Issue 5)
     DisposableEffect(Unit) {
@@ -527,6 +544,14 @@ fun ChatScreen(
                                 )
                             }
                         }
+                        
+                        // Dedicated emergency exit button
+                        IconButton(
+                            onClick = onNavigateBack,
+                            modifier = Modifier.size(40.dp)
+                        ) {
+                            Icon(Icons.Default.ExitToApp, contentDescription = "Emergency Exit to Notes", tint = iconTint, modifier = Modifier.size(23.dp))
+                        }
 
                         Box {
                             IconButton(
@@ -541,19 +566,6 @@ fun ChatScreen(
                                 expanded = showChatMenu,
                                 onDismissRequest = { showChatMenu = false }
                             ) {
-                                if (!isPrivate) {
-                                    DropdownMenuItem(
-                                        text = { Text("Check After Timer") },
-                                        onClick = {
-                                            showChatMenu = false
-                                            viewModel.openCheckAfterSheet()
-                                        },
-                                        leadingIcon = {
-                                            Icon(Icons.Filled.HourglassTop, null, tint = RoseGoldPrimary)
-                                        }
-                                    )
-                                }
-
                                 DropdownMenuItem(
                                     text = { Text(if (uiState.filterStarredOnly) "Show All Messages" else "Starred Messages ⭐") },
                                     onClick = {
@@ -562,6 +574,17 @@ fun ChatScreen(
                                     },
                                     leadingIcon = {
                                         Icon(if (uiState.filterStarredOnly) Icons.Filled.Star else Icons.Outlined.StarOutline, null, tint = GoldMilestone)
+                                    }
+                                )
+
+                                DropdownMenuItem(
+                                    text = { Text("Settings") },
+                                    onClick = {
+                                        showChatMenu = false
+                                        onNavigateToProfile()
+                                    },
+                                    leadingIcon = {
+                                        Icon(Icons.Default.Settings, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
                                     }
                                 )
 
@@ -711,7 +734,7 @@ fun ChatScreen(
                     placeholder = when {
                         uiState.isStealthCurtainActive -> "Add a note..."
                         uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE -> "Type a message..."
-                        else -> "Type something sweet to $partnerName... ❤️"
+                        else -> "Message $partnerName... ❤️"
                     },
                     isPrivateMode = (uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE)
                 )
@@ -721,65 +744,29 @@ fun ChatScreen(
     },
         containerColor = MaterialTheme.colorScheme.background
     ) { paddingValues ->
+        var totalDrag = 0f
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .pointerInput(uiState.isStealthCurtainActive) {
-                    if (uiState.isStealthCurtainActive) return@pointerInput
-                    awaitEachGesture {
-                        val down = awaitFirstDown(requireUnconsumed = false)
-                        var accX = 0f
-                        var accY = 0f
-                        var directionLocked = false
-                        var isHorizontal = false
-                        var wasConsumedByChild = false
-                        var hasNavigated = false
-
-                        while (true) {
-                            val event = awaitPointerEvent(PointerEventPass.Main)
-                            val change = event.changes.firstOrNull { it.id == down.id } ?: break
-                            if (!change.pressed) break
-
-                            if (change.isConsumed) {
-                                wasConsumedByChild = true
-                                break
-                            }
-
-                            val delta = change.positionChange()
-                            accX += delta.x
-                            accY += delta.y
-
-                            if (!directionLocked && (kotlin.math.abs(accX) > 12f || kotlin.math.abs(accY) > 12f)) {
-                                isHorizontal = kotlin.math.abs(accX) > (kotlin.math.abs(accY) * 1.3f)
-                                directionLocked = true
-                                if (!isHorizontal) {
-                                    break
-                                }
-                            }
-
-                            if (directionLocked && isHorizontal) {
-                                change.consume()
-                                if (accX > 70f) {
-                                    hasNavigated = true
-                                    onNavigateToHome()
-                                    break
-                                } else if (accX < -70f) {
-                                    hasNavigated = true
-                                    onNavigateToProfile()
-                                    break
-                                }
-                            }
-                        }
-
-                        if (!hasNavigated && directionLocked && isHorizontal && !wasConsumedByChild) {
-                            if (accX > 50f) {
+                .pointerInput(uiState.isStealthCurtainActive, uiState.isSearching) {
+                    if (uiState.isStealthCurtainActive || uiState.isSearching) return@pointerInput
+                    detectHorizontalDragGestures(
+                        onDragStart = { totalDrag = 0f },
+                        onDragEnd = {
+                            if (totalDrag > 120f) {
                                 onNavigateToHome()
-                            } else if (accX < -50f) {
+                            } else if (totalDrag < -120f) {
                                 onNavigateToProfile()
                             }
+                            totalDrag = 0f
+                        },
+                        onDragCancel = { totalDrag = 0f },
+                        onHorizontalDrag = { change, dragAmount ->
+                            change.consume()
+                            totalDrag += dragAmount
                         }
-                    }
+                    )
                 }
         ) {
             // Starred Messages Filter Header Banner
@@ -889,16 +876,12 @@ fun ChatScreen(
                 val hasTodayMessages = remember(displayedMessages) { displayedMessages.any { isToday(it.timestamp) } }
 
                 val canLoadMore = uiState.showPreviousChats && !uiState.isPaginationExhausted && !uiState.isLoadingMore && displayedMessages.isNotEmpty()
-                val shouldLoadMore by remember(canLoadMore, hasLoadedPreviousChats) {
+                val shouldLoadMore by remember(canLoadMore) {
                     derivedStateOf {
                         if (!canLoadMore) return@derivedStateOf false
                         val totalItems = listState.layoutInfo.totalItemsCount
                         val lastVisibleItem = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
-                        if (!hasLoadedPreviousChats) {
-                            totalItems > 0 && lastVisibleItem >= totalItems - 1
-                        } else {
-                            totalItems > 0 && lastVisibleItem >= totalItems - 4
-                        }
+                        totalItems > 0 && lastVisibleItem >= totalItems - 4
                     }
                 }
                 LaunchedEffect(shouldLoadMore) {
@@ -927,14 +910,7 @@ fun ChatScreen(
                         val isFirstOfDay = index == reversedMessages.lastIndex || !isSameDay(reversedMessages[index + 1].timestamp, message.timestamp)
 
                         Column(
-                            modifier = Modifier.animateItem(
-                                fadeInSpec = null,
-                                fadeOutSpec = null,
-                                placementSpec = spring(
-                                    dampingRatio = Spring.DampingRatioNoBouncy,
-                                    stiffness = Spring.StiffnessMediumLow
-                                )
-                            )
+                            modifier = Modifier.fillMaxWidth()
                         ) {
                             val dateSep = formatDateSeparator(message.timestamp)
                             if (isFirstOfDay && dateSep.isNotEmpty()) {
@@ -950,6 +926,9 @@ fun ChatScreen(
 
                             val isPrivate = uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE
                             val isHighlighted = (highlightedMessageId == message.id)
+                            val isYouTube = remember(message.text) {
+                                YouTubeHelper.extractVideoId(message.text) != null
+                            }
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -1048,57 +1027,6 @@ fun ChatScreen(
                                             fontSize = 11.5.sp,
                                             fontWeight = FontWeight.Medium,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    // 2. Load Previous Chats Entry Button
-                    // When previous chats are enabled in Settings and have not been loaded yet, provide a sleek button at the top of today's chat
-                    if (uiState.showPreviousChats && !hasLoadedPreviousChats && uiState.hasPreviousChatsAvailable && !uiState.isPaginationExhausted && hasTodayMessages && !uiState.isLoadingMore) {
-                        item(key = "load_previous_chats_entry", contentType = "previous_entry") {
-                            val isPrivate = uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 24.dp, vertical = 12.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Surface(
-                                    shape = RoundedCornerShape(16.dp),
-                                    color = if (isPrivate) {
-                                        if (isDark) Color(0xFF232428).copy(alpha = 0.9f) else Color(0xFFF3F4F6)
-                                    } else {
-                                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = if (isDark) 0.85f else 0.92f)
-                                    },
-                                    border = BorderStroke(
-                                        1.dp,
-                                        if (isPrivate) (if (isDark) Color(0xFF374151) else Color(0xFFE5E7EB)) else RoseGoldPrimary.copy(alpha = 0.35f)
-                                    ),
-                                    shadowElevation = 1.dp,
-                                    modifier = Modifier.clickable {
-                                        viewModel.loadMoreMessages()
-                                    }
-                                ) {
-                                    Row(
-                                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.Center
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.History,
-                                            contentDescription = null,
-                                            tint = if (isPrivate) (if (isDark) Color(0xFF9CA3AF) else Color(0xFF4B5563)) else RoseGoldPrimary,
-                                            modifier = Modifier.size(16.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Text(
-                                            text = "Load Previous Chats (Yesterday & earlier)",
-                                            fontSize = 12.sp,
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = if (isPrivate) (if (isDark) Color(0xFFD1D5DB) else Color(0xFF374151)) else RoseGoldPrimary
                                         )
                                     }
                                 }
@@ -1793,8 +1721,9 @@ fun BouncingDots(color: Color = RoseGoldPrimary) {
 
 fun isSameDay(t1: Long, t2: Long): Boolean {
     if (t1 <= 0L || t2 <= 0L) return false
-    val cal1 = java.util.Calendar.getInstance().apply { timeInMillis = t1 }
-    val cal2 = java.util.Calendar.getInstance().apply { timeInMillis = t2 }
+    val offset = 4 * 60 * 60 * 1000L
+    val cal1 = java.util.Calendar.getInstance().apply { timeInMillis = t1 - offset }
+    val cal2 = java.util.Calendar.getInstance().apply { timeInMillis = t2 - offset }
     return cal1.get(java.util.Calendar.ERA) == cal2.get(java.util.Calendar.ERA) &&
            cal1.get(java.util.Calendar.YEAR) == cal2.get(java.util.Calendar.YEAR) &&
            cal1.get(java.util.Calendar.DAY_OF_YEAR) == cal2.get(java.util.Calendar.DAY_OF_YEAR)
@@ -1802,8 +1731,9 @@ fun isSameDay(t1: Long, t2: Long): Boolean {
 
 fun isToday(timestamp: Long): Boolean {
     if (timestamp <= 0L) return false
-    val calMsg = java.util.Calendar.getInstance().apply { timeInMillis = timestamp }
-    val calToday = java.util.Calendar.getInstance()
+    val offset = 4 * 60 * 60 * 1000L
+    val calMsg = java.util.Calendar.getInstance().apply { timeInMillis = timestamp - offset }
+    val calToday = java.util.Calendar.getInstance().apply { timeInMillis = System.currentTimeMillis() - offset }
     return calMsg.get(java.util.Calendar.ERA) == calToday.get(java.util.Calendar.ERA) &&
            calMsg.get(java.util.Calendar.YEAR) == calToday.get(java.util.Calendar.YEAR) &&
            calMsg.get(java.util.Calendar.DAY_OF_YEAR) == calToday.get(java.util.Calendar.DAY_OF_YEAR)
@@ -1811,8 +1741,10 @@ fun isToday(timestamp: Long): Boolean {
 
 fun isYesterday(timestamp: Long): Boolean {
     if (timestamp <= 0L) return false
-    val calMsg = java.util.Calendar.getInstance().apply { timeInMillis = timestamp }
+    val offset = 4 * 60 * 60 * 1000L
+    val calMsg = java.util.Calendar.getInstance().apply { timeInMillis = timestamp - offset }
     val calYesterday = java.util.Calendar.getInstance().apply {
+        timeInMillis = System.currentTimeMillis() - offset
         add(java.util.Calendar.DAY_OF_YEAR, -1)
     }
     return calMsg.get(java.util.Calendar.ERA) == calYesterday.get(java.util.Calendar.ERA) &&
@@ -1825,12 +1757,16 @@ fun formatDateSeparator(timestamp: Long): String {
     if (isToday(timestamp)) return "Today"
     if (isYesterday(timestamp)) return "Yesterday"
     
-    val calMsg = java.util.Calendar.getInstance().apply { timeInMillis = timestamp }
-    val calNow = java.util.Calendar.getInstance()
+    val offset = 4 * 60 * 60 * 1000L
+    val calMsg = java.util.Calendar.getInstance().apply { timeInMillis = timestamp - offset }
+    val calNow = java.util.Calendar.getInstance().apply { timeInMillis = System.currentTimeMillis() - offset }
     
     val sameYear = calMsg.get(java.util.Calendar.YEAR) == calNow.get(java.util.Calendar.YEAR)
     val pattern = if (sameYear) "EEEE, MMMM d" else "EEEE, MMMM d, yyyy"
-    return SimpleDateFormat(pattern, Locale.getDefault()).format(Date(timestamp))
+    // Use the actual timestamp for formatting, so the header shows the correct date string
+    // e.g. "Tuesday, October 10" instead of "Monday, October 9" for a 3 AM message?
+    // Wait, if it's 3 AM Tuesday, and we want it to be considered Monday, we MUST format the adjusted timestamp!
+    return SimpleDateFormat(pattern, Locale.getDefault()).format(Date(timestamp - offset))
 }
 
 @Composable

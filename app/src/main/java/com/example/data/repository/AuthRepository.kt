@@ -100,6 +100,11 @@ class AuthRepository(private val context: Context) {
         updatePresence()
     }
 
+    fun isUserActivelyInChat(): Boolean {
+        val isDisguised = securityPrefs.isDisguiseActive.value
+        return isAppInForeground && isActivelyInChatTab && !isDisguised
+    }
+
     fun onAppForegroundStateChanged(inForeground: Boolean) {
         isAppInForeground = inForeground
         updatePresence()

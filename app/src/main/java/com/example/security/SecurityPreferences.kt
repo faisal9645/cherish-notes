@@ -61,11 +61,20 @@ class SecurityPreferences(context: Context) {
     fun revealSecretApp() {
         _hasRevealedSecretAppInSession.value = true
         _isDisguiseActive.value = false
+        // Every time the secret app is opened, default to showing only today's chats
+        setShowPreviousChatsEnabled(false)
+        try {
+            com.example.CherishApplication.instance.chatRepository.resetPreviousChats()
+        } catch (_: Exception) {}
     }
 
     fun reDisguise() {
         _hasRevealedSecretAppInSession.value = false
         _isDisguiseActive.value = true
+        setShowPreviousChatsEnabled(false)
+        try {
+            com.example.CherishApplication.instance.chatRepository.resetPreviousChats()
+        } catch (_: Exception) {}
         // Ensure that when the app is backgrounded in Private Mode, 
         // it does not restore to the private chat screen upon reopening.
         setChatExperienceMode(com.example.ui.chat.ChatExperienceMode.NORMAL)
@@ -76,6 +85,8 @@ class SecurityPreferences(context: Context) {
 
     fun revealSecretHistory() {
         _isSecretHistoryRevealed.value = true
+        setShowPreviousChatsEnabled(true)
+        setTemporaryClearTimestamp(0L)
     }
 
     fun hideSecretHistory() {

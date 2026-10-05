@@ -75,6 +75,22 @@ fun CherishNavGraph(
         }
     }
 
+    // Whenever opening secret app, it should go to chat tab only
+    LaunchedEffect(isDisguiseActive) {
+        if (!isDisguiseActive && isUserLoggedIn) {
+            val currentRoute = navController.currentBackStackEntry?.destination?.route
+            if (currentRoute != Screen.Chat.route) {
+                val popped = navController.popBackStack(Screen.Chat.route, inclusive = false)
+                if (!popped) {
+                    navController.navigate(Screen.Chat.route) {
+                        popUpTo(0) { inclusive = false }
+                        launchSingleTop = true
+                    }
+                }
+            }
+        }
+    }
+
     val appAlpha by animateFloatAsState(
         targetValue = if (isDisguiseActive) 0f else 1f,
         animationSpec = if (isDisguiseActive) snap() else tween(160, easing = FastOutSlowInEasing),
@@ -370,9 +386,11 @@ fun CherishNavGraph(
                     navController.navigate(Screen.PrivacyAudit.route) { launchSingleTop = true }
                 },
                 onNavigateToStorageManager = {
+                    app.securityPreferences.ignoreChatNavigation = true
                     navController.navigate(Screen.StorageManager.route) { launchSingleTop = true }
                 },
                 onNavigateToDeviceSessions = {
+                    app.securityPreferences.ignoreChatNavigation = true
                     navController.navigate(Screen.DeviceSessions.route) { launchSingleTop = true }
                 },
                 onNavigateToOpenWhen = {
@@ -417,13 +435,19 @@ fun CherishNavGraph(
 
         composable(Screen.StorageManager.route) {
             com.example.ui.profile.StorageManagerScreen(
-                onNavigateBack = { navController.popBackStack() }
+                onNavigateBack = {
+                    app.securityPreferences.ignoreChatNavigation = false
+                    navController.popBackStack()
+                }
             )
         }
 
         composable(Screen.DeviceSessions.route) {
             com.example.ui.profile.DeviceSessionsScreen(
-                onNavigateBack = { navController.popBackStack() }
+                onNavigateBack = {
+                    app.securityPreferences.ignoreChatNavigation = false
+                    navController.popBackStack()
+                }
             )
         }
     }
@@ -459,6 +483,18 @@ fun CherishNavGraph(
             securityPreferences = app.securityPreferences,
             onSecretGestureTriggered = {
                 app.securityPreferences.revealSecretApp()
+                if (isUserLoggedIn) {
+                    val currentRoute = navController.currentBackStackEntry?.destination?.route
+                    if (currentRoute != Screen.Chat.route) {
+                        val popped = navController.popBackStack(Screen.Chat.route, inclusive = false)
+                        if (!popped) {
+                            navController.navigate(Screen.Chat.route) {
+                                popUpTo(0) { inclusive = false }
+                                launchSingleTop = true
+                            }
+                        }
+                    }
+                }
             },
             modifier = Modifier.fillMaxSize()
         )

@@ -34,12 +34,14 @@ class CherishFirebaseMessagingService : FirebaseMessagingService() {
             ?: remoteMessage.notification?.body
             ?: "Sent a message"
         val conversationId = remoteMessage.data["conversationId"]
+        val messageId = remoteMessage.data["messageId"] ?: remoteMessage.data["id"] ?: remoteMessage.messageId
 
         NotificationHelper.showMessageNotification(
             context = applicationContext,
             senderName = senderName,
             messageText = messageText,
-            conversationId = conversationId
+            conversationId = conversationId,
+            messageId = messageId
         )
     }
 }

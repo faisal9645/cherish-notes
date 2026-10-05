@@ -135,10 +135,18 @@ fun MessageBubble(
     val heartScale = remember { Animatable(0f) }
     val heartAlpha = remember { Animatable(0f) }
 
-    // Swipe-to-reply interactive state
+    // Swipe-to-reply interactive state with density-aware threshold
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val thresholdPx = remember(density) { with(density) { 42.dp.toPx() } }
+    val maxDragPx = remember(density) { with(density) { 76.dp.toPx() } }
+
     val swipeOffset = remember { Animatable(0f) }
-    val replyIconAlpha by remember {
-        derivedStateOf { (abs(swipeOffset.value) / 36f).coerceIn(0f, 1f) }
+
+    val replyProgress by remember {
+        derivedStateOf { (abs(swipeOffset.value) / thresholdPx).coerceIn(0f, 1f) }
+    }
+    val isReplyReached by remember {
+        derivedStateOf { abs(swipeOffset.value) >= thresholdPx }
     }
     var hasTriggeredThresholdHaptic by remember { mutableStateOf(false) }
 
@@ -169,104 +177,111 @@ fun MessageBubble(
         }
     }
 
+    val isYouTube = remember(message.text) {
+        YouTubeHelper.extractVideoId(message.text) != null
+    }
+
     Box(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 6.dp, vertical = 2.5.dp),
         contentAlignment = if (isFromMe) Alignment.CenterEnd else Alignment.CenterStart
     ) {
-        val replyColor = if (isPrivateMode) {
-            if (isDark) Color(0xFF9CA3AF) else Color(0xFF6B7280)
-        } else {
-            RoseGoldPrimary
-        }
-
-        // Reply icon on the left (revealed when swiping right on ANY message)
-        if (onSwipeToReply != null && (swipeOffset.value > 0f || !isFromMe)) {
-            Icon(
-                imageVector = Icons.AutoMirrored.Filled.Reply,
-                contentDescription = "Swipe to reply",
-                tint = replyColor.copy(alpha = replyIconAlpha),
+        // Stationary background reply indicator on the left (revealed when swiping right on partner message)
+        if (onSwipeToReply != null && !isFromMe && swipeOffset.value > 0f) {
+            ReplyIndicator(
+                isReached = isReplyReached,
+                progress = replyProgress,
+                isDark = isDark,
+                isPrivateMode = isPrivateMode,
                 modifier = Modifier
                     .align(Alignment.CenterStart)
                     .padding(start = 12.dp)
-                    .size(24.dp)
-                    .graphicsLayer {
-                        scaleX = replyIconAlpha
-                        scaleY = replyIconAlpha
-                        alpha = replyIconAlpha
-                    }
             )
         }
 
-        // Reply icon on the right (revealed when swiping left on outgoing message)
-        if (onSwipeToReply != null && swipeOffset.value < 0f) {
-            Icon(
-                imageVector = Icons.AutoMirrored.Filled.Reply,
-                contentDescription = "Swipe to reply",
-                tint = replyColor.copy(alpha = replyIconAlpha),
+        // Stationary background reply indicator on the right (revealed when swiping left on user message)
+        if (onSwipeToReply != null && isFromMe && swipeOffset.value < 0f) {
+            ReplyIndicator(
+                isReached = isReplyReached,
+                progress = replyProgress,
+                isDark = isDark,
+                isPrivateMode = isPrivateMode,
                 modifier = Modifier
                     .align(Alignment.CenterEnd)
                     .padding(end = 12.dp)
-                    .size(24.dp)
-                    .graphicsLayer {
-                        scaleX = replyIconAlpha
-                        scaleY = replyIconAlpha
-                        alpha = replyIconAlpha
-                    }
             )
         }
 
-        Column(
-            horizontalAlignment = if (isFromMe) Alignment.End else Alignment.Start,
-            modifier = Modifier
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = if (isFromMe) Arrangement.End else Arrangement.Start,
+            modifier = (if (isYouTube) Modifier.fillMaxWidth() else Modifier)
                 .offset { androidx.compose.ui.unit.IntOffset(swipeOffset.value.roundToInt(), 0) }
-                .pointerInput(message.id, onSwipeToReply) {
-                    if (onSwipeToReply != null) {
-                        detectHorizontalDragGestures(
-                            onDragStart = {
-                                hasTriggeredThresholdHaptic = false
-                            },
-                            onDragEnd = {
-                                if (abs(swipeOffset.value) >= 36f) {
-                                    try {
-                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    } catch (_: Exception) {}
-                                    onSwipeToReply()
-                                }
-                                hasTriggeredThresholdHaptic = false
-                                scope.launch {
-                                    swipeOffset.animateTo(0f, spring(dampingRatio = Spring.DampingRatioMediumBouncy))
-                                }
-                            },
-                            onDragCancel = {
-                                hasTriggeredThresholdHaptic = false
-                                scope.launch {
-                                    swipeOffset.animateTo(0f, spring(dampingRatio = Spring.DampingRatioMediumBouncy))
-                                }
-                            },
-                            onHorizontalDrag = { change, dragAmount ->
-                                change.consume()
-                                val current = swipeOffset.value
-                                val newTarget = if (isFromMe) {
-                                    (current + dragAmount).coerceIn(-80f, 80f)
-                                } else {
-                                    (current + dragAmount).coerceIn(0f, 80f)
-                                }
-                                if (abs(newTarget) >= 36f && !hasTriggeredThresholdHaptic) {
-                                    hasTriggeredThresholdHaptic = true
-                                    try {
-                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    } catch (_: Exception) {}
-                                } else if (abs(newTarget) < 36f) {
-                                    hasTriggeredThresholdHaptic = false
-                                }
-                                scope.launch { swipeOffset.snapTo(newTarget) }
-                            }
-                        )
-                    }
-                }
         ) {
+            // Adjacent reply indicator (revealed to the left when user swipes their own message right)
+            if (onSwipeToReply != null && isFromMe && swipeOffset.value > 0f) {
+                ReplyIndicator(
+                    isReached = isReplyReached,
+                    progress = replyProgress,
+                    isDark = isDark,
+                    isPrivateMode = isPrivateMode,
+                    modifier = Modifier.padding(end = 10.dp)
+                )
+            }
+
+            Column(
+                horizontalAlignment = if (isFromMe) Alignment.End else Alignment.Start,
+                modifier = (if (isYouTube) Modifier.fillMaxWidth() else Modifier)
+                    .pointerInput(message.id, onSwipeToReply) {
+                        if (onSwipeToReply != null) {
+                            detectHorizontalDragGestures(
+                                onDragStart = {
+                                    hasTriggeredThresholdHaptic = false
+                                },
+                                onDragEnd = {
+                                    if (abs(swipeOffset.value) >= thresholdPx) {
+                                        try {
+                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        } catch (_: Exception) {}
+                                        onSwipeToReply()
+                                    }
+                                    hasTriggeredThresholdHaptic = false
+                                    scope.launch {
+                                        swipeOffset.animateTo(0f, spring(dampingRatio = Spring.DampingRatioMediumBouncy))
+                                    }
+                                },
+                                onDragCancel = {
+                                    hasTriggeredThresholdHaptic = false
+                                    scope.launch {
+                                        swipeOffset.animateTo(0f, spring(dampingRatio = Spring.DampingRatioMediumBouncy))
+                                    }
+                                },
+                                onHorizontalDrag = { change, dragAmount ->
+                                    change.consume()
+                                    val current = swipeOffset.value
+                                    
+                                    // Ensure swipe direction matches isFromMe (right for received, left for sent) to avoid wrong UI indicator
+                                    val newTarget = if (isFromMe) {
+                                        (current + dragAmount).coerceIn(-maxDragPx, 0f)
+                                    } else {
+                                        (current + dragAmount).coerceIn(0f, maxDragPx)
+                                    }
+                                    
+                                    if (abs(newTarget) >= thresholdPx && !hasTriggeredThresholdHaptic) {
+                                        hasTriggeredThresholdHaptic = true
+                                        try {
+                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        } catch (_: Exception) {}
+                                    } else if (abs(newTarget) < thresholdPx) {
+                                        hasTriggeredThresholdHaptic = false
+                                    }
+                                    scope.launch { swipeOffset.snapTo(newTarget) }
+                                }
+                            )
+                        }
+                    }
+            ) {
             val bubbleMinWidth = when (message.getTypedType()) {
                 MessageType.IMAGE, MessageType.AUDIO -> 260.dp
                 else -> 60.dp
@@ -277,8 +292,7 @@ fun MessageBubble(
             }
 
             Box(
-                modifier = Modifier
-                    .widthIn(min = bubbleMinWidth, max = bubbleMaxWidth)
+                modifier = (if (isYouTube) Modifier.fillMaxWidth() else Modifier.widthIn(min = bubbleMinWidth, max = bubbleMaxWidth))
                     .then(
                         if (isPrivateMode) {
                             Modifier.shadow(0.5.dp, bubbleShape)
@@ -329,7 +343,10 @@ fun MessageBubble(
                     }
                     .testTag("message_bubble_${message.id}")
             ) {
-            Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)) {
+            Column(
+                modifier = (if (isYouTube) Modifier.fillMaxWidth() else Modifier)
+                    .padding(horizontal = if (isYouTube) 6.dp else 10.dp, vertical = 6.dp)
+            ) {
                 // Reply Quote Preview
                 if (!message.replyToText.isNullOrEmpty()) {
                     Surface(
@@ -622,7 +639,8 @@ fun MessageBubble(
                         Spacer(modifier = Modifier.height(6.dp))
                         InlineYouTubeCard(
                             videoId = youtubeVideoId,
-                            onOpenTheater = { vid -> onOpenTheaterVideo?.invoke(vid) }
+                            onOpenTheater = { vid -> onOpenTheaterVideo?.invoke(vid) },
+                            modifier = Modifier.fillMaxWidth()
                         )
                     } else if (genericUrl != null) {
                         Spacer(modifier = Modifier.height(6.dp))
@@ -756,7 +774,81 @@ fun MessageBubble(
                 }
             }
         }
-
         }
+
+        // Adjacent reply indicator when partner message is swiped left
+        if (onSwipeToReply != null && !isFromMe && swipeOffset.value < 0f) {
+            ReplyIndicator(
+                isReached = isReplyReached,
+                progress = replyProgress,
+                isDark = isDark,
+                isPrivateMode = isPrivateMode,
+                modifier = Modifier.padding(start = 10.dp)
+            )
+        }
+    }
+}
+}
+
+@Composable
+private fun ReplyIndicator(
+    isReached: Boolean,
+    progress: Float,
+    isDark: Boolean,
+    isPrivateMode: Boolean,
+    modifier: Modifier = Modifier
+) {
+    val scale = (0.55f + (progress * 0.45f)).coerceIn(0.55f, if (isReached) 1.15f else 1.0f)
+    val alpha = progress.coerceIn(0.2f, 1f)
+
+    val backgroundColor = when {
+        isReached -> if (isPrivateMode) Color(0xFF4B5563) else RoseGoldPrimary
+        isPrivateMode -> if (isDark) Color(0xFF1F2937) else Color(0xFFF3F4F6)
+        isDark -> Color(0xFF2C2227)
+        else -> Color(0xFFFFF0F5)
+    }
+
+    val iconTint = when {
+        isReached -> Color.White
+        isPrivateMode -> if (isDark) Color.White else Color(0xFF374151)
+        else -> RoseGoldPrimary
+    }
+
+    val borderColor = when {
+        isReached -> if (isPrivateMode) Color(0xFF9CA3AF) else RoseGoldPrimary
+        isPrivateMode -> if (isDark) Color(0xFF4B5563) else Color(0xFFD1D5DB)
+        else -> RoseGoldPrimary.copy(alpha = 0.5f)
+    }
+
+    Box(
+        modifier = modifier
+            .size(36.dp)
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+                this.alpha = alpha
+            }
+            .shadow(
+                elevation = if (isReached) 4.dp else 2.dp,
+                shape = CircleShape,
+                clip = false
+            )
+            .background(
+                color = backgroundColor,
+                shape = CircleShape
+            )
+            .border(
+                width = if (isReached) 1.5.dp else 1.dp,
+                color = borderColor,
+                shape = CircleShape
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = Icons.AutoMirrored.Filled.Reply,
+            contentDescription = "Swipe to reply",
+            tint = iconTint,
+            modifier = Modifier.size(20.dp)
+        )
     }
 }

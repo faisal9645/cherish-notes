@@ -5,7 +5,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
 
 // Day Mode: Pure white surface, electric day blue accents
 private val PureWhiteColorScheme = lightColorScheme(
@@ -79,9 +82,17 @@ fun CherishTheme(
         else -> if (isSystemDark) DarkColorScheme else PureWhiteColorScheme
     }
 
-    MaterialTheme(
-        colorScheme = colorScheme,
-        typography = Typography,
-        content = content
+    val currentDensity = LocalDensity.current
+    val cappedDensity = Density(
+        density = currentDensity.density,
+        fontScale = currentDensity.fontScale.coerceAtMost(1.0f)
     )
+
+    CompositionLocalProvider(LocalDensity provides cappedDensity) {
+        MaterialTheme(
+            colorScheme = colorScheme,
+            typography = Typography,
+            content = content
+        )
+    }
 }

@@ -110,6 +110,11 @@ class MainActivity : FragmentActivity() {
                         }
                     }
 
+                    // Always default to hiding previous/cleared chats on fresh app launch
+                    LaunchedEffect(Unit) {
+                        app.securityPreferences.setShowPreviousChatsEnabled(false)
+                    }
+
                     CherishNavGraph(app = app)
                 }
             }

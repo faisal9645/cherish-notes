@@ -41,6 +41,7 @@ class ChatRepository(
     private var globalTodayListener: ListenerRegistration? = null
     private var globalPreviousListener: ListenerRegistration? = null
     private var currentActiveConversationId: String? = null
+    private var isInitialTodaySnapshot = true
     
     private var previousMessageLimit = 0L
     private var todayMessages: List<Message> = emptyList()
@@ -54,6 +55,9 @@ class ChatRepository(
 
     private val _hasPreviousChatsAvailableFlow = MutableStateFlow(true)
     val hasPreviousChatsAvailableFlow: StateFlow<Boolean> = _hasPreviousChatsAvailableFlow.asStateFlow()
+
+    private val _galleryMediaMessages = MutableStateFlow<List<Message>>(emptyList())
+    val galleryMediaMessages: StateFlow<List<Message>> = _galleryMediaMessages.asStateFlow()
 
     var isQueryExhausted: Boolean
         get() = _isQueryExhaustedFlow.value
@@ -113,11 +117,53 @@ class ChatRepository(
         }
     }
 
+    /**
+     * Immediately loads all media messages (photos, videos, audio notes) and starred items
+     * from Firestore for the gallery view so all items appear without manual chat pagination.
+     */
+    fun loadAllGalleryMedia() {
+        val convId = currentActiveConversationId ?: getConversationId()
+        val fs = firestore ?: return
+        val convRef = fs.collection("conversations")
+            .document(convId)
+            .collection("messages")
+
+        convRef.whereIn("type", listOf(
+            com.example.data.model.MessageType.IMAGE.name,
+            com.example.data.model.MessageType.AUDIO.name,
+            com.example.data.model.MessageType.VIDEO.name
+        )).get().addOnSuccessListener { mediaSnap ->
+            val mediaItems = mediaSnap.documents.mapNotNull { it.toObject(Message::class.java) }
+            convRef.whereEqualTo("isStarred", true).get().addOnSuccessListener { starSnap ->
+                val starredItems = starSnap.documents.mapNotNull { it.toObject(Message::class.java) }
+                val allItems = (mediaItems + starredItems).distinctBy { it.id }.sortedByDescending { it.timestamp }
+                _galleryMediaMessages.value = allItems
+            }.addOnFailureListener {
+                _galleryMediaMessages.value = mediaItems.sortedByDescending { it.timestamp }
+            }
+        }.addOnFailureListener { e ->
+            Log.w("ChatRepository", "Failed loading gallery media", e)
+        }
+    }
+
+    fun resetPreviousChats() {
+        previousMessageLimit = 0L
+        previousMessages = emptyList()
+        _galleryMediaMessages.value = emptyList()
+        globalPreviousListener?.remove()
+        globalPreviousListener = null
+        _isQueryExhaustedFlow.value = false
+        _isLoadingMoreFlow.value = false
+        _hasPreviousChatsAvailableFlow.value = true
+        mergeAndEmitMessages()
+    }
+
     private fun startGlobalMessagesListener(conversationId: String, forceRestart: Boolean = false) {
         if (!forceRestart && currentActiveConversationId == conversationId && globalTodayListener != null) return
         globalTodayListener?.remove()
         globalPreviousListener?.remove()
         currentActiveConversationId = conversationId
+        isInitialTodaySnapshot = true
         val fs = firestore
         if (fs == null) {
             _isLoadingMoreFlow.value = false
@@ -141,13 +187,36 @@ class ChatRepository(
                 return@addSnapshotListener
             }
             if (snapshot != null) {
-                todayMessages = snapshot.documents.mapNotNull { it.toObject(Message::class.java) }
-                
-                // If today has no messages yet and previous messages haven't been loaded, load initial previous batch
-                if (todayMessages.isEmpty() && previousMessageLimit == 0L) {
-                    previousMessageLimit = 30L
-                    startPreviousMessagesListener(conversationId)
+                if (!isInitialTodaySnapshot) {
+                    for (change in snapshot.documentChanges) {
+                        if (change.type == com.google.firebase.firestore.DocumentChange.Type.ADDED) {
+                            val msg = change.document.toObject(Message::class.java)
+                            val currentUserId = authRepository.getCurrentUserId()
+                            if (msg.senderId != currentUserId && msg.status != MessageStatus.READ.name) {
+                                if (!authRepository.isUserActivelyInChat()) {
+                                    val previewText = when (msg.getTypedType()) {
+                                        MessageType.TEXT -> msg.text
+                                        MessageType.IMAGE -> "Photo"
+                                        MessageType.AUDIO -> "Voice message"
+                                        MessageType.VIDEO -> "Video"
+                                        MessageType.DOCUMENT -> "Document"
+                                        else -> "New message"
+                                    }
+                                    com.example.notifications.NotificationHelper.showMessageNotification(
+                                        context = context,
+                                        senderName = msg.senderName,
+                                        messageText = previewText,
+                                        conversationId = conversationId,
+                                        messageId = msg.id
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
+                isInitialTodaySnapshot = false
+
+                todayMessages = snapshot.documents.mapNotNull { it.toObject(Message::class.java) }
                 mergeAndEmitMessages()
             }
         }

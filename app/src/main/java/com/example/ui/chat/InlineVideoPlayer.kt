@@ -38,7 +38,7 @@ import com.example.ui.theme.RoseGoldPrimary
 
 object YouTubeHelper {
     private val YOUTUBE_REGEX = Regex(
-        """(?:https?://)?(?:www\.|m\.)?(?:youtube\.com/(?:watch\?v=|shorts/|embed/)|youtu\.be/)([a-zA-Z0-9_-]{11})""",
+        """(?:https?://)?(?:www\.|m\.)?(?:youtube\.com/(?:watch\?(?:.*&)?v=|shorts/|embed/|live/|v/)|youtu\.be/)([a-zA-Z0-9_-]{11})""",
         RegexOption.IGNORE_CASE
     )
 
@@ -52,7 +52,7 @@ object YouTubeHelper {
     }
 
     fun getEmbedUrl(videoId: String): String {
-        return "https://www.youtube-nocookie.com/embed/$videoId?autoplay=1&enablejsapi=1&fs=1&rel=0&modestbranding=1"
+        return "https://www.youtube.com/embed/$videoId?autoplay=1&enablejsapi=1&fs=1&rel=0&playsinline=1&modestbranding=1&origin=https://www.youtube.com"
     }
 
     fun getEmbedHtml(videoId: String): String {
@@ -62,20 +62,56 @@ object YouTubeHelper {
             <head>
                 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
                 <style>
-                    * { margin: 0; padding: 0; box-sizing: border-box; background: #000; }
-                    html, body { width: 100%; height: 100%; overflow: hidden; background: #000; display: flex; align-items: center; justify-content: center; }
-                    iframe { width: 100%; height: 100%; border: none; }
+                    html, body {
+                        margin: 0;
+                        padding: 0;
+                        width: 100%;
+                        height: 100%;
+                        overflow: hidden;
+                        background-color: #000000;
+                    }
+                    .player-container {
+                        position: relative;
+                        width: 100%;
+                        height: 100%;
+                        background-color: #000000;
+                    }
+                    iframe {
+                        position: absolute;
+                        top: 0;
+                        left: 0;
+                        width: 100%;
+                        height: 100%;
+                        border: 0;
+                    }
                 </style>
             </head>
             <body>
-                <iframe 
-                    src="https://www.youtube-nocookie.com/embed/$videoId?autoplay=1&enablejsapi=1&fs=1&rel=0&playsinline=1"
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                    allowfullscreen>
-                </iframe>
+                <div class="player-container">
+                    <iframe 
+                        id="ytplayer"
+                        src="https://www.youtube.com/embed/$videoId?autoplay=1&enablejsapi=1&fs=1&rel=0&playsinline=1&modestbranding=1&iv_load_policy=3&origin=https://www.youtube.com"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                        allowfullscreen>
+                    </iframe>
+                </div>
             </body>
             </html>
         """.trimIndent()
+    }
+
+    fun openInYouTube(context: Context, videoId: String) {
+        try {
+            val appIntent = Intent(Intent.ACTION_VIEW, Uri.parse("vnd.youtube:$videoId"))
+            appIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            context.startActivity(appIntent)
+        } catch (_: Exception) {
+            try {
+                val webIntent = Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/watch?v=$videoId"))
+                webIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                context.startActivity(webIntent)
+            } catch (_: Exception) {}
+        }
     }
 }
 
@@ -106,6 +142,17 @@ fun YouTubeWebView(
     modifier: Modifier = Modifier
 ) {
     val embedHtml = remember(videoId) { YouTubeHelper.getEmbedHtml(videoId) }
+    var webViewRef by remember { mutableStateOf<WebView?>(null) }
+
+    DisposableEffect(videoId) {
+        onDispose {
+            webViewRef?.apply {
+                stopLoading()
+                loadUrl("about:blank")
+                destroy()
+            }
+        }
+    }
 
     AndroidView(
         modifier = modifier
@@ -113,21 +160,32 @@ fun YouTubeWebView(
             .clip(RoundedCornerShape(12.dp)),
         factory = { ctx ->
             WebView(ctx).apply {
+                webViewRef = this
                 layoutParams = ViewGroup.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT,
                     ViewGroup.LayoutParams.MATCH_PARENT
                 )
                 setBackgroundColor(android.graphics.Color.BLACK)
+                setLayerType(android.view.View.LAYER_TYPE_HARDWARE, null)
 
                 settings.apply {
                     javaScriptEnabled = true
                     domStorageEnabled = true
+                    databaseEnabled = true
                     mediaPlaybackRequiresUserGesture = false
-                    allowFileAccess = false
+                    allowFileAccess = true
+                    allowContentAccess = true
                     loadsImagesAutomatically = true
                     mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
                     useWideViewPort = true
                     loadWithOverviewMode = true
+                    javaScriptCanOpenWindowsAutomatically = true
+                    setSupportMultipleWindows(false)
+                    cacheMode = WebSettings.LOAD_DEFAULT
+
+                    // Bypass YouTube WebView restrictions by removing WebView indicators from User Agent
+                    val defaultUa = userAgentString
+                    userAgentString = defaultUa.replace("; wv", "").replace("Version/4.0 ", "")
                 }
 
                 // Enable cookie persistence for YouTube & Google login inside the app
@@ -135,14 +193,52 @@ fun YouTubeWebView(
                 cookieManager.setAcceptCookie(true)
                 cookieManager.setAcceptThirdPartyCookies(this, true)
 
-                webChromeClient = WebChromeClient()
-                webViewClient = object : WebViewClient() {
-                    override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
-                        return false // keep video navigation inside webview
+                webChromeClient = object : WebChromeClient() {
+                    override fun onPermissionRequest(request: PermissionRequest?) {
+                        try {
+                            request?.grant(request.resources)
+                        } catch (_: Exception) {}
+                    }
+
+                    override fun getDefaultVideoPoster(): Bitmap? {
+                        return Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888)
                     }
                 }
 
-                loadDataWithBaseURL("https://www.youtube.com", embedHtml, "text/html", "UTF-8", null)
+                webViewClient = object : WebViewClient() {
+                    override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
+                        val uri = request?.url ?: return false
+                        val url = uri.toString()
+                        if (url.contains("/embed/") || 
+                            url.contains("accounts.google.com") || 
+                            url.contains("doubleclick.net") || 
+                            url.contains("googlevideo.com") ||
+                            url.contains("gstatic.com")) {
+                            return false // keep embed and its dependencies inside webview
+                        }
+                        // If user clicked "Watch on YouTube", channel link, or external intent
+                        try {
+                            val intent = if (url.startsWith("intent://")) {
+                                Intent.parseUri(url, Intent.URI_INTENT_SCHEME)
+                            } else {
+                                Intent(Intent.ACTION_VIEW, uri)
+                            }
+                            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            view?.context?.startActivity(intent)
+                            return true
+                        } catch (_: Exception) {
+                            return false
+                        }
+                    }
+                }
+
+                loadDataWithBaseURL(
+                    "https://www.youtube.com",
+                    embedHtml,
+                    "text/html",
+                    "UTF-8",
+                    "https://www.youtube.com"
+                )
             }
         },
         update = { webView ->
@@ -160,6 +256,7 @@ fun InlineYouTubeCard(
     onOpenTheater: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     var isPlayingInline by remember { mutableStateOf(false) }
 
     Surface(
@@ -196,14 +293,41 @@ fun InlineYouTubeCard(
                     }
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = "YouTube • Inline Player",
+                        text = "YouTube • Player",
                         color = MaterialTheme.colorScheme.surface,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold
                     )
                 }
 
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    IconButton(
+                        onClick = { YouTubeHelper.openInYouTube(context, videoId) },
+                        modifier = Modifier.size(26.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.OpenInNew,
+                            contentDescription = "Watch in YouTube App",
+                            tint = Color(0xFFA1A1AA),
+                            modifier = Modifier.size(15.dp)
+                        )
+                    }
+
+                    IconButton(
+                        onClick = { onOpenTheater(videoId) },
+                        modifier = Modifier.size(26.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Fullscreen,
+                            contentDescription = "Theater Mode",
+                            tint = Color.White,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+
                     if (isPlayingInline) {
                         TextButton(
                             onClick = { isPlayingInline = false },
@@ -212,28 +336,16 @@ fun InlineYouTubeCard(
                         ) {
                             Text("✕ Close", color = Color(0xFFA1A1AA), fontSize = 11.sp)
                         }
-                    } else {
-                        IconButton(
-                            onClick = { onOpenTheater(videoId) },
-                            modifier = Modifier.size(24.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Fullscreen,
-                                contentDescription = "Theater Mode",
-                                tint = Color.White,
-                                modifier = Modifier.size(16.dp)
-                            )
-                        }
                     }
                 }
             }
 
-            // Player View / Thumbnail View
+            // Player View / Thumbnail View (Full width 16:9 aspect ratio)
             if (isPlayingInline) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(210.dp)
+                        .aspectRatio(16f / 9f)
                         .background(Color.Black)
                 ) {
                     YouTubeWebView(
@@ -245,7 +357,7 @@ fun InlineYouTubeCard(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(180.dp)
+                        .aspectRatio(16f / 9f)
                         .clickable { isPlayingInline = true },
                     contentAlignment = Alignment.Center
                 ) {
@@ -283,7 +395,7 @@ fun InlineYouTubeCard(
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
                             .fillMaxWidth()
-                            .background(Color.Black.copy(alpha = 0.65f))
+                            .background(Color.Black.copy(alpha = 0.70f))
                             .padding(horizontal = 10.dp, vertical = 6.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
@@ -295,16 +407,33 @@ fun InlineYouTubeCard(
                             fontWeight = FontWeight.Medium
                         )
 
-                        FilledTonalButton(
-                            onClick = { onOpenTheater(videoId) },
-                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
-                            modifier = Modifier.height(26.dp),
-                            colors = ButtonDefaults.filledTonalButtonColors(
-                                containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.2f),
-                                contentColor = Color.White
-                            )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
-                            Text("⛶ Theater", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            FilledTonalButton(
+                                onClick = { YouTubeHelper.openInYouTube(context, videoId) },
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                                modifier = Modifier.height(26.dp),
+                                colors = ButtonDefaults.filledTonalButtonColors(
+                                    containerColor = Color(0xFFFF0000).copy(alpha = 0.25f),
+                                    contentColor = Color.White
+                                )
+                            ) {
+                                Text("▶ App", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            }
+
+                            FilledTonalButton(
+                                onClick = { onOpenTheater(videoId) },
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                                modifier = Modifier.height(26.dp),
+                                colors = ButtonDefaults.filledTonalButtonColors(
+                                    containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.2f),
+                                    contentColor = Color.White
+                                )
+                            ) {
+                                Text("⛶ Theater", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            }
                         }
                     }
                 }
@@ -322,6 +451,7 @@ fun InlineVideoTheaterModal(
     videoId: String,
     onDismiss: () -> Unit
 ) {
+    val context = LocalContext.current
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
@@ -351,13 +481,27 @@ fun InlineVideoTheaterModal(
                         )
                     }
 
-                    IconButton(
-                        onClick = onDismiss,
-                        modifier = Modifier
-                            .size(36.dp)
-                            .background(Color(0xFF27272A), CircleShape)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.White, modifier = Modifier.size(20.dp))
+                        IconButton(
+                            onClick = { YouTubeHelper.openInYouTube(context, videoId) },
+                            modifier = Modifier
+                                .size(36.dp)
+                                .background(Color(0xFF27272A), CircleShape)
+                        ) {
+                            Icon(Icons.Default.OpenInNew, contentDescription = "Watch in YouTube App", tint = Color.White, modifier = Modifier.size(18.dp))
+                        }
+
+                        IconButton(
+                            onClick = onDismiss,
+                            modifier = Modifier
+                                .size(36.dp)
+                                .background(Color(0xFF27272A), CircleShape)
+                        ) {
+                            Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.White, modifier = Modifier.size(20.dp))
+                        }
                     }
                 }
 
@@ -377,7 +521,7 @@ fun InlineVideoTheaterModal(
 
                 // Bottom Hint
                 Text(
-                    text = "Watching together in Cherish • No external app required 💕",
+                    text = "Watching together in Cherish • Tap ↗ to open in YouTube app",
                     color = Color(0xFFA1A1AA),
                     fontSize = 12.sp,
                     modifier = Modifier

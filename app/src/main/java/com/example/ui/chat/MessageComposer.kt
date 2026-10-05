@@ -52,6 +52,7 @@ import com.example.ui.theme.HeartRed
 import com.example.ui.theme.appGradientShadow
 import com.example.ui.theme.appHorizontalGradient
 import kotlin.math.roundToInt
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 
 @Composable
@@ -79,6 +80,7 @@ fun MessageComposer(
     val haptic = LocalHapticFeedback.current
     val keyboardController = LocalSoftwareKeyboardController.current
     val focusManager = LocalFocusManager.current
+    val scope = rememberCoroutineScope()
 
     var showEmojiPanel by remember { mutableStateOf(false) }
     var isLockedRecording by remember { mutableStateOf(false) }
@@ -123,7 +125,6 @@ fun MessageComposer(
     }
 
     // Comprehensive emoji categories like WhatsApp / Telegram
-    var selectedEmojiTab by remember { mutableIntStateOf(0) }
     val emojiTabs = remember { listOf("💕", "😊", "👤", "🐾", "🍔", "⚽", "💡", "🏳️") }
     val emojiCategories = remember {
         listOf(
@@ -219,6 +220,7 @@ fun MessageComposer(
             )
         )
     }
+    val emojiPagerState = androidx.compose.foundation.pager.rememberPagerState(initialPage = 0, pageCount = { emojiCategories.size })
 
     Column(
         modifier = modifier
@@ -226,13 +228,19 @@ fun MessageComposer(
             .background(barBg)
     ) {
         // Reply bar preview
-        AnimatedVisibility(visible = replyingTo != null) {
+        AnimatedVisibility(
+            visible = replyingTo != null,
+            modifier = Modifier
+                .widthIn(max = 600.dp)
+                .fillMaxWidth()
+                .align(Alignment.CenterHorizontally)
+        ) {
             if (replyingTo != null) {
                 Surface(
                     color = pillBg,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                        .padding(start = 12.dp, end = 66.dp, top = 6.dp, bottom = 0.dp),
                     shape = RoundedCornerShape(12.dp)
                 ) {
                     Row(
@@ -285,7 +293,7 @@ fun MessageComposer(
                 .widthIn(max = 600.dp)
                 .fillMaxWidth()
                 .align(Alignment.CenterHorizontally)
-                .padding(horizontal = 16.dp, vertical = 8.dp),
+                .padding(horizontal = 12.dp, vertical = 6.dp),
             verticalAlignment = Alignment.Bottom
         ) {
             // Main Input Pill / Active Recording Bar
@@ -451,11 +459,11 @@ fun MessageComposer(
                 Row(
                     modifier = Modifier
                         .weight(1f)
-                        .heightIn(min = 48.dp)
+                        .heightIn(min = 44.dp)
                         .clip(RoundedCornerShape(26.dp))
                         .background(pillBg)
                         .border(BorderStroke(1.dp, pillBorder), RoundedCornerShape(26.dp))
-                        .padding(start = if (isPrivateMode) 16.dp else 4.dp, end = if (isPrivateMode) 12.dp else 4.dp),
+                        .padding(start = if (isPrivateMode) 14.dp else 4.dp, end = if (isPrivateMode) 10.dp else 4.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     if (!isPrivateMode) {
@@ -486,7 +494,7 @@ fun MessageComposer(
                     Box(
                         modifier = Modifier
                             .weight(1f)
-                            .padding(horizontal = 4.dp, vertical = 8.dp),
+                            .padding(horizontal = 4.dp, vertical = 6.dp),
                         contentAlignment = Alignment.CenterStart
                     ) {
                         if (text.isEmpty()) {
@@ -497,7 +505,9 @@ fun MessageComposer(
                                 } else {
                                     Color(0xFF64748B)
                                 },
-                                fontSize = 14.sp
+                                fontSize = 13.sp,
+                                maxLines = 1,
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                             )
                         }
                         BasicTextField(
@@ -509,8 +519,8 @@ fun MessageComposer(
                                 } else {
                                     if (isDark) Color.White else Color(0xFF0F172A)
                                 },
-                                fontSize = 15.sp,
-                                lineHeight = 20.sp
+                                fontSize = 14.sp,
+                                lineHeight = 18.sp
                             ),
                             cursorBrush = SolidColor(if (isPrivateMode) (if (isDark) Color(0xFFD1D5DB) else Color(0xFF374151)) else DayBluePrimary),
                             maxLines = 5,
@@ -806,7 +816,7 @@ fun MessageComposer(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         emojiTabs.forEachIndexed { index, tabEmoji ->
-                            val isSelected = selectedEmojiTab == index
+                            val isSelected = emojiPagerState.currentPage == index
                             Box(
                                 modifier = Modifier
                                     .weight(1f)
@@ -815,7 +825,11 @@ fun MessageComposer(
                                         if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
                                         else Color.Transparent
                                     )
-                                    .clickable { selectedEmojiTab = index }
+                                    .clickable {
+                                        scope.launch {
+                                            emojiPagerState.animateScrollToPage(index)
+                                        }
+                                    }
                                     .padding(vertical = 6.dp),
                                 contentAlignment = Alignment.Center
                             ) {
@@ -840,29 +854,34 @@ fun MessageComposer(
                         }
                     }
 
-                    // Emoji grid for selected category
-                    val currentEmojis = emojiCategories.getOrElse(selectedEmojiTab) { emptyList() }
-                    LazyVerticalGrid(
-                        columns = GridCells.Fixed(8),
+                    // Emoji pager for smooth left/right gliding between categories
+                    androidx.compose.foundation.pager.HorizontalPager(
+                        state = emojiPagerState,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .weight(1f),
-                        contentPadding = PaddingValues(6.dp),
-                        horizontalArrangement = Arrangement.SpaceEvenly,
-                        verticalArrangement = Arrangement.spacedBy(2.dp)
-                    ) {
-                        items(currentEmojis, key = { "${selectedEmojiTab}_$it" }) { emoji ->
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .clickable {
-                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                        onTextChanged(text + emoji)
-                                    }
-                                    .padding(vertical = 4.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(text = emoji, fontSize = 24.sp)
+                            .weight(1f)
+                    ) { pageIndex ->
+                        val currentEmojis = emojiCategories.getOrElse(pageIndex) { emptyList() }
+                        LazyVerticalGrid(
+                            columns = GridCells.Fixed(8),
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(6.dp),
+                            horizontalArrangement = Arrangement.SpaceEvenly,
+                            verticalArrangement = Arrangement.spacedBy(2.dp)
+                        ) {
+                            items(currentEmojis, key = { "${pageIndex}_$it" }) { emoji ->
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .clickable {
+                                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                            onTextChanged(text + emoji)
+                                        }
+                                        .padding(vertical = 4.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(text = emoji, fontSize = 24.sp)
+                                }
                             }
                         }
                     }

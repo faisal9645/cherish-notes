@@ -68,9 +68,11 @@ class ChatViewModel(
         ChatUiState(
             gallerySize = securityPreferences.getImageGallerySize(),
             chatBgTheme = securityPreferences.getChatBgTheme(),
-            chatExperienceMode = securityPreferences.getChatExperienceMode()
+            chatExperienceMode = securityPreferences.getChatExperienceMode(),
+            showPreviousChats = securityPreferences.isShowPreviousChatsEnabled(),
+            isSecretHistoryRevealed = securityPreferences.isSecretHistoryRevealed.value,
+            temporaryClearTimestamp = securityPreferences.getTemporaryClearTimestamp()
         )
-
     )
     val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
 
@@ -101,6 +103,21 @@ class ChatViewModel(
                 _uiState.update {
                     it.copy(
                         partnerUser = partner,
+                        isPartnerOnline = partner?.isEffectivelyOnline() ?: false,
+                        isPartnerTyping = partner?.isEffectivelyTyping() ?: false,
+                        isPartnerRecordingAudio = partner?.isEffectivelyRecording() ?: false
+                    )
+                }
+            }
+        }
+
+        // Periodically re-evaluate presence because time passes even without Firestore updates
+        viewModelScope.launch {
+            while (true) {
+                kotlinx.coroutines.delay(10_000L) // every 10 seconds
+                val partner = _uiState.value.partnerUser
+                _uiState.update {
+                    it.copy(
                         isPartnerOnline = partner?.isEffectivelyOnline() ?: false,
                         isPartnerTyping = partner?.isEffectivelyTyping() ?: false,
                         isPartnerRecordingAudio = partner?.isEffectivelyRecording() ?: false
@@ -142,6 +159,21 @@ class ChatViewModel(
         viewModelScope.launch {
             chatRepository.deletionRequestFlow.collect { req ->
                 _uiState.update { it.copy(deletionRequest = req) }
+            }
+        }
+
+        viewModelScope.launch {
+            securityPreferences.isDisguiseActive.collect { isDisguised ->
+                if (isDisguised) {
+                    _uiState.update {
+                        it.copy(
+                            fullScreenMediaUrl = null,
+                            fullScreenMediaType = null,
+                            allMediaUrlsForViewer = emptyList(),
+                            theaterVideoId = null
+                        )
+                    }
+                }
             }
         }
 
@@ -196,6 +228,13 @@ class ChatViewModel(
 
     fun loadMoreMessages() {
         chatRepository.loadMoreMessages()
+    }
+
+    val galleryMediaMessages: kotlinx.coroutines.flow.StateFlow<List<com.example.data.model.Message>> =
+        chatRepository.galleryMediaMessages
+
+    fun loadAllGalleryMedia() {
+        chatRepository.loadAllGalleryMedia()
     }
 
     val isQueryExhausted: Boolean
@@ -441,6 +480,9 @@ class ChatViewModel(
     // --- SECRET HISTORY PROTECTION & RECOVERY ---
     fun revealSecretHistory() {
         securityPreferences.revealSecretHistory()
+        viewModelScope.launch {
+            chatRepository.loadMoreMessages()
+        }
     }
 
     fun hideSecretHistory() {

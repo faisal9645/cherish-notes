@@ -25,19 +25,19 @@ object NotificationHelper {
     private const val NOTIFICATION_ID_MESSAGE = 1001
 
     private val pendingUnreadCount = AtomicInteger(0)
+    private val notifiedMessageIds = java.util.Collections.synchronizedSet(LinkedHashSet<String>())
 
     fun createNotificationChannels(context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val messagesChannel = NotificationChannel(
                 CHANNEL_MESSAGES_ID,
                 CHANNEL_MESSAGES_NAME,
-                NotificationManager.IMPORTANCE_DEFAULT
+                NotificationManager.IMPORTANCE_HIGH
             ).apply {
                 description = "Discreet sync and reminder notifications"
                 enableVibration(true)
                 setShowBadge(true)
-                // Private visibility on lock screen
-                lockscreenVisibility = NotificationCompat.VISIBILITY_PRIVATE
+                lockscreenVisibility = NotificationCompat.VISIBILITY_PUBLIC
             }
 
             val remindersChannel = NotificationChannel(
@@ -59,24 +59,50 @@ object NotificationHelper {
     }
 
     /**
+     * Check if user is actively inside the chat screen so we don't disturb them
+     * with redundant notifications while they are already viewing messages live.
+     */
+    fun isUserActivelyViewingChat(context: Context): Boolean {
+        return try {
+            val app = context.applicationContext as? com.example.CherishApplication
+            app?.authRepository?.isUserActivelyInChat() ?: false
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    /**
      * Show a stealth disguised notification that others will never suspect,
      * consolidated into a single notification without duplicates.
+     * Alerts ONLY ONCE while unread messages accumulate, updates the icon badge,
+     * and shows disguised Notes reminder on the lockscreen.
      */
     fun showMessageNotification(
         context: Context,
         senderName: String,
         messageText: String,
-        conversationId: String? = null
+        conversationId: String? = null,
+        messageId: String? = null
     ) {
+        // If user is actively looking at the chat tab in foreground, do not notify
+        if (isUserActivelyViewingChat(context)) {
+            return
+        }
+
+        // Deduplicate message ID so FCM and Firestore listeners don't double count
+        if (!messageId.isNullOrBlank()) {
+            if (!notifiedMessageIds.add(messageId)) {
+                return
+            }
+        }
+
         val count = pendingUnreadCount.incrementAndGet()
         val prefs = SecurityPreferences.getInstance(context)
-        val isDiscreet = prefs.isHideNotificationContent()
+        val isDiscreet = prefs.isHideNotificationContent() || prefs.isDisguiseModeEnabled() || prefs.isDisguiseActive()
 
         val intent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
-            putExtra("conversationId", conversationId)
-            putExtra("open_chat", true)
-            putExtra("from_notification", true)
+            // Do not open chat automatically
         }
 
         val pendingIntent = PendingIntent.getActivity(
@@ -89,23 +115,34 @@ object NotificationHelper {
         // When discreet/hidden mode is enabled, notification payloads mask sender names and contents
         val displayTitle = if (isDiscreet) "Notes" else senderName
         val displayText = if (isDiscreet) {
-            if (count <= 1) "Checklist reminder updated" else "$count reminders synchronized"
+            "Checklist reminder updated"
         } else {
-            messageText
+            "New messages"
         }
         val subText = if (isDiscreet) "Notes" else "Cherish"
 
-        val notification = NotificationCompat.Builder(context, CHANNEL_MESSAGES_ID)
+        // Public version shown on secure lock screens
+        val publicNotification = NotificationCompat.Builder(context, CHANNEL_MESSAGES_ID)
             .setSmallIcon(R.mipmap.ic_launcher)
+            .setContentTitle("Notes")
+            .setContentText("Checklist reminder updated")
+            .setSubText("Notes")
+            .setBadgeIconType(NotificationCompat.BADGE_ICON_SMALL)
+            .build()
+
+        val notification = NotificationCompat.Builder(context, CHANNEL_MESSAGES_ID)
+            .setSmallIcon(if (isDiscreet) R.mipmap.ic_launcher else R.drawable.ic_cherish_heart)
             .setContentTitle(displayTitle)
             .setContentText(displayText)
             .setSubText(subText)
+            .setBadgeIconType(NotificationCompat.BADGE_ICON_SMALL)
             .setAutoCancel(true)
             .setContentIntent(pendingIntent)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(NotificationCompat.CATEGORY_MESSAGE)
-            .setOnlyAlertOnce(true) // Never buzz multiple times for updates
-            .setVisibility(if (isDiscreet) NotificationCompat.VISIBILITY_SECRET else NotificationCompat.VISIBILITY_PRIVATE)
+            .setOnlyAlertOnce(true) // Crucial: alerts only one time while unread messages accumulate
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setPublicVersion(publicNotification)
             .build()
 
         try {
@@ -113,16 +150,35 @@ object NotificationHelper {
         } catch (_: SecurityException) {
             // Handled if POST_NOTIFICATIONS runtime permission not yet prompted
         }
+
+        // Update launcher icon badge for OEM launchers
+        updateLauncherBadge(context, count)
     }
 
     /**
-     * Clears notifications and resets the counter when the user views the chat
+     * Clears notifications and resets the counter and badge when the user views the chat
      */
     fun clearNotifications(context: Context) {
         pendingUnreadCount.set(0)
+        notifiedMessageIds.clear()
         try {
             NotificationManagerCompat.from(context).cancel(NOTIFICATION_ID_MESSAGE)
             NotificationManagerCompat.from(context).cancel(NOTIFICATION_ID_CHECK_AFTER)
+        } catch (_: Exception) {}
+        updateLauncherBadge(context, 0)
+    }
+
+    /**
+     * Broadcasts unread count badge to Samsung, Sony, HTC and compatible OEM launchers
+     */
+    fun updateLauncherBadge(context: Context, count: Int) {
+        try {
+            val intent = Intent("android.intent.action.BADGE_COUNT_UPDATE").apply {
+                putExtra("badge_count", count)
+                putExtra("badge_count_package_name", context.packageName)
+                putExtra("badge_count_class_name", "com.example.MainActivity")
+            }
+            context.sendBroadcast(intent)
         } catch (_: Exception) {}
     }
 
@@ -137,7 +193,6 @@ object NotificationHelper {
 
         val intent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            putExtra("open_chat", true)
         }
 
         val pendingIntent = PendingIntent.getActivity(
@@ -156,7 +211,7 @@ object NotificationHelper {
         }
 
         val notification = NotificationCompat.Builder(context, CHANNEL_MESSAGES_ID)
-            .setSmallIcon(R.mipmap.ic_launcher)
+            .setSmallIcon(if (isDisguised) R.mipmap.ic_launcher else R.drawable.ic_cherish_heart)
             .setContentTitle(displayTitle)
             .setContentText(displayText)
             .setSubText(if (isDisguised) "Notes" else "Cherish")

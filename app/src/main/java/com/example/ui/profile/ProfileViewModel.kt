@@ -376,6 +376,14 @@ class ProfileViewModel(
         securityPreferences.setShowPreviousChatsEnabled(enabled)
     }
 
+    fun recoverAllChatsAndGallery() {
+        securityPreferences.setShowPreviousChatsEnabled(true)
+        securityPreferences.setTemporaryClearTimestamp(0L)
+        try {
+            com.example.CherishApplication.instance.chatRepository.loadAllGalleryMedia()
+        } catch (_: Exception) {}
+    }
+
     fun updatePartnerEmailAndKey(partnerEmail: String, coupleKey: String) {
         viewModelScope.launch {
             authRepository.pairWithPartner(partnerEmail, coupleKey)

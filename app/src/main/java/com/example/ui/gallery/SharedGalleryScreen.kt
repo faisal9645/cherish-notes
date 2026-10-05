@@ -104,8 +104,34 @@ fun SharedGalleryScreen(
 
 
 
-    val filteredMessages = remember(chatState.messages, selectedDateMillis, chatState.showPreviousChats) {
-        var list = chatState.messages.filter { !it.isDeleted }
+    val app = LocalContext.current.applicationContext as? com.example.CherishApplication
+    val isDisguiseActive by (app?.securityPreferences?.isDisguiseActive ?: kotlinx.coroutines.flow.MutableStateFlow(false)).collectAsState()
+
+    LaunchedEffect(isDisguiseActive) {
+        if (isDisguiseActive) {
+            selectedMediaUrl = null
+            selectedMessageIdForViewer = null
+        }
+    }
+
+    val allGalleryItems by chatViewModel.galleryMediaMessages.collectAsState()
+
+    LaunchedEffect(chatState.showPreviousChats) {
+        if (chatState.showPreviousChats) {
+            chatViewModel.loadAllGalleryMedia()
+        }
+    }
+
+    val sourceMessages = remember(chatState.messages, allGalleryItems, chatState.showPreviousChats) {
+        if (chatState.showPreviousChats && allGalleryItems.isNotEmpty()) {
+            (chatState.messages + allGalleryItems).distinctBy { it.id }
+        } else {
+            chatState.messages
+        }
+    }
+
+    val filteredMessages = remember(sourceMessages, selectedDateMillis, chatState.showPreviousChats) {
+        var list = sourceMessages.filter { !it.isDeleted }
 
         if (!chatState.showPreviousChats) {
             val now = Calendar.getInstance()
@@ -907,9 +933,9 @@ fun SharedGalleryScreen(
             }
         }
 
-        // Floating "Load More" Button for Gallery
+        // Floating "Load More" Button for Gallery (only shown if not all items already retrieved)
         androidx.compose.animation.AnimatedVisibility(
-            visible = !chatViewModel.isQueryExhausted,
+            visible = !chatViewModel.isQueryExhausted && allGalleryItems.isEmpty() && chatState.showPreviousChats,
             modifier = Modifier.padding(bottom = 16.dp, top = 8.dp)
         ) {
             Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {

@@ -140,7 +140,6 @@ fun ProfileScreen(
     var showSetPinDialog by remember { mutableStateOf(false) }
     var showSetPasscodeDialog by remember { mutableStateOf(false) }
     var showPairDialog by remember { mutableStateOf(false) }
-    var showRestoreConfirmDialog by remember { mutableStateOf(false) }
     var newPinText by remember { mutableStateOf("") }
     var newPasscodeText by remember { mutableStateOf("") }
     var isPasscodeRevealed by remember { mutableStateOf(false) }
@@ -295,48 +294,71 @@ fun ProfileScreen(
                         .padding(18.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Box(contentAlignment = Alignment.BottomEnd) {
-                        AvatarView(
-                            photoUrl = user?.photoUrl,
-                            name = user?.displayName ?: "Me",
-                            size = 80.dp,
-                            isOnline = true,
-                            showOnlineBadge = false,
-                            modifier = Modifier
-                                .clip(CircleShape)
-                                .clickable { showAvatarOptionsDialog = true }
-                        )
-
-                        if (uiState.isUpdating) {
-                            Box(
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Box(contentAlignment = Alignment.BottomEnd) {
+                            AvatarView(
+                                photoUrl = user?.photoUrl,
+                                name = user?.displayName ?: "Me",
+                                size = 80.dp,
+                                isOnline = true,
+                                showOnlineBadge = false,
                                 modifier = Modifier
-                                    .size(80.dp)
                                     .clip(CircleShape)
-                                    .background(Color.Black.copy(alpha = 0.45f)),
-                                contentAlignment = Alignment.Center
+                                    .clickable { showAvatarOptionsDialog = true }
+                            )
+
+                            if (uiState.isUpdating) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(80.dp)
+                                        .clip(CircleShape)
+                                        .background(Color.Black.copy(alpha = 0.45f)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(28.dp),
+                                        color = MaterialTheme.colorScheme.surface,
+                                        strokeWidth = 3.dp
+                                    )
+                                }
+                            }
+
+                            IconButton(
+                                onClick = { showAvatarOptionsDialog = true },
+                                modifier = Modifier
+                                    .size(32.dp)
+                                    .minimumInteractiveComponentSize()
+                                    .background(primaryAccent, CircleShape)
                             ) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(28.dp),
-                                    color = MaterialTheme.colorScheme.surface,
-                                    strokeWidth = 3.dp
+                                Icon(
+                                    Icons.Default.CameraAlt,
+                                    contentDescription = "Change profile photo",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(16.dp)
                                 )
                             }
                         }
 
-                        IconButton(
-                            onClick = { showAvatarOptionsDialog = true },
+                        Icon(
+                            imageVector = Icons.Filled.Favorite,
+                            contentDescription = "Love",
+                            tint = Color(0xFFE91E63),
                             modifier = Modifier
-                                .size(32.dp)
-                                .minimumInteractiveComponentSize()
-                                .background(primaryAccent, CircleShape)
-                        ) {
-                            Icon(
-                                Icons.Default.CameraAlt,
-                                contentDescription = "Change profile photo",
-                                tint = Color.White,
-                                modifier = Modifier.size(16.dp)
-                            )
-                        }
+                                .padding(horizontal = 12.dp)
+                                .size(28.dp)
+                        )
+
+                        AvatarView(
+                            photoUrl = partner?.photoUrl,
+                            name = partner?.displayName ?: "Partner",
+                            size = 80.dp,
+                            isOnline = true,
+                            showOnlineBadge = false,
+                            modifier = Modifier.clip(CircleShape)
+                        )
                     }
 
                     Spacer(modifier = Modifier.height(10.dp))
@@ -453,14 +475,23 @@ fun ProfileScreen(
                 icon = Icons.Default.Security
             ) {
                 ListItem(
-                    headlineContent = { Text("Show Previous & Cleared Chats", fontSize = 15.sp, fontWeight = FontWeight.SemiBold) },
-                    supportingContent = { Text("Restore cleared chats and show earlier message history", fontSize = 13.sp) },
-                    leadingContent = { Icon(Icons.Default.History, contentDescription = null, tint = primaryAccent) },
+                    headlineContent = { Text("Recover All Chats & Gallery", fontSize = 15.sp, fontWeight = FontWeight.SemiBold) },
+                    supportingContent = { Text("Restore all older & cleared messages and all gallery items immediately", fontSize = 13.sp) },
+                    leadingContent = { Icon(Icons.Filled.Favorite, contentDescription = null, tint = HeartRed) },
                     trailingContent = {
-                        Switch(
-                            checked = uiState.showPreviousChats,
-                            onCheckedChange = { viewModel.setShowPreviousChatsEnabled(it) }
-                        )
+                        FilledTonalButton(
+                            onClick = {
+                                viewModel.recoverAllChatsAndGallery()
+                                Toast.makeText(context, "All chats & gallery recovered ✨", Toast.LENGTH_SHORT).show()
+                                onNavigateBack()
+                            },
+                            shape = RoundedCornerShape(12.dp),
+                            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
+                        ) {
+                            Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Recover All", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                        }
                     }
                 )
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), thickness = 0.6.dp)
@@ -469,7 +500,7 @@ fun ProfileScreen(
                 ListItem(
                     headlineContent = { Text("Disguise as Notes App", fontSize = 15.sp, fontWeight = FontWeight.SemiBold) },
                     supportingContent = { Text("Opens as functional notes app with secret unlock gesture", fontSize = 13.sp) },
-                    leadingContent = { Icon(Icons.Filled.EditNote, contentDescription = null, tint = primaryAccent) },
+                    leadingContent = { Icon(Icons.Filled.Favorite, contentDescription = null, tint = HeartRed) },
                     trailingContent = {
                         Switch(
                             checked = uiState.isDisguiseModeEnabled,
@@ -604,26 +635,12 @@ fun ProfileScreen(
                     ) {
                         OutlinedButton(
                             onClick = { viewModel.triggerInstantDisguise() },
-                            modifier = Modifier.weight(1f).height(38.dp),
+                            modifier = Modifier.fillMaxWidth().height(38.dp),
                             shape = RoundedCornerShape(10.dp)
                         ) {
                             Icon(Icons.Outlined.VisibilityOff, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(6.dp))
                             Text("Lock Disguise", fontSize = 12.sp)
-                        }
-
-                        OutlinedButton(
-                            onClick = {
-                                viewModel.revealSecretHistory()
-                                Toast.makeText(context, "Chat history recovered", Toast.LENGTH_SHORT).show()
-                                onNavigateBack()
-                            },
-                            modifier = Modifier.weight(1f).height(38.dp),
-                            shape = RoundedCornerShape(10.dp)
-                        ) {
-                            Icon(Icons.Outlined.Visibility, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Recover All", fontSize = 12.sp)
                         }
                     }
                 }
@@ -891,80 +908,85 @@ fun ProfileScreen(
             SettingsSection(title = "Chat Experience", icon = Icons.Default.ChatBubble) {
                 val currentMode = uiState.chatExperienceMode
 
-                // ❤️ Normal Mode option
-                Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = if (currentMode == com.example.ui.chat.ChatExperienceMode.NORMAL)
-                        RoseGoldPrimary.copy(alpha = 0.12f) 
-                    else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                    border = if (currentMode == com.example.ui.chat.ChatExperienceMode.NORMAL)
-                        BorderStroke(2.dp, RoseGoldPrimary)
-                    else BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable { 
-                            viewModel.setChatExperienceMode(com.example.ui.chat.ChatExperienceMode.NORMAL) 
-                            onNavigateToChat()
-                        }
+                        .padding(horizontal = 14.dp, vertical = 10.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Row(modifier = Modifier.padding(14.dp), verticalAlignment = Alignment.Top) {
-                        RadioButton(
-                            selected = currentMode == com.example.ui.chat.ChatExperienceMode.NORMAL,
-                            onClick = { 
+                    // ❤️ Normal Mode option
+                    Surface(
+                        shape = RoundedCornerShape(14.dp),
+                        color = if (currentMode == com.example.ui.chat.ChatExperienceMode.NORMAL)
+                            RoseGoldPrimary.copy(alpha = 0.12f) 
+                        else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                        border = if (currentMode == com.example.ui.chat.ChatExperienceMode.NORMAL)
+                            BorderStroke(1.5.dp, RoseGoldPrimary)
+                        else BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { 
                                 viewModel.setChatExperienceMode(com.example.ui.chat.ChatExperienceMode.NORMAL) 
                                 onNavigateToChat()
-                            },
-                            colors = RadioButtonDefaults.colors(selectedColor = RoseGoldPrimary)
-                        )
-                        Column(modifier = Modifier.padding(start = 8.dp)) {
-                            Text("❤️ Normal Mode", fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                            Text(
-                                "Your full Cherish couple experience with partner identity, " +
-                                "presence and personalized love-focused interactions.",
-                                fontSize = 12.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                lineHeight = 16.sp
+                            }
+                    ) {
+                        Row(modifier = Modifier.padding(14.dp), verticalAlignment = Alignment.Top) {
+                            RadioButton(
+                                selected = currentMode == com.example.ui.chat.ChatExperienceMode.NORMAL,
+                                onClick = { 
+                                    viewModel.setChatExperienceMode(com.example.ui.chat.ChatExperienceMode.NORMAL) 
+                                    onNavigateToChat()
+                                },
+                                colors = RadioButtonDefaults.colors(selectedColor = RoseGoldPrimary)
                             )
+                            Column(modifier = Modifier.padding(start = 8.dp)) {
+                                Text("❤️ Normal Mode", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                Text(
+                                    "Your full Cherish couple experience with partner identity, " +
+                                    "presence and personalized love-focused interactions.",
+                                    fontSize = 12.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    lineHeight = 16.sp
+                                )
+                            }
                         }
                     }
-                }
 
-                Spacer(modifier = Modifier.height(8.dp))
-
-                // 🔒 Private Mode option
-                Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = if (currentMode == com.example.ui.chat.ChatExperienceMode.PRIVATE)
-                        MaterialTheme.colorScheme.primary.copy(alpha = 0.12f) 
-                    else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                    border = if (currentMode == com.example.ui.chat.ChatExperienceMode.PRIVATE)
-                        BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
-                    else BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { 
-                            viewModel.setChatExperienceMode(com.example.ui.chat.ChatExperienceMode.PRIVATE) 
-                            onNavigateToChat()
-                        }
-                ) {
-                    Row(modifier = Modifier.padding(14.dp), verticalAlignment = Alignment.Top) {
-                        RadioButton(
-                            selected = currentMode == com.example.ui.chat.ChatExperienceMode.PRIVATE,
-                            onClick = { 
+                    // 🔒 Private Mode option
+                    Surface(
+                        shape = RoundedCornerShape(14.dp),
+                        color = if (currentMode == com.example.ui.chat.ChatExperienceMode.PRIVATE)
+                            MaterialTheme.colorScheme.primary.copy(alpha = 0.12f) 
+                        else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                        border = if (currentMode == com.example.ui.chat.ChatExperienceMode.PRIVATE)
+                            BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary)
+                        else BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { 
                                 viewModel.setChatExperienceMode(com.example.ui.chat.ChatExperienceMode.PRIVATE) 
                                 onNavigateToChat()
-                            },
-                            colors = RadioButtonDefaults.colors(selectedColor = MaterialTheme.colorScheme.primary)
-                        )
-                        Column(modifier = Modifier.padding(start = 8.dp)) {
-                            Text("🔒 Private Mode", fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                            Text(
-                                "Keep the complete chat experience while minimizing " +
-                                "partner identity and presence information.",
-                                fontSize = 12.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                lineHeight = 16.sp
+                            }
+                    ) {
+                        Row(modifier = Modifier.padding(14.dp), verticalAlignment = Alignment.Top) {
+                            RadioButton(
+                                selected = currentMode == com.example.ui.chat.ChatExperienceMode.PRIVATE,
+                                onClick = { 
+                                    viewModel.setChatExperienceMode(com.example.ui.chat.ChatExperienceMode.PRIVATE) 
+                                    onNavigateToChat()
+                                },
+                                colors = RadioButtonDefaults.colors(selectedColor = MaterialTheme.colorScheme.primary)
                             )
+                            Column(modifier = Modifier.padding(start = 8.dp)) {
+                                Text("🔒 Private Mode", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                Text(
+                                    "Keep the complete chat experience while minimizing " +
+                                    "partner identity and presence information.",
+                                    fontSize = 12.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    lineHeight = 16.sp
+                                )
+                            }
                         }
                     }
                 }
@@ -1177,63 +1199,7 @@ fun ProfileScreen(
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Button(
-                            onClick = {
-                                viewModel.backupNow { success, msg ->
-                                    Toast.makeText(context, if (success) "Backup completed! Everything saved ✨" else msg, Toast.LENGTH_SHORT).show()
-                                }
-                            },
-                            enabled = !backupState.isBackingUp && !backupState.isRestoring,
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(42.dp)
-                                .testTag("backup_now_settings_button"),
-                            shape = RoundedCornerShape(10.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = primaryAccent)
-                        ) {
-                            if (backupState.isBackingUp) {
-                                CircularProgressIndicator(color = MaterialTheme.colorScheme.surface, modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("Backing up...", fontSize = 12.sp)
-                            } else {
-                                Icon(Icons.Default.CloudUpload, contentDescription = null, modifier = Modifier.size(16.dp))
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("Backup Now", fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                            }
-                        }
-
-                        Button(
-                            onClick = { showRestoreConfirmDialog = true },
-                            enabled = !backupState.isBackingUp && !backupState.isRestoring,
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(42.dp)
-                                .testTag("recover_settings_button"),
-                            shape = RoundedCornerShape(10.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                                contentColor = primaryAccent
-                            )
-                        ) {
-                            if (backupState.isRestoring) {
-                                CircularProgressIndicator(color = primaryAccent, modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("Recovering...", fontSize = 12.sp)
-                            } else {
-                                Icon(Icons.Default.CloudDownload, contentDescription = null, modifier = Modifier.size(16.dp))
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("Recover", fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(4.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
 
                     TextButton(
                         onClick = onNavigateToCloudBackup,
@@ -1752,66 +1718,6 @@ fun ProfileScreen(
             },
             dismissButton = {
                 TextButton(onClick = { showPairDialog = false }) {
-                    Text("Cancel")
-                }
-            }
-        )
-    }
-
-    // Recover from Cloud Backup Dialog inside Settings
-    if (showRestoreConfirmDialog) {
-        AlertDialog(
-            onDismissRequest = { showRestoreConfirmDialog = false },
-            icon = {
-                Icon(Icons.Default.CloudDownload, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(32.dp))
-            },
-            title = {
-                Text("Recover All Data", fontWeight = FontWeight.Bold)
-            },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text(
-                        "Recovering will restore all chat messages, shared photo gallery, voice notes, memories, important dates, and shared notes from your backup.",
-                        fontSize = 13.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        lineHeight = 18.sp
-                    )
-                    Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        color = MaterialTheme.colorScheme.surfaceVariant,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                Text("Last Backup:", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                Text(backupState.lastBackupDate, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                            }
-                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                Text("Items Protected:", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                Text("${backupState.totalItemsBackedUp} items", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                            }
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        showRestoreConfirmDialog = false
-                        viewModel.restoreNow { success, msg ->
-                            Toast.makeText(context, if (success) "Recovery complete! Everything restored ✨" else msg, Toast.LENGTH_LONG).show()
-                        }
-                    },
-                    shape = RoundedCornerShape(10.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-                ) {
-                    Icon(Icons.Default.CloudDownload, contentDescription = null, modifier = Modifier.size(16.dp), tint = Color.White)
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("Recover Now", fontWeight = FontWeight.Bold, color = Color.White)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showRestoreConfirmDialog = false }) {
                     Text("Cancel")
                 }
             }
