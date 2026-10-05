@@ -50,6 +50,39 @@ fun CircularVideoNoteRecorderDialog(
     var cameraRef by remember { mutableStateOf<Camera?>(null) }
     var mediaRecorderRef by remember { mutableStateOf<MediaRecorder?>(null) }
     var outputFileRef by remember { mutableStateOf<File?>(null) }
+    var surfaceHolderRef by remember { mutableStateOf<SurfaceHolder?>(null) }
+
+    fun startCamera(facing: Int, holder: SurfaceHolder) {
+        try {
+            cameraRef?.stopPreview()
+            cameraRef?.release()
+        } catch (_: Exception) {}
+        try {
+            val camId = getCameraId(facing)
+            val cam = Camera.open(camId)
+            cameraRef = cam
+            cam.setDisplayOrientation(90)
+            try {
+                val params = cam.parameters
+                val sizes = params.supportedPreviewSizes
+                val best = sizes?.minByOrNull { kotlin.math.abs((it.width.toFloat() / it.height.toFloat()) - (4f / 3f)) }
+                if (best != null) {
+                    params.setPreviewSize(best.width, best.height)
+                    cam.parameters = params
+                }
+            } catch (_: Exception) {}
+            cam.setPreviewDisplay(holder)
+            cam.startPreview()
+        } catch (_: Exception) {}
+    }
+
+    fun stopCamera() {
+        try {
+            cameraRef?.stopPreview()
+            cameraRef?.release()
+            cameraRef = null
+        } catch (_: Exception) {}
+    }
 
     // Timer & 60-second limit
     LaunchedEffect(isRecording) {
@@ -131,26 +164,15 @@ fun CircularVideoNoteRecorderDialog(
                             SurfaceView(ctx).apply {
                                 holder.addCallback(object : SurfaceHolder.Callback {
                                     override fun surfaceCreated(holder: SurfaceHolder) {
-                                        try {
-                                            val camId = getCameraId(cameraFacing)
-                                            val cam = Camera.open(camId)
-                                            cameraRef = cam
-                                            cam.setDisplayOrientation(90)
-                                            cam.setPreviewDisplay(holder)
-                                            cam.startPreview()
-                                        } catch (e: Exception) {
-                                            // Handle emulator / unavailable camera gracefully
-                                        }
+                                        surfaceHolderRef = holder
+                                        startCamera(cameraFacing, holder)
                                     }
 
                                     override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {}
 
                                     override fun surfaceDestroyed(holder: SurfaceHolder) {
-                                        try {
-                                            cameraRef?.stopPreview()
-                                            cameraRef?.release()
-                                            cameraRef = null
-                                        } catch (_: Exception) {}
+                                        surfaceHolderRef = null
+                                        stopCamera()
                                     }
                                 })
                             }
@@ -244,7 +266,7 @@ fun CircularVideoNoteRecorderDialog(
                                     // Start recording
                                     val outFile = File(context.cacheDir, "videonote_${System.currentTimeMillis()}.mp4")
                                     outputFileRef = outFile
-                                    val started = startVideoRecording(context, cameraRef, outFile)
+                                    val started = startVideoRecording(context, cameraRef, cameraFacing, outFile)
                                     if (started != null) {
                                         mediaRecorderRef = started
                                         isRecording = true
@@ -290,15 +312,9 @@ fun CircularVideoNoteRecorderDialog(
                                 } else {
                                     Camera.CameraInfo.CAMERA_FACING_FRONT
                                 }
-                                try {
-                                    cameraRef?.stopPreview()
-                                    cameraRef?.release()
-                                    val camId = getCameraId(cameraFacing)
-                                    val cam = Camera.open(camId)
-                                    cameraRef = cam
-                                    cam.setDisplayOrientation(90)
-                                    cam.startPreview()
-                                } catch (_: Exception) {}
+                                surfaceHolderRef?.let { holder ->
+                                    startCamera(cameraFacing, holder)
+                                }
                             }
                         },
                         enabled = !isRecording,
@@ -323,7 +339,7 @@ private fun getCameraId(facing: Int): Int {
     return 0
 }
 
-private fun startVideoRecording(context: Context, camera: Camera?, outputFile: File): MediaRecorder? {
+private fun startVideoRecording(context: Context, camera: Camera?, facing: Int, outputFile: File): MediaRecorder? {
     return try {
         val cam = camera ?: return null
         cam.unlock()
@@ -331,13 +347,24 @@ private fun startVideoRecording(context: Context, camera: Camera?, outputFile: F
         recorder.setCamera(cam)
         recorder.setAudioSource(MediaRecorder.AudioSource.MIC)
         recorder.setVideoSource(MediaRecorder.VideoSource.CAMERA)
-        recorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
-        recorder.setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
-        recorder.setVideoEncoder(MediaRecorder.VideoEncoder.H264)
+        val orientationHint = if (facing == Camera.CameraInfo.CAMERA_FACING_FRONT) 270 else 90
+
+        val camId = getCameraId(facing)
+        if (CamcorderProfile.hasProfile(camId, CamcorderProfile.QUALITY_480P)) {
+            val profile = CamcorderProfile.get(camId, CamcorderProfile.QUALITY_480P)
+            recorder.setProfile(profile)
+        } else if (CamcorderProfile.hasProfile(camId, CamcorderProfile.QUALITY_LOW)) {
+            val profile = CamcorderProfile.get(camId, CamcorderProfile.QUALITY_LOW)
+            recorder.setProfile(profile)
+        } else {
+            recorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
+            recorder.setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
+            recorder.setVideoEncoder(MediaRecorder.VideoEncoder.H264)
+            recorder.setVideoSize(480, 480)
+            recorder.setVideoFrameRate(30)
+        }
         recorder.setOutputFile(outputFile.absolutePath)
-        recorder.setVideoSize(480, 480)
-        recorder.setVideoFrameRate(30)
-        recorder.setOrientationHint(270)
+        recorder.setOrientationHint(orientationHint)
         recorder.prepare()
         recorder.start()
         recorder

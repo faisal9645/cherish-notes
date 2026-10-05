@@ -38,7 +38,8 @@ data class ProfileUiState(
     val chatExperienceMode: com.example.ui.chat.ChatExperienceMode = com.example.ui.chat.ChatExperienceMode.NORMAL,
     val isSideEmergencyExitEnabled: Boolean = true,
     val sideEmergencyExitOpacity: Float = 0.35f,
-    val isChatSoundsEnabled: Boolean = true
+    val isChatSoundsEnabled: Boolean = true,
+    val isNotificationsEnabled: Boolean = true
 )
 
 data class UpdateCheckState(
@@ -136,7 +137,8 @@ class ProfileViewModel(
             isCheckAfterReminderEnabled = securityPreferences.isCheckAfterReminderEnabled(),
             themeMode = securityPreferences.getThemeMode(),
             chatBgTheme = securityPreferences.getChatBgTheme(),
-            chatExperienceMode = securityPreferences.getChatExperienceMode()
+            chatExperienceMode = securityPreferences.getChatExperienceMode(),
+            isNotificationsEnabled = securityPreferences.isNotificationsEnabled()
         )
     )
     val uiState: StateFlow<ProfileUiState> = _uiState.asStateFlow()
@@ -164,9 +166,15 @@ class ProfileViewModel(
                 chatBgTheme = securityPreferences.getChatBgTheme(),
                 chatExperienceMode = securityPreferences.getChatExperienceMode(),
                 isSideEmergencyExitEnabled = securityPreferences.isSideEmergencyExitEnabled(),
-                sideEmergencyExitOpacity = securityPreferences.getSideEmergencyExitOpacity()
+                sideEmergencyExitOpacity = securityPreferences.getSideEmergencyExitOpacity(),
+                isNotificationsEnabled = securityPreferences.isNotificationsEnabled()
             )
         }
+    }
+
+    fun setNotificationsEnabled(enabled: Boolean) {
+        securityPreferences.setNotificationsEnabled(enabled)
+        _uiState.update { it.copy(isNotificationsEnabled = enabled) }
     }
 
     fun setSideEmergencyExitEnabled(enabled: Boolean) {

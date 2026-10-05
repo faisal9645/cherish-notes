@@ -39,6 +39,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
@@ -280,240 +281,342 @@ fun ProfileScreen(
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // 1. User Profile Header Card
+            // 1. Premium Couple Profile Showcase Card
             Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("profile_header_card"),
+                shape = RoundedCornerShape(24.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = if (isDark) Color(0xFF141923) else Color(0xFFFBFDFF)
+                ),
+                border = BorderStroke(
+                    1.dp,
+                    if (isDark) Color(0xFF232D3F) else Color(0xFFE2E8F0)
+                ),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
             ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(18.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    val myName = user?.displayName?.ifBlank { "Me" } ?: "Me"
-                    val partnerName = partner?.displayName?.ifBlank {
-                        user?.partnerEmail?.removeSuffix("@cherish.app") ?: "Partner"
-                    } ?: (user?.partnerEmail?.removeSuffix("@cherish.app") ?: "Partner")
-
-                    // 1. Both Profile Pictures Linked Together with Clean Interlocking Closed Heart
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    // Subtle romantic ambient glow in header background
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(vertical = 6.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.Center
-                        ) {
-                            // User Profile Picture with Camera Edit on Bottom-Left (No collision with partner or heart)
-                            Box(contentAlignment = Alignment.BottomStart) {
-                                Surface(
-                                    shape = CircleShape,
-                                    color = MaterialTheme.colorScheme.surface,
-                                    shadowElevation = 3.dp,
-                                    border = BorderStroke(2.5.dp, MaterialTheme.colorScheme.surface)
-                                ) {
-                                    AvatarView(
-                                        photoUrl = user?.photoUrl,
-                                        name = myName,
-                                        size = 84.dp,
-                                        isOnline = true,
-                                        showOnlineBadge = false,
-                                        modifier = Modifier
-                                            .clip(CircleShape)
-                                            .clickable { showAvatarOptionsDialog = true }
+                            .height(110.dp)
+                            .background(
+                                Brush.verticalGradient(
+                                    colors = listOf(
+                                        primaryAccent.copy(alpha = if (isDark) 0.18f else 0.12f),
+                                        Color.Transparent
                                     )
-                                }
+                                )
+                            )
+                    )
 
-                                if (uiState.isUpdating) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(84.dp)
-                                            .clip(CircleShape)
-                                            .background(Color.Black.copy(alpha = 0.45f)),
-                                        contentAlignment = Alignment.Center
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(20.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        val myName = user?.displayName?.ifBlank { "Me" } ?: "Me"
+                        val partnerName = partner?.displayName?.ifBlank {
+                            user?.partnerEmail?.removeSuffix("@cherish.app") ?: "Partner"
+                        } ?: (user?.partnerEmail?.removeSuffix("@cherish.app") ?: "Partner")
+
+                        // Symmetrical, Balanced Couple Avatars with Heart Nexus
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 8.dp, bottom = 12.dp),
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            // My Avatar Column
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Box(contentAlignment = Alignment.BottomEnd) {
+                                    Surface(
+                                        shape = CircleShape,
+                                        color = MaterialTheme.colorScheme.surface,
+                                        shadowElevation = 4.dp,
+                                        border = BorderStroke(2.5.dp, primaryAccent)
                                     ) {
-                                        CircularProgressIndicator(
-                                            modifier = Modifier.size(26.dp),
-                                            color = MaterialTheme.colorScheme.surface,
-                                            strokeWidth = 3.dp
+                                        AvatarView(
+                                            photoUrl = user?.photoUrl,
+                                            name = myName,
+                                            size = 76.dp,
+                                            isOnline = true,
+                                            showOnlineBadge = false,
+                                            modifier = Modifier
+                                                .clip(CircleShape)
+                                                .clickable { showAvatarOptionsDialog = true }
                                         )
+                                    }
+
+                                    if (uiState.isUpdating) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(76.dp)
+                                                .clip(CircleShape)
+                                                .background(Color.Black.copy(alpha = 0.45f)),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            CircularProgressIndicator(
+                                                modifier = Modifier.size(24.dp),
+                                                color = Color.White,
+                                                strokeWidth = 2.5.dp
+                                            )
+                                        }
+                                    }
+
+                                    // Camera edit pill on bottom-right
+                                    Surface(
+                                        shape = CircleShape,
+                                        color = primaryAccent,
+                                        border = BorderStroke(2.dp, if (isDark) Color(0xFF141923) else Color.White),
+                                        shadowElevation = 3.dp,
+                                        modifier = Modifier
+                                            .size(26.dp)
+                                            .clickable { showAvatarOptionsDialog = true }
+                                    ) {
+                                        Box(contentAlignment = Alignment.Center) {
+                                            Icon(
+                                                imageVector = Icons.Default.CameraAlt,
+                                                contentDescription = "Change profile photo",
+                                                tint = Color.White,
+                                                modifier = Modifier.size(13.dp)
+                                            )
+                                        }
                                     }
                                 }
 
-                                // Camera Edit Button on Bottom-Left
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Text(
+                                    text = myName,
+                                    fontSize = 13.5.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    maxLines = 1
+                                )
+                                // My live battery indicator
+                                val myBattery = user?.batteryLevel
+                                if (myBattery != null && myBattery in 0..100) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier.padding(top = 2.dp)
+                                    ) {
+                                        Text(
+                                            text = if (user.isCharging) "⚡ $myBattery%" else "🔋 $myBattery%",
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = if (user.isCharging) Color(0xFF10B981) else if (myBattery <= 20) Color(0xFFEF4444) else MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                            }
+
+                            // Glowing Interlocking Heart Connector
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                modifier = Modifier.padding(horizontal = 16.dp)
+                            ) {
                                 Surface(
                                     shape = CircleShape,
-                                    color = primaryAccent,
-                                    border = BorderStroke(2.dp, MaterialTheme.colorScheme.surface),
+                                    color = HeartRed.copy(alpha = 0.15f),
+                                    border = BorderStroke(1.5.dp, HeartRed.copy(alpha = 0.6f)),
                                     shadowElevation = 4.dp,
-                                    modifier = Modifier
-                                        .size(28.dp)
-                                        .offset(x = (-2).dp, y = 2.dp)
-                                        .clickable { showAvatarOptionsDialog = true }
+                                    modifier = Modifier.size(42.dp)
                                 ) {
                                     Box(contentAlignment = Alignment.Center) {
                                         Icon(
-                                            imageVector = Icons.Default.CameraAlt,
-                                            contentDescription = "Change profile photo",
-                                            tint = Color.White,
-                                            modifier = Modifier.size(14.dp)
+                                            imageVector = Icons.Filled.Favorite,
+                                            contentDescription = "Together in Love",
+                                            tint = HeartRed,
+                                            modifier = Modifier.size(22.dp)
+                                        )
+                                    }
+                                }
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = "Connected",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = HeartRed
+                                )
+                            }
+
+                            // Partner Avatar Column
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Surface(
+                                    shape = CircleShape,
+                                    color = MaterialTheme.colorScheme.surface,
+                                    shadowElevation = 4.dp,
+                                    border = BorderStroke(2.5.dp, HeartRed.copy(alpha = 0.8f))
+                                ) {
+                                    AvatarView(
+                                        photoUrl = partner?.photoUrl,
+                                        name = partnerName,
+                                        size = 76.dp,
+                                        isOnline = true,
+                                        showOnlineBadge = false,
+                                        modifier = Modifier.clip(CircleShape)
+                                    )
+                                }
+
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Text(
+                                    text = partnerName,
+                                    fontSize = 13.5.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    maxLines = 1
+                                )
+                                // Partner live battery indicator
+                                val partnerBattery = partner?.batteryLevel
+                                if (partnerBattery != null && partnerBattery in 0..100) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier.padding(top = 2.dp)
+                                    ) {
+                                        Text(
+                                            text = if (partner.isCharging) "⚡ $partnerBattery%" else "🔋 $partnerBattery%",
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = if (partner.isCharging) Color(0xFF10B981) else if (partnerBattery <= 20) Color(0xFFEF4444) else MaterialTheme.colorScheme.onSurfaceVariant
                                         )
                                     }
                                 }
                             }
-
-                            // Partner Profile Picture (overlapping user avatar by 20dp)
-                            Surface(
-                                shape = CircleShape,
-                                color = MaterialTheme.colorScheme.surface,
-                                shadowElevation = 4.dp,
-                                border = BorderStroke(2.5.dp, MaterialTheme.colorScheme.surface),
-                                modifier = Modifier.offset(x = (-20).dp)
-                            ) {
-                                AvatarView(
-                                    photoUrl = partner?.photoUrl,
-                                    name = partnerName,
-                                    size = 84.dp,
-                                    isOnline = true,
-                                    showOnlineBadge = false,
-                                    modifier = Modifier.clip(CircleShape)
-                                )
-                            }
                         }
 
-                        // Interlocking Closed Heart Centerpiece Linking Both Avatars
+                        // Couple Title
+                        Text(
+                            text = "$myName & $partnerName",
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+
+                        Spacer(modifier = Modifier.height(4.dp))
+
+                        // Clean Status Pill: "Strictly Connected Couple Channel"
                         Surface(
-                            shape = CircleShape,
-                            color = primaryAccent,
-                            border = BorderStroke(2.5.dp, MaterialTheme.colorScheme.surface),
-                            shadowElevation = 6.dp,
-                            modifier = Modifier
-                                .offset(x = (-10).dp)
-                                .size(32.dp)
+                            color = primaryAccent.copy(alpha = 0.1f),
+                            shape = RoundedCornerShape(16.dp),
+                            border = BorderStroke(0.8.dp, primaryAccent.copy(alpha = 0.3f)),
+                            modifier = Modifier.padding(vertical = 4.dp)
                         ) {
-                            Box(contentAlignment = Alignment.Center) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.5.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
                                 Icon(
-                                    imageVector = Icons.Filled.Favorite,
-                                    contentDescription = "Closed heart linking profiles together",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(16.dp)
+                                    imageVector = Icons.Default.Lock,
+                                    contentDescription = null,
+                                    tint = primaryAccent,
+                                    modifier = Modifier.size(11.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = "Private Couple Channel • 2-Way Encrypted",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = primaryAccent
                                 )
                             }
                         }
-                    }
 
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    // 2. Both Names Displayed Together with Closed Heart & Edit Action
-                    Row(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(12.dp))
-                            .clickable { showEditProfileDialog = true }
-                            .padding(horizontal = 14.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center
-                    ) {
-                        Text(
-                            text = myName,
-                            fontSize = 20.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Icon(
-                            imageVector = Icons.Filled.Favorite,
-                            contentDescription = null,
-                            tint = primaryAccent,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = partnerName,
-                            fontSize = 20.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Icon(
-                            imageVector = Icons.Default.Edit,
-                            contentDescription = "Edit Profile",
-                            tint = primaryAccent,
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
-
-                    Surface(
-                        color = primaryAccent.copy(alpha = 0.08f),
-                        shape = RoundedCornerShape(14.dp),
-                        border = BorderStroke(0.8.dp, primaryAccent.copy(alpha = 0.25f)),
-                        modifier = Modifier.padding(top = 2.dp, bottom = 4.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                imageVector = Icons.Filled.Favorite,
-                                contentDescription = null,
-                                tint = primaryAccent,
-                                modifier = Modifier.size(11.dp)
-                            )
-                            Spacer(modifier = Modifier.width(5.dp))
+                        if (!user?.email.isNullOrBlank()) {
                             Text(
-                                text = "Strictly Connected Couple Channel",
-                                fontSize = 11.5.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = primaryAccent
+                                text = user.email,
+                                fontSize = 12.5.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
                             )
                         }
-                    }
 
-                    if (!user?.email.isNullOrBlank()) {
-                        Text(
-                            text = user.email,
-                            fontSize = 13.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+                        Spacer(modifier = Modifier.height(8.dp))
 
-                    Spacer(modifier = Modifier.height(6.dp))
+                        // Custom Bio / Love Note Quote Bubble
+                        Surface(
+                            color = if (isDark) Color(0xFF1A2230) else Color(0xFFF1F5F9),
+                            shape = RoundedCornerShape(14.dp),
+                            border = BorderStroke(1.dp, if (isDark) Color(0xFF2A364F) else Color(0xFFE2E8F0)),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { showEditProfileDialog = true }
+                                .padding(horizontal = 4.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 9.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "“",
+                                    fontSize = 18.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = primaryAccent
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = user?.statusMessage?.ifBlank { "Loving every moment with you ✨" } ?: "Loving every moment with you ✨",
+                                    fontSize = 13.sp,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    fontWeight = FontWeight.Medium,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                Icon(
+                                    imageVector = Icons.Default.Edit,
+                                    contentDescription = "Edit note",
+                                    tint = primaryAccent.copy(alpha = 0.7f),
+                                    modifier = Modifier.size(14.dp)
+                                )
+                            }
+                        }
 
-                    Surface(
-                        color = primaryAccent.copy(alpha = 0.08f),
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.clickable { showEditProfileDialog = true }
-                    ) {
-                        Text(
-                            text = user?.statusMessage?.ifBlank { "Together forever ✨" } ?: "Together forever ✨",
-                            fontSize = 13.sp,
-                            color = primaryAccent,
-                            fontWeight = FontWeight.Medium,
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
-                        )
-                    }
+                        Spacer(modifier = Modifier.height(14.dp))
 
-                    Spacer(modifier = Modifier.height(12.dp))
+                        // Dual Action Buttons: Edit Profile & Change Photo
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Button(
+                                onClick = { showEditProfileDialog = true },
+                                shape = RoundedCornerShape(14.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = primaryAccent,
+                                    contentColor = Color.White
+                                ),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(42.dp)
+                                    .testTag("edit_profile_button")
+                            ) {
+                                Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(15.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Edit Profile", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                            }
 
-                    Button(
-                        onClick = { showEditProfileDialog = true },
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = primaryAccent,
-                            contentColor = Color.White
-                        ),
-                        modifier = Modifier
-                            .height(40.dp)
-                            .testTag("edit_profile_button")
-                    ) {
-                        Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(15.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("Edit Profile & Note", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                            OutlinedButton(
+                                onClick = { showAvatarOptionsDialog = true },
+                                shape = RoundedCornerShape(14.dp),
+                                border = BorderStroke(1.dp, primaryAccent.copy(alpha = 0.5f)),
+                                colors = ButtonDefaults.outlinedButtonColors(
+                                    contentColor = primaryAccent
+                                ),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(42.dp)
+                                    .testTag("change_photo_button")
+                            ) {
+                                Icon(Icons.Default.CameraAlt, contentDescription = null, modifier = Modifier.size(15.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Change Photo", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                            }
+                        }
                     }
                 }
             }
@@ -876,6 +979,33 @@ fun ProfileScreen(
 
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), thickness = 0.6.dp)
 
+                // Push Notifications On / Off
+                ListItem(
+                    headlineContent = { Text("Push Notifications", fontSize = 15.sp, fontWeight = FontWeight.SemiBold) },
+                    supportingContent = {
+                        Text(
+                            if (uiState.isNotificationsEnabled) "Receive notifications for new love messages & reminders"
+                            else "All incoming notifications are muted",
+                            fontSize = 13.sp
+                        )
+                    },
+                    leadingContent = {
+                        Icon(
+                            if (uiState.isNotificationsEnabled) Icons.Default.Notifications else Icons.Default.NotificationsOff,
+                            contentDescription = null,
+                            tint = if (uiState.isNotificationsEnabled) primaryAccent else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    },
+                    trailingContent = {
+                        Switch(
+                            checked = uiState.isNotificationsEnabled,
+                            onCheckedChange = { viewModel.setNotificationsEnabled(it) }
+                        )
+                    }
+                )
+
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), thickness = 0.6.dp)
+
                 // Notification Content Privacy
                 ListItem(
                     headlineContent = { Text("Hide Notification Content", fontSize = 15.sp, fontWeight = FontWeight.SemiBold) },
@@ -884,7 +1014,8 @@ fun ProfileScreen(
                     trailingContent = {
                         Switch(
                             checked = uiState.isHideNotificationContent,
-                            onCheckedChange = { viewModel.setHideNotificationContent(it) }
+                            onCheckedChange = { viewModel.setHideNotificationContent(it) },
+                            enabled = uiState.isNotificationsEnabled
                         )
                     }
                 )
@@ -1904,7 +2035,7 @@ fun ProfileScreen(
                         value = usernameInput,
                         onValueChange = { usernameInput = it },
                         label = { Text("My Username") },
-                        placeholder = { Text("e.g. Faisal") },
+                        placeholder = { Text("e.g. Faisal or Shali") },
                         singleLine = true,
                         shape = RoundedCornerShape(12.dp),
                         modifier = Modifier.fillMaxWidth().testTag("edit_my_username_input")
@@ -1912,8 +2043,8 @@ fun ProfileScreen(
                     OutlinedTextField(
                         value = partnerEmailInput,
                         onValueChange = { partnerEmailInput = it },
-                        label = { Text("Partner's Account / Email") },
-                        placeholder = { Text("e.g. partner@cherish.app") },
+                        label = { Text("Partner's Account / Username") },
+                        placeholder = { Text("e.g. Shali or Faisal") },
                         singleLine = true,
                         shape = RoundedCornerShape(12.dp),
                         modifier = Modifier.fillMaxWidth().testTag("edit_partner_email_input")
@@ -1922,7 +2053,7 @@ fun ProfileScreen(
                         value = coupleKeyInput,
                         onValueChange = { coupleKeyInput = it },
                         label = { Text("Couple Secret Passcode") },
-                        placeholder = { Text("e.g. CHERISH-FOREVER") },
+                        placeholder = { Text("e.g. faisal-shali") },
                         singleLine = true,
                         shape = RoundedCornerShape(12.dp),
                         modifier = Modifier.fillMaxWidth().testTag("edit_couple_key_input")

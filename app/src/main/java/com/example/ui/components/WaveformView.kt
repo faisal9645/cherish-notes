@@ -50,26 +50,38 @@ fun WaveformView(
     val dropletElevation = remember { Animatable(0f) }
     var isDragging by remember { mutableStateOf(false) }
 
-    // Live continuous animation for recording and playback feedback
-    val infiniteTransition = rememberInfiniteTransition(label = "waveform_motion")
-    val wavePhase by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = (2 * PI).toFloat(),
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 1100, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "wave_phase"
-    )
-    val playheadPulse by infiniteTransition.animateFloat(
-        initialValue = 0.88f,
-        targetValue = 1.22f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 650, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "playhead_pulse"
-    )
+    // Live continuous animation only active during recording or playback to conserve CPU and battery
+    val wavePhase = if (isRecording) {
+        val transition = rememberInfiniteTransition(label = "waveform_motion")
+        val phase by transition.animateFloat(
+            initialValue = 0f,
+            targetValue = (2 * PI).toFloat(),
+            animationSpec = infiniteRepeatable(
+                animation = tween(durationMillis = 1100, easing = LinearEasing),
+                repeatMode = RepeatMode.Restart
+            ),
+            label = "wave_phase"
+        )
+        phase
+    } else {
+        0f
+    }
+
+    val playheadPulse = if (isPlaying) {
+        val transition = rememberInfiniteTransition(label = "waveform_pulse")
+        val pulse by transition.animateFloat(
+            initialValue = 0.88f,
+            targetValue = 1.22f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(durationMillis = 650, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "playhead_pulse"
+        )
+        pulse
+    } else {
+        1.0f
+    }
 
     fun startScrubbingPhysics() {
         isDragging = true

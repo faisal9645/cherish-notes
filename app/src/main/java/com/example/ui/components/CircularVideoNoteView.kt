@@ -27,6 +27,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -48,6 +49,8 @@ fun CircularVideoNoteView(
     var progress by remember { mutableFloatStateOf(0f) }
     var videoViewRef by remember { mutableStateOf<VideoView?>(null) }
     var mediaPlayerRef by remember { mutableStateOf<MediaPlayer?>(null) }
+    var videoWidth by remember { mutableIntStateOf(0) }
+    var videoHeight by remember { mutableIntStateOf(0) }
 
     // Progress tracker
     LaunchedEffect(isPlaying) {
@@ -71,9 +74,20 @@ fun CircularVideoNoteView(
         }
     }
 
+    val scaleFactor = remember(videoWidth, videoHeight) {
+        if (videoWidth > 0 && videoHeight > 0) {
+            val aspect = videoWidth.toFloat() / videoHeight.toFloat()
+            val scaleX = if (aspect < 1f) (1f / aspect) else 1.0f
+            val scaleY = if (aspect > 1f) aspect else 1.0f
+            Pair(scaleX, scaleY)
+        } else {
+            Pair(1f, 1f)
+        }
+    }
+
     Box(
         modifier = modifier
-            .size(190.dp)
+            .size(240.dp)
             .clip(CircleShape)
             .background(Color.Black)
             .border(2.5.dp, RoseGoldPrimary.copy(alpha = 0.4f), CircleShape)
@@ -90,7 +104,7 @@ fun CircularVideoNoteView(
             },
         contentAlignment = Alignment.Center
     ) {
-        // Video View surface
+        // Video View surface with center-crop to prevent any stretching
         AndroidView(
             factory = { ctx ->
                 VideoView(ctx).apply {
@@ -98,6 +112,8 @@ fun CircularVideoNoteView(
                     setOnPreparedListener { mp ->
                         mediaPlayerRef = mp
                         mp.isLooping = true
+                        videoWidth = mp.videoWidth
+                        videoHeight = mp.videoHeight
                         if (isMuted) {
                             mp.setVolume(0f, 0f)
                         } else {
@@ -115,6 +131,10 @@ fun CircularVideoNoteView(
             },
             modifier = Modifier
                 .fillMaxSize()
+                .graphicsLayer {
+                    scaleX = scaleFactor.first
+                    scaleY = scaleFactor.second
+                }
                 .clip(CircleShape)
         )
 

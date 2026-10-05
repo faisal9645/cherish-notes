@@ -48,9 +48,9 @@ fun AuthScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
-    var myUsername by remember { mutableStateOf("") }
-    var partnerName by remember { mutableStateOf("") }
-    var coupleSecretCode by remember { mutableStateOf("") }
+    var myUsername by remember { mutableStateOf("Faisal") }
+    var partnerName by remember { mutableStateOf("Shali") }
+    var coupleSecretCode by remember { mutableStateOf("faisal-shali") }
 
     LaunchedEffect(uiState) {
         if (uiState is AuthUiState.Success) {
@@ -169,7 +169,7 @@ fun AuthScreen(
                                 }
                             }
 
-                            Spacer(modifier = Modifier.height(20.dp))
+                            Spacer(modifier = Modifier.height(18.dp))
 
                             // Field 1: Your Username
                             OutlinedTextField(

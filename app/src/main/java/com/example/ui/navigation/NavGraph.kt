@@ -34,7 +34,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
-import androidx.compose.material.icons.filled.ExitToApp
+import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -718,24 +718,29 @@ fun CherishNavGraph(
         var dragOffsetY by remember { mutableFloatStateOf(0f) }
         val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
 
+        val handleShape = RoundedCornerShape(topStart = 24.dp, bottomStart = 24.dp, topEnd = 0.dp, bottomEnd = 0.dp)
+
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .zIndex(999f)
         ) {
             Surface(
-                color = if (isDark) Color(0xFF1E2638).copy(alpha = exitOpacity) else Color.White.copy(alpha = exitOpacity),
+                shape = handleShape,
+                color = if (isDark) Color(0xFF1E2638).copy(alpha = exitOpacity)
+                        else Color(0xFF1F2937).copy(alpha = exitOpacity),
                 border = BorderStroke(
                     1.dp,
-                    if (isDark) Color(0xFF2A364F).copy(alpha = exitOpacity) else Color.LightGray.copy(alpha = exitOpacity)
+                    if (isDark) Color(0xFF2A364F).copy(alpha = (exitOpacity * 0.7f).coerceIn(0.1f, 0.9f))
+                    else Color(0xFF111827).copy(alpha = (exitOpacity * 0.5f).coerceIn(0.1f, 0.8f))
                 ),
-                shadowElevation = if (exitOpacity > 0.3f) 6.dp else 1.dp,
+                shadowElevation = 0.dp,
+                tonalElevation = 0.dp,
                 modifier = Modifier
                     .align(Alignment.CenterEnd)
                     .offset { IntOffset(0, dragOffsetY.roundToInt()) }
                     .width(44.dp)
                     .height(88.dp)
-                    .clip(RoundedCornerShape(topStart = 24.dp, bottomStart = 24.dp, topEnd = 0.dp, bottomEnd = 0.dp))
                     .pointerInput(Unit) {
                         detectVerticalDragGestures { change, dragAmount ->
                             change.consume()
@@ -758,9 +763,9 @@ fun CherishNavGraph(
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        imageVector = Icons.Default.ExitToApp,
+                        imageVector = Icons.AutoMirrored.Filled.ExitToApp,
                         contentDescription = "Emergency Exit to Notes",
-                        tint = HeartRed.copy(alpha = exitOpacity.coerceAtLeast(0.45f)),
+                        tint = HeartRed.copy(alpha = exitOpacity.coerceAtLeast(0.55f)),
                         modifier = Modifier.size(24.dp)
                     )
                 }

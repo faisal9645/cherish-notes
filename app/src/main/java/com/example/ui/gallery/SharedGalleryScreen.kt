@@ -207,8 +207,14 @@ fun SharedGalleryScreen(
     }
 
     val mediaMessages = remember(filteredMessages) {
-        filteredMessages.filter { it.mediaUrl != null && it.getTypedType() == MessageType.IMAGE }
-            .sortedByDescending { it.timestamp }
+        filteredMessages.filter {
+            !it.mediaUrl.isNullOrBlank() && (
+                it.getTypedType() == MessageType.IMAGE ||
+                it.getTypedType() == MessageType.VIDEO ||
+                it.isVideoNote ||
+                it.isCircularVideoNote()
+            )
+        }.sortedByDescending { it.timestamp }
     }
 
     val voiceMessages = remember(filteredMessages) {
@@ -446,6 +452,53 @@ fun SharedGalleryScreen(
                                             modifier = Modifier.fillMaxSize()
                                         )
 
+                                        val isVideoItem = msg.isCircularVideoNote() || msg.isVideoNote || msg.getTypedType() == MessageType.VIDEO
+                                        if (isVideoItem) {
+                                            // Center Play Indicator
+                                            Box(
+                                                modifier = Modifier
+                                                    .align(Alignment.Center)
+                                                    .size(36.dp)
+                                                    .background(Color.Black.copy(alpha = 0.55f), CircleShape),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.PlayArrow,
+                                                    contentDescription = "Video Note",
+                                                    tint = Color.White,
+                                                    modifier = Modifier.size(22.dp)
+                                                )
+                                            }
+
+                                            // Video Note Pill
+                                            Surface(
+                                                shape = RoundedCornerShape(8.dp),
+                                                color = Color.Black.copy(alpha = 0.65f),
+                                                modifier = Modifier
+                                                    .align(Alignment.BottomStart)
+                                                    .padding(4.dp)
+                                            ) {
+                                                Row(
+                                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Icon(
+                                                        imageVector = Icons.Default.Videocam,
+                                                        contentDescription = null,
+                                                        tint = RoseGoldPrimary,
+                                                        modifier = Modifier.size(11.dp)
+                                                    )
+                                                    Spacer(modifier = Modifier.width(3.dp))
+                                                    Text(
+                                                        text = if (msg.isCircularVideoNote() || msg.isVideoNote) "Video Note" else "Video",
+                                                        color = Color.White,
+                                                        fontSize = 9.5.sp,
+                                                        fontWeight = FontWeight.Bold
+                                                    )
+                                                }
+                                            }
+                                        }
+
                                         // Overlay "Show in chat" button on bottom edge
                                         Box(
                                             modifier = Modifier
@@ -479,7 +532,7 @@ fun SharedGalleryScreen(
                                             Icon(
                                                 imageVector = Icons.Default.Delete,
                                                 contentDescription = "Delete",
-                                                tint = Color(0xFFFF5252),
+                                                tint = Color(0xFF9CA3AF),
                                                 modifier = Modifier.size(16.dp)
                                             )
                                         }
@@ -576,7 +629,7 @@ fun SharedGalleryScreen(
                                                     onClick = { messageToDelete = msg },
                                                     modifier = Modifier.size(32.dp)
                                                 ) {
-                                                    Icon(Icons.Default.DeleteOutline, contentDescription = "Delete", tint = Color.Red, modifier = Modifier.size(18.dp))
+                                                    Icon(Icons.Default.DeleteOutline, contentDescription = "Delete", tint = Color(0xFF9CA3AF), modifier = Modifier.size(18.dp))
                                                 }
                                             }
 
@@ -839,7 +892,7 @@ fun SharedGalleryScreen(
                                                     },
                                                     modifier = Modifier.size(30.dp)
                                                 ) {
-                                                    Icon(Icons.Default.DeleteOutline, contentDescription = "Delete", tint = Color.Red, modifier = Modifier.size(18.dp))
+                                                    Icon(Icons.Default.DeleteOutline, contentDescription = "Delete", tint = Color(0xFF9CA3AF), modifier = Modifier.size(18.dp))
                                                 }
                                             }
                                         }

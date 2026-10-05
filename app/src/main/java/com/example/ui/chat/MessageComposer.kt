@@ -47,6 +47,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
+import androidx.compose.material.icons.automirrored.filled.Reply
 import com.example.data.model.Message
 import com.example.ui.components.WaveformView
 import com.example.ui.theme.DarkBluePrimary
@@ -262,29 +263,38 @@ fun MessageComposer(
         ) {
             if (replyingTo != null) {
                 Surface(
-                    color = pillBg,
+                    color = if (isDark) Color(0xFF1E2430) else Color(0xFFF1F5F9),
+                    border = BorderStroke(1.dp, if (isDark) Color(0xFF2A364F) else Color(0xFFE2E8F0)),
+                    shadowElevation = 2.dp,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(start = 12.dp, end = 66.dp, top = 6.dp, bottom = 0.dp),
-                    shape = RoundedCornerShape(12.dp)
+                        .padding(start = 12.dp, end = 12.dp, top = 6.dp, bottom = 4.dp),
+                    shape = RoundedCornerShape(16.dp)
                 ) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 12.dp, vertical = 6.dp),
+                            .padding(horizontal = 12.dp, vertical = 7.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Box(
                             modifier = Modifier
-                                .width(3.dp)
+                                .width(3.5.dp)
                                 .height(32.dp)
                                 .background(if (isPrivateMode) (if (isDark) Color(0xFF9CA3AF) else Color(0xFF6B7280)) else MaterialTheme.colorScheme.primary, CircleShape)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.Reply,
+                            contentDescription = null,
+                            tint = if (isPrivateMode) (if (isDark) Color(0xFF9CA3AF) else Color(0xFF6B7280)) else MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = "Replying to ${replyingTo.senderName ?: "Partner"}",
-                                fontSize = 11.sp,
+                                fontSize = 11.5.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = if (isPrivateMode) (if (isDark) Color(0xFFECECEC) else Color(0xFF111827)) else MaterialTheme.colorScheme.primary
                             )
@@ -297,7 +307,7 @@ fun MessageComposer(
                         }
                         IconButton(
                             onClick = onDismissReply,
-                            modifier = Modifier.size(24.dp)
+                            modifier = Modifier.size(26.dp)
                         ) {
                             Icon(
                                 Icons.Default.Close,
@@ -312,13 +322,13 @@ fun MessageComposer(
         }
 
         // 23. WhatsApp-Style Composer Row:
-        // [ 🙂 | Message your love... | 📎 | 📷 ]    [ 🎤 / ✈️ ]
+        // [ 🙂 | Message your love... | 📎 | 📷 | 📹 ]    [ 🎤 / ✈️ ]
         Row(
             modifier = Modifier
                 .widthIn(max = 600.dp)
                 .fillMaxWidth()
                 .align(Alignment.CenterHorizontally)
-                .padding(horizontal = 12.dp, vertical = 6.dp),
+                .padding(start = 12.dp, end = 12.dp, top = 2.dp, bottom = 8.dp),
             verticalAlignment = Alignment.Bottom
         ) {
             // Main Input Pill / Active Recording Bar
@@ -354,6 +364,17 @@ fun MessageComposer(
                         }
 
                         Spacer(modifier = Modifier.width(4.dp))
+
+                        // Profile icon on the left side during recording
+                        com.example.ui.components.AvatarView(
+                            photoUrl = myPhotoUrl,
+                            name = myName,
+                            size = 28.dp,
+                            isOnline = false,
+                            showOnlineBadge = false
+                        )
+
+                        Spacer(modifier = Modifier.width(6.dp))
 
                         // Pulsing red dot
                         Box(
@@ -409,7 +430,16 @@ fun MessageComposer(
                             .padding(horizontal = 8.dp, vertical = 6.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // Removed profile avatar during active recording as per requirements
+                        // Profile icon on the left side during recording
+                        com.example.ui.components.AvatarView(
+                            photoUrl = myPhotoUrl,
+                            name = myName,
+                            size = 28.dp,
+                            isOnline = false,
+                            showOnlineBadge = false
+                        )
+
+                        Spacer(modifier = Modifier.width(6.dp))
 
                         // Pulsing red dot
                         Box(
@@ -626,12 +656,23 @@ fun MessageComposer(
                                 .size(36.dp)
                                 .testTag("composer_video_note_button")
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.Videocam,
-                                contentDescription = "Circular Video Note",
-                                tint = if (isPrivateMode) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(23.dp)
-                            )
+                            Box(
+                                modifier = Modifier
+                                    .size(26.dp)
+                                    .border(
+                                        width = 1.8.dp,
+                                        color = if (isPrivateMode) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.primary,
+                                        shape = CircleShape
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Videocam,
+                                    contentDescription = "Circular Video Note",
+                                    tint = if (isPrivateMode) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(15.dp)
+                                )
+                            }
                         }
                     }
                 }

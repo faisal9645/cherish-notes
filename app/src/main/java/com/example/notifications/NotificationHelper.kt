@@ -98,6 +98,7 @@ object NotificationHelper {
 
         val count = pendingUnreadCount.incrementAndGet()
         val prefs = SecurityPreferences.getInstance(context)
+        if (!prefs.isNotificationsEnabled()) return
         val isDiscreet = prefs.isHideNotificationContent() || prefs.isDisguiseModeEnabled() || prefs.isDisguiseActive()
 
         val intent = Intent(context, MainActivity::class.java).apply {
@@ -189,6 +190,7 @@ object NotificationHelper {
      */
     fun showCheckAfterReminderNotification(context: Context, partnerName: String = "Your partner") {
         val prefs = SecurityPreferences.getInstance(context)
+        if (!prefs.isNotificationsEnabled()) return
         if (!prefs.isCheckAfterReminderEnabled()) return
 
         val intent = Intent(context, MainActivity::class.java).apply {
@@ -240,6 +242,7 @@ object NotificationHelper {
         content: String
     ) {
         val prefs = SecurityPreferences.getInstance(context)
+        if (!prefs.isNotificationsEnabled()) return
         if (!prefs.isNoteRemindersEnabled()) return
 
         val intent = Intent(context, MainActivity::class.java).apply {

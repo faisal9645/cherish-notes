@@ -589,6 +589,10 @@ class AuthRepository(private val context: Context) {
     suspend fun updateBatteryStatus(level: Int, isCharging: Boolean): Result<Unit> {
         val uid = getCurrentUserId()
         val current = _currentUserState.value ?: User(id = uid)
+        // Guard against duplicate state mutations and unnecessary writes to save battery & CPU
+        if (current.batteryLevel == level && current.isCharging == isCharging) {
+            return Result.success(Unit)
+        }
         val updated = current.copy(batteryLevel = level, isCharging = isCharging)
         _currentUserState.value = updated
         return try {
@@ -613,6 +617,14 @@ class AuthRepository(private val context: Context) {
                 com.google.firebase.firestore.SetOptions.merge()
             )
         } catch (_: Exception) {}
+
+        // In offline/demo mode, if partner is online, also sync to partner so live touch connection works immediately
+        if (firestore == null && active) {
+            val partner = _partnerUserState.value
+            if (partner != null && (partner.isOnline || partner.isEffectivelyOnline())) {
+                _partnerUserState.value = partner.copy(heartbeatTouchingTimestamp = timestamp)
+            }
+        }
     }
 
     suspend fun pairWithPartner(partnerUsername: String, coupleSecretKey: String): Result<User> {
@@ -1065,19 +1077,61 @@ class AuthRepository(private val context: Context) {
             val status = prefs.getString("statusMessage", "Loving every moment with you ✨") ?: "Loving every moment with you ✨"
             val partnerId = prefs.getString("partnerId", null)?.ifBlank { null }
             val partnerEmail = prefs.getString("partnerEmail", null)?.ifBlank { null }
-            val coupleId = prefs.getString("coupleId", "couple_default") ?: "couple_default"
-            _currentUserState.value = User(
+            val coupleId = prefs.getString("coupleId", "couple_faisal_shali") ?: "couple_faisal_shali"
+            val user = User(
                 id = uid,
                 email = prefs.getString("email", "") ?: "",
-                displayName = prefs.getString("displayName", "User") ?: "User",
+                displayName = prefs.getString("displayName", if (uid == "user_shali") "Shali" else "Faisal") ?: "Faisal",
                 photoUrl = photo,
                 statusMessage = status,
-                partnerId = partnerId,
-                partnerEmail = partnerEmail,
+                partnerId = partnerId ?: if (uid == "user_faisal") "user_shali" else "user_faisal",
+                partnerEmail = partnerEmail ?: if (uid == "user_faisal") "shalihafais36@gmail.com" else "faisallasiaff@gmail.com",
                 coupleId = coupleId,
                 checkAfterTimeMillis = if (targetTime > 0L) targetTime else null,
                 checkAfterNote = note.ifBlank { null },
                 checkAfterActive = active
+            )
+            _currentUserState.value = user
+            val partnerUid = user.partnerId ?: if (uid == "user_faisal") "user_shali" else "user_faisal"
+            val partnerName = if (partnerUid == "user_shali") "Shali" else "Faisal"
+            val partnerEmailAddr = if (partnerUid == "user_shali") "shalihafais36@gmail.com" else "faisallasiaff@gmail.com"
+            if (_partnerUserState.value == null) {
+                _partnerUserState.value = User(
+                    id = partnerUid,
+                    email = partnerEmailAddr,
+                    displayName = partnerName,
+                    partnerId = user.id,
+                    partnerEmail = user.email,
+                    coupleId = coupleId,
+                    isOnline = true,
+                    statusMessage = if (partnerUid == "user_shali") "Always with you 💕" else "Forever yours ❤️"
+                )
+            }
+        } else {
+            // Default couple setup: Faisal & Shali!
+            val defaultUser = User(
+                id = "user_faisal",
+                email = "faisallasiaff@gmail.com",
+                displayName = "Faisal",
+                partnerId = "user_shali",
+                partnerEmail = "shalihafais36@gmail.com",
+                coupleId = "couple_faisal_shali",
+                statusMessage = "Forever yours ❤️",
+                isOnline = true
+            )
+            _currentUserState.value = defaultUser
+            saveLocalUserSession(defaultUser)
+            securityPrefs.setApprovedPartnerEmail("shalihafais36@gmail.com")
+            securityPrefs.setCoupleSecretKey("couple_faisal_shali")
+            _partnerUserState.value = User(
+                id = "user_shali",
+                email = "shalihafais36@gmail.com",
+                displayName = "Shali",
+                partnerId = "user_faisal",
+                partnerEmail = "faisallasiaff@gmail.com",
+                coupleId = "couple_faisal_shali",
+                isOnline = true,
+                statusMessage = "Always with you 💕"
             )
         }
     }

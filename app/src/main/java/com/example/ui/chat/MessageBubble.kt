@@ -432,7 +432,17 @@ fun MessageBubble(
                                 .fillMaxWidth()
                                 .padding(vertical = 4.dp, horizontal = 2.dp)
                         ) {
-                            // Opponent avatar moved to the right side after waveform
+                            // Sent voice message: profile icon on the LEFT side
+                            if (isFromMe && !isPrivateMode) {
+                                com.example.ui.components.AvatarView(
+                                    photoUrl = senderPhotoUrl,
+                                    name = message.senderName,
+                                    size = 40.dp,
+                                    isOnline = false,
+                                    showOnlineBadge = false
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                            }
 
                             IconButton(
                                 onClick = onPlayAudio,
@@ -541,12 +551,13 @@ fun MessageBubble(
                                 }
                             }
 
-                            if (!isPrivateMode) {
-                                Spacer(modifier = Modifier.width(10.dp))
+                            // Opposite user voice message: profile icon on the RIGHT side
+                            if (!isFromMe && !isPrivateMode) {
+                                Spacer(modifier = Modifier.width(8.dp))
                                 com.example.ui.components.AvatarView(
                                     photoUrl = senderPhotoUrl,
                                     name = message.senderName,
-                                    size = 42.dp,
+                                    size = 40.dp,
                                     isOnline = false,
                                     showOnlineBadge = false
                                 )

@@ -28,6 +28,9 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.input.pointer.pointerInput
@@ -96,6 +99,27 @@ fun ChatScreen(
     var showVideoNoteRecorder by remember { mutableStateOf(false) }
     var showHeartbeatTouch by remember { mutableStateOf(false) }
     var showMoodPicker by remember { mutableStateOf(false) }
+
+    val searchFocusRequester = remember { FocusRequester() }
+    val keyboardController = LocalSoftwareKeyboardController.current
+
+    // Automatically open keyboard and focus input when search is opened
+    LaunchedEffect(uiState.isSearching) {
+        if (uiState.isSearching) {
+            kotlinx.coroutines.delay(120)
+            try {
+                searchFocusRequester.requestFocus()
+                keyboardController?.show()
+            } catch (_: Exception) {}
+        }
+    }
+
+    // Automatically open Heartbeat Touch dialog when partner starts heartbeat touching
+    LaunchedEffect(uiState.isPartnerHeartTouching) {
+        if (uiState.isPartnerHeartTouching && !showHeartbeatTouch) {
+            showHeartbeatTouch = true
+        }
+    }
 
     val currentPlayingId by viewModel.voicePlayerHelper.currentlyPlayingId.collectAsState()
     val isAudioPlaying by viewModel.voicePlayerHelper.isPlaying.collectAsState()
@@ -253,7 +277,7 @@ fun ChatScreen(
         if (partnerHasCheckAfter) {
             while (true) {
                 headerTicker = System.currentTimeMillis()
-                kotlinx.coroutines.delay(1000)
+                kotlinx.coroutines.delay(10_000L)
             }
         }
     }
@@ -373,6 +397,45 @@ fun ChatScreen(
     }
 
     Scaffold(
+        modifier = Modifier.pointerInput(Unit) {
+            awaitEachGesture {
+                val down = awaitFirstDown(requireUnconsumed = false)
+                var accX = 0f
+                var accY = 0f
+                var directionLocked = false
+                var isHorizontal = false
+
+                while (true) {
+                    val event = awaitPointerEvent()
+                    val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                    if (!change.pressed) break
+
+                    val delta = change.positionChange()
+                    accX += delta.x
+                    accY += delta.y
+
+                    if (!directionLocked && (kotlin.math.abs(accX) > 12f || kotlin.math.abs(accY) > 12f)) {
+                        isHorizontal = kotlin.math.abs(accX) > kotlin.math.abs(accY) * 1.35f
+                        directionLocked = true
+                    }
+
+                    if (directionLocked && isHorizontal) {
+                        // Swiping right smoothly glides to Love & Us tab
+                        if (accX > 55f) {
+                            change.consume()
+                            onNavigateToHome()
+                            break
+                        }
+                        // Swiping left smoothly glides to Settings / Profile tab
+                        if (accX < -55f) {
+                            change.consume()
+                            onNavigateToProfile()
+                            break
+                        }
+                    }
+                }
+            }
+        },
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
             Column {
@@ -397,6 +460,7 @@ fun ChatScreen(
                             ),
                             modifier = Modifier
                                 .fillMaxWidth()
+                                .focusRequester(searchFocusRequester)
                                 .testTag("chat_search_input")
                         )
                     } else {
@@ -647,17 +711,6 @@ fun ChatScreen(
                                     },
                                     leadingIcon = {
                                         Icon(Icons.Outlined.Mood, null, tint = RoseGoldPrimary)
-                                    }
-                                )
-
-                                DropdownMenuItem(
-                                    text = { Text("Heartbeat Touch ❤️") },
-                                    onClick = {
-                                        showChatMenu = false
-                                        showHeartbeatTouch = true
-                                    },
-                                    leadingIcon = {
-                                        Icon(Icons.Default.Favorite, null, tint = HeartRed)
                                     }
                                 )
 
@@ -1099,9 +1152,12 @@ fun ChatScreen(
                             ) {
                                 Surface(
                                     shape = RoundedCornerShape(20.dp),
-                                    color = if (isDark) Color(0xFF1E2430).copy(alpha = 0.95f) else Color(0xFFFFF0F3).copy(alpha = 0.95f),
-                                    border = BorderStroke(1.dp, RoseGoldPrimary.copy(alpha = 0.5f)),
-                                    shadowElevation = 3.dp
+                                    color = if (isDark) Color(0xFF1E2430).copy(alpha = 0.95f) else Color.White.copy(alpha = 0.95f),
+                                    border = BorderStroke(
+                                        1.dp,
+                                        if (isDark) Color.White.copy(alpha = 0.12f) else Color.Black.copy(alpha = 0.08f)
+                                    ),
+                                    shadowElevation = 2.dp
                                 ) {
                                     Row(
                                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
@@ -1110,7 +1166,7 @@ fun ChatScreen(
                                         CircularProgressIndicator(
                                             modifier = Modifier.size(14.dp),
                                             strokeWidth = 2.dp,
-                                            color = RoseGoldPrimary
+                                            color = MaterialTheme.colorScheme.primary
                                         )
                                         Spacer(modifier = Modifier.width(10.dp))
                                         Text(
@@ -1137,8 +1193,11 @@ fun ChatScreen(
                                 Surface(
                                     shape = RoundedCornerShape(22.dp),
                                     color = if (isDark) Color(0xFF1E2430).copy(alpha = 0.95f) else Color.White.copy(alpha = 0.95f),
-                                    border = BorderStroke(1.dp, RoseGoldPrimary.copy(alpha = 0.6f)),
-                                    shadowElevation = 3.dp,
+                                    border = BorderStroke(
+                                        1.dp,
+                                        if (isDark) Color.White.copy(alpha = 0.14f) else Color.Black.copy(alpha = 0.10f)
+                                    ),
+                                    shadowElevation = 2.dp,
                                     modifier = Modifier
                                         .clip(RoundedCornerShape(22.dp))
                                         .clickable {
@@ -1155,7 +1214,7 @@ fun ChatScreen(
                                         Icon(
                                             imageVector = Icons.Default.History,
                                             contentDescription = null,
-                                            tint = RoseGoldPrimary,
+                                            tint = MaterialTheme.colorScheme.primary,
                                             modifier = Modifier.size(16.dp)
                                         )
                                         Spacer(modifier = Modifier.width(8.dp))
@@ -1363,6 +1422,7 @@ fun ChatScreen(
         HeartbeatTouchDialog(
             partnerName = partnerName,
             isPartnerTouching = uiState.isPartnerHeartTouching,
+            isPartnerOnline = uiState.isPartnerOnline,
             onTouchChanged = { viewModel.setHeartbeatTouch(it) },
             onDismiss = { showHeartbeatTouch = false }
         )

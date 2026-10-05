@@ -37,6 +37,9 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChange
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -265,14 +268,21 @@ fun FullScreenMediaViewer(
             // Issue 11: beyondBoundsPageCount=1 pre-loads the adjacent images so swiping
             // left/right is instant with no load delay. userScrollEnabled=false while zoomed
             // prevents accidental page swipes during pinch-zoom.
+            val isZoomed = scale > 1.05f
             HorizontalPager(
                 state = pagerState,
-                userScrollEnabled = scale <= 1.05f,
+                userScrollEnabled = !isZoomed,
                 beyondViewportPageCount = 1,
                 key = { it },
                 modifier = Modifier.fillMaxSize()
             ) { page ->
                 val pageUrl = mediaList.getOrNull(page) ?: currentUrl
+                val isVideo = remember(pageUrl) {
+                    pageUrl.endsWith(".mp4", ignoreCase = true) ||
+                    pageUrl.contains("videonote", ignoreCase = true) ||
+                    (pageUrl.startsWith("content://") && pageUrl.contains("video", ignoreCase = true))
+                }
+
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -286,67 +296,172 @@ fun FullScreenMediaViewer(
                                 }
                             )
                         }
-                        .pointerInput(page) {
-                            detectTransformGestures { _, pan, zoom, _ ->
-                                val newScale = (scale * zoom).coerceIn(0.75f, 5.0f)
-                                scale = newScale
-
-                                if (scale > 1.05f) {
-                                    // Pan bounded
-                                    val maxBound = (scale - 1f) * 600f
-                                    offset = Offset(
-                                        x = (offset.x + pan.x).coerceIn(-maxBound, maxBound),
-                                        y = (offset.y + pan.y).coerceIn(-maxBound, maxBound)
-                                    )
-                                } else {
-                                    // Swipe down to dismiss gesture when at min scale
-                                    if (pan.y > 0 || swipeOffsetY > 0) {
-                                        swipeOffsetY += pan.y
-                                        if (swipeOffsetY > 160f) {
-                                            onDismiss()
+                        .then(
+                            if (isZoomed) {
+                                Modifier.pointerInput(page, isZoomed) {
+                                    detectTransformGestures { _, pan, zoom, _ ->
+                                        val newScale = (scale * zoom).coerceIn(0.75f, 5.0f)
+                                        scale = newScale
+                                        if (scale > 1.05f) {
+                                            val maxBound = (scale - 1f) * 600f
+                                            offset = Offset(
+                                                x = (offset.x + pan.x).coerceIn(-maxBound, maxBound),
+                                                y = (offset.y + pan.y).coerceIn(-maxBound, maxBound)
+                                            )
+                                        } else {
+                                            resetZoom()
                                         }
-                                    } else {
-                                        swipeOffsetY = 0f
+                                    }
+                                }
+                            } else {
+                                // When not zoomed, allow HorizontalPager to freely handle left/right swipe between photos!
+                                // Only consume vertical swipe-down to dismiss
+                                Modifier.pointerInput(page) {
+                                    awaitEachGesture {
+                                        val down = awaitFirstDown(requireUnconsumed = false)
+                                        var totalY = 0f
+                                        var totalX = 0f
+                                        var isVertical = false
+                                        var decided = false
+
+                                        while (true) {
+                                            val event = awaitPointerEvent()
+                                            val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                                            if (!change.pressed) break
+
+                                            val delta = change.positionChange()
+                                            totalX += delta.x
+                                            totalY += delta.y
+
+                                            if (!decided && (kotlin.math.abs(totalX) > 12f || kotlin.math.abs(totalY) > 12f)) {
+                                                decided = true
+                                                isVertical = kotlin.math.abs(totalY) > kotlin.math.abs(totalX) * 1.5f && totalY > 0
+                                            }
+
+                                            if (decided && isVertical) {
+                                                change.consume()
+                                                swipeOffsetY = totalY
+                                                if (swipeOffsetY > 160f) {
+                                                    onDismiss()
+                                                    break
+                                                }
+                                            }
+                                        }
+                                        if (!isVertical || swipeOffsetY <= 160f) {
+                                            swipeOffsetY = 0f
+                                        }
                                     }
                                 }
                             }
-                        },
+                        ),
                     contentAlignment = Alignment.Center
                 ) {
-                    val modelData = remember(pageUrl) {
-                        when {
-                            pageUrl.startsWith("data:image") -> {
-                                try {
-                                    val base64 = pageUrl.substringAfter("base64,")
-                                    android.util.Base64.decode(base64, android.util.Base64.DEFAULT)
-                                } catch (e: Exception) {
-                                    pageUrl
+                    if (isVideo) {
+                        com.example.ui.components.CircularVideoNoteView(
+                            videoUrl = pageUrl,
+                            modifier = Modifier.size(260.dp)
+                        )
+                    } else {
+                        val modelData = remember(pageUrl) {
+                            when {
+                                pageUrl.startsWith("data:image") -> {
+                                    try {
+                                        val base64 = pageUrl.substringAfter("base64,")
+                                        android.util.Base64.decode(base64, android.util.Base64.DEFAULT)
+                                    } catch (e: Exception) {
+                                        pageUrl
+                                    }
+                                }
+                                pageUrl.startsWith("/") -> java.io.File(pageUrl)
+                                pageUrl.startsWith("file://") -> java.io.File(pageUrl.removePrefix("file://"))
+                                pageUrl.startsWith("content://") -> android.net.Uri.parse(pageUrl)
+                                else -> pageUrl
+                            }
+                        }
+
+                        AsyncImage(
+                            model = coil.request.ImageRequest.Builder(androidx.compose.ui.platform.LocalContext.current)
+                                .data(modelData)
+                                .build(),
+                            contentDescription = "Full-screen media photo",
+                            contentScale = ContentScale.Fit,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .graphicsLayer {
+                                    if (page == pagerState.currentPage) {
+                                        scaleX = scale
+                                        scaleY = scale
+                                        translationX = offset.x
+                                        translationY = offset.y + swipeOffsetY
+                                    }
+                                }
+                        )
+                    }
+                }
+            }
+
+            // Left (Previous) and Right (Next) chevron buttons for effortless photo navigation
+            if (mediaList.size > 1) {
+                AnimatedVisibility(
+                    visible = isChromeVisible && pagerState.currentPage > 0,
+                    enter = fadeIn(),
+                    exit = fadeOut(),
+                    modifier = Modifier
+                        .align(Alignment.CenterStart)
+                        .padding(start = 12.dp)
+                ) {
+                    Surface(
+                        shape = CircleShape,
+                        color = Color.Black.copy(alpha = 0.55f),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.2f)),
+                        modifier = Modifier
+                            .size(44.dp)
+                            .clickable {
+                                scope.launch {
+                                    pagerState.animateScrollToPage(pagerState.currentPage - 1)
                                 }
                             }
-                            pageUrl.startsWith("/") -> java.io.File(pageUrl)
-                            pageUrl.startsWith("file://") -> java.io.File(pageUrl.removePrefix("file://"))
-                            pageUrl.startsWith("content://") -> android.net.Uri.parse(pageUrl)
-                            else -> pageUrl
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "Previous photo",
+                                tint = Color.White,
+                                modifier = Modifier.size(24.dp)
+                            )
                         }
                     }
+                }
 
-                    AsyncImage(
-                        model = coil.request.ImageRequest.Builder(androidx.compose.ui.platform.LocalContext.current)
-                            .data(modelData)
-                            .build(),
-                        contentDescription = "Full-screen media photo",
-                        contentScale = ContentScale.Fit,
+                AnimatedVisibility(
+                    visible = isChromeVisible && pagerState.currentPage < mediaList.lastIndex,
+                    enter = fadeIn(),
+                    exit = fadeOut(),
+                    modifier = Modifier
+                        .align(Alignment.CenterEnd)
+                        .padding(end = 12.dp)
+                ) {
+                    Surface(
+                        shape = CircleShape,
+                        color = Color.Black.copy(alpha = 0.55f),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.2f)),
                         modifier = Modifier
-                            .fillMaxSize()
-                            .graphicsLayer {
-                                if (page == pagerState.currentPage) {
-                                    scaleX = scale
-                                    scaleY = scale
-                                    translationX = offset.x
-                                    translationY = offset.y + swipeOffsetY
+                            .size(44.dp)
+                            .clickable {
+                                scope.launch {
+                                    pagerState.animateScrollToPage(pagerState.currentPage + 1)
                                 }
                             }
-                    )
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                                contentDescription = "Next photo",
+                                tint = Color.White,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+                    }
                 }
             }
 
@@ -476,7 +591,7 @@ fun FullScreenMediaViewer(
                                     Icon(
                                         imageVector = Icons.Default.Delete,
                                         contentDescription = "Delete",
-                                        tint = Color(0xFFFF5252),
+                                        tint = Color(0xFF9CA3AF),
                                         modifier = Modifier.size(19.dp)
                                     )
                                 }

@@ -10,6 +10,6 @@
         <!-- Dark Mode & AMOLED Splash Screen -->
         <item name="android:windowSplashScreenBackground" tools:targetApi="s">#121212</item>
         <item name="android:windowSplashScreenIconBackgroundColor" tools:targetApi="s">#121212</item>
-        <item name="android:windowSplashScreenAnimatedIcon" tools:targetApi="s">@drawable/splash_icon</item>
+        <item name="android:windowSplashScreenAnimatedIcon" tools:targetApi="s">@drawable/splash_icon_dark</item>
     </style>
 </resources>

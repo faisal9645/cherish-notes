@@ -122,21 +122,6 @@ class ChatViewModel(
             }
         }
 
-        // Periodically re-evaluate presence because time passes even without Firestore updates
-        viewModelScope.launch {
-            while (true) {
-                kotlinx.coroutines.delay(10_000L) // every 10 seconds
-                val partner = _uiState.value.partnerUser
-                _uiState.update {
-                    it.copy(
-                        isPartnerOnline = partner?.isEffectivelyOnline() ?: false,
-                        isPartnerTyping = partner?.isEffectivelyTyping() ?: false,
-                        isPartnerRecordingAudio = partner?.isEffectivelyRecording() ?: false
-                    )
-                }
-            }
-        }
-
         viewModelScope.launch {
             securityPreferences.chatBgTheme.collect { theme ->
                 _uiState.update { it.copy(chatBgTheme = theme) }
@@ -206,19 +191,31 @@ class ChatViewModel(
             }
         }
         
-        // Ticker to continuously evaluate effective online/typing status
+        // Ticker to evaluate effective online/typing status without unnecessary CPU load
         viewModelScope.launch {
             while (true) {
-                kotlinx.coroutines.delay(1000L)
+                kotlinx.coroutines.delay(2000L)
                 _uiState.update { state ->
                     val partner = state.partnerUser
                     val partnerTouching = partner?.heartbeatTouchingTimestamp?.let { System.currentTimeMillis() - it < 8000L } ?: false
-                    state.copy(
-                        isPartnerOnline = partner?.isEffectivelyOnline() ?: false,
-                        isPartnerTyping = partner?.isEffectivelyTyping() ?: false,
-                        isPartnerRecordingAudio = partner?.isEffectivelyRecording() ?: false,
-                        isPartnerHeartTouching = partnerTouching
-                    )
+                    val newOnline = partner?.isEffectivelyOnline() ?: false
+                    val newTyping = partner?.isEffectivelyTyping() ?: false
+                    val newRecording = partner?.isEffectivelyRecording() ?: false
+
+                    if (state.isPartnerOnline == newOnline &&
+                        state.isPartnerTyping == newTyping &&
+                        state.isPartnerRecordingAudio == newRecording &&
+                        state.isPartnerHeartTouching == partnerTouching
+                    ) {
+                        state // No change: return identical instance to prevent recomposition cascades
+                    } else {
+                        state.copy(
+                            isPartnerOnline = newOnline,
+                            isPartnerTyping = newTyping,
+                            isPartnerRecordingAudio = newRecording,
+                            isPartnerHeartTouching = partnerTouching
+                        )
+                    }
                 }
             }
         }

@@ -94,13 +94,19 @@ class HomeViewModel(
 
         viewModelScope.launch {
             while (true) {
-                kotlinx.coroutines.delay(1000L)
+                kotlinx.coroutines.delay(2500L)
                 _uiState.update { state ->
                     val partner = state.partnerUser
-                    state.copy(
-                        isPartnerOnline = partner?.isEffectivelyOnline() ?: false,
-                        isPartnerTyping = partner?.isEffectivelyTyping() ?: false
-                    )
+                    val newOnline = partner?.isEffectivelyOnline() ?: false
+                    val newTyping = partner?.isEffectivelyTyping() ?: false
+                    if (state.isPartnerOnline == newOnline && state.isPartnerTyping == newTyping) {
+                        state
+                    } else {
+                        state.copy(
+                            isPartnerOnline = newOnline,
+                            isPartnerTyping = newTyping
+                        )
+                    }
                 }
             }
         }

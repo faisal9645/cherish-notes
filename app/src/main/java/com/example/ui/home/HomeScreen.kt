@@ -24,6 +24,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.testTag
@@ -75,7 +76,7 @@ fun HomeScreen(
         if (partnerHasCheckAfter) {
             while (true) {
                 partnerCheckTicker = System.currentTimeMillis()
-                delay(1000)
+                delay(10_000L)
             }
         }
     }
@@ -153,7 +154,10 @@ fun HomeScreen(
                             tint = HeartRed,
                             modifier = Modifier
                                 .size(18.dp)
-                                .scale(heartScale)
+                                .graphicsLayer {
+                                    scaleX = heartScale
+                                    scaleY = heartScale
+                                }
                         )
                     }
                 },

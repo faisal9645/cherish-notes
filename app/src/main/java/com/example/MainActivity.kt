@@ -173,6 +173,12 @@ class MainActivity : FragmentActivity() {
         // Screenshot protection removed — no FLAG_SECURE applied
         app.authRepository.onAppForegroundStateChanged(true)
         app.securityPreferences.ignoreNextPause = false
+        if (app.authRepository.isUserLoggedIn()) {
+            val info = batteryHelper.getCurrentBattery()
+            lifecycleScope.launch {
+                app.authRepository.updateBatteryStatus(info.level, info.isCharging)
+            }
+        }
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {

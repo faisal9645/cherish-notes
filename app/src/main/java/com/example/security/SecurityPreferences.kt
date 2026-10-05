@@ -220,6 +220,12 @@ class SecurityPreferences(context: Context) {
         prefs.edit().putBoolean(KEY_HIDE_NOTIFICATION_CONTENT, hide).apply()
     }
 
+    fun isNotificationsEnabled(): Boolean = prefs.getBoolean(KEY_NOTIFICATIONS_ENABLED, true)
+
+    fun setNotificationsEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_NOTIFICATIONS_ENABLED, enabled).apply()
+    }
+
     fun setPin(pin: String) {
         val hash = hashPin(pin)
         prefs.edit().putString(KEY_PIN_HASH, hash).apply()
@@ -444,6 +450,7 @@ class SecurityPreferences(context: Context) {
         private const val KEY_BIOMETRIC_ENABLED = "biometric_enabled"
         private const val KEY_SCREENSHOT_PROTECTION = "screenshot_protection"
         private const val KEY_HIDE_NOTIFICATION_CONTENT = "hide_notification_content"
+        private const val KEY_NOTIFICATIONS_ENABLED = "notifications_enabled"
         private const val KEY_PIN_HASH = "pin_hash"
         private const val KEY_COUPLE_KEY = "couple_key"
         private const val KEY_PARTNER_EMAIL = "partner_email"

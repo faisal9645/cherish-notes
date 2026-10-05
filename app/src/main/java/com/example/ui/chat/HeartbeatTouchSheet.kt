@@ -38,6 +38,7 @@ import com.example.util.HeartbeatHapticHelper
 fun HeartbeatTouchDialog(
     partnerName: String,
     isPartnerTouching: Boolean,
+    isPartnerOnline: Boolean = false,
     onTouchChanged: (Boolean) -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -45,11 +46,13 @@ fun HeartbeatTouchDialog(
     val hapticHelper = remember { HeartbeatHapticHelper(context) }
     var isMeTouching by remember { mutableStateOf(false) }
 
-    val isConnected = isMeTouching && isPartnerTouching
+    // When touching and partner is either touching OR online, connect and feel heartbeat automatically!
+    val isConnected = isMeTouching && (isPartnerTouching || isPartnerOnline)
 
-    // Trigger haptics when both are touching
-    LaunchedEffect(isConnected) {
-        if (isConnected) {
+    // Trigger haptics when connected, or when pressing while partner is online, or when partner is holding
+    val shouldFeelHeartbeat = isConnected || (isMeTouching && isPartnerOnline) || isPartnerTouching
+    LaunchedEffect(shouldFeelHeartbeat) {
+        if (shouldFeelHeartbeat) {
             hapticHelper.startHeartbeat()
         } else {
             hapticHelper.stopHeartbeat()
@@ -66,20 +69,20 @@ fun HeartbeatTouchDialog(
     // Heart pulse animation
     val infiniteTransition = rememberInfiniteTransition(label = "heartbeat")
     val pulseScale by infiniteTransition.animateFloat(
-        initialValue = if (isConnected) 1.0f else 1.0f,
-        targetValue = if (isConnected) 1.28f else 1.08f,
+        initialValue = if (isConnected) 0.95f else 0.98f,
+        targetValue = if (isConnected) 1.30f else 1.12f,
         animationSpec = infiniteRepeatable(
-            animation = tween(if (isConnected) 420 else 900, easing = FastOutSlowInEasing),
+            animation = tween(if (isConnected) 420 else 850, easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Reverse
         ),
         label = "pulse_scale"
     )
 
     val glowAlpha by infiniteTransition.animateFloat(
-        initialValue = if (isConnected) 0.5f else 0.2f,
-        targetValue = if (isConnected) 0.95f else 0.45f,
+        initialValue = if (isConnected) 0.45f else 0.2f,
+        targetValue = if (isConnected) 0.95f else 0.5f,
         animationSpec = infiniteRepeatable(
-            animation = tween(if (isConnected) 420 else 900, easing = FastOutSlowInEasing),
+            animation = tween(if (isConnected) 420 else 850, easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Reverse
         ),
         label = "glow_alpha"
@@ -175,10 +178,12 @@ fun HeartbeatTouchDialog(
                 ) {
                     Text(
                         text = when {
-                            isConnected -> "✨ Synchronized! Both hearts beating together ❤️"
-                            isMeTouching && !isPartnerTouching -> "Touching... Waiting for $partnerName to hold"
-                            !isMeTouching && isPartnerTouching -> "❤️ $partnerName is holding! Touch the screen now!"
-                            else -> "Hold your finger on the screen simultaneously"
+                            isConnected && isPartnerTouching -> "✨ Synchronized! Both hearts beating together in real-time ❤️"
+                            isConnected && isPartnerOnline -> "✨ $partnerName is online! Connected and feeling heartbeat ❤️"
+                            isMeTouching && !isPartnerOnline -> "Touching... Waiting for $partnerName to come online"
+                            !isMeTouching && isPartnerTouching -> "❤️ $partnerName is touching! Hold now to synchronize!"
+                            isPartnerOnline -> "💚 $partnerName is online! Hold the heart to feel connection"
+                            else -> "Hold your finger on the heart to feel connection"
                         },
                         color = if (isConnected) Color.White else Color.White.copy(alpha = 0.85f),
                         fontSize = 13.sp,
@@ -207,7 +212,7 @@ fun HeartbeatTouchDialog(
                                     .copy(alpha = glowAlpha * 0.25f)
                             )
                             .border(
-                                2.dp,
+                                2.5.dp,
                                 (if (isConnected) HeartRed else RoseGoldPrimary).copy(alpha = glowAlpha),
                                 CircleShape
                             )
@@ -218,14 +223,16 @@ fun HeartbeatTouchDialog(
                         shape = CircleShape,
                         color = if (isConnected) HeartRed else if (isMeTouching) RoseGoldPrimary else Color.White.copy(alpha = 0.12f),
                         shadowElevation = if (isConnected) 16.dp else 4.dp,
-                        modifier = Modifier.size(120.dp)
+                        modifier = Modifier.size(122.dp)
                     ) {
                         Box(contentAlignment = Alignment.Center) {
                             Icon(
-                                imageVector = if (isConnected || isMeTouching) Icons.Default.Favorite else Icons.Default.TouchApp,
-                                contentDescription = null,
-                                tint = Color.White,
-                                modifier = Modifier.size(54.dp)
+                                imageVector = Icons.Default.Favorite,
+                                contentDescription = "Heart symbol",
+                                tint = if (isConnected || isMeTouching) Color.White else HeartRed.copy(alpha = 0.9f),
+                                modifier = Modifier
+                                    .size(56.dp)
+                                    .scale(if (isConnected) pulseScale / 1.15f else 1.0f)
                             )
                         }
                     }
@@ -234,7 +241,7 @@ fun HeartbeatTouchDialog(
                 Spacer(modifier = Modifier.height(48.dp))
 
                 Text(
-                    text = if (isMeTouching) "Keep holding..." else "Touch & Hold Anywhere",
+                    text = if (isMeTouching) "Keep holding... Connected" else "Touch & Hold Heart",
                     color = Color.White.copy(alpha = 0.9f),
                     fontSize = 15.sp,
                     fontWeight = FontWeight.SemiBold
@@ -243,7 +250,7 @@ fun HeartbeatTouchDialog(
                 Spacer(modifier = Modifier.height(6.dp))
 
                 Text(
-                    text = "When you and $partnerName hold at the same time, you'll feel synchronized heartbeat vibrations in your palm.",
+                    text = "When you press, if $partnerName is online, your hearts connect and you feel synchronized heartbeat vibrations in your palm.",
                     color = Color.White.copy(alpha = 0.6f),
                     fontSize = 12.sp,
                     textAlign = TextAlign.Center,
