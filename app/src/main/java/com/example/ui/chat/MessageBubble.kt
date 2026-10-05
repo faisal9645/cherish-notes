@@ -179,7 +179,13 @@ fun MessageBubble(
     }
 
     val isVideoNote = remember(message) {
-        message.isCircularVideoNote() || message.isVideoNote || message.getTypedType() == MessageType.VIDEO
+        message.isCircularVideoNote() ||
+        message.isVideoNote ||
+        message.type.equals("VIDEO", ignoreCase = true) ||
+        message.getTypedType() == MessageType.VIDEO ||
+        message.mediaUrl?.contains("video", ignoreCase = true) == true ||
+        message.mediaName?.contains("video", ignoreCase = true) == true ||
+        message.text.contains("Video note", ignoreCase = true)
     }
 
     Box(
@@ -283,74 +289,160 @@ fun MessageBubble(
                         }
                     }
             ) {
-            val bubbleMinWidth = when (message.getTypedType()) {
-                MessageType.IMAGE -> 280.dp
-                MessageType.AUDIO -> 260.dp
-                MessageType.VIDEO -> 195.dp
-                else -> 60.dp
-            }
-            val bubbleMaxWidth = when (message.getTypedType()) {
-                MessageType.IMAGE -> 340.dp
-                MessageType.AUDIO -> 310.dp
-                MessageType.VIDEO -> 268.dp
-                else -> 295.dp
-            }
-
-            Box(
-                modifier = (if (isYouTube) Modifier.fillMaxWidth() else if (isVideoNote) Modifier.size(264.dp) else Modifier.widthIn(min = bubbleMinWidth, max = bubbleMaxWidth))
-                    .then(
-                        if (isVideoNote) Modifier
-                        else if (isPrivateMode) {
-                            Modifier.shadow(0.5.dp, bubbleShape)
-                        } else {
-                            if (isFromMe) Modifier.appGradientShadow(bubbleShape)
-                            else Modifier.shadow(0.8.dp, bubbleShape)
+            if (isVideoNote) {
+                // Telegram-Style Big Circular Video Note (standalone round circle without box card)
+                val videoUrl = message.mediaUrl ?: message.mediaUrls.firstOrNull() ?: ""
+                Box(
+                    modifier = Modifier
+                        .size(240.dp)
+                        .clip(CircleShape)
+                        .pointerInput(message.id) {
+                            detectTapGestures(
+                                onLongPress = { onLongClick() },
+                                onDoubleTap = { triggerHeartBurst() }
+                            )
                         }
-                    )
-                    .clip(if (isVideoNote) CircleShape else bubbleShape)
-                    .then(
-                        if (isVideoNote) Modifier
-                        else if (isHighlighted) Modifier.border(BorderStroke(2.dp, if (isPrivateMode) (if (isDark) Color(0xFF6B7280) else Color(0xFF9CA3AF)) else MaterialTheme.colorScheme.primary), bubbleShape)
-                        else if (isPrivateMode) Modifier.border(
-                            BorderStroke(0.6.dp, if (isDark) Color(0xFF38393E) else Color(0xFFE5E7EB)),
-                            bubbleShape
-                        )
-                        else if (!isFromMe) Modifier.border(
-                            BorderStroke(0.5.dp, if (isDark) Color(0xFF2A364F) else Color(0xFFE2E8F0)),
-                            bubbleShape
-                        )
-                        else Modifier
-                    )
-                    .background(
-                        if (isVideoNote) androidx.compose.ui.graphics.SolidColor(Color.Transparent)
-                        else if (isPrivateMode) androidx.compose.ui.graphics.SolidColor(bubbleBg)
-                        else if (isFromMe) appHorizontalGradient()
-                        else androidx.compose.ui.graphics.SolidColor(if (isDark) Color(0xFF1E2638) else Color(0xFFF1F5FB))
-                    )
-                    .pointerInput(message.id) {
-                        detectTapGestures(
-                            onTap = {
-                                if (message.getTypedType() == MessageType.IMAGE) {
-                                    val mediaList = message.getAllMediaUrls()
-                                    if (mediaList.isNotEmpty()) {
-                                        if (onImageClickWithList != null) {
-                                            onImageClickWithList(mediaList[0], mediaList)
-                                        } else {
-                                            onImageClick(mediaList[0])
-                                        }
-                                    }
-                                }
-                            },
-                            onLongPress = {
-                                onLongClick()
-                            },
-                            onDoubleTap = {
-                                triggerHeartBurst()
-                            }
+                        .testTag("message_bubble_${message.id}"),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (videoUrl.isNotBlank()) {
+                        com.example.ui.components.CircularVideoNoteView(
+                            videoUrl = videoUrl,
+                            durationSeconds = message.durationSeconds,
+                            modifier = Modifier.fillMaxSize()
                         )
                     }
-                    .testTag("message_bubble_${message.id}")
-            ) {
+
+                    // Telegram-Style Overlay Status Chip (Timestamp & ticks on bottom-right of circle)
+                    Surface(
+                        shape = CircleShape,
+                        color = Color.Black.copy(alpha = 0.65f),
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(bottom = 10.dp, end = 10.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.5.dp)
+                        ) {
+                            if (message.isPinned) {
+                                Icon(
+                                    imageVector = Icons.Filled.PushPin,
+                                    contentDescription = "Pinned",
+                                    tint = Color.White.copy(alpha = 0.85f),
+                                    modifier = Modifier.size(10.dp).padding(end = 2.dp)
+                                )
+                            }
+                            if (message.isStarred) {
+                                Icon(
+                                    imageVector = Icons.Default.Star,
+                                    contentDescription = "Starred",
+                                    tint = GoldMilestone,
+                                    modifier = Modifier.size(10.dp).padding(end = 2.dp)
+                                )
+                            }
+                            Text(
+                                text = formatMessageTime(message.timestamp),
+                                fontSize = 10.sp,
+                                color = Color.White,
+                                fontWeight = FontWeight.Medium
+                            )
+                            if (isFromMe) {
+                                Spacer(modifier = Modifier.width(3.dp))
+                                when (message.getTypedStatus()) {
+                                    MessageStatus.SENDING -> Icon(Icons.Default.AccessTime, "Sending", tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(10.dp))
+                                    MessageStatus.SENT -> Icon(Icons.Default.Check, "Sent", tint = Color.White.copy(alpha = 0.8f), modifier = Modifier.size(10.dp))
+                                    MessageStatus.DELIVERED -> Icon(Icons.Default.DoneAll, "Delivered", tint = Color.White.copy(alpha = 0.9f), modifier = Modifier.size(11.dp))
+                                    MessageStatus.READ -> Icon(Icons.Default.DoneAll, "Read", tint = Color.White, modifier = Modifier.size(11.dp))
+                                }
+                            }
+                        }
+                    }
+
+                    // Bursting Heart Dopamine Pop Animation on Double-Tap
+                    if (showBurstHeart) {
+                        Box(
+                            modifier = Modifier.matchParentSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "💖",
+                                fontSize = 44.sp,
+                                modifier = Modifier.graphicsLayer {
+                                    scaleX = heartScale.value
+                                    scaleY = heartScale.value
+                                    alpha = heartAlpha.value
+                                }
+                            )
+                        }
+                    }
+                }
+            } else {
+                val bubbleMinWidth = when (message.getTypedType()) {
+                    MessageType.IMAGE -> 280.dp
+                    MessageType.AUDIO -> 260.dp
+                    MessageType.VIDEO -> 195.dp
+                    else -> 60.dp
+                }
+                val bubbleMaxWidth = when (message.getTypedType()) {
+                    MessageType.IMAGE -> 340.dp
+                    MessageType.AUDIO -> 310.dp
+                    MessageType.VIDEO -> 268.dp
+                    else -> 295.dp
+                }
+
+                Box(
+                    modifier = (if (isYouTube) Modifier.fillMaxWidth() else Modifier.widthIn(min = bubbleMinWidth, max = bubbleMaxWidth))
+                        .then(
+                            if (isPrivateMode) {
+                                Modifier.shadow(0.5.dp, bubbleShape)
+                            } else {
+                                if (isFromMe) Modifier.appGradientShadow(bubbleShape)
+                                else Modifier.shadow(0.8.dp, bubbleShape)
+                            }
+                        )
+                        .clip(bubbleShape)
+                        .then(
+                            if (isHighlighted) Modifier.border(BorderStroke(2.dp, if (isPrivateMode) (if (isDark) Color(0xFF6B7280) else Color(0xFF9CA3AF)) else MaterialTheme.colorScheme.primary), bubbleShape)
+                            else if (isPrivateMode) Modifier.border(
+                                BorderStroke(0.6.dp, if (isDark) Color(0xFF38393E) else Color(0xFFE5E7EB)),
+                                bubbleShape
+                            )
+                            else if (!isFromMe) Modifier.border(
+                                BorderStroke(0.5.dp, if (isDark) Color(0xFF2A364F) else Color(0xFFE2E8F0)),
+                                bubbleShape
+                            )
+                            else Modifier
+                        )
+                        .background(
+                            if (isPrivateMode) androidx.compose.ui.graphics.SolidColor(bubbleBg)
+                            else if (isFromMe) appHorizontalGradient()
+                            else androidx.compose.ui.graphics.SolidColor(if (isDark) Color(0xFF1E2638) else Color(0xFFF1F5FB))
+                        )
+                        .pointerInput(message.id) {
+                            detectTapGestures(
+                                onTap = {
+                                    if (message.getTypedType() == MessageType.IMAGE) {
+                                        val mediaList = message.getAllMediaUrls()
+                                        if (mediaList.isNotEmpty()) {
+                                            if (onImageClickWithList != null) {
+                                                onImageClickWithList(mediaList[0], mediaList)
+                                            } else {
+                                                onImageClick(mediaList[0])
+                                            }
+                                        }
+                                    }
+                                },
+                                onLongPress = {
+                                    onLongClick()
+                                },
+                                onDoubleTap = {
+                                    triggerHeartBurst()
+                                }
+                            )
+                        }
+                        .testTag("message_bubble_${message.id}")
+                ) {
             Column(
                 modifier = (if (isYouTube) Modifier.fillMaxWidth() else Modifier)
                     .padding(if (isVideoNote) PaddingValues(0.dp) else if (isYouTube) PaddingValues(horizontal = 6.dp, vertical = 6.dp) else PaddingValues(horizontal = 10.dp, vertical = 6.dp))
@@ -783,6 +875,7 @@ fun MessageBubble(
                         }
                     )
                 }
+            }
             }
         }
 

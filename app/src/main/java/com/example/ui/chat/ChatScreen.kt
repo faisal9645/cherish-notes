@@ -1311,70 +1311,76 @@ fun ChatScreen(
                 }
             }
 
-            // Partner typing / recording animated bubble - positioned above the type center bar layout
+            } // Close Box(modifier = Modifier.weight(1f).fillMaxWidth())
+
+            // Partner typing / recording animated bubble - positioned in layout flow below messages, above composer
+            // Prevents overlapping and never hides the last message from view
             androidx.compose.animation.AnimatedVisibility(
                 visible = (uiState.isPartnerRecordingAudio || uiState.isPartnerTyping) && !uiState.isStealthCurtainActive,
-                enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
-                exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
+                enter = androidx.compose.animation.expandVertically() + fadeIn(),
+                exit = androidx.compose.animation.shrinkVertically() + fadeOut(),
                 modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .padding(start = 16.dp, bottom = 8.dp)
-                    .zIndex(10f)
+                    .fillMaxWidth()
+                    .padding(start = 16.dp, end = 16.dp, top = 2.dp, bottom = 4.dp)
             ) {
                 val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
                 val isPrivate = uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE
-                Surface(
-                    color = if (isPrivate) {
-                        if (isDark) Color(0xFF26272B) else Color(0xFFE5E7EB)
-                    } else {
-                        if (isDark) Color(0xFF1E2638) else Color.White
-                    },
-                    shape = RoundedCornerShape(18.dp, 18.dp, 18.dp, 4.dp),
-                    border = BorderStroke(
-                        0.8.dp,
-                        if (isDark) TrueDarkOutline else Color(0xFFE2E8F0)
-                    ),
-                    shadowElevation = 4.dp
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Start
                 ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        if (uiState.isPartnerRecordingAudio) {
-                            Icon(
-                                imageVector = Icons.Default.Mic,
-                                contentDescription = null,
-                                tint = if (isPrivate) MaterialTheme.colorScheme.onSurfaceVariant else RoseGoldPrimary,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = if (isPrivate)
-                                    "recording audio..."
-                                else
-                                    "$partnerName is recording...",
-                                fontSize = 12.5.sp,
-                                color = if (isPrivate) MaterialTheme.colorScheme.onSurfaceVariant else RoseGoldPrimary,
-                                fontWeight = FontWeight.Medium
-                            )
+                    Surface(
+                        color = if (isPrivate) {
+                            if (isDark) Color(0xFF26272B) else Color(0xFFE5E7EB)
                         } else {
-                            if (!isPrivate) {
-                                Text(
-                                    text = "$partnerName is typing",
-                                    fontSize = 12.5.sp,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    fontWeight = FontWeight.Medium
+                            if (isDark) Color(0xFF1E2638) else Color.White
+                        },
+                        shape = RoundedCornerShape(18.dp, 18.dp, 18.dp, 4.dp),
+                        border = BorderStroke(
+                            0.8.dp,
+                            if (isDark) TrueDarkOutline else Color(0xFFE2E8F0)
+                        ),
+                        shadowElevation = 4.dp
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            if (uiState.isPartnerRecordingAudio) {
+                                Icon(
+                                    imageVector = Icons.Default.Mic,
+                                    contentDescription = null,
+                                    tint = if (isPrivate) MaterialTheme.colorScheme.onSurfaceVariant else RoseGoldPrimary,
+                                    modifier = Modifier.size(16.dp)
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = if (isPrivate)
+                                        "recording audio..."
+                                    else
+                                        "$partnerName is recording...",
+                                    fontSize = 12.5.sp,
+                                    color = if (isPrivate) MaterialTheme.colorScheme.onSurfaceVariant else RoseGoldPrimary,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            } else {
+                                if (!isPrivate) {
+                                    Text(
+                                        text = "$partnerName is typing",
+                                        fontSize = 12.5.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                }
+                                BouncingDots(color = if (isPrivate) MaterialTheme.colorScheme.onSurfaceVariant else RoseGoldPrimary)
                             }
-                            BouncingDots(color = if (isPrivate) MaterialTheme.colorScheme.onSurfaceVariant else RoseGoldPrimary)
                         }
                     }
                 }
             }
         }
     }
-}
 
     // Message Actions Bottom Sheet
     uiState.selectedMessageForActions?.let { msg ->

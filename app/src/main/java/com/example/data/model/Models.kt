@@ -137,10 +137,15 @@ data class Message(
     val isVideoNote: Boolean = false
 ) {
     fun isCircularVideoNote(): Boolean {
-        return isVideoNote || (getTypedType() == MessageType.VIDEO && (mediaName?.contains("videonote", ignoreCase = true) == true || isVideoNote))
+        val isTypeVideo = type.equals("VIDEO", ignoreCase = true)
+        val hasVideoNoteName = mediaName?.contains("video", ignoreCase = true) == true ||
+                               mediaUrl?.contains("video", ignoreCase = true) == true ||
+                               mediaUrl?.endsWith(".mp4", ignoreCase = true) == true ||
+                               text.contains("Video note", ignoreCase = true)
+        return isVideoNote || (isTypeVideo && hasVideoNoteName) || isTypeVideo
     }
     fun getTypedType(): MessageType {
-        return runCatching { MessageType.valueOf(type) }.getOrDefault(MessageType.TEXT)
+        return runCatching { MessageType.valueOf(type.trim().uppercase()) }.getOrDefault(MessageType.TEXT)
     }
 
     fun getTypedStatus(): MessageStatus {

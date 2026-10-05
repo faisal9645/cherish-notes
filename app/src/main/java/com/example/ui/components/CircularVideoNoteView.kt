@@ -102,7 +102,7 @@ fun CircularVideoNoteView(
 
     Box(
         modifier = modifier
-            .size(260.dp)
+            .defaultMinSize(minWidth = 240.dp, minHeight = 240.dp)
             .clip(CircleShape)
             .background(Color.Black)
             .border(3.dp, RoseGoldPrimary.copy(alpha = 0.5f), CircleShape)

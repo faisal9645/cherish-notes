@@ -95,6 +95,7 @@ fun MessageComposer(
     var isLockedRecording by remember { mutableStateOf(false) }
     var dragOffsetX by remember { mutableFloatStateOf(0f) }
     var dragOffsetY by remember { mutableFloatStateOf(0f) }
+    var isVideoMode by remember { mutableStateOf(false) }
 
     // When replyingTo message is set (glide/swipe to reply), open keyboard and focus input automatically
     LaunchedEffect(replyingTo) {
@@ -154,18 +155,23 @@ fun MessageComposer(
     val emojiTabs = remember { listOf("💕", "😊", "👤", "🐾", "🍔", "⚽", "💡", "🏳️") }
     val emojiCategories = remember {
         listOf(
-            // 0: Couple / Love (always first - enhanced with lying on chest, forehead kiss & deep intimacy)
+            // 0: Couple / Love & Deep Intimacy (lying on chest, forehead kiss, bed cuddles, kisses & romance)
             listOf(
-                "🫂", "👩‍❤️‍👨", "👩‍❤️‍💋‍👨", "💑", "👫", "🧑‍🤝‍🧑", "🛌", "😚", "💋", "😘",
-                "😙", "😗", "🥰", "😍", "🫦", "🫶", "🫀", "💆‍♀️", "💆‍♂️", "😴",
-                "💤", "🥺", "🥹", "🫣", "🤭", "🤫", "🤱", "🤲", "🤝", "🫳",
-                "🫴", "💌", "💍", "🌹", "🥀", "💐", "🌷", "🌸", "🕯️", "🍷",
-                "🥂", "🍫", "🧸", "🏩", "💒", "🕊️", "🌙", "🌟", "✨", "💫",
-                "🔥", "❤️‍🔥", "❤️‍🩹", "❤️", "🩷", "💖", "💗", "💓", "💞", "💕",
-                "💘", "💝", "❣️", "💟", "♥️", "🧡", "💛", "💚", "💙", "🩵",
-                "💜", "🤎", "🖤", "🩶", "🤍", "😻", "😽", "👩‍❤️‍👩", "👨‍❤️‍👨", "👩‍❤️‍💋‍👩",
-                "👨‍❤️‍💋‍👨", "👭", "👬", "🪶", "🎀", "🪞", "🪔", "🛁", "🧖‍♀️", "🧖‍♂️",
-                "🍓", "🧁", "🍯"
+                // Forehead kisses, tender kisses, lying on chest, deep cuddles
+                "😚", "🫂", "🛌", "🛏️", "💋", "😘", "😙", "😗", "💏", "👩‍❤️‍💋‍👨",
+                "🧑‍❤️‍💋‍🧑", "👩‍❤️‍💋‍👩", "👨‍❤️‍💋‍👨", "👄", "🫦", "🫠", "🥰", "😍", "🤱", "💆",
+                "💆‍♂️", "💆‍♀️", "😴", "💤", "🥱", "🥺", "🥹", "🤤", "🥵", "😳",
+                "🫣", "🤭", "🤫", "🫶", "🫰", "🫀", "🤲", "🫳", "🫴", "🤝",
+                "👫", "🧑‍🤝‍🧑", "💑", "👩‍❤️‍👨", "🧑‍❤️‍🧑", "👩‍❤️‍👩", "👨‍❤️‍👨", "👭", "👬", "👣",
+                // Romantic date nights, bath, intimacy & gifts
+                "🛁", "🧖", "🧖‍♀️", "🧖‍♂️", "🕯️", "🍷", "🥂", "🍾", "🍫", "🍓",
+                "🍒", "🧁", "🍯", "🧸", "🏩", "💒", "💍", "💌", "🔐", "🗝️",
+                "🔒", "♾️", "🕊️", "🌙", "🪐", "🌟", "✨", "💫", "🪽", "🪶",
+                "🎀", "🪞", "🪔", "🌹", "🥀", "💐", "🌷", "🌸", "🌺", "🌼",
+                // Passionate hearts & love symbols
+                "❤️‍🔥", "❤️‍🩹", "❤️", "🩷", "💖", "💗", "💓", "💞", "💕", "💘",
+                "💝", "❣️", "💟", "♥️", "🤍", "💜", "🩵", "💙", "💚", "💛",
+                "🧡", "🤎", "🖤", "🔥", "😻", "😽", "🙈", "🙉"
             ),
             // 1: Smileys & Faces  
             listOf(
@@ -718,6 +724,7 @@ fun MessageComposer(
                     targetState = when {
                         text.isNotBlank() -> "SEND_TEXT"
                         isRecordingVoice && isLockedRecording -> "SEND_VOICE"
+                        isVideoMode -> "VIDEO_NOTE"
                         else -> "MIC"
                     },
                     transitionSpec = {
@@ -790,6 +797,64 @@ fun MessageComposer(
                                     contentDescription = "Send voice note",
                                     tint = sendTint,
                                     modifier = Modifier.size(22.dp)
+                                )
+                            }
+                        }
+                        "VIDEO_NOTE" -> {
+                            val videoBg = if (isPrivateMode) {
+                                if (isDark) Color(0xFF2E2F33) else Color(0xFFE5E7EB)
+                            } else null
+                            val videoTint = if (isPrivateMode) {
+                                if (isDark) Color(0xFFD1D5DB) else Color(0xFF374151)
+                            } else Color.White
+
+                            Box(
+                                modifier = Modifier
+                                    .size(52.dp)
+                                    .then(
+                                        if (isPrivateMode) Modifier.clip(CircleShape).background(videoBg ?: Color.Gray)
+                                        else Modifier
+                                            .appGradientShadow(CircleShape)
+                                            .clip(CircleShape)
+                                            .background(appHorizontalGradient())
+                                    )
+                                    .pointerInput(Unit) {
+                                        awaitEachGesture {
+                                            val down = awaitFirstDown(requireUnconsumed = false)
+                                            down.consume()
+                                            var liftedEarly = false
+                                            withTimeoutOrNull(220L) {
+                                                while (true) {
+                                                    val ev = awaitPointerEvent()
+                                                    val ch = ev.changes.firstOrNull { it.id == down.id }
+                                                    if (ch == null || !ch.pressed) {
+                                                        liftedEarly = true
+                                                        break
+                                                    }
+                                                }
+                                            }
+
+                                            if (liftedEarly) {
+                                                // Quick tap: switch back to Voice Note mode (Telegram style)
+                                                isVideoMode = false
+                                                try { haptic.performHapticFeedback(HapticFeedbackType.LongPress) } catch (_: Exception) {}
+                                                Toast.makeText(context, "Switched to Voice Note", Toast.LENGTH_SHORT).show()
+                                                return@awaitEachGesture
+                                            }
+
+                                            // Confirmed hold: record circular video note
+                                            try { haptic.performHapticFeedback(HapticFeedbackType.LongPress) } catch (_: Exception) {}
+                                            onRecordVideoNote()
+                                        }
+                                    }
+                                    .testTag("composer_video_note_action_button"),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Videocam,
+                                    contentDescription = "Circular Video Note (tap to switch to Mic, hold to record)",
+                                    tint = videoTint,
+                                    modifier = Modifier.size(26.dp)
                                 )
                             }
                         }
@@ -881,8 +946,10 @@ fun MessageComposer(
                                                 }
 
                                                 if (liftedEarly) {
-                                                    // Quick tap — show hint, do not record
-                                                    Toast.makeText(context, "Hold to record, release to send", Toast.LENGTH_SHORT).show()
+                                                    // Quick tap — switch to Video Note mode (Telegram style)
+                                                    isVideoMode = true
+                                                    try { haptic.performHapticFeedback(HapticFeedbackType.LongPress) } catch (_: Exception) {}
+                                                    Toast.makeText(context, "Switched to Video Note (tap to switch back, hold to record)", Toast.LENGTH_SHORT).show()
                                                     return@awaitEachGesture
                                                 }
 

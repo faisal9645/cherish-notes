@@ -286,132 +286,157 @@ fun FullScreenMediaViewer(
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .pointerInput(page) {
-                            detectTapGestures(
-                                onTap = {
-                                    isChromeVisible = !isChromeVisible
-                                },
-                                onDoubleTap = { tapOffset ->
-                                    toggleMaxMinZoom(tapOffset)
-                                }
-                            )
-                        }
-                        .pointerInput(page) {
-                            awaitEachGesture {
-                                val down = awaitFirstDown(requireUnconsumed = false)
-                                var isMultiTouch = false
-                                var previousDistance = 0f
-                                var totalX = 0f
-                                var totalY = 0f
-                                var decidedDirection = false
-                                var isVerticalSwipeDismiss = false
-                                var overscrollX = 0f
+                        .then(
+                            if (page == pagerState.currentPage) {
+                                Modifier.pointerInput(page) {
+                                    var lastTapTime = 0L
+                                    var lastTapOffset = Offset.Zero
 
-                                while (true) {
-                                    val event = awaitPointerEvent()
-                                    val activeChanges = event.changes.filter { it.pressed }
-                                    if (activeChanges.isEmpty()) break
+                                    awaitEachGesture {
+                                        val down = awaitFirstDown(requireUnconsumed = false)
+                                        val startTime = System.currentTimeMillis()
+                                        var isMultiTouch = false
+                                        var previousDistance = 0f
+                                        var totalX = 0f
+                                        var totalY = 0f
+                                        var decidedDirection = false
+                                        var isVerticalSwipeDismiss = false
+                                        var overscrollX = 0f
 
-                                    if (activeChanges.size >= 2) {
-                                        // Multi-finger pinch-to-zoom: Works at ANY scale (from 1.0x to 5.0x)!
-                                        isMultiTouch = true
-                                        val p0 = activeChanges[0].position
-                                        val p1 = activeChanges[1].position
-                                        val currentDistance = kotlin.math.hypot(p0.x - p1.x, p0.y - p1.y)
+                                        while (true) {
+                                            val event = awaitPointerEvent()
+                                            val activeChanges = event.changes.filter { it.pressed }
+                                            if (activeChanges.isEmpty()) break
 
-                                        if (previousDistance > 0f && currentDistance > 0f) {
-                                            val zoomDelta = currentDistance / previousDistance
-                                            val newScale = (scale * zoomDelta).coerceIn(0.85f, 5.0f)
-                                            scale = newScale
+                                            if (activeChanges.size >= 2) {
+                                                // Multi-finger pinch-to-zoom
+                                                isMultiTouch = true
+                                                val p0 = activeChanges[0].position
+                                                val p1 = activeChanges[1].position
+                                                val currentDistance = kotlin.math.hypot(p0.x - p1.x, p0.y - p1.y)
 
-                                            // Centroid pan
-                                            val centroidChange = (activeChanges[0].positionChange() + activeChanges[1].positionChange()) / 2f
-                                            if (scale > 1.05f) {
-                                                val maxBoundX = (scale - 1f) * 600f
-                                                val maxBoundY = (scale - 1f) * 800f
-                                                offset = Offset(
-                                                    x = (offset.x + centroidChange.x).coerceIn(-maxBoundX, maxBoundX),
-                                                    y = (offset.y + centroidChange.y).coerceIn(-maxBoundY, maxBoundY)
-                                                )
-                                            }
-                                        }
-                                        previousDistance = currentDistance
-                                        activeChanges.forEach { it.consume() }
+                                                if (previousDistance > 0f && currentDistance > 0f) {
+                                                    val zoomDelta = currentDistance / previousDistance
+                                                    val newScale = (scale * zoomDelta).coerceIn(0.85f, 5.0f)
+                                                    scale = newScale
 
-                                    } else if (activeChanges.size == 1 && !isMultiTouch) {
-                                        // Single finger interaction
-                                        val change = activeChanges[0]
-                                        val delta = change.positionChange()
-                                        totalX += delta.x
-                                        totalY += delta.y
-
-                                        if (scale > 1.05f) {
-                                            // Zoomed-in state: Pan the zoomed image
-                                            val maxBoundX = (scale - 1f) * 600f
-                                            val maxBoundY = (scale - 1f) * 800f
-                                            val newX = offset.x + delta.x
-                                            val newY = offset.y + delta.y
-
-                                            // Track overscroll at boundary
-                                            if (newX > maxBoundX) {
-                                                overscrollX += (newX - maxBoundX)
-                                            } else if (newX < -maxBoundX) {
-                                                overscrollX += (newX - (-maxBoundX))
-                                            } else {
-                                                overscrollX = 0f
-                                            }
-
-                                            offset = Offset(
-                                                x = newX.coerceIn(-maxBoundX, maxBoundX),
-                                                y = newY.coerceIn(-maxBoundY, maxBoundY)
-                                            )
-                                            change.consume()
-
-                                        } else {
-                                            // Normal 1.0x scale:
-                                            // Only consume if predominantly vertical swipe-down to dismiss
-                                            if (!decidedDirection && (abs(totalX) > 12f || abs(totalY) > 12f)) {
-                                                decidedDirection = true
-                                                isVerticalSwipeDismiss = abs(totalY) > abs(totalX) * 1.4f && totalY > 0
-                                            }
-
-                                            if (decidedDirection && isVerticalSwipeDismiss) {
-                                                change.consume()
-                                                swipeOffsetY = totalY
-                                                if (swipeOffsetY > 160f) {
-                                                    onDismiss()
-                                                    break
+                                                    // Centroid pan
+                                                    val centroidChange = (activeChanges[0].positionChange() + activeChanges[1].positionChange()) / 2f
+                                                    if (scale > 1.05f) {
+                                                        val maxBoundX = (scale - 1f) * 600f
+                                                        val maxBoundY = (scale - 1f) * 800f
+                                                        offset = Offset(
+                                                            x = (offset.x + centroidChange.x).coerceIn(-maxBoundX, maxBoundX),
+                                                            y = (offset.y + centroidChange.y).coerceIn(-maxBoundY, maxBoundY)
+                                                        )
+                                                    }
                                                 }
+                                                previousDistance = currentDistance
+                                                activeChanges.forEach { it.consume() }
+
+                                            } else if (activeChanges.size == 1 && !isMultiTouch) {
+                                                // Single finger interaction
+                                                val change = activeChanges[0]
+                                                val delta = change.positionChange()
+                                                totalX += delta.x
+                                                totalY += delta.y
+
+                                                if (scale > 1.05f) {
+                                                    // Zoomed-in state: Pan the zoomed image
+                                                    val maxBoundX = (scale - 1f) * 600f
+                                                    val maxBoundY = (scale - 1f) * 800f
+                                                    val newX = offset.x + delta.x
+                                                    val newY = offset.y + delta.y
+
+                                                    // Track overscroll at boundary
+                                                    if (newX > maxBoundX) {
+                                                        overscrollX += (newX - maxBoundX)
+                                                    } else if (newX < -maxBoundX) {
+                                                        overscrollX += (newX - (-maxBoundX))
+                                                    } else {
+                                                        overscrollX = 0f
+                                                    }
+
+                                                    offset = Offset(
+                                                        x = newX.coerceIn(-maxBoundX, maxBoundX),
+                                                        y = newY.coerceIn(-maxBoundY, maxBoundY)
+                                                    )
+                                                    change.consume()
+
+                                                } else {
+                                                    // Normal 1.0x scale:
+                                                    // Detect if user intended a clear horizontal slide or vertical pull-down dismiss
+                                                    if (!decidedDirection) {
+                                                        if (abs(totalX) > 20f && abs(totalX) > abs(totalY)) {
+                                                            // Clear horizontal swipe: Leave change completely unconsumed so HorizontalPager slides pages smoothly
+                                                            decidedDirection = true
+                                                            isVerticalSwipeDismiss = false
+                                                        } else if (totalY > 40f && totalY > abs(totalX) * 1.8f) {
+                                                            // Clear downwards swipe: Handle vertical pull-down to dismiss
+                                                            decidedDirection = true
+                                                            isVerticalSwipeDismiss = true
+                                                        }
+                                                    }
+
+                                                    if (decidedDirection && isVerticalSwipeDismiss) {
+                                                        change.consume()
+                                                        swipeOffsetY = totalY
+                                                        if (swipeOffsetY > 160f) {
+                                                            onDismiss()
+                                                            break
+                                                        }
+                                                    } else {
+                                                        // Horizontal or undecided swipe:
+                                                        // DO NOT consume change! HorizontalPager handles sliding smoothly to next/prev photo!
+                                                    }
+                                                }
+                                            }
+                                        }
+
+                                        val elapsed = System.currentTimeMillis() - startTime
+                                        val dist = kotlin.math.hypot(totalX, totalY)
+
+                                        // Tap / Double-tap detection with responsive touch thresholds
+                                        if (dist < 40f && !isMultiTouch && elapsed < 380L) {
+                                            val now = System.currentTimeMillis()
+                                            val tapPos = down.position
+                                            if (now - lastTapTime < 380L && (tapPos - lastTapOffset).getDistance() < 120f) {
+                                                // Double tap
+                                                toggleMaxMinZoom(tapPos)
+                                                lastTapTime = 0L
                                             } else {
-                                                // Horizontal swipe: Do NOT consume change!
-                                                // HorizontalPager freely takes it and smoothly slides to next/prev photo!
+                                                lastTapTime = now
+                                                lastTapOffset = tapPos
+                                                // Single tap: toggle chrome visibility
+                                                isChromeVisible = !isChromeVisible
+                                            }
+                                        }
+
+                                        // Snap back near 1.0x to immediately re-enable pager scrolling
+                                        if (scale < 1.15f) {
+                                            scale = 1f
+                                            offset = Offset.Zero
+                                        }
+                                        if (swipeOffsetY <= 160f) {
+                                            swipeOffsetY = 0f
+                                        }
+
+                                        // If user swiped past the boundary while zoomed in, glide to next/previous photo
+                                        if (overscrollX < -120f && pagerState.currentPage < mediaList.lastIndex) {
+                                            scope.launch {
+                                                resetZoom()
+                                                pagerState.animateScrollToPage(pagerState.currentPage + 1)
+                                            }
+                                        } else if (overscrollX > 120f && pagerState.currentPage > 0) {
+                                            scope.launch {
+                                                resetZoom()
+                                                pagerState.animateScrollToPage(pagerState.currentPage - 1)
                                             }
                                         }
                                     }
                                 }
-
-                                if (scale < 1.05f) {
-                                    scale = 1f
-                                    offset = Offset.Zero
-                                }
-                                if (swipeOffsetY <= 160f) {
-                                    swipeOffsetY = 0f
-                                }
-
-                                // If user swiped past the boundary while zoomed in, glide to next/previous photo
-                                if (overscrollX < -150f && pagerState.currentPage < mediaList.lastIndex) {
-                                    scope.launch {
-                                        resetZoom()
-                                        pagerState.animateScrollToPage(pagerState.currentPage + 1)
-                                    }
-                                } else if (overscrollX > 150f && pagerState.currentPage > 0) {
-                                    scope.launch {
-                                        resetZoom()
-                                        pagerState.animateScrollToPage(pagerState.currentPage - 1)
-                                    }
-                                }
-                            }
-                        },
+                            } else Modifier
+                        ),
                     contentAlignment = Alignment.Center
                 ) {
                     if (isVideo) {
