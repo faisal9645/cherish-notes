@@ -443,16 +443,24 @@ fun SharedGalleryScreen(
                                             }
                                         }
 
+                                        val context = androidx.compose.ui.platform.LocalContext.current
+                                        val isVideoItem = msg.isCircularVideoNote() || msg.isVideoNote || msg.getTypedType() == MessageType.VIDEO
+
                                         AsyncImage(
-                                            model = coil.request.ImageRequest.Builder(androidx.compose.ui.platform.LocalContext.current)
+                                            model = coil.request.ImageRequest.Builder(context)
                                                 .data(modelData)
+                                                .apply {
+                                                    if (isVideoItem) {
+                                                        decoderFactory(coil.decode.VideoFrameDecoder.Factory())
+                                                    }
+                                                }
+                                                .crossfade(true)
                                                 .build(),
-                                            contentDescription = "Shared photo",
+                                            contentDescription = if (isVideoItem) "Shared video note" else "Shared photo",
                                             contentScale = ContentScale.Crop,
                                             modifier = Modifier.fillMaxSize()
                                         )
 
-                                        val isVideoItem = msg.isCircularVideoNote() || msg.isVideoNote || msg.getTypedType() == MessageType.VIDEO
                                         if (isVideoItem) {
                                             // Center Play Indicator
                                             Box(
@@ -1052,9 +1060,12 @@ fun SharedGalleryScreen(
     }
 
     selectedMediaUrl?.let { url ->
+        val galleryAllUrls = remember(mediaMessages) {
+            mediaMessages.flatMap { it.getAllMediaUrls().ifEmpty { listOfNotNull(it.mediaUrl) } }.distinct()
+        }
         FullScreenMediaViewer(
             mediaUrl = url,
-            allMediaUrls = mediaMessages.mapNotNull { it.mediaUrl },
+            allMediaUrls = if (galleryAllUrls.isNotEmpty()) galleryAllUrls else listOf(url),
             onShowInChat = { clickedUrl ->
                 val targetMsg = mediaMessages.find { it.mediaUrl == clickedUrl }
                 if (targetMsg != null) {

@@ -13,7 +13,16 @@ import com.example.notifications.NotificationHelper
 import com.example.security.SecurityPreferences
 import com.google.firebase.FirebaseApp
 
-class CherishApplication : Application() {
+class CherishApplication : Application(), coil.ImageLoaderFactory {
+
+    override fun newImageLoader(): coil.ImageLoader {
+        return coil.ImageLoader.Builder(this)
+            .components {
+                add(coil.decode.VideoFrameDecoder.Factory())
+            }
+            .crossfade(true)
+            .build()
+    }
 
     lateinit var securityPreferences: SecurityPreferences
         private set

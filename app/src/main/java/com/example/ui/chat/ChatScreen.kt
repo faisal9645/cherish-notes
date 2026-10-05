@@ -526,9 +526,9 @@ fun ChatScreen(
                                             }
                                         }
 
-                                        // Partner Battery Status Pill
+                                        // Partner Battery Status Pill - Only shown when partner is online (no stale offline battery)
                                         val battery = partner?.batteryLevel
-                                        if (battery != null && battery in 0..100) {
+                                        if (uiState.isPartnerOnline && battery != null && battery in 0..100) {
                                             val isCharging = partner.isCharging
                                             val isLow = battery <= 20
                                             Surface(

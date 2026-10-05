@@ -178,6 +178,10 @@ fun MessageBubble(
         YouTubeHelper.extractVideoId(message.text) != null
     }
 
+    val isVideoNote = remember(message) {
+        message.isCircularVideoNote() || message.isVideoNote || message.getTypedType() == MessageType.VIDEO
+    }
+
     Box(
         modifier = modifier
             .fillMaxWidth()
@@ -288,23 +292,25 @@ fun MessageBubble(
             val bubbleMaxWidth = when (message.getTypedType()) {
                 MessageType.IMAGE -> 340.dp
                 MessageType.AUDIO -> 310.dp
-                MessageType.VIDEO -> 220.dp
+                MessageType.VIDEO -> 268.dp
                 else -> 295.dp
             }
 
             Box(
-                modifier = (if (isYouTube) Modifier.fillMaxWidth() else Modifier.widthIn(min = bubbleMinWidth, max = bubbleMaxWidth))
+                modifier = (if (isYouTube) Modifier.fillMaxWidth() else if (isVideoNote) Modifier.size(264.dp) else Modifier.widthIn(min = bubbleMinWidth, max = bubbleMaxWidth))
                     .then(
-                        if (isPrivateMode) {
+                        if (isVideoNote) Modifier
+                        else if (isPrivateMode) {
                             Modifier.shadow(0.5.dp, bubbleShape)
                         } else {
                             if (isFromMe) Modifier.appGradientShadow(bubbleShape)
                             else Modifier.shadow(0.8.dp, bubbleShape)
                         }
                     )
-                    .clip(bubbleShape)
+                    .clip(if (isVideoNote) CircleShape else bubbleShape)
                     .then(
-                        if (isHighlighted) Modifier.border(BorderStroke(2.dp, if (isPrivateMode) (if (isDark) Color(0xFF6B7280) else Color(0xFF9CA3AF)) else MaterialTheme.colorScheme.primary), bubbleShape)
+                        if (isVideoNote) Modifier
+                        else if (isHighlighted) Modifier.border(BorderStroke(2.dp, if (isPrivateMode) (if (isDark) Color(0xFF6B7280) else Color(0xFF9CA3AF)) else MaterialTheme.colorScheme.primary), bubbleShape)
                         else if (isPrivateMode) Modifier.border(
                             BorderStroke(0.6.dp, if (isDark) Color(0xFF38393E) else Color(0xFFE5E7EB)),
                             bubbleShape
@@ -316,7 +322,8 @@ fun MessageBubble(
                         else Modifier
                     )
                     .background(
-                        if (isPrivateMode) androidx.compose.ui.graphics.SolidColor(bubbleBg)
+                        if (isVideoNote) androidx.compose.ui.graphics.SolidColor(Color.Transparent)
+                        else if (isPrivateMode) androidx.compose.ui.graphics.SolidColor(bubbleBg)
                         else if (isFromMe) appHorizontalGradient()
                         else androidx.compose.ui.graphics.SolidColor(if (isDark) Color(0xFF1E2638) else Color(0xFFF1F5FB))
                     )
@@ -346,7 +353,7 @@ fun MessageBubble(
             ) {
             Column(
                 modifier = (if (isYouTube) Modifier.fillMaxWidth() else Modifier)
-                    .padding(horizontal = if (isYouTube) 6.dp else 10.dp, vertical = 6.dp)
+                    .padding(if (isVideoNote) PaddingValues(0.dp) else if (isYouTube) PaddingValues(horizontal = 6.dp, vertical = 6.dp) else PaddingValues(horizontal = 10.dp, vertical = 6.dp))
             ) {
                 // Reply Quote Preview
                 if (!message.replyToText.isNullOrEmpty()) {

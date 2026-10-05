@@ -33,6 +33,7 @@ import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.ui.input.pointer.pointerInput
@@ -716,9 +717,15 @@ fun CherishNavGraph(
         val exitOpacity = sideEmergencyExitOpacity.coerceIn(0.1f, 1.0f)
         val haptic = LocalHapticFeedback.current
         var dragOffsetY by remember { mutableFloatStateOf(0f) }
+        var dragOffsetX by remember { mutableFloatStateOf(0f) }
+        var isDockedOnLeft by remember { mutableStateOf(false) }
         val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
 
-        val handleShape = RoundedCornerShape(topStart = 24.dp, bottomStart = 24.dp, topEnd = 0.dp, bottomEnd = 0.dp)
+        val handleShape = if (isDockedOnLeft) {
+            RoundedCornerShape(topStart = 0.dp, bottomStart = 0.dp, topEnd = 24.dp, bottomEnd = 24.dp)
+        } else {
+            RoundedCornerShape(topStart = 24.dp, bottomStart = 24.dp, topEnd = 0.dp, bottomEnd = 0.dp)
+        }
 
         Box(
             modifier = Modifier
@@ -737,15 +744,37 @@ fun CherishNavGraph(
                 shadowElevation = 0.dp,
                 tonalElevation = 0.dp,
                 modifier = Modifier
-                    .align(Alignment.CenterEnd)
-                    .offset { IntOffset(0, dragOffsetY.roundToInt()) }
+                    .align(if (isDockedOnLeft) Alignment.CenterStart else Alignment.CenterEnd)
+                    .offset { IntOffset(dragOffsetX.roundToInt(), dragOffsetY.roundToInt()) }
                     .width(44.dp)
                     .height(88.dp)
-                    .pointerInput(Unit) {
-                        detectVerticalDragGestures { change, dragAmount ->
-                            change.consume()
-                            dragOffsetY = (dragOffsetY + dragAmount).coerceIn(-500f, 500f)
-                        }
+                    .pointerInput(isDockedOnLeft) {
+                        detectDragGestures(
+                            onDragEnd = {
+                                if (!isDockedOnLeft && dragOffsetX < -90f) {
+                                    isDockedOnLeft = true
+                                } else if (isDockedOnLeft && dragOffsetX > 90f) {
+                                    isDockedOnLeft = false
+                                }
+                                dragOffsetX = 0f
+                            },
+                            onDragCancel = {
+                                dragOffsetX = 0f
+                            },
+                            onDrag = { change, dragAmount ->
+                                change.consume()
+                                dragOffsetX += dragAmount.x
+                                dragOffsetY = (dragOffsetY + dragAmount.y).coerceIn(-500f, 500f)
+                                // Immediate switch when dragged sufficiently across the screen
+                                if (!isDockedOnLeft && dragOffsetX < -180f) {
+                                    isDockedOnLeft = true
+                                    dragOffsetX = 0f
+                                } else if (isDockedOnLeft && dragOffsetX > 180f) {
+                                    isDockedOnLeft = false
+                                    dragOffsetX = 0f
+                                }
+                            }
+                        )
                     }
                     .clickable {
                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -759,14 +788,20 @@ fun CherishNavGraph(
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(end = 4.dp),
+                        .padding(start = if (isDockedOnLeft) 4.dp else 0.dp, end = if (!isDockedOnLeft) 4.dp else 0.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ExitToApp,
                         contentDescription = "Emergency Exit to Notes",
                         tint = HeartRed.copy(alpha = exitOpacity.coerceAtLeast(0.55f)),
-                        modifier = Modifier.size(24.dp)
+                        modifier = Modifier
+                            .size(24.dp)
+                            .graphicsLayer {
+                                if (isDockedOnLeft) {
+                                    scaleX = -1f
+                                }
+                            }
                     )
                 }
             }

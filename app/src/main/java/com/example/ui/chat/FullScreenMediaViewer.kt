@@ -271,7 +271,7 @@ fun FullScreenMediaViewer(
             val isZoomed = scale > 1.05f
             HorizontalPager(
                 state = pagerState,
-                userScrollEnabled = !isZoomed,
+                userScrollEnabled = scale <= 1.05f,
                 beyondViewportPageCount = 1,
                 key = { it },
                 modifier = Modifier.fillMaxSize()
@@ -296,64 +296,122 @@ fun FullScreenMediaViewer(
                                 }
                             )
                         }
-                        .then(
-                            if (isZoomed) {
-                                Modifier.pointerInput(page, isZoomed) {
-                                    detectTransformGestures { _, pan, zoom, _ ->
-                                        val newScale = (scale * zoom).coerceIn(0.75f, 5.0f)
-                                        scale = newScale
-                                        if (scale > 1.05f) {
-                                            val maxBound = (scale - 1f) * 600f
-                                            offset = Offset(
-                                                x = (offset.x + pan.x).coerceIn(-maxBound, maxBound),
-                                                y = (offset.y + pan.y).coerceIn(-maxBound, maxBound)
-                                            )
-                                        } else {
-                                            resetZoom()
+                        .pointerInput(page) {
+                            awaitEachGesture {
+                                val down = awaitFirstDown(requireUnconsumed = false)
+                                var isMultiTouch = false
+                                var previousDistance = 0f
+                                var totalX = 0f
+                                var totalY = 0f
+                                var decidedDirection = false
+                                var isVerticalSwipeDismiss = false
+                                var overscrollX = 0f
+
+                                while (true) {
+                                    val event = awaitPointerEvent()
+                                    val activeChanges = event.changes.filter { it.pressed }
+                                    if (activeChanges.isEmpty()) break
+
+                                    if (activeChanges.size >= 2) {
+                                        // Multi-finger pinch-to-zoom: Works at ANY scale (from 1.0x to 5.0x)!
+                                        isMultiTouch = true
+                                        val p0 = activeChanges[0].position
+                                        val p1 = activeChanges[1].position
+                                        val currentDistance = kotlin.math.hypot(p0.x - p1.x, p0.y - p1.y)
+
+                                        if (previousDistance > 0f && currentDistance > 0f) {
+                                            val zoomDelta = currentDistance / previousDistance
+                                            val newScale = (scale * zoomDelta).coerceIn(0.85f, 5.0f)
+                                            scale = newScale
+
+                                            // Centroid pan
+                                            val centroidChange = (activeChanges[0].positionChange() + activeChanges[1].positionChange()) / 2f
+                                            if (scale > 1.05f) {
+                                                val maxBoundX = (scale - 1f) * 600f
+                                                val maxBoundY = (scale - 1f) * 800f
+                                                offset = Offset(
+                                                    x = (offset.x + centroidChange.x).coerceIn(-maxBoundX, maxBoundX),
+                                                    y = (offset.y + centroidChange.y).coerceIn(-maxBoundY, maxBoundY)
+                                                )
+                                            }
                                         }
-                                    }
-                                }
-                            } else {
-                                // When not zoomed, allow HorizontalPager to freely handle left/right swipe between photos!
-                                // Only consume vertical swipe-down to dismiss
-                                Modifier.pointerInput(page) {
-                                    awaitEachGesture {
-                                        val down = awaitFirstDown(requireUnconsumed = false)
-                                        var totalY = 0f
-                                        var totalX = 0f
-                                        var isVertical = false
-                                        var decided = false
+                                        previousDistance = currentDistance
+                                        activeChanges.forEach { it.consume() }
 
-                                        while (true) {
-                                            val event = awaitPointerEvent()
-                                            val change = event.changes.firstOrNull { it.id == down.id } ?: break
-                                            if (!change.pressed) break
+                                    } else if (activeChanges.size == 1 && !isMultiTouch) {
+                                        // Single finger interaction
+                                        val change = activeChanges[0]
+                                        val delta = change.positionChange()
+                                        totalX += delta.x
+                                        totalY += delta.y
 
-                                            val delta = change.positionChange()
-                                            totalX += delta.x
-                                            totalY += delta.y
+                                        if (scale > 1.05f) {
+                                            // Zoomed-in state: Pan the zoomed image
+                                            val maxBoundX = (scale - 1f) * 600f
+                                            val maxBoundY = (scale - 1f) * 800f
+                                            val newX = offset.x + delta.x
+                                            val newY = offset.y + delta.y
 
-                                            if (!decided && (kotlin.math.abs(totalX) > 12f || kotlin.math.abs(totalY) > 12f)) {
-                                                decided = true
-                                                isVertical = kotlin.math.abs(totalY) > kotlin.math.abs(totalX) * 1.5f && totalY > 0
+                                            // Track overscroll at boundary
+                                            if (newX > maxBoundX) {
+                                                overscrollX += (newX - maxBoundX)
+                                            } else if (newX < -maxBoundX) {
+                                                overscrollX += (newX - (-maxBoundX))
+                                            } else {
+                                                overscrollX = 0f
                                             }
 
-                                            if (decided && isVertical) {
+                                            offset = Offset(
+                                                x = newX.coerceIn(-maxBoundX, maxBoundX),
+                                                y = newY.coerceIn(-maxBoundY, maxBoundY)
+                                            )
+                                            change.consume()
+
+                                        } else {
+                                            // Normal 1.0x scale:
+                                            // Only consume if predominantly vertical swipe-down to dismiss
+                                            if (!decidedDirection && (abs(totalX) > 12f || abs(totalY) > 12f)) {
+                                                decidedDirection = true
+                                                isVerticalSwipeDismiss = abs(totalY) > abs(totalX) * 1.4f && totalY > 0
+                                            }
+
+                                            if (decidedDirection && isVerticalSwipeDismiss) {
                                                 change.consume()
                                                 swipeOffsetY = totalY
                                                 if (swipeOffsetY > 160f) {
                                                     onDismiss()
                                                     break
                                                 }
+                                            } else {
+                                                // Horizontal swipe: Do NOT consume change!
+                                                // HorizontalPager freely takes it and smoothly slides to next/prev photo!
                                             }
-                                        }
-                                        if (!isVertical || swipeOffsetY <= 160f) {
-                                            swipeOffsetY = 0f
                                         }
                                     }
                                 }
+
+                                if (scale < 1.05f) {
+                                    scale = 1f
+                                    offset = Offset.Zero
+                                }
+                                if (swipeOffsetY <= 160f) {
+                                    swipeOffsetY = 0f
+                                }
+
+                                // If user swiped past the boundary while zoomed in, glide to next/previous photo
+                                if (overscrollX < -150f && pagerState.currentPage < mediaList.lastIndex) {
+                                    scope.launch {
+                                        resetZoom()
+                                        pagerState.animateScrollToPage(pagerState.currentPage + 1)
+                                    }
+                                } else if (overscrollX > 150f && pagerState.currentPage > 0) {
+                                    scope.launch {
+                                        resetZoom()
+                                        pagerState.animateScrollToPage(pagerState.currentPage - 1)
+                                    }
+                                }
                             }
-                        ),
+                        },
                     contentAlignment = Alignment.Center
                 ) {
                     if (isVideo) {
@@ -646,6 +704,62 @@ fun FullScreenMediaViewer(
                         .padding(bottom = 40.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
+                    // Thumbnail filmstrip preview for fast photo browsing (if multiple photos)
+                    if (mediaList.size > 1) {
+                        LazyRow(
+                            state = filmstripListState,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            contentPadding = PaddingValues(horizontal = 16.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 10.dp)
+                        ) {
+                            itemsIndexed(mediaList) { idx, url ->
+                                val isSelected = idx == currentIndex
+                                val isVid = url.endsWith(".mp4", true) || url.contains("videonote", true)
+                                Surface(
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = Color.Black.copy(alpha = 0.6f),
+                                    border = androidx.compose.foundation.BorderStroke(
+                                        if (isSelected) 2.dp else 1.dp,
+                                        if (isSelected) RoseGoldPrimary else Color.White.copy(alpha = 0.25f)
+                                    ),
+                                    modifier = Modifier
+                                        .size(46.dp)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .clickable {
+                                            if (currentIndex != idx) {
+                                                scope.launch {
+                                                    resetZoom()
+                                                    pagerState.animateScrollToPage(idx)
+                                                }
+                                            }
+                                        }
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        AsyncImage(
+                                            model = ImageRequest.Builder(context)
+                                                .data(url)
+                                                .crossfade(true)
+                                                .build(),
+                                            contentDescription = "Photo thumbnail $idx",
+                                            contentScale = ContentScale.Crop,
+                                            modifier = Modifier.fillMaxSize()
+                                        )
+                                        if (isVid) {
+                                            Icon(
+                                                imageVector = Icons.Default.PlayArrow,
+                                                contentDescription = "Video",
+                                                tint = Color.White,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
                     // Zoom Max & Min Controls Pill
                     Surface(
                         shape = RoundedCornerShape(24.dp),
