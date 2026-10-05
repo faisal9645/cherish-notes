@@ -55,9 +55,10 @@ class CherishApplication : Application() {
                 } catch (_: Exception) {}
             }
             if (FirebaseApp.getApps(this).isEmpty()) {
+                val apiKey = BuildConfig.FIREBASE_API_KEY.ifEmpty { "AIzaSyPlaceholderForFirebaseInit" }
                 val options = com.google.firebase.FirebaseOptions.Builder()
                     .setApplicationId("1:589800064404:android:48e44687a5abaab671bb81")
-                    .setApiKey(BuildConfig.FIREBASE_API_KEY)
+                    .setApiKey(apiKey)
                     .setProjectId("gen-lang-client-0340321202")
                     .setStorageBucket("gen-lang-client-0340321202.firebasestorage.app")
                     .setGcmSenderId("589800064404")

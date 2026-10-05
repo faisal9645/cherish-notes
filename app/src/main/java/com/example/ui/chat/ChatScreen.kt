@@ -103,7 +103,7 @@ fun ChatScreen(
     // Activity result launchers for media selection (supports multiple photo selection)
     var isHandlingMedia by remember { mutableStateOf(false) }
     val photoPickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.PickMultipleVisualMedia(maxItems = 10)
+        contract = ActivityResultContracts.PickMultipleVisualMedia(maxItems = 20)
     ) { uris: List<Uri> ->
         if (isHandlingMedia) return@rememberLauncherForActivityResult
         val distinctUris = uris.distinct()
@@ -272,15 +272,15 @@ fun ChatScreen(
         if (!uiState.showPreviousChats) {
             val clearTime = uiState.temporaryClearTimestamp
             val now = java.util.Calendar.getInstance()
-            if (now.get(java.util.Calendar.HOUR_OF_DAY) < 6) {
+            if (now.get(java.util.Calendar.HOUR_OF_DAY) < 4) {
                 now.add(java.util.Calendar.DAY_OF_YEAR, -1)
             }
-            now.set(java.util.Calendar.HOUR_OF_DAY, 6)
+            now.set(java.util.Calendar.HOUR_OF_DAY, 4)
             now.set(java.util.Calendar.MINUTE, 0)
             now.set(java.util.Calendar.SECOND, 0)
             now.set(java.util.Calendar.MILLISECOND, 0)
-            val today6am = now.timeInMillis
-            val cutoff = maxOf(today6am, clearTime)
+            val today4am = now.timeInMillis
+            val cutoff = maxOf(today4am, clearTime)
             list = list.filter { it.timestamp > cutoff }
         }
         if (uiState.searchQuery.isNotBlank()) {
@@ -294,6 +294,8 @@ fun ChatScreen(
 
     val app = LocalContext.current.applicationContext as com.example.CherishApplication
     val isDisguiseActive by app.securityPreferences.isDisguiseActive.collectAsState()
+    val isSideEmergencyExitEnabled by app.securityPreferences.isSideEmergencyExitEnabled.collectAsState()
+    val sideEmergencyExitOpacity by app.securityPreferences.sideEmergencyExitOpacity.collectAsState()
     LaunchedEffect(isDisguiseActive) {
         if (isDisguiseActive) {
             viewModel.closeFullScreenMedia()
@@ -543,14 +545,6 @@ fun ChatScreen(
                                     modifier = Modifier.size(23.dp)
                                 )
                             }
-                        }
-                        
-                        // Dedicated emergency exit button
-                        IconButton(
-                            onClick = onNavigateBack,
-                            modifier = Modifier.size(40.dp)
-                        ) {
-                            Icon(Icons.Default.ExitToApp, contentDescription = "Emergency Exit to Notes", tint = iconTint, modifier = Modifier.size(23.dp))
                         }
 
                         Box {
@@ -913,9 +907,15 @@ fun ChatScreen(
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             val dateSep = formatDateSeparator(message.timestamp)
-                            if (isFirstOfDay && dateSep.isNotEmpty()) {
-                                DateSeparatorBadge(
-                                    dateText = dateSep,
+                            if (isFirstOfDay) {
+                                if (dateSep.isNotEmpty()) {
+                                    DateSeparatorBadge(
+                                        dateText = dateSep,
+                                        isPrivateMode = (uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE),
+                                        isDark = isDark
+                                    )
+                                }
+                                StrictlyTwoPersonBanner(
                                     isPrivateMode = (uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE),
                                     isDark = isDark
                                 )
@@ -955,10 +955,29 @@ fun ChatScreen(
                                         }
                                     },
                                     onImageClick = { url ->
-                                        viewModel.openFullScreenMedia(url, MessageType.IMAGE, message.getAllMediaUrls())
+                                        val msgUrls = message.getAllMediaUrls()
+                                        val mediaList = if (msgUrls.size > 1) {
+                                            msgUrls
+                                        } else {
+                                            val allChatImages = displayedMessages
+                                                .filter { it.getTypedType() == MessageType.IMAGE }
+                                                .flatMap { it.getAllMediaUrls() }
+                                                .distinct()
+                                            if (allChatImages.isNotEmpty()) allChatImages else listOf(url)
+                                        }
+                                        viewModel.openFullScreenMedia(url, MessageType.IMAGE, mediaList)
                                     },
                                     onImageClickWithList = { url, allUrls ->
-                                        viewModel.openFullScreenMedia(url, MessageType.IMAGE, allUrls)
+                                        val mediaList = if (allUrls.size > 1) {
+                                            allUrls
+                                        } else {
+                                            val allChatImages = displayedMessages
+                                                .filter { it.getTypedType() == MessageType.IMAGE }
+                                                .flatMap { it.getAllMediaUrls() }
+                                                .distinct()
+                                            if (allChatImages.isNotEmpty()) allChatImages else listOf(url)
+                                        }
+                                        viewModel.openFullScreenMedia(url, MessageType.IMAGE, mediaList)
                                     },
                                     onSwipeToReply = {
                                         viewModel.setReplyingTo(message)
@@ -1003,30 +1022,30 @@ fun ChatScreen(
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(vertical = 12.dp),
+                                    .padding(vertical = 14.dp),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Surface(
-                                    shape = RoundedCornerShape(14.dp),
-                                    color = if (isDark) Color(0xFF1E2430).copy(alpha = 0.9f) else Color(0xFFF1F5F9).copy(alpha = 0.95f),
-                                    border = BorderStroke(0.8.dp, if (isDark) Color(0xFF334155).copy(alpha = 0.6f) else Color(0xFFCBD5E1)),
-                                    shadowElevation = 2.dp
+                                    shape = RoundedCornerShape(20.dp),
+                                    color = if (isDark) Color(0xFF1E2430).copy(alpha = 0.95f) else Color(0xFFFFF0F3).copy(alpha = 0.95f),
+                                    border = BorderStroke(1.dp, RoseGoldPrimary.copy(alpha = 0.5f)),
+                                    shadowElevation = 3.dp
                                 ) {
                                     Row(
-                                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
+                                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         CircularProgressIndicator(
-                                            modifier = Modifier.size(13.dp),
+                                            modifier = Modifier.size(14.dp),
                                             strokeWidth = 2.dp,
                                             color = RoseGoldPrimary
                                         )
-                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Spacer(modifier = Modifier.width(10.dp))
                                         Text(
-                                            text = "Loading earlier messages...",
-                                            fontSize = 11.5.sp,
+                                            text = "Reliving earlier memories...",
+                                            fontSize = 12.sp,
                                             fontWeight = FontWeight.Medium,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            color = if (isDark) Color.White else Color(0xFF1E293B)
                                         )
                                     }
                                 }
@@ -1034,10 +1053,57 @@ fun ChatScreen(
                         }
                     }
 
-                    // 4. Strictly 2-Person Beginning of Chat Banner
+                    // 2. Load Earlier Messages Pill (shown when previous chats folded)
+                    if (!uiState.showPreviousChats && uiState.hasPreviousChatsAvailable && displayedMessages.isNotEmpty()) {
+                        item(key = "reveal_previous_chats_pill", contentType = "action_pill") {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 12.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Surface(
+                                    shape = RoundedCornerShape(22.dp),
+                                    color = if (isDark) Color(0xFF1E2430).copy(alpha = 0.95f) else Color.White.copy(alpha = 0.95f),
+                                    border = BorderStroke(1.dp, RoseGoldPrimary.copy(alpha = 0.6f)),
+                                    shadowElevation = 3.dp,
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(22.dp))
+                                        .clickable {
+                                            viewModel.soundEffectsPlayer.playSound(com.example.audio.ChatSoundEffectsPlayer.SoundType.REACTION)
+                                            viewModel.setShowPreviousChats(true)
+                                            viewModel.loadMoreMessages()
+                                        }
+                                        .testTag("load_previous_chats_button")
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 18.dp, vertical = 9.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.History,
+                                            contentDescription = null,
+                                            tint = RoseGoldPrimary,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(
+                                            text = "Load Earlier Love Notes & Chats",
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = if (isDark) Color.White else Color(0xFF1E293B)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // 3. Strictly 2-Person Beginning of Chat Banner
                     // Shown ONLY when the user has genuinely reached the beginning of all messages
-                    // (i.e. isPaginationExhausted is true, or chat is empty)
-                    if (uiState.isPaginationExhausted || displayedMessages.isEmpty()) {
+                    val showBeginning = (uiState.isPaginationExhausted || displayedMessages.isEmpty()) && 
+                        (uiState.showPreviousChats || !uiState.hasPreviousChatsAvailable)
+                    if (showBeginning) {
                         item(key = "info_card", contentType = "info_card") {
                             StrictlyPrivateChatBeginningBanner(
                                 currentUser = uiState.currentUser,
@@ -1111,6 +1177,67 @@ fun ChatScreen(
                         fontWeight = FontWeight.SemiBold,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
                     )
+                }
+            }
+
+            // Discreet Right-Side Center Screen Floating Emergency Exit Toggle (Full Thumb Size)
+            if (isSideEmergencyExitEnabled) {
+                val exitOpacity = sideEmergencyExitOpacity.coerceIn(0.05f, 1.0f)
+                val isPrivate = uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE
+
+                Surface(
+                    shape = RoundedCornerShape(
+                        topStart = 24.dp,
+                        bottomStart = 24.dp,
+                        topEnd = 0.dp,
+                        bottomEnd = 0.dp
+                    ),
+                    color = if (isPrivate) {
+                        if (isDark) Color(0xFF26272B).copy(alpha = exitOpacity)
+                        else Color(0xFFE5E7EB).copy(alpha = exitOpacity)
+                    } else {
+                        if (isDark) Color(0xFF2B1D25).copy(alpha = exitOpacity)
+                        else Color(0xFFFFF0F2).copy(alpha = exitOpacity)
+                    },
+                    border = BorderStroke(
+                        1.dp,
+                        if (isPrivate) {
+                            if (isDark) Color(0xFF45474E).copy(alpha = exitOpacity)
+                            else Color(0xFF9CA3AF).copy(alpha = exitOpacity)
+                        } else {
+                            HeartRed.copy(alpha = (exitOpacity * 0.75f).coerceIn(0.05f, 0.9f))
+                        }
+                    ),
+                    shadowElevation = if (exitOpacity > 0.3f) 4.dp else 0.dp,
+                    modifier = Modifier
+                        .align(Alignment.CenterEnd)
+                        .width(44.dp)
+                        .height(88.dp)
+                        .clip(RoundedCornerShape(topStart = 24.dp, bottomStart = 24.dp, topEnd = 0.dp, bottomEnd = 0.dp))
+                        .clickable {
+                            haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                            onQuickDisguise()
+                        }
+                        .testTag("side_emergency_exit_toggle")
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(end = 4.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.ExitToApp,
+                            contentDescription = "Quick Disguise to Notes",
+                            tint = if (isPrivate) {
+                                if (isDark) Color.White.copy(alpha = exitOpacity)
+                                else Color.Black.copy(alpha = exitOpacity)
+                            } else {
+                                HeartRed.copy(alpha = exitOpacity)
+                            },
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
                 }
             }
         }
@@ -1719,55 +1846,13 @@ fun BouncingDots(color: Color = RoseGoldPrimary) {
     }
 }
 
-fun isSameDay(t1: Long, t2: Long): Boolean {
-    if (t1 <= 0L || t2 <= 0L) return false
-    val offset = 4 * 60 * 60 * 1000L
-    val cal1 = java.util.Calendar.getInstance().apply { timeInMillis = t1 - offset }
-    val cal2 = java.util.Calendar.getInstance().apply { timeInMillis = t2 - offset }
-    return cal1.get(java.util.Calendar.ERA) == cal2.get(java.util.Calendar.ERA) &&
-           cal1.get(java.util.Calendar.YEAR) == cal2.get(java.util.Calendar.YEAR) &&
-           cal1.get(java.util.Calendar.DAY_OF_YEAR) == cal2.get(java.util.Calendar.DAY_OF_YEAR)
-}
+fun isSameDay(t1: Long, t2: Long): Boolean = com.example.util.ChatTimeFormatter.isSameDay(t1, t2)
 
-fun isToday(timestamp: Long): Boolean {
-    if (timestamp <= 0L) return false
-    val offset = 4 * 60 * 60 * 1000L
-    val calMsg = java.util.Calendar.getInstance().apply { timeInMillis = timestamp - offset }
-    val calToday = java.util.Calendar.getInstance().apply { timeInMillis = System.currentTimeMillis() - offset }
-    return calMsg.get(java.util.Calendar.ERA) == calToday.get(java.util.Calendar.ERA) &&
-           calMsg.get(java.util.Calendar.YEAR) == calToday.get(java.util.Calendar.YEAR) &&
-           calMsg.get(java.util.Calendar.DAY_OF_YEAR) == calToday.get(java.util.Calendar.DAY_OF_YEAR)
-}
+fun isToday(timestamp: Long): Boolean = com.example.util.ChatTimeFormatter.isToday(timestamp)
 
-fun isYesterday(timestamp: Long): Boolean {
-    if (timestamp <= 0L) return false
-    val offset = 4 * 60 * 60 * 1000L
-    val calMsg = java.util.Calendar.getInstance().apply { timeInMillis = timestamp - offset }
-    val calYesterday = java.util.Calendar.getInstance().apply {
-        timeInMillis = System.currentTimeMillis() - offset
-        add(java.util.Calendar.DAY_OF_YEAR, -1)
-    }
-    return calMsg.get(java.util.Calendar.ERA) == calYesterday.get(java.util.Calendar.ERA) &&
-           calMsg.get(java.util.Calendar.YEAR) == calYesterday.get(java.util.Calendar.YEAR) &&
-           calMsg.get(java.util.Calendar.DAY_OF_YEAR) == calYesterday.get(java.util.Calendar.DAY_OF_YEAR)
-}
+fun isYesterday(timestamp: Long): Boolean = com.example.util.ChatTimeFormatter.isYesterday(timestamp)
 
-fun formatDateSeparator(timestamp: Long): String {
-    if (timestamp <= 0L) return ""
-    if (isToday(timestamp)) return "Today"
-    if (isYesterday(timestamp)) return "Yesterday"
-    
-    val offset = 4 * 60 * 60 * 1000L
-    val calMsg = java.util.Calendar.getInstance().apply { timeInMillis = timestamp - offset }
-    val calNow = java.util.Calendar.getInstance().apply { timeInMillis = System.currentTimeMillis() - offset }
-    
-    val sameYear = calMsg.get(java.util.Calendar.YEAR) == calNow.get(java.util.Calendar.YEAR)
-    val pattern = if (sameYear) "EEEE, MMMM d" else "EEEE, MMMM d, yyyy"
-    // Use the actual timestamp for formatting, so the header shows the correct date string
-    // e.g. "Tuesday, October 10" instead of "Monday, October 9" for a 3 AM message?
-    // Wait, if it's 3 AM Tuesday, and we want it to be considered Monday, we MUST format the adjusted timestamp!
-    return SimpleDateFormat(pattern, Locale.getDefault()).format(Date(timestamp - offset))
-}
+fun formatDateSeparator(timestamp: Long): String = com.example.util.ChatTimeFormatter.formatDateSeparator(timestamp)
 
 @Composable
 fun DateSeparatorBadge(
@@ -1841,6 +1926,65 @@ fun DateSeparatorBadge(
                     )
                 )
         )
+    }
+}
+
+@Composable
+fun StrictlyTwoPersonBanner(
+    isPrivateMode: Boolean,
+    isDark: Boolean,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp, vertical = 4.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Surface(
+            shape = RoundedCornerShape(14.dp),
+            color = if (isPrivateMode) {
+                if (isDark) Color(0xFF1E2024).copy(alpha = 0.90f) else Color(0xFFF3F4F6)
+            } else {
+                if (isDark) Color(0xFF152033).copy(alpha = 0.92f) else Color(0xFFEFF6FF)
+            },
+            border = BorderStroke(
+                1.dp,
+                if (isPrivateMode) {
+                    if (isDark) Color(0xFF33353C) else Color(0xFFE5E7EB)
+                } else {
+                    if (isDark) Color(0xFF2563EB).copy(alpha = 0.35f) else Color(0xFF93C5FD).copy(alpha = 0.55f)
+                }
+            )
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Lock,
+                    contentDescription = null,
+                    tint = if (isPrivateMode) {
+                        if (isDark) Color(0xFF9CA3AF) else Color(0xFF4B5563)
+                    } else {
+                        if (isDark) Color(0xFF60A5FA) else Color(0xFF2563EB)
+                    },
+                    modifier = Modifier.size(13.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = "Strictly 2-Person Private Channel • End-to-End Encrypted",
+                    fontSize = 11.5.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = if (isPrivateMode) {
+                        if (isDark) Color(0xFFD1D5DB) else Color(0xFF374151)
+                    } else {
+                        if (isDark) Color(0xFF93C5FD) else Color(0xFF1E40AF)
+                    }
+                )
+            }
+        }
     }
 }
 

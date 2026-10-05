@@ -41,8 +41,7 @@ object CheckAfterHelper {
         if (timeMillis == Long.MAX_VALUE) return "Later"
         val calTarget = Calendar.getInstance().apply { timeInMillis = timeMillis }
         val calNow = Calendar.getInstance()
-        val timeFormat = SimpleDateFormat("h:mm a", Locale.getDefault())
-        val formattedTime = timeFormat.format(Date(timeMillis))
+        val formattedTime = com.example.util.ChatTimeFormatter.formatMessageTime(timeMillis)
 
         val isSameDay = calTarget.get(Calendar.YEAR) == calNow.get(Calendar.YEAR) &&
                 calTarget.get(Calendar.DAY_OF_YEAR) == calNow.get(Calendar.DAY_OF_YEAR)
@@ -55,8 +54,8 @@ object CheckAfterHelper {
             isSameDay -> formattedTime
             isTomorrow -> "Tomorrow, $formattedTime"
             else -> {
-                val dateFormat = SimpleDateFormat("MMM d, h:mm a", Locale.getDefault())
-                dateFormat.format(Date(timeMillis))
+                val datePart = SimpleDateFormat("MMM d", Locale.US).format(Date(timeMillis))
+                "$datePart, $formattedTime"
             }
         }
     }

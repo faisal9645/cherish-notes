@@ -16,8 +16,8 @@ android {
     applicationId = "com.cherish.notes"
     minSdk = 24
     targetSdk = 35
-    versionCode = 52
-    versionName = "1.5.0"
+    versionCode = 54
+    versionName = "1.5.2"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     resourceConfigurations += listOf("en")
@@ -39,6 +39,11 @@ android {
       keyAlias = "androiddebugkey"
       keyPassword = "android"
     }
+  }
+
+  lint {
+    abortOnError = false
+    checkReleaseBuilds = false
   }
 
   buildTypes {

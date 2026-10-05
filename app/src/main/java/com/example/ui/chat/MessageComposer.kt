@@ -27,6 +27,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
@@ -44,6 +46,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import com.example.data.model.Message
 import com.example.ui.components.WaveformView
 import com.example.ui.theme.DarkBluePrimary
@@ -74,6 +77,7 @@ fun MessageComposer(
     myName: String = "Me",
     placeholder: String = "Message your love...",
     isPrivateMode: Boolean = false,
+    onEmergencyExit: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -81,11 +85,29 @@ fun MessageComposer(
     val keyboardController = LocalSoftwareKeyboardController.current
     val focusManager = LocalFocusManager.current
     val scope = rememberCoroutineScope()
+    val focusRequester = remember { FocusRequester() }
 
     var showEmojiPanel by remember { mutableStateOf(false) }
     var isLockedRecording by remember { mutableStateOf(false) }
     var dragOffsetX by remember { mutableFloatStateOf(0f) }
     var dragOffsetY by remember { mutableFloatStateOf(0f) }
+
+    // When replyingTo message is set (glide/swipe to reply), open keyboard and focus input automatically
+    LaunchedEffect(replyingTo) {
+        if (replyingTo != null) {
+            showEmojiPanel = false
+            kotlinx.coroutines.delay(60)
+            try {
+                focusRequester.requestFocus()
+                keyboardController?.show()
+            } catch (_: Exception) {}
+            kotlinx.coroutines.delay(120)
+            try {
+                focusRequester.requestFocus()
+                keyboardController?.show()
+            } catch (_: Exception) {}
+        }
+    }
 
     // Reset lock & drag offsets when recording ends
     LaunchedEffect(isRecordingVoice) {
@@ -526,6 +548,7 @@ fun MessageComposer(
                             maxLines = 5,
                             modifier = Modifier
                                 .fillMaxWidth()
+                                .focusRequester(focusRequester)
                                 .testTag("composer_text_input")
                         )
                     }

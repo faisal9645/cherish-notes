@@ -49,14 +49,10 @@ import androidx.compose.material.icons.automirrored.filled.Reply
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
-private val timeFormatThreadLocal = object : ThreadLocal<SimpleDateFormat>() {
-    override fun initialValue(): SimpleDateFormat {
-        return SimpleDateFormat("h:mm a", Locale.getDefault())
-    }
-}
+import com.example.util.ChatTimeFormatter
 
-private fun formatMessageTime(timestamp: Long): String {
-    return timeFormatThreadLocal.get()?.format(Date(timestamp)) ?: ""
+private fun formatMessageTime(rawTimestamp: Long): String {
+    return ChatTimeFormatter.formatMessageTime(rawTimestamp)
 }
 
 @OptIn(ExperimentalFoundationApi::class)

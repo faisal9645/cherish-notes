@@ -293,15 +293,19 @@ private fun MediaTile(
         )
         if (url.isNotBlank()) {
             val modelData = remember(url) {
-                if (url.startsWith("data:image")) {
-                    try {
-                        val base64 = url.substringAfter("base64,")
-                        android.util.Base64.decode(base64, android.util.Base64.DEFAULT)
-                    } catch (e: Exception) {
-                        url
+                when {
+                    url.startsWith("data:image") -> {
+                        try {
+                            val base64 = url.substringAfter("base64,")
+                            android.util.Base64.decode(base64, android.util.Base64.DEFAULT)
+                        } catch (e: Exception) {
+                            url
+                        }
                     }
-                } else {
-                    android.net.Uri.parse(url)
+                    url.startsWith("/") -> java.io.File(url)
+                    url.startsWith("file://") -> java.io.File(url.removePrefix("file://"))
+                    url.startsWith("content://") -> android.net.Uri.parse(url)
+                    else -> url
                 }
             }
             AsyncImage(

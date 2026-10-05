@@ -109,8 +109,9 @@ fun FullScreenMediaViewer(
 
     // Ensure initial media is present in media list
     val mediaList = remember(mediaUrl, allMediaUrls) {
-        if (allMediaUrls.contains(mediaUrl)) allMediaUrls
+        val combined = if (allMediaUrls.contains(mediaUrl)) allMediaUrls
         else listOf(mediaUrl) + allMediaUrls
+        combined.filter { it.isNotBlank() }.distinct().ifEmpty { listOf(mediaUrl) }
     }
 
     val initialIdx = remember { mediaList.indexOf(mediaUrl).coerceAtLeast(0) }
@@ -311,15 +312,19 @@ fun FullScreenMediaViewer(
                     contentAlignment = Alignment.Center
                 ) {
                     val modelData = remember(pageUrl) {
-                        if (pageUrl.startsWith("data:image")) {
-                            try {
-                                val base64 = pageUrl.substringAfter("base64,")
-                                android.util.Base64.decode(base64, android.util.Base64.DEFAULT)
-                            } catch (e: Exception) {
-                                pageUrl
+                        when {
+                            pageUrl.startsWith("data:image") -> {
+                                try {
+                                    val base64 = pageUrl.substringAfter("base64,")
+                                    android.util.Base64.decode(base64, android.util.Base64.DEFAULT)
+                                } catch (e: Exception) {
+                                    pageUrl
+                                }
                             }
-                        } else {
-                            android.net.Uri.parse(pageUrl)
+                            pageUrl.startsWith("/") -> java.io.File(pageUrl)
+                            pageUrl.startsWith("file://") -> java.io.File(pageUrl.removePrefix("file://"))
+                            pageUrl.startsWith("content://") -> android.net.Uri.parse(pageUrl)
+                            else -> pageUrl
                         }
                     }
 

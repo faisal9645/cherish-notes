@@ -52,7 +52,7 @@ object YouTubeHelper {
     }
 
     fun getEmbedUrl(videoId: String): String {
-        return "https://www.youtube.com/embed/$videoId?autoplay=1&enablejsapi=1&fs=1&rel=0&playsinline=1&modestbranding=1&origin=https://www.youtube.com"
+        return "https://www.youtube-nocookie.com/embed/$videoId?autoplay=1&enablejsapi=1&fs=1&rel=0&playsinline=1&modestbranding=1"
     }
 
     fun getEmbedHtml(videoId: String): String {
@@ -62,9 +62,8 @@ object YouTubeHelper {
             <head>
                 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
                 <style>
+                    * { box-sizing: border-box; margin: 0; padding: 0; }
                     html, body {
-                        margin: 0;
-                        padding: 0;
                         width: 100%;
                         height: 100%;
                         overflow: hidden;
@@ -90,7 +89,7 @@ object YouTubeHelper {
                 <div class="player-container">
                     <iframe 
                         id="ytplayer"
-                        src="https://www.youtube.com/embed/$videoId?autoplay=1&enablejsapi=1&fs=1&rel=0&playsinline=1&modestbranding=1&iv_load_policy=3&origin=https://www.youtube.com"
+                        src="https://www.youtube-nocookie.com/embed/$videoId?autoplay=1&enablejsapi=1&fs=1&rel=0&playsinline=1&modestbranding=1"
                         allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                         allowfullscreen>
                     </iframe>
@@ -141,8 +140,10 @@ fun YouTubeWebView(
     videoId: String,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     val embedHtml = remember(videoId) { YouTubeHelper.getEmbedHtml(videoId) }
     var webViewRef by remember { mutableStateOf<WebView?>(null) }
+    var hasError by remember { mutableStateOf(false) }
 
     DisposableEffect(videoId) {
         onDispose {
@@ -154,97 +155,149 @@ fun YouTubeWebView(
         }
     }
 
-    AndroidView(
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp)),
-        factory = { ctx ->
-            WebView(ctx).apply {
-                webViewRef = this
-                layoutParams = ViewGroup.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.MATCH_PARENT
-                )
-                setBackgroundColor(android.graphics.Color.BLACK)
-                setLayerType(android.view.View.LAYER_TYPE_HARDWARE, null)
+    Box(modifier = modifier) {
+        AndroidView(
+            modifier = Modifier
+                .fillMaxSize()
+                .clip(RoundedCornerShape(12.dp)),
+            factory = { ctx ->
+                WebView(ctx).apply {
+                    webViewRef = this
+                    layoutParams = ViewGroup.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.MATCH_PARENT
+                    )
+                    setBackgroundColor(android.graphics.Color.BLACK)
+                    setLayerType(android.view.View.LAYER_TYPE_HARDWARE, null)
 
-                settings.apply {
-                    javaScriptEnabled = true
-                    domStorageEnabled = true
-                    databaseEnabled = true
-                    mediaPlaybackRequiresUserGesture = false
-                    allowFileAccess = true
-                    allowContentAccess = true
-                    loadsImagesAutomatically = true
-                    mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
-                    useWideViewPort = true
-                    loadWithOverviewMode = true
-                    javaScriptCanOpenWindowsAutomatically = true
-                    setSupportMultipleWindows(false)
-                    cacheMode = WebSettings.LOAD_DEFAULT
+                    settings.apply {
+                        javaScriptEnabled = true
+                        domStorageEnabled = true
+                        databaseEnabled = true
+                        mediaPlaybackRequiresUserGesture = false
+                        allowFileAccess = true
+                        allowContentAccess = true
+                        loadsImagesAutomatically = true
+                        mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+                        useWideViewPort = true
+                        loadWithOverviewMode = true
+                        javaScriptCanOpenWindowsAutomatically = true
+                        setSupportMultipleWindows(false)
+                        cacheMode = WebSettings.LOAD_DEFAULT
 
-                    // Bypass YouTube WebView restrictions by removing WebView indicators from User Agent
-                    val defaultUa = userAgentString
-                    userAgentString = defaultUa.replace("; wv", "").replace("Version/4.0 ", "")
-                }
-
-                // Enable cookie persistence for YouTube & Google login inside the app
-                val cookieManager = CookieManager.getInstance()
-                cookieManager.setAcceptCookie(true)
-                cookieManager.setAcceptThirdPartyCookies(this, true)
-
-                webChromeClient = object : WebChromeClient() {
-                    override fun onPermissionRequest(request: PermissionRequest?) {
-                        try {
-                            request?.grant(request.resources)
-                        } catch (_: Exception) {}
+                        // Standard modern mobile Chrome user-agent for smooth YouTube playback
+                        userAgentString = "Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36"
                     }
 
-                    override fun getDefaultVideoPoster(): Bitmap? {
-                        return Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888)
-                    }
-                }
+                    // Enable cookie persistence for YouTube & Google login inside the app
+                    val cookieManager = CookieManager.getInstance()
+                    cookieManager.setAcceptCookie(true)
+                    cookieManager.setAcceptThirdPartyCookies(this, true)
 
-                webViewClient = object : WebViewClient() {
-                    override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
-                        val uri = request?.url ?: return false
-                        val url = uri.toString()
-                        if (url.contains("/embed/") || 
-                            url.contains("accounts.google.com") || 
-                            url.contains("doubleclick.net") || 
-                            url.contains("googlevideo.com") ||
-                            url.contains("gstatic.com")) {
-                            return false // keep embed and its dependencies inside webview
+                    webChromeClient = object : WebChromeClient() {
+                        override fun onPermissionRequest(request: PermissionRequest?) {
+                            try {
+                                request?.grant(request.resources)
+                            } catch (_: Exception) {}
                         }
-                        // If user clicked "Watch on YouTube", channel link, or external intent
-                        try {
-                            val intent = if (url.startsWith("intent://")) {
-                                Intent.parseUri(url, Intent.URI_INTENT_SCHEME)
-                            } else {
-                                Intent(Intent.ACTION_VIEW, uri)
+
+                        override fun getDefaultVideoPoster(): Bitmap? {
+                            return Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888)
+                        }
+                    }
+
+                    webViewClient = object : WebViewClient() {
+                        override fun onReceivedError(view: WebView?, errorCode: Int, description: String?, failingUrl: String?) {
+                            super.onReceivedError(view, errorCode, description, failingUrl)
+                            if (failingUrl?.contains("youtube") == true) {
+                                hasError = true
                             }
-                            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                            view?.context?.startActivity(intent)
-                            return true
-                        } catch (_: Exception) {
-                            return false
+                        }
+
+                        override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
+                            val uri = request?.url ?: return false
+                            val url = uri.toString()
+                            if (url.contains("/embed/") || 
+                                url.contains("youtube-nocookie.com") ||
+                                url.contains("youtube.com") ||
+                                url.contains("accounts.google.com") || 
+                                url.contains("doubleclick.net") || 
+                                url.contains("googlevideo.com") ||
+                                url.contains("gstatic.com") ||
+                                url.contains("ytimg.com")) {
+                                return false // keep embed and its dependencies inside webview
+                            }
+                            // If user clicked "Watch on YouTube", channel link, or external intent
+                            try {
+                                val intent = if (url.startsWith("intent://")) {
+                                    Intent.parseUri(url, Intent.URI_INTENT_SCHEME)
+                                } else {
+                                    Intent(Intent.ACTION_VIEW, uri)
+                                }
+                                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                view?.context?.startActivity(intent)
+                                return true
+                            } catch (_: Exception) {
+                                return false
+                            }
                         }
                     }
-                }
 
-                loadDataWithBaseURL(
-                    "https://www.youtube.com",
-                    embedHtml,
-                    "text/html",
-                    "UTF-8",
-                    "https://www.youtube.com"
-                )
+                    loadDataWithBaseURL(
+                        "https://www.youtube-nocookie.com",
+                        embedHtml,
+                        "text/html",
+                        "UTF-8",
+                        null
+                    )
+                }
+            },
+            update = { webView ->
+                // ensure state remains active
             }
-        },
-        update = { webView ->
-            // ensure state remains active
+        )
+
+        // Friendly 1-tap fallback overlay when the video owner disabled third-party embeds
+        if (hasError) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.90f))
+                    .padding(16.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Info,
+                        contentDescription = null,
+                        tint = Color(0xFFA1A1AA),
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = "Video owner restricted inline playback",
+                        color = Color.White,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Button(
+                        onClick = { YouTubeHelper.openInYouTube(context, videoId) },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF0000)),
+                        shape = RoundedCornerShape(8.dp),
+                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
+                    ) {
+                        Icon(Icons.Default.OpenInNew, contentDescription = null, modifier = Modifier.size(15.dp), tint = Color.White)
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Watch in YouTube App", fontSize = 12.sp, color = Color.White)
+                    }
+                }
+            }
         }
-    )
+    }
 }
 
 /**

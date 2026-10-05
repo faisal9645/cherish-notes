@@ -40,6 +40,14 @@ class MainActivity : FragmentActivity() {
             statusBarStyle = SystemBarStyle.auto(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT),
             navigationBarStyle = SystemBarStyle.auto(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT)
         )
+        val initialThemeMode = try { app.securityPreferences.getThemeMode() } catch (_: Exception) { 0 }
+        val isSystemDark = (resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) == android.content.res.Configuration.UI_MODE_NIGHT_YES
+        val isInitialDark = when (initialThemeMode) {
+            1 -> false
+            2, 3 -> true
+            else -> isSystemDark
+        }
+        window.decorView.setBackgroundColor(if (isInitialDark) android.graphics.Color.parseColor("#121212") else android.graphics.Color.WHITE)
         setHighRefreshRate()
         // Screenshot protection removed per user request — FLAG_SECURE is never applied
         // Only apply default state on cold start.

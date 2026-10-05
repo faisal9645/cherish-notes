@@ -35,7 +35,10 @@ data class ProfileUiState(
     val showPreviousChats: Boolean = false,
     val themeMode: Int = 0,
     val chatBgTheme: Int = 0,
-    val chatExperienceMode: com.example.ui.chat.ChatExperienceMode = com.example.ui.chat.ChatExperienceMode.NORMAL
+    val chatExperienceMode: com.example.ui.chat.ChatExperienceMode = com.example.ui.chat.ChatExperienceMode.NORMAL,
+    val isSideEmergencyExitEnabled: Boolean = true,
+    val sideEmergencyExitOpacity: Float = 0.35f,
+    val isChatSoundsEnabled: Boolean = true
 )
 
 data class UpdateCheckState(
@@ -159,9 +162,21 @@ class ProfileViewModel(
                 isCheckAfterReminderEnabled = securityPreferences.isCheckAfterReminderEnabled(),
                 themeMode = securityPreferences.getThemeMode(),
                 chatBgTheme = securityPreferences.getChatBgTheme(),
-                chatExperienceMode = securityPreferences.getChatExperienceMode()
+                chatExperienceMode = securityPreferences.getChatExperienceMode(),
+                isSideEmergencyExitEnabled = securityPreferences.isSideEmergencyExitEnabled(),
+                sideEmergencyExitOpacity = securityPreferences.getSideEmergencyExitOpacity()
             )
         }
+    }
+
+    fun setSideEmergencyExitEnabled(enabled: Boolean) {
+        securityPreferences.setSideEmergencyExitEnabled(enabled)
+        _uiState.update { it.copy(isSideEmergencyExitEnabled = enabled) }
+    }
+
+    fun setSideEmergencyExitOpacity(opacity: Float) {
+        securityPreferences.setSideEmergencyExitOpacity(opacity)
+        _uiState.update { it.copy(sideEmergencyExitOpacity = opacity) }
     }
 
     init {
@@ -200,6 +215,16 @@ class ProfileViewModel(
                 _uiState.update { it.copy(showPreviousChats = show) }
             }
         }
+
+        viewModelScope.launch {
+            securityPreferences.isChatSoundsEnabled.collect { sounds ->
+                _uiState.update { it.copy(isChatSoundsEnabled = sounds) }
+            }
+        }
+    }
+
+    fun setChatSoundsEnabled(enabled: Boolean) {
+        securityPreferences.setChatSoundsEnabled(enabled)
     }
 
     fun setThemeMode(mode: Int) {

@@ -294,96 +294,184 @@ fun ProfileScreen(
                         .padding(18.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center
-                    ) {
-                        Box(contentAlignment = Alignment.BottomEnd) {
-                            AvatarView(
-                                photoUrl = user?.photoUrl,
-                                name = user?.displayName ?: "Me",
-                                size = 80.dp,
-                                isOnline = true,
-                                showOnlineBadge = false,
-                                modifier = Modifier
-                                    .clip(CircleShape)
-                                    .clickable { showAvatarOptionsDialog = true }
-                            )
+                    val myName = user?.displayName?.ifBlank { "Me" } ?: "Me"
+                    val partnerName = partner?.displayName?.ifBlank {
+                        user?.partnerEmail?.removeSuffix("@cherish.app") ?: "Partner"
+                    } ?: (user?.partnerEmail?.removeSuffix("@cherish.app") ?: "Partner")
 
-                            if (uiState.isUpdating) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(80.dp)
-                                        .clip(CircleShape)
-                                        .background(Color.Black.copy(alpha = 0.45f)),
-                                    contentAlignment = Alignment.Center
+                    // 1. Both Profile Pictures Linked Together with Clean Interlocking Closed Heart
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 6.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            // User Profile Picture with Camera Edit on Bottom-Left (No collision with partner or heart)
+                            Box(contentAlignment = Alignment.BottomStart) {
+                                Surface(
+                                    shape = CircleShape,
+                                    color = MaterialTheme.colorScheme.surface,
+                                    shadowElevation = 3.dp,
+                                    border = BorderStroke(2.5.dp, MaterialTheme.colorScheme.surface)
                                 ) {
-                                    CircularProgressIndicator(
-                                        modifier = Modifier.size(28.dp),
-                                        color = MaterialTheme.colorScheme.surface,
-                                        strokeWidth = 3.dp
+                                    AvatarView(
+                                        photoUrl = user?.photoUrl,
+                                        name = myName,
+                                        size = 84.dp,
+                                        isOnline = true,
+                                        showOnlineBadge = false,
+                                        modifier = Modifier
+                                            .clip(CircleShape)
+                                            .clickable { showAvatarOptionsDialog = true }
                                     )
+                                }
+
+                                if (uiState.isUpdating) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(84.dp)
+                                            .clip(CircleShape)
+                                            .background(Color.Black.copy(alpha = 0.45f)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(26.dp),
+                                            color = MaterialTheme.colorScheme.surface,
+                                            strokeWidth = 3.dp
+                                        )
+                                    }
+                                }
+
+                                // Camera Edit Button on Bottom-Left
+                                Surface(
+                                    shape = CircleShape,
+                                    color = primaryAccent,
+                                    border = BorderStroke(2.dp, MaterialTheme.colorScheme.surface),
+                                    shadowElevation = 4.dp,
+                                    modifier = Modifier
+                                        .size(28.dp)
+                                        .offset(x = (-2).dp, y = 2.dp)
+                                        .clickable { showAvatarOptionsDialog = true }
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(
+                                            imageVector = Icons.Default.CameraAlt,
+                                            contentDescription = "Change profile photo",
+                                            tint = Color.White,
+                                            modifier = Modifier.size(14.dp)
+                                        )
+                                    }
                                 }
                             }
 
-                            IconButton(
-                                onClick = { showAvatarOptionsDialog = true },
-                                modifier = Modifier
-                                    .size(32.dp)
-                                    .minimumInteractiveComponentSize()
-                                    .background(primaryAccent, CircleShape)
+                            // Partner Profile Picture (overlapping user avatar by 20dp)
+                            Surface(
+                                shape = CircleShape,
+                                color = MaterialTheme.colorScheme.surface,
+                                shadowElevation = 4.dp,
+                                border = BorderStroke(2.5.dp, MaterialTheme.colorScheme.surface),
+                                modifier = Modifier.offset(x = (-20).dp)
                             ) {
+                                AvatarView(
+                                    photoUrl = partner?.photoUrl,
+                                    name = partnerName,
+                                    size = 84.dp,
+                                    isOnline = true,
+                                    showOnlineBadge = false,
+                                    modifier = Modifier.clip(CircleShape)
+                                )
+                            }
+                        }
+
+                        // Interlocking Closed Heart Centerpiece Linking Both Avatars
+                        Surface(
+                            shape = CircleShape,
+                            color = primaryAccent,
+                            border = BorderStroke(2.5.dp, MaterialTheme.colorScheme.surface),
+                            shadowElevation = 6.dp,
+                            modifier = Modifier
+                                .offset(x = (-10).dp)
+                                .size(32.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
                                 Icon(
-                                    Icons.Default.CameraAlt,
-                                    contentDescription = "Change profile photo",
+                                    imageVector = Icons.Filled.Favorite,
+                                    contentDescription = "Closed heart linking profiles together",
                                     tint = Color.White,
                                     modifier = Modifier.size(16.dp)
                                 )
                             }
                         }
-
-                        Icon(
-                            imageVector = Icons.Filled.Favorite,
-                            contentDescription = "Love",
-                            tint = Color(0xFFE91E63),
-                            modifier = Modifier
-                                .padding(horizontal = 12.dp)
-                                .size(28.dp)
-                        )
-
-                        AvatarView(
-                            photoUrl = partner?.photoUrl,
-                            name = partner?.displayName ?: "Partner",
-                            size = 80.dp,
-                            isOnline = true,
-                            showOnlineBadge = false,
-                            modifier = Modifier.clip(CircleShape)
-                        )
                     }
 
                     Spacer(modifier = Modifier.height(10.dp))
 
+                    // 2. Both Names Displayed Together with Closed Heart & Edit Action
                     Row(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
+                            .clip(RoundedCornerShape(12.dp))
                             .clickable { showEditProfileDialog = true }
-                            .padding(horizontal = 10.dp, vertical = 4.dp),
+                            .padding(horizontal = 14.dp, vertical = 6.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.Center
                     ) {
                         Text(
-                            text = user?.displayName?.ifBlank { "My Account" } ?: "My Account",
-                            fontSize = 18.sp,
+                            text = myName,
+                            fontSize = 20.sp,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface
                         )
-                        Spacer(modifier = Modifier.width(6.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
                         Icon(
-                            Icons.Default.Edit,
+                            imageVector = Icons.Filled.Favorite,
+                            contentDescription = null,
+                            tint = primaryAccent,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = partnerName,
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Icon(
+                            imageVector = Icons.Default.Edit,
                             contentDescription = "Edit Profile",
                             tint = primaryAccent,
                             modifier = Modifier.size(16.dp)
                         )
+                    }
+
+                    Surface(
+                        color = primaryAccent.copy(alpha = 0.08f),
+                        shape = RoundedCornerShape(14.dp),
+                        border = BorderStroke(0.8.dp, primaryAccent.copy(alpha = 0.25f)),
+                        modifier = Modifier.padding(top = 2.dp, bottom = 4.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.Favorite,
+                                contentDescription = null,
+                                tint = primaryAccent,
+                                modifier = Modifier.size(11.dp)
+                            )
+                            Spacer(modifier = Modifier.width(5.dp))
+                            Text(
+                                text = "Strictly Connected Couple Channel",
+                                fontSize = 11.5.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = primaryAccent
+                            )
+                        }
                     }
 
                     if (!user?.email.isNullOrBlank()) {
@@ -641,6 +729,83 @@ fun ProfileScreen(
                             Icon(Icons.Outlined.VisibilityOff, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(6.dp))
                             Text("Lock Disguise", fontSize = 12.sp)
+                        }
+                    }
+                }
+
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), thickness = 0.6.dp)
+
+                // Side Screen Floating Emergency Exit Toggle & Custom Invisibility / Opacity
+                ListItem(
+                    headlineContent = { Text("Side Floating Exit Toggle", fontSize = 15.sp, fontWeight = FontWeight.SemiBold) },
+                    supportingContent = { Text("Discreet full-thumb switch on center-right screen edge for instant 1-tap Notes disguise", fontSize = 13.sp) },
+                    leadingContent = { Icon(Icons.Default.ExitToApp, contentDescription = null, tint = HeartRed) },
+                    trailingContent = {
+                        Switch(
+                            checked = uiState.isSideEmergencyExitEnabled,
+                            onCheckedChange = { viewModel.setSideEmergencyExitEnabled(it) }
+                        )
+                    }
+                )
+
+                if (uiState.isSideEmergencyExitEnabled) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 6.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = "Toggle Visibility / Stealth: ${(uiState.sideEmergencyExitOpacity * 100).toInt()}%",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            // Live preview of the stealth edge toggle at current opacity!
+                            Surface(
+                                shape = RoundedCornerShape(topStart = 10.dp, bottomStart = 10.dp, topEnd = 0.dp, bottomEnd = 0.dp),
+                                color = if (isDark) Color(0xFF26272B).copy(alpha = uiState.sideEmergencyExitOpacity)
+                                        else Color(0xFF1F2937).copy(alpha = uiState.sideEmergencyExitOpacity),
+                                border = BorderStroke(1.dp, if (isDark) Color.White.copy(alpha = (uiState.sideEmergencyExitOpacity * 0.4f).coerceIn(0.05f, 0.9f))
+                                        else Color.Black.copy(alpha = (uiState.sideEmergencyExitOpacity * 0.4f).coerceIn(0.05f, 0.9f))),
+                                modifier = Modifier
+                                    .width(26.dp)
+                                    .height(34.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = Icons.Default.ExitToApp,
+                                        contentDescription = null,
+                                        tint = Color.White.copy(alpha = uiState.sideEmergencyExitOpacity),
+                                        modifier = Modifier.size(13.dp)
+                                    )
+                                }
+                            }
+                        }
+
+                        Slider(
+                            value = uiState.sideEmergencyExitOpacity,
+                            onValueChange = { viewModel.setSideEmergencyExitOpacity(it) },
+                            valueRange = 0.05f..1.0f,
+                            steps = 18,
+                            colors = SliderDefaults.colors(
+                                thumbColor = HeartRed,
+                                activeTrackColor = HeartRed
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text("5% (Ultra-Stealth)", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("35% (Subtle)", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("100% (Solid)", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                 }
@@ -987,6 +1152,67 @@ fun ProfileScreen(
                                     lineHeight = 16.sp
                                 )
                             }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    // 🎵 In-Chat Sound Effects Toggle
+                    Surface(
+                        shape = RoundedCornerShape(14.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 14.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(
+                                modifier = Modifier.weight(1f),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(38.dp)
+                                        .clip(CircleShape)
+                                        .background(RoseGoldPrimary.copy(alpha = 0.15f)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = if (uiState.isChatSoundsEnabled) Icons.Default.VolumeUp else Icons.Default.VolumeOff,
+                                        contentDescription = null,
+                                        tint = RoseGoldPrimary,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Column {
+                                    Text(
+                                        text = "In-Chat Sound Effects",
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 14.sp,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Text(
+                                        text = "Warm acoustic chimes for sent, received, reaction & voice notes",
+                                        fontSize = 11.5.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        lineHeight = 15.sp
+                                    )
+                                }
+                            }
+                            Switch(
+                                checked = uiState.isChatSoundsEnabled,
+                                onCheckedChange = { viewModel.setChatSoundsEnabled(it) },
+                                colors = SwitchDefaults.colors(
+                                    checkedThumbColor = Color.White,
+                                    checkedTrackColor = RoseGoldPrimary
+                                )
+                            )
                         }
                     }
                 }

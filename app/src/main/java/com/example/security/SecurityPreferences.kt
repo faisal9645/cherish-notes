@@ -26,6 +26,12 @@ class SecurityPreferences(context: Context) {
     private val _isDisguiseActive = MutableStateFlow(prefs.getBoolean(KEY_DISGUISE_ENABLED, true))
     val isDisguiseActive: StateFlow<Boolean> = _isDisguiseActive.asStateFlow()
 
+    private val _isSideEmergencyExitEnabled = MutableStateFlow(prefs.getBoolean(KEY_SIDE_EMERGENCY_EXIT_ENABLED, true))
+    val isSideEmergencyExitEnabled: StateFlow<Boolean> = _isSideEmergencyExitEnabled.asStateFlow()
+
+    private val _sideEmergencyExitOpacity = MutableStateFlow(prefs.getFloat(KEY_SIDE_EMERGENCY_EXIT_OPACITY, 0.35f))
+    val sideEmergencyExitOpacity: StateFlow<Float> = _sideEmergencyExitOpacity.asStateFlow()
+
     private val _hasRevealedSecretAppInSession = MutableStateFlow(!prefs.getBoolean(KEY_DISGUISE_ENABLED, true))
     val hasRevealedSecretAppInSession: StateFlow<Boolean> = _hasRevealedSecretAppInSession.asStateFlow()
 
@@ -126,6 +132,16 @@ class SecurityPreferences(context: Context) {
     val isNoteRemindersEnabled: StateFlow<Boolean> = _isNoteRemindersEnabled.asStateFlow()
 
     fun isNoteRemindersEnabled(): Boolean = prefs.getBoolean(KEY_NOTE_REMINDERS_ENABLED, true)
+
+    private val _isChatSoundsEnabled = MutableStateFlow(isChatSoundsEnabled())
+    val isChatSoundsEnabled: StateFlow<Boolean> = _isChatSoundsEnabled.asStateFlow()
+
+    fun isChatSoundsEnabled(): Boolean = prefs.getBoolean(KEY_CHAT_SOUNDS_ENABLED, true)
+
+    fun setChatSoundsEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_CHAT_SOUNDS_ENABLED, enabled).apply()
+        _isChatSoundsEnabled.value = enabled
+    }
 
     fun setNoteRemindersEnabled(enabled: Boolean) {
         prefs.edit().putBoolean(KEY_NOTE_REMINDERS_ENABLED, enabled).apply()
@@ -249,6 +265,21 @@ class SecurityPreferences(context: Context) {
     }
 
     // --- SECRET CHAT TRIGGER & GESTURE PREFERENCES ---
+
+    fun isSideEmergencyExitEnabled(): Boolean = _isSideEmergencyExitEnabled.value
+
+    fun setSideEmergencyExitEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_SIDE_EMERGENCY_EXIT_ENABLED, enabled).apply()
+        _isSideEmergencyExitEnabled.value = enabled
+    }
+
+    fun getSideEmergencyExitOpacity(): Float = _sideEmergencyExitOpacity.value
+
+    fun setSideEmergencyExitOpacity(opacity: Float) {
+        val clamped = opacity.coerceIn(0.05f, 1.0f)
+        prefs.edit().putFloat(KEY_SIDE_EMERGENCY_EXIT_OPACITY, clamped).apply()
+        _sideEmergencyExitOpacity.value = clamped
+    }
 
     fun isKeywordTriggerEnabled(): Boolean = prefs.getBoolean(KEY_KEYWORD_TRIGGER_ENABLED, true)
 
@@ -443,6 +474,9 @@ class SecurityPreferences(context: Context) {
         private const val KEY_SHOW_PREVIOUS_CHATS = "show_previous_chats"
         private const val KEY_TEMPORARY_CLEAR_TIMESTAMP = "temporary_clear_timestamp"
         private const val KEY_NOTE_REMINDERS_ENABLED = "note_reminders_enabled"
+        private const val KEY_SIDE_EMERGENCY_EXIT_ENABLED = "side_emergency_exit_enabled"
+        private const val KEY_SIDE_EMERGENCY_EXIT_OPACITY = "side_emergency_exit_opacity"
+        private const val KEY_CHAT_SOUNDS_ENABLED = "chat_sounds_enabled"
 
         @Volatile
         private var INSTANCE: SecurityPreferences? = null

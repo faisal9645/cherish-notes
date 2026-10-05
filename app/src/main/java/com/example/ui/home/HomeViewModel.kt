@@ -152,14 +152,14 @@ class HomeViewModel(
             hours < 24 -> "Active $hours hr ago"
             days < 7 -> "Active $days days ago"
             else -> {
-                val sdf = SimpleDateFormat("MMM d, h:mm a", Locale.getDefault())
-                "Last seen ${sdf.format(Date(timestamp))}"
+                val dateStr = java.text.SimpleDateFormat("MMM d", Locale.US).format(Date(timestamp))
+                val timeStr = com.example.util.ChatTimeFormatter.formatMessageTime(timestamp)
+                "Last seen $dateStr, $timeStr"
             }
         }
     }
 
     fun formatMessageTime(timestamp: Long): String {
-        val sdf = SimpleDateFormat("h:mm a", Locale.getDefault())
-        return sdf.format(Date(timestamp))
+        return com.example.util.ChatTimeFormatter.formatConversationTime(timestamp)
     }
 }

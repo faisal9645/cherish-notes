@@ -231,8 +231,9 @@ fun NoteCard(
     val progress = if (totalItems > 0) doneItems.toFloat() / totalItems.toFloat() else 0f
 
     val formattedDate = remember(note.updatedAt) {
-        val sdf = SimpleDateFormat("MMM d, h:mm a", Locale.getDefault())
-        sdf.format(Date(note.updatedAt))
+        val datePart = SimpleDateFormat("MMM d", Locale.US).format(Date(note.updatedAt))
+        val timePart = com.example.util.ChatTimeFormatter.formatMessageTime(note.updatedAt)
+        "$datePart, $timePart"
     }
 
     Card(
@@ -544,8 +545,9 @@ fun NoteCard(
             if (note.reminderTime != null) {
                 val isPast = note.isReminderPast()
                 val reminderFormatted = remember(note.reminderTime) {
-                    val sdf = SimpleDateFormat("MMM d • h:mm a", Locale.getDefault())
-                    sdf.format(Date(note.reminderTime))
+                    val datePart = SimpleDateFormat("MMM d", Locale.US).format(Date(note.reminderTime))
+                    val timePart = com.example.util.ChatTimeFormatter.formatMessageTime(note.reminderTime)
+                    "$datePart • $timePart"
                 }
                 Surface(
                     shape = RoundedCornerShape(8.dp),

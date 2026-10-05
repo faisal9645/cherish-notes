@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.audio.ChatSoundEffectsPlayer
 import com.example.audio.VoicePlayerHelper
 import com.example.audio.VoiceRecorderHelper
 import com.example.data.model.Message
@@ -61,7 +62,8 @@ class ChatViewModel(
     private val mediaRepository: MediaRepository,
     val voiceRecorderHelper: VoiceRecorderHelper,
     val voicePlayerHelper: VoicePlayerHelper,
-    val securityPreferences: SecurityPreferences = CherishApplication.instance.securityPreferences
+    val securityPreferences: SecurityPreferences = CherishApplication.instance.securityPreferences,
+    val soundEffectsPlayer: ChatSoundEffectsPlayer = ChatSoundEffectsPlayer.getInstance(CherishApplication.instance)
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(
@@ -80,9 +82,17 @@ class ChatViewModel(
         // Collect messages from the single global listener in ChatRepository.
         // No duplicate listener creation — ChatRepository.init manages the Firestore listener
         // and switches it when coupleId changes via its own collectLatest.
+        var highestMessageTimestamp = 0L
         viewModelScope.launch {
             chatRepository.messagesFlow.collect { msgList ->
                 val pinned = msgList.lastOrNull { it.isPinned && !it.isDeleted }
+                val currentUserId = authRepository.getCurrentUserId()
+                val newIncoming = msgList.lastOrNull { it.senderId != currentUserId && it.timestamp > highestMessageTimestamp }
+                if (highestMessageTimestamp > 0L && newIncoming != null) {
+                    soundEffectsPlayer.playSound(ChatSoundEffectsPlayer.SoundType.RECEIVED)
+                }
+                highestMessageTimestamp = maxOf(highestMessageTimestamp, msgList.maxOfOrNull { it.timestamp } ?: 0L)
+
                 _uiState.update {
                     it.copy(
                         messages = msgList,
@@ -249,6 +259,7 @@ class ChatViewModel(
         if (trimmed.isEmpty()) return
         val replyTo = _uiState.value.replyingToMessage
 
+        soundEffectsPlayer.playSound(ChatSoundEffectsPlayer.SoundType.SENT)
         viewModelScope.launch {
             _uiState.update { it.copy(replyingToMessage = null) }
             chatRepository.sendMessage(
@@ -327,6 +338,7 @@ class ChatViewModel(
                     chatRepository.sendMessage(
                         text = if (uploadedUrls.size == 1) "Sent a photo" else "Sent ${uploadedUrls.size} photos",
                         type = MessageType.IMAGE,
+                        mediaUrl = uploadedUrls.firstOrNull(),
                         mediaUrls = uploadedUrls,
                         replyTo = _uiState.value.replyingToMessage
                     )
@@ -346,14 +358,17 @@ class ChatViewModel(
         val file = voiceRecorderHelper.startRecording()
         if (file != null) {
             authRepository.setRecordingAudio(true)
+            soundEffectsPlayer.playSound(ChatSoundEffectsPlayer.SoundType.RECORD_START)
         }
     }
 
     fun stopAndSendVoiceRecording() {
         authRepository.setRecordingAudio(false)
+        soundEffectsPlayer.playSound(ChatSoundEffectsPlayer.SoundType.RECORD_STOP)
         val amplitudesSnapshot = voiceRecorderHelper.amplitudes.value.toList()
         val (file, duration) = voiceRecorderHelper.stopRecording()
         if (file != null && duration > 0) {
+            soundEffectsPlayer.playSound(ChatSoundEffectsPlayer.SoundType.SENT)
             viewModelScope.launch {
                 val coupleId = chatRepository.getConversationId()
                 val uploadResult = mediaRepository.uploadFile(
@@ -391,12 +406,14 @@ class ChatViewModel(
     }
 
     fun toggleReaction(messageId: String, emoji: String) {
+        soundEffectsPlayer.playSound(ChatSoundEffectsPlayer.SoundType.REACTION)
         viewModelScope.launch {
             chatRepository.toggleReaction(messageId, emoji)
         }
     }
 
     fun toggleStar(messageId: String) {
+        soundEffectsPlayer.playSound(ChatSoundEffectsPlayer.SoundType.STAR)
         viewModelScope.launch {
             chatRepository.toggleStar(messageId)
         }
@@ -432,6 +449,7 @@ class ChatViewModel(
     }
 
     fun deleteMessage(messageId: String) {
+        soundEffectsPlayer.playSound(ChatSoundEffectsPlayer.SoundType.DELETE)
         viewModelScope.launch {
             chatRepository.deleteMessage(messageId)
         }
