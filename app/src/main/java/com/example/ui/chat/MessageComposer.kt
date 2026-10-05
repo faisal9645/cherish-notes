@@ -55,6 +55,8 @@ import com.example.ui.theme.HeartRed
 import com.example.ui.theme.appGradientShadow
 import com.example.ui.theme.appHorizontalGradient
 import kotlin.math.roundToInt
+import kotlin.math.sin
+import kotlin.math.PI
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 
