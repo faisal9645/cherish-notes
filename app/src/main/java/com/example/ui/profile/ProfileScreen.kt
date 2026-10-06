@@ -686,7 +686,7 @@ fun ProfileScreen(
                 ListItem(
                     headlineContent = { Text("Recover All Chats & Gallery", fontSize = 15.sp, fontWeight = FontWeight.SemiBold) },
                     supportingContent = { Text("Restore all older & cleared messages and all gallery items immediately", fontSize = 13.sp) },
-                    leadingContent = { Icon(Icons.Filled.Favorite, contentDescription = null, tint = HeartRed) },
+                    leadingContent = { Icon(Icons.Filled.Restore, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
                     trailingContent = {
                         FilledTonalButton(
                             onClick = {

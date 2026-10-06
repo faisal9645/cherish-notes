@@ -180,6 +180,7 @@ fun CherishNavGraph(
     Box(
         modifier = modifier
             .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
     ) {
         NavHost(
             navController = navController,

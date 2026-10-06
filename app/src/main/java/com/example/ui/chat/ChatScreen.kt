@@ -41,6 +41,7 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -86,7 +87,17 @@ fun ChatScreen(
     val haptic = LocalHapticFeedback.current
     val scope = rememberCoroutineScope()
     val uiState by viewModel.uiState.collectAsState()
-    val listState = rememberLazyListState()
+    val listState = rememberLazyListState(
+        initialFirstVisibleItemIndex = viewModel.savedScrollIndex,
+        initialFirstVisibleItemScrollOffset = viewModel.savedScrollOffset
+    )
+
+    DisposableEffect(Unit) {
+        onDispose {
+            viewModel.savedScrollIndex = listState.firstVisibleItemIndex
+            viewModel.savedScrollOffset = listState.firstVisibleItemScrollOffset
+        }
+    }
     val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
 
     var composerText by remember { mutableStateOf("") }
@@ -227,23 +238,24 @@ fun ChatScreen(
         }
     }
 
-    // Issue 13: Only auto-scroll to bottom when a genuinely new message arrives
-    // AND the user is already near the bottom — don't hijack scroll mid-history.
-    val prevMessageCount = remember { mutableIntStateOf(uiState.messages.size) }
-    val prevNewestMessageTimestamp = remember { mutableLongStateOf(0L) }
+    // Only auto-scroll to bottom when a genuinely new message arrives while near bottom — never hijack scroll mid-history or on tab switch
+    val prevNewestMessageTimestamp = rememberSaveable {
+        mutableLongStateOf(uiState.messages.maxOfOrNull { it.timestamp } ?: 0L)
+    }
     LaunchedEffect(uiState.messages) {
-        val isNearBottom = listState.firstVisibleItemIndex <= 1
         val newestMessage = uiState.messages.maxByOrNull { it.timestamp }
-        val isNewArrival = newestMessage != null && newestMessage.timestamp > prevNewestMessageTimestamp.longValue
-        val iSentIt = newestMessage?.senderId == uiState.currentUser?.id
-
-        if (isNewArrival) {
-            if (isNearBottom || iSentIt) {
-                listState.animateScrollToItem(0)
-            }
-        }
         if (newestMessage != null) {
-            prevNewestMessageTimestamp.longValue = newestMessage.timestamp
+            if (prevNewestMessageTimestamp.longValue == 0L) {
+                // Initial message load: record timestamp without hijacking user's scroll position
+                prevNewestMessageTimestamp.longValue = newestMessage.timestamp
+            } else if (newestMessage.timestamp > prevNewestMessageTimestamp.longValue) {
+                val isNearBottom = listState.firstVisibleItemIndex <= 1
+                val iSentIt = newestMessage.senderId == uiState.currentUser?.id
+                if (isNearBottom || iSentIt) {
+                    listState.animateScrollToItem(0)
+                }
+                prevNewestMessageTimestamp.longValue = newestMessage.timestamp
+            }
         }
     }
 
@@ -723,16 +735,6 @@ fun ChatScreen(
                                     }
                                 )
 
-                                DropdownMenuItem(
-                                    text = { Text("Settings") },
-                                    onClick = {
-                                        showChatMenu = false
-                                        onNavigateToProfile()
-                                    },
-                                    leadingIcon = {
-                                        Icon(Icons.Default.Settings, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    }
-                                )
 
                                 DropdownMenuItem(
                                     text = { Text("Clear Chat", color = MaterialTheme.colorScheme.error) },
@@ -1070,10 +1072,12 @@ fun ChatScreen(
                                         isDark = isDark
                                     )
                                 }
-                                StrictlyTwoPersonBanner(
-                                    isPrivateMode = (uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE),
-                                    isDark = isDark
-                                )
+                                if (isToday(message.timestamp)) {
+                                    StrictlyTwoPersonBanner(
+                                        isPrivateMode = (uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE),
+                                        isDark = isDark
+                                    )
+                                }
                             }
 
                             // Read marking is handled in the batched LaunchedEffect above the Scaffold.
@@ -1310,22 +1314,18 @@ fun ChatScreen(
                 }
             }
 
-            } // Close Box(modifier = Modifier.weight(1f).fillMaxWidth())
-
-            // Partner typing / recording animated bubble - positioned in layout flow below messages, above composer
-            // Prevents overlapping and never hides the last message from view
+            // Partner typing / recording animated bubble - floats seamlessly over chat wallpaper at bottom-start
             androidx.compose.animation.AnimatedVisibility(
                 visible = (uiState.isPartnerRecordingAudio || uiState.isPartnerTyping) && !uiState.isStealthCurtainActive,
                 enter = androidx.compose.animation.expandVertically() + fadeIn(),
                 exit = androidx.compose.animation.shrinkVertically() + fadeOut(),
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(start = 16.dp, end = 16.dp, top = 2.dp, bottom = 4.dp)
+                    .align(Alignment.BottomStart)
+                    .padding(start = 16.dp, bottom = 8.dp)
             ) {
                 val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
                 val isPrivate = uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.Start
                 ) {
                     Surface(
@@ -1378,6 +1378,8 @@ fun ChatScreen(
                     }
                 }
             }
+
+            } // Close Box(modifier = Modifier.weight(1f).fillMaxWidth())
         }
     }
 

@@ -280,7 +280,7 @@ fun MessageComposer(
                     shadowElevation = 2.dp,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(start = 12.dp, end = 12.dp, top = 6.dp, bottom = 4.dp),
+                        .padding(start = 12.dp, end = 70.dp, top = 6.dp, bottom = 4.dp),
                     shape = RoundedCornerShape(16.dp)
                 ) {
                     Row(

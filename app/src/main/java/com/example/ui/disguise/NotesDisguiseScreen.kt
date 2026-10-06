@@ -852,7 +852,7 @@ fun NotesDisguiseScreen(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(MaterialTheme.colorScheme.onBackground.copy(alpha = unlockAnimProgress.value * 0.22f)),
+                .background(Color.Black.copy(alpha = unlockAnimProgress.value * 0.35f)),
             contentAlignment = Alignment.Center
         ) {
             Column(

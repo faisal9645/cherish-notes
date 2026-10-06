@@ -16,8 +16,8 @@ android {
     applicationId = "com.cherish.notes"
     minSdk = 24
     targetSdk = 35
-    versionCode = 60
-    versionName = "1.5.8"
+    versionCode = 61
+    versionName = "1.5.9"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     resourceConfigurations += listOf("en")
@@ -33,8 +33,11 @@ android {
         keyPassword = System.getenv("KEY_PASSWORD")
       }
     }
+    val debugKeyFile = file("${rootDir}/debug.keystore").let {
+      if (it.exists()) it else file("${System.getProperty("user.home")}/.android/debug.keystore")
+    }
     create("debugConfig") {
-      storeFile = file("${rootDir}/debug.keystore")
+      storeFile = debugKeyFile
       storePassword = "android"
       keyAlias = "androiddebugkey"
       keyPassword = "android"

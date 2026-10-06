@@ -390,13 +390,21 @@ fun MessageBubble(
                 }
             } else {
                 val bubbleMinWidth = when (message.getTypedType()) {
-                    MessageType.IMAGE -> 280.dp
+                    MessageType.IMAGE -> when (gallerySize.lowercase()) {
+                        "small" -> 150.dp
+                        "medium" -> 200.dp
+                        else -> 250.dp
+                    }
                     MessageType.AUDIO -> 260.dp
                     MessageType.VIDEO -> 195.dp
                     else -> 60.dp
                 }
                 val bubbleMaxWidth = when (message.getTypedType()) {
-                    MessageType.IMAGE -> 340.dp
+                    MessageType.IMAGE -> when (gallerySize.lowercase()) {
+                        "small" -> 200.dp
+                        "medium" -> 260.dp
+                        else -> 310.dp
+                    }
                     MessageType.AUDIO -> 310.dp
                     MessageType.VIDEO -> 268.dp
                     else -> 295.dp

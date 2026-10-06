@@ -8,8 +8,11 @@ import android.net.Uri
 import android.view.ViewGroup
 import android.webkit.*
 import androidx.compose.animation.*
+import androidx.compose.animation.core.*
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -90,7 +93,7 @@ object YouTubeHelper {
                     <iframe 
                         id="ytplayer"
                         src="https://www.youtube-nocookie.com/embed/$videoId?autoplay=1&enablejsapi=1&fs=1&rel=0&playsinline=1&modestbranding=1"
-                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                         allowfullscreen>
                     </iframe>
                 </div>
@@ -312,13 +315,38 @@ fun InlineYouTubeCard(
     val context = LocalContext.current
     var isPlayingInline by remember { mutableStateOf(false) }
 
+    val infiniteTransition = rememberInfiniteTransition(label = "yt_glow")
+    val glowAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.40f,
+        targetValue = 0.95f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1200, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "glow_alpha"
+    )
+    val themeColor = MaterialTheme.colorScheme.primary
+
     Surface(
         shape = RoundedCornerShape(14.dp),
         color = MaterialTheme.colorScheme.onBackground,
-        border = BorderStroke(1.dp, Color(0xFF27272A)),
+        border = BorderStroke(
+            width = if (isPlayingInline) 2.dp else 1.dp,
+            color = if (isPlayingInline) themeColor.copy(alpha = glowAlpha) else Color(0xFF27272A)
+        ),
+        shadowElevation = if (isPlayingInline) 12.dp else 0.dp,
         modifier = modifier
             .fillMaxWidth()
             .padding(vertical = 4.dp)
+            .then(
+                if (isPlayingInline) {
+                    Modifier.graphicsLayer {
+                        shadowElevation = 18.dp.toPx()
+                        spotShadowColor = themeColor
+                        ambientShadowColor = themeColor
+                    }
+                } else Modifier
+            )
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
             // Header Bar
@@ -357,18 +385,6 @@ fun InlineYouTubeCard(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    IconButton(
-                        onClick = { YouTubeHelper.openInYouTube(context, videoId) },
-                        modifier = Modifier.size(26.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.OpenInNew,
-                            contentDescription = "Watch in YouTube App",
-                            tint = Color(0xFFA1A1AA),
-                            modifier = Modifier.size(15.dp)
-                        )
-                    }
-
                     IconButton(
                         onClick = { onOpenTheater(videoId) },
                         modifier = Modifier.size(26.dp)
@@ -464,17 +480,6 @@ fun InlineYouTubeCard(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
-                            FilledTonalButton(
-                                onClick = { YouTubeHelper.openInYouTube(context, videoId) },
-                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
-                                modifier = Modifier.height(26.dp),
-                                colors = ButtonDefaults.filledTonalButtonColors(
-                                    containerColor = Color(0xFFFF0000).copy(alpha = 0.25f),
-                                    contentColor = Color.White
-                                )
-                            ) {
-                                Text("▶ App", fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                            }
 
                             FilledTonalButton(
                                 onClick = { onOpenTheater(videoId) },
@@ -504,7 +509,6 @@ fun InlineVideoTheaterModal(
     videoId: String,
     onDismiss: () -> Unit
 ) {
-    val context = LocalContext.current
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
@@ -514,57 +518,13 @@ fun InlineVideoTheaterModal(
             modifier = Modifier.fillMaxSize()
         ) {
             Box(modifier = Modifier.fillMaxSize()) {
-                // Top control bar
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .statusBarsPadding()
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Filled.Movie, contentDescription = null, tint = Color(0xFFFF0000), modifier = Modifier.size(22.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "Cherish Theater",
-                            color = MaterialTheme.colorScheme.surface,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 16.sp
-                        )
-                    }
-
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        IconButton(
-                            onClick = { YouTubeHelper.openInYouTube(context, videoId) },
-                            modifier = Modifier
-                                .size(36.dp)
-                                .background(Color(0xFF27272A), CircleShape)
-                        ) {
-                            Icon(Icons.Default.OpenInNew, contentDescription = "Watch in YouTube App", tint = Color.White, modifier = Modifier.size(18.dp))
-                        }
-
-                        IconButton(
-                            onClick = onDismiss,
-                            modifier = Modifier
-                                .size(36.dp)
-                                .background(Color(0xFF27272A), CircleShape)
-                        ) {
-                            Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.White, modifier = Modifier.size(20.dp))
-                        }
-                    }
-                }
-
-                // Centered Player
+                // Centered Player: Full screen landscape width (edge-to-edge, 0 horizontal padding)
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .align(Alignment.Center)
                         .aspectRatio(16f / 9f)
-                        .padding(horizontal = 8.dp)
+                        .background(Color.Black)
                 ) {
                     YouTubeWebView(
                         videoId = videoId,
@@ -572,16 +532,58 @@ fun InlineVideoTheaterModal(
                     )
                 }
 
-                // Bottom Hint
-                Text(
-                    text = "Watching together in Cherish • Tap ↗ to open in YouTube app",
-                    color = Color(0xFFA1A1AA),
-                    fontSize = 12.sp,
+                // Top-Left: Theater Badge Overlay
+                Row(
                     modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .navigationBarsPadding()
-                        .padding(bottom = 16.dp)
-                )
+                        .align(Alignment.TopStart)
+                        .statusBarsPadding()
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Surface(
+                        shape = CircleShape,
+                        color = Color.Black.copy(alpha = 0.70f),
+                        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.2f))
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                Icons.Filled.Movie,
+                                contentDescription = null,
+                                tint = Color(0xFFFF0000),
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "Cherish Theater",
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 13.sp
+                            )
+                        }
+                    }
+                }
+
+                // Top-Right: Prominent High-Visibility Floating Close Button
+                IconButton(
+                    onClick = onDismiss,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .statusBarsPadding()
+                        .padding(16.dp)
+                        .size(44.dp)
+                        .background(Color.Black.copy(alpha = 0.70f), CircleShape)
+                        .border(1.dp, Color.White.copy(alpha = 0.35f), CircleShape)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Close Theater View",
+                        tint = Color.White,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
             }
         }
     }

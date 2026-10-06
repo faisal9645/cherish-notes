@@ -14,6 +14,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -45,9 +46,9 @@ fun AdaptiveMediaGrid(
     }
 
     val singleImageHeight: Dp = when (gallerySize.lowercase()) {
-        "small" -> 200.dp
-        "medium" -> 280.dp
-        else -> 360.dp
+        "small" -> 250.dp
+        "medium" -> 350.dp
+        else -> 440.dp
     }
 
     val cornerRadius = 14.dp
@@ -59,14 +60,14 @@ fun AdaptiveMediaGrid(
             .clip(RoundedCornerShape(cornerRadius))
     ) {
         when {
-            // Case 1: Single Photo
+            // Case 1: Single Photo (Full photo visible, heightened allowance, customizable via settings)
             urls.size == 1 -> {
                 MediaTile(
                     url = urls[0],
-                    contentScale = ContentScale.Crop,
+                    contentScale = ContentScale.Fit,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(singleImageHeight)
+                        .heightIn(min = 140.dp, max = singleImageHeight)
                         .clip(RoundedCornerShape(cornerRadius))
                         .clickable { onImageClick(0, urls[0]) }
                 )
@@ -279,9 +280,11 @@ private fun MediaTile(
     contentScale: ContentScale = ContentScale.Crop
 ) {
     val context = LocalContext.current
+    val isDark = androidx.compose.material3.MaterialTheme.colorScheme.surface.luminance() < 0.5f
+    val tileBg = if (isDark) Color(0xFF131824) else Color(0xFFE2E8F0)
     Box(
         modifier = modifier
-            .background(Color(0xFFE2E8F0))
+            .background(tileBg)
             .clip(RoundedCornerShape(12.dp)),
         contentAlignment = Alignment.Center
     ) {

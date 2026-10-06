@@ -628,23 +628,6 @@ fun FullScreenMediaViewer(
                                 }
                             }
 
-                            // Share
-                            Box(
-                                modifier = Modifier
-                                    .size(38.dp)
-                                    .clip(CircleShape)
-                                    .background(Color.Black.copy(alpha = 0.50f))
-                                    .clickable { shareImage() }
-                                    .testTag("full_screen_media_share"),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Share,
-                                    contentDescription = "Share",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            }
 
                             // Download / Save to Gallery
                             Box(
@@ -746,16 +729,32 @@ fun FullScreenMediaViewer(
                             itemsIndexed(mediaList) { idx, url ->
                                 val isSelected = idx == currentIndex
                                 val isVid = url.endsWith(".mp4", true) || url.contains("videonote", true)
+                                val thumbData = remember(url) {
+                                    when {
+                                        url.startsWith("data:image") -> {
+                                            try {
+                                                val base64 = url.substringAfter("base64,")
+                                                android.util.Base64.decode(base64, android.util.Base64.DEFAULT)
+                                            } catch (e: Exception) {
+                                                url
+                                            }
+                                        }
+                                        url.startsWith("/") -> java.io.File(url)
+                                        url.startsWith("file://") -> java.io.File(url.removePrefix("file://"))
+                                        url.startsWith("content://") -> android.net.Uri.parse(url)
+                                        else -> url
+                                    }
+                                }
                                 Surface(
-                                    shape = RoundedCornerShape(8.dp),
-                                    color = Color.Black.copy(alpha = 0.6f),
+                                    shape = RoundedCornerShape(10.dp),
+                                    color = Color.Black.copy(alpha = 0.65f),
                                     border = androidx.compose.foundation.BorderStroke(
-                                        if (isSelected) 2.dp else 1.dp,
-                                        if (isSelected) RoseGoldPrimary else Color.White.copy(alpha = 0.25f)
+                                        if (isSelected) 2.5.dp else 1.dp,
+                                        if (isSelected) RoseGoldPrimary else Color.White.copy(alpha = 0.35f)
                                     ),
                                     modifier = Modifier
-                                        .size(46.dp)
-                                        .clip(RoundedCornerShape(8.dp))
+                                        .size(52.dp)
+                                        .clip(RoundedCornerShape(10.dp))
                                         .clickable {
                                             if (currentIndex != idx) {
                                                 scope.launch {
@@ -768,7 +767,7 @@ fun FullScreenMediaViewer(
                                     Box(contentAlignment = Alignment.Center) {
                                         AsyncImage(
                                             model = ImageRequest.Builder(context)
-                                                .data(url)
+                                                .data(thumbData)
                                                 .crossfade(true)
                                                 .build(),
                                             contentDescription = "Photo thumbnail $idx",
@@ -780,7 +779,7 @@ fun FullScreenMediaViewer(
                                                 imageVector = Icons.Default.PlayArrow,
                                                 contentDescription = "Video",
                                                 tint = Color.White,
-                                                modifier = Modifier.size(16.dp)
+                                                modifier = Modifier.size(18.dp)
                                             )
                                         }
                                     }
@@ -794,7 +793,7 @@ fun FullScreenMediaViewer(
                         shape = RoundedCornerShape(24.dp),
                         color = Color.Black.copy(alpha = 0.65f),
                         border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.2f)),
-                        modifier = Modifier.padding(bottom = 12.dp)
+                        modifier = Modifier.padding(bottom = 6.dp)
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
@@ -852,40 +851,6 @@ fun FullScreenMediaViewer(
                                     color = RoseGoldPrimary,
                                     fontWeight = FontWeight.SemiBold,
                                     fontSize = 12.sp
-                                )
-                            }
-                        }
-                    }
-
-                    // Page indicator dots (if multiple images)
-                    if (mediaList.size > 1) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(bottom = 8.dp),
-                            horizontalArrangement = Arrangement.Center,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            val displayCount = mediaList.size.coerceAtMost(20)
-                            repeat(displayCount) { index ->
-                                val isSelected = index == currentIndex
-                                Box(
-                                    modifier = Modifier
-                                        .padding(horizontal = 3.dp)
-                                        .size(if (isSelected) 8.dp else 6.dp)
-                                        .clip(CircleShape)
-                                        .background(
-                                            if (isSelected) RoseGoldPrimary
-                                            else Color.White.copy(alpha = 0.4f)
-                                        )
-                                )
-                            }
-                            if (mediaList.size > 20) {
-                                Text(
-                                    text = "+${mediaList.size - 20}",
-                                    color = Color.White.copy(alpha = 0.5f),
-                                    fontSize = 10.sp,
-                                    modifier = Modifier.padding(start = 4.dp)
                                 )
                             }
                         }

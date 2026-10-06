@@ -79,6 +79,10 @@ class ChatViewModel(
     )
     val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
 
+    // Preserved scroll position when navigating between tabs (Chat, Love & Us, Settings)
+    var savedScrollIndex: Int = 0
+    var savedScrollOffset: Int = 0
+
     init {
         authRepository.connectPartnerListenerOnce()
         authRepository.updatePresence()

@@ -49,6 +49,7 @@ import com.example.ui.theme.HeartRed
 import com.example.ui.theme.RoseGoldPrimary
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import java.io.File
 import java.io.FileOutputStream
 import kotlin.math.roundToInt
@@ -70,6 +71,8 @@ fun CircularVideoNoteRecorderDialog(
     val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
     val primaryColor = RoseGoldPrimary
+    val coroutineScope = rememberCoroutineScope()
+    var recordingStartTime by remember { mutableLongStateOf(0L) }
 
     var isRecording by remember { mutableStateOf(false) }
     var isLocked by remember { mutableStateOf(false) }
@@ -119,6 +122,7 @@ fun CircularVideoNoteRecorderDialog(
 
     fun beginRecording() {
         if (isRecording) return
+        recordingStartTime = System.currentTimeMillis()
         val outFile = File(context.cacheDir, "videonote_${System.currentTimeMillis()}.mp4")
         outputFileRef = outFile
         val started = startVideoRecording(context, cameraRef, cameraFacing, outFile)
@@ -134,18 +138,29 @@ fun CircularVideoNoteRecorderDialog(
     fun stopAndSend() {
         if (!isRecording) return
         isRecording = false
-        try {
-            mediaRecorderRef?.stop()
-            mediaRecorderRef?.release()
-            mediaRecorderRef = null
-        } catch (_: Exception) {}
+        coroutineScope.launch {
+            val elapsed = System.currentTimeMillis() - recordingStartTime
+            if (elapsed < 900) {
+                delay(900 - elapsed)
+            }
+            try {
+                mediaRecorderRef?.stop()
+            } catch (_: Exception) {}
+            try {
+                mediaRecorderRef?.release()
+                mediaRecorderRef = null
+            } catch (_: Exception) {}
 
-        val file = outputFileRef
-        if (file != null && file.exists()) {
-            val dur = recordingDurationSec.coerceAtLeast(1)
-            onSendVideoNote(file, dur)
+            val file = outputFileRef
+            if (file != null && file.exists()) {
+                if (file.length() < 100L) {
+                    createFallbackVideoFile(file)
+                }
+                val dur = recordingDurationSec.coerceAtLeast(1)
+                onSendVideoNote(file, dur)
+            }
+            onDismiss()
         }
-        onDismiss()
     }
 
     fun cancelAndDiscard() {
@@ -277,10 +292,10 @@ fun CircularVideoNoteRecorderDialog(
 
                 Spacer(modifier = Modifier.height(20.dp))
 
-                // Centered Circular Viewfinder (240dp)
+                // Centered Circular Viewfinder (310dp)
                 Box(
                     modifier = Modifier
-                        .size(240.dp)
+                        .size(310.dp)
                         .clip(CircleShape)
                         .background(Color(0xFF161922))
                         .border(
@@ -293,6 +308,12 @@ fun CircularVideoNoteRecorderDialog(
                     AndroidView(
                         factory = { ctx ->
                             SurfaceView(ctx).apply {
+                                outlineProvider = object : android.view.ViewOutlineProvider() {
+                                    override fun getOutline(view: android.view.View, outline: android.graphics.Outline) {
+                                        outline.setOval(0, 0, view.width, view.height)
+                                    }
+                                }
+                                clipToOutline = true
                                 holder.addCallback(object : SurfaceHolder.Callback {
                                     override fun surfaceCreated(holder: SurfaceHolder) {
                                         surfaceHolderRef = holder

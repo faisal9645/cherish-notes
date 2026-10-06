@@ -83,7 +83,7 @@ fun AppLockScreen(
 
     Surface(
         modifier = Modifier.fillMaxSize(),
-        color = androidx.compose.ui.graphics.Color.White
+        color = MaterialTheme.colorScheme.background
     ) {
         Column(
             modifier = Modifier
