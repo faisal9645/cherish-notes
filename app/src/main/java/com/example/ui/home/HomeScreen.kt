@@ -108,31 +108,29 @@ fun HomeScreen(
                 var isHorizontal = false
 
                 while (true) {
-                    val event = awaitPointerEvent()
+                    val event = awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Main)
                     val change = event.changes.firstOrNull { it.id == down.id } ?: break
                     if (!change.pressed) break
+
+                    if (change.isConsumed) {
+                        break
+                    }
 
                     val delta = change.positionChange()
                     accX += delta.x
                     accY += delta.y
 
-                    if (!directionLocked && (kotlin.math.abs(accX) > 10f || kotlin.math.abs(accY) > 10f)) {
-                        isHorizontal = kotlin.math.abs(accX) > kotlin.math.abs(accY)
+                    if (!directionLocked && (kotlin.math.abs(accX) > 16f || kotlin.math.abs(accY) > 16f)) {
+                        isHorizontal = kotlin.math.abs(accX) > kotlin.math.abs(accY) * 1.8f
                         directionLocked = true
                     }
 
                     if (directionLocked && isHorizontal) {
-                        change.consume()
                         if (accX < -70f) {
+                            change.consume()
                             onNavigateToChat()
                             break
                         }
-                    }
-                }
-
-                if (directionLocked && isHorizontal) {
-                    if (accX < -50f) {
-                        onNavigateToChat()
                     }
                 }
             }

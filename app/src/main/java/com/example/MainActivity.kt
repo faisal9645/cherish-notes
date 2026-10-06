@@ -187,7 +187,10 @@ class MainActivity : FragmentActivity() {
         super.onWindowFocusChanged(hasFocus)
         // Immediately disguise on focus loss (e.g., bottom gesture glide) to protect privacy in recent apps
         if (!hasFocus && !isChangingConfigurations) {
-            if (!app.securityPreferences.ignoreNextPause && !app.securityPreferences.ignoreChatNavigation && !app.securityPreferences.isTheaterModeActive) {
+            if (!app.securityPreferences.ignoreNextPause && 
+                !app.securityPreferences.ignoreChatNavigation && 
+                !app.securityPreferences.isTheaterModeActive &&
+                !app.securityPreferences.isMediaViewerActive) {
                 app.securityPreferences.reDisguise()
             }
         }

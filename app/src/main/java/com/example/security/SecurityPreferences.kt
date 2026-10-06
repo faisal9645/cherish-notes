@@ -28,6 +28,12 @@ class SecurityPreferences(context: Context) {
      */
     var isTheaterModeActive: Boolean = false
 
+    /**
+     * Set to true while full-screen photo/media viewer is active so dialog windows
+     * and window focus changes never trigger disguise mode.
+     */
+    var isMediaViewerActive: Boolean = false
+
 
     private val _isDisguiseActive = MutableStateFlow(prefs.getBoolean(KEY_DISGUISE_ENABLED, true))
     val isDisguiseActive: StateFlow<Boolean> = _isDisguiseActive.asStateFlow()
@@ -81,7 +87,7 @@ class SecurityPreferences(context: Context) {
     }
 
     fun reDisguise() {
-        if (ignoreNextPause || ignoreChatNavigation || isTheaterModeActive) return
+        if (ignoreNextPause || ignoreChatNavigation || isTheaterModeActive || isMediaViewerActive) return
         _hasRevealedSecretAppInSession.value = false
         _isDisguiseActive.value = true
         setShowPreviousChatsEnabled(false)

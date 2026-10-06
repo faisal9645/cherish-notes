@@ -90,6 +90,14 @@ fun FullScreenMediaViewer(
     var showDeleteConfirmDialog by remember { mutableStateOf(false) }
 
     val app = context.applicationContext as? CherishApplication
+    DisposableEffect(Unit) {
+        val prefs = app?.securityPreferences
+        prefs?.isMediaViewerActive = true
+        onDispose {
+            prefs?.isMediaViewerActive = false
+        }
+    }
+
     val isDisguiseActive by (app?.securityPreferences?.isDisguiseActive ?: kotlinx.coroutines.flow.MutableStateFlow(false)).collectAsState()
 
     LaunchedEffect(isDisguiseActive) {

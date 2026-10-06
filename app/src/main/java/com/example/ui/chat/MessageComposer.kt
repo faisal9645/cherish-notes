@@ -265,75 +265,8 @@ fun MessageComposer(
             .fillMaxWidth()
             .background(barBg)
     ) {
-        // Reply bar preview
-        AnimatedVisibility(
-            visible = replyingTo != null,
-            modifier = Modifier
-                .widthIn(max = 400.dp)
-                .fillMaxWidth(0.85f)
-                .align(Alignment.CenterHorizontally)
-        ) {
-            if (replyingTo != null) {
-                Surface(
-                    color = if (isDark) Color(0xFF1E2430) else Color(0xFFF1F5F9),
-                    border = BorderStroke(1.dp, if (isDark) Color(0xFF2A364F) else Color(0xFFE2E8F0)),
-                    shadowElevation = 2.dp,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(start = 6.dp, end = 6.dp, bottom = 4.dp),
-                    shape = RoundedCornerShape(16.dp)
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 12.dp, vertical = 7.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .width(3.5.dp)
-                                .height(32.dp)
-                                .background(if (isPrivateMode) (if (isDark) Color(0xFF9CA3AF) else Color(0xFF6B7280)) else MaterialTheme.colorScheme.primary, CircleShape)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.Reply,
-                            contentDescription = null,
-                            tint = if (isPrivateMode) (if (isDark) Color(0xFF9CA3AF) else Color(0xFF6B7280)) else MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "Replying to ${replyingTo.senderName ?: "Partner"}",
-                                fontSize = 11.5.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = if (isPrivateMode) (if (isDark) Color(0xFFECECEC) else Color(0xFF111827)) else MaterialTheme.colorScheme.primary
-                            )
-                            Text(
-                                text = replyingTo.text,
-                                fontSize = 12.sp,
-                                maxLines = 1,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        IconButton(
-                            onClick = onDismissReply,
-                            modifier = Modifier.size(26.dp)
-                        ) {
-                            Icon(
-                                Icons.Default.Close,
-                                contentDescription = "Cancel reply",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(16.dp)
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
         // 23. WhatsApp-Style Composer Row:
+        // [ Reply Bar ]
         // [ 🙂 | Message your love... | 📎 | 📷 | 📹 ]    [ 🎤 / ✈️ ]
         Row(
             modifier = Modifier
@@ -343,21 +276,106 @@ fun MessageComposer(
                 .padding(start = 12.dp, end = 12.dp, top = 2.dp, bottom = 8.dp),
             verticalAlignment = Alignment.Bottom
         ) {
-            // Main Input Pill / Active Recording Bar
-            if (isRecordingVoice) {
-                // ---- WhatsApp-Style Recording Bar ----
-                if (isLockedRecording) {
-                    // LOCKED hands-free mode: [ Avatar | 🔴 timer | waveform | 🔒 ] [ 🗑 ]
-                    Row(
-                        modifier = Modifier
-                            .weight(1f)
-                            .heightIn(min = 52.dp)
-                            .clip(RoundedCornerShape(26.dp))
-                            .background(if (isDark) Color(0xFF1E2638) else Color.White)
-                            .border(BorderStroke(1.dp, pillBorder), RoundedCornerShape(26.dp))
-                            .padding(horizontal = 8.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
+            Column(
+                modifier = Modifier.weight(1f),
+                horizontalAlignment = Alignment.Start
+            ) {
+                // Reply bar preview - Left-aligned, emerging smoothly from the top of the type center bar
+                AnimatedVisibility(
+                    visible = replyingTo != null,
+                    enter = expandVertically(
+                        expandFrom = Alignment.Bottom,
+                        animationSpec = spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessMediumLow)
+                    ) + fadeIn(animationSpec = tween(180)),
+                    exit = shrinkVertically(
+                        shrinkTowards = Alignment.Bottom,
+                        animationSpec = tween(160)
+                    ) + fadeOut(animationSpec = tween(120)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    if (replyingTo != null) {
+                        Surface(
+                            color = if (isDark) Color(0xFF1E2430) else Color(0xFFF1F5F9),
+                            border = BorderStroke(1.dp, if (isDark) Color(0xFF2A364F) else Color(0xFFE2E8F0)),
+                            shadowElevation = 2.dp,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 5.dp),
+                            shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 8.dp, bottomEnd = 8.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 10.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .width(3.5.dp)
+                                        .height(30.dp)
+                                        .background(if (isPrivateMode) (if (isDark) Color(0xFF9CA3AF) else Color(0xFF6B7280)) else MaterialTheme.colorScheme.primary, CircleShape)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.Reply,
+                                    contentDescription = null,
+                                    tint = if (isPrivateMode) (if (isDark) Color(0xFF9CA3AF) else Color(0xFF6B7280)) else MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Column(
+                                    modifier = Modifier.weight(1f),
+                                    horizontalAlignment = Alignment.Start
+                                ) {
+                                    Text(
+                                        text = "Replying to ${replyingTo.senderName ?: "Partner"}",
+                                        fontSize = 11.5.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (isPrivateMode) (if (isDark) Color(0xFFECECEC) else Color(0xFF111827)) else MaterialTheme.colorScheme.primary,
+                                        textAlign = androidx.compose.ui.text.style.TextAlign.Start,
+                                        maxLines = 1,
+                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                    )
+                                    Text(
+                                        text = replyingTo.text,
+                                        fontSize = 12.sp,
+                                        maxLines = 1,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        textAlign = androidx.compose.ui.text.style.TextAlign.Start,
+                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                    )
+                                }
+                                IconButton(
+                                    onClick = onDismissReply,
+                                    modifier = Modifier.size(26.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Default.Close,
+                                        contentDescription = "Cancel reply",
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Main Input Pill / Active Recording Bar
+                if (isRecordingVoice) {
+                    // ---- WhatsApp-Style Recording Bar ----
+                    if (isLockedRecording) {
+                        // LOCKED hands-free mode: [ Avatar | 🔴 timer | waveform | 🔒 ] [ 🗑 ]
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(min = 52.dp)
+                                .clip(RoundedCornerShape(26.dp))
+                                .background(if (isDark) Color(0xFF1E2638) else Color.White)
+                                .border(BorderStroke(1.dp, pillBorder), RoundedCornerShape(26.dp))
+                                .padding(horizontal = 8.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
                         // Trash to cancel
                         IconButton(
                             onClick = {
@@ -434,7 +452,7 @@ fun MessageComposer(
                     // HOLD mode: [ Avatar | 🔴 timer | waveform grows | ‹‹ Slide to cancel ]
                     Row(
                         modifier = Modifier
-                            .weight(1f)
+                            .fillMaxWidth()
                             .heightIn(min = 52.dp)
                             .clip(RoundedCornerShape(26.dp))
                             .background(if (isDark) Color(0xFF1E2638) else Color.White)
@@ -557,7 +575,7 @@ fun MessageComposer(
                 // [ 🙂 | Message your love... | 📎 | 📷 ]
                 Row(
                     modifier = Modifier
-                        .weight(1f)
+                        .fillMaxWidth()
                         .heightIn(min = 44.dp)
                         .clip(RoundedCornerShape(26.dp))
                         .background(pillBg)
@@ -689,6 +707,7 @@ fun MessageComposer(
                     }
                 }
             }
+        }
 
             Spacer(modifier = Modifier.width(6.dp))
 

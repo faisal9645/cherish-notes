@@ -187,17 +187,6 @@ fun ChatScreen(
     var tempCameraUri by remember { mutableStateOf<Uri?>(null) }
     var showAttachmentSheet by remember { mutableStateOf(false) }
 
-    val isAnyDialogOpen = showClearChatDialog || showFullProfilePicViewer || showChatMenu || showVideoNoteRecorder || showHeartbeatTouch || showMoodPicker || showAttachmentSheet
-    
-    LaunchedEffect(isAnyDialogOpen) {
-        if (isAnyDialogOpen) {
-            com.example.security.SecurityPreferences.getInstance(context).ignoreNextPause = true
-        } else {
-            kotlinx.coroutines.delay(200)
-            com.example.security.SecurityPreferences.getInstance(context).ignoreNextPause = false
-        }
-    }
-
     val cameraSnapLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.TakePicture()
     ) { success: Boolean ->
@@ -434,28 +423,34 @@ fun ChatScreen(
                 var isHorizontal = false
 
                 while (true) {
-                    val event = awaitPointerEvent()
+                    val event = awaitPointerEvent(PointerEventPass.Main)
                     val change = event.changes.firstOrNull { it.id == down.id } ?: break
                     if (!change.pressed) break
+
+                    // If a child component (like a message bubble swipe-to-reply) consumed the event,
+                    // do not interpret this gesture as a tab switch
+                    if (change.isConsumed) {
+                        break
+                    }
 
                     val delta = change.positionChange()
                     accX += delta.x
                     accY += delta.y
 
-                    if (!directionLocked && (kotlin.math.abs(accX) > 12f || kotlin.math.abs(accY) > 12f)) {
-                        isHorizontal = kotlin.math.abs(accX) > kotlin.math.abs(accY) * 1.35f
+                    if (!directionLocked && (kotlin.math.abs(accX) > 16f || kotlin.math.abs(accY) > 16f)) {
+                        isHorizontal = kotlin.math.abs(accX) > kotlin.math.abs(accY) * 1.8f
                         directionLocked = true
                     }
 
                     if (directionLocked && isHorizontal) {
                         // Swiping right smoothly glides to Love & Us tab
-                        if (accX > 55f) {
+                        if (accX > 70f) {
                             change.consume()
                             onNavigateToHome()
                             break
                         }
                         // Swiping left smoothly glides to Settings / Profile tab
-                        if (accX < -55f) {
+                        if (accX < -70f) {
                             change.consume()
                             onNavigateToProfile()
                             break
@@ -509,7 +504,11 @@ fun ChatScreen(
                                         .clickable(
                                             interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
                                             indication = null
-                                        ) { showFullProfilePicViewer = true }
+                                        ) {
+                                            val app = context.applicationContext as? com.example.CherishApplication
+                                            app?.securityPreferences?.isMediaViewerActive = true
+                                            showFullProfilePicViewer = true
+                                        }
                                 ) {
                                     AvatarView(
                                         photoUrl = partner?.photoUrl,
@@ -857,30 +856,10 @@ fun ChatScreen(
     },
         containerColor = MaterialTheme.colorScheme.background
     ) { paddingValues ->
-        var totalDrag = 0f
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .pointerInput(uiState.isStealthCurtainActive, uiState.isSearching) {
-                    if (uiState.isStealthCurtainActive || uiState.isSearching) return@pointerInput
-                    detectHorizontalDragGestures(
-                        onDragStart = { totalDrag = 0f },
-                        onDragEnd = {
-                            if (totalDrag > 120f) {
-                                onNavigateToHome()
-                            } else if (totalDrag < -120f) {
-                                onNavigateToProfile()
-                            }
-                            totalDrag = 0f
-                        },
-                        onDragCancel = { totalDrag = 0f },
-                        onHorizontalDrag = { change, dragAmount ->
-                            change.consume()
-                            totalDrag += dragAmount
-                        }
-                    )
-                }
         ) {
             // Starred Messages Filter Header Banner
             AnimatedVisibility(visible = uiState.filterStarredOnly) {
@@ -1130,6 +1109,8 @@ fun ChatScreen(
                                         }
                                     },
                                     onImageClick = { url ->
+                                        val app = context.applicationContext as? com.example.CherishApplication
+                                        app?.securityPreferences?.isMediaViewerActive = true
                                         val isVideo = message.getTypedType() == MessageType.VIDEO || message.isVideoNote || message.isCircularVideoNote()
                                         val targetType = if (isVideo) MessageType.VIDEO else MessageType.IMAGE
                                         val mediaList = if (isVideo) {
@@ -1149,6 +1130,8 @@ fun ChatScreen(
                                         viewModel.openFullScreenMedia(url, targetType, mediaList)
                                     },
                                     onImageClickWithList = { url, allUrls ->
+                                        val app = context.applicationContext as? com.example.CherishApplication
+                                        app?.securityPreferences?.isMediaViewerActive = true
                                         val isVideo = message.getTypedType() == MessageType.VIDEO || message.isVideoNote || message.isCircularVideoNote()
                                         val targetType = if (isVideo) MessageType.VIDEO else MessageType.IMAGE
                                         val mediaList = if (isVideo) {
