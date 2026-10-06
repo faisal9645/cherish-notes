@@ -722,6 +722,22 @@ fun ChatScreen(
                                 onDismissRequest = { showChatMenu = false }
                             ) {
                                 DropdownMenuItem(
+                                    text = { Text("Set Mood Status") },
+                                    onClick = {
+                                        showChatMenu = false
+                                        showMoodPicker = true
+                                    },
+                                    leadingIcon = { Icon(Icons.Outlined.Mood, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface) }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Starred Messages") },
+                                    onClick = {
+                                        showChatMenu = false
+                                        viewModel.toggleFilterStarred()
+                                    },
+                                    leadingIcon = { Icon(Icons.Outlined.Star, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface) }
+                                )
+                                DropdownMenuItem(
                                     text = { Text("Clear Chat") },
                                     onClick = {
                                         showChatMenu = false
@@ -733,6 +749,7 @@ fun ChatScreen(
                                     text = { Text("Logout") },
                                     onClick = {
                                         showChatMenu = false
+                                        viewModel.logout()
                                         onLoggedOut()
                                     },
                                     leadingIcon = { Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface) }

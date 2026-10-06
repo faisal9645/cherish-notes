@@ -780,9 +780,6 @@ fun CherishNavGraph(
                     .clickable {
                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                         app.securityPreferences.reDisguise()
-                        try {
-                            navController.popBackStack(Screen.Chat.route, inclusive = false)
-                        } catch (_: Exception) {}
                     }
                     .testTag("side_emergency_exit_toggle")
             ) {

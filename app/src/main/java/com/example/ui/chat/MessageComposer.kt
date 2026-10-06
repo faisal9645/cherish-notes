@@ -280,7 +280,7 @@ fun MessageComposer(
                     shadowElevation = 2.dp,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(start = 8.dp, end = 8.dp, bottom = 4.dp),
+                        .padding(start = 6.dp, end = 6.dp, bottom = 4.dp),
                     shape = RoundedCornerShape(16.dp)
                 ) {
                     Row(
@@ -1112,7 +1112,7 @@ fun MessageComposer(
                                         .padding(vertical = 4.dp),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    Text(text = emoji, fontSize = 32.sp)
+                                    Text(text = emoji, fontSize = 40.sp)
                                 }
                             }
                         }

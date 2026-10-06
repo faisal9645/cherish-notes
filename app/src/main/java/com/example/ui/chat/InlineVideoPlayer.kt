@@ -343,8 +343,8 @@ fun InlineYouTubeCard(
         shape = RoundedCornerShape(16.dp),
         color = Color(0xFF1E1E24),
         border = BorderStroke(
-            width = if (isPlayingInline) 1.5.dp else 1.dp,
-            color = if (isPlayingInline) Color(0xFFFF0000).copy(alpha = 0.8f) else Color(0xFF2E2E34)
+            width = 1.dp,
+            color = Color(0xFF2E2E34)
         ),
         modifier = modifier
             .fillMaxWidth()
@@ -564,6 +564,11 @@ fun InlineVideoTheaterModal(
             if (window != null) {
                 window.statusBarColor = android.graphics.Color.BLACK
                 window.navigationBarColor = android.graphics.Color.BLACK
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+                    window.attributes = window.attributes.apply {
+                        layoutInDisplayCutoutMode = android.view.WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+                    }
+                }
                 window.setLayout(
                     android.view.ViewGroup.LayoutParams.MATCH_PARENT,
                     android.view.ViewGroup.LayoutParams.MATCH_PARENT
@@ -594,8 +599,8 @@ fun InlineVideoTheaterModal(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .statusBarsPadding()
-                        .padding(horizontal = 20.dp, vertical = 12.dp),
+                        .safeDrawingPadding()
+                        .padding(horizontal = 32.dp, vertical = 16.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -612,7 +617,7 @@ fun InlineVideoTheaterModal(
                             Icon(
                                 Icons.Filled.Movie,
                                 contentDescription = null,
-                                tint = Color(0xFFFF0000),
+                                tint = Color.White,
                                 modifier = Modifier.size(16.dp)
                             )
                             Spacer(modifier = Modifier.width(6.dp))
