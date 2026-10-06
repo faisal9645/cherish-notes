@@ -67,7 +67,7 @@ def create_github_release(token: str, version_code: int, version_name: str) -> d
     payload = {
         "tag_name": tag,
         "name": f"v{version_name} (build {version_code})",
-        "body": f"Cherish v{version_name} (Build {version_code}):\n• Physics Wave Typing Dots: fluid sinusoidal wave with dynamic squash-and-stretch\n• Elastic Swipe-to-Reply: non-linear rubber-band tension with haptic detent\n• Squash & Stretch Send Pop: punchy outgoing bubble animation\n• Physics Reaction Bursts: 8 floating emoji particles with air drag & angular flutter\n• Battery Heartbeat Shimmer: pulsing glow when partner's phone drops below 15%\n• Animated Status Checkmarks: spring-bounce transitions with read glow\n• 3 Concentric Breathing Rings: mic recording rings scaled to live amplitude\n• Circle Video Gallery: video notes shown as circle thumbnails with play overlay\n• Enhanced Slide-to-Cancel: improved rubber-band damping & trash magnetism",
+        "body": f"Cherish v{version_name} (Build {version_code}):\n• Full photo visibility with adaptive thumbnail sizing\n• Fixed photo viewer thumbnails filmstrip\n• Video note recorder enlarged (310dp) with seamless circular clipping\n• Retained chat scroll position on tab navigation\n• YouTube inline player with glowing theme border\n• Fullscreen landscape theater mode with floating close button\n• Recover all chats & gallery restore icon in settings\n• Dark mode whitish flash fixes\n• Integrated typing indicator in chat wallpaper",
         "draft": False,
         "prerelease": False,
     }

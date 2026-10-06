@@ -73,7 +73,7 @@ class OtaUpdateManager private constructor(private val appContext: Context) {
             val publishedAt = json.optString("published_at", "")
 
             // Parse version code from tag name (e.g. "v1.1.1-12" -> 12, or fallback to version numbers)
-            val remoteVersionCode = parseVersionCode(tagName)
+            var remoteVersionCode = parseVersionCode(tagName)
             val remoteVersionName = parseVersionName(tagName)
 
             var apkDownloadUrl = ""
@@ -87,14 +87,25 @@ class OtaUpdateManager private constructor(private val appContext: Context) {
                     if (name.endsWith(".apk", ignoreCase = true)) {
                         apkDownloadUrl = asset.optString("browser_download_url", "")
                         apkSize = asset.optLong("size", 0L)
+                        
+                        // Fallback to extracting version code from APK name if tag didn't have it
+                        if (remoteVersionCode <= 0) {
+                            val match = Regex("(\\d+)\\.apk", RegexOption.IGNORE_CASE).find(name)
+                            if (match != null) {
+                                remoteVersionCode = match.groupValues[1].toIntOrNull() ?: remoteVersionCode
+                            }
+                        }
                         break
                     }
                 }
             }
 
             val currentCode = BuildConfig.VERSION_CODE
-            val isNewer = isSemanticVersionNewer(remoteVersionName, BuildConfig.VERSION_NAME) || 
-                (remoteVersionName == BuildConfig.VERSION_NAME && remoteVersionCode > currentCode)
+            val isNewer = if (remoteVersionCode > 0) {
+                remoteVersionCode > currentCode
+            } else {
+                isSemanticVersionNewer(remoteVersionName, BuildConfig.VERSION_NAME)
+            }
 
             val info = UpdateInfo(
                 hasUpdate = isNewer && apkDownloadUrl.isNotBlank(),
@@ -139,18 +150,20 @@ class OtaUpdateManager private constructor(private val appContext: Context) {
                 readTimeout = 30000
             }
 
-            // Handle redirect if needed
+            // Handle redirects if needed (up to 5 times)
             var redirectConn = conn
             var responseCode = redirectConn.responseCode
-            if (responseCode == HttpURLConnection.HTTP_MOVED_PERM || 
-                responseCode == HttpURLConnection.HTTP_MOVED_TEMP || 
-                responseCode == 307 || responseCode == 308) {
+            var redirectCount = 0
+            while (responseCode in arrayOf(HttpURLConnection.HTTP_MOVED_PERM, HttpURLConnection.HTTP_MOVED_TEMP, 307, 308) && redirectCount < 5) {
                 val newUrl = redirectConn.getHeaderField("Location")
+                if (newUrl == null) break
                 redirectConn = (URL(newUrl).openConnection() as HttpURLConnection).apply {
                     setRequestProperty("User-Agent", "CherishApp/${BuildConfig.VERSION_NAME}")
                     connectTimeout = 15000
                     readTimeout = 30000
                 }
+                responseCode = redirectConn.responseCode
+                redirectCount++
             }
 
             val totalBytes = redirectConn.contentLengthLong.let { if (it <= 0) info.assetSize else it }
