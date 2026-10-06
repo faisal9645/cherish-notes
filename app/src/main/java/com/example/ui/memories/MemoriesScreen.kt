@@ -263,7 +263,12 @@ fun AddMemoryDialog(
 
     val photoPicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia()
-    ) { uri -> selectedImageUri = uri }
+    ) { uri -> 
+        val prefs = com.example.security.SecurityPreferences.getInstance(context)
+        prefs.isExternalPickerActive = false
+        prefs.ignoreNextPause = false
+        selectedImageUri = uri 
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -300,7 +305,9 @@ fun AddMemoryDialog(
 
                 Button(
                     onClick = {
-                        com.example.security.SecurityPreferences.getInstance(context).ignoreNextPause = true
+                        val prefs = com.example.security.SecurityPreferences.getInstance(context)
+                        prefs.isExternalPickerActive = true
+                        prefs.ignoreNextPause = true
                         photoPicker.launch(
                             PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
                         )

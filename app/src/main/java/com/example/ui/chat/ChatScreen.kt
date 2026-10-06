@@ -145,6 +145,9 @@ fun ChatScreen(
     val photoPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickMultipleVisualMedia(maxItems = 20)
     ) { uris: List<Uri> ->
+        val prefs = com.example.security.SecurityPreferences.getInstance(context)
+        prefs.isExternalPickerActive = false
+        prefs.ignoreNextPause = false
         if (isHandlingMedia) return@rememberLauncherForActivityResult
         val distinctUris = uris.distinct()
         if (distinctUris.isNotEmpty()) {
@@ -162,13 +165,13 @@ fun ChatScreen(
         }
     }
 
-
-
-
     // Video picker launcher for sharing videos
     val videoPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia()
     ) { uri: Uri? ->
+        val prefs = com.example.security.SecurityPreferences.getInstance(context)
+        prefs.isExternalPickerActive = false
+        prefs.ignoreNextPause = false
         if (uri != null) {
             viewModel.sendMediaFile(uri, MessageType.VIDEO)
         }
@@ -190,6 +193,9 @@ fun ChatScreen(
     val cameraSnapLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.TakePicture()
     ) { success: Boolean ->
+        val prefs = com.example.security.SecurityPreferences.getInstance(context)
+        prefs.isExternalPickerActive = false
+        prefs.ignoreNextPause = false
         if (success) {
             tempCameraUri?.let { uri ->
                 viewModel.sendMediaFile(uri, MessageType.IMAGE)
@@ -209,9 +215,14 @@ fun ChatScreen(
                 photoFile
             )
             tempCameraUri = uri
-            com.example.security.SecurityPreferences.getInstance(context).ignoreNextPause = true
+            val prefs = com.example.security.SecurityPreferences.getInstance(context)
+            prefs.isExternalPickerActive = true
+            prefs.ignoreNextPause = true
             cameraSnapLauncher.launch(uri)
         } catch (e: Exception) {
+            val prefs = com.example.security.SecurityPreferences.getInstance(context)
+            prefs.isExternalPickerActive = false
+            prefs.ignoreNextPause = false
             Toast.makeText(context, "Could not open camera: ${e.message}", Toast.LENGTH_SHORT).show()
         }
     }
@@ -219,6 +230,9 @@ fun ChatScreen(
     val cameraPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
     ) { isGranted ->
+        val prefs = com.example.security.SecurityPreferences.getInstance(context)
+        prefs.isExternalPickerActive = false
+        prefs.ignoreNextPause = false
         if (isGranted) {
             launchRealtimeCameraSnap()
         } else {
@@ -234,7 +248,9 @@ fun ChatScreen(
         if (hasCamera) {
             launchRealtimeCameraSnap()
         } else {
-            com.example.security.SecurityPreferences.getInstance(context).ignoreNextPause = true
+            val prefs = com.example.security.SecurityPreferences.getInstance(context)
+            prefs.isExternalPickerActive = true
+            prefs.ignoreNextPause = true
             cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
         }
     }
@@ -351,7 +367,7 @@ fun ChatScreen(
         }
     }
 
-    // Android back button & gesture: handle in-app dialogs first, else return to disguise Notes
+    // Android back button & gesture: handle in-app dialogs first, else return to Home tab
     val isImeVisible = androidx.compose.foundation.layout.WindowInsets.isImeVisible
     BackHandler(enabled = true) {
         if (isImeVisible) {
@@ -360,12 +376,32 @@ fun ChatScreen(
             viewModel.closeTheaterVideo()
         } else if (uiState.fullScreenMediaUrl != null) {
             viewModel.closeFullScreenMedia()
-        } else if (uiState.isSearching) {
-            viewModel.setSearching(false)
+        } else if (showFullProfilePicViewer) {
+            showFullProfilePicViewer = false
+        } else if (showClearChatDialog) {
+            showClearChatDialog = false
+        } else if (showDeleteConfirmDialog != null) {
+            showDeleteConfirmDialog = null
+        } else if (editingMessage != null) {
+            editingMessage = null
+        } else if (showAttachmentSheet) {
+            showAttachmentSheet = false
         } else if (showChatMenu) {
             showChatMenu = false
+        } else if (showVideoNoteRecorder) {
+            showVideoNoteRecorder = false
+        } else if (showHeartbeatTouch) {
+            showHeartbeatTouch = false
+        } else if (showMoodPicker) {
+            showMoodPicker = false
+        } else if (uiState.selectedMessageForActions != null) {
+            viewModel.setSelectedMessageForActions(null)
+        } else if (uiState.replyingToMessage != null) {
+            viewModel.setReplyingTo(null)
+        } else if (uiState.isSearching) {
+            viewModel.setSearching(false)
         } else {
-            onQuickDisguise()
+            onNavigateToHome()
         }
     }
 
@@ -644,7 +680,7 @@ fun ChatScreen(
                             if (uiState.isSearching) {
                                 viewModel.setSearching(false)
                             } else {
-                                onQuickDisguise()
+                                onNavigateToHome()
                             }
                         },
                         modifier = Modifier
@@ -1026,11 +1062,7 @@ fun ChatScreen(
 
                 LazyColumn(
                     state = listState,
-                    modifier = Modifier.fillMaxSize().pointerInput(Unit) {
-                        detectTapGestures(
-                            onDoubleTap = { onQuickDisguise() }
-                        )
-                    },
+                    modifier = Modifier.fillMaxSize(),
                     reverseLayout = true,
                     contentPadding = PaddingValues(vertical = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp)
@@ -1393,7 +1425,9 @@ fun ChatScreen(
                         color = Color(0xFF6C5CE7),
                         onClick = {
                             showAttachmentSheet = false
-                            com.example.security.SecurityPreferences.getInstance(context).ignoreNextPause = true
+                            val prefs = com.example.security.SecurityPreferences.getInstance(context)
+                            prefs.isExternalPickerActive = true
+                            prefs.ignoreNextPause = true
                             photoPickerLauncher.launch(
                                 PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
                             )
@@ -1406,7 +1440,9 @@ fun ChatScreen(
                         color = RoseGoldPrimary,
                         onClick = {
                             showAttachmentSheet = false
-                            com.example.security.SecurityPreferences.getInstance(context).ignoreNextPause = true
+                            val prefs = com.example.security.SecurityPreferences.getInstance(context)
+                            prefs.isExternalPickerActive = true
+                            prefs.ignoreNextPause = true
                             videoPickerLauncher.launch(
                                 PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly)
                             )
@@ -1544,10 +1580,18 @@ fun ChatScreen(
             FullScreenMediaViewer(
                 mediaUrl = photoUrl,
                 allMediaUrls = listOf(photoUrl),
-                onDismiss = { showFullProfilePicViewer = false }
+                onDismiss = {
+                    val app = context.applicationContext as? com.example.CherishApplication
+                    app?.securityPreferences?.isMediaViewerActive = false
+                    showFullProfilePicViewer = false
+                }
             )
         } else {
-            androidx.compose.ui.window.Dialog(onDismissRequest = { showFullProfilePicViewer = false }) {
+            androidx.compose.ui.window.Dialog(onDismissRequest = {
+                val app = context.applicationContext as? com.example.CherishApplication
+                app?.securityPreferences?.isMediaViewerActive = false
+                showFullProfilePicViewer = false
+            }) {
                 Surface(
                     shape = RoundedCornerShape(24.dp),
                     color = MaterialTheme.colorScheme.surface,
@@ -1596,7 +1640,11 @@ fun ChatScreen(
                         )
                         Spacer(modifier = Modifier.height(20.dp))
                         Button(
-                            onClick = { showFullProfilePicViewer = false },
+                            onClick = {
+                                val app = context.applicationContext as? com.example.CherishApplication
+                                app?.securityPreferences?.isMediaViewerActive = false
+                                showFullProfilePicViewer = false
+                            },
                             shape = RoundedCornerShape(12.dp),
                             modifier = Modifier.fillMaxWidth()
                         ) {

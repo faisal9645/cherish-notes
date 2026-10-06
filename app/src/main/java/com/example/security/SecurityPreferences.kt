@@ -34,6 +34,12 @@ class SecurityPreferences(context: Context) {
      */
     var isMediaViewerActive: Boolean = false
 
+    /**
+     * Set to true while system pickers (Photo Picker, Camera, Documents, Biometric) are active
+     * so that Activity transitions and pause/stop events never trigger disguise mode.
+     */
+    var isExternalPickerActive: Boolean = false
+
 
     private val _isDisguiseActive = MutableStateFlow(prefs.getBoolean(KEY_DISGUISE_ENABLED, true))
     val isDisguiseActive: StateFlow<Boolean> = _isDisguiseActive.asStateFlow()
@@ -87,7 +93,8 @@ class SecurityPreferences(context: Context) {
     }
 
     fun reDisguise() {
-        if (ignoreNextPause || ignoreChatNavigation || isTheaterModeActive || isMediaViewerActive) return
+        if (!isDisguiseModeEnabled()) return
+        if (ignoreNextPause || ignoreChatNavigation || isTheaterModeActive || isMediaViewerActive || isExternalPickerActive) return
         _hasRevealedSecretAppInSession.value = false
         _isDisguiseActive.value = true
         setShowPreviousChatsEnabled(false)
@@ -96,6 +103,21 @@ class SecurityPreferences(context: Context) {
         } catch (_: Exception) {}
         // Ensure that when the app is backgrounded in Private Mode, 
         // it does not restore to the private chat screen upon reopening.
+        setChatExperienceMode(com.example.ui.chat.ChatExperienceMode.NORMAL)
+    }
+
+    /**
+     * For manual emergency triggers only (e.g. Side Emergency Exit button, Panic button in Settings).
+     * Bypasses transient view flags to immediately disguise into Notes.
+     */
+    fun forceDisguise() {
+        if (!isDisguiseModeEnabled()) return
+        _hasRevealedSecretAppInSession.value = false
+        _isDisguiseActive.value = true
+        setShowPreviousChatsEnabled(false)
+        try {
+            com.example.CherishApplication.instance.chatRepository.resetPreviousChats()
+        } catch (_: Exception) {}
         setChatExperienceMode(com.example.ui.chat.ChatExperienceMode.NORMAL)
     }
 

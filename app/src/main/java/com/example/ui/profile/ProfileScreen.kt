@@ -176,9 +176,14 @@ fun ProfileScreen(
                     photoFile
                 )
                 tempCameraUri = uri
-                com.example.security.SecurityPreferences.getInstance(context).ignoreNextPause = true
+                val prefs = com.example.security.SecurityPreferences.getInstance(context)
+                prefs.isExternalPickerActive = true
+                prefs.ignoreNextPause = true
                 cameraLauncher.launch(uri)
             } catch (e: Exception) {
+                val prefs = com.example.security.SecurityPreferences.getInstance(context)
+                prefs.isExternalPickerActive = false
+                prefs.ignoreNextPause = false
                 Toast.makeText(context, "Could not open camera: ${e.message}", Toast.LENGTH_SHORT).show()
             }
         } else {
@@ -187,13 +192,18 @@ fun ProfileScreen(
     }
 
     fun launchCameraForAvatar() {
-        com.example.security.SecurityPreferences.getInstance(context).ignoreNextPause = true
+        val prefs = com.example.security.SecurityPreferences.getInstance(context)
+        prefs.isExternalPickerActive = true
+        prefs.ignoreNextPause = true
         cameraPermissionLauncher.launch(android.Manifest.permission.CAMERA)
     }
 
     val photoPicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia()
     ) { uri: Uri? ->
+        val prefs = com.example.security.SecurityPreferences.getInstance(context)
+        prefs.isExternalPickerActive = false
+        prefs.ignoreNextPause = false
         if (uri != null) {
             viewModel.updateAvatar(uri) {
                 Toast.makeText(context, "Profile photo updated ✨", Toast.LENGTH_SHORT).show()
@@ -1709,7 +1719,9 @@ fun ProfileScreen(
                             .fillMaxWidth()
                             .clickable {
                                 showAvatarOptionsDialog = false
-                                com.example.security.SecurityPreferences.getInstance(context).ignoreNextPause = true
+                                val prefs = com.example.security.SecurityPreferences.getInstance(context)
+                                prefs.isExternalPickerActive = true
+                                prefs.ignoreNextPause = true
                                 photoPicker.launch(
                                     PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
                                 )

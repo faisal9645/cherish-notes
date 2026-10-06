@@ -98,6 +98,21 @@ class CherishApplication : Application(), coil.ImageLoaderFactory {
         )
 
         com.example.notifications.NoteReminderScheduler.rescheduleAllUpcomingReminders(this, notesRepository)
+
+        androidx.lifecycle.ProcessLifecycleOwner.get().lifecycle.addObserver(
+            androidx.lifecycle.LifecycleEventObserver { _, event ->
+                if (event == androidx.lifecycle.Lifecycle.Event.ON_STOP) {
+                    if (securityPreferences.isDisguiseModeEnabled() &&
+                        !securityPreferences.ignoreNextPause &&
+                        !securityPreferences.ignoreChatNavigation &&
+                        !securityPreferences.isExternalPickerActive &&
+                        !securityPreferences.isMediaViewerActive &&
+                        !securityPreferences.isTheaterModeActive) {
+                        securityPreferences.reDisguise()
+                    }
+                }
+            }
+        )
     }
 
     companion object {

@@ -53,8 +53,13 @@ fun HomeScreen(
     onNavigateToCloudBackup: () -> Unit = {},
     onQuickDisguise: () -> Unit = {}
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     BackHandler {
-        onQuickDisguise()
+        val app = context.applicationContext as? com.example.CherishApplication
+        if (app?.securityPreferences?.isDisguiseModeEnabled() == true) {
+            app.securityPreferences.reDisguise()
+        }
+        (context as? android.app.Activity)?.moveTaskToBack(true)
     }
 
     val uiState by viewModel.uiState.collectAsState()

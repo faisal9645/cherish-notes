@@ -185,21 +185,19 @@ class MainActivity : FragmentActivity() {
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
-        // Immediately disguise on focus loss (e.g., bottom gesture glide) to protect privacy in recent apps
-        if (!hasFocus && !isChangingConfigurations) {
-            if (!app.securityPreferences.ignoreNextPause && 
-                !app.securityPreferences.ignoreChatNavigation && 
-                !app.securityPreferences.isTheaterModeActive &&
-                !app.securityPreferences.isMediaViewerActive) {
-                app.securityPreferences.reDisguise()
-            }
-        }
+        // Window focus changes happen during normal in-app interactions (dialogs, dropdowns,
+        // photo viewer, keyboard, bottom sheets, permission popups). NEVER trigger re-disguise here.
     }
 
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
         if (isChangingConfigurations) return
-        if (!app.securityPreferences.ignoreNextPause && !app.securityPreferences.ignoreChatNavigation) {
+        if (!app.securityPreferences.ignoreNextPause && 
+            !app.securityPreferences.ignoreChatNavigation && 
+            !app.securityPreferences.isTheaterModeActive &&
+            !app.securityPreferences.isMediaViewerActive &&
+            !app.securityPreferences.isExternalPickerActive &&
+            app.securityPreferences.isDisguiseModeEnabled()) {
             app.securityPreferences.reDisguise()
         }
     }
@@ -212,12 +210,17 @@ class MainActivity : FragmentActivity() {
         super.onStop()
         if (isChangingConfigurations) return
         app.authRepository.onAppForegroundStateChanged(false)
-        // ALWAYS re-disguise when the Activity stops (user backgrounded the app),
-        // but NEVER if in-app navigation, media viewer, or theater mode is active.
-        if (!app.securityPreferences.ignoreNextPause && !app.securityPreferences.ignoreChatNavigation && !app.securityPreferences.isTheaterModeActive) {
+        // Re-disguise ONLY when the user truly leaves the app (activity stopped without active picker/viewer),
+        // and disguise mode is enabled in user settings.
+        if (!app.securityPreferences.ignoreNextPause && 
+            !app.securityPreferences.ignoreChatNavigation && 
+            !app.securityPreferences.isTheaterModeActive &&
+            !app.securityPreferences.isMediaViewerActive &&
+            !app.securityPreferences.isExternalPickerActive &&
+            app.securityPreferences.isDisguiseModeEnabled()) {
             app.securityPreferences.reDisguise()
         }
-        if (!app.securityPreferences.ignoreChatNavigation && !app.securityPreferences.isTheaterModeActive) {
+        if (!app.securityPreferences.ignoreChatNavigation && !app.securityPreferences.isTheaterModeActive && !app.securityPreferences.isExternalPickerActive) {
             app.securityPreferences.ignoreNextPause = false
         }
         app.googleDriveBackupManager.triggerImmediateAutoBackup()
