@@ -174,13 +174,20 @@ class ProfileViewModel(
         }
     }
 
-    fun setNotificationsEnabled(enabled: Boolean) {
+    fun setNotificationsEnabled(context: android.content.Context, enabled: Boolean) {
         securityPreferences.setNotificationsEnabled(enabled)
+        if (!enabled) {
+            com.example.notifications.NotificationHelper.clearNotifications(context)
+            com.example.notifications.NotificationHelper.updateLauncherBadge(context, 0)
+        }
         _uiState.update { it.copy(isNotificationsEnabled = enabled) }
     }
 
-    fun setBadgeNotificationEnabled(enabled: Boolean) {
+    fun setBadgeNotificationEnabled(context: android.content.Context, enabled: Boolean) {
         securityPreferences.setBadgeNotificationEnabled(enabled)
+        if (!enabled) {
+            com.example.notifications.NotificationHelper.updateLauncherBadge(context, 0)
+        }
         _uiState.update { it.copy(isBadgeNotificationEnabled = enabled) }
     }
 

@@ -74,7 +74,6 @@ class VoiceRecorderHelper(private val context: Context) {
                         flutter
                     }
                     ampList.add(normalized)
-                    if (ampList.size > 45) ampList.removeAt(0)
                     _amplitudes.value = ampList.toList()
 
                     delay(100)

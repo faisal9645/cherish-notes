@@ -238,24 +238,25 @@ fun ChatScreen(
         }
     }
 
-    // Only auto-scroll to bottom when a genuinely new message arrives while near bottom — never hijack scroll mid-history or on tab switch
-    val prevNewestMessageTimestamp = rememberSaveable {
-        mutableLongStateOf(uiState.messages.maxOfOrNull { it.timestamp } ?: 0L)
-    }
-    LaunchedEffect(uiState.messages) {
-        val newestMessage = uiState.messages.maxByOrNull { it.timestamp }
-        if (newestMessage != null) {
-            if (prevNewestMessageTimestamp.longValue == 0L) {
-                // Initial message load: record timestamp without hijacking user's scroll position
-                prevNewestMessageTimestamp.longValue = newestMessage.timestamp
-            } else if (newestMessage.timestamp > prevNewestMessageTimestamp.longValue) {
-                val isNearBottom = listState.firstVisibleItemIndex <= 1
-                val iSentIt = newestMessage.senderId == uiState.currentUser?.id
-                if (isNearBottom || iSentIt) {
-                    listState.animateScrollToItem(0)
-                }
-                prevNewestMessageTimestamp.longValue = newestMessage.timestamp
+    val isInitialLoad = rememberSaveable { mutableStateOf(true) }
+    val prevMessageCount = rememberSaveable { mutableIntStateOf(uiState.messages.size) }
+
+    LaunchedEffect(uiState.messages.size) {
+        val currentSize = uiState.messages.size
+        if (isInitialLoad.value && currentSize > 0) {
+            // Initial message load: record size without hijacking user's scroll position
+            isInitialLoad.value = false
+            prevMessageCount.intValue = currentSize
+        } else if (!isInitialLoad.value && currentSize > prevMessageCount.intValue) {
+            val isNearBottom = listState.firstVisibleItemIndex <= 1
+            val newestMessage = uiState.messages.maxByOrNull { it.timestamp }
+            val iSentIt = newestMessage?.senderId == uiState.currentUser?.id
+            if (isNearBottom || iSentIt == true) {
+                listState.animateScrollToItem(0)
             }
+            prevMessageCount.intValue = currentSize
+        } else {
+            prevMessageCount.intValue = currentSize
         }
     }
 
@@ -350,7 +351,8 @@ fun ChatScreen(
     }
 
     // Android back button & gesture: handle in-app dialogs first, else return to disguise Notes
-    BackHandler {
+    val isImeVisible = androidx.compose.foundation.layout.WindowInsets.isImeVisible
+    BackHandler(enabled = !isImeVisible) {
         if (uiState.theaterVideoId != null) {
             viewModel.closeTheaterVideo()
         } else if (uiState.fullScreenMediaUrl != null) {
@@ -705,69 +707,7 @@ fun ChatScreen(
                             }
                         }
 
-                        Box {
-                            IconButton(
-                                onClick = { showChatMenu = true },
-                                modifier = Modifier
-                                    .size(40.dp)
-                                    .testTag("chat_more_menu_button")
-                            ) {
-                                Icon(Icons.Default.MoreVert, contentDescription = "More options", tint = iconTint, modifier = Modifier.size(23.dp))
-                            }
-                            DropdownMenu(
-                                expanded = showChatMenu,
-                                onDismissRequest = { showChatMenu = false }
-                            ) {
-                                DropdownMenuItem(
-                                    text = { Text("Set Mood & Status 🥰") },
-                                    onClick = {
-                                        showChatMenu = false
-                                        showMoodPicker = true
-                                    },
-                                    leadingIcon = {
-                                        Icon(Icons.Outlined.Mood, null, tint = RoseGoldPrimary)
-                                    }
-                                )
-
-                                DropdownMenuItem(
-                                    text = { Text(if (uiState.filterStarredOnly) "Show All Messages" else "Starred Messages ⭐") },
-                                    onClick = {
-                                        showChatMenu = false
-                                        viewModel.toggleFilterStarred()
-                                    },
-                                    leadingIcon = {
-                                        Icon(if (uiState.filterStarredOnly) Icons.Filled.Star else Icons.Outlined.StarOutline, null, tint = GoldMilestone)
-                                    }
-                                )
-
-
-                                DropdownMenuItem(
-                                    text = { Text("Clear Chat", color = MaterialTheme.colorScheme.error) },
-                                    onClick = {
-                                        showChatMenu = false
-                                        showClearChatDialog = true
-                                    },
-                                    leadingIcon = {
-                                        Icon(Icons.Default.DeleteSweep, null, tint = MaterialTheme.colorScheme.error)
-                                    }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("Log Out", color = MaterialTheme.colorScheme.error) },
-                                    onClick = {
-                                        showChatMenu = false
-                                        viewModel.logout()
-                                        onLoggedOut()
-                                    },
-                                    leadingIcon = {
-                                        Icon(
-                                            Icons.AutoMirrored.Filled.Logout,
-                                            null,
-                                            tint = MaterialTheme.colorScheme.error
-                                        )
-                                    }
-                                )
-                            }
-                        }
+                        // 3-dots menu removed per user request
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -1057,6 +997,76 @@ fun ChatScreen(
                     contentPadding = PaddingValues(vertical = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
+                    item(key = "typing_indicator", contentType = "typing") {
+                        androidx.compose.animation.AnimatedVisibility(
+                            visible = (uiState.isPartnerRecordingAudio || uiState.isPartnerTyping) && !uiState.isStealthCurtainActive,
+                            enter = androidx.compose.animation.expandVertically() + fadeIn(),
+                            exit = androidx.compose.animation.shrinkVertically() + fadeOut(),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(start = 16.dp, bottom = 4.dp, top = 4.dp)
+                        ) {
+                            val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+                            val isPrivate = uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE
+                            Row(
+                                horizontalArrangement = Arrangement.Start
+                            ) {
+                                Surface(
+                                    color = if (isPrivate) {
+                                        if (isDark) Color(0xFF26272B) else Color(0xFFE5E7EB)
+                                    } else {
+                                        if (isDark) Color(0xFF1E2638) else Color(0xFFF1F5FB)
+                                    },
+                                    shape = RoundedCornerShape(18.dp, 18.dp, 18.dp, 4.dp),
+                                    border = BorderStroke(
+                                        0.5.dp,
+                                        if (isPrivate) {
+                                            if (isDark) Color(0xFF38393E) else Color(0xFFE5E7EB)
+                                        } else {
+                                            if (isDark) Color(0xFF2A364F) else Color(0xFFE2E8F0)
+                                        }
+                                    ),
+                                    shadowElevation = if (isPrivate) 0.5.dp else 0.8.dp
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        if (uiState.isPartnerRecordingAudio) {
+                                            Icon(
+                                                imageVector = Icons.Default.Mic,
+                                                contentDescription = null,
+                                                tint = if (isPrivate) MaterialTheme.colorScheme.onSurfaceVariant else RoseGoldPrimary,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text(
+                                                text = if (isPrivate)
+                                                    "recording audio..."
+                                                else
+                                                    "$partnerName is recording...",
+                                                fontSize = 12.5.sp,
+                                                color = if (isPrivate) MaterialTheme.colorScheme.onSurfaceVariant else RoseGoldPrimary,
+                                                fontWeight = FontWeight.Medium
+                                            )
+                                        } else {
+                                            if (!isPrivate) {
+                                                Text(
+                                                    text = "$partnerName is typing",
+                                                    fontSize = 12.5.sp,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    fontWeight = FontWeight.Medium
+                                                )
+                                                Spacer(modifier = Modifier.width(6.dp))
+                                            }
+                                            BouncingDots(color = if (isPrivate) MaterialTheme.colorScheme.onSurfaceVariant else RoseGoldPrimary)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
                     itemsIndexed(
                         items = reversedMessages,
                         key = { _, msg -> msg.id },
@@ -1241,19 +1251,7 @@ fun ChatScreen(
                     }
 
                     // Strictly 2-Person Beginning of Chat Banner (shown when pagination is exhausted)
-                    val showBeginning = (uiState.isPaginationExhausted || displayedMessages.isEmpty())
-                    if (showBeginning) {
-                        item(key = "info_card", contentType = "info_card") {
-                            StrictlyPrivateChatBeginningBanner(
-                                currentUser = uiState.currentUser,
-                                partnerUser = uiState.partnerUser,
-                                partnerName = partnerName,
-                                isPrivateMode = (uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE),
-                                isDark = isDark
-                            )
-                        }
-                    }
-            }
+            } // Box content end
 
 
             // Floating scroll to bottom button
@@ -1319,70 +1317,7 @@ fun ChatScreen(
                 }
             }
 
-            // Partner typing / recording animated bubble - floats seamlessly over chat wallpaper at bottom-start
-            androidx.compose.animation.AnimatedVisibility(
-                visible = (uiState.isPartnerRecordingAudio || uiState.isPartnerTyping) && !uiState.isStealthCurtainActive,
-                enter = androidx.compose.animation.expandVertically() + fadeIn(),
-                exit = androidx.compose.animation.shrinkVertically() + fadeOut(),
-                modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .padding(start = 16.dp, bottom = 8.dp)
-            ) {
-                val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
-                val isPrivate = uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE
-                Row(
-                    horizontalArrangement = Arrangement.Start
-                ) {
-                    Surface(
-                        color = if (isPrivate) {
-                            if (isDark) Color(0xFF26272B) else Color(0xFFE5E7EB)
-                        } else {
-                            if (isDark) Color(0xFF1E2638) else Color.White
-                        },
-                        shape = RoundedCornerShape(18.dp, 18.dp, 18.dp, 4.dp),
-                        border = BorderStroke(
-                            0.8.dp,
-                            if (isDark) TrueDarkOutline else Color(0xFFE2E8F0)
-                        ),
-                        shadowElevation = 4.dp
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            if (uiState.isPartnerRecordingAudio) {
-                                Icon(
-                                    imageVector = Icons.Default.Mic,
-                                    contentDescription = null,
-                                    tint = if (isPrivate) MaterialTheme.colorScheme.onSurfaceVariant else RoseGoldPrimary,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(
-                                    text = if (isPrivate)
-                                        "recording audio..."
-                                    else
-                                        "$partnerName is recording...",
-                                    fontSize = 12.5.sp,
-                                    color = if (isPrivate) MaterialTheme.colorScheme.onSurfaceVariant else RoseGoldPrimary,
-                                    fontWeight = FontWeight.Medium
-                                )
-                            } else {
-                                if (!isPrivate) {
-                                    Text(
-                                        text = "$partnerName is typing",
-                                        fontSize = 12.5.sp,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        fontWeight = FontWeight.Medium
-                                    )
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                }
-                                BouncingDots(color = if (isPrivate) MaterialTheme.colorScheme.onSurfaceVariant else RoseGoldPrimary)
-                            }
-                        }
-                    }
-                }
-            }
+            // (Partner typing / recording animated bubble moved into LazyColumn)
 
             } // Close Box(modifier = Modifier.weight(1f).fillMaxWidth())
         }
@@ -1882,7 +1817,7 @@ fun StealthDisguiseNotesView(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.surface)
+            .background(MaterialTheme.colorScheme.background)
             .padding(24.dp)
             .pointerInput(Unit) {
                 detectTapGestures(

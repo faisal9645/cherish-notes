@@ -59,6 +59,7 @@ fun HeartbeatTouchDialog(
     LaunchedEffect(shouldFeelHeartbeat(isBothTouching)) {
         if (isBothTouching) {
             hapticHelper.startHeartbeat()
+            viewModel.syncHeartbeatStreak()
         } else {
             hapticHelper.stopHeartbeat()
         }

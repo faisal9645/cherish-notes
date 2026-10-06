@@ -11,7 +11,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -509,52 +509,7 @@ fun SharedGalleryScreen(
                 }
             }
 
-            // Today's Gallery Indicator with 1-tap Recover All
-            if (!isAllGalleryRecovered && selectedDateMillis == null) {
-                Surface(
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 14.dp, vertical = 4.dp)
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 12.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Default.CalendarToday,
-                                contentDescription = null,
-                                tint = RoseGoldPrimary,
-                                modifier = Modifier.size(15.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = "Today's Gallery",
-                                fontSize = 12.5.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                        }
-
-                        FilledTonalButton(
-                            onClick = { chatViewModel.recoverAllMessagesAndGallery() },
-                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
-                            modifier = Modifier.height(28.dp),
-                            colors = ButtonDefaults.filledTonalButtonColors(
-                                containerColor = RoseGoldPrimary,
-                                contentColor = Color.White
-                            )
-                        ) {
-                            Text("Recover All", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                        }
-                    }
-                }
-            }
+            // (Recover All moved to settings tab per user request)
 
             // Primary Tab Row
             PrimaryTabRow(
@@ -606,20 +561,23 @@ fun SharedGalleryScreen(
                                     .fillMaxSize()
                                     .padding(4.dp)
                                     .pointerInput(Unit) {
-                                        detectTransformGestures { _, _, zoom, _ ->
-                                            accumulatedZoom *= zoom
-                                            if (accumulatedZoom > 1.25f) {
-                                                // Pinch out: zoom in (make bigger -> reduce columns)
-                                                if (gridColumnCount > 1) {
-                                                    gridColumnCount--
+                                        awaitPointerEventScope {
+                                            while (true) {
+                                                val event = awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Initial)
+                                                if (event.changes.count { it.pressed } >= 2) {
+                                                    event.changes.forEach { it.consume() }
+                                                    val zoom = event.calculateZoom()
+                                                    accumulatedZoom *= zoom
+                                                    if (accumulatedZoom > 1.25f) {
+                                                        if (gridColumnCount > 1) gridColumnCount--
+                                                        accumulatedZoom = 1f
+                                                    } else if (accumulatedZoom < 0.80f) {
+                                                        if (gridColumnCount < 5) gridColumnCount++
+                                                        accumulatedZoom = 1f
+                                                    }
+                                                } else if (event.changes.isEmpty()) {
+                                                    accumulatedZoom = 1f
                                                 }
-                                                accumulatedZoom = 1f
-                                            } else if (accumulatedZoom < 0.80f) {
-                                                // Pinch in: zoom out (shrink thumbnails -> increase columns)
-                                                if (gridColumnCount < 5) {
-                                                    gridColumnCount++
-                                                }
-                                                accumulatedZoom = 1f
                                             }
                                         }
                                     },

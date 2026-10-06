@@ -69,7 +69,9 @@ data class User(
     val mood: String? = null,
     val batteryLevel: Int? = null,
     val isCharging: Boolean = false,
-    val heartbeatTouchingTimestamp: Long = 0L
+    val heartbeatTouchingTimestamp: Long = 0L,
+    val heartbeatStreak: Int = 0,
+    val lastHeartbeatSync: Long = 0L
 ) {
     fun isEffectivelyOnline(): Boolean {
         if (!isOnline) return false
@@ -113,32 +115,33 @@ data class User(
 @androidx.compose.runtime.Immutable
 @IgnoreExtraProperties
 data class Message(
-    val id: String = "",
-    val conversationId: String = "",
-    val senderId: String = "",
-    val senderName: String = "",
-    val receiverId: String = "",
-    val text: String = "",
-    val timestamp: Long = System.currentTimeMillis(),
-    val type: String = MessageType.TEXT.name,
-    val mediaUrl: String? = null,
-    val mediaName: String? = null,
-    val mediaSize: Long = 0L,
-    val durationSeconds: Int = 0,
-    val waveform: List<Float> = emptyList(),
-    val status: String = MessageStatus.SENT.name,
-    val readTimestamp: Long? = null,
-    val isEdited: Boolean = false,
-    val isDeleted: Boolean = false,
-    val isStarred: Boolean = false,
-    val isPinned: Boolean = false,
-    val replyToMessageId: String? = null,
-    val replyToText: String? = null,
-    val replyToSenderName: String? = null,
-    val reactions: Map<String, String> = emptyMap(), // userId -> emoji
-    val mediaUrls: List<String> = emptyList(),
-    val isVideoNote: Boolean = false
+    var id: String = "",
+    var conversationId: String = "",
+    var senderId: String = "",
+    var senderName: String = "",
+    var receiverId: String = "",
+    var text: String = "",
+    var timestamp: Long = System.currentTimeMillis(),
+    var type: String = MessageType.TEXT.name,
+    var mediaUrl: String? = null,
+    var mediaName: String? = null,
+    var mediaSize: Long = 0L,
+    var durationSeconds: Int = 0,
+    var waveform: List<Float> = emptyList(),
+    var status: String = MessageStatus.SENT.name,
+    var readTimestamp: Long? = null,
+    var isEdited: Boolean = false,
+    var isDeleted: Boolean = false,
+    var isStarred: Boolean = false,
+    var isPinned: Boolean = false,
+    var replyToMessageId: String? = null,
+    var replyToText: String? = null,
+    var replyToSenderName: String? = null,
+    var reactions: Map<String, String> = emptyMap(), // userId -> emoji
+    var mediaUrls: List<String> = emptyList(),
+    var isVideoNote: Boolean = false
 ) {
+    @com.google.firebase.firestore.Exclude
     fun isCircularVideoNote(): Boolean {
         val isTypeVideo = type.equals("VIDEO", ignoreCase = true)
         val hasVideoNoteName = mediaName?.contains("video", ignoreCase = true) == true ||
@@ -147,14 +150,17 @@ data class Message(
                                text.contains("Video note", ignoreCase = true)
         return isVideoNote || (isTypeVideo && hasVideoNoteName) || isTypeVideo
     }
+    @com.google.firebase.firestore.Exclude
     fun getTypedType(): MessageType {
         return runCatching { MessageType.valueOf(type.trim().uppercase()) }.getOrDefault(MessageType.TEXT)
     }
 
+    @com.google.firebase.firestore.Exclude
     fun getTypedStatus(): MessageStatus {
         return runCatching { MessageStatus.valueOf(status) }.getOrDefault(MessageStatus.SENT)
     }
 
+    @com.google.firebase.firestore.Exclude
     fun getAllMediaUrls(): List<String> {
         val result = mutableListOf<String>()
         if (mediaUrls.isNotEmpty()) {
@@ -180,7 +186,9 @@ data class Conversation(
     val lastMessageSenderId: String = "",
     val lastMessageTimestamp: Long = 0L,
     val unreadCountForUser: Map<String, Int> = emptyMap(),
-    val typingStatus: Map<String, Boolean> = emptyMap()
+    val typingStatus: Map<String, Boolean> = emptyMap(),
+    val heartbeatStreak: Int = 0,
+    val lastHeartbeatSyncTimestamp: Long = 0L
 )
 
 @IgnoreExtraProperties

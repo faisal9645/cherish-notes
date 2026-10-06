@@ -541,15 +541,11 @@ fun InlineVideoTheaterModal(
 
     DisposableEffect(activity) {
         app?.securityPreferences?.isTheaterModeActive = true
-        app?.securityPreferences?.ignoreNextPause = true
-        app?.securityPreferences?.ignoreChatNavigation = true
         val originalOrientation = activity?.requestedOrientation ?: ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
         activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
         onDispose {
             activity?.requestedOrientation = originalOrientation
             app?.securityPreferences?.isTheaterModeActive = false
-            app?.securityPreferences?.ignoreNextPause = false
-            app?.securityPreferences?.ignoreChatNavigation = false
         }
     }
 

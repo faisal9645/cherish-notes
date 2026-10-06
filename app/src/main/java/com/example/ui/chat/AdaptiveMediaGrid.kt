@@ -70,10 +70,11 @@ fun AdaptiveMediaGrid(
             urls.size == 1 -> {
                 MediaTile(
                     url = urls[0],
-                    contentScale = ContentScale.Crop,
+                    contentScale = ContentScale.FillWidth,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(singleImageHeight)
+                        .heightIn(max = 400.dp)
+                        .wrapContentHeight()
                         .clip(RoundedCornerShape(cornerRadius))
                         .clickable { onImageClick(0, urls[0]) }
                 )

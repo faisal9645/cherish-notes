@@ -1017,7 +1017,7 @@ fun ProfileScreen(
                     trailingContent = {
                         Switch(
                             checked = uiState.isNotificationsEnabled,
-                            onCheckedChange = { viewModel.setNotificationsEnabled(it) }
+                            onCheckedChange = { viewModel.setNotificationsEnabled(context, it) }
                         )
                     }
                 )
@@ -1048,7 +1048,7 @@ fun ProfileScreen(
                     trailingContent = {
                         Switch(
                             checked = uiState.isBadgeNotificationEnabled,
-                            onCheckedChange = { viewModel.setBadgeNotificationEnabled(it) },
+                            onCheckedChange = { viewModel.setBadgeNotificationEnabled(context, it) },
                             enabled = uiState.isNotificationsEnabled
                         )
                     }

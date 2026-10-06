@@ -280,7 +280,7 @@ fun MessageComposer(
                     shadowElevation = 2.dp,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(start = 12.dp, end = 70.dp, top = 6.dp, bottom = 4.dp),
+                        .padding(horizontal = 8.dp, bottom = 4.dp),
                     shape = RoundedCornerShape(16.dp)
                 ) {
                     Row(
@@ -410,7 +410,7 @@ fun MessageComposer(
 
                         // Live waveform
                         WaveformView(
-                            amplitudes = recordingAmplitudes,
+                            amplitudes = recordingAmplitudes.takeLast(45),
                             progress = 1f,
                             isRecording = true,
                             activeColor = MaterialTheme.colorScheme.primary,
@@ -475,7 +475,7 @@ fun MessageComposer(
 
                         // Growing waveform (takes available space)
                         WaveformView(
-                            amplitudes = recordingAmplitudes,
+                            amplitudes = recordingAmplitudes.takeLast(45),
                             progress = 1f,
                             isRecording = true,
                             activeColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.85f),

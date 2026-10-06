@@ -185,15 +185,18 @@ class MainActivity : FragmentActivity() {
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
-        // Do NOT force show system bars here - it causes content jumps on resume
+        // Immediately disguise on focus loss (e.g., bottom gesture glide) to protect privacy in recent apps
+        if (!hasFocus && !isChangingConfigurations) {
+            if (!app.securityPreferences.ignoreNextPause && !app.securityPreferences.ignoreChatNavigation && !app.securityPreferences.isTheaterModeActive) {
+                app.securityPreferences.reDisguise()
+            }
+        }
     }
 
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
         if (isChangingConfigurations) return
-        // When user intentionally leaves the app (home button, task switcher)
-        // but NOT during in-app navigation (camera, gallery picker, theater mode, etc.)
-        if (!app.securityPreferences.ignoreNextPause && !app.securityPreferences.ignoreChatNavigation && !app.securityPreferences.isTheaterModeActive) {
+        if (!app.securityPreferences.ignoreNextPause && !app.securityPreferences.ignoreChatNavigation) {
             app.securityPreferences.reDisguise()
         }
     }
@@ -207,8 +210,8 @@ class MainActivity : FragmentActivity() {
         if (isChangingConfigurations) return
         app.authRepository.onAppForegroundStateChanged(false)
         // ALWAYS re-disguise when the Activity stops (user backgrounded the app),
-        // but NEVER if in-app navigation, media viewer, or theater mode is active.
-        if (!app.securityPreferences.ignoreNextPause && !app.securityPreferences.ignoreChatNavigation && !app.securityPreferences.isTheaterModeActive) {
+        // but NEVER if in-app navigation or media viewer is active.
+        if (!app.securityPreferences.ignoreNextPause && !app.securityPreferences.ignoreChatNavigation) {
             app.securityPreferences.reDisguise()
         }
         if (!app.securityPreferences.ignoreChatNavigation && !app.securityPreferences.isTheaterModeActive) {

@@ -448,6 +448,10 @@ class ChatViewModel(
         authRepository.setHeartbeatTouch(active)
     }
 
+    fun syncHeartbeatStreak() {
+        authRepository.syncHeartbeatStreak()
+    }
+
     fun updateMood(mood: String) {
         viewModelScope.launch {
             authRepository.updateMood(mood)

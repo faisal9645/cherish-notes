@@ -655,6 +655,29 @@ class AuthRepository(private val context: Context) {
         }
     }
 
+    fun syncHeartbeatStreak() {
+        val uid = getCurrentUserId()
+        val current = _currentUserState.value ?: return
+        val now = System.currentTimeMillis()
+        
+        // Logical day starts at 4 AM
+        val DAY_ROLLOVER_OFFSET_MS = 4 * 60 * 60 * 1000L
+        val currentLogicalDay = (now - DAY_ROLLOVER_OFFSET_MS) / (24 * 60 * 60 * 1000L)
+        val lastSyncLogicalDay = (current.lastHeartbeatSync - DAY_ROLLOVER_OFFSET_MS) / (24 * 60 * 60 * 1000L)
+        
+        if (currentLogicalDay > lastSyncLogicalDay) {
+            val newStreak = if (currentLogicalDay - lastSyncLogicalDay == 1L) current.heartbeatStreak + 1 else 1
+            
+            _currentUserState.value = current.copy(heartbeatStreak = newStreak, lastHeartbeatSync = now)
+            try {
+                firestore?.collection("users")?.document(uid)?.set(
+                    mapOf("heartbeatStreak" to newStreak, "lastHeartbeatSync" to now),
+                    com.google.firebase.firestore.SetOptions.merge()
+                )
+            } catch (_: Exception) {}
+        }
+    }
+
     suspend fun pairWithPartner(partnerUsername: String, coupleSecretKey: String): Result<User> {
         val uid = getCurrentUserId()
         val cleanPartner = partnerUsername.trim().lowercase().replace("@", "_").replace(" ", "_").filter { it.isLetterOrDigit() || it == '_' }

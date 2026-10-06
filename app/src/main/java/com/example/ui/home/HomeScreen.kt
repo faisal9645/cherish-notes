@@ -215,7 +215,14 @@ fun HomeScreen(
                             selected = true,
                             onClick = { },
                             icon = { Icon(Icons.Filled.Favorite, contentDescription = "Us & Growth") },
-                            label = { Text("Love & Us") },
+                            label = { 
+                                val streak = uiState.currentUser?.heartbeatStreak ?: 0
+                                if (streak > 0) {
+                                    Text("Love & Us 🔥$streak") 
+                                } else {
+                                    Text("Love & Us") 
+                                }
+                            },
                             colors = NavigationBarItemDefaults.colors(
                                 selectedIconColor = MaterialTheme.colorScheme.primary,
                                 selectedTextColor = MaterialTheme.colorScheme.primary,

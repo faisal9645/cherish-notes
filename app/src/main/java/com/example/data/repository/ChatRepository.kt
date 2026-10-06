@@ -185,6 +185,29 @@ class ChatRepository(
         previousMessages = previousMessages.map {
             if (it.isDeleted) it.copy(isDeleted = false) else it
         }
+        
+        // Load from local backup file to ensure recovered data is local and does not upload to partner
+        try {
+            val context = com.example.CherishApplication.instance
+            val backupFile = java.io.File(context.filesDir, "gdrive_appdata_cherish_vault_backup.json")
+            if (backupFile.exists()) {
+                val json = backupFile.readText()
+                val moshi = com.squareup.moshi.Moshi.Builder().add(com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory()).build()
+                val adapter = moshi.adapter(com.example.backup.FullAppBackupPayload::class.java)
+                val payload = adapter.fromJson(json)
+                if (payload != null) {
+                    val current = _messagesFlow.value.toMutableList()
+                    val existingIds = current.map { it.id }.toSet()
+                    val toAdd = payload.messages.filter { it.id !in existingIds }
+                    if (toAdd.isNotEmpty()) {
+                        current.addAll(toAdd)
+                        _messagesFlow.value = current.sortedBy { it.timestamp }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("ChatRepository", "Failed to load local backup for recoverAllMessages", e)
+        }
         // ONLY gallery items all become visible:
         loadAllGalleryMedia()
         // Previous chats come as pagination on scroll:
@@ -617,17 +640,7 @@ class ChatRepository(
         if (toAdd.isNotEmpty()) {
             current.addAll(toAdd)
             _messagesFlow.value = current.sortedBy { it.timestamp }
-            val fs = firestore
-            val convId = getConversationId()
-            if (fs != null) {
-                toAdd.forEach { msg ->
-                    try {
-                        fs.collection("conversations").document(convId).collection("messages").document(msg.id).set(msg).await()
-                    } catch (e: Exception) {
-                        Log.w("ChatRepository", "Restore message sync warning", e)
-                    }
-                }
-            }
+            // Intentionally not uploading to Firestore to ensure recovered data is local and does not show to the partner
         }
     }
 
