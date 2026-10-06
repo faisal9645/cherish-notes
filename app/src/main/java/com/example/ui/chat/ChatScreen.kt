@@ -710,7 +710,35 @@ fun ChatScreen(
                             }
                         }
 
-                        // 3-dots menu removed per user request
+                        Box {
+                            IconButton(
+                                onClick = { showChatMenu = true },
+                                modifier = Modifier.size(40.dp)
+                            ) {
+                                Icon(Icons.Default.MoreVert, contentDescription = "More options", tint = iconTint, modifier = Modifier.size(23.dp))
+                            }
+                            DropdownMenu(
+                                expanded = showChatMenu,
+                                onDismissRequest = { showChatMenu = false }
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text("Clear Chat") },
+                                    onClick = {
+                                        showChatMenu = false
+                                        showClearChatDialog = true
+                                    },
+                                    leadingIcon = { Icon(Icons.Outlined.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface) }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Logout") },
+                                    onClick = {
+                                        showChatMenu = false
+                                        onLoggedOut()
+                                    },
+                                    leadingIcon = { Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface) }
+                                )
+                            }
+                        }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
