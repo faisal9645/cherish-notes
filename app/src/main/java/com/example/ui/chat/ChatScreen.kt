@@ -187,6 +187,17 @@ fun ChatScreen(
     var tempCameraUri by remember { mutableStateOf<Uri?>(null) }
     var showAttachmentSheet by remember { mutableStateOf(false) }
 
+    val isAnyDialogOpen = showClearChatDialog || showFullProfilePicViewer || showChatMenu || showVideoNoteRecorder || showHeartbeatTouch || showMoodPicker || showAttachmentSheet
+    
+    LaunchedEffect(isAnyDialogOpen) {
+        if (isAnyDialogOpen) {
+            com.example.security.SecurityPreferences.getInstance(context).ignoreNextPause = true
+        } else {
+            kotlinx.coroutines.delay(200)
+            com.example.security.SecurityPreferences.getInstance(context).ignoreNextPause = false
+        }
+    }
+
     val cameraSnapLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.TakePicture()
     ) { success: Boolean ->

@@ -269,8 +269,8 @@ fun MessageComposer(
         AnimatedVisibility(
             visible = replyingTo != null,
             modifier = Modifier
-                .widthIn(max = 600.dp)
-                .fillMaxWidth()
+                .widthIn(max = 400.dp)
+                .fillMaxWidth(0.85f)
                 .align(Alignment.CenterHorizontally)
         ) {
             if (replyingTo != null) {

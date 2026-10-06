@@ -89,9 +89,15 @@ fun CherishNavGraph(
         }
     }
 
+    val keyboardController = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
+    val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
+
     // Whenever opening secret app, it should go to chat tab only
     LaunchedEffect(isDisguiseActive) {
-        if (!isDisguiseActive && isUserLoggedIn) {
+        if (isDisguiseActive) {
+            keyboardController?.hide()
+            focusManager.clearFocus(force = true)
+        } else if (isUserLoggedIn) {
             val currentRoute = navController.currentBackStackEntry?.destination?.route
             if (currentRoute != Screen.Chat.route) {
                 val popped = navController.popBackStack(Screen.Chat.route, inclusive = false)
@@ -174,6 +180,7 @@ fun CherishNavGraph(
 
     // Inside Cherish secret app (unlocked): Android system back button & edge gesture returns to Notes app for security
     BackHandler(enabled = !isDisguiseActive && hasRevealedSecretApp) {
+        app.securityPreferences.ignoreChatNavigation = false
         app.securityPreferences.reDisguise()
     }
 
@@ -302,7 +309,10 @@ fun CherishNavGraph(
                 onNavigateToProfile = { navController.navigate(Screen.Profile.route) { launchSingleTop = true } },
                 onNavigateToLifetimeJourney = { navController.navigate(Screen.LifetimeJourney.route) { launchSingleTop = true } },
                 onNavigateToCloudBackup = { navController.navigate(Screen.CloudBackup.route) { launchSingleTop = true } },
-                onQuickDisguise = { app.securityPreferences.reDisguise() }
+                onQuickDisguise = { 
+                    app.securityPreferences.ignoreChatNavigation = false
+                    app.securityPreferences.reDisguise() 
+                }
             )
         }
 
@@ -310,13 +320,17 @@ fun CherishNavGraph(
             ChatScreen(
                 viewModel = sharedChatViewModel,
                 onNavigateBack = {
+                    app.securityPreferences.ignoreChatNavigation = false
                     app.securityPreferences.reDisguise()
                 },
                 onNavigateToGallery = {
                     app.securityPreferences.ignoreChatNavigation = true
                     navController.navigate(Screen.SharedGallery.route)
                 },
-                onQuickDisguise = { app.securityPreferences.reDisguise() },
+                onQuickDisguise = { 
+                    app.securityPreferences.ignoreChatNavigation = false
+                    app.securityPreferences.reDisguise() 
+                },
                 onNavigateToHome = {
                     app.securityPreferences.ignoreChatNavigation = true
                     val popped = navController.popBackStack(Screen.Home.route, inclusive = false)
@@ -437,7 +451,10 @@ fun CherishNavGraph(
         composable(Screen.PrivacyAudit.route) {
             com.example.ui.security.PrivacyAuditScreen(
                 securityPreferences = app.securityPreferences,
-                onNavigateBack = { app.securityPreferences.reDisguise() },
+                onNavigateBack = { 
+                    app.securityPreferences.ignoreChatNavigation = false
+                    app.securityPreferences.reDisguise() 
+                },
                 onNavigateToBackup = { navController.navigate(Screen.CloudBackup.route) }
             )
         }
@@ -779,6 +796,7 @@ fun CherishNavGraph(
                     }
                     .clickable {
                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        app.securityPreferences.ignoreChatNavigation = false
                         app.securityPreferences.reDisguise()
                     }
                     .testTag("side_emergency_exit_toggle")
