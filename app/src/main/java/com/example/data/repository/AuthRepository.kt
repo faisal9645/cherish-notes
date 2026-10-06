@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 
@@ -621,7 +622,12 @@ class AuthRepository(private val context: Context) {
         }
     }
 
+    private var heartbeatTouchJob: kotlinx.coroutines.Job? = null
+
     fun setHeartbeatTouch(active: Boolean) {
+        heartbeatTouchJob?.cancel()
+        heartbeatTouchJob = null
+
         val uid = getCurrentUserId()
         val timestamp = if (active) System.currentTimeMillis() else 0L
         val current = _currentUserState.value ?: User(id = uid)
@@ -632,12 +638,21 @@ class AuthRepository(private val context: Context) {
                 com.google.firebase.firestore.SetOptions.merge()
             )
         } catch (_: Exception) {}
-    }
 
-    fun simulatePartnerHeartbeatTouch(active: Boolean) {
-        val timestamp = if (active) System.currentTimeMillis() else 0L
-        val partner = _partnerUserState.value ?: return
-        _partnerUserState.value = partner.copy(heartbeatTouchingTimestamp = timestamp)
+        if (active) {
+            heartbeatTouchJob = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                while (isActive) {
+                    kotlinx.coroutines.delay(2000L)
+                    val liveTs = System.currentTimeMillis()
+                    try {
+                        firestore?.collection("users")?.document(uid)?.set(
+                            mapOf("heartbeatTouchingTimestamp" to liveTs),
+                            com.google.firebase.firestore.SetOptions.merge()
+                        )
+                    } catch (_: Exception) {}
+                }
+            }
+        }
     }
 
     suspend fun pairWithPartner(partnerUsername: String, coupleSecretKey: String): Result<User> {

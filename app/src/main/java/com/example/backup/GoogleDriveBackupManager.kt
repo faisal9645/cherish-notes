@@ -87,7 +87,10 @@ class GoogleDriveBackupManager(
         // Continuous Always-On Auto-Backup:
         // Automatically syncs immediately whenever chat messages, memories, shared notes, or dates are updated
         autoBackupScope.launch {
-            kotlinx.coroutines.delay(1000) // Brief startup settle
+            kotlinx.coroutines.delay(1200) // Brief startup settle
+            // Immediate startup auto-backup
+            performBackupToGoogleDrive()
+
             kotlinx.coroutines.flow.combine(
                 chatRepository.messagesFlow,
                 coupleFeaturesRepository.memoriesFlow,
@@ -117,7 +120,7 @@ class GoogleDriveBackupManager(
     suspend fun performBackupToGoogleDrive(): Result<String> = withContext(Dispatchers.IO) {
         _backupState.value = _backupState.value.copy(
             isBackingUp = true,
-            statusMessage = "Packaging chats, gallery, and lifetime memories..."
+            statusMessage = "Packaging chats, media, gallery, and lifetime memories..."
         )
 
         try {
@@ -132,6 +135,8 @@ class GoogleDriveBackupManager(
             val sdf = SimpleDateFormat("MMM d, yyyy 'at' h:mm a", Locale.getDefault())
             val dateStr = sdf.format(Date())
 
+            val totalItems = messages.size + memories.size + yearlyStories.size + bucketList.size + importantDates.size + sharedNotes.size
+
             val manifest = BackupManifest(
                 backupTimestamp = System.currentTimeMillis(),
                 backupDateFormatted = dateStr,
@@ -139,6 +144,7 @@ class GoogleDriveBackupManager(
                 totalMessages = messages.size,
                 totalMemories = memories.size,
                 totalYearlyStories = yearlyStories.size,
+                totalLoveNotes = sharedNotes.size,
                 totalBucketItems = bucketList.size,
                 totalImportantDates = importantDates.size,
                 storageLocationDesc = "Google Drive (Hidden AppData Space: appDataFolder)"
@@ -162,7 +168,6 @@ class GoogleDriveBackupManager(
             val backupFile = File(context.filesDir, "gdrive_appdata_cherish_vault_backup.json")
             backupFile.writeText(jsonPayload)
 
-            val totalItems = messages.size + memories.size + yearlyStories.size + bucketList.size + importantDates.size
             val size = backupFile.length()
 
             prefs.edit()

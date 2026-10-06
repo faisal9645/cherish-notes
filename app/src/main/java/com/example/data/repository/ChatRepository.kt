@@ -87,7 +87,7 @@ class ChatRepository(
                 .map { it?.coupleId?.trim()?.ifBlank { null } ?: "couple_faisal_shali" }
                 .distinctUntilChanged()
                 .collectLatest { convId ->
-                    previousMessageLimit = 40L
+                    previousMessageLimit = 0L
                     todayMessages = emptyList()
                     previousMessages = emptyList()
                     _isQueryExhaustedFlow.value = false
@@ -185,9 +185,15 @@ class ChatRepository(
         previousMessages = previousMessages.map {
             if (it.isDeleted) it.copy(isDeleted = false) else it
         }
-        previousMessageLimit = 500L
-        currentActiveConversationId?.let { startPreviousMessagesListener(it) }
+        // ONLY gallery items all become visible:
         loadAllGalleryMedia()
+        // Previous chats come as pagination on scroll:
+        _hasPreviousChatsAvailableFlow.value = true
+        _isQueryExhaustedFlow.value = false
+        if (previousMessageLimit == 0L) {
+            previousMessageLimit = 40L
+        }
+        currentActiveConversationId?.let { startPreviousMessagesListener(it) }
         mergeAndEmitMessages()
         try {
             com.example.CherishApplication.instance.googleDriveBackupManager.triggerImmediateAutoBackup()

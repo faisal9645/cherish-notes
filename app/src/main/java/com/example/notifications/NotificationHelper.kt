@@ -98,7 +98,10 @@ object NotificationHelper {
 
         val count = pendingUnreadCount.incrementAndGet()
         val prefs = SecurityPreferences.getInstance(context)
-        if (!prefs.isNotificationsEnabled()) return
+        if (!prefs.isNotificationsEnabled()) {
+            clearNotifications(context)
+            return
+        }
         val isDiscreet = prefs.isHideNotificationContent() || prefs.isDisguiseModeEnabled() || prefs.isDisguiseActive()
 
         val intent = Intent(context, MainActivity::class.java).apply {
@@ -118,7 +121,7 @@ object NotificationHelper {
         val displayText = if (isDiscreet) {
             "Checklist reminder updated"
         } else {
-            "New messages"
+            messageText.ifBlank { "New message" }
         }
         val subText = if (isDiscreet) "Notes" else "Cherish"
 
@@ -129,14 +132,25 @@ object NotificationHelper {
             .setContentText("Checklist reminder updated")
             .setSubText("Notes")
             .setBadgeIconType(NotificationCompat.BADGE_ICON_SMALL)
+            .setNumber(1)
             .build()
+
+        val isBadgeEnabled = prefs.isBadgeNotificationEnabled()
 
         val notification = NotificationCompat.Builder(context, CHANNEL_MESSAGES_ID)
             .setSmallIcon(if (isDiscreet) R.mipmap.ic_launcher else R.drawable.ic_cherish_heart)
             .setContentTitle(displayTitle)
             .setContentText(displayText)
             .setSubText(subText)
-            .setBadgeIconType(NotificationCompat.BADGE_ICON_SMALL)
+            .apply {
+                if (isBadgeEnabled) {
+                    setBadgeIconType(NotificationCompat.BADGE_ICON_SMALL)
+                    setNumber(1)
+                } else {
+                    setBadgeIconType(NotificationCompat.BADGE_ICON_NONE)
+                    setNumber(0)
+                }
+            }
             .setAutoCancel(true)
             .setContentIntent(pendingIntent)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
@@ -152,8 +166,12 @@ object NotificationHelper {
             // Handled if POST_NOTIFICATIONS runtime permission not yet prompted
         }
 
-        // Update launcher icon badge for OEM launchers
-        updateLauncherBadge(context, count)
+        // Update launcher icon badge to 1 for OEM launchers (only if badge enabled)
+        if (isBadgeEnabled) {
+            updateLauncherBadge(context, if (count > 0) 1 else 0)
+        } else {
+            updateLauncherBadge(context, 0)
+        }
     }
 
     /**
@@ -170,12 +188,13 @@ object NotificationHelper {
     }
 
     /**
-     * Broadcasts unread count badge to Samsung, Sony, HTC and compatible OEM launchers
+     * Broadcasts unread count badge (1 when unread, 0 when cleared) to Samsung, Sony, HTC and compatible OEM launchers
      */
     fun updateLauncherBadge(context: Context, count: Int) {
         try {
+            val badgeCount = if (count > 0) 1 else 0
             val intent = Intent("android.intent.action.BADGE_COUNT_UPDATE").apply {
-                putExtra("badge_count", count)
+                putExtra("badge_count", badgeCount)
                 putExtra("badge_count_package_name", context.packageName)
                 putExtra("badge_count_class_name", "com.example.MainActivity")
             }

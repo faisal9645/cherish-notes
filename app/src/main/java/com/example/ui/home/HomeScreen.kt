@@ -232,7 +232,7 @@ fun HomeScreen(
                                     badge = {
                                         if (uiState.unreadCount > 0) {
                                             Badge(containerColor = HeartRed) {
-                                                Text("${uiState.unreadCount}")
+                                                Text("1")
                                             }
                                         }
                                     }
@@ -534,7 +534,7 @@ fun HomeScreen(
                                 .padding(horizontal = 7.dp, vertical = 3.dp)
                         ) {
                             Text(
-                                text = "${uiState.unreadCount}",
+                                text = "1",
                                 color = Color.White,
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold

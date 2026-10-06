@@ -39,7 +39,8 @@ data class ProfileUiState(
     val isSideEmergencyExitEnabled: Boolean = true,
     val sideEmergencyExitOpacity: Float = 0.35f,
     val isChatSoundsEnabled: Boolean = true,
-    val isNotificationsEnabled: Boolean = true
+    val isNotificationsEnabled: Boolean = true,
+    val isBadgeNotificationEnabled: Boolean = true
 )
 
 data class UpdateCheckState(
@@ -167,7 +168,8 @@ class ProfileViewModel(
                 chatExperienceMode = securityPreferences.getChatExperienceMode(),
                 isSideEmergencyExitEnabled = securityPreferences.isSideEmergencyExitEnabled(),
                 sideEmergencyExitOpacity = securityPreferences.getSideEmergencyExitOpacity(),
-                isNotificationsEnabled = securityPreferences.isNotificationsEnabled()
+                isNotificationsEnabled = securityPreferences.isNotificationsEnabled(),
+                isBadgeNotificationEnabled = securityPreferences.isBadgeNotificationEnabled()
             )
         }
     }
@@ -175,6 +177,11 @@ class ProfileViewModel(
     fun setNotificationsEnabled(enabled: Boolean) {
         securityPreferences.setNotificationsEnabled(enabled)
         _uiState.update { it.copy(isNotificationsEnabled = enabled) }
+    }
+
+    fun setBadgeNotificationEnabled(enabled: Boolean) {
+        securityPreferences.setBadgeNotificationEnabled(enabled)
+        _uiState.update { it.copy(isBadgeNotificationEnabled = enabled) }
     }
 
     fun setSideEmergencyExitEnabled(enabled: Boolean) {
@@ -412,6 +419,7 @@ class ProfileViewModel(
     fun recoverAllChatsAndGallery() {
         securityPreferences.setShowPreviousChatsEnabled(true)
         securityPreferences.setTemporaryClearTimestamp(0L)
+        securityPreferences.setAllGalleryRecovered(true)
         try {
             com.example.CherishApplication.instance.chatRepository.recoverAllMessages()
             com.example.CherishApplication.instance.chatRepository.loadAllGalleryMedia()

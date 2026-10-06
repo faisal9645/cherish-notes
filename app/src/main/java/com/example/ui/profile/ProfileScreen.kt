@@ -1024,7 +1024,7 @@ fun ProfileScreen(
 
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), thickness = 0.6.dp)
 
-                // Notification Content Privacy
+                // Notification Content Privacy (Mask private notification)
                 ListItem(
                     headlineContent = { Text("Hide Notification Content", fontSize = 15.sp, fontWeight = FontWeight.SemiBold) },
                     supportingContent = { Text("Mask private messages on banner and lock screen", fontSize = 13.sp) },
@@ -1033,6 +1033,22 @@ fun ProfileScreen(
                         Switch(
                             checked = uiState.isHideNotificationContent,
                             onCheckedChange = { viewModel.setHideNotificationContent(it) },
+                            enabled = uiState.isNotificationsEnabled
+                        )
+                    }
+                )
+
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), thickness = 0.6.dp)
+
+                // App Icon Badge Notification
+                ListItem(
+                    headlineContent = { Text("App Icon Badge", fontSize = 15.sp, fontWeight = FontWeight.SemiBold) },
+                    supportingContent = { Text("Show unread indicator dot or count on launcher app icon", fontSize = 13.sp) },
+                    leadingContent = { Icon(Icons.Default.MarkChatUnread, contentDescription = null, tint = primaryAccent) },
+                    trailingContent = {
+                        Switch(
+                            checked = uiState.isBadgeNotificationEnabled,
+                            onCheckedChange = { viewModel.setBadgeNotificationEnabled(it) },
                             enabled = uiState.isNotificationsEnabled
                         )
                     }

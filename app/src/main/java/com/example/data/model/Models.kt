@@ -156,18 +156,18 @@ data class Message(
     }
 
     fun getAllMediaUrls(): List<String> {
-        if (mediaUrls.isNotEmpty()) return mediaUrls.distinct()
+        val result = mutableListOf<String>()
+        if (mediaUrls.isNotEmpty()) {
+            result.addAll(mediaUrls)
+        }
         if (!mediaUrl.isNullOrBlank()) {
-            if (mediaUrl.startsWith("data:")) {
-                return listOf(mediaUrl)
-            }
-            return if (mediaUrl.contains(",")) {
-                mediaUrl.split(",").map { it.trim() }.filter { it.isNotEmpty() }.distinct()
+            if (mediaUrl.contains(",") && !mediaUrl.startsWith("data:")) {
+                result.addAll(mediaUrl.split(",").map { it.trim() }.filter { it.isNotEmpty() })
             } else {
-                listOf(mediaUrl)
+                result.add(mediaUrl)
             }
         }
-        return emptyList()
+        return result.filter { it.isNotBlank() }.distinct()
     }
 }
 

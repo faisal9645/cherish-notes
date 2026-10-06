@@ -389,11 +389,17 @@ fun MessageBubble(
                     }
                 }
             } else {
+                val isGenericPhotoText = message.getTypedType() == MessageType.IMAGE && (
+                    message.text.isBlank() || 
+                    message.text.equals("Sent a photo", ignoreCase = true) || 
+                    message.text.matches(Regex("""Sent \d+ photos?"""))
+                )
+
                 val bubbleMinWidth = when (message.getTypedType()) {
                     MessageType.IMAGE -> when (gallerySize.lowercase()) {
-                        "small" -> 150.dp
-                        "medium" -> 200.dp
-                        else -> 250.dp
+                        "small" -> 160.dp
+                        "medium" -> 220.dp
+                        else -> 280.dp
                     }
                     MessageType.AUDIO -> 260.dp
                     MessageType.VIDEO -> 195.dp
@@ -401,8 +407,8 @@ fun MessageBubble(
                 }
                 val bubbleMaxWidth = when (message.getTypedType()) {
                     MessageType.IMAGE -> when (gallerySize.lowercase()) {
-                        "small" -> 200.dp
-                        "medium" -> 260.dp
+                        "small" -> 180.dp
+                        "medium" -> 245.dp
                         else -> 310.dp
                     }
                     MessageType.AUDIO -> 310.dp
@@ -464,7 +470,15 @@ fun MessageBubble(
                 ) {
             Column(
                 modifier = (if (isYouTube) Modifier.fillMaxWidth() else Modifier)
-                    .padding(if (isVideoNote) PaddingValues(0.dp) else if (isYouTube) PaddingValues(horizontal = 6.dp, vertical = 6.dp) else PaddingValues(horizontal = 10.dp, vertical = 6.dp))
+                    .padding(
+                        if (isVideoNote) PaddingValues(0.dp) 
+                        else if (isYouTube) PaddingValues(horizontal = 6.dp, vertical = 6.dp) 
+                        else if (message.getTypedType() == MessageType.IMAGE) {
+                            if (isGenericPhotoText && message.replyToText.isNullOrEmpty()) PaddingValues(0.dp)
+                            else PaddingValues(horizontal = 4.dp, vertical = 4.dp)
+                        }
+                        else PaddingValues(horizontal = 10.dp, vertical = 6.dp)
+                    )
             ) {
                 // Reply Quote Preview
                 if (!message.replyToText.isNullOrEmpty()) {
@@ -509,18 +523,68 @@ fun MessageBubble(
                     MessageType.IMAGE -> {
                         val mediaList = message.getAllMediaUrls()
                         if (mediaList.isNotEmpty()) {
-                            AdaptiveMediaGrid(
-                                urls = mediaList,
-                                gallerySize = gallerySize,
-                                onImageClick = { _, clickedUrl ->
-                                    if (onImageClickWithList != null) {
-                                        onImageClickWithList(clickedUrl, mediaList)
-                                    } else {
-                                        onImageClick(clickedUrl)
+                            Box(modifier = Modifier.fillMaxWidth()) {
+                                AdaptiveMediaGrid(
+                                    urls = mediaList,
+                                    gallerySize = gallerySize,
+                                    onImageClick = { _, clickedUrl ->
+                                        if (onImageClickWithList != null) {
+                                            onImageClickWithList(clickedUrl, mediaList)
+                                        } else {
+                                            onImageClick(clickedUrl)
+                                        }
+                                    },
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+
+                                // When there is no text caption, overlay the time & read status pill on the photo
+                                if (isGenericPhotoText) {
+                                    Surface(
+                                        shape = RoundedCornerShape(12.dp),
+                                        color = Color.Black.copy(alpha = 0.58f),
+                                        modifier = Modifier
+                                            .align(Alignment.BottomEnd)
+                                            .padding(6.dp)
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.5.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            if (message.isPinned) {
+                                                Icon(
+                                                    imageVector = Icons.Filled.PushPin,
+                                                    contentDescription = "Pinned",
+                                                    tint = Color.White.copy(alpha = 0.9f),
+                                                    modifier = Modifier.size(11.dp).padding(end = 3.dp)
+                                                )
+                                            }
+                                            if (message.isStarred) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Star,
+                                                    contentDescription = "Starred",
+                                                    tint = GoldMilestone,
+                                                    modifier = Modifier.size(11.dp).padding(end = 3.dp)
+                                                )
+                                            }
+                                            Text(
+                                                text = formatMessageTime(message.timestamp),
+                                                fontSize = 10.sp,
+                                                color = Color.White.copy(alpha = 0.95f),
+                                                fontWeight = FontWeight.Medium
+                                            )
+                                            if (isFromMe) {
+                                                Spacer(modifier = Modifier.width(3.dp))
+                                                when (message.getTypedStatus()) {
+                                                    MessageStatus.SENDING -> Icon(Icons.Default.AccessTime, "Sending", tint = Color.White.copy(alpha = 0.7f), modifier = Modifier.size(10.dp))
+                                                    MessageStatus.SENT -> Icon(Icons.Default.Check, "Sent", tint = Color.White.copy(alpha = 0.85f), modifier = Modifier.size(11.dp))
+                                                    MessageStatus.DELIVERED -> Icon(Icons.Default.DoneAll, "Delivered", tint = Color.White.copy(alpha = 0.9f), modifier = Modifier.size(12.dp))
+                                                    MessageStatus.READ -> Icon(Icons.Default.DoneAll, "Read", tint = Color(0xFF60A5FA), modifier = Modifier.size(12.dp))
+                                                }
+                                            }
+                                        }
                                     }
-                                },
-                                modifier = Modifier.padding(bottom = 6.dp)
-                            )
+                                }
+                            }
                         }
                     }
                     MessageType.VIDEO -> {
@@ -720,24 +784,26 @@ fun MessageBubble(
                     else -> {}
                 }
 
-                // Image Message Footer: "Sent a photo" on left, Time & Status on right
-                if (message.getTypedType() == MessageType.IMAGE) {
-                    Row(
+                // Image Message Footer: Only rendered when user entered an actual custom text caption
+                if (message.getTypedType() == MessageType.IMAGE && !isGenericPhotoText) {
+                    Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(top = 2.dp, start = 2.dp, end = 2.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                            .padding(top = 4.dp, start = 4.dp, end = 4.dp, bottom = 2.dp)
                     ) {
                         Text(
-                            text = if (message.text.isNotBlank()) message.text else "Sent a photo",
-                            fontSize = 12.sp,
+                            text = message.text,
+                            fontSize = 13.sp,
                             fontWeight = FontWeight.Normal,
                             color = if (isPrivateMode) textColor 
                                     else if (isFromMe) Color.White 
                                     else (if (isDark) Color(0xFFCBD5E1) else Color(0xFF0F172A))
                         )
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Row(
+                            modifier = Modifier.align(Alignment.End),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
                             if (message.isPinned) {
                                 Icon(
                                     imageVector = Icons.Filled.PushPin,

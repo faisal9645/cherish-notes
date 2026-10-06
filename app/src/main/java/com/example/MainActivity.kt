@@ -172,7 +172,9 @@ class MainActivity : FragmentActivity() {
         // Re-calling it causes a layout recalculation that shifts content after minimize/reopen.
         // Screenshot protection removed — no FLAG_SECURE applied
         app.authRepository.onAppForegroundStateChanged(true)
-        app.securityPreferences.ignoreNextPause = false
+        if (!app.securityPreferences.ignoreChatNavigation) {
+            app.securityPreferences.ignoreNextPause = false
+        }
         if (app.authRepository.isUserLoggedIn()) {
             val info = batteryHelper.getCurrentBattery()
             lifecycleScope.launch {
@@ -188,9 +190,10 @@ class MainActivity : FragmentActivity() {
 
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
+        if (isChangingConfigurations) return
         // When user intentionally leaves the app (home button, task switcher)
-        // but NOT during in-app navigation (camera, gallery picker, etc.)
-        if (!app.securityPreferences.ignoreNextPause && !app.securityPreferences.ignoreChatNavigation) {
+        // but NOT during in-app navigation (camera, gallery picker, theater mode, etc.)
+        if (!app.securityPreferences.ignoreNextPause && !app.securityPreferences.ignoreChatNavigation && !app.securityPreferences.isTheaterModeActive) {
             app.securityPreferences.reDisguise()
         }
     }
@@ -201,15 +204,16 @@ class MainActivity : FragmentActivity() {
 
     override fun onStop() {
         super.onStop()
+        if (isChangingConfigurations) return
         app.authRepository.onAppForegroundStateChanged(false)
-        // ALWAYS re-disguise when the Activity stops (user backgrounded the app).
-        // Reset ignoreChatNavigation so sub-screen navigation flags don't persist
-        // across minimize/reopen cycles — ensures reopening always shows Notes.
-        if (!app.securityPreferences.ignoreNextPause) {
-            app.securityPreferences.ignoreChatNavigation = false
+        // ALWAYS re-disguise when the Activity stops (user backgrounded the app),
+        // but NEVER if in-app navigation, media viewer, or theater mode is active.
+        if (!app.securityPreferences.ignoreNextPause && !app.securityPreferences.ignoreChatNavigation && !app.securityPreferences.isTheaterModeActive) {
             app.securityPreferences.reDisguise()
         }
-        app.securityPreferences.ignoreNextPause = false
+        if (!app.securityPreferences.ignoreChatNavigation && !app.securityPreferences.isTheaterModeActive) {
+            app.securityPreferences.ignoreNextPause = false
+        }
         app.googleDriveBackupManager.triggerImmediateAutoBackup()
     }
 

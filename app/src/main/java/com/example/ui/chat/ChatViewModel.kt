@@ -118,12 +118,14 @@ class ChatViewModel(
 
         viewModelScope.launch {
             authRepository.partnerUserState.collect { partner ->
+                val partnerTouching = partner?.heartbeatTouchingTimestamp?.let { it > 0L && (System.currentTimeMillis() - it < 4500L) } ?: false
                 _uiState.update {
                     it.copy(
                         partnerUser = partner,
                         isPartnerOnline = partner?.isEffectivelyOnline() ?: false,
                         isPartnerTyping = partner?.isEffectivelyTyping() ?: false,
-                        isPartnerRecordingAudio = partner?.isEffectivelyRecording() ?: false
+                        isPartnerRecordingAudio = partner?.isEffectivelyRecording() ?: false,
+                        isPartnerHeartTouching = partnerTouching
                     )
                 }
             }
@@ -138,6 +140,12 @@ class ChatViewModel(
         viewModelScope.launch {
             securityPreferences.isSecretHistoryRevealed.collect { revealed ->
                 _uiState.update { it.copy(isSecretHistoryRevealed = revealed) }
+            }
+        }
+
+        viewModelScope.launch {
+            securityPreferences.imageGallerySize.collect { size ->
+                _uiState.update { it.copy(gallerySize = size) }
             }
         }
 
@@ -198,13 +206,14 @@ class ChatViewModel(
             }
         }
         
-        // Ticker to evaluate effective online/typing status without unnecessary CPU load
+        // Ticker to evaluate effective online/typing/heartbeat status without unnecessary CPU load
         viewModelScope.launch {
             while (true) {
-                kotlinx.coroutines.delay(2000L)
+                val delayMs = if (_uiState.value.isPartnerHeartTouching || (_uiState.value.partnerUser?.heartbeatTouchingTimestamp ?: 0L) > 0L) 500L else 2000L
+                kotlinx.coroutines.delay(delayMs)
                 _uiState.update { state ->
                     val partner = state.partnerUser
-                    val partnerTouching = partner?.heartbeatTouchingTimestamp?.let { it > 0L && (System.currentTimeMillis() - it < 8000L) } ?: false
+                    val partnerTouching = partner?.heartbeatTouchingTimestamp?.let { it > 0L && (System.currentTimeMillis() - it < 4500L) } ?: false
                     val newOnline = partner?.isEffectivelyOnline() ?: false
                     val newTyping = partner?.isEffectivelyTyping() ?: false
                     val newRecording = partner?.isEffectivelyRecording() ?: false
@@ -439,10 +448,6 @@ class ChatViewModel(
         authRepository.setHeartbeatTouch(active)
     }
 
-    fun simulatePartnerHeartbeatTouch(active: Boolean) {
-        authRepository.simulatePartnerHeartbeatTouch(active)
-    }
-
     fun updateMood(mood: String) {
         viewModelScope.launch {
             authRepository.updateMood(mood)
@@ -555,6 +560,7 @@ class ChatViewModel(
     fun recoverAllMessagesAndGallery() {
         securityPreferences.setShowPreviousChatsEnabled(true)
         securityPreferences.setTemporaryClearTimestamp(0L)
+        securityPreferences.setAllGalleryRecovered(true)
         chatRepository.recoverAllMessages()
         chatRepository.loadAllGalleryMedia()
     }
@@ -580,6 +586,7 @@ class ChatViewModel(
 
     fun navigateToMessageInChat(messageId: String) {
         securityPreferences.revealSecretHistory()
+        securityPreferences.setShowPreviousChatsEnabled(true)
         chatRepository.expandLimitForSearch()
         _uiState.update {
             it.copy(

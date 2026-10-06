@@ -40,15 +40,21 @@ fun AdaptiveMediaGrid(
     if (urls.isEmpty()) return
 
     val gridHeight: Dp = when (gallerySize.lowercase()) {
-        "small" -> 180.dp
-        "medium" -> 250.dp
-        else -> 320.dp
+        "small" -> 130.dp
+        "medium" -> 190.dp
+        else -> 250.dp
     }
 
     val singleImageHeight: Dp = when (gallerySize.lowercase()) {
-        "small" -> 250.dp
-        "medium" -> 350.dp
-        else -> 440.dp
+        "small" -> 140.dp
+        "medium" -> 200.dp
+        else -> 265.dp
+    }
+
+    val twoImagesHeight: Dp = when (gallerySize.lowercase()) {
+        "small" -> 105.dp
+        "medium" -> 150.dp
+        else -> 190.dp
     }
 
     val cornerRadius = 14.dp
@@ -60,14 +66,14 @@ fun AdaptiveMediaGrid(
             .clip(RoundedCornerShape(cornerRadius))
     ) {
         when {
-            // Case 1: Single Photo (Full photo visible, heightened allowance, customizable via settings)
+            // Case 1: Single Photo (No black top/bottom bars, perfectly cropped to thumb height)
             urls.size == 1 -> {
                 MediaTile(
                     url = urls[0],
-                    contentScale = ContentScale.Fit,
+                    contentScale = ContentScale.Crop,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .heightIn(min = 140.dp, max = singleImageHeight)
+                        .height(singleImageHeight)
                         .clip(RoundedCornerShape(cornerRadius))
                         .clickable { onImageClick(0, urls[0]) }
                 )
@@ -78,7 +84,7 @@ fun AdaptiveMediaGrid(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(135.dp),
+                        .height(twoImagesHeight),
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     MediaTile(
@@ -283,9 +289,7 @@ private fun MediaTile(
     val isDark = androidx.compose.material3.MaterialTheme.colorScheme.surface.luminance() < 0.5f
     val tileBg = if (isDark) Color(0xFF131824) else Color(0xFFE2E8F0)
     Box(
-        modifier = modifier
-            .background(tileBg)
-            .clip(RoundedCornerShape(12.dp)),
+        modifier = modifier.background(tileBg),
         contentAlignment = Alignment.Center
     ) {
         Icon(
@@ -318,9 +322,7 @@ private fun MediaTile(
                     .build(),
                 contentDescription = "Photo",
                 contentScale = contentScale,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .clip(RoundedCornerShape(12.dp))
+                modifier = Modifier.fillMaxSize()
             )
         }
     }

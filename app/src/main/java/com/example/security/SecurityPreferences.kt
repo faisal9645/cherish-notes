@@ -22,6 +22,12 @@ class SecurityPreferences(context: Context) {
      */
     var ignoreChatNavigation: Boolean = false
 
+    /**
+     * Set to true while YouTube Theater mode or full-screen video playback is active
+     * to ensure orientation changes and fullscreen dialogs never trigger disguise.
+     */
+    var isTheaterModeActive: Boolean = false
+
 
     private val _isDisguiseActive = MutableStateFlow(prefs.getBoolean(KEY_DISGUISE_ENABLED, true))
     val isDisguiseActive: StateFlow<Boolean> = _isDisguiseActive.asStateFlow()
@@ -75,6 +81,7 @@ class SecurityPreferences(context: Context) {
     }
 
     fun reDisguise() {
+        if (ignoreNextPause || ignoreChatNavigation || isTheaterModeActive) return
         _hasRevealedSecretAppInSession.value = false
         _isDisguiseActive.value = true
         setShowPreviousChatsEnabled(false)
@@ -102,14 +109,40 @@ class SecurityPreferences(context: Context) {
     private val _showPreviousChats = MutableStateFlow(isShowPreviousChatsEnabled())
     val showPreviousChats: StateFlow<Boolean> = _showPreviousChats.asStateFlow()
 
-    fun isShowPreviousChatsEnabled(): Boolean = prefs.getBoolean(KEY_SHOW_PREVIOUS_CHATS, true)
+    fun isShowPreviousChatsEnabled(): Boolean {
+        val todayStr = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date())
+        val savedDate = prefs.getString(KEY_SHOW_PREVIOUS_CHATS_DATE, null)
+        return savedDate == todayStr
+    }
 
     fun setShowPreviousChatsEnabled(enabled: Boolean) {
         if (enabled) {
             setTemporaryClearTimestamp(0L)
+            val todayStr = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date())
+            prefs.edit().putString(KEY_SHOW_PREVIOUS_CHATS_DATE, todayStr).apply()
+        } else {
+            prefs.edit().remove(KEY_SHOW_PREVIOUS_CHATS_DATE).apply()
         }
-        prefs.edit().putBoolean(KEY_SHOW_PREVIOUS_CHATS, enabled).apply()
         _showPreviousChats.value = enabled
+    }
+
+    private val _isAllGalleryRecovered = MutableStateFlow(isAllGalleryRecovered())
+    val isAllGalleryRecovered: StateFlow<Boolean> = _isAllGalleryRecovered.asStateFlow()
+
+    fun isAllGalleryRecovered(): Boolean {
+        val todayStr = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date())
+        val savedDate = prefs.getString(KEY_ALL_GALLERY_RECOVERED_DATE, null)
+        return savedDate == todayStr
+    }
+
+    fun setAllGalleryRecovered(recovered: Boolean) {
+        val todayStr = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date())
+        if (recovered) {
+            prefs.edit().putString(KEY_ALL_GALLERY_RECOVERED_DATE, todayStr).apply()
+        } else {
+            prefs.edit().remove(KEY_ALL_GALLERY_RECOVERED_DATE).apply()
+        }
+        _isAllGalleryRecovered.value = recovered
     }
 
     private val _temporaryClearTimestamp = MutableStateFlow(getTemporaryClearTimestamp())
@@ -218,13 +251,31 @@ class SecurityPreferences(context: Context) {
 
     fun setHideNotificationContent(hide: Boolean) {
         prefs.edit().putBoolean(KEY_HIDE_NOTIFICATION_CONTENT, hide).apply()
+        _isHideNotificationContent.value = hide
     }
+
+    private val _isHideNotificationContent = MutableStateFlow(isHideNotificationContent())
+    val isHideNotificationContentFlow: StateFlow<Boolean> = _isHideNotificationContent.asStateFlow()
 
     fun isNotificationsEnabled(): Boolean = prefs.getBoolean(KEY_NOTIFICATIONS_ENABLED, true)
 
     fun setNotificationsEnabled(enabled: Boolean) {
         prefs.edit().putBoolean(KEY_NOTIFICATIONS_ENABLED, enabled).apply()
+        _isNotificationsEnabled.value = enabled
     }
+
+    private val _isNotificationsEnabled = MutableStateFlow(isNotificationsEnabled())
+    val isNotificationsEnabledFlow: StateFlow<Boolean> = _isNotificationsEnabled.asStateFlow()
+
+    fun isBadgeNotificationEnabled(): Boolean = prefs.getBoolean(KEY_BADGE_NOTIFICATION_ENABLED, true)
+
+    fun setBadgeNotificationEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_BADGE_NOTIFICATION_ENABLED, enabled).apply()
+        _isBadgeNotificationEnabled.value = enabled
+    }
+
+    private val _isBadgeNotificationEnabled = MutableStateFlow(isBadgeNotificationEnabled())
+    val isBadgeNotificationEnabledFlow: StateFlow<Boolean> = _isBadgeNotificationEnabled.asStateFlow()
 
     fun setPin(pin: String) {
         val hash = hashPin(pin)
@@ -332,7 +383,11 @@ class SecurityPreferences(context: Context) {
             else -> "medium"
         }
         prefs.edit().putString(KEY_IMAGE_GALLERY_SIZE, validSize).apply()
+        _imageGallerySize.value = validSize
     }
+
+    private val _imageGallerySize = MutableStateFlow(getImageGallerySize())
+    val imageGallerySize: StateFlow<String> = _imageGallerySize.asStateFlow()
 
     fun isHapticFeedbackEnabled(): Boolean = prefs.getBoolean(KEY_HAPTIC_FEEDBACK_ENABLED, true)
 
@@ -451,6 +506,7 @@ class SecurityPreferences(context: Context) {
         private const val KEY_SCREENSHOT_PROTECTION = "screenshot_protection"
         private const val KEY_HIDE_NOTIFICATION_CONTENT = "hide_notification_content"
         private const val KEY_NOTIFICATIONS_ENABLED = "notifications_enabled"
+        private const val KEY_BADGE_NOTIFICATION_ENABLED = "badge_notification_enabled"
         private const val KEY_PIN_HASH = "pin_hash"
         private const val KEY_COUPLE_KEY = "couple_key"
         private const val KEY_PARTNER_EMAIL = "partner_email"
@@ -479,6 +535,9 @@ class SecurityPreferences(context: Context) {
         private const val KEY_INITIAL_PERMS_REQUESTED = "initial_perms_requested"
         private const val KEY_INITIAL_NOTIF_REQUESTED = "initial_notif_requested"
         private const val KEY_SHOW_PREVIOUS_CHATS = "show_previous_chats"
+        private const val KEY_SHOW_PREVIOUS_CHATS_DATE = "show_previous_chats_date"
+        private const val KEY_ALL_GALLERY_RECOVERED = "all_gallery_recovered"
+        private const val KEY_ALL_GALLERY_RECOVERED_DATE = "all_gallery_recovered_date"
         private const val KEY_TEMPORARY_CLEAR_TIMESTAMP = "temporary_clear_timestamp"
         private const val KEY_NOTE_REMINDERS_ENABLED = "note_reminders_enabled"
         private const val KEY_SIDE_EMERGENCY_EXIT_ENABLED = "side_emergency_exit_enabled"

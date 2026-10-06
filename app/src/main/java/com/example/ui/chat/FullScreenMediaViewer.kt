@@ -101,9 +101,8 @@ fun FullScreenMediaViewer(
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_STOP || event == Lifecycle.Event.ON_PAUSE) {
+            if (event == Lifecycle.Event.ON_STOP) {
                 onDismiss()
-                app?.securityPreferences?.reDisguise()
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -709,22 +708,22 @@ fun FullScreenMediaViewer(
                         .fillMaxWidth()
                         .background(
                             Brush.verticalGradient(
-                                colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.85f))
+                                colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.88f))
                             )
                         )
-                        .navigationBarsPadding()
-                        .padding(bottom = 40.dp),
+                        .windowInsetsPadding(WindowInsets.navigationBars)
+                        .padding(bottom = 24.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    // Thumbnail filmstrip preview for fast photo browsing (if multiple photos)
+                    // Thumbnail filmstrip preview for fast photo browsing (starts from center of screen)
                     if (mediaList.size > 1) {
                         LazyRow(
                             state = filmstripListState,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            contentPadding = PaddingValues(horizontal = 16.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+                            contentPadding = PaddingValues(horizontal = 24.dp),
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(bottom = 10.dp)
+                                .padding(bottom = 14.dp)
                         ) {
                             itemsIndexed(mediaList) { idx, url ->
                                 val isSelected = idx == currentIndex
@@ -788,12 +787,12 @@ fun FullScreenMediaViewer(
                         }
                     }
 
-                    // Zoom Max & Min Controls Pill
+                    // Zoom Max & Min Controls Pill (elevated safely above native gesture bar)
                     Surface(
                         shape = RoundedCornerShape(24.dp),
-                        color = Color.Black.copy(alpha = 0.65f),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.2f)),
-                        modifier = Modifier.padding(bottom = 6.dp)
+                        color = Color.Black.copy(alpha = 0.75f),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.25f)),
+                        modifier = Modifier.padding(bottom = 10.dp)
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,

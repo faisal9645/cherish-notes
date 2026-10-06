@@ -10,6 +10,8 @@ import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -47,8 +49,20 @@ import com.example.ui.theme.AppGradientStart
 import com.example.ui.theme.RoseGoldPrimary
 import com.example.ui.theme.appHorizontalGradient
 import java.text.SimpleDateFormat
+import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import java.util.*
 import kotlinx.coroutines.launch
+
+data class GalleryMediaItem(
+    val id: String,
+    val messageId: String,
+    val mediaUrl: String,
+    val isVideo: Boolean,
+    val durationSeconds: Int,
+    val timestamp: Long,
+    val originalMessage: Message
+)
 
 data class GalleryLinkItem(
     val messageId: String,
@@ -95,6 +109,13 @@ fun SharedGalleryScreen(
     var selectedDateMillis by remember { mutableStateOf<Long?>(null) }
     var messageToDelete by remember { mutableStateOf<Message?>(null) }
 
+    // Telegram-style Gallery Zoom: initially ALWAYS 3 columns
+    var gridColumnCount by remember { mutableIntStateOf(3) }
+    // Multi-Select and Delete
+    var isSelectionMode by remember { mutableStateOf(false) }
+    var selectedItemIds by remember { mutableStateOf(setOf<String>()) }
+    var showMultiDeleteConfirmDialog by remember { mutableStateOf(false) }
+
     val voicePlayerHelper = chatViewModel.voicePlayerHelper
     val currentTrackId by voicePlayerHelper.currentTrackId.collectAsState()
     val isVoicePlaying by voicePlayerHelper.isPlaying.collectAsState()
@@ -104,8 +125,6 @@ fun SharedGalleryScreen(
 
     val currentUserId = chatState.currentUser?.id ?: "user_me"
 
-
-
     val app = LocalContext.current.applicationContext as? com.example.CherishApplication
     val isDisguiseActive by (app?.securityPreferences?.isDisguiseActive ?: kotlinx.coroutines.flow.MutableStateFlow(false)).collectAsState()
 
@@ -113,20 +132,32 @@ fun SharedGalleryScreen(
         if (isDisguiseActive) {
             selectedMediaUrl = null
             selectedMessageIdForViewer = null
+            isSelectionMode = false
+            selectedItemIds = emptySet()
         }
     }
 
     val allGalleryItems by chatViewModel.galleryMediaMessages.collectAsState()
+    val isAllGalleryRecovered by (app?.securityPreferences?.isAllGalleryRecovered?.collectAsState() ?: remember { mutableStateOf(false) })
+    val startOfToday = remember { com.example.CherishApplication.instance.chatRepository.getStartOfToday() }
 
-    LaunchedEffect(Unit) {
-        chatViewModel.loadAllGalleryMedia()
+    LaunchedEffect(isAllGalleryRecovered) {
+        if (isAllGalleryRecovered) {
+            chatViewModel.loadAllGalleryMedia()
+        }
+    }
+
+    LaunchedEffect(selectedDateMillis) {
+        if (selectedDateMillis != null) {
+            chatViewModel.loadAllGalleryMedia()
+        }
     }
 
     val sourceMessages = remember(chatState.messages, allGalleryItems) {
         (chatState.messages + allGalleryItems).distinctBy { it.id }
     }
 
-    val filteredMessages = remember(sourceMessages, selectedDateMillis) {
+    val filteredMessages = remember(sourceMessages, selectedDateMillis, isAllGalleryRecovered) {
         var list = sourceMessages.filter { !it.isDeleted }
 
         // Filter out any messages containing "today start 6 am" or similar variations
@@ -138,19 +169,22 @@ fun SharedGalleryScreen(
             !(hasToday && (hasStart || has6Am))
         }
 
-        // Calendar Date Search rule (6:00 AM daily boundary)
+        // Calendar Date Search rule (searches full selected day)
         if (selectedDateMillis != null) {
-            val cal = Calendar.getInstance().apply {
-                timeInMillis = selectedDateMillis!!
-                set(Calendar.HOUR_OF_DAY, 6)
-                set(Calendar.MINUTE, 0)
-                set(Calendar.SECOND, 0)
-                set(Calendar.MILLISECOND, 0)
+            val selCal = Calendar.getInstance().apply { timeInMillis = selectedDateMillis!! }
+            list = list.filter { msg ->
+                val msgCal = Calendar.getInstance().apply { timeInMillis = msg.timestamp }
+                msgCal.get(Calendar.YEAR) == selCal.get(Calendar.YEAR) &&
+                msgCal.get(Calendar.DAY_OF_YEAR) == selCal.get(Calendar.DAY_OF_YEAR)
             }
-            val startOfDay = cal.timeInMillis
-            cal.add(Calendar.DAY_OF_YEAR, 1)
-            val endOfDay = cal.timeInMillis
-            list = list.filter { it.timestamp in startOfDay until endOfDay }
+        } else if (!isAllGalleryRecovered) {
+            // When day starts, show only today's gallery unless Recover All is activated
+            val todayCal = Calendar.getInstance()
+            list = list.filter { msg ->
+                val msgCal = Calendar.getInstance().apply { timeInMillis = msg.timestamp }
+                msgCal.get(Calendar.YEAR) == todayCal.get(Calendar.YEAR) &&
+                msgCal.get(Calendar.DAY_OF_YEAR) == todayCal.get(Calendar.DAY_OF_YEAR)
+            }
         }
 
         list
@@ -187,14 +221,50 @@ fun SharedGalleryScreen(
         list.sortedByDescending { it.timestamp }
     }
 
+    // Every media URL from single and multi-photo messages is represented
+    val galleryMediaItems = remember(filteredMessages) {
+        val list = mutableListOf<GalleryMediaItem>()
+        filteredMessages.forEach { msg ->
+            if (msg.getTypedType() == MessageType.IMAGE) {
+                val urls = msg.getAllMediaUrls().ifEmpty { listOfNotNull(msg.mediaUrl) }
+                urls.forEachIndexed { idx, url ->
+                    if (url.isNotBlank()) {
+                        list.add(
+                            GalleryMediaItem(
+                                id = "${msg.id}_$idx",
+                                messageId = msg.id,
+                                mediaUrl = url,
+                                isVideo = false,
+                                durationSeconds = 0,
+                                timestamp = msg.timestamp,
+                                originalMessage = msg
+                            )
+                        )
+                    }
+                }
+            } else if (msg.getTypedType() == MessageType.VIDEO || msg.isVideoNote || msg.isCircularVideoNote()) {
+                val vUrl = msg.mediaUrl ?: msg.mediaUrls.firstOrNull() ?: ""
+                if (vUrl.isNotBlank()) {
+                    list.add(
+                        GalleryMediaItem(
+                            id = msg.id,
+                            messageId = msg.id,
+                            mediaUrl = vUrl,
+                            isVideo = true,
+                            durationSeconds = msg.durationSeconds,
+                            timestamp = msg.timestamp,
+                            originalMessage = msg
+                        )
+                    )
+                }
+            }
+        }
+        list.sortedByDescending { it.timestamp }
+    }
+
     val mediaMessages = remember(filteredMessages) {
         filteredMessages.filter {
-            !it.mediaUrl.isNullOrBlank() && (
-                it.getTypedType() == MessageType.IMAGE ||
-                it.getTypedType() == MessageType.VIDEO ||
-                it.isVideoNote ||
-                it.isCircularVideoNote()
-            )
+            !it.mediaUrl.isNullOrBlank() || it.mediaUrls.isNotEmpty()
         }.sortedByDescending { it.timestamp }
     }
 
@@ -210,90 +280,180 @@ fun SharedGalleryScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = {
-                    Column {
+            if (isSelectionMode) {
+                TopAppBar(
+                    title = {
                         Text(
-                            "Shared Gallery",
+                            "${selectedItemIds.size} Selected",
                             fontWeight = FontWeight.Bold,
-                            fontSize = 18.sp,
+                            fontSize = 17.sp,
                             color = MaterialTheme.colorScheme.onSurface
                         )
-                        val countText = when (pagerState.currentPage) {
-                            0 -> "${mediaMessages.size} photos & videos"
-                            1 -> "${voiceMessages.size} voice notes"
-                            2 -> "${extractedLinks.size} shared links"
-                            else -> "${starredMessages.size} starred items"
-                        }
-                        val subtitle = if (selectedDateMillis != null) {
-                            val sdf = SimpleDateFormat("MMM d, yyyy", Locale.getDefault())
-                            "$countText • ${sdf.format(Date(selectedDateMillis!!))}"
-                        } else {
-                            countText
-                        }
-                        Text(
-                            text = subtitle,
-                            fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                },
-                navigationIcon = {
-                    IconButton(
-                        onClick = onNavigateBack,
-                        modifier = Modifier.testTag("gallery_back_button")
-                    ) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                },
-                actions = {
-                    IconButton(
-                        onClick = {
-                            val cal = Calendar.getInstance()
-                            selectedDateMillis?.let { cal.timeInMillis = it }
-                            android.app.DatePickerDialog(
-                                context,
-                                { _, year, month, dayOfMonth ->
-                                    val selectedCal = Calendar.getInstance().apply {
-                                        set(Calendar.YEAR, year)
-                                        set(Calendar.MONTH, month)
-                                        set(Calendar.DAY_OF_MONTH, dayOfMonth)
-                                        set(Calendar.HOUR_OF_DAY, 0)
-                                        set(Calendar.MINUTE, 0)
-                                        set(Calendar.SECOND, 0)
-                                        set(Calendar.MILLISECOND, 0)
-                                    }
-                                    selectedDateMillis = selectedCal.timeInMillis
-                                },
-                                cal.get(Calendar.YEAR),
-                                cal.get(Calendar.MONTH),
-                                cal.get(Calendar.DAY_OF_MONTH)
-                            ).show()
-                        },
-                        modifier = Modifier.testTag("gallery_calendar_search_button")
-                    ) {
-                        Icon(
-                            imageVector = if (selectedDateMillis != null) Icons.Default.EventAvailable else Icons.Default.CalendarMonth,
-                            contentDescription = "Search by Date",
-                            tint = if (selectedDateMillis != null) RoseGoldPrimary else MaterialTheme.colorScheme.onSurface
-                        )
-                    }
-
-                    if (selectedDateMillis != null) {
+                    },
+                    navigationIcon = {
                         IconButton(
-                            onClick = { selectedDateMillis = null },
-                            modifier = Modifier.testTag("gallery_clear_date_button")
+                            onClick = {
+                                isSelectionMode = false
+                                selectedItemIds = emptySet()
+                            }
                         ) {
-                            Icon(
-                                Icons.Default.Close,
-                                contentDescription = "Clear Date Filter",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            Icon(Icons.Default.Close, contentDescription = "Cancel Selection")
+                        }
+                    },
+                    actions = {
+                        TextButton(
+                            onClick = {
+                                selectedItemIds = if (selectedItemIds.size == galleryMediaItems.size) {
+                                    emptySet()
+                                } else {
+                                    galleryMediaItems.map { it.id }.toSet()
+                                }
+                            }
+                        ) {
+                            Text(
+                                if (selectedItemIds.size == galleryMediaItems.size) "Deselect All" else "Select All",
+                                fontWeight = FontWeight.Bold,
+                                color = RoseGoldPrimary
                             )
                         }
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
-            )
+                        IconButton(
+                            onClick = {
+                                if (selectedItemIds.isNotEmpty()) {
+                                    showMultiDeleteConfirmDialog = true
+                                }
+                            },
+                            enabled = selectedItemIds.isNotEmpty()
+                        ) {
+                            Icon(
+                                Icons.Default.Delete,
+                                contentDescription = "Delete Selected",
+                                tint = if (selectedItemIds.isNotEmpty()) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                            )
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
+                )
+            } else {
+                TopAppBar(
+                    title = {
+                        Column {
+                            Text(
+                                "Shared Gallery",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 18.sp,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            val countText = when (pagerState.currentPage) {
+                                0 -> "${galleryMediaItems.size} photos & videos"
+                                1 -> "${voiceMessages.size} voice notes"
+                                2 -> "${extractedLinks.size} shared links"
+                                else -> "${starredMessages.size} starred items"
+                            }
+                            val subtitle = if (selectedDateMillis != null) {
+                                val sdf = SimpleDateFormat("MMM d, yyyy", Locale.getDefault())
+                                "$countText • ${sdf.format(Date(selectedDateMillis!!))}"
+                            } else {
+                                countText
+                            }
+                            Text(
+                                text = subtitle,
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    },
+                    navigationIcon = {
+                        IconButton(
+                            onClick = onNavigateBack,
+                            modifier = Modifier.testTag("gallery_back_button")
+                        ) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        }
+                    },
+                    actions = {
+                        // Quick Telegram-style thumbnail zoom controls for media tab
+                        if (pagerState.currentPage == 0 && galleryMediaItems.isNotEmpty()) {
+                            IconButton(
+                                onClick = {
+                                    if (gridColumnCount < 5) gridColumnCount++
+                                }
+                            ) {
+                                Icon(
+                                    Icons.Default.ZoomOut,
+                                    contentDescription = "Zoom Out (Smaller Thumbnails)",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            IconButton(
+                                onClick = {
+                                    if (gridColumnCount > 1) gridColumnCount--
+                                }
+                            ) {
+                                Icon(
+                                    Icons.Default.ZoomIn,
+                                    contentDescription = "Zoom In (Bigger Thumbnails)",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            IconButton(
+                                onClick = { isSelectionMode = true }
+                            ) {
+                                Icon(
+                                    Icons.Default.CheckCircleOutline,
+                                    contentDescription = "Select Items",
+                                    tint = RoseGoldPrimary
+                                )
+                            }
+                        }
+
+                        IconButton(
+                            onClick = {
+                                val cal = Calendar.getInstance()
+                                selectedDateMillis?.let { cal.timeInMillis = it }
+                                android.app.DatePickerDialog(
+                                    context,
+                                    { _, year, month, dayOfMonth ->
+                                        val selectedCal = Calendar.getInstance().apply {
+                                            set(Calendar.YEAR, year)
+                                            set(Calendar.MONTH, month)
+                                            set(Calendar.DAY_OF_MONTH, dayOfMonth)
+                                            set(Calendar.HOUR_OF_DAY, 0)
+                                            set(Calendar.MINUTE, 0)
+                                            set(Calendar.SECOND, 0)
+                                            set(Calendar.MILLISECOND, 0)
+                                        }
+                                        selectedDateMillis = selectedCal.timeInMillis
+                                    },
+                                    cal.get(Calendar.YEAR),
+                                    cal.get(Calendar.MONTH),
+                                    cal.get(Calendar.DAY_OF_MONTH)
+                                ).show()
+                            },
+                            modifier = Modifier.testTag("gallery_calendar_search_button")
+                        ) {
+                            Icon(
+                                imageVector = if (selectedDateMillis != null) Icons.Default.EventAvailable else Icons.Default.CalendarMonth,
+                                contentDescription = "Search by Date",
+                                tint = if (selectedDateMillis != null) RoseGoldPrimary else MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+
+                        if (selectedDateMillis != null) {
+                            IconButton(
+                                onClick = { selectedDateMillis = null },
+                                modifier = Modifier.testTag("gallery_clear_date_button")
+                            ) {
+                                Icon(
+                                    Icons.Default.Close,
+                                    contentDescription = "Clear Date Filter",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
+                )
+            }
         },
         containerColor = MaterialTheme.colorScheme.background
     ) { paddingValues ->
@@ -349,6 +509,53 @@ fun SharedGalleryScreen(
                 }
             }
 
+            // Today's Gallery Indicator with 1-tap Recover All
+            if (!isAllGalleryRecovered && selectedDateMillis == null) {
+                Surface(
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 14.dp, vertical = 4.dp)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.CalendarToday,
+                                contentDescription = null,
+                                tint = RoseGoldPrimary,
+                                modifier = Modifier.size(15.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "Today's Gallery",
+                                fontSize = 12.5.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+
+                        FilledTonalButton(
+                            onClick = { chatViewModel.recoverAllMessagesAndGallery() },
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
+                            modifier = Modifier.height(28.dp),
+                            colors = ButtonDefaults.filledTonalButtonColors(
+                                containerColor = RoseGoldPrimary,
+                                contentColor = Color.White
+                            )
+                        ) {
+                            Text("Recover All", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+
             // Primary Tab Row
             PrimaryTabRow(
                 selectedTabIndex = pagerState.currentPage,
@@ -383,7 +590,7 @@ fun SharedGalleryScreen(
                 when (page) {
                     // TAB 0: Media (Photos & Videos)
                     0 -> {
-                        if (mediaMessages.isEmpty()) {
+                        if (galleryMediaItems.isEmpty()) {
                             val emptyText = if (selectedDateMillis != null) {
                                 val sdf = SimpleDateFormat("MMM d, yyyy", Locale.getDefault())
                                 "No photos or videos found on ${sdf.format(Date(selectedDateMillis!!))} 📅"
@@ -392,26 +599,69 @@ fun SharedGalleryScreen(
                             }
                             EmptyGalleryNotice(emptyText)
                         } else {
+                            var accumulatedZoom by remember { mutableFloatStateOf(1f) }
                             LazyVerticalGrid(
-                                columns = GridCells.Fixed(3),
+                                columns = GridCells.Fixed(gridColumnCount),
                                 modifier = Modifier
                                     .fillMaxSize()
-                                    .padding(4.dp),
+                                    .padding(4.dp)
+                                    .pointerInput(Unit) {
+                                        detectTransformGestures { _, _, zoom, _ ->
+                                            accumulatedZoom *= zoom
+                                            if (accumulatedZoom > 1.25f) {
+                                                // Pinch out: zoom in (make bigger -> reduce columns)
+                                                if (gridColumnCount > 1) {
+                                                    gridColumnCount--
+                                                }
+                                                accumulatedZoom = 1f
+                                            } else if (accumulatedZoom < 0.80f) {
+                                                // Pinch in: zoom out (shrink thumbnails -> increase columns)
+                                                if (gridColumnCount < 5) {
+                                                    gridColumnCount++
+                                                }
+                                                accumulatedZoom = 1f
+                                            }
+                                        }
+                                    },
                                 horizontalArrangement = Arrangement.spacedBy(4.dp),
                                 verticalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
-                                items(mediaMessages, key = { it.id }) { msg ->
+                                items(galleryMediaItems, key = { it.id }) { item ->
+                                    val isSelected = selectedItemIds.contains(item.id)
+
                                     Box(
                                         modifier = Modifier
                                             .aspectRatio(1f)
                                             .clip(RoundedCornerShape(8.dp))
-                                            .clickable {
-                                                selectedMediaUrl = msg.mediaUrl
-                                                selectedMessageIdForViewer = msg.id
+                                            .then(
+                                                if (isSelected) Modifier.border(2.5.dp, RoseGoldPrimary, RoundedCornerShape(8.dp))
+                                                else Modifier
+                                            )
+                                            .pointerInput(item.id, isSelectionMode) {
+                                                detectTapGestures(
+                                                    onLongPress = {
+                                                        if (!isSelectionMode) {
+                                                            isSelectionMode = true
+                                                            selectedItemIds = setOf(item.id)
+                                                        }
+                                                    },
+                                                    onTap = {
+                                                        if (isSelectionMode) {
+                                                            selectedItemIds = if (isSelected) {
+                                                                selectedItemIds - item.id
+                                                            } else {
+                                                                selectedItemIds + item.id
+                                                            }
+                                                        } else {
+                                                            selectedMediaUrl = item.mediaUrl
+                                                            selectedMessageIdForViewer = item.messageId
+                                                        }
+                                                    }
+                                                )
                                             }
                                     ) {
-                                        val modelData = remember(msg.mediaUrl) {
-                                            val url = msg.mediaUrl ?: ""
+                                        val modelData = remember(item.mediaUrl) {
+                                            val url = item.mediaUrl
                                             if (url.startsWith("data:image")) {
                                                 try {
                                                     val base64 = url.substringAfter("base64,")
@@ -425,7 +675,7 @@ fun SharedGalleryScreen(
                                         }
 
                                         val context = androidx.compose.ui.platform.LocalContext.current
-                                        val isVideoItem = msg.isCircularVideoNote() || msg.isVideoNote || msg.getTypedType() == MessageType.VIDEO
+                                        val isVideoItem = item.isVideo
 
                                         AsyncImage(
                                             model = coil.request.ImageRequest.Builder(context)
@@ -479,7 +729,7 @@ fun SharedGalleryScreen(
                                                     )
                                                     Spacer(modifier = Modifier.width(3.dp))
                                                     Text(
-                                                        text = if (msg.isCircularVideoNote() || msg.isVideoNote) "Video Note" else "Video",
+                                                        text = if (item.originalMessage.isCircularVideoNote() || item.originalMessage.isVideoNote) "Video Note" else "Video",
                                                         color = Color.White,
                                                         fontSize = 9.5.sp,
                                                         fontWeight = FontWeight.Bold
@@ -488,42 +738,64 @@ fun SharedGalleryScreen(
                                             }
                                         }
 
-                                        // Overlay "Show in chat" button on bottom edge
-                                        Box(
-                                            modifier = Modifier
-                                                .align(Alignment.BottomEnd)
-                                                .padding(4.dp)
-                                                .clip(CircleShape)
-                                                .background(Color.Black.copy(alpha = 0.55f))
-                                                .clickable { onNavigateToMessage(msg.id) }
-                                                .padding(6.dp)
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Default.Chat,
-                                                contentDescription = "Show in chat",
-                                                tint = Color.White,
-                                                modifier = Modifier.size(14.dp)
-                                            )
+                                        // Selection Mode Checkbox Badge
+                                        if (isSelectionMode) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .align(Alignment.TopStart)
+                                                    .padding(4.dp)
+                                                    .size(24.dp)
+                                                    .clip(CircleShape)
+                                                    .background(if (isSelected) RoseGoldPrimary else Color.Black.copy(alpha = 0.55f)),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Icon(
+                                                    imageVector = if (isSelected) Icons.Default.Check else Icons.Outlined.Circle,
+                                                    contentDescription = if (isSelected) "Selected" else "Not selected",
+                                                    tint = Color.White,
+                                                    modifier = Modifier.size(16.dp)
+                                                )
+                                            }
                                         }
 
-                                        // Overlay "Delete" button on top edge
-                                        Box(
-                                            modifier = Modifier
-                                                .align(Alignment.TopEnd)
-                                                .padding(4.dp)
-                                                .size(32.dp)
-                                                .clip(CircleShape)
-                                                .background(Color.Black.copy(alpha = 0.65f))
-                                                .clickable { messageToDelete = msg }
-                                                .testTag("gallery_item_delete_${msg.id}"),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Default.Delete,
-                                                contentDescription = "Delete",
-                                                tint = Color(0xFF9CA3AF),
-                                                modifier = Modifier.size(16.dp)
-                                            )
+                                        // Overlay "Show in chat" button on bottom edge (when not in multi-selection mode)
+                                        if (!isSelectionMode) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .align(Alignment.BottomEnd)
+                                                    .padding(4.dp)
+                                                    .clip(CircleShape)
+                                                    .background(Color.Black.copy(alpha = 0.55f))
+                                                    .clickable { onNavigateToMessage(item.messageId) }
+                                                    .padding(6.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Chat,
+                                                    contentDescription = "Show in chat",
+                                                    tint = Color.White,
+                                                    modifier = Modifier.size(14.dp)
+                                                )
+                                            }
+
+                                            // Overlay "Delete" button on top edge
+                                            Box(
+                                                modifier = Modifier
+                                                    .align(Alignment.TopEnd)
+                                                    .padding(4.dp)
+                                                    .size(32.dp)
+                                                    .clip(CircleShape)
+                                                    .background(Color.Black.copy(alpha = 0.65f))
+                                                    .clickable { messageToDelete = item.originalMessage }
+                                                    .testTag("gallery_item_delete_${item.id}"),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Delete,
+                                                    contentDescription = "Delete",
+                                                    tint = Color(0xFF9CA3AF),
+                                                    modifier = Modifier.size(16.dp)
+                                                )
+                                            }
                                         }
                                     }
                                 }
@@ -947,20 +1219,46 @@ fun SharedGalleryScreen(
 
                                             Spacer(modifier = Modifier.height(8.dp))
 
-                                            if (msg.mediaUrl != null && msg.getTypedType() == MessageType.IMAGE) {
-                                                AsyncImage(
-                                                    model = msg.mediaUrl,
-                                                    contentDescription = null,
-                                                    contentScale = ContentScale.Crop,
-                                                    modifier = Modifier
-                                                        .fillMaxWidth()
-                                                        .height(140.dp)
-                                                        .clip(RoundedCornerShape(10.dp))
-                                                        .clickable {
-                                                            selectedMediaUrl = msg.mediaUrl
-                                                            selectedMessageIdForViewer = msg.id
+                                            val starredUrls = msg.getAllMediaUrls()
+                                            if (starredUrls.isNotEmpty() && msg.getTypedType() == MessageType.IMAGE) {
+                                                if (starredUrls.size == 1) {
+                                                    AsyncImage(
+                                                        model = starredUrls[0],
+                                                        contentDescription = null,
+                                                        contentScale = ContentScale.Crop,
+                                                        modifier = Modifier
+                                                            .fillMaxWidth()
+                                                            .height(140.dp)
+                                                            .clip(RoundedCornerShape(10.dp))
+                                                            .clickable {
+                                                                selectedMediaUrl = starredUrls[0]
+                                                                selectedMessageIdForViewer = msg.id
+                                                            }
+                                                    )
+                                                } else {
+                                                    Row(
+                                                        modifier = Modifier
+                                                            .fillMaxWidth()
+                                                            .height(130.dp),
+                                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                                    ) {
+                                                        starredUrls.forEach { starUrl ->
+                                                            AsyncImage(
+                                                                model = starUrl,
+                                                                contentDescription = null,
+                                                                contentScale = ContentScale.Crop,
+                                                                modifier = Modifier
+                                                                    .weight(1f)
+                                                                    .fillMaxHeight()
+                                                                    .clip(RoundedCornerShape(10.dp))
+                                                                    .clickable {
+                                                                        selectedMediaUrl = starUrl
+                                                                        selectedMessageIdForViewer = msg.id
+                                                                    }
+                                                            )
                                                         }
-                                                )
+                                                    }
+                                                }
                                                 val clean = msg.text.trim()
                                                 val isSuppressed = clean.lowercase().let { it.contains("today") && (it.contains("start") || it.contains("satrt") || it.contains("6 am") || it.contains("6am") || it.contains("6:00")) }
                                                 if (clean.isNotBlank() && clean != "Sent a photo" && !isSuppressed) {
@@ -1010,7 +1308,41 @@ fun SharedGalleryScreen(
         }
     }
 
-    // Delete Confirmation Dialog for Gallery
+    // Multi-Select Delete Confirmation Dialog
+    if (showMultiDeleteConfirmDialog) {
+        val count = selectedItemIds.size
+        AlertDialog(
+            onDismissRequest = { showMultiDeleteConfirmDialog = false },
+            title = { Text("Delete $count selected item${if (count > 1) "s" else ""}?") },
+            text = { Text("These items will be permanently removed from your shared gallery and chat.") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val messagesToDelete = galleryMediaItems
+                            .filter { it.id in selectedItemIds }
+                            .map { it.messageId }
+                            .distinct()
+                        messagesToDelete.forEach { id ->
+                            chatViewModel.deleteMessage(id)
+                        }
+                        selectedItemIds = emptySet()
+                        isSelectionMode = false
+                        showMultiDeleteConfirmDialog = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text("Delete ($count)")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showMultiDeleteConfirmDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    // Delete Confirmation Dialog for Single Gallery Item
     messageToDelete?.let { msg ->
         AlertDialog(
             onDismissRequest = { messageToDelete = null },
@@ -1041,21 +1373,22 @@ fun SharedGalleryScreen(
     }
 
     selectedMediaUrl?.let { url ->
-        val galleryAllUrls = remember(mediaMessages) {
-            mediaMessages.flatMap { it.getAllMediaUrls().ifEmpty { listOfNotNull(it.mediaUrl) } }.distinct()
+        val galleryAllUrls = remember(galleryMediaItems) {
+            galleryMediaItems.map { it.mediaUrl }.filter { it.isNotBlank() }.distinct()
         }
         FullScreenMediaViewer(
             mediaUrl = url,
             allMediaUrls = if (galleryAllUrls.isNotEmpty()) galleryAllUrls else listOf(url),
             onShowInChat = { clickedUrl ->
-                val targetMsg = mediaMessages.find { it.mediaUrl == clickedUrl }
+                val targetMsg = sourceMessages.find { it.mediaUrl == clickedUrl || it.getAllMediaUrls().contains(clickedUrl) }
+                    ?: allGalleryItems.find { it.mediaUrl == clickedUrl || it.getAllMediaUrls().contains(clickedUrl) }
                 if (targetMsg != null) {
                     onNavigateToMessage(targetMsg.id)
                 }
             },
             onDeleteMedia = { clickedUrl ->
-                val targetMsg = mediaMessages.find { it.mediaUrl == clickedUrl }
-                    ?: allGalleryItems.find { it.mediaUrl == clickedUrl }
+                val targetMsg = sourceMessages.find { it.mediaUrl == clickedUrl || it.getAllMediaUrls().contains(clickedUrl) }
+                    ?: allGalleryItems.find { it.mediaUrl == clickedUrl || it.getAllMediaUrls().contains(clickedUrl) }
                 if (targetMsg != null) {
                     chatViewModel.deleteMessage(targetMsg.id)
                 }

@@ -1,11 +1,12 @@
 package com.example.ui.chat
 
 import android.content.Context
+import android.graphics.Matrix
+import android.graphics.SurfaceTexture
 import android.hardware.Camera
 import android.media.CamcorderProfile
 import android.media.MediaRecorder
-import android.view.SurfaceHolder
-import android.view.SurfaceView
+import android.view.TextureView
 import android.widget.Toast
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
@@ -86,9 +87,44 @@ fun CircularVideoNoteRecorderDialog(
     var cameraRef by remember { mutableStateOf<Camera?>(null) }
     var mediaRecorderRef by remember { mutableStateOf<MediaRecorder?>(null) }
     var outputFileRef by remember { mutableStateOf<File?>(null) }
-    var surfaceHolderRef by remember { mutableStateOf<SurfaceHolder?>(null) }
+    var surfaceTextureRef by remember { mutableStateOf<SurfaceTexture?>(null) }
+    var textureViewRef by remember { mutableStateOf<TextureView?>(null) }
+    var previewWidth by remember { mutableIntStateOf(640) }
+    var previewHeight by remember { mutableIntStateOf(480) }
 
-    fun startCamera(facing: Int, holder: SurfaceHolder) {
+    fun adjustTextureTransform(tv: TextureView, viewW: Int, viewH: Int, pW: Int, pH: Int, isFront: Boolean) {
+        if (viewW <= 0 || viewH <= 0 || pW <= 0 || pH <= 0) return
+        val matrix = Matrix()
+        // With 90 deg rotation, portrait dimensions are:
+        val rotatedW = pH.toFloat()
+        val rotatedH = pW.toFloat()
+
+        // Center-crop to square viewfinder without stretching or squishing face
+        val scaleX: Float
+        val scaleY: Float
+        val ratioView = viewW.toFloat() / viewH.toFloat()
+        val ratioCam = rotatedW / rotatedH
+
+        if (ratioCam < ratioView) {
+            // Camera portrait is taller than square: crop top/bottom
+            scaleX = 1f
+            scaleY = ratioView / ratioCam
+        } else {
+            // Camera portrait is wider: crop sides
+            scaleX = ratioCam / ratioView
+            scaleY = 1f
+        }
+
+        val centerX = viewW / 2f
+        val centerY = viewH / 2f
+
+        // Natural selfie mirror on front camera
+        val finalScaleX = if (isFront) -scaleX else scaleX
+        matrix.setScale(finalScaleX, scaleY, centerX, centerY)
+        tv.setTransform(matrix)
+    }
+
+    fun startCamera(facing: Int, texture: SurfaceTexture, width: Int, height: Int) {
         try {
             cameraRef?.stopPreview()
             cameraRef?.release()
@@ -98,17 +134,27 @@ fun CircularVideoNoteRecorderDialog(
             val cam = Camera.open(camId)
             cameraRef = cam
             cam.setDisplayOrientation(90)
+            var pW = 640
+            var pH = 480
             try {
                 val params = cam.parameters
                 val sizes = params.supportedPreviewSizes
                 val best = sizes?.minByOrNull { kotlin.math.abs((it.width.toFloat() / it.height.toFloat()) - (4f / 3f)) }
                 if (best != null) {
                     params.setPreviewSize(best.width, best.height)
+                    pW = best.width
+                    pH = best.height
                     cam.parameters = params
                 }
             } catch (_: Exception) {}
-            cam.setPreviewDisplay(holder)
+            previewWidth = pW
+            previewHeight = pH
+            cam.setPreviewTexture(texture)
             cam.startPreview()
+
+            textureViewRef?.let { tv ->
+                adjustTextureTransform(tv, width, height, pW, pH, facing == Camera.CameraInfo.CAMERA_FACING_FRONT)
+            }
         } catch (_: Exception) {}
     }
 
@@ -238,7 +284,7 @@ fun CircularVideoNoteRecorderDialog(
             decorFitsSystemWindows = false
         )
     ) {
-        Box(
+        BoxWithConstraints(
             modifier = Modifier
                 .fillMaxSize()
                 .background(Color.Black.copy(alpha = 0.88f))
@@ -246,12 +292,14 @@ fun CircularVideoNoteRecorderDialog(
                 .navigationBarsPadding(),
             contentAlignment = Alignment.Center
         ) {
+            val circleSize = if (maxWidth < 360.dp) 300.dp else if (maxWidth < 400.dp) 330.dp else 340.dp
+
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center,
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(horizontal = 20.dp, vertical = 16.dp)
+                    .padding(horizontal = 16.dp, vertical = 12.dp)
             ) {
                 // Header status
                 Row(
@@ -290,14 +338,13 @@ fun CircularVideoNoteRecorderDialog(
                     fontSize = 13.sp
                 )
 
-                Spacer(modifier = Modifier.height(20.dp))
+                Spacer(modifier = Modifier.height(18.dp))
 
-                // Centered Circular Viewfinder (310dp)
+                // Centered Circular Viewfinder (Enlarged, strictly clipped with NO dark square box around it)
                 Box(
                     modifier = Modifier
-                        .size(310.dp)
+                        .size(circleSize)
                         .clip(CircleShape)
-                        .background(Color(0xFF161922))
                         .border(
                             width = 3.5.dp,
                             color = if (isRecording) RoseGoldPrimary else Color.White.copy(alpha = 0.35f),
@@ -307,28 +354,34 @@ fun CircularVideoNoteRecorderDialog(
                 ) {
                     AndroidView(
                         factory = { ctx ->
-                            SurfaceView(ctx).apply {
+                            TextureView(ctx).apply {
+                                textureViewRef = this
+                                clipToOutline = true
                                 outlineProvider = object : android.view.ViewOutlineProvider() {
                                     override fun getOutline(view: android.view.View, outline: android.graphics.Outline) {
                                         outline.setOval(0, 0, view.width, view.height)
                                     }
                                 }
-                                clipToOutline = true
-                                holder.addCallback(object : SurfaceHolder.Callback {
-                                    override fun surfaceCreated(holder: SurfaceHolder) {
-                                        surfaceHolderRef = holder
-                                        startCamera(cameraFacing, holder)
+                                surfaceTextureListener = object : TextureView.SurfaceTextureListener {
+                                    override fun onSurfaceTextureAvailable(surface: SurfaceTexture, width: Int, height: Int) {
+                                        surfaceTextureRef = surface
+                                        startCamera(cameraFacing, surface, width, height)
                                         // Auto-start recording as in Telegram
                                         beginRecording()
                                     }
 
-                                    override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {}
-
-                                    override fun surfaceDestroyed(holder: SurfaceHolder) {
-                                        surfaceHolderRef = null
-                                        stopCamera()
+                                    override fun onSurfaceTextureSizeChanged(surface: SurfaceTexture, width: Int, height: Int) {
+                                        adjustTextureTransform(this@apply, width, height, previewWidth, previewHeight, cameraFacing == Camera.CameraInfo.CAMERA_FACING_FRONT)
                                     }
-                                })
+
+                                    override fun onSurfaceTextureDestroyed(surface: SurfaceTexture): Boolean {
+                                        surfaceTextureRef = null
+                                        stopCamera()
+                                        return true
+                                    }
+
+                                    override fun onSurfaceTextureUpdated(surface: SurfaceTexture) {}
+                                }
                             }
                         },
                         modifier = Modifier
@@ -598,8 +651,10 @@ fun CircularVideoNoteRecorderDialog(
                                 } else {
                                     Camera.CameraInfo.CAMERA_FACING_FRONT
                                 }
-                                surfaceHolderRef?.let { holder ->
-                                    startCamera(cameraFacing, holder)
+                                surfaceTextureRef?.let { st ->
+                                    val w = textureViewRef?.width ?: 640
+                                    val h = textureViewRef?.height ?: 640
+                                    startCamera(cameraFacing, st, w, h)
                                 }
                                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                             },

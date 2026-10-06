@@ -349,9 +349,13 @@ fun ChatScreen(
         }
     }
 
-    // Android back button & gesture: return directly to normal Notes app (Issue Back Button)
+    // Android back button & gesture: handle in-app dialogs first, else return to disguise Notes
     BackHandler {
-        if (uiState.isSearching) {
+        if (uiState.theaterVideoId != null) {
+            viewModel.closeTheaterVideo()
+        } else if (uiState.fullScreenMediaUrl != null) {
+            viewModel.closeFullScreenMedia()
+        } else if (uiState.isSearching) {
             viewModel.setSearching(false)
         } else if (showChatMenu) {
             showChatMenu = false
@@ -360,13 +364,14 @@ fun ChatScreen(
         }
     }
 
-    // Scroll to target message when navigating from gallery ("Show in chat")
+    // Scroll to exact target message when navigating from gallery ("Show in chat")
     LaunchedEffect(uiState.targetScrollMessageId, displayedMessages.size) {
         val targetId = uiState.targetScrollMessageId
         if (targetId != null && displayedMessages.isNotEmpty()) {
-            val idx = displayedMessages.indexOfFirst { it.id == targetId }
-            if (idx >= 0) {
-                listState.animateScrollToItem(idx)
+            val reversedMessages = displayedMessages.reversed()
+            val targetIndex = reversedMessages.indexOfFirst { it.id == targetId }
+            if (targetIndex >= 0) {
+                listState.animateScrollToItem(index = targetIndex, scrollOffset = -150)
                 highlightedMessageId = targetId
                 kotlinx.coroutines.delay(2500)
                 highlightedMessageId = null
@@ -1431,7 +1436,6 @@ fun ChatScreen(
             isPartnerTouching = uiState.isPartnerHeartTouching,
             isPartnerOnline = uiState.isPartnerOnline,
             onTouchChanged = { viewModel.setHeartbeatTouch(it) },
-            onSimulatePartnerTouch = { viewModel.simulatePartnerHeartbeatTouch(it) },
             onDismiss = { showHeartbeatTouch = false }
         )
     }
@@ -1563,6 +1567,12 @@ fun ChatScreen(
         FullScreenMediaViewer(
             mediaUrl = url,
             allMediaUrls = uiState.allMediaUrlsForViewer,
+            onShowInChat = { clickedUrl ->
+                val targetMsg = uiState.messages.find { it.mediaUrl == clickedUrl || it.getAllMediaUrls().contains(clickedUrl) }
+                if (targetMsg != null) {
+                    viewModel.navigateToMessageInChat(targetMsg.id)
+                }
+            },
             onDeleteMedia = { clickedUrl ->
                 val targetMsg = uiState.messages.find { it.mediaUrl == clickedUrl || it.getAllMediaUrls().contains(clickedUrl) }
                 if (targetMsg != null) {
