@@ -508,7 +508,7 @@ fun MessageBubble(
                                     color = textColor.copy(alpha = 0.9f)
                                 )
                                 Text(
-                                    text = message.replyToText,
+                                    text = message.replyToText ?: "",
                                     fontSize = 12.sp,
                                     maxLines = 1,
                                     color = textColor.copy(alpha = 0.75f)
@@ -663,7 +663,7 @@ fun MessageBubble(
 
                             Column(modifier = Modifier.weight(1f)) {
                                 WaveformView(
-                                    amplitudes = message.waveform,
+                                    amplitudes = message.waveform.map { it.toFloat() },
                                     progress = audioProgress(),
                                     isPlaying = isPlayingAudio,
                                     isRecording = false,

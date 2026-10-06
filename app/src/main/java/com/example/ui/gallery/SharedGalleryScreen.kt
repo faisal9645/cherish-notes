@@ -888,7 +888,7 @@ fun SharedGalleryScreen(
                                                 // Progress & scrubber waveform
                                                 Column(modifier = Modifier.weight(1f)) {
                                                     WaveformView(
-                                                        amplitudes = msg.waveform,
+                                                        amplitudes = msg.waveform.map { it.toFloat() },
                                                         progress = if (isThisActive) voiceProgress else 0f,
                                                         isPlaying = isThisPlaying,
                                                         isRecording = false,

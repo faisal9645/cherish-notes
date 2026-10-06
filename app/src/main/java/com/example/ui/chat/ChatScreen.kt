@@ -1,3 +1,4 @@
+@file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 package com.example.ui.chat
 
 import android.Manifest
@@ -72,7 +73,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 fun ChatScreen(
     viewModel: ChatViewModel,
@@ -352,8 +353,10 @@ fun ChatScreen(
 
     // Android back button & gesture: handle in-app dialogs first, else return to disguise Notes
     val isImeVisible = androidx.compose.foundation.layout.WindowInsets.isImeVisible
-    BackHandler(enabled = !isImeVisible) {
-        if (uiState.theaterVideoId != null) {
+    BackHandler(enabled = true) {
+        if (isImeVisible) {
+            keyboardController?.hide()
+        } else if (uiState.theaterVideoId != null) {
             viewModel.closeTheaterVideo()
         } else if (uiState.fullScreenMediaUrl != null) {
             viewModel.closeFullScreenMedia()
@@ -997,75 +1000,7 @@ fun ChatScreen(
                     contentPadding = PaddingValues(vertical = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    item(key = "typing_indicator", contentType = "typing") {
-                        androidx.compose.animation.AnimatedVisibility(
-                            visible = (uiState.isPartnerRecordingAudio || uiState.isPartnerTyping) && !uiState.isStealthCurtainActive,
-                            enter = androidx.compose.animation.expandVertically() + fadeIn(),
-                            exit = androidx.compose.animation.shrinkVertically() + fadeOut(),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(start = 16.dp, bottom = 4.dp, top = 4.dp)
-                        ) {
-                            val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
-                            val isPrivate = uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE
-                            Row(
-                                horizontalArrangement = Arrangement.Start
-                            ) {
-                                Surface(
-                                    color = if (isPrivate) {
-                                        if (isDark) Color(0xFF26272B) else Color(0xFFE5E7EB)
-                                    } else {
-                                        if (isDark) Color(0xFF1E2638) else Color(0xFFF1F5FB)
-                                    },
-                                    shape = RoundedCornerShape(18.dp, 18.dp, 18.dp, 4.dp),
-                                    border = BorderStroke(
-                                        0.5.dp,
-                                        if (isPrivate) {
-                                            if (isDark) Color(0xFF38393E) else Color(0xFFE5E7EB)
-                                        } else {
-                                            if (isDark) Color(0xFF2A364F) else Color(0xFFE2E8F0)
-                                        }
-                                    ),
-                                    shadowElevation = if (isPrivate) 0.5.dp else 0.8.dp
-                                ) {
-                                    Row(
-                                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        if (uiState.isPartnerRecordingAudio) {
-                                            Icon(
-                                                imageVector = Icons.Default.Mic,
-                                                contentDescription = null,
-                                                tint = if (isPrivate) MaterialTheme.colorScheme.onSurfaceVariant else RoseGoldPrimary,
-                                                modifier = Modifier.size(16.dp)
-                                            )
-                                            Spacer(modifier = Modifier.width(6.dp))
-                                            Text(
-                                                text = if (isPrivate)
-                                                    "recording audio..."
-                                                else
-                                                    "$partnerName is recording...",
-                                                fontSize = 12.5.sp,
-                                                color = if (isPrivate) MaterialTheme.colorScheme.onSurfaceVariant else RoseGoldPrimary,
-                                                fontWeight = FontWeight.Medium
-                                            )
-                                        } else {
-                                            if (!isPrivate) {
-                                                Text(
-                                                    text = "$partnerName is typing",
-                                                    fontSize = 12.5.sp,
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                    fontWeight = FontWeight.Medium
-                                                )
-                                                Spacer(modifier = Modifier.width(6.dp))
-                                            }
-                                            BouncingDots(color = if (isPrivate) MaterialTheme.colorScheme.onSurfaceVariant else RoseGoldPrimary)
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
+
 
                     itemsIndexed(
                         items = reversedMessages,
@@ -1371,6 +1306,7 @@ fun ChatScreen(
             isPartnerTouching = uiState.isPartnerHeartTouching,
             isPartnerOnline = uiState.isPartnerOnline,
             onTouchChanged = { viewModel.setHeartbeatTouch(it) },
+            onSyncHeartbeatStreak = { viewModel.syncHeartbeatStreak() },
             onDismiss = { showHeartbeatTouch = false }
         )
     }

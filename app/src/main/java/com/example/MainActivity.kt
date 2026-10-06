@@ -210,8 +210,8 @@ class MainActivity : FragmentActivity() {
         if (isChangingConfigurations) return
         app.authRepository.onAppForegroundStateChanged(false)
         // ALWAYS re-disguise when the Activity stops (user backgrounded the app),
-        // but NEVER if in-app navigation or media viewer is active.
-        if (!app.securityPreferences.ignoreNextPause && !app.securityPreferences.ignoreChatNavigation) {
+        // but NEVER if in-app navigation, media viewer, or theater mode is active.
+        if (!app.securityPreferences.ignoreNextPause && !app.securityPreferences.ignoreChatNavigation && !app.securityPreferences.isTheaterModeActive) {
             app.securityPreferences.reDisguise()
         }
         if (!app.securityPreferences.ignoreChatNavigation && !app.securityPreferences.isTheaterModeActive) {

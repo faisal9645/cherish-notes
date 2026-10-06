@@ -398,7 +398,7 @@ class ChatRepository(
             mediaName = mediaName,
             mediaSize = mediaSize,
             durationSeconds = durationSeconds,
-            waveform = waveform,
+            waveform = waveform.map { it.toDouble() },
             status = MessageStatus.SENT.name,
             replyToMessageId = replyTo?.id,
             replyToText = replyTo?.text?.take(80),

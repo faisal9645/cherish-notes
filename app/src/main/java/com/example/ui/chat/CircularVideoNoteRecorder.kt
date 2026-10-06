@@ -730,11 +730,11 @@ private fun startVideoRecording(context: Context, camera: Camera?, facing: Int, 
         val orientationHint = if (facing == Camera.CameraInfo.CAMERA_FACING_FRONT) 270 else 90
 
         val camId = getCameraId(facing)
-        if (CamcorderProfile.hasProfile(camId, CamcorderProfile.QUALITY_480P)) {
-            val profile = CamcorderProfile.get(camId, CamcorderProfile.QUALITY_480P)
-            recorder.setProfile(profile)
-        } else if (CamcorderProfile.hasProfile(camId, CamcorderProfile.QUALITY_LOW)) {
+        if (CamcorderProfile.hasProfile(camId, CamcorderProfile.QUALITY_LOW)) {
             val profile = CamcorderProfile.get(camId, CamcorderProfile.QUALITY_LOW)
+            recorder.setProfile(profile)
+        } else if (CamcorderProfile.hasProfile(camId, CamcorderProfile.QUALITY_480P)) {
+            val profile = CamcorderProfile.get(camId, CamcorderProfile.QUALITY_480P)
             recorder.setProfile(profile)
         } else {
             recorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)

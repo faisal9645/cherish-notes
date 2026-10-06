@@ -127,7 +127,7 @@ data class Message(
     var mediaName: String? = null,
     var mediaSize: Long = 0L,
     var durationSeconds: Int = 0,
-    var waveform: List<Float> = emptyList(),
+    var waveform: List<Double> = emptyList(),
     var status: String = MessageStatus.SENT.name,
     var readTimestamp: Long? = null,
     var isEdited: Boolean = false,
@@ -167,10 +167,10 @@ data class Message(
             result.addAll(mediaUrls)
         }
         if (!mediaUrl.isNullOrBlank()) {
-            if (mediaUrl.contains(",") && !mediaUrl.startsWith("data:")) {
-                result.addAll(mediaUrl.split(",").map { it.trim() }.filter { it.isNotEmpty() })
+            if (mediaUrl!!.contains(",") && !mediaUrl!!.startsWith("data:")) {
+                result.addAll(mediaUrl!!.split(",").map { it.trim() }.filter { it.isNotEmpty() })
             } else {
-                result.add(mediaUrl)
+                result.add(mediaUrl!!)
             }
         }
         return result.filter { it.isNotBlank() }.distinct()

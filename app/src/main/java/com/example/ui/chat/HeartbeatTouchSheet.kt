@@ -41,6 +41,7 @@ fun HeartbeatTouchDialog(
     isPartnerTouching: Boolean,
     isPartnerOnline: Boolean = false,
     onTouchChanged: (Boolean) -> Unit,
+    onSyncHeartbeatStreak: () -> Unit,
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
@@ -59,7 +60,7 @@ fun HeartbeatTouchDialog(
     LaunchedEffect(shouldFeelHeartbeat(isBothTouching)) {
         if (isBothTouching) {
             hapticHelper.startHeartbeat()
-            viewModel.syncHeartbeatStreak()
+            onSyncHeartbeatStreak()
         } else {
             hapticHelper.stopHeartbeat()
         }

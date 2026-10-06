@@ -496,10 +496,12 @@ class ChatViewModel(
     }
 
     fun openTheaterVideo(videoId: String) {
+        securityPreferences.isTheaterModeActive = true
         _uiState.update { it.copy(theaterVideoId = videoId) }
     }
 
     fun closeTheaterVideo() {
+        securityPreferences.isTheaterModeActive = false
         _uiState.update { it.copy(theaterVideoId = null) }
     }
 

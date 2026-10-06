@@ -349,7 +349,7 @@ fun ProfileScreen(
                                             AvatarView(
                                                 photoUrl = user?.photoUrl,
                                                 name = myName,
-                                                size = 80.dp,
+                                                size = 90.dp,
                                                 isOnline = user?.isOnline == true || user?.isEffectivelyOnline() == true,
                                                 showOnlineBadge = true,
                                                 modifier = Modifier
@@ -434,7 +434,7 @@ fun ProfileScreen(
                                         AvatarView(
                                             photoUrl = partner?.photoUrl,
                                             name = partnerName,
-                                            size = 80.dp,
+                                            size = 90.dp,
                                             isOnline = isPartnerOnline,
                                             showOnlineBadge = isPartnerOnline,
                                             modifier = Modifier.clip(CircleShape)
@@ -456,9 +456,9 @@ fun ProfileScreen(
                                         partnerLastSeen > 0L -> {
                                             val diffSec = ((System.currentTimeMillis() - partnerLastSeen) / 1000).coerceAtLeast(0)
                                             when {
-                                                diffSec < 60 -> "last seen just now"
-                                                diffSec < 3600 -> "last seen ${diffSec / 60}m ago"
-                                                diffSec < 86400 -> "last seen ${diffSec / 3600}h ago"
+                                                diffSec < 60 -> "just now"
+                                                diffSec < 3600 -> "${diffSec / 60}m ago"
+                                                diffSec < 86400 -> "${diffSec / 3600}h ago"
                                                 else -> "Offline"
                                             }
                                         }

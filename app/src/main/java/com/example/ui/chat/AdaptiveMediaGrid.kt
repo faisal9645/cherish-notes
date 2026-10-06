@@ -70,11 +70,10 @@ fun AdaptiveMediaGrid(
             urls.size == 1 -> {
                 MediaTile(
                     url = urls[0],
-                    contentScale = ContentScale.FillWidth,
+                    contentScale = ContentScale.Crop,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .heightIn(max = 400.dp)
-                        .wrapContentHeight()
+                        .height(singleImageHeight)
                         .clip(RoundedCornerShape(cornerRadius))
                         .clickable { onImageClick(0, urls[0]) }
                 )
@@ -323,7 +322,7 @@ private fun MediaTile(
                     .build(),
                 contentDescription = "Photo",
                 contentScale = contentScale,
-                modifier = Modifier.fillMaxSize()
+                modifier = if (contentScale == ContentScale.FillWidth) Modifier.fillMaxWidth().wrapContentHeight() else Modifier.fillMaxSize()
             )
         }
     }
