@@ -660,8 +660,8 @@ class AuthRepository(private val context: Context) {
         val current = _currentUserState.value ?: return
         val now = System.currentTimeMillis()
         
-        // Logical day starts at 4 AM
-        val DAY_ROLLOVER_OFFSET_MS = 4 * 60 * 60 * 1000L
+        // Logical day starts at 6 AM
+        val DAY_ROLLOVER_OFFSET_MS = 6 * 60 * 60 * 1000L
         val currentLogicalDay = (now - DAY_ROLLOVER_OFFSET_MS) / (24 * 60 * 60 * 1000L)
         val lastSyncLogicalDay = (current.lastHeartbeatSync - DAY_ROLLOVER_OFFSET_MS) / (24 * 60 * 60 * 1000L)
         

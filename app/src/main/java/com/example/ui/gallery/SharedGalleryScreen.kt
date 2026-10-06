@@ -169,21 +169,25 @@ fun SharedGalleryScreen(
             !(hasToday && (hasStart || has6Am))
         }
 
+        val shiftToLogicalDay = { ts: Long ->
+            val cal = Calendar.getInstance().apply { timeInMillis = ts }
+            if (cal.get(Calendar.HOUR_OF_DAY) < 6) {
+                cal.add(Calendar.DAY_OF_YEAR, -1)
+            }
+            Pair(cal.get(Calendar.YEAR), cal.get(Calendar.DAY_OF_YEAR))
+        }
+
         // Calendar Date Search rule (searches full selected day)
         if (selectedDateMillis != null) {
-            val selCal = Calendar.getInstance().apply { timeInMillis = selectedDateMillis!! }
+            val selLogicalDay = shiftToLogicalDay(selectedDateMillis!!)
             list = list.filter { msg ->
-                val msgCal = Calendar.getInstance().apply { timeInMillis = msg.timestamp }
-                msgCal.get(Calendar.YEAR) == selCal.get(Calendar.YEAR) &&
-                msgCal.get(Calendar.DAY_OF_YEAR) == selCal.get(Calendar.DAY_OF_YEAR)
+                shiftToLogicalDay(msg.timestamp) == selLogicalDay
             }
         } else if (!isAllGalleryRecovered) {
             // When day starts, show only today's gallery unless Recover All is activated
-            val todayCal = Calendar.getInstance()
+            val todayLogicalDay = shiftToLogicalDay(System.currentTimeMillis())
             list = list.filter { msg ->
-                val msgCal = Calendar.getInstance().apply { timeInMillis = msg.timestamp }
-                msgCal.get(Calendar.YEAR) == todayCal.get(Calendar.YEAR) &&
-                msgCal.get(Calendar.DAY_OF_YEAR) == todayCal.get(Calendar.DAY_OF_YEAR)
+                shiftToLogicalDay(msg.timestamp) == todayLogicalDay
             }
         }
 
@@ -561,21 +565,14 @@ fun SharedGalleryScreen(
                                     .fillMaxSize()
                                     .padding(4.dp)
                                     .pointerInput(Unit) {
-                                        awaitPointerEventScope {
-                                            while (true) {
-                                                val event = awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Initial)
-                                                if (event.changes.count { it.pressed } >= 2) {
-                                                    event.changes.forEach { it.consume() }
-                                                    val zoom = event.calculateZoom()
-                                                    accumulatedZoom *= zoom
-                                                    if (accumulatedZoom > 1.25f) {
-                                                        if (gridColumnCount > 1) gridColumnCount--
-                                                        accumulatedZoom = 1f
-                                                    } else if (accumulatedZoom < 0.80f) {
-                                                        if (gridColumnCount < 5) gridColumnCount++
-                                                        accumulatedZoom = 1f
-                                                    }
-                                                } else if (event.changes.isEmpty()) {
+                                        detectTransformGestures { _, _, zoom, _ ->
+                                            if (zoom != 1f) {
+                                                accumulatedZoom *= zoom
+                                                if (accumulatedZoom > 1.25f) {
+                                                    if (gridColumnCount > 1) gridColumnCount--
+                                                    accumulatedZoom = 1f
+                                                } else if (accumulatedZoom < 0.80f) {
+                                                    if (gridColumnCount < 5) gridColumnCount++
                                                     accumulatedZoom = 1f
                                                 }
                                             }

@@ -69,11 +69,11 @@ class ChatRepository(
 
     fun getStartOfToday(): Long {
         val cal = java.util.Calendar.getInstance()
-        if (cal.get(java.util.Calendar.HOUR_OF_DAY) < 4) {
-            // Before 4 AM, today's chat session started yesterday morning at 4:00 AM
+        if (cal.get(java.util.Calendar.HOUR_OF_DAY) < 6) {
+            // Before 6 AM, today's chat session started yesterday morning at 6:00 AM
             cal.add(java.util.Calendar.DAY_OF_YEAR, -1)
         }
-        cal.set(java.util.Calendar.HOUR_OF_DAY, 4)
+        cal.set(java.util.Calendar.HOUR_OF_DAY, 6)
         cal.set(java.util.Calendar.MINUTE, 0)
         cal.set(java.util.Calendar.SECOND, 0)
         cal.set(java.util.Calendar.MILLISECOND, 0)

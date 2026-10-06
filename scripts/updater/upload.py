@@ -179,10 +179,24 @@ def update_firestore(project_root: str, version_code: int, version_name: str, do
     print("Firestore app_config/version updated successfully!")
 
 
+def build_apk(project_root: str):
+    import subprocess
+    print("Building release APK...", flush=True)
+    gradlew = os.path.join(project_root, "gradlew.bat" if os.name == 'nt' else "gradlew")
+    try:
+        subprocess.check_call([gradlew, "assembleRelease"], cwd=project_root)
+        print("Build successful!", flush=True)
+    except subprocess.CalledProcessError as e:
+        print(f"ERROR: Build failed with exit code {e.returncode}")
+        sys.exit(1)
+
+
 def main():
     sys.stdout.reconfigure(line_buffering=True)
     script_dir   = os.path.dirname(os.path.abspath(__file__))
     project_root = os.path.abspath(os.path.join(script_dir, "..", ".."))
+
+    build_apk(project_root)
 
     token                    = get_github_token(project_root)
     version_code, version_name = get_version(project_root)
