@@ -35,6 +35,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
@@ -82,11 +83,29 @@ fun FullScreenMediaViewer(
     allMediaUrls: List<String> = emptyList(),
     onShowInChat: ((url: String) -> Unit)? = null,
     onDeleteMedia: ((url: String) -> Unit)? = null,
+    openFrom: TransformOrigin = TransformOrigin.Center,
     onDismiss: () -> Unit
 ) {
-    BackHandler(onBack = onDismiss)
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+
+    // Zooms out of the point that was tapped (openFrom, as a fraction of the screen) and back into
+    // it when closed by the user
+    val entrance = remember { Animatable(0f) }
+    LaunchedEffect(Unit) {
+        entrance.animateTo(1f, spring(dampingRatio = 0.82f, stiffness = 420f))
+    }
+    var isClosing by remember { mutableStateOf(false) }
+    val closeAnimated: () -> Unit = {
+        if (!isClosing) {
+            isClosing = true
+            scope.launch {
+                entrance.animateTo(0f, tween(180, easing = FastOutLinearInEasing))
+                onDismiss()
+            }
+        }
+    }
+    BackHandler(onBack = closeAnimated)
     var showDeleteConfirmDialog by remember { mutableStateOf(false) }
 
     val app = context.applicationContext as? CherishApplication
@@ -249,7 +268,7 @@ fun FullScreenMediaViewer(
     }
 
     Dialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = closeAnimated,
         properties = DialogProperties(
             usePlatformDefaultWidth = false,
             decorFitsSystemWindows = false
@@ -262,12 +281,15 @@ fun FullScreenMediaViewer(
                 window.statusBarColor = android.graphics.Color.TRANSPARENT
                 window.navigationBarColor = android.graphics.Color.TRANSPARENT
                 androidx.core.view.WindowCompat.setDecorFitsSystemWindows(window, false)
+                // The black backdrop fades in with the zoom; no platform dim popping in first
+                window.setDimAmount(0f)
             }
         }
-        
+
         Box(
             modifier = Modifier
                 .fillMaxSize()
+                .graphicsLayer { alpha = entrance.value.coerceIn(0f, 1f) }
                 .background(Color.Black.copy(alpha = backgroundAlpha))
                 .testTag("full_screen_media_dialog")
         ) {
@@ -281,7 +303,14 @@ fun FullScreenMediaViewer(
                 userScrollEnabled = scale <= 1.05f,
                 beyondViewportPageCount = 1,
                 key = { it },
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        val zoom = 0.32f + 0.68f * entrance.value
+                        scaleX = zoom
+                        scaleY = zoom
+                        transformOrigin = openFrom
+                    }
             ) { page ->
                 val pageUrl = mediaList.getOrNull(page) ?: currentUrl
                 val isVideo = remember(pageUrl) {
@@ -392,7 +421,7 @@ fun FullScreenMediaViewer(
                                                         change.consume()
                                                         swipeOffsetY = totalY
                                                         if (swipeOffsetY > 160f) {
-                                                            onDismiss()
+                                                            closeAnimated()
                                                             break
                                                         }
                                                     } else {
@@ -583,7 +612,7 @@ fun FullScreenMediaViewer(
                                     .size(38.dp)
                                     .clip(CircleShape)
                                     .background(Color.Black.copy(alpha = 0.50f))
-                                    .clickable { onDismiss() }
+                                    .clickable { closeAnimated() }
                                     .testTag("full_screen_media_close"),
                                 contentAlignment = Alignment.Center
                             ) {

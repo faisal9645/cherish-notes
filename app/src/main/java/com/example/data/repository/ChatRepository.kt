@@ -7,16 +7,27 @@ import com.example.data.model.Message
 import com.example.data.model.MessageStatus
 import com.example.data.model.MessageType
 import com.google.firebase.FirebaseApp
+import com.google.firebase.firestore.CollectionReference
+import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.SetOptions
+import com.google.firebase.firestore.Source
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.withContext
 import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
 
 class ChatRepository(
     private val context: Context,
@@ -61,6 +72,16 @@ class ChatRepository(
     private val _galleryMediaMessages = MutableStateFlow<List<Message>>(emptyList())
     val galleryMediaMessages: StateFlow<List<Message>> = _galleryMediaMessages.asStateFlow()
 
+    private val _isGalleryLoadingFlow = MutableStateFlow(false)
+    val isGalleryLoadingFlow: StateFlow<Boolean> = _isGalleryLoadingFlow.asStateFlow()
+
+    private val repoScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    @Volatile private var galleryLoadJob: Job? = null
+    @Volatile private var galleryLoadedConversationId: String? = null
+
+    // Deleted during this session, so late gallery or backup results can't bring them back
+    private val deletedMessageIds: MutableSet<String> = ConcurrentHashMap.newKeySet()
+
     var isQueryExhausted: Boolean
         get() = _isQueryExhaustedFlow.value
         set(value) { _isQueryExhaustedFlow.value = value }
@@ -94,6 +115,7 @@ class ChatRepository(
                     _isQueryExhaustedFlow.value = false
                     _isLoadingMoreFlow.value = false
                     _hasPreviousChatsAvailableFlow.value = true
+                    resetGalleryCache()
                     startGlobalMessagesListener(convId)
                 }
         }
@@ -130,50 +152,105 @@ class ChatRepository(
     }
 
     /**
-     * Immediately loads all media messages (photos, videos, audio notes) and starred items
-     * from local state and Firestore for the gallery view so all items appear without manual chat pagination.
+     * Loads every gallery item (photos, videos, voice notes, links and starred messages) straight from
+     * Firestore, independent of chat pagination, so the gallery is complete right away while the chat
+     * keeps paging older history on scroll.
      */
-    fun loadAllGalleryMedia() {
-        // Collect from all currently loaded messages immediately
-        val allLocal = _messagesFlow.value + localBackupMessages
-        val localMedia = allLocal.filter {
-            !it.isDeleted && (
-                it.type.equals(com.example.data.model.MessageType.IMAGE.name, ignoreCase = true) ||
-                it.type.equals(com.example.data.model.MessageType.VIDEO.name, ignoreCase = true) ||
-                it.type.equals(com.example.data.model.MessageType.AUDIO.name, ignoreCase = true) ||
-                it.isStarred ||
-                !it.mediaUrl.isNullOrBlank() ||
-                it.mediaUrls.isNotEmpty()
-            )
-        }
-        if (localMedia.isNotEmpty()) {
-            val combined = (_galleryMediaMessages.value + localMedia).distinctBy { it.id }.sortedByDescending { it.timestamp }
-            _galleryMediaMessages.value = combined
-        }
+    fun loadAllGalleryMedia(forceRefresh: Boolean = false) {
+        // Whatever is already on the device shows up instantly
+        publishGalleryItems(_messagesFlow.value + localBackupMessages)
 
-        val convId = currentActiveConversationId ?: getConversationId()
         val fs = firestore ?: return
-        val convRef = fs.collection("conversations")
-            .document(convId)
-            .collection("messages")
+        val convId = currentActiveConversationId ?: getConversationId()
+        if (!forceRefresh && (galleryLoadJob?.isActive == true || galleryLoadedConversationId == convId)) return
 
-        convRef.whereIn("type", listOf(
-            com.example.data.model.MessageType.IMAGE.name,
-            com.example.data.model.MessageType.AUDIO.name,
-            com.example.data.model.MessageType.VIDEO.name
-        )).get().addOnSuccessListener { mediaSnap ->
-            val mediaItems = mediaSnap.documents.mapNotNull { it.toObject(Message::class.java) }
-            convRef.whereEqualTo("isStarred", true).get().addOnSuccessListener { starSnap ->
-                val starredItems = starSnap.documents.mapNotNull { it.toObject(Message::class.java) }
-                val allItems = (mediaItems + starredItems + _galleryMediaMessages.value).distinctBy { it.id }.sortedByDescending { it.timestamp }
-                _galleryMediaMessages.value = allItems
-            }.addOnFailureListener {
-                val allItems = (mediaItems + _galleryMediaMessages.value).distinctBy { it.id }.sortedByDescending { it.timestamp }
-                _galleryMediaMessages.value = allItems
+        galleryLoadJob?.cancel()
+        _isGalleryLoadingFlow.value = true
+        val messagesRef = fs.collection("conversations").document(convId).collection("messages")
+        val job = repoScope.launch {
+            // The cache pass shows everything already synced to this device without waiting on the
+            // network; the server pass then fills in whatever the cache doesn't have yet.
+            for (source in listOf(Source.CACHE, Source.SERVER)) {
+                try {
+                    loadGalleryFrom(messagesRef, source)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    Log.w("ChatRepository", "Gallery load from $source failed", e)
+                }
             }
-        }.addOnFailureListener { e ->
-            Log.w("ChatRepository", "Failed loading gallery media", e)
+            galleryLoadedConversationId = convId
         }
+        galleryLoadJob = job
+        job.invokeOnCompletion {
+            if (galleryLoadJob === job) _isGalleryLoadingFlow.value = false
+        }
+    }
+
+    private suspend fun loadGalleryFrom(messagesRef: CollectionReference, source: Source) = coroutineScope {
+        // Photos, videos, voice notes and starred messages can be queried directly
+        val targetedQueries = listOf(
+            messagesRef.whereIn("type", listOf(MessageType.IMAGE.name, MessageType.VIDEO.name, MessageType.AUDIO.name)),
+            messagesRef.whereEqualTo("isStarred", true)
+        )
+        val targeted = targetedQueries
+            .map { query -> async { query.get(source).await().documents.mapNotNull { it.toMessageOrNull() } } }
+            .awaitAll()
+            .flatten()
+        publishGalleryItems(targeted)
+
+        // Links live inside text messages and can't be queried, so page through the whole history
+        // newest first, publishing as pages arrive
+        var lastDoc: DocumentSnapshot? = null
+        val pending = mutableListOf<Message>()
+        var lastPublishAt = 0L
+        while (true) {
+            var page = messagesRef.orderBy("timestamp", Query.Direction.DESCENDING).limit(GALLERY_SCAN_PAGE_SIZE)
+            lastDoc?.let { page = page.startAfter(it) }
+            val docs = page.get(source).await().documents
+            docs.mapNotNullTo(pending) { it.toMessageOrNull() }
+            val isLastPage = docs.size < GALLERY_SCAN_PAGE_SIZE
+            val now = System.currentTimeMillis()
+            if (isLastPage || now - lastPublishAt >= GALLERY_PUBLISH_INTERVAL_MS) {
+                publishGalleryItems(pending.toList())
+                pending.clear()
+                lastPublishAt = now
+            }
+            if (isLastPage) break
+            lastDoc = docs.last()
+        }
+    }
+
+    private fun isGalleryRelevant(message: Message): Boolean {
+        if (message.isDeleted) return false
+        return when (message.getTypedType()) {
+            MessageType.IMAGE, MessageType.VIDEO, MessageType.AUDIO -> true
+            else -> message.isStarred || message.isVideoNote ||
+                !message.mediaUrl.isNullOrBlank() || message.mediaUrls.isNotEmpty() ||
+                LINK_REGEX.containsMatchIn(message.text)
+        }
+    }
+
+    private fun publishGalleryItems(candidates: List<Message>) {
+        val (relevant, irrelevant) = candidates
+            .filter { it.id.isNotBlank() }
+            .partition { it.id !in deletedMessageIds && isGalleryRelevant(it) }
+        if (relevant.isEmpty() && irrelevant.isEmpty()) return
+        val dropIds = irrelevant.mapTo(HashSet()) { it.id }
+        _galleryMediaMessages.update { current ->
+            val merged = LinkedHashMap<String, Message>(current.size + relevant.size)
+            current.forEach { if (it.id !in dropIds) merged[it.id] = it }
+            relevant.forEach { merged[it.id] = it }
+            merged.values.sortedByDescending { it.timestamp }
+        }
+    }
+
+    private fun resetGalleryCache() {
+        galleryLoadJob?.cancel()
+        galleryLoadJob = null
+        galleryLoadedConversationId = null
+        _isGalleryLoadingFlow.value = false
+        _galleryMediaMessages.value = emptyList()
     }
 
     fun recoverAllMessages() {
@@ -187,43 +264,55 @@ class ChatRepository(
         previousMessages = previousMessages.map {
             if (it.isDeleted) it.copy(isDeleted = false) else it
         }
-        
-        // Load from local backup file to ensure recovered data is local and does not upload to partner
-        try {
-            val context = com.example.CherishApplication.instance
-            val backupFile = java.io.File(context.filesDir, "gdrive_appdata_cherish_vault_backup.json")
-            if (backupFile.exists()) {
-                val json = backupFile.readText()
-                val moshi = com.squareup.moshi.Moshi.Builder().add(com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory()).build()
-                val adapter = moshi.adapter(com.example.backup.FullAppBackupPayload::class.java)
-                val payload = adapter.fromJson(json)
-                if (payload != null) {
-                    localBackupMessages = payload.messages
-                }
-            }
-        } catch (e: Exception) {
-            android.util.Log.e("ChatRepository", "Failed to load local backup for recoverAllMessages", e)
-        }
-        // ONLY gallery items all become visible:
-        loadAllGalleryMedia()
-        // Previous chats come as pagination on scroll:
+
+        // Gallery: every photo, video, voice note, link and starred message comes back right away
+        loadAllGalleryMedia(forceRefresh = true)
+
+        // Chat: older history comes back page by page as the user scrolls up
         _hasPreviousChatsAvailableFlow.value = true
         _isQueryExhaustedFlow.value = false
         if (previousMessageLimit == 0L) {
             previousMessageLimit = 40L
         }
-        currentActiveConversationId?.let { startPreviousMessagesListener(it) }
+        val convId = currentActiveConversationId
+        if (convId != null && firestore != null) {
+            _isLoadingMoreFlow.value = true
+            startPreviousMessagesListener(convId)
+        }
         mergeAndEmitMessages()
-        try {
-            com.example.CherishApplication.instance.googleDriveBackupManager.triggerImmediateAutoBackup()
-        } catch (_: Exception) {}
+
+        // The local backup stays on this device (never uploaded to the partner); read it off the main thread
+        repoScope.launch {
+            val backupMessages = readLocalBackupMessages().filter { it.id !in deletedMessageIds }
+            if (backupMessages.isNotEmpty()) {
+                withContext(Dispatchers.Main) {
+                    localBackupMessages = backupMessages
+                    mergeAndEmitMessages()
+                }
+                publishGalleryItems(backupMessages)
+            }
+            triggerBackup()
+        }
+    }
+
+    private fun readLocalBackupMessages(): List<Message> {
+        return try {
+            val backupFile = java.io.File(context.filesDir, "gdrive_appdata_cherish_vault_backup.json")
+            if (!backupFile.exists()) return emptyList()
+            val moshi = com.squareup.moshi.Moshi.Builder().add(com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory()).build()
+            val adapter = moshi.adapter(com.example.backup.FullAppBackupPayload::class.java)
+            adapter.fromJson(backupFile.readText())?.messages.orEmpty()
+        } catch (e: Exception) {
+            Log.e("ChatRepository", "Failed to load local backup for recoverAllMessages", e)
+            emptyList()
+        }
     }
 
     fun resetPreviousChats() {
         previousMessageLimit = 0L
         previousMessages = emptyList()
         localBackupMessages = emptyList()
-        _galleryMediaMessages.value = emptyList()
+        resetGalleryCache()
         globalPreviousListener?.remove()
         globalPreviousListener = null
         _isQueryExhaustedFlow.value = false
@@ -264,7 +353,7 @@ class ChatRepository(
                 if (!isInitialTodaySnapshot) {
                     for (change in snapshot.documentChanges) {
                         if (change.type == com.google.firebase.firestore.DocumentChange.Type.ADDED) {
-                            val msg = change.document.toObject(Message::class.java)
+                            val msg = change.document.toMessageOrNull() ?: continue
                             val currentUserId = authRepository.getCurrentUserId()
                             if (msg.senderId != currentUserId && msg.status != MessageStatus.READ.name) {
                                 if (!authRepository.isUserActivelyInChat()) {
@@ -290,7 +379,7 @@ class ChatRepository(
                 }
                 isInitialTodaySnapshot = false
 
-                todayMessages = snapshot.documents.mapNotNull { it.toObject(Message::class.java) }
+                todayMessages = snapshot.documents.mapNotNull { it.toMessageOrNull() }
                 mergeAndEmitMessages()
             }
         }
@@ -335,11 +424,33 @@ class ChatRepository(
             if (snapshot != null) {
                 _hasPreviousChatsAvailableFlow.value = snapshot.documents.isNotEmpty()
                 _isQueryExhaustedFlow.value = (snapshot.documents.size < previousMessageLimit)
-                previousMessages = snapshot.documents.mapNotNull { it.toObject(Message::class.java) }
+                previousMessages = snapshot.documents.mapNotNull { it.toMessageOrNull() }
                 mergeAndEmitMessages()
             }
         }
     }
+
+    /**
+     * Firestore maps Kotlin "isX" booleans to fields named "x" when a whole message is written, while
+     * field updates (star, pin, edit) write "isX". Prefer the "isX" field, which carries the latest
+     * change, and fall back to the bean-style name, so those flags survive a round trip.
+     */
+    private fun DocumentSnapshot.toMessageOrNull(): Message? {
+        val message = try {
+            toObject(Message::class.java)
+        } catch (e: Exception) {
+            Log.w("ChatRepository", "Skipping unreadable message $id", e)
+            null
+        } ?: return null
+        if (message.id.isBlank()) message.id = id
+        message.isStarred = flag("isStarred", "starred") ?: message.isStarred
+        message.isPinned = flag("isPinned", "pinned") ?: message.isPinned
+        message.isEdited = flag("isEdited", "edited") ?: message.isEdited
+        return message
+    }
+
+    private fun DocumentSnapshot.flag(field: String, legacyField: String): Boolean? =
+        (get(field) as? Boolean) ?: (get(legacyField) as? Boolean)
 
     private fun mergeAndEmitMessages() {
         val firestoreMessages = previousMessages + todayMessages
@@ -504,18 +615,18 @@ class ChatRepository(
     }
 
     suspend fun toggleStar(messageId: String) {
-        val currentMessage = _messagesFlow.value.find { it.id == messageId } ?: return
+        val currentMessage = findMessage(messageId) ?: return
         val newStarred = !currentMessage.isStarred
-        val updated = currentMessage.copy(isStarred = newStarred)
-        _messagesFlow.value = _messagesFlow.value.map { if (it.id == messageId) updated else it }
+        updateMessageEverywhere(messageId) { it.copy(isStarred = newStarred) }
 
         try {
             val convId = getConversationId()
+            // Both names, so app versions that still read the bean-style "starred" field agree
             firestore?.collection("conversations")
                 ?.document(convId)
                 ?.collection("messages")
                 ?.document(messageId)
-                ?.update("isStarred", newStarred)
+                ?.update(mapOf("isStarred" to newStarred, "starred" to newStarred))
         } catch (e: Exception) {
             // ignore
         }
@@ -560,20 +671,99 @@ class ChatRepository(
     }
 
     suspend fun deleteMessage(messageId: String) {
-        // Immediately remove from in-memory message flows so it disappears from UI
-        _messagesFlow.value = _messagesFlow.value.filter { it.id != messageId }
-        _galleryMediaMessages.value = _galleryMediaMessages.value.filter { it.id != messageId }
+        deleteMessages(listOf(messageId))
+    }
 
-        try {
-            val convId = getConversationId()
-            firestore?.collection("conversations")
-                ?.document(convId)
-                ?.collection("messages")
-                ?.document(messageId)
-                ?.delete()
-        } catch (e: Exception) {
-            // ignore
+    suspend fun deleteMessages(messageIds: Collection<String>) {
+        val ids = messageIds.filter { it.isNotBlank() }.toSet()
+        if (ids.isEmpty()) return
+        deletedMessageIds.addAll(ids)
+
+        // Remove from every in-memory source at once, so the messages leave chat and gallery immediately
+        // and can't be merged back from a stale list before Firestore confirms
+        _messagesFlow.update { list -> list.filterNot { it.id in ids } }
+        _galleryMediaMessages.update { list -> list.filterNot { it.id in ids } }
+        todayMessages = todayMessages.filterNot { it.id in ids }
+        previousMessages = previousMessages.filterNot { it.id in ids }
+        localBackupMessages = localBackupMessages.filterNot { it.id in ids }
+
+        val fs = firestore
+        if (fs != null) {
+            val messagesRef = fs.collection("conversations").document(getConversationId()).collection("messages")
+            ids.chunked(FIRESTORE_BATCH_LIMIT).forEach { chunk ->
+                try {
+                    val batch = fs.batch()
+                    chunk.forEach { batch.delete(messagesRef.document(it)) }
+                    batch.commit().addOnFailureListener { e ->
+                        Log.w("ChatRepository", "Failed to delete ${chunk.size} messages", e)
+                    }
+                } catch (e: Exception) {
+                    Log.w("ChatRepository", "Failed to delete ${chunk.size} messages", e)
+                }
+            }
         }
+        triggerBackup()
+    }
+
+    /**
+     * Removes single photos/videos from their messages. A multi-photo message keeps its remaining
+     * photos; a message left without any media is deleted entirely.
+     */
+    suspend fun removeMediaUrls(messages: List<Message>, urlsToRemove: Set<String>) {
+        if (messages.isEmpty() || urlsToRemove.isEmpty()) return
+        val emptiedIds = mutableSetOf<String>()
+        val trimmedMessages = mutableListOf<Message>()
+        messages.distinctBy { it.id }.forEach { original ->
+            val message = findMessage(original.id) ?: original
+            val currentUrls = message.getAllMediaUrls()
+            val remaining = currentUrls.filterNot { it in urlsToRemove }
+            when {
+                remaining.isEmpty() -> emptiedIds += message.id
+                remaining.size < currentUrls.size -> {
+                    val caption = if (GENERIC_PHOTO_CAPTION.matches(message.text.trim())) {
+                        if (remaining.size == 1) "Sent a photo" else "Sent ${remaining.size} photos"
+                    } else {
+                        message.text
+                    }
+                    trimmedMessages += message.copy(mediaUrl = remaining.first(), mediaUrls = remaining, text = caption)
+                }
+            }
+        }
+
+        trimmedMessages.forEach { trimmed ->
+            updateMessageEverywhere(trimmed.id) {
+                it.copy(mediaUrl = trimmed.mediaUrl, mediaUrls = trimmed.mediaUrls, text = trimmed.text)
+            }
+            try {
+                firestore?.collection("conversations")
+                    ?.document(getConversationId())
+                    ?.collection("messages")
+                    ?.document(trimmed.id)
+                    ?.update(mapOf("mediaUrl" to trimmed.mediaUrl, "mediaUrls" to trimmed.mediaUrls, "text" to trimmed.text))
+                    ?.addOnFailureListener { e -> Log.w("ChatRepository", "Failed to remove photos from ${trimmed.id}", e) }
+            } catch (e: Exception) {
+                Log.w("ChatRepository", "Failed to remove photos from ${trimmed.id}", e)
+            }
+        }
+
+        if (emptiedIds.isNotEmpty()) deleteMessages(emptiedIds) else triggerBackup()
+    }
+
+    private fun findMessage(messageId: String): Message? =
+        _messagesFlow.value.find { it.id == messageId }
+            ?: _galleryMediaMessages.value.find { it.id == messageId }
+            ?: todayMessages.find { it.id == messageId }
+            ?: previousMessages.find { it.id == messageId }
+
+    private fun updateMessageEverywhere(messageId: String, transform: (Message) -> Message) {
+        val apply: (List<Message>) -> List<Message> = { list -> list.map { if (it.id == messageId) transform(it) else it } }
+        _messagesFlow.update(apply)
+        _galleryMediaMessages.update(apply)
+        todayMessages = apply(todayMessages)
+        previousMessages = apply(previousMessages)
+    }
+
+    private fun triggerBackup() {
         try {
             com.example.CherishApplication.instance.googleDriveBackupManager.triggerImmediateAutoBackup()
         } catch (_: Exception) {}
@@ -695,4 +885,13 @@ class ChatRepository(
             )
         )
     }
+
+    private companion object {
+        const val GALLERY_SCAN_PAGE_SIZE = 500L
+        const val GALLERY_PUBLISH_INTERVAL_MS = 300L
+        const val FIRESTORE_BATCH_LIMIT = 450
+        val LINK_REGEX = Regex("""(https?://\S+)|(www\.\S+)""", RegexOption.IGNORE_CASE)
+        val GENERIC_PHOTO_CAPTION = Regex("""Sent (a photo|\d+ photos?)""", RegexOption.IGNORE_CASE)
+    }
 }
+

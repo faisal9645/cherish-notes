@@ -128,9 +128,41 @@ fun MessageBubble(
 
     val scope = rememberCoroutineScope()
     val haptic = LocalHapticFeedback.current
+    val view = androidx.compose.ui.platform.LocalView.current
+    val context = androidx.compose.ui.platform.LocalContext.current
     var showBurstHeart by remember { mutableStateOf(false) }
     val heartScale = remember { Animatable(0f) }
     val heartAlpha = remember { Animatable(0f) }
+    val heartBurst = rememberHeartBurstState()
+
+    // Bubble sinks a little under the finger (more on long-press) and springs back on release.
+    // The press shows after a short delay so a scroll starting on a bubble doesn't flicker it.
+    var isPressed by remember { mutableStateOf(false) }
+    var isLongPressed by remember { mutableStateOf(false) }
+    val pressScale by animateFloatAsState(
+        targetValue = when {
+            isLongPressed -> 0.94f
+            isPressed -> 0.97f
+            else -> 1f
+        },
+        animationSpec = spring(dampingRatio = 0.5f, stiffness = 700f),
+        label = "bubble_press"
+    )
+    val trackPress: suspend androidx.compose.foundation.gestures.PressGestureScope.(androidx.compose.ui.geometry.Offset) -> Unit = {
+        val showPress = scope.launch {
+            delay(70)
+            isPressed = true
+        }
+        tryAwaitRelease()
+        showPress.cancel()
+        isPressed = false
+        isLongPressed = false
+    }
+    val onBubbleLongPress: (androidx.compose.ui.geometry.Offset) -> Unit = {
+        isLongPressed = true
+        view.chatHaptic(ChatHaptic.LongPress)
+        onLongClick()
+    }
 
     // Swipe-to-reply interactive state with density-aware threshold
     val density = androidx.compose.ui.platform.LocalDensity.current
@@ -150,10 +182,9 @@ fun MessageBubble(
     fun triggerHeartBurst() {
         if (isPrivateMode) return
         scope.launch {
-            try {
-                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-            } catch (_: Exception) {}
+            context.vibrateHeartbeat()
             onReactionClick("❤️")
+            launch { heartBurst.burst() }
             showBurstHeart = true
             heartScale.snapTo(0.2f)
             heartAlpha.snapTo(1f)
@@ -304,10 +335,16 @@ fun MessageBubble(
                 Box(
                     modifier = Modifier
                         .size(240.dp)
+                        .graphicsLayer {
+                            scaleX = pressScale
+                            scaleY = pressScale
+                        }
+                        .heartBurst(heartBurst)
                         .clip(CircleShape)
                         .pointerInput(message.id) {
                             detectTapGestures(
-                                onLongPress = { onLongClick() },
+                                onPress = trackPress,
+                                onLongPress = onBubbleLongPress,
                                 onDoubleTap = { triggerHeartBurst() },
                                 onTap = { openBigVideoNote() }
                             )
@@ -360,11 +397,13 @@ fun MessageBubble(
                             )
                             if (isFromMe) {
                                 Spacer(modifier = Modifier.width(3.dp))
-                                when (message.getTypedStatus()) {
-                                    MessageStatus.SENDING -> Icon(Icons.Default.AccessTime, "Sending", tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(10.dp))
-                                    MessageStatus.SENT -> Icon(Icons.Default.Check, "Sent", tint = Color.White.copy(alpha = 0.8f), modifier = Modifier.size(10.dp))
-                                    MessageStatus.DELIVERED -> Icon(Icons.Default.DoneAll, "Delivered", tint = Color.White.copy(alpha = 0.9f), modifier = Modifier.size(11.dp))
-                                    MessageStatus.READ -> Icon(Icons.Default.DoneAll, "Read", tint = Color.White, modifier = Modifier.size(11.dp))
+                                MessageStatusTicks(message.getTypedStatus()) { status ->
+                                    when (status) {
+                                        MessageStatus.SENDING -> Icon(Icons.Default.AccessTime, "Sending", tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(10.dp))
+                                        MessageStatus.SENT -> Icon(Icons.Default.Check, "Sent", tint = Color.White.copy(alpha = 0.8f), modifier = Modifier.size(10.dp))
+                                        MessageStatus.DELIVERED -> Icon(Icons.Default.DoneAll, "Delivered", tint = Color.White.copy(alpha = 0.9f), modifier = Modifier.size(11.dp))
+                                        MessageStatus.READ -> Icon(Icons.Default.DoneAll, "Read", tint = Color.White, modifier = Modifier.size(11.dp))
+                                    }
                                 }
                             }
                         }
@@ -418,6 +457,11 @@ fun MessageBubble(
 
                 Box(
                     modifier = (if (isYouTube) Modifier.fillMaxWidth() else Modifier.widthIn(min = bubbleMinWidth, max = bubbleMaxWidth))
+                        .graphicsLayer {
+                            scaleX = pressScale
+                            scaleY = pressScale
+                        }
+                        .heartBurst(heartBurst)
                         .then(
                             if (isPrivateMode) {
                                 Modifier.shadow(0.5.dp, bubbleShape)
@@ -458,9 +502,8 @@ fun MessageBubble(
                                         }
                                     }
                                 },
-                                onLongPress = {
-                                    onLongClick()
-                                },
+                                onPress = trackPress,
+                                onLongPress = onBubbleLongPress,
                                 onDoubleTap = {
                                     triggerHeartBurst()
                                 }
@@ -507,11 +550,12 @@ fun MessageBubble(
                                     fontWeight = FontWeight.Bold,
                                     color = textColor.copy(alpha = 0.9f)
                                 )
-                                Text(
+                                EmojiText(
                                     text = message.replyToText ?: "",
                                     fontSize = 12.sp,
                                     maxLines = 1,
-                                    color = textColor.copy(alpha = 0.75f)
+                                    color = textColor.copy(alpha = 0.75f),
+                                    emojiScale = 1.15f
                                 )
                             }
                         }
@@ -574,11 +618,13 @@ fun MessageBubble(
                                             )
                                             if (isFromMe) {
                                                 Spacer(modifier = Modifier.width(3.dp))
-                                                when (message.getTypedStatus()) {
-                                                    MessageStatus.SENDING -> Icon(Icons.Default.AccessTime, "Sending", tint = Color.White.copy(alpha = 0.7f), modifier = Modifier.size(10.dp))
-                                                    MessageStatus.SENT -> Icon(Icons.Default.Check, "Sent", tint = Color.White.copy(alpha = 0.85f), modifier = Modifier.size(11.dp))
-                                                    MessageStatus.DELIVERED -> Icon(Icons.Default.DoneAll, "Delivered", tint = Color.White.copy(alpha = 0.9f), modifier = Modifier.size(12.dp))
-                                                    MessageStatus.READ -> Icon(Icons.Default.DoneAll, "Read", tint = Color(0xFF60A5FA), modifier = Modifier.size(12.dp))
+                                                MessageStatusTicks(message.getTypedStatus()) { status ->
+                                                    when (status) {
+                                                        MessageStatus.SENDING -> Icon(Icons.Default.AccessTime, "Sending", tint = Color.White.copy(alpha = 0.7f), modifier = Modifier.size(10.dp))
+                                                        MessageStatus.SENT -> Icon(Icons.Default.Check, "Sent", tint = Color.White.copy(alpha = 0.85f), modifier = Modifier.size(11.dp))
+                                                        MessageStatus.DELIVERED -> Icon(Icons.Default.DoneAll, "Delivered", tint = Color.White.copy(alpha = 0.9f), modifier = Modifier.size(12.dp))
+                                                        MessageStatus.READ -> Icon(Icons.Default.DoneAll, "Read", tint = Color(0xFF60A5FA), modifier = Modifier.size(12.dp))
+                                                    }
                                                 }
                                             }
                                         }
@@ -722,18 +768,20 @@ fun MessageBubble(
                                         )
                                         if (isFromMe) {
                                             Spacer(modifier = Modifier.width(3.dp))
-                                            when (message.getTypedStatus()) {
-                                                MessageStatus.SENDING -> {
-                                                    Icon(Icons.Default.AccessTime, "Sending", tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(11.dp))
-                                                }
-                                                MessageStatus.SENT -> {
-                                                    Icon(Icons.Default.Check, "Sent", tint = Color.White.copy(alpha = 0.8f), modifier = Modifier.size(12.dp))
-                                                }
-                                                MessageStatus.DELIVERED -> {
-                                                    Icon(Icons.Default.DoneAll, "Delivered", tint = Color.White.copy(alpha = 0.9f), modifier = Modifier.size(13.dp))
-                                                }
-                                                MessageStatus.READ -> {
-                                                    Icon(Icons.Default.DoneAll, "Read", tint = Color.White, modifier = Modifier.size(13.dp))
+                                            MessageStatusTicks(message.getTypedStatus()) { status ->
+                                                when (status) {
+                                                    MessageStatus.SENDING -> {
+                                                        Icon(Icons.Default.AccessTime, "Sending", tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(11.dp))
+                                                    }
+                                                    MessageStatus.SENT -> {
+                                                        Icon(Icons.Default.Check, "Sent", tint = Color.White.copy(alpha = 0.8f), modifier = Modifier.size(12.dp))
+                                                    }
+                                                    MessageStatus.DELIVERED -> {
+                                                        Icon(Icons.Default.DoneAll, "Delivered", tint = Color.White.copy(alpha = 0.9f), modifier = Modifier.size(13.dp))
+                                                    }
+                                                    MessageStatus.READ -> {
+                                                        Icon(Icons.Default.DoneAll, "Read", tint = Color.White, modifier = Modifier.size(13.dp))
+                                                    }
                                                 }
                                             }
                                         }
@@ -791,11 +839,11 @@ fun MessageBubble(
                             .fillMaxWidth()
                             .padding(top = 4.dp, start = 4.dp, end = 4.dp, bottom = 2.dp)
                     ) {
-                        Text(
+                        EmojiText(
                             text = message.text,
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Normal,
-                            color = if (isPrivateMode) textColor 
+                            color = if (isPrivateMode) textColor
                                     else if (isFromMe) Color.White 
                                     else (if (isDark) Color(0xFFCBD5E1) else Color(0xFF0F172A))
                         )
@@ -827,11 +875,13 @@ fun MessageBubble(
                             )
                             if (isFromMe) {
                                 Spacer(modifier = Modifier.width(3.dp))
-                                when (message.getTypedStatus()) {
-                                    MessageStatus.SENDING -> Icon(Icons.Default.AccessTime, "Sending", tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(11.dp))
-                                    MessageStatus.SENT -> Icon(Icons.Default.Check, "Sent", tint = Color.White.copy(alpha = 0.8f), modifier = Modifier.size(12.dp))
-                                    MessageStatus.DELIVERED -> Icon(Icons.Default.DoneAll, "Delivered", tint = Color.White.copy(alpha = 0.9f), modifier = Modifier.size(13.dp))
-                                    MessageStatus.READ -> Icon(Icons.Default.DoneAll, "Read", tint = Color.White, modifier = Modifier.size(13.dp))
+                                MessageStatusTicks(message.getTypedStatus()) { status ->
+                                    when (status) {
+                                        MessageStatus.SENDING -> Icon(Icons.Default.AccessTime, "Sending", tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(11.dp))
+                                        MessageStatus.SENT -> Icon(Icons.Default.Check, "Sent", tint = Color.White.copy(alpha = 0.8f), modifier = Modifier.size(12.dp))
+                                        MessageStatus.DELIVERED -> Icon(Icons.Default.DoneAll, "Delivered", tint = Color.White.copy(alpha = 0.9f), modifier = Modifier.size(13.dp))
+                                        MessageStatus.READ -> Icon(Icons.Default.DoneAll, "Read", tint = Color.White, modifier = Modifier.size(13.dp))
+                                    }
                                 }
                             }
                         }
@@ -840,11 +890,12 @@ fun MessageBubble(
 
                 // Text Content & Inline YouTube / Link Preview
                 if (message.text.isNotEmpty() && message.getTypedType() != MessageType.AUDIO && message.getTypedType() != MessageType.IMAGE) {
-                    Text(
+                    EmojiText(
                         text = message.text,
                         color = textColor,
                         style = MaterialTheme.typography.bodyMedium,
-                        fontStyle = if (message.isDeleted) FontStyle.Italic else FontStyle.Normal
+                        fontStyle = if (message.isDeleted) FontStyle.Italic else FontStyle.Normal,
+                        largeWhenEmojiOnly = true
                     )
 
                     val youtubeVideoId = remember(message.text) {
@@ -913,38 +964,40 @@ fun MessageBubble(
 
                         if (isFromMe) {
                             Spacer(modifier = Modifier.width(4.dp))
-                            when (message.getTypedStatus()) {
-                                MessageStatus.SENDING -> {
-                                    Icon(
-                                        imageVector = Icons.Default.AccessTime,
-                                        contentDescription = "Sending",
-                                        tint = Color.White.copy(alpha = 0.6f),
-                                        modifier = Modifier.size(11.dp)
-                                    )
-                                }
-                                MessageStatus.SENT -> {
-                                    Icon(
-                                        imageVector = Icons.Default.Check,
-                                        contentDescription = "Sent",
-                                        tint = Color.White.copy(alpha = 0.8f),
-                                        modifier = Modifier.size(12.dp)
-                                    )
-                                }
-                                MessageStatus.DELIVERED -> {
-                                    Icon(
-                                        imageVector = Icons.Default.DoneAll,
-                                        contentDescription = "Delivered",
-                                        tint = Color.White.copy(alpha = 0.9f),
-                                        modifier = Modifier.size(13.dp)
-                                    )
-                                }
-                                MessageStatus.READ -> {
-                                    Icon(
-                                        imageVector = Icons.Default.DoneAll,
-                                        contentDescription = "Read",
-                                        tint = Color.White,
-                                        modifier = Modifier.size(13.dp)
-                                    )
+                            MessageStatusTicks(message.getTypedStatus()) { status ->
+                                when (status) {
+                                    MessageStatus.SENDING -> {
+                                        Icon(
+                                            imageVector = Icons.Default.AccessTime,
+                                            contentDescription = "Sending",
+                                            tint = Color.White.copy(alpha = 0.6f),
+                                            modifier = Modifier.size(11.dp)
+                                        )
+                                    }
+                                    MessageStatus.SENT -> {
+                                        Icon(
+                                            imageVector = Icons.Default.Check,
+                                            contentDescription = "Sent",
+                                            tint = Color.White.copy(alpha = 0.8f),
+                                            modifier = Modifier.size(12.dp)
+                                        )
+                                    }
+                                    MessageStatus.DELIVERED -> {
+                                        Icon(
+                                            imageVector = Icons.Default.DoneAll,
+                                            contentDescription = "Delivered",
+                                            tint = Color.White.copy(alpha = 0.9f),
+                                            modifier = Modifier.size(13.dp)
+                                        )
+                                    }
+                                    MessageStatus.READ -> {
+                                        Icon(
+                                            imageVector = Icons.Default.DoneAll,
+                                            contentDescription = "Read",
+                                            tint = Color.White,
+                                            modifier = Modifier.size(13.dp)
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -972,11 +1025,34 @@ fun MessageBubble(
             }
         }
 
-        // Emoji reactions pill below bubble
-        if (message.reactions.isNotEmpty()) {
+        // Emoji reactions pill below bubble: pops in with the first reaction, bumps when reactions
+        // change and counts roll to their new value. The last non-empty set is kept so the pill
+        // still has content while it shrinks away.
+        val lastReactions = remember { arrayOf(message.reactions) }
+        if (message.reactions.isNotEmpty()) lastReactions[0] = message.reactions
+        val pillBump = remember { Animatable(1f) }
+        val isFirstReactionsRun = remember { booleanArrayOf(true) }
+        val reactionsSignature = message.reactions.entries.sortedBy { it.key }.joinToString { "${it.key}:${it.value}" }
+        LaunchedEffect(reactionsSignature) {
+            if (isFirstReactionsRun[0]) {
+                isFirstReactionsRun[0] = false
+            } else if (message.reactions.isNotEmpty()) {
+                pillBump.snapTo(1.22f)
+                pillBump.animateTo(1f, spring(dampingRatio = 0.4f, stiffness = 600f))
+            }
+        }
+        AnimatedVisibility(
+            visible = message.reactions.isNotEmpty(),
+            enter = scaleIn(spring(dampingRatio = 0.45f, stiffness = 500f), initialScale = 0.3f) + fadeIn(tween(120)),
+            exit = scaleOut(tween(150), targetScale = 0.5f) + fadeOut(tween(150))
+        ) {
             Surface(
                 modifier = Modifier
                     .offset(y = (-6).dp)
+                    .graphicsLayer {
+                        scaleX = pillBump.value
+                        scaleY = pillBump.value
+                    }
                     .testTag("reactions_pill_${message.id}"),
                 shape = CircleShape,
                 color = MaterialTheme.colorScheme.surface,
@@ -984,21 +1060,40 @@ fun MessageBubble(
                 shadowElevation = 2.dp
             ) {
                 Row(
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.5.dp),
+                    modifier = Modifier
+                        .padding(horizontal = 8.dp, vertical = 2.5.dp)
+                        .animateContentSize(spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessMediumLow)),
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    val emojiCounts = message.reactions.values.groupingBy { it }.eachCount()
+                    val emojiCounts = lastReactions[0].values.groupingBy { it }.eachCount()
                     for ((emoji, count) in emojiCounts) {
-                        val label = if (count > 1) "$emoji $count" else emoji
-                        Text(
-                            text = label,
-                            fontSize = 11.5.sp,
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier
-                                .clickable { onReactionClick(emoji) }
+                                .clickable {
+                                    view.chatHaptic(ChatHaptic.Tick)
+                                    onReactionClick(emoji)
+                                }
                                 .padding(horizontal = 2.dp)
                                 .testTag("reaction_badge_${message.id}_$emoji")
-                        )
+                        ) {
+                            ChatEmoji(emoji = emoji, fontSize = 15.sp)
+                            if (count > 1) {
+                                AnimatedContent(
+                                    targetState = count,
+                                    transitionSpec = {
+                                        val up = targetState > initialState
+                                        (slideInVertically { if (up) it else -it } + fadeIn())
+                                            .togetherWith(slideOutVertically { if (up) -it else it } + fadeOut())
+                                            .using(SizeTransform(clip = false))
+                                    },
+                                    label = "reaction_count"
+                                ) { shownCount ->
+                                    Text(text = " $shownCount", fontSize = 12.5.sp)
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -1017,6 +1112,25 @@ fun MessageBubble(
         }
     }
 }
+}
+
+/** Delivery ticks that pop in when the status changes (sent -> delivered -> read). */
+@Composable
+private fun MessageStatusTicks(
+    status: MessageStatus,
+    content: @Composable (MessageStatus) -> Unit
+) {
+    AnimatedContent(
+        targetState = status,
+        transitionSpec = {
+            (scaleIn(spring(dampingRatio = 0.45f, stiffness = 650f), initialScale = 0.3f) + fadeIn(tween(120)))
+                .togetherWith(fadeOut(tween(90)))
+                .using(SizeTransform(clip = false))
+        },
+        label = "status_ticks"
+    ) { shownStatus ->
+        content(shownStatus)
+    }
 }
 
 @Composable

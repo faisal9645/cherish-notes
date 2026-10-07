@@ -92,11 +92,12 @@ fun MoodPickerSheet(
                                 onDismiss()
                             }
                     ) {
-                        Text(
+                        EmojiText(
                             text = mood,
                             fontSize = 13.sp,
                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                             color = if (isSelected) RoseGoldPrimary else MaterialTheme.colorScheme.onSurface,
+                            emojiScale = 1.2f,
                             modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)
                         )
                     }

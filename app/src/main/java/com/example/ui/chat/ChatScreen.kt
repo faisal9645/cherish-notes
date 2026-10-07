@@ -38,6 +38,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material.icons.automirrored.filled.Reply
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
@@ -46,22 +47,36 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.paint
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.BlurEffect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.TileMode
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.example.data.model.Message
 import com.example.data.model.MessageType
 import com.example.ui.components.AvatarView
+import com.example.ui.components.SelectionCheckBadge
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.ui.zIndex
 import com.example.ui.theme.*
@@ -105,12 +120,50 @@ fun ChatScreen(
     var editingMessage by remember { mutableStateOf<Message?>(null) }
     var editDialogText by remember { mutableStateOf("") }
     var showDeleteConfirmDialog by remember { mutableStateOf<Message?>(null) }
+    var isSelectionMode by remember { mutableStateOf(false) }
+    var selectedItemIds by remember { mutableStateOf(setOf<String>()) }
+    var showMultiDeleteConfirmDialog by remember { mutableStateOf(false) }
     var showClearChatDialog by remember { mutableStateOf(false) }
     var showFullProfilePicViewer by remember { mutableStateOf(false) }
     var showChatMenu by remember { mutableStateOf(false) }
     var showVideoNoteRecorder by remember { mutableStateOf(false) }
     var showHeartbeatTouch by remember { mutableStateOf(false) }
     var showMoodPicker by remember { mutableStateOf(false) }
+    val view = LocalView.current
+
+    // Long-press focus view (message lifted over the dimmed, blurred chat)
+    var focusedMessage by remember { mutableStateOf<Message?>(null) }
+    var focusedBounds by remember { mutableStateOf(Rect.Zero) }
+    val focusProgress = remember { Animatable(0f) }
+
+    // Where the last touch landed (fraction of the screen), so the photo viewer zooms out of it
+    val lastTouchFraction = remember { floatArrayOf(0.5f, 0.5f) }
+
+    // Messages that arrive while this screen is open get a landing animation; the ones already
+    // there when it opened don't. My own just-sent messages count as arrivals.
+    val chatOpenedAt = remember { System.currentTimeMillis() }
+    val initialMessageIds = remember { HashSet<String>() }
+    val initialSnapshotTaken = remember { booleanArrayOf(false) }
+    val landedMessageIds = remember { HashSet<String>() }
+    if (!initialSnapshotTaken[0] && uiState.messages.isNotEmpty()) {
+        uiState.messages.forEach { if (it.timestamp < chatOpenedAt - 2_000L) initialMessageIds += it.id }
+        initialSnapshotTaken[0] = true
+    }
+
+    // Incoming messages that arrived while scrolled up, shown on the scroll-down button
+    var unseenIncomingCount by remember { mutableIntStateOf(0) }
+
+    fun exitSelection() {
+        isSelectionMode = false
+        selectedItemIds = emptySet()
+    }
+
+    // WhatsApp-style: deselecting the last message leaves selection mode
+    fun toggleMessageSelection(messageId: String) {
+        view.chatHaptic(ChatHaptic.Tick)
+        selectedItemIds = if (messageId in selectedItemIds) selectedItemIds - messageId else selectedItemIds + messageId
+        if (selectedItemIds.isEmpty()) isSelectionMode = false
+    }
 
     val searchFocusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
@@ -304,6 +357,29 @@ fun ChatScreen(
         unreadIds.forEach { viewModel.markMessageAsRead(it) }
     }
 
+    // Soft tick when a message arrives while the chat is open, and a count on the scroll-down
+    // button when scrolled up. Compared with the partner's own earlier timestamps, so a clock
+    // difference between the two phones doesn't matter.
+    val newestIncoming = remember(uiState.messages, currentUserId) {
+        uiState.messages.lastOrNull { it.senderId != currentUserId }
+    }
+    var newestIncomingSeenAt by remember { mutableLongStateOf(-1L) }
+    LaunchedEffect(newestIncoming?.id) {
+        val incoming = newestIncoming ?: return@LaunchedEffect
+        if (newestIncomingSeenAt < 0L) {
+            newestIncomingSeenAt = incoming.timestamp
+        } else if (incoming.timestamp > newestIncomingSeenAt) {
+            newestIncomingSeenAt = incoming.timestamp
+            view.chatHaptic(ChatHaptic.Receive)
+            if (listState.firstVisibleItemIndex > 1) unseenIncomingCount++
+        }
+    }
+    LaunchedEffect(listState) {
+        snapshotFlow { listState.firstVisibleItemIndex == 0 }.collect { atBottom ->
+            if (atBottom) unseenIncomingCount = 0
+        }
+    }
+
     val partnerHasCheckAfter = partner?.hasActiveCheckAfter() == true
     val partnerCheckAfterTarget = partner?.checkAfterTimeMillis ?: 0L
     val iHaveCheckAfter = myUser?.hasActiveCheckAfter() == true
@@ -356,6 +432,30 @@ fun ChatScreen(
             showFullProfilePicViewer = false
             showClearChatDialog = false
             showChatMenu = false
+            showMultiDeleteConfirmDialog = false
+            exitSelection()
+            focusedMessage = null
+            focusProgress.snapTo(0f)
+        }
+    }
+
+    LaunchedEffect(uiState.isStealthCurtainActive) {
+        if (uiState.isStealthCurtainActive) {
+            showMultiDeleteConfirmDialog = false
+            exitSelection()
+            focusedMessage = null
+            focusProgress.snapTo(0f)
+        }
+    }
+
+    // Drop selected messages that are no longer shown (deleted on the other phone, filter changed)
+    LaunchedEffect(displayedMessages, isSelectionMode) {
+        if (isSelectionMode) {
+            val shownIds = displayedMessages.mapTo(HashSet()) { it.id }
+            if (!shownIds.containsAll(selectedItemIds)) {
+                selectedItemIds = selectedItemIds.intersect(shownIds)
+                if (selectedItemIds.isEmpty()) isSelectionMode = false
+            }
         }
     }
 
@@ -372,6 +472,8 @@ fun ChatScreen(
     BackHandler(enabled = true) {
         if (isImeVisible) {
             keyboardController?.hide()
+        } else if (isSelectionMode) {
+            exitSelection()
         } else if (uiState.theaterVideoId != null) {
             viewModel.closeTheaterVideo()
         } else if (uiState.fullScreenMediaUrl != null) {
@@ -450,54 +552,77 @@ fun ChatScreen(
     }
 
     Scaffold(
-        modifier = Modifier.pointerInput(Unit) {
-            awaitEachGesture {
-                val down = awaitFirstDown(requireUnconsumed = false)
-                var accX = 0f
-                var accY = 0f
-                var directionLocked = false
-                var isHorizontal = false
+        modifier = Modifier
+            .graphicsLayer {
+                // The chat blurs behind the long-press focus view (Android 12+)
+                if (android.os.Build.VERSION.SDK_INT >= 31) {
+                    val radius = 10.dp.toPx() * focusProgress.value.coerceIn(0f, 1f)
+                    renderEffect = if (radius > 0.5f) BlurEffect(radius, radius, TileMode.Clamp) else null
+                }
+            }
+            .pointerInput(Unit) {
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false)
+                    lastTouchFraction[0] = down.position.x / size.width.coerceAtLeast(1)
+                    lastTouchFraction[1] = down.position.y / size.height.coerceAtLeast(1)
+                    // No tab switching mid-selection, it would drop the selected messages
+                    if (isSelectionMode) return@awaitEachGesture
+                    var accX = 0f
+                    var accY = 0f
+                    var directionLocked = false
+                    var isHorizontal = false
 
-                while (true) {
-                    val event = awaitPointerEvent(PointerEventPass.Main)
-                    val change = event.changes.firstOrNull { it.id == down.id } ?: break
-                    if (!change.pressed) break
+                    while (true) {
+                        val event = awaitPointerEvent(PointerEventPass.Main)
+                        val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                        if (!change.pressed) break
 
-                    // If a child component (like a message bubble swipe-to-reply) consumed the event,
-                    // do not interpret this gesture as a tab switch
-                    if (change.isConsumed) {
-                        break
-                    }
-
-                    val delta = change.positionChange()
-                    accX += delta.x
-                    accY += delta.y
-
-                    if (!directionLocked && (kotlin.math.abs(accX) > 16f || kotlin.math.abs(accY) > 16f)) {
-                        isHorizontal = kotlin.math.abs(accX) > kotlin.math.abs(accY) * 1.8f
-                        directionLocked = true
-                    }
-
-                    if (directionLocked && isHorizontal) {
-                        // Swiping right smoothly glides to Love & Us tab
-                        if (accX > 70f) {
-                            change.consume()
-                            onNavigateToHome()
+                        // If a child component (like a message bubble swipe-to-reply) consumed the event,
+                        // do not interpret this gesture as a tab switch
+                        if (change.isConsumed) {
                             break
                         }
-                        // Swiping left smoothly glides to Settings / Profile tab
-                        if (accX < -70f) {
-                            change.consume()
-                            onNavigateToProfile()
-                            break
+
+                        val delta = change.positionChange()
+                        accX += delta.x
+                        accY += delta.y
+
+                        if (!directionLocked && (kotlin.math.abs(accX) > 16f || kotlin.math.abs(accY) > 16f)) {
+                            isHorizontal = kotlin.math.abs(accX) > kotlin.math.abs(accY) * 1.8f
+                            directionLocked = true
+                        }
+
+                        if (directionLocked && isHorizontal) {
+                            // Swiping right smoothly glides to Love & Us tab
+                            if (accX > 70f) {
+                                change.consume()
+                                onNavigateToHome()
+                                break
+                            }
+                            // Swiping left smoothly glides to Settings / Profile tab
+                            if (accX < -70f) {
+                                change.consume()
+                                onNavigateToProfile()
+                                break
+                            }
                         }
                     }
                 }
-            }
-        },
+            },
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
-            Column {
+            AnimatedContent(
+                targetState = isSelectionMode,
+                transitionSpec = { fadeIn(tween(180)) togetherWith fadeOut(tween(120)) },
+                label = "chat_top_bar"
+            ) { selecting ->
+            if (selecting) {
+                ChatSelectionTopBar(
+                    selectedCount = selectedItemIds.size,
+                    onClose = { exitSelection() },
+                    onDelete = { showMultiDeleteConfirmDialog = true }
+                )
+            } else Column {
                 TopAppBar(
                     title = {
                     if (uiState.isSearching) {
@@ -581,12 +706,13 @@ fun ChatScreen(
                                                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.75f),
                                                 modifier = Modifier.clickable { showMoodPicker = true }
                                             ) {
-                                                Text(
+                                                EmojiText(
                                                     text = partnerMood,
                                                     fontSize = 10.sp,
                                                     fontWeight = FontWeight.Medium,
                                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                                     maxLines = 1,
+                                                    emojiScale = 1.2f,
                                                     modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                                                 )
                                             }
@@ -811,6 +937,7 @@ fun ChatScreen(
             )
             HorizontalDivider(thickness = 1.dp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
             }
+            }
         },
         bottomBar = {
             val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
@@ -835,6 +962,7 @@ fun ChatScreen(
                         viewModel.onTypingChanged(it.isNotBlank())
                     },
                     onSendText = {
+                        if (composerText.isNotBlank()) view.chatHaptic(ChatHaptic.Send)
                         viewModel.sendTextMessage(composerText)
                         composerText = ""
                         viewModel.onTypingChanged(false)
@@ -978,9 +1106,15 @@ fun ChatScreen(
                     PinnedMessageBanner(
                         message = pinned,
                         onClick = {
+                            // The list is reversed (newest at index 0)
                             val index = displayedMessages.indexOfFirst { it.id == pinned.id }
                             if (index >= 0) {
-                                scope.launch { listState.animateScrollToItem(index) }
+                                scope.launch {
+                                    listState.animateScrollToItem(displayedMessages.lastIndex - index)
+                                    highlightedMessageId = pinned.id
+                                    delay(1400)
+                                    highlightedMessageId = null
+                                }
                             }
                         },
                         onUnpin = { viewModel.togglePin(pinned.id) }
@@ -1060,10 +1194,13 @@ fun ChatScreen(
                     }
                 }
 
+                // The typing bubble sits under the list, so as it grows the newest messages move up
+                Column(modifier = Modifier.fillMaxSize()) {
                 LazyColumn(
                     state = listState,
                     modifier = Modifier
-                        .fillMaxSize()
+                        .weight(1f)
+                        .fillMaxWidth()
                         .pointerInput(Unit) {
                             detectTapGestures(onDoubleTap = { onQuickDisguise() })
                         },
@@ -1082,7 +1219,19 @@ fun ChatScreen(
                         val isFirstOfDay = index == reversedMessages.lastIndex || !isSameDay(reversedMessages[index + 1].timestamp, message.timestamp)
 
                         Column(
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                // Rows glide aside when messages are added or deleted instead of jumping;
+                                // new arrivals get their own landing below
+                                .animateItem(
+                                    fadeInSpec = null,
+                                    placementSpec = spring(
+                                        dampingRatio = 0.86f,
+                                        stiffness = Spring.StiffnessMediumLow,
+                                        visibilityThreshold = IntOffset.VisibilityThreshold
+                                    ),
+                                    fadeOutSpec = tween(180)
+                                )
                         ) {
                             val dateSep = formatDateSeparator(message.timestamp)
                             if (isFirstOfDay) {
@@ -1109,113 +1258,212 @@ fun ChatScreen(
                             val isYouTube = remember(message.text) {
                                 YouTubeHelper.extractVideoId(message.text) != null
                             }
+                            val isSelected = isSelectionMode && message.id in selectedItemIds
+                            val selectionAccent = if (isPrivate) (if (isDark) Color(0xFF9CA3AF) else Color(0xFF6B7280)) else RoseGoldPrimary
+
+                            // A message that arrives while the chat is open lands with a spring: sent ones
+                            // rise from the composer, received ones slide in from the left
+                            val isFreshArrival = remember(message.id) {
+                                index <= 1 && initialSnapshotTaken[0] &&
+                                    message.id !in initialMessageIds && landedMessageIds.add(message.id)
+                            }
+                            val landing = remember(message.id) { Animatable(if (isFreshArrival) 0f else 1f) }
+                            LaunchedEffect(message.id) {
+                                if (isFreshArrival) landing.animateTo(1f, spring(dampingRatio = 0.62f, stiffness = 420f))
+                            }
+
+                            // Jump-to-message highlight: a quick bump, and a glow that fades once released
+                            val glow = remember(message.id) { Animatable(0f) }
+                            val bump = remember(message.id) { Animatable(0f) }
+                            LaunchedEffect(isHighlighted) {
+                                if (isHighlighted) {
+                                    launch {
+                                        bump.animateTo(1f, spring(dampingRatio = 0.5f, stiffness = 900f))
+                                        bump.animateTo(0f, spring(dampingRatio = 0.45f, stiffness = 300f))
+                                    }
+                                    glow.animateTo(1f, tween(200))
+                                } else {
+                                    glow.animateTo(0f, tween(650))
+                                }
+                            }
+                            val glowColor = if (isPrivate) (if (isDark) Color(0xFF6B7280) else Color(0xFF9CA3AF)) else RoseGoldPrimary
+                            val rowTint by animateColorAsState(
+                                targetValue = if (isSelected) selectionAccent.copy(alpha = if (isDark) 0.22f else 0.14f) else Color.Transparent,
+                                animationSpec = tween(160),
+                                label = "row_tint"
+                            )
+                            val bubbleStartPadding by animateDpAsState(
+                                targetValue = if (isSelectionMode) 6.dp else 16.dp,
+                                animationSpec = spring(dampingRatio = 0.85f, stiffness = Spring.StiffnessMediumLow),
+                                label = "row_start_padding"
+                            )
+                            // Where the message sits on screen, for the long-press focus view
+                            val anchor = remember(message.id) { arrayOf(Rect.Zero) }
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(horizontal = 16.dp)
+                                    .drawBehind { if (rowTint.alpha > 0f) drawRect(rowTint) }
                                     .then(
-                                        if (isHighlighted) {
-                                            val hColor = if (isPrivate) (if (isDark) Color(0xFF6B7280) else Color(0xFF9CA3AF)) else RoseGoldPrimary
-                                            Modifier
-                                                .background(hColor.copy(alpha = 0.15f), RoundedCornerShape(16.dp))
-                                                .border(2.dp, hColor, RoundedCornerShape(16.dp))
-                                                .padding(4.dp)
+                                        if (isFreshArrival) {
+                                            Modifier.graphicsLayer {
+                                                val p = landing.value
+                                                alpha = p.coerceIn(0f, 1f)
+                                                val s = 0.86f + 0.14f * p
+                                                scaleX = s
+                                                scaleY = s
+                                                transformOrigin = TransformOrigin(if (isFromMe) 1f else 0f, 1f)
+                                                translationY = (1f - p) * 28.dp.toPx()
+                                                if (!isFromMe) translationX = (1f - p) * -20.dp.toPx()
+                                            }
                                         } else Modifier
                                     )
                             ) {
-                                MessageBubble(
-                                    message = message,
-                                    isFromMe = isFromMe,
-                                    isPlayingAudio = (currentPlayingId == message.id && isAudioPlaying),
-                                    audioProgress = { if (currentPlayingId == message.id) audioProgress else 0f },
-                                    gallerySize = uiState.gallerySize,
-                                    onPlayAudio = {
-                                        message.mediaUrl?.let { url ->
-                                            viewModel.playAudio(message.id, url)
-                                        }
-                                    },
-                                    onSeekAudio = { progress ->
-                                        if (currentPlayingId == message.id) {
-                                            viewModel.seekAudio(progress)
-                                        } else {
-                                            message.mediaUrl?.let { url ->
-                                                viewModel.playAudio(message.id, url)
-                                                viewModel.seekAudio(progress)
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    AnimatedVisibility(
+                                        visible = isSelectionMode,
+                                        enter = expandHorizontally(spring(dampingRatio = 0.85f, stiffness = Spring.StiffnessMediumLow)) +
+                                            fadeIn(tween(150)) +
+                                            scaleIn(spring(dampingRatio = 0.5f, stiffness = 600f), initialScale = 0.4f),
+                                        exit = shrinkHorizontally(tween(160)) + fadeOut(tween(120))
+                                    ) {
+                                        SelectionCheckBadge(
+                                            isSelected = isSelected,
+                                            accentColor = selectionAccent,
+                                            modifier = Modifier.padding(start = 14.dp)
+                                        )
+                                    }
+                                    Box(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .padding(start = bubbleStartPadding, end = 16.dp)
+                                            .onGloballyPositioned { anchor[0] = it.boundsInRoot() }
+                                            .graphicsLayer {
+                                                val grow = 1f + 0.035f * bump.value
+                                                scaleX = grow
+                                                scaleY = grow
+                                                transformOrigin = TransformOrigin(if (isFromMe) 1f else 0f, 0.5f)
                                             }
-                                        }
-                                    },
-                                    onImageClick = { url ->
-                                        val app = context.applicationContext as? com.example.CherishApplication
-                                        app?.securityPreferences?.isMediaViewerActive = true
-                                        val isVideo = message.getTypedType() == MessageType.VIDEO || message.isVideoNote || message.isCircularVideoNote()
-                                        val targetType = if (isVideo) MessageType.VIDEO else MessageType.IMAGE
-                                        val mediaList = if (isVideo) {
-                                            listOf(url)
-                                        } else {
-                                            val msgUrls = message.getAllMediaUrls()
-                                            if (msgUrls.size > 1) {
-                                                msgUrls
-                                            } else {
-                                                val allChatImages = displayedMessages
-                                                    .filter { it.getTypedType() == MessageType.IMAGE }
-                                                    .flatMap { it.getAllMediaUrls() }
-                                                    .distinct()
-                                                if (allChatImages.isNotEmpty()) allChatImages else listOf(url)
-                                            }
-                                        }
-                                        viewModel.openFullScreenMedia(url, targetType, mediaList)
-                                    },
-                                    onImageClickWithList = { url, allUrls ->
-                                        val app = context.applicationContext as? com.example.CherishApplication
-                                        app?.securityPreferences?.isMediaViewerActive = true
-                                        val isVideo = message.getTypedType() == MessageType.VIDEO || message.isVideoNote || message.isCircularVideoNote()
-                                        val targetType = if (isVideo) MessageType.VIDEO else MessageType.IMAGE
-                                        val mediaList = if (isVideo) {
-                                            listOf(url)
-                                        } else if (allUrls.size > 1) {
-                                            allUrls
-                                        } else {
-                                            val allChatImages = displayedMessages
-                                                .filter { it.getTypedType() == MessageType.IMAGE }
-                                                .flatMap { it.getAllMediaUrls() }
-                                                .distinct()
-                                            if (allChatImages.isNotEmpty()) allChatImages else listOf(url)
-                                        }
-                                        viewModel.openFullScreenMedia(url, targetType, mediaList)
-                                    },
-                                    onSwipeToReply = {
-                                        viewModel.setReplyingTo(message)
-                                    },
-                                    onLongClick = {
-                                        viewModel.setSelectedMessageForActions(message)
-                                    },
-                                    onReactionClick = { emoji ->
-                                        viewModel.toggleReaction(message.id, emoji)
-                                    },
-                                    onOpenTheaterVideo = { videoId ->
-                                        viewModel.openTheaterVideo(videoId)
-                                    },
-                                    voicePlaybackSpeed = uiState.voicePlaybackSpeed,
-                                    onToggleVoiceSpeed = {
-                                        viewModel.toggleVoiceSpeed()
-                                    },
-                                    isHighlighted = isHighlighted,
-                                    onReplyQuoteClick = { replyId ->
-                                        if (!replyId.isNullOrBlank()) {
-                                            val targetIndex = reversedMessages.indexOfFirst { it.id == replyId }
-                                            if (targetIndex >= 0) {
-                                                scope.launch {
-                                                    listState.animateScrollToItem(targetIndex)
-                                                    highlightedMessageId = replyId
-                                                    kotlinx.coroutines.delay(1400)
-                                                    highlightedMessageId = null
+                                            .drawBehind {
+                                                val g = glow.value
+                                                if (g > 0f) {
+                                                    val corner = CornerRadius(16.dp.toPx())
+                                                    drawRoundRect(glowColor.copy(alpha = 0.16f * g), cornerRadius = corner)
+                                                    drawRoundRect(glowColor.copy(alpha = g), cornerRadius = corner, style = Stroke(2.dp.toPx()))
                                                 }
                                             }
-                                        }
-                                    },
-                                    isPrivateMode = isPrivate,
-                                    senderPhotoUrl = if (isFromMe) uiState.currentUser?.photoUrl else uiState.partnerUser?.photoUrl
-                                )
+                                    ) {
+                                        MessageBubble(
+                                            message = message,
+                                            isFromMe = isFromMe,
+                                            isPlayingAudio = (currentPlayingId == message.id && isAudioPlaying),
+                                            audioProgress = { if (currentPlayingId == message.id) audioProgress else 0f },
+                                            gallerySize = uiState.gallerySize,
+                                            onPlayAudio = {
+                                                message.mediaUrl?.let { url ->
+                                                    viewModel.playAudio(message.id, url)
+                                                }
+                                            },
+                                            onSeekAudio = { progress ->
+                                                if (currentPlayingId == message.id) {
+                                                    viewModel.seekAudio(progress)
+                                                } else {
+                                                    message.mediaUrl?.let { url ->
+                                                        viewModel.playAudio(message.id, url)
+                                                        viewModel.seekAudio(progress)
+                                                    }
+                                                }
+                                            },
+                                            onImageClick = { url ->
+                                                val app = context.applicationContext as? com.example.CherishApplication
+                                                app?.securityPreferences?.isMediaViewerActive = true
+                                                val isVideo = message.getTypedType() == MessageType.VIDEO || message.isVideoNote || message.isCircularVideoNote()
+                                                val targetType = if (isVideo) MessageType.VIDEO else MessageType.IMAGE
+                                                val mediaList = if (isVideo) {
+                                                    listOf(url)
+                                                } else {
+                                                    val msgUrls = message.getAllMediaUrls()
+                                                    if (msgUrls.size > 1) {
+                                                        msgUrls
+                                                    } else {
+                                                        val allChatImages = displayedMessages
+                                                            .filter { it.getTypedType() == MessageType.IMAGE }
+                                                            .flatMap { it.getAllMediaUrls() }
+                                                            .distinct()
+                                                        if (allChatImages.isNotEmpty()) allChatImages else listOf(url)
+                                                    }
+                                                }
+                                                viewModel.openFullScreenMedia(url, targetType, mediaList)
+                                            },
+                                            onImageClickWithList = { url, allUrls ->
+                                                val app = context.applicationContext as? com.example.CherishApplication
+                                                app?.securityPreferences?.isMediaViewerActive = true
+                                                val isVideo = message.getTypedType() == MessageType.VIDEO || message.isVideoNote || message.isCircularVideoNote()
+                                                val targetType = if (isVideo) MessageType.VIDEO else MessageType.IMAGE
+                                                val mediaList = if (isVideo) {
+                                                    listOf(url)
+                                                } else if (allUrls.size > 1) {
+                                                    allUrls
+                                                } else {
+                                                    val allChatImages = displayedMessages
+                                                        .filter { it.getTypedType() == MessageType.IMAGE }
+                                                        .flatMap { it.getAllMediaUrls() }
+                                                        .distinct()
+                                                    if (allChatImages.isNotEmpty()) allChatImages else listOf(url)
+                                                }
+                                                viewModel.openFullScreenMedia(url, targetType, mediaList)
+                                            },
+                                            onSwipeToReply = {
+                                                viewModel.setReplyingTo(message)
+                                            },
+                                            onLongClick = {
+                                                keyboardController?.hide()
+                                                focusedBounds = anchor[0]
+                                                focusedMessage = message
+                                            },
+                                            onReactionClick = { emoji ->
+                                                viewModel.toggleReaction(message.id, emoji)
+                                            },
+                                            onOpenTheaterVideo = { videoId ->
+                                                viewModel.openTheaterVideo(videoId)
+                                            },
+                                            voicePlaybackSpeed = uiState.voicePlaybackSpeed,
+                                            onToggleVoiceSpeed = {
+                                                viewModel.toggleVoiceSpeed()
+                                            },
+                                            isHighlighted = isHighlighted,
+                                            onReplyQuoteClick = { replyId ->
+                                                if (!replyId.isNullOrBlank()) {
+                                                    val targetIndex = reversedMessages.indexOfFirst { it.id == replyId }
+                                                    if (targetIndex >= 0) {
+                                                        scope.launch {
+                                                            listState.animateScrollToItem(targetIndex)
+                                                            highlightedMessageId = replyId
+                                                            kotlinx.coroutines.delay(1400)
+                                                            highlightedMessageId = null
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            isPrivateMode = isPrivate,
+                                            senderPhotoUrl = if (isFromMe) uiState.currentUser?.photoUrl else uiState.partnerUser?.photoUrl
+                                        )
+                                    }
+                                }
+                                if (isSelectionMode) {
+                                    // Covers the whole row, so a tap selects the message instead of opening media,
+                                    // playing audio or swiping to reply
+                                    Box(
+                                        modifier = Modifier
+                                            .matchParentSize()
+                                            .pointerInput(message.id) {
+                                                detectTapGestures(
+                                                    onTap = { toggleMessageSelection(message.id) },
+                                                    onLongPress = { toggleMessageSelection(message.id) }
+                                                )
+                                            }
+                                            .testTag("chat_select_${message.id}")
+                                    )
+                                }
                             }
                         }
                     }
@@ -1226,6 +1474,7 @@ fun ChatScreen(
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
+                                    .animateItem()
                                     .padding(vertical = 14.dp),
                                 contentAlignment = Alignment.Center
                             ) {
@@ -1263,6 +1512,53 @@ fun ChatScreen(
                     // Strictly 2-Person Beginning of Chat Banner (shown when pagination is exhausted)
             } // Box content end
 
+                PartnerTypingBubble(
+                    visible = (uiState.isPartnerTyping || uiState.isPartnerRecordingAudio) &&
+                        uiState.chatExperienceMode != com.example.ui.chat.ChatExperienceMode.PRIVATE &&
+                        !uiState.isSearching,
+                    isRecording = uiState.isPartnerRecordingAudio,
+                    partnerPhotoUrl = partner?.photoUrl,
+                    partnerName = partnerName,
+                    isDark = isDark
+                )
+                } // Column: list + typing bubble
+
+            // WhatsApp-style date chip: the date of the messages at the top, shown while scrolling
+            var showDateChip by remember { mutableStateOf(false) }
+            val isListScrolling = listState.isScrollInProgress
+            LaunchedEffect(isListScrolling) {
+                if (isListScrolling) {
+                    showDateChip = true
+                } else {
+                    delay(1200)
+                    showDateChip = false
+                }
+            }
+            val topVisibleDate by remember(reversedMessages) {
+                derivedStateOf {
+                    val topIndex = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: return@derivedStateOf null
+                    (reversedMessages.getOrNull(topIndex) ?: reversedMessages.lastOrNull())
+                        ?.let { formatDateSeparator(it.timestamp) }
+                        ?.takeIf { it.isNotEmpty() }
+                }
+            }
+            val lastShownDate = remember { arrayOf("") }
+            topVisibleDate?.let { lastShownDate[0] = it }
+            androidx.compose.animation.AnimatedVisibility(
+                visible = showDateChip && topVisibleDate != null,
+                enter = fadeIn(tween(150)) + slideInVertically(spring(dampingRatio = 0.8f, stiffness = 600f)) { -it / 2 },
+                exit = fadeOut(tween(250)),
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = 8.dp)
+            ) {
+                DateChip(
+                    dateText = lastShownDate[0],
+                    isPrivateMode = (uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE),
+                    isDark = isDark,
+                    shadowElevation = 3.dp
+                )
+            }
 
             // Floating scroll to bottom button
             val showScrollButton by remember {
@@ -1273,24 +1569,60 @@ fun ChatScreen(
 
             androidx.compose.animation.AnimatedVisibility(
                 visible = showScrollButton,
+                enter = scaleIn(spring(dampingRatio = 0.55f, stiffness = 500f), initialScale = 0.4f) + fadeIn(tween(120)),
+                exit = scaleOut(tween(140), targetScale = 0.6f) + fadeOut(tween(140)),
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .padding(16.dp)
             ) {
                 val isPrivate = uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE
-                SmallFloatingActionButton(
-                    onClick = {
-                        scope.launch {
-                            if (displayedMessages.isNotEmpty()) {
-                                listState.animateScrollToItem(0)
+                Box {
+                    SmallFloatingActionButton(
+                        onClick = {
+                            scope.launch {
+                                if (displayedMessages.isNotEmpty()) {
+                                    listState.animateScrollToItem(0)
+                                }
                             }
+                        },
+                        containerColor = if (isPrivate) (if (isDark) Color(0xFF2E2F33) else Color(0xFFE5E7EB)) else MaterialTheme.colorScheme.primaryContainer,
+                        contentColor = if (isPrivate) (if (isDark) Color(0xFFECECEC) else Color(0xFF1F2937)) else MaterialTheme.colorScheme.onPrimaryContainer,
+                        shape = CircleShape
+                    ) {
+                        Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Scroll to bottom")
+                    }
+                    // New messages that arrived while scrolled up; bumps with each one
+                    if (unseenIncomingCount > 0) {
+                        val badgeBump = remember { Animatable(1f) }
+                        LaunchedEffect(unseenIncomingCount) {
+                            badgeBump.snapTo(1.35f)
+                            badgeBump.animateTo(1f, spring(dampingRatio = 0.4f, stiffness = 600f))
                         }
-                    },
-                    containerColor = if (isPrivate) (if (isDark) Color(0xFF2E2F33) else Color(0xFFE5E7EB)) else MaterialTheme.colorScheme.primaryContainer,
-                    contentColor = if (isPrivate) (if (isDark) Color(0xFFECECEC) else Color(0xFF1F2937)) else MaterialTheme.colorScheme.onPrimaryContainer,
-                    shape = CircleShape
-                ) {
-                    Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Scroll to bottom")
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .offset(x = 4.dp, y = (-4).dp)
+                                .graphicsLayer {
+                                    scaleX = badgeBump.value
+                                    scaleY = badgeBump.value
+                                }
+                                .defaultMinSize(minWidth = 18.dp, minHeight = 18.dp)
+                                .background(
+                                    if (isPrivate) (if (isDark) Color(0xFFECECEC) else Color(0xFF1F2937)) else HeartRed,
+                                    CircleShape
+                                )
+                                .padding(horizontal = 4.dp)
+                                .testTag("chat_unseen_badge"),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = if (unseenIncomingCount > 99) "99+" else unseenIncomingCount.toString(),
+                                color = if (isPrivate && isDark) Color(0xFF111827) else Color.White,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
                 }
             }
             } // Close else branch of if (uiState.isStealthCurtainActive)
@@ -1333,13 +1665,83 @@ fun ChatScreen(
         }
     }
 
+    // Long-press focus view over the whole chat; "+" opens the full sheet below
+    focusedMessage?.let { focused ->
+        val live = uiState.messages.find { it.id == focused.id } ?: focused
+        val focusedIsFromMe = live.senderId == currentUserId
+        val isPrivate = uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE
+        val focusActions = buildList {
+            add(FocusAction("Reply", Icons.AutoMirrored.Filled.Reply) { viewModel.setReplyingTo(live) })
+            add(
+                FocusAction(
+                    label = if (live.isStarred) "Unstar" else "Star",
+                    icon = if (live.isStarred) Icons.Filled.Star else Icons.Outlined.StarOutline
+                ) { viewModel.toggleStar(live.id) }
+            )
+            add(
+                FocusAction(
+                    label = if (live.isPinned) "Unpin" else "Pin",
+                    icon = if (live.isPinned) Icons.Filled.PushPin else Icons.Outlined.PushPin
+                ) { viewModel.togglePin(live.id) }
+            )
+            if (live.getTypedType() == MessageType.TEXT && live.text.isNotBlank()) {
+                add(FocusAction("Copy", Icons.Default.ContentCopy) {
+                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                    clipboard.setPrimaryClip(ClipData.newPlainText("Cherish Message", live.text))
+                })
+            }
+            if (focusedIsFromMe && !live.isDeleted) {
+                add(FocusAction("Edit", Icons.Default.Edit) {
+                    editingMessage = live
+                    editDialogText = live.text
+                })
+            }
+            add(FocusAction("Select", Icons.Default.CheckCircleOutline) {
+                isSelectionMode = true
+                selectedItemIds = setOf(live.id)
+            })
+            add(FocusAction("Save to Memories", Icons.Outlined.FavoriteBorder) {
+                Toast.makeText(context, "Saved to Our Memories ❤️", Toast.LENGTH_SHORT).show()
+            })
+            add(FocusAction("Delete", Icons.Outlined.Delete, isDestructive = true) { showDeleteConfirmDialog = live })
+        }
+        MessageFocusOverlay(
+            isFromMe = focusedIsFromMe,
+            anchorBounds = focusedBounds,
+            progress = focusProgress,
+            myReaction = live.reactions[currentUserId],
+            isPrivateMode = isPrivate,
+            actions = focusActions,
+            onReaction = { emoji -> viewModel.toggleReaction(live.id, emoji) },
+            onMoreReactions = { viewModel.setSelectedMessageForActions(live) },
+            onDismissed = { focusedMessage = null }
+        ) {
+            MessageBubble(
+                message = live,
+                isFromMe = focusedIsFromMe,
+                isPlayingAudio = false,
+                audioProgress = { 0f },
+                onPlayAudio = {},
+                onImageClick = {},
+                onLongClick = {},
+                onReactionClick = { emoji -> viewModel.toggleReaction(live.id, emoji) },
+                gallerySize = uiState.gallerySize,
+                isPrivateMode = isPrivate,
+                senderPhotoUrl = if (focusedIsFromMe) uiState.currentUser?.photoUrl else uiState.partnerUser?.photoUrl
+            )
+        }
+    }
+
     // Message Actions Bottom Sheet
     uiState.selectedMessageForActions?.let { msg ->
         MessageActionsSheet(
             message = msg,
             isFromMe = msg.senderId == currentUserId,
             onDismiss = { viewModel.setSelectedMessageForActions(null) },
-            onReaction = { emoji -> viewModel.toggleReaction(msg.id, emoji) },
+            onReaction = { emoji ->
+                view.chatHaptic(ChatHaptic.Tick)
+                viewModel.toggleReaction(msg.id, emoji)
+            },
             onReply = { viewModel.setReplyingTo(msg) },
             onCopy = {
                 val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
@@ -1354,6 +1756,10 @@ fun ChatScreen(
             },
             onDelete = {
                 showDeleteConfirmDialog = msg
+            },
+            onSelect = {
+                isSelectionMode = true
+                selectedItemIds = setOf(msg.id)
             },
             onSearch = {
                 viewModel.setSearching(true)
@@ -1496,6 +1902,7 @@ fun ChatScreen(
             confirmButton = {
                 Button(
                     onClick = {
+                        view.chatHaptic(ChatHaptic.Delete)
                         viewModel.deleteMessage(msg.id)
                         showDeleteConfirmDialog = null
                     },
@@ -1512,11 +1919,45 @@ fun ChatScreen(
         )
     }
 
+    // Multi-select Delete Confirmation Dialog
+    if (showMultiDeleteConfirmDialog) {
+        val count = selectedItemIds.size
+        AlertDialog(
+            onDismissRequest = { showMultiDeleteConfirmDialog = false },
+            title = { Text(if (count == 1) "Delete message?" else "Delete $count messages?") },
+            text = {
+                Text(if (count == 1) "This message will be removed from your private chat." else "These $count messages will be removed from your private chat.")
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        view.chatHaptic(ChatHaptic.Delete)
+                        viewModel.deleteMessages(selectedItemIds)
+                        showMultiDeleteConfirmDialog = false
+                        exitSelection()
+                    },
+                    enabled = count > 0,
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                    modifier = Modifier.testTag("chat_confirm_delete_selected")
+                ) {
+                    Text(if (count == 1) "Delete" else "Delete ($count)")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showMultiDeleteConfirmDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
     // Full-screen media viewer
     uiState.fullScreenMediaUrl?.let { url ->
+        val openFrom = remember(url) { TransformOrigin(lastTouchFraction[0], lastTouchFraction[1]) }
         FullScreenMediaViewer(
             mediaUrl = url,
             allMediaUrls = uiState.allMediaUrlsForViewer,
+            openFrom = openFrom,
             onShowInChat = { clickedUrl ->
                 val targetMsg = uiState.messages.find { it.mediaUrl == clickedUrl || it.getAllMediaUrls().contains(clickedUrl) }
                 if (targetMsg != null) {
@@ -1581,9 +2022,11 @@ fun ChatScreen(
     if (showFullProfilePicViewer) {
         val photoUrl = partner?.photoUrl
         if (!photoUrl.isNullOrBlank()) {
+            val openFrom = remember(photoUrl) { TransformOrigin(lastTouchFraction[0], lastTouchFraction[1]) }
             FullScreenMediaViewer(
                 mediaUrl = photoUrl,
                 allMediaUrls = listOf(photoUrl),
+                openFrom = openFrom,
                 onDismiss = {
                     val app = context.applicationContext as? com.example.CherishApplication
                     app?.securityPreferences?.isMediaViewerActive = false
@@ -1681,6 +2124,51 @@ fun ChatScreen(
             viewModel.extendCheckAfter(duration)
         }
     )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ChatSelectionTopBar(
+    selectedCount: Int,
+    onClose: () -> Unit,
+    onDelete: () -> Unit
+) {
+    Column {
+        TopAppBar(
+            title = {
+                Text(
+                    text = "$selectedCount selected",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 17.sp,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            },
+            navigationIcon = {
+                IconButton(
+                    onClick = onClose,
+                    modifier = Modifier.testTag("chat_selection_close")
+                ) {
+                    Icon(Icons.Default.Close, contentDescription = "Cancel selection")
+                }
+            },
+            actions = {
+                IconButton(
+                    onClick = onDelete,
+                    enabled = selectedCount > 0,
+                    modifier = Modifier.testTag("chat_delete_selected")
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Delete,
+                        contentDescription = "Delete selected messages",
+                        tint = if (selectedCount > 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                    )
+                }
+            },
+            colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface),
+            windowInsets = WindowInsets.statusBars
+        )
+        HorizontalDivider(thickness = 1.dp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+    }
 }
 
 @Composable
@@ -1955,6 +2443,96 @@ fun StealthDisguiseNotesView(
     }
 }
 
+/**
+ * Partner typing / recording indicator under the newest message. It springs in from the bottom-left
+ * and, because it sits below the list, pushes the newest messages up as it grows.
+ */
+@Composable
+private fun PartnerTypingBubble(
+    visible: Boolean,
+    isRecording: Boolean,
+    partnerPhotoUrl: String?,
+    partnerName: String,
+    isDark: Boolean
+) {
+    AnimatedVisibility(
+        visible = visible,
+        enter = expandVertically(spring(dampingRatio = 0.8f, stiffness = 500f), expandFrom = Alignment.Top) +
+            fadeIn(tween(160)) +
+            scaleIn(spring(dampingRatio = 0.55f, stiffness = 500f), initialScale = 0.6f, transformOrigin = TransformOrigin(0f, 1f)),
+        exit = shrinkVertically(tween(180), shrinkTowards = Alignment.Top) +
+            fadeOut(tween(140)) +
+            scaleOut(tween(160), targetScale = 0.7f, transformOrigin = TransformOrigin(0f, 1f))
+    ) {
+        Row(
+            verticalAlignment = Alignment.Bottom,
+            modifier = Modifier
+                .padding(start = 22.dp, end = 16.dp, top = 2.dp, bottom = 8.dp)
+                .testTag("partner_typing_bubble")
+        ) {
+            AvatarView(
+                photoUrl = partnerPhotoUrl,
+                name = partnerName,
+                size = 26.dp,
+                showOnlineBadge = false
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+            Surface(
+                shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomEnd = 16.dp, bottomStart = 4.dp),
+                color = if (isDark) Color(0xFF1E2638) else Color(0xFFF1F5FB),
+                border = BorderStroke(0.5.dp, if (isDark) Color(0xFF2A364F) else Color(0xFFE2E8F0)),
+                shadowElevation = 0.8.dp
+            ) {
+                Box(
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 11.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (isRecording) {
+                        RecordingBars(color = HeartRed)
+                    } else {
+                        BouncingDots(color = if (isDark) Color(0xFFCBD5E1) else Color(0xFF64748B))
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RecordingBars(color: Color) {
+    val transition = rememberInfiniteTransition(label = "recording_bars")
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(3.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = Icons.Default.Mic,
+            contentDescription = "Recording a voice note",
+            tint = color,
+            modifier = Modifier.size(14.dp)
+        )
+        repeat(4) { bar ->
+            val level by transition.animateFloat(
+                initialValue = 0.3f,
+                targetValue = 1f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(380, easing = FastOutSlowInEasing),
+                    repeatMode = RepeatMode.Reverse,
+                    initialStartOffset = StartOffset(bar * 90)
+                ),
+                label = "recording_bar_$bar"
+            )
+            Box(
+                modifier = Modifier
+                    .width(3.dp)
+                    .height(14.dp)
+                    .graphicsLayer { scaleY = level }
+                    .background(color.copy(alpha = 0.85f), RoundedCornerShape(2.dp))
+            )
+        }
+    }
+}
+
 @Composable
 fun BouncingDots(color: Color = RoseGoldPrimary) {
     val infiniteTransition = rememberInfiniteTransition(label = "bouncing_dots")
@@ -2035,36 +2613,12 @@ fun DateSeparatorBadge(
                 )
         )
 
-        Surface(
-            shape = RoundedCornerShape(12.dp),
-            color = if (isPrivateMode) {
-                if (isDark) Color(0xFF232428).copy(alpha = 0.95f) else Color(0xFFF3F4F6)
-            } else {
-                if (isDark) Color(0xFF1E293B).copy(alpha = 0.92f) else Color(0xFFF1F5F9).copy(alpha = 0.95f)
-            },
-            border = BorderStroke(
-                0.8.dp,
-                if (isPrivateMode) {
-                    if (isDark) Color(0xFF374151).copy(alpha = 0.6f) else Color(0xFFE5E7EB)
-                } else {
-                    if (isDark) Color(0xFF475569).copy(alpha = 0.4f) else Color(0xFFE2E8F0)
-                }
-            ),
-            shadowElevation = 1.dp,
+        DateChip(
+            dateText = dateText,
+            isPrivateMode = isPrivateMode,
+            isDark = isDark,
             modifier = Modifier.padding(horizontal = 10.dp)
-        ) {
-            Text(
-                text = dateText,
-                fontSize = 11.5.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = if (isPrivateMode) {
-                    if (isDark) Color(0xFF9CA3AF) else Color(0xFF4B5563)
-                } else {
-                    if (isDark) Color(0xFF94A3B8) else Color(0xFF475569)
-                },
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
-            )
-        }
+        )
 
         Box(
             modifier = Modifier
@@ -2075,6 +2629,47 @@ fun DateSeparatorBadge(
                         colors = listOf(lineColor, Color.Transparent)
                     )
                 )
+        )
+    }
+}
+
+/** The date pill used by the in-list date separators and the floating date while scrolling. */
+@Composable
+fun DateChip(
+    dateText: String,
+    isPrivateMode: Boolean,
+    isDark: Boolean,
+    modifier: Modifier = Modifier,
+    shadowElevation: Dp = 1.dp
+) {
+    Surface(
+        shape = RoundedCornerShape(12.dp),
+        color = if (isPrivateMode) {
+            if (isDark) Color(0xFF232428).copy(alpha = 0.95f) else Color(0xFFF3F4F6)
+        } else {
+            if (isDark) Color(0xFF1E293B).copy(alpha = 0.92f) else Color(0xFFF1F5F9).copy(alpha = 0.95f)
+        },
+        border = BorderStroke(
+            0.8.dp,
+            if (isPrivateMode) {
+                if (isDark) Color(0xFF374151).copy(alpha = 0.6f) else Color(0xFFE5E7EB)
+            } else {
+                if (isDark) Color(0xFF475569).copy(alpha = 0.4f) else Color(0xFFE2E8F0)
+            }
+        ),
+        shadowElevation = shadowElevation,
+        modifier = modifier
+    ) {
+        Text(
+            text = dateText,
+            fontSize = 11.5.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = if (isPrivateMode) {
+                if (isDark) Color(0xFF9CA3AF) else Color(0xFF4B5563)
+            } else {
+                if (isDark) Color(0xFF94A3B8) else Color(0xFF475569)
+            },
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
         )
     }
 }
@@ -2340,6 +2935,10 @@ private fun AttachmentOptionItem(
         )
     }
 }
+
+
+
+
 
 
 

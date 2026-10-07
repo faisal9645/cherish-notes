@@ -67,7 +67,7 @@ def create_github_release(token: str, version_code: int, version_name: str) -> d
     payload = {
         "tag_name": tag,
         "name": f"v{version_name} (build {version_code})",
-        "body": f"Cherish v{version_name} (Build {version_code}):\n• Full photo visibility with adaptive thumbnail sizing\n• Fixed photo viewer thumbnails filmstrip\n• Video note recorder enlarged (310dp) with seamless circular clipping\n• Retained chat scroll position on tab navigation\n• YouTube inline player with glowing theme border\n• Fullscreen landscape theater mode with floating close button\n• Recover all chats & gallery restore icon in settings\n• Dark mode whitish flash fixes\n• Integrated typing indicator in chat wallpaper",
+        "body": f"Cherish v{version_name} (Build {version_code}):\n• Smiley faces now show in a natural fair skin tone instead of yellow\n• Hands and people emojis use the fair skin tone too (unless a tone was picked)\n• Emojis in chat are a little bigger; emoji-only messages show large\n• Bigger emojis in reactions, the reaction picker and mood status",
         "draft": False,
         "prerelease": False,
     }

@@ -428,9 +428,8 @@ class ProfileViewModel(
         securityPreferences.setTemporaryClearTimestamp(0L)
         securityPreferences.setAllGalleryRecovered(true)
         try {
+            // Loads the whole gallery right away, pages older chat on scroll and triggers the backup itself
             com.example.CherishApplication.instance.chatRepository.recoverAllMessages()
-            com.example.CherishApplication.instance.chatRepository.loadAllGalleryMedia()
-            googleDriveBackupManager.triggerImmediateAutoBackup()
         } catch (_: Exception) {}
     }
 

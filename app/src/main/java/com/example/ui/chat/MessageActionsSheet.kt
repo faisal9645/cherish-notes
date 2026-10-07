@@ -37,6 +37,7 @@ fun MessageActionsSheet(
     onPin: () -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
+    onSelect: () -> Unit = {},
     onSearch: () -> Unit = {},
     onSaveToMemories: () -> Unit = {}
 ) {
@@ -98,7 +99,7 @@ fun MessageActionsSheet(
                                 .testTag("reaction_emoji_$emoji"),
                             contentAlignment = Alignment.Center
                         ) {
-                            Text(text = emoji, fontSize = 28.sp)
+                            ChatEmoji(emoji = emoji, fontSize = 28.sp)
                         }
                     }
                 }
@@ -201,6 +202,17 @@ fun MessageActionsSheet(
                         .testTag("action_edit")
                 )
             }
+
+            ListItem(
+                headlineContent = { Text("Select Message", fontWeight = FontWeight.Medium) },
+                leadingContent = { Icon(Icons.Default.CheckCircleOutline, contentDescription = null) },
+                modifier = Modifier
+                    .clickable {
+                        onSelect()
+                        onDismiss()
+                    }
+                    .testTag("action_select")
+            )
 
             ListItem(
                 headlineContent = { Text("Delete Message", color = HeartRed, fontWeight = FontWeight.Medium) },

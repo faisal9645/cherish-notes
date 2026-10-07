@@ -6,7 +6,9 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -14,6 +16,7 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -33,7 +36,10 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.drawOutline
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -47,6 +53,7 @@ import com.example.data.model.Message
 import com.example.data.model.MessageType
 import com.example.ui.chat.ChatViewModel
 import com.example.ui.chat.FullScreenMediaViewer
+import com.example.ui.components.SelectionCheckBadge
 import com.example.ui.components.WaveformView
 import com.example.ui.theme.AppGradientStart
 import com.example.ui.theme.RoseGoldPrimary
@@ -54,6 +61,7 @@ import com.example.ui.theme.appHorizontalGradient
 import java.text.SimpleDateFormat
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.positionChanged
 import java.util.*
 import kotlin.math.roundToInt
@@ -113,6 +121,7 @@ fun SharedGalleryScreen(
     var selectedMessageIdForViewer by remember { mutableStateOf<String?>(null) }
     var selectedDateMillis by remember { mutableStateOf<Long?>(null) }
     var messageToDelete by remember { mutableStateOf<Message?>(null) }
+    var mediaItemToDelete by remember { mutableStateOf<GalleryMediaItem?>(null) }
 
     // Telegram-style Gallery Zoom: initially ALWAYS 3 columns
     var gridColumnCount by remember { mutableIntStateOf(3) }
@@ -143,6 +152,7 @@ fun SharedGalleryScreen(
     }
 
     val allGalleryItems by chatViewModel.galleryMediaMessages.collectAsState()
+    val isGalleryLoading by chatViewModel.isGalleryLoading.collectAsState()
     val isAllGalleryRecovered by (app?.securityPreferences?.isAllGalleryRecovered?.collectAsState() ?: remember { mutableStateOf(false) })
     val startOfToday = remember { com.example.CherishApplication.instance.chatRepository.getStartOfToday() }
 
@@ -227,7 +237,8 @@ fun SharedGalleryScreen(
                 }
             }
         }
-        list.sortedByDescending { it.timestamp }
+        // The same URL twice in one message would produce duplicate LazyColumn keys
+        list.distinctBy { it.messageId to it.url }.sortedByDescending { it.timestamp }
     }
 
     // Every media URL from single and multi-photo messages is represented
@@ -236,11 +247,13 @@ fun SharedGalleryScreen(
         filteredMessages.forEach { msg ->
             if (msg.getTypedType() == MessageType.IMAGE) {
                 val urls = msg.getAllMediaUrls().ifEmpty { listOfNotNull(msg.mediaUrl) }
-                urls.forEachIndexed { idx, url ->
+                urls.forEach { url ->
                     if (url.isNotBlank()) {
                         list.add(
                             GalleryMediaItem(
-                                id = "${msg.id}_$idx",
+                                // Keyed by URL (not position) so a tile keeps its identity when other
+                                // photos of the same message are deleted
+                                id = "${msg.id}_${url.hashCode()}",
                                 messageId = msg.id,
                                 mediaUrl = url,
                                 isVideo = false,
@@ -287,9 +300,62 @@ fun SharedGalleryScreen(
             .sortedByDescending { it.timestamp }
     }
 
+    // Multi-select works per tab: one key per photo/video tile, otherwise one key per message
+    val selectableIdsOnPage = remember(pagerState.currentPage, galleryMediaItems, voiceMessages, extractedLinks, starredMessages) {
+        when (pagerState.currentPage) {
+            0 -> galleryMediaItems.map { it.id }
+            1 -> voiceMessages.map { it.id }
+            2 -> extractedLinks.map { it.messageId }.distinct()
+            else -> starredMessages.map { it.id }
+        }
+    }
+    val allOnPageSelected = selectableIdsOnPage.isNotEmpty() && selectedItemIds.containsAll(selectableIdsOnPage)
+
+    fun exitSelection() {
+        isSelectionMode = false
+        selectedItemIds = emptySet()
+    }
+
+    fun startSelection(id: String) {
+        isSelectionMode = true
+        selectedItemIds = selectedItemIds + id
+    }
+
+    fun toggleSelection(id: String) {
+        selectedItemIds = if (id in selectedItemIds) selectedItemIds - id else selectedItemIds + id
+    }
+
+    fun deleteSelectedItems() {
+        if (pagerState.currentPage == 0) {
+            val chosen = galleryMediaItems.filter { it.id in selectedItemIds }
+            chatViewModel.deleteGalleryMedia(chosen.map { it.originalMessage }, chosen.map { it.mediaUrl }.toSet())
+        } else {
+            chatViewModel.deleteMessages(selectedItemIds)
+        }
+        exitSelection()
+    }
+
+    // A selection belongs to the tab it was made on
+    LaunchedEffect(pagerState.currentPage) { exitSelection() }
+
+    // Drop selections whose items disappeared (deleted on the other phone, filter changed)
+    LaunchedEffect(selectableIdsOnPage) {
+        val available = selectableIdsOnPage.toSet()
+        if (!available.containsAll(selectedItemIds)) {
+            selectedItemIds = selectedItemIds.intersect(available)
+        }
+    }
+
+    BackHandler(enabled = isSelectionMode) { exitSelection() }
+
     Scaffold(
         topBar = {
-            if (isSelectionMode) {
+            AnimatedContent(
+                targetState = isSelectionMode,
+                transitionSpec = { fadeIn(tween(180)) togetherWith fadeOut(tween(120)) },
+                label = "gallery_top_bar"
+            ) { selecting ->
+            if (selecting) {
                 TopAppBar(
                     title = {
                         Text(
@@ -301,10 +367,8 @@ fun SharedGalleryScreen(
                     },
                     navigationIcon = {
                         IconButton(
-                            onClick = {
-                                isSelectionMode = false
-                                selectedItemIds = emptySet()
-                            }
+                            onClick = { exitSelection() },
+                            modifier = Modifier.testTag("gallery_selection_close")
                         ) {
                             Icon(Icons.Default.Close, contentDescription = "Cancel Selection")
                         }
@@ -312,15 +376,13 @@ fun SharedGalleryScreen(
                     actions = {
                         TextButton(
                             onClick = {
-                                selectedItemIds = if (selectedItemIds.size == galleryMediaItems.size) {
-                                    emptySet()
-                                } else {
-                                    galleryMediaItems.map { it.id }.toSet()
-                                }
-                            }
+                                selectedItemIds = if (allOnPageSelected) emptySet() else selectableIdsOnPage.toSet()
+                            },
+                            enabled = selectableIdsOnPage.isNotEmpty(),
+                            modifier = Modifier.testTag("gallery_select_all")
                         ) {
                             Text(
-                                if (selectedItemIds.size == galleryMediaItems.size) "Deselect All" else "Select All",
+                                if (allOnPageSelected) "Deselect All" else "Select All",
                                 fontWeight = FontWeight.Bold,
                                 color = RoseGoldPrimary
                             )
@@ -331,7 +393,8 @@ fun SharedGalleryScreen(
                                     showMultiDeleteConfirmDialog = true
                                 }
                             },
-                            enabled = selectedItemIds.isNotEmpty()
+                            enabled = selectedItemIds.isNotEmpty(),
+                            modifier = Modifier.testTag("gallery_delete_selected")
                         ) {
                             Icon(
                                 Icons.Default.Delete,
@@ -404,8 +467,12 @@ fun SharedGalleryScreen(
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
+                        }
+
+                        if (selectableIdsOnPage.isNotEmpty()) {
                             IconButton(
-                                onClick = { isSelectionMode = true }
+                                onClick = { isSelectionMode = true },
+                                modifier = Modifier.testTag("gallery_select_button")
                             ) {
                                 Icon(
                                     Icons.Default.CheckCircleOutline,
@@ -462,6 +529,7 @@ fun SharedGalleryScreen(
                     },
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
                 )
+            }
             }
         },
         containerColor = MaterialTheme.colorScheme.background
@@ -545,8 +613,21 @@ fun SharedGalleryScreen(
                 }
             }
 
+            // Whole-history gallery load (Recover All / date search) in progress
+            if (isGalleryLoading) {
+                LinearProgressIndicator(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(2.dp)
+                        .testTag("gallery_loading_indicator"),
+                    color = RoseGoldPrimary,
+                    trackColor = RoseGoldPrimary.copy(alpha = 0.15f)
+                )
+            }
+
             HorizontalPager(
                 state = pagerState,
+                userScrollEnabled = !isSelectionMode,
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f)
@@ -561,7 +642,7 @@ fun SharedGalleryScreen(
                             } else {
                                 "No shared photos or videos yet 💕"
                             }
-                            EmptyGalleryNotice(emptyText)
+                            EmptyGalleryNotice(emptyText, isLoading = isGalleryLoading)
                         } else {
                             val configuration = LocalConfiguration.current
                             val screenWidthDp = configuration.screenWidthDp.toFloat() - 8f
@@ -583,15 +664,15 @@ fun SharedGalleryScreen(
                                     .padding(4.dp)
                                     .pointerInput(Unit) {
                                         awaitEachGesture {
-                                            awaitFirstDown()
+                                            awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
                                             var zooming = false
                                             var currentZoom = 1f
                                             val startSize = activeThumbnailSize
 
                                             do {
-                                                val event = awaitPointerEvent()
+                                                val event = awaitPointerEvent(pass = PointerEventPass.Initial)
                                                 val zoomChange = event.calculateZoom()
-                                                if (zoomChange != 1f) {
+                                                if (zoomChange != 1f && event.changes.size > 1) {
                                                     zooming = true
                                                     currentZoom *= zoomChange
                                                     activeThumbnailSize = (startSize * currentZoom).coerceIn(minThumbnailSize, maxThumbnailSize)
@@ -624,20 +705,15 @@ fun SharedGalleryScreen(
                                                 else Modifier
                                             )
                                             .pointerInput(item.id, isSelectionMode) {
+                                                // Selection is read when the gesture fires; a value captured at
+                                                // composition would go stale after the first toggle
                                                 detectTapGestures(
                                                     onLongPress = {
-                                                        if (!isSelectionMode) {
-                                                            isSelectionMode = true
-                                                            selectedItemIds = setOf(item.id)
-                                                        }
+                                                        if (isSelectionMode) toggleSelection(item.id) else startSelection(item.id)
                                                     },
                                                     onTap = {
                                                         if (isSelectionMode) {
-                                                            selectedItemIds = if (isSelected) {
-                                                                selectedItemIds - item.id
-                                                            } else {
-                                                                selectedItemIds + item.id
-                                                            }
+                                                            toggleSelection(item.id)
                                                         } else {
                                                             selectedMediaUrl = item.mediaUrl
                                                             selectedMessageIdForViewer = item.messageId
@@ -726,22 +802,13 @@ fun SharedGalleryScreen(
 
                                         // Selection Mode Checkbox Badge
                                         if (isSelectionMode) {
-                                            Box(
+                                            SelectionCheckBadge(
+                                                isSelected = isSelected,
+                                                overMedia = true,
                                                 modifier = Modifier
                                                     .align(Alignment.TopStart)
                                                     .padding(4.dp)
-                                                    .size(24.dp)
-                                                    .clip(CircleShape)
-                                                    .background(if (isSelected) RoseGoldPrimary else Color.Black.copy(alpha = 0.55f)),
-                                                contentAlignment = Alignment.Center
-                                            ) {
-                                                Icon(
-                                                    imageVector = if (isSelected) Icons.Default.Check else Icons.Outlined.Circle,
-                                                    contentDescription = if (isSelected) "Selected" else "Not selected",
-                                                    tint = Color.White,
-                                                    modifier = Modifier.size(16.dp)
-                                                )
-                                            }
+                                            )
                                         }
 
                                         // Overlay "Show in chat" button on bottom edge (when not in multi-selection mode)
@@ -771,7 +838,7 @@ fun SharedGalleryScreen(
                                                     .size(32.dp)
                                                     .clip(CircleShape)
                                                     .background(Color.Black.copy(alpha = 0.65f))
-                                                    .clickable { messageToDelete = item.originalMessage }
+                                                    .clickable { mediaItemToDelete = item }
                                                     .testTag("gallery_item_delete_${item.id}"),
                                                 contentAlignment = Alignment.Center
                                             ) {
@@ -798,7 +865,7 @@ fun SharedGalleryScreen(
                             } else {
                                 "No shared voice notes yet 🎙️"
                             }
-                            EmptyGalleryNotice(emptyText)
+                            EmptyGalleryNotice(emptyText, isLoading = isGalleryLoading)
                         } else {
                             LazyColumn(
                                 modifier = Modifier
@@ -815,7 +882,17 @@ fun SharedGalleryScreen(
                                         shape = RoundedCornerShape(16.dp),
                                         color = MaterialTheme.colorScheme.surface,
                                         shadowElevation = 1.5.dp,
-                                        modifier = Modifier.fillMaxWidth()
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .gallerySelectable(
+                                                key = msg.id,
+                                                isSelectionMode = isSelectionMode,
+                                                isSelected = msg.id in selectedItemIds,
+                                                accentColor = RoseGoldPrimary,
+                                                onToggle = { toggleSelection(msg.id) },
+                                                onStartSelection = { startSelection(msg.id) }
+                                            )
+                                            .testTag("gallery_voice_${msg.id}")
                                     ) {
                                         Column(modifier = Modifier.padding(14.dp)) {
                                             // Top info: Sender + Date & Time
@@ -823,6 +900,10 @@ fun SharedGalleryScreen(
                                                 modifier = Modifier.fillMaxWidth(),
                                                 verticalAlignment = Alignment.CenterVertically
                                             ) {
+                                                if (isSelectionMode) {
+                                                    SelectionCheckBadge(isSelected = msg.id in selectedItemIds)
+                                                    Spacer(modifier = Modifier.width(10.dp))
+                                                }
                                                 Box(
                                                     modifier = Modifier
                                                         .size(34.dp)
@@ -974,7 +1055,7 @@ fun SharedGalleryScreen(
                             } else {
                                 "No shared links yet 🔗\nAny links shared in your secret chat will automatically appear here."
                             }
-                            EmptyGalleryNotice(emptyText)
+                            EmptyGalleryNotice(emptyText, isLoading = isGalleryLoading)
                         } else {
                             LazyColumn(
                                 modifier = Modifier
@@ -987,13 +1068,30 @@ fun SharedGalleryScreen(
                                         shape = RoundedCornerShape(16.dp),
                                         color = MaterialTheme.colorScheme.surface,
                                         shadowElevation = 1.5.dp,
-                                        modifier = Modifier.fillMaxWidth()
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .gallerySelectable(
+                                                key = item.messageId,
+                                                isSelectionMode = isSelectionMode,
+                                                isSelected = item.messageId in selectedItemIds,
+                                                accentColor = RoseGoldPrimary,
+                                                onToggle = { toggleSelection(item.messageId) },
+                                                onStartSelection = { startSelection(item.messageId) }
+                                            )
+                                            .testTag("gallery_link_${item.messageId}")
                                     ) {
                                         Column(modifier = Modifier.padding(14.dp)) {
                                             Row(
                                                 modifier = Modifier.fillMaxWidth(),
                                                 verticalAlignment = Alignment.Top
                                             ) {
+                                                if (isSelectionMode) {
+                                                    SelectionCheckBadge(
+                                                        isSelected = item.messageId in selectedItemIds,
+                                                        modifier = Modifier.padding(top = 9.dp)
+                                                    )
+                                                    Spacer(modifier = Modifier.width(10.dp))
+                                                }
                                                 // Domain icon badge (WhatsApp style)
                                                 Box(
                                                     modifier = Modifier
@@ -1158,7 +1256,7 @@ fun SharedGalleryScreen(
                             } else {
                                 "No starred messages or media yet ⭐"
                             }
-                            EmptyGalleryNotice(emptyText)
+                            EmptyGalleryNotice(emptyText, isLoading = isGalleryLoading)
                         } else {
                             LazyColumn(
                                 modifier = Modifier
@@ -1171,13 +1269,27 @@ fun SharedGalleryScreen(
                                         shape = RoundedCornerShape(16.dp),
                                         color = MaterialTheme.colorScheme.surface,
                                         shadowElevation = 1.5.dp,
-                                        modifier = Modifier.fillMaxWidth()
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .gallerySelectable(
+                                                key = msg.id,
+                                                isSelectionMode = isSelectionMode,
+                                                isSelected = msg.id in selectedItemIds,
+                                                accentColor = RoseGoldPrimary,
+                                                onToggle = { toggleSelection(msg.id) },
+                                                onStartSelection = { startSelection(msg.id) }
+                                            )
+                                            .testTag("gallery_starred_${msg.id}")
                                     ) {
                                         Column(modifier = Modifier.padding(14.dp)) {
                                             Row(
                                                 modifier = Modifier.fillMaxWidth(),
                                                 verticalAlignment = Alignment.CenterVertically
                                             ) {
+                                                if (isSelectionMode) {
+                                                    SelectionCheckBadge(isSelected = msg.id in selectedItemIds)
+                                                    Spacer(modifier = Modifier.width(10.dp))
+                                                }
                                                 Icon(
                                                     imageVector = Icons.Default.Star,
                                                     contentDescription = null,
@@ -1271,51 +1383,29 @@ fun SharedGalleryScreen(
                 }
             }
         }
-
-        // Floating "Load More" Button for Gallery (only shown if not all items already retrieved)
-        androidx.compose.animation.AnimatedVisibility(
-            visible = !chatViewModel.isQueryExhausted && allGalleryItems.isEmpty() && chatState.showPreviousChats,
-            modifier = Modifier.padding(bottom = 16.dp, top = 8.dp)
-        ) {
-            Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                FilledTonalButton(
-                    onClick = { chatViewModel.loadMoreMessages() },
-                    elevation = ButtonDefaults.filledTonalButtonElevation(defaultElevation = 6.dp),
-                    colors = ButtonDefaults.filledTonalButtonColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                        contentColor = RoseGoldPrimary
-                    )
-                ) {
-                    Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("Load Older History", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                }
-            }
-        }
     }
 
     // Multi-Select Delete Confirmation Dialog
     if (showMultiDeleteConfirmDialog) {
         val count = selectedItemIds.size
+        val itemLabel = when (pagerState.currentPage) {
+            0 -> if (count == 1) "photo or video" else "photos & videos"
+            1 -> if (count == 1) "voice note" else "voice notes"
+            2 -> if (count == 1) "link message" else "link messages"
+            else -> if (count == 1) "starred message" else "starred messages"
+        }
         AlertDialog(
             onDismissRequest = { showMultiDeleteConfirmDialog = false },
-            title = { Text("Delete $count selected item${if (count > 1) "s" else ""}?") },
-            text = { Text("These items will be permanently removed from your shared gallery and chat.") },
+            title = { Text("Delete $count $itemLabel?") },
+            text = { Text("The selected items will be permanently removed from your shared gallery and chat.") },
             confirmButton = {
                 Button(
                     onClick = {
-                        val messagesToDelete = galleryMediaItems
-                            .filter { it.id in selectedItemIds }
-                            .map { it.messageId }
-                            .distinct()
-                        messagesToDelete.forEach { id ->
-                            chatViewModel.deleteMessage(id)
-                        }
-                        selectedItemIds = emptySet()
-                        isSelectionMode = false
+                        deleteSelectedItems()
                         showMultiDeleteConfirmDialog = false
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                    modifier = Modifier.testTag("gallery_confirm_delete_selected")
                 ) {
                     Text("Delete ($count)")
                 }
@@ -1358,6 +1448,35 @@ fun SharedGalleryScreen(
         )
     }
 
+    // Delete Confirmation Dialog for a single photo/video tile (other photos of the same message stay)
+    mediaItemToDelete?.let { item ->
+        AlertDialog(
+            onDismissRequest = { mediaItemToDelete = null },
+            title = { Text(if (item.isVideo) "Delete video?" else "Delete photo?") },
+            text = { Text("It will be permanently removed from your shared gallery and chat.") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        chatViewModel.deleteGalleryMedia(listOf(item.originalMessage), setOf(item.mediaUrl))
+                        if (selectedMediaUrl == item.mediaUrl) {
+                            selectedMediaUrl = null
+                            selectedMessageIdForViewer = null
+                        }
+                        mediaItemToDelete = null
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text("Delete")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { mediaItemToDelete = null }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
     selectedMediaUrl?.let { url ->
         val galleryAllUrls = remember(galleryMediaItems) {
             galleryMediaItems.map { it.mediaUrl }.filter { it.isNotBlank() }.distinct()
@@ -1376,7 +1495,7 @@ fun SharedGalleryScreen(
                 val targetMsg = sourceMessages.find { it.mediaUrl == clickedUrl || it.getAllMediaUrls().contains(clickedUrl) }
                     ?: allGalleryItems.find { it.mediaUrl == clickedUrl || it.getAllMediaUrls().contains(clickedUrl) }
                 if (targetMsg != null) {
-                    chatViewModel.deleteMessage(targetMsg.id)
+                    chatViewModel.deleteGalleryMedia(listOf(targetMsg), setOf(clickedUrl))
                 }
             },
             onDismiss = {
@@ -1388,22 +1507,66 @@ fun SharedGalleryScreen(
 }
 
 @Composable
-private fun EmptyGalleryNotice(message: String) {
+private fun EmptyGalleryNotice(message: String, isLoading: Boolean = false) {
     Box(
         modifier = Modifier
             .fillMaxSize()
             .padding(32.dp),
         contentAlignment = Alignment.Center
     ) {
-        Text(
-            text = message,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-            lineHeight = 20.sp
-        )
+        if (isLoading) {
+            CircularProgressIndicator(
+                color = RoseGoldPrimary,
+                strokeWidth = 2.5.dp,
+                modifier = Modifier.size(28.dp)
+            )
+        } else {
+            Text(
+                text = message,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                lineHeight = 20.sp
+            )
+        }
     }
 }
+
+/**
+ * Multi-select for gallery cards: long-press starts selecting; while selecting, a tap anywhere on the
+ * card toggles it. Taps are taken on the Initial pass, before the card's own buttons (play, open,
+ * copy, show in chat) see them, so those don't fire in selection mode.
+ */
+private fun Modifier.gallerySelectable(
+    key: Any,
+    isSelectionMode: Boolean,
+    isSelected: Boolean,
+    accentColor: Color,
+    onToggle: () -> Unit,
+    onStartSelection: () -> Unit,
+    shape: Shape = RoundedCornerShape(16.dp)
+): Modifier = this
+    .then(if (isSelected) Modifier.border(2.dp, accentColor, shape) else Modifier)
+    .drawWithContent {
+        drawContent()
+        if (isSelected) {
+            drawOutline(shape.createOutline(size, layoutDirection, this), accentColor.copy(alpha = 0.10f))
+        }
+    }
+    .pointerInput(key, isSelectionMode) {
+        if (isSelectionMode) {
+            awaitEachGesture {
+                awaitFirstDown(pass = PointerEventPass.Initial).consume()
+                val up = waitForUpOrCancellation(pass = PointerEventPass.Initial)
+                if (up != null) {
+                    up.consume()
+                    onToggle()
+                }
+            }
+        } else {
+            detectTapGestures(onLongPress = { onStartSelection() })
+        }
+    }
 
 private fun getDomainIcon(host: String): androidx.compose.ui.graphics.vector.ImageVector {
     val h = host.lowercase()
@@ -1428,6 +1591,10 @@ private fun getDomainBadgeColor(host: String): Color {
         else -> Color(0xFF6366F1)
     }
 }
+
+
+
+
 
 
 

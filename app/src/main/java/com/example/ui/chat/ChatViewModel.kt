@@ -259,6 +259,8 @@ class ChatViewModel(
     val galleryMediaMessages: kotlinx.coroutines.flow.StateFlow<List<com.example.data.model.Message>> =
         chatRepository.galleryMediaMessages
 
+    val isGalleryLoading: StateFlow<Boolean> = chatRepository.isGalleryLoadingFlow
+
     fun loadAllGalleryMedia() {
         chatRepository.loadAllGalleryMedia()
     }
@@ -516,9 +518,25 @@ class ChatViewModel(
     }
 
     fun deleteMessage(messageId: String) {
+        deleteMessages(listOf(messageId))
+    }
+
+    fun deleteMessages(messageIds: Collection<String>) {
+        val ids = messageIds.toSet()
+        if (ids.isEmpty()) return
+        soundEffectsPlayer.playSound(ChatSoundEffectsPlayer.SoundType.DELETE)
+        if (voicePlayerHelper.currentTrackId.value in ids) voicePlayerHelper.stop()
+        viewModelScope.launch {
+            chatRepository.deleteMessages(ids)
+        }
+    }
+
+    /** Deletes individual photos/videos; multi-photo messages keep their other photos. */
+    fun deleteGalleryMedia(messages: List<Message>, mediaUrls: Set<String>) {
+        if (messages.isEmpty() || mediaUrls.isEmpty()) return
         soundEffectsPlayer.playSound(ChatSoundEffectsPlayer.SoundType.DELETE)
         viewModelScope.launch {
-            chatRepository.deleteMessage(messageId)
+            chatRepository.removeMediaUrls(messages, mediaUrls)
         }
     }
 
@@ -568,7 +586,6 @@ class ChatViewModel(
         securityPreferences.setTemporaryClearTimestamp(0L)
         securityPreferences.setAllGalleryRecovered(true)
         chatRepository.recoverAllMessages()
-        chatRepository.loadAllGalleryMedia()
     }
 
     fun revealSecretHistory() {

@@ -9,7 +9,10 @@ import androidx.compose.material.icons.filled.Image
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -289,16 +292,30 @@ private fun MediaTile(
     val context = LocalContext.current
     val isDark = androidx.compose.material3.MaterialTheme.colorScheme.surface.luminance() < 0.5f
     val tileBg = if (isDark) Color(0xFF131824) else Color(0xFFE2E8F0)
+    // Shimmer while the photo loads; the placeholder icon only when there is nothing to show
+    var isLoading by remember(url) { mutableStateOf(url.isNotBlank()) }
+    var hasFailed by remember(url) { mutableStateOf(false) }
     Box(
         modifier = modifier.background(tileBg),
         contentAlignment = Alignment.Center
     ) {
-        Icon(
-            imageVector = Icons.Default.Image,
-            contentDescription = "Photo placeholder",
-            tint = DayBlueSecondary.copy(alpha = 0.6f),
-            modifier = Modifier.size(36.dp)
-        )
+        if (isLoading) {
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .shimmer(
+                        baseColor = tileBg,
+                        highlightColor = Color.White.copy(alpha = if (isDark) 0.07f else 0.55f)
+                    )
+            )
+        } else if (hasFailed || url.isBlank()) {
+            Icon(
+                imageVector = Icons.Default.Image,
+                contentDescription = "Photo placeholder",
+                tint = DayBlueSecondary.copy(alpha = 0.6f),
+                modifier = Modifier.size(36.dp)
+            )
+        }
         if (url.isNotBlank()) {
             val modelData = remember(url) {
                 when {
@@ -323,6 +340,10 @@ private fun MediaTile(
                     .build(),
                 contentDescription = "Photo",
                 contentScale = contentScale,
+                onState = { state ->
+                    isLoading = state is coil.compose.AsyncImagePainter.State.Loading
+                    hasFailed = state is coil.compose.AsyncImagePainter.State.Error
+                },
                 modifier = if (contentScale == ContentScale.FillWidth) Modifier.fillMaxWidth().wrapContentHeight() else Modifier.fillMaxSize()
             )
         }

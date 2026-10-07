@@ -22,6 +22,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -52,6 +54,7 @@ fun HeartbeatTouchDialog(
     val isBothTouching = isMeTouching && isPartnerTouching
     val isConnected = isBothTouching
 
+    var heartCenter by remember { mutableStateOf<Offset?>(null) }
     var syncConnectedSeconds by remember { mutableIntStateOf(0) }
     var whoStoppedMessage by remember { mutableStateOf<String?>(null) }
     var previousBothTouching by remember { mutableStateOf(false) }
@@ -175,6 +178,13 @@ fun HeartbeatTouchDialog(
                 )
             }
 
+            // Hearts rising from behind the big heart while both are holding
+            FloatingHeartsStream(
+                active = isConnected,
+                origin = heartCenter,
+                modifier = Modifier.fillMaxSize()
+            )
+
             // Close button top end
             IconButton(
                 onClick = {
@@ -263,6 +273,10 @@ fun HeartbeatTouchDialog(
                     contentAlignment = Alignment.Center,
                     modifier = Modifier
                         .size(200.dp)
+                        .onGloballyPositioned { coordinates ->
+                            heartCenter = coordinates.positionInRoot() +
+                                Offset(coordinates.size.width / 2f, coordinates.size.height / 2f)
+                        }
                         .scale(pulseScale)
                 ) {
                     // Outer ripple ring

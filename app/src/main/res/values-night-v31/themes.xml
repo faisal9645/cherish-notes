@@ -7,9 +7,9 @@
         <item name="android:navigationBarColor">#121212</item>
         <item name="android:windowLightStatusBar">false</item>
         <item name="android:windowLightNavigationBar">false</item>
-        <!-- Android 12+ Splash Screen in Dark / AMOLED Mode -->
+        <!-- Android 12+ Splash Screen in Dark / AMOLED Mode. No icon background color:
+             it would draw a circle behind the logo. -->
         <item name="android:windowSplashScreenBackground">#121212</item>
-        <item name="android:windowSplashScreenIconBackgroundColor">#121212</item>
-        <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_icon_dark</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_icon</item>
     </style>
 </resources>

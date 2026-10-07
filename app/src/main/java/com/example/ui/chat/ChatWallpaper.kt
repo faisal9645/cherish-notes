@@ -22,8 +22,25 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.animation.animateColor
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.VectorConverter
+import androidx.compose.animation.core.spring
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.hardware.SensorManager
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.consumeAsFlow
 
 /**
  * Premium Chat Wallpaper Composable that dynamically adapts to Day Mode (Light)
@@ -109,12 +126,14 @@ fun DoodleWallpaper(
     isDark: Boolean,
     modifier: Modifier = Modifier
 ) {
-    Box(modifier = modifier.fillMaxSize()) {
+    Box(modifier = modifier.fillMaxSize().clipToBounds()) {
         androidx.compose.foundation.Image(
             painter = androidx.compose.ui.res.painterResource(id = com.example.R.drawable.chat_bg_theme_1),
             contentDescription = "Chat Background",
             contentScale = androidx.compose.ui.layout.ContentScale.Crop,
-            modifier = Modifier.fillMaxSize()
+            modifier = Modifier
+                .fillMaxSize()
+                .tiltParallax()
         )
         
         // Overlay for day/night mode adaptation
@@ -131,6 +150,64 @@ fun DoodleWallpaper(
                     .background(Color.White.copy(alpha = 0.4f))
             )
         }
+    }
+}
+
+/**
+ * Shifts the wallpaper a few dp against the phone's tilt for a sense of depth. Tilt is measured
+ * against a slowly drifting baseline, so whatever angle the phone is held at counts as centre.
+ * Off when system animations are turned off.
+ */
+@Composable
+private fun Modifier.tiltParallax(maxShift: Dp = 10.dp): Modifier {
+    val context = LocalContext.current
+    val maxShiftPx = with(LocalDensity.current) { maxShift.toPx() }
+    val shift = remember { Animatable(Offset.Zero, Offset.VectorConverter) }
+
+    LaunchedEffect(maxShiftPx) {
+        if (context.areAnimationsDisabled()) return@LaunchedEffect
+        val sensorManager = context.getSystemService(SensorManager::class.java) ?: return@LaunchedEffect
+        val sensor = sensorManager.getDefaultSensor(Sensor.TYPE_GRAVITY)
+            ?: sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
+            ?: return@LaunchedEffect
+        val targets = Channel<Offset>(Channel.CONFLATED)
+        var baseX = Float.NaN
+        var baseY = Float.NaN
+        val listener = object : SensorEventListener {
+            override fun onSensorChanged(event: SensorEvent) {
+                val x = event.values[0]
+                val y = event.values[1]
+                if (baseX.isNaN()) {
+                    baseX = x
+                    baseY = y
+                }
+                baseX += (x - baseX) * 0.02f
+                baseY += (y - baseY) * 0.02f
+                // About 3 m/s² of change away from the baseline gives the full shift
+                val dx = ((x - baseX) / 3f).coerceIn(-1f, 1f)
+                val dy = ((y - baseY) / 3f).coerceIn(-1f, 1f)
+                targets.trySend(Offset(dx * maxShiftPx, -dy * maxShiftPx))
+            }
+
+            override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
+        }
+        sensorManager.registerListener(listener, sensor, SensorManager.SENSOR_DELAY_UI)
+        try {
+            targets.consumeAsFlow().collectLatest { target ->
+                shift.animateTo(target, spring(dampingRatio = 0.9f, stiffness = Spring.StiffnessVeryLow))
+            }
+        } finally {
+            sensorManager.unregisterListener(listener)
+        }
+    }
+
+    return graphicsLayer {
+        // Slightly enlarged so the shifted edges never show
+        val zoom = 1f + 2.2f * maxShiftPx / size.minDimension.coerceAtLeast(1f)
+        scaleX = zoom
+        scaleY = zoom
+        translationX = shift.value.x
+        translationY = shift.value.y
     }
 }
 
