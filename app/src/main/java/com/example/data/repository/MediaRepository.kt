@@ -122,6 +122,45 @@ class MediaRepository(private val context: Context) {
         compressedFile
     }
 
+    /**
+     * A small JPEG preview of an already-prepared image (longest side [maxDim] px), shown in chat
+     * bubbles and the gallery instead of the full photo. Null if the image can't be decoded.
+     */
+    suspend fun createThumbnail(image: File, maxDim: Int = 720): File? = withContext(Dispatchers.IO) {
+        try {
+            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            BitmapFactory.decodeFile(image.absolutePath, bounds)
+            if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return@withContext null
+            var sampleSize = 1
+            while (bounds.outWidth / (sampleSize * 2) >= maxDim && bounds.outHeight / (sampleSize * 2) >= maxDim) {
+                sampleSize *= 2
+            }
+            val decoded = BitmapFactory.decodeFile(
+                image.absolutePath,
+                BitmapFactory.Options().apply { inSampleSize = sampleSize }
+            ) ?: return@withContext null
+            val scale = maxDim.toFloat() / maxOf(decoded.width, decoded.height)
+            val preview = if (scale < 1f) {
+                Bitmap.createScaledBitmap(
+                    decoded,
+                    (decoded.width * scale).toInt().coerceAtLeast(1),
+                    (decoded.height * scale).toInt().coerceAtLeast(1),
+                    true
+                )
+            } else {
+                decoded
+            }
+            val thumbnail = File(image.parentFile, "thumb_${image.name}")
+            FileOutputStream(thumbnail).use { out -> preview.compress(Bitmap.CompressFormat.JPEG, 72, out) }
+            if (preview !== decoded) preview.recycle()
+            decoded.recycle()
+            thumbnail
+        } catch (e: Exception) {
+            Log.w("MediaRepository", "Thumbnail creation failed", e)
+            null
+        }
+    }
+
     private fun decodeSampledBitmapFromUri(uri: Uri, reqWidth: Int, reqHeight: Int): Bitmap? {
         return try {
             val options = BitmapFactory.Options().apply {

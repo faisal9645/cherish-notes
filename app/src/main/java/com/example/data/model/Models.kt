@@ -2,6 +2,7 @@ package com.example.data.model
 
 import com.google.firebase.firestore.IgnoreExtraProperties
 import com.google.firebase.firestore.PropertyName
+import com.squareup.moshi.JsonClass
 
 enum class MessageType {
     TEXT,
@@ -114,6 +115,7 @@ data class User(
 
 @androidx.compose.runtime.Immutable
 @IgnoreExtraProperties
+@JsonClass(generateAdapter = true)
 data class Message(
     var id: String = "",
     var conversationId: String = "",
@@ -139,7 +141,11 @@ data class Message(
     var replyToSenderName: String? = null,
     var reactions: Map<String, String> = emptyMap(), // userId -> emoji
     var mediaUrls: List<String> = emptyList(),
-    var isVideoNote: Boolean = false
+    var isVideoNote: Boolean = false,
+    // Text contains a web link; lets the gallery query links instead of scanning every message
+    var hasLink: Boolean = false,
+    // Small previews for chat bubbles and the gallery, same order as getAllMediaUrls()
+    var thumbnailUrls: List<String> = emptyList()
 ) {
     @com.google.firebase.firestore.Exclude
     fun isCircularVideoNote(): Boolean {
@@ -158,6 +164,13 @@ data class Message(
     @com.google.firebase.firestore.Exclude
     fun getTypedStatus(): MessageStatus {
         return runCatching { MessageStatus.valueOf(status) }.getOrDefault(MessageStatus.SENT)
+    }
+
+    /** The small preview for one of this message's media URLs, or the URL itself when it has none. */
+    @com.google.firebase.firestore.Exclude
+    fun thumbnailFor(url: String): String {
+        val index = getAllMediaUrls().indexOf(url)
+        return thumbnailUrls.getOrNull(index)?.takeIf { it.isNotBlank() } ?: url
     }
 
     @com.google.firebase.firestore.Exclude
@@ -192,6 +205,7 @@ data class Conversation(
 )
 
 @IgnoreExtraProperties
+@JsonClass(generateAdapter = true)
 data class Memory(
     val id: String = "",
     val coupleId: String = "",
@@ -205,6 +219,7 @@ data class Memory(
 )
 
 @IgnoreExtraProperties
+@JsonClass(generateAdapter = true)
 data class ImportantDate(
     val id: String = "",
     val coupleId: String = "",
@@ -220,6 +235,7 @@ data class ImportantDate(
 }
 
 @IgnoreExtraProperties
+@JsonClass(generateAdapter = true)
 data class SharedNote(
     val id: String = "",
     val coupleId: String = "",
@@ -249,6 +265,7 @@ data class DailyQuestion(
 )
 
 @IgnoreExtraProperties
+@JsonClass(generateAdapter = true)
 data class LoveJarNote(
     val id: String = "",
     val text: String = "",
@@ -306,6 +323,7 @@ data class StorageBreakdown(
 }
 
 @IgnoreExtraProperties
+@JsonClass(generateAdapter = true)
 data class BucketListItem(
     val id: String = "",
     val title: String = "",
@@ -315,6 +333,7 @@ data class BucketListItem(
 )
 
 @IgnoreExtraProperties
+@JsonClass(generateAdapter = true)
 data class YearlyJourneyEntry(
     val id: String = "",
     val year: Int = 2026,
@@ -331,6 +350,7 @@ data class YearlyJourneyEntry(
 )
 
 @IgnoreExtraProperties
+@JsonClass(generateAdapter = true)
 data class LifetimeAgeProfile(
     val myBirthYear: Int = 1992,
     val partnerBirthYear: Int = 1995,

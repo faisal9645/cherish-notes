@@ -1,25 +1,14 @@
 package com.example.ui.chat
 
-import android.graphics.Bitmap
-import android.graphics.Canvas
 import android.graphics.Paint
-import android.graphics.Rect
 import android.util.LruCache
-import androidx.compose.foundation.Image
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.text.InlineTextContent
-import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.Placeholder
-import androidx.compose.ui.text.PlaceholderVerticalAlign
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -29,24 +18,16 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.em
-import kotlin.math.max
 
 /*
  * How emojis look in the chat, applied when drawing (stored text is never changed):
  * - hands and people get a fair skin tone unless the sender picked one;
- * - yellow smiley faces, which have no Unicode skin tones, are drawn as images recoloured to the
- *   same fair tone;
+ * - smiley faces keep the phone's own colours, exactly as they look while typing;
  * - emojis are drawn a little bigger than the text around them, emoji-only messages large.
  */
 
 /** Unicode "light skin tone" modifier (Fitzpatrick type 1-2). */
 private const val FAIR_SKIN_TONE = 0x1F3FB
-
-/** Hue of the fair tone faces are recoloured to; matches the light skin tone of hands. */
-private const val FACE_SKIN_HUE = 25f
-
-/** Inline face images are sized to match a native emoji glyph at the same font size. */
-private const val FACE_SIZE_EM = 1.1f
 
 /**
  * Text with chat emoji styling. [emojiScale] enlarges emojis relative to the text; with
@@ -78,7 +59,6 @@ fun EmojiText(
         fontStyle = fontStyle,
         maxLines = maxLines,
         overflow = overflow,
-        inlineContent = content.inlineContent,
         // A fixed line height would make the bigger emojis overlap the next line
         style = if (content.hasEmoji) style.copy(lineHeight = TextUnit.Unspecified) else style
     )
@@ -90,23 +70,19 @@ fun ChatEmoji(emoji: String, fontSize: TextUnit, modifier: Modifier = Modifier) 
     EmojiText(text = emoji, fontSize = fontSize, emojiScale = 1f, modifier = modifier)
 }
 
-private class EmojiContent(
-    val text: AnnotatedString,
-    val inlineContent: Map<String, InlineTextContent>,
-    val hasEmoji: Boolean
-)
+private class EmojiContent(val text: AnnotatedString, val hasEmoji: Boolean)
 
 private class EmojiToken(val text: String, val isEmoji: Boolean)
 
 private fun buildEmojiContent(raw: String, emojiScale: Float, largeWhenEmojiOnly: Boolean): EmojiContent {
     val tokens = tokenize(raw)
     val emojiCount = tokens.count { it.isEmoji }
-    if (emojiCount == 0) return EmojiContent(AnnotatedString(raw), emptyMap(), hasEmoji = false)
+    if (emojiCount == 0) return EmojiContent(AnnotatedString(raw), hasEmoji = false)
 
     val emojiOnly = tokens.all { it.isEmoji || it.text.isBlank() }
     val scale = if (largeWhenEmojiOnly && emojiOnly && emojiCount <= 6) {
         when (emojiCount) {
-            1 -> 2.4f
+            1 -> 2.8f
             2 -> 2.1f
             3 -> 1.8f
             else -> 1.5f
@@ -115,7 +91,6 @@ private fun buildEmojiContent(raw: String, emojiScale: Float, largeWhenEmojiOnly
         emojiScale
     }
 
-    val inline = HashMap<String, InlineTextContent>()
     val text = buildAnnotatedString {
         tokens.forEach { token ->
             if (!token.isEmoji) {
@@ -123,29 +98,14 @@ private fun buildEmojiContent(raw: String, emojiScale: Float, largeWhenEmojiOnly
                 return@forEach
             }
             val shown = withFairSkinTone(token.text)
-            if (isFace(shown) && FaceEmojiImages.canDraw(shown)) {
-                val id = "face:$shown"
-                if (id !in inline) {
-                    val size = (scale * FACE_SIZE_EM).em
-                    inline[id] = InlineTextContent(Placeholder(size, size, PlaceholderVerticalAlign.TextCenter)) {
-                        FaceEmojiImage(shown)
-                    }
-                }
-                appendInlineContent(id, shown)
-            } else if (scale != 1f) {
+            if (scale != 1f) {
                 withStyle(SpanStyle(fontSize = scale.em)) { append(shown) }
             } else {
                 append(shown)
             }
         }
     }
-    return EmojiContent(text, inline, hasEmoji = true)
-}
-
-@Composable
-private fun FaceEmojiImage(face: String) {
-    val bitmap = remember(face) { FaceEmojiImages.get(face) } ?: return
-    Image(bitmap = bitmap, contentDescription = face, modifier = Modifier.fillMaxSize())
+    return EmojiContent(text, hasEmoji = true)
 }
 
 // ---- Emoji detection --------------------------------------------------------------------------
@@ -290,112 +250,4 @@ private fun withFairSkinTone(emoji: String): String {
     }
     toneCache.put(emoji, result)
     return result
-}
-
-// ---- Fair-toned smiley faces ------------------------------------------------------------------
-
-/** Human smiley faces (yellow in emoji fonts); cats, robots, ghosts etc. are left alone. */
-private val FACE_RANGES = intArrayOf(
-    0x1F600, 0x1F637, 0x1F641, 0x1F644, 0x1F910, 0x1F915, 0x1F917, 0x1F917, 0x1F920, 0x1F925,
-    0x1F927, 0x1F92F, 0x1F970, 0x1F976, 0x1F978, 0x1F97A, 0x1F9D0, 0x1F9D0, 0x1FAE0, 0x1FAE5,
-    0x1FAE8, 0x1FAE8, 0x263A, 0x263A, 0x2639, 0x2639
-)
-
-/** Faces drawn red, green or blue on purpose (angry, sick, hot, cold, exploding): left alone. */
-private val COLORED_FACES = setOf(0x1F621, 0x1F92C, 0x1F922, 0x1F92E, 0x1F92F, 0x1F975, 0x1F976)
-
-private fun isFace(emoji: String): Boolean {
-    val cp = emoji.codePointAt(0)
-    if (cp in COLORED_FACES) return false
-    var i = 0
-    while (i < FACE_RANGES.size) {
-        if (cp >= FACE_RANGES[i] && cp <= FACE_RANGES[i + 1]) return true
-        i += 2
-    }
-    return false
-}
-
-private object FaceEmojiImages {
-    private const val SIZE_PX = 144
-    private val images = LruCache<String, ImageBitmap>(80)
-    private val unsupported = HashSet<String>()
-    private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
-    private val bounds = Rect()
-
-    @Synchronized
-    fun canDraw(face: String): Boolean {
-        if (face in unsupported) return false
-        if (images.get(face) != null) return true
-        return paint.hasGlyph(face).also { if (!it) unsupported += face }
-    }
-
-    @Synchronized
-    fun get(face: String): ImageBitmap? {
-        images.get(face)?.let { return it }
-        if (!canDraw(face)) return null
-        val bitmap = render(face)
-        if (bitmap == null) {
-            unsupported += face
-            return null
-        }
-        recolorToFairSkin(bitmap)
-        return bitmap.asImageBitmap().also { images.put(face, it) }
-    }
-
-    /** Draws the system emoji glyph tightly into a square bitmap. */
-    private fun render(face: String): Bitmap? {
-        paint.textSize = 100f
-        paint.getTextBounds(face, 0, face.length, bounds)
-        val largest = max(bounds.width(), bounds.height())
-        if (largest <= 0) return null
-        paint.textSize = 100f * SIZE_PX * 0.96f / largest
-        paint.getTextBounds(face, 0, face.length, bounds)
-        val bitmap = Bitmap.createBitmap(SIZE_PX, SIZE_PX, Bitmap.Config.ARGB_8888)
-        Canvas(bitmap).drawText(face, SIZE_PX / 2f - bounds.exactCenterX(), SIZE_PX / 2f - bounds.exactCenterY(), paint)
-        return bitmap
-    }
-
-    /**
-     * Moves the bright yellow/orange face skin to a fair skin tone, keeping its shading (orange
-     * areas of a yellow face are its shadows). Dark features, red blush, hearts, tears and white
-     * eyes are outside the hue/brightness window and keep their colours; edges blend smoothly.
-     */
-    private fun recolorToFairSkin(bitmap: Bitmap) {
-        val width = bitmap.width
-        val height = bitmap.height
-        val pixels = IntArray(width * height)
-        bitmap.getPixels(pixels, 0, width, 0, 0, width, height)
-        val hsv = FloatArray(3)
-        for (i in pixels.indices) {
-            val c = pixels[i]
-            val alpha = c ushr 24
-            if (alpha == 0) continue
-            android.graphics.Color.colorToHSV(c, hsv)
-            val hue = hsv[0]
-            val sat = hsv[1]
-            val value = hsv[2]
-            val weight = smoothstep(18f, 28f, hue) * (1f - smoothstep(60f, 70f, hue)) *
-                smoothstep(0.28f, 0.42f, sat) * smoothstep(0.48f, 0.68f, value)
-            if (weight <= 0f) continue
-            val shade = ((46f - hue) / 18f).coerceIn(0f, 1f)
-            hsv[0] = FACE_SKIN_HUE
-            hsv[1] = (sat * 0.29f + shade * 0.08f).coerceIn(0.12f, 0.42f)
-            hsv[2] = (0.58f + 0.39f * value - shade * 0.10f).coerceIn(0f, 0.98f)
-            val mapped = android.graphics.Color.HSVToColor(hsv)
-            pixels[i] = android.graphics.Color.argb(
-                alpha,
-                mix(android.graphics.Color.red(c), android.graphics.Color.red(mapped), weight),
-                mix(android.graphics.Color.green(c), android.graphics.Color.green(mapped), weight),
-                mix(android.graphics.Color.blue(c), android.graphics.Color.blue(mapped), weight)
-            )
-        }
-        bitmap.setPixels(pixels, 0, width, 0, 0, width, height)
-    }
-
-    private fun smoothstep(edge0: Float, edge1: Float, x: Float): Float {
-        val t = ((x - edge0) / (edge1 - edge0)).coerceIn(0f, 1f)
-        return t * t * (3f - 2f * t)
-    }
-
-    private fun mix(from: Int, to: Int, t: Float): Int = (from + (to - from) * t).toInt().coerceIn(0, 255)
 }

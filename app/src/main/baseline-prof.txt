@@ -1,0 +1,36 @@
+# Baseline Profile for Cherish's own code: what runs from launch through the Notes screen and the
+# chat (composed under Notes at start, then scrolled). Release builds compile it ahead of time, so
+# the first launches after every install or OTA update don't run this code interpreted. Libraries
+# such as Compose and coroutines ship their own profiles, which are merged in automatically.
+#
+# A recorded profile can replace these hand-written rules:
+#   ./gradlew :app:generateBaselineProfile   (with an Android 13+ device or emulator connected)
+# which writes app/src/release/generated/baselineProfiles/baseline-prof.txt.
+
+# Start: application, activity, disguise/lock state
+HSPLcom/example/CherishApplication**->**(**)**
+HSPLcom/example/MainActivity**->**(**)**
+HSPLcom/example/security/**->**(**)**
+Lcom/example/CherishApplication;
+Lcom/example/MainActivity;
+Lcom/example/security/**;
+
+# Data: models, Firestore/Room repositories
+HSPLcom/example/data/**->**(**)**
+Lcom/example/data/**;
+
+# Screens shown from launch: navigation, theme, Notes disguise, app lock
+HSPLcom/example/ui/navigation/**->**(**)**
+HSPLcom/example/ui/theme/**->**(**)**
+HSPLcom/example/ui/disguise/**->**(**)**
+HSPLcom/example/ui/lock/**->**(**)**
+Lcom/example/ui/navigation/**;
+Lcom/example/ui/theme/**;
+Lcom/example/ui/disguise/**;
+
+# Chat: list, bubbles, composer, media, effects
+HSPLcom/example/ui/chat/**->**(**)**
+HSPLcom/example/ui/components/**->**(**)**
+HSPLcom/example/util/**->**(**)**
+Lcom/example/ui/chat/**;
+Lcom/example/ui/components/**;

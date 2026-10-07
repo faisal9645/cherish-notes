@@ -67,7 +67,7 @@ def create_github_release(token: str, version_code: int, version_name: str) -> d
     payload = {
         "tag_name": tag,
         "name": f"v{version_name} (build {version_code})",
-        "body": f"Cherish v{version_name} (Build {version_code}):\n• Smiley faces now show in a natural fair skin tone instead of yellow\n• Hands and people emojis use the fair skin tone too (unless a tone was picked)\n• Emojis in chat are a little bigger; emoji-only messages show large\n• Bigger emojis in reactions, the reaction picker and mood status",
+        "body": f"Cherish v{version_name} (Build {version_code}):\n• Multi-select & delete in chat screen — long-press any message to enter selection mode\n• Multi-select & delete across all gallery tabs (Media, Voice Notes, Links, Starred)\n• 'Select Message' option added to the message action sheet\n• Smaller APK — R8 minify + resource shrinking enabled\n• All gallery tabs: Select All targets only the current tab\n• Recover All now immediately restores media, voice notes, links & starred items\n• Bug fixes and stability improvements",
         "draft": False,
         "prerelease": False,
     }
@@ -174,7 +174,7 @@ def update_firestore(project_root: str, version_code: int, version_name: str, do
         "versionName":  version_name,
         "downloadUrl":  download_url,
         "releaseDate":  firestore.SERVER_TIMESTAMP,
-        "releaseNotes": f"v{version_name} — automatic OTA via GitHub Releases",
+        "releaseNotes": f"v{version_name} — Multi-select delete in chat & gallery, Recover All fixed, smaller APK",
     }, merge=True)
     print("Firestore app_config/version updated successfully!")
 

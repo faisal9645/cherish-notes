@@ -6,6 +6,9 @@ import android.graphics.SurfaceTexture
 import android.hardware.Camera
 import android.media.CamcorderProfile
 import android.media.MediaRecorder
+import android.os.Build
+import android.util.Log
+import android.view.Surface
 import android.view.TextureView
 import android.widget.Toast
 import androidx.compose.animation.*
@@ -46,13 +49,16 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.example.ui.theme.HeartRed
 import com.example.ui.theme.RoseGoldPrimary
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.io.File
-import java.io.FileOutputStream
 import kotlin.math.roundToInt
 
 /**
@@ -85,168 +91,216 @@ fun CircularVideoNoteRecorderDialog(
     var dragOffsetY by remember { mutableFloatStateOf(0f) }
 
     var cameraRef by remember { mutableStateOf<Camera?>(null) }
+    var cameraId by remember { mutableIntStateOf(0) }
     var mediaRecorderRef by remember { mutableStateOf<MediaRecorder?>(null) }
     var outputFileRef by remember { mutableStateOf<File?>(null) }
     var surfaceTextureRef by remember { mutableStateOf<SurfaceTexture?>(null) }
     var textureViewRef by remember { mutableStateOf<TextureView?>(null) }
-    var previewWidth by remember { mutableIntStateOf(640) }
-    var previewHeight by remember { mutableIntStateOf(480) }
+    var previewWidth by remember { mutableIntStateOf(0) }
+    var previewHeight by remember { mutableIntStateOf(0) }
+    // How the camera picture is turned for the screen, and how the recording is marked to play
+    var displayOrientation by remember { mutableIntStateOf(90) }
+    var recordingOrientation by remember { mutableIntStateOf(270) }
+    var recordingProfile by remember { mutableStateOf<CamcorderProfile?>(null) }
+    // Bumped for every recording started, so the timer restarts with it
+    var recordingSession by remember { mutableIntStateOf(0) }
 
-    fun adjustTextureTransform(tv: TextureView, viewW: Int, viewH: Int, pW: Int, pH: Int, isFront: Boolean) {
+    /** Centre-crops the camera picture into the square viewfinder, without stretching it. */
+    fun adjustTextureTransform(tv: TextureView, viewW: Int, viewH: Int) {
+        val pW = previewWidth
+        val pH = previewHeight
         if (viewW <= 0 || viewH <= 0 || pW <= 0 || pH <= 0) return
-        val matrix = Matrix()
-        // With 90 deg rotation, portrait dimensions are:
-        val rotatedW = pH.toFloat()
-        val rotatedH = pW.toFloat()
-
-        // Center-crop to square viewfinder without stretching or squishing face
-        val scaleX: Float
-        val scaleY: Float
-        val ratioView = viewW.toFloat() / viewH.toFloat()
-        val ratioCam = rotatedW / rotatedH
-
-        if (ratioCam < ratioView) {
-            // Camera portrait is taller than square: crop top/bottom
-            scaleX = 1f
-            scaleY = ratioView / ratioCam
-        } else {
-            // Camera portrait is wider: crop sides
-            scaleX = ratioCam / ratioView
-            scaleY = 1f
-        }
-
-        val centerX = viewW / 2f
-        val centerY = viewH / 2f
-
-        // Natural selfie mirror on front camera
-        val finalScaleX = if (isFront) -scaleX else scaleX
-        matrix.setScale(finalScaleX, scaleY, centerX, centerY)
-        tv.setTransform(matrix)
-    }
-
-    fun startCamera(facing: Int, texture: SurfaceTexture, width: Int, height: Int) {
-        try {
-            cameraRef?.stopPreview()
-            cameraRef?.release()
-        } catch (_: Exception) {}
-        try {
-            val camId = getCameraId(facing)
-            val cam = Camera.open(camId)
-            cameraRef = cam
-            cam.setDisplayOrientation(90)
-            var pW = 640
-            var pH = 480
-            try {
-                val params = cam.parameters
-                val sizes = params.supportedPreviewSizes
-                val best = sizes?.minByOrNull { kotlin.math.abs((it.width.toFloat() / it.height.toFloat()) - (4f / 3f)) }
-                if (best != null) {
-                    params.setPreviewSize(best.width, best.height)
-                    pW = best.width
-                    pH = best.height
-                    cam.parameters = params
-                }
-            } catch (_: Exception) {}
-            previewWidth = pW
-            previewHeight = pH
-            cam.setPreviewTexture(texture)
-            cam.startPreview()
-
-            textureViewRef?.let { tv ->
-                adjustTextureTransform(tv, width, height, pW, pH, facing == Camera.CameraInfo.CAMERA_FACING_FRONT)
-            }
-        } catch (_: Exception) {}
+        // The camera turns its picture upright for the screen, so a landscape preview shows as portrait
+        val sideways = displayOrientation % 180 != 0
+        val pictureRatio = if (sideways) pH.toFloat() / pW else pW.toFloat() / pH
+        val viewRatio = viewW.toFloat() / viewH
+        // The TextureView squeezes the picture into its own shape; scale one side back out
+        val scaleX = if (pictureRatio > viewRatio) pictureRatio / viewRatio else 1f
+        val scaleY = if (pictureRatio < viewRatio) viewRatio / pictureRatio else 1f
+        val isFront = cameraFacing == Camera.CameraInfo.CAMERA_FACING_FRONT
+        // Front camera: shown the way it is recorded (the camera itself mirrors its preview)
+        tv.setTransform(Matrix().apply { setScale(if (isFront) -scaleX else scaleX, scaleY, viewW / 2f, viewH / 2f) })
     }
 
     fun stopCamera() {
-        try {
-            cameraRef?.stopPreview()
-            cameraRef?.release()
-            cameraRef = null
-        } catch (_: Exception) {}
+        val cam = cameraRef ?: return
+        cameraRef = null
+        try { cam.stopPreview() } catch (_: Exception) {}
+        try { cam.release() } catch (_: Exception) {}
     }
 
-    fun beginRecording() {
-        if (isRecording) return
-        recordingStartTime = System.currentTimeMillis()
-        val outFile = File(context.cacheDir, "videonote_${System.currentTimeMillis()}.mp4")
-        outputFileRef = outFile
-        val started = startVideoRecording(context, cameraRef, cameraFacing, outFile)
-        if (started != null) {
-            mediaRecorderRef = started
-            isRecording = true
-        } else {
-            createFallbackVideoFile(outFile)
-            isRecording = true
+    fun startCamera(facing: Int, texture: SurfaceTexture, viewW: Int, viewH: Int) {
+        stopCamera()
+        try {
+            val id = getCameraId(facing)
+            val info = Camera.CameraInfo().also { Camera.getCameraInfo(id, it) }
+            val cam = Camera.open(id)
+            cameraRef = cam
+            cameraId = id
+
+            val screenDegrees = displayRotationDegrees(context)
+            val isFront = info.facing == Camera.CameraInfo.CAMERA_FACING_FRONT
+            displayOrientation = if (isFront) {
+                (360 - (info.orientation + screenDegrees) % 360) % 360
+            } else {
+                (info.orientation - screenDegrees + 360) % 360
+            }
+            recordingOrientation = if (isFront) {
+                (info.orientation + screenDegrees) % 360
+            } else {
+                (info.orientation - screenDegrees + 360) % 360
+            }
+            cam.setDisplayOrientation(displayOrientation)
+
+            val profile = videoNoteProfile(id)
+            recordingProfile = profile
+            val params = cam.parameters
+            val previewSize = choosePreviewSize(
+                sizes = params.supportedPreviewSizes.orEmpty(),
+                videoW = profile?.videoFrameWidth ?: 1280,
+                videoH = profile?.videoFrameHeight ?: 720,
+                viewSide = minOf(viewW, viewH)
+            )
+            previewSize?.let { params.setPreviewSize(it.width, it.height) }
+            // Prepares the camera for video, so starting the recording doesn't restart the picture
+            params.setRecordingHint(true)
+            if (Camera.Parameters.FOCUS_MODE_CONTINUOUS_VIDEO in params.supportedFocusModes.orEmpty()) {
+                params.focusMode = Camera.Parameters.FOCUS_MODE_CONTINUOUS_VIDEO
+            }
+            if (params.isVideoStabilizationSupported) params.videoStabilization = true
+            val applied = runCatching { cam.parameters = params }.isSuccess
+            if (!applied && previewSize != null) {
+                // Some cameras refuse one of the extras; the preview size is the part that matters
+                runCatching { cam.parameters = cam.parameters.apply { setPreviewSize(previewSize.width, previewSize.height) } }
+            }
+            val shown = cam.parameters.previewSize
+            previewWidth = shown.width
+            previewHeight = shown.height
+            cam.setPreviewTexture(texture)
+            cam.startPreview()
+            textureViewRef?.let { adjustTextureTransform(it, viewW, viewH) }
+        } catch (e: Exception) {
+            Log.w("VideoNoteRecorder", "Camera failed to start", e)
+            stopCamera()
         }
+    }
+
+    /** Starts recording from the open camera; false when the camera or recorder isn't available. */
+    fun beginRecording(): Boolean {
+        if (isRecording) return true
+        val cam = cameraRef ?: return false
+        val outFile = File(context.cacheDir, "videonote_${System.currentTimeMillis()}.mp4")
+        val recorder = startVideoRecording(context, cam, cameraId, recordingProfile, recordingOrientation, outFile)
+            ?: return false
+        outputFileRef = outFile
+        mediaRecorderRef = recorder
+        recordingStartTime = System.currentTimeMillis()
+        recordingSession++
+        isRecording = true
+        return true
+    }
+
+    /** Stops the recorder; true when it saved a playable video. */
+    fun finishRecorder(): Boolean {
+        val recorder = mediaRecorderRef ?: return false
+        mediaRecorderRef = null
+        // stop() throws when nothing usable was recorded
+        val saved = try {
+            recorder.stop()
+            true
+        } catch (_: Exception) {
+            false
+        }
+        try { recorder.release() } catch (_: Exception) {}
+        return saved
+    }
+
+    fun failAndClose() {
+        Toast.makeText(context, "Couldn't use the camera, please try again", Toast.LENGTH_SHORT).show()
+        stopCamera()
+        onDismiss()
     }
 
     fun stopAndSend() {
         if (!isRecording) return
         isRecording = false
         coroutineScope.launch {
+            // A recorder stopped within its first moments has nothing to save
             val elapsed = System.currentTimeMillis() - recordingStartTime
-            if (elapsed < 900) {
-                delay(900 - elapsed)
-            }
-            try {
-                mediaRecorderRef?.stop()
-            } catch (_: Exception) {}
-            try {
-                mediaRecorderRef?.release()
-                mediaRecorderRef = null
-            } catch (_: Exception) {}
-
+            if (elapsed < 900) delay(900 - elapsed)
+            val durationSec = ((System.currentTimeMillis() - recordingStartTime + 500) / 1000).toInt().coerceIn(1, 60)
+            val saved = finishRecorder()
+            stopCamera()
             val file = outputFileRef
-            if (file != null && file.exists()) {
-                if (file.length() < 100L) {
-                    createFallbackVideoFile(file)
-                }
-                val dur = recordingDurationSec.coerceAtLeast(1)
-                onSendVideoNote(file, dur)
+            if (saved && file != null && file.length() > 1024) {
+                onSendVideoNote(file, durationSec)
+            } else {
+                file?.delete()
+                Toast.makeText(context, "Couldn't save the video note, please try again", Toast.LENGTH_SHORT).show()
             }
             onDismiss()
         }
     }
 
-    fun cancelAndDiscard() {
+    fun cancelAndDiscard(showMessage: Boolean = true) {
         isCancelled = true
         isRecording = false
-        try {
-            mediaRecorderRef?.stop()
-            mediaRecorderRef?.release()
-            mediaRecorderRef = null
-        } catch (_: Exception) {}
+        finishRecorder()
         outputFileRef?.delete()
-        Toast.makeText(context, "Video note discarded", Toast.LENGTH_SHORT).show()
+        outputFileRef = null
+        if (showMessage) Toast.makeText(context, "Video note discarded", Toast.LENGTH_SHORT).show()
         onDismiss()
     }
 
-    // Auto-record timer & 60-second limit
-    LaunchedEffect(isRecording) {
-        if (isRecording) {
-            recordingDurationSec = 0
-            while (isActive && isRecording) {
-                delay(1000)
-                recordingDurationSec++
-                if (recordingDurationSec >= 60) {
-                    stopAndSend()
-                    break
-                }
+    /** A recording can't change cameras midway, so it starts again with the other camera. */
+    fun flipCamera() {
+        val wasRecording = isRecording
+        if (wasRecording) {
+            isRecording = false
+            finishRecorder()
+            outputFileRef?.delete()
+            outputFileRef = null
+        }
+        cameraFacing = if (cameraFacing == Camera.CameraInfo.CAMERA_FACING_FRONT) {
+            Camera.CameraInfo.CAMERA_FACING_BACK
+        } else {
+            Camera.CameraInfo.CAMERA_FACING_FRONT
+        }
+        val st = surfaceTextureRef ?: return
+        startCamera(cameraFacing, st, textureViewRef?.width ?: 0, textureViewRef?.height ?: 0)
+        if (wasRecording && !beginRecording()) failAndClose()
+    }
+
+    // Recording timer & 60-second limit, restarted with every recording
+    LaunchedEffect(recordingSession) {
+        if (recordingSession == 0) return@LaunchedEffect
+        recordingDurationSec = 0
+        while (isActive && isRecording) {
+            delay(1000)
+            if (!isRecording) break
+            recordingDurationSec++
+            if (recordingDurationSec >= 60) {
+                stopAndSend()
+                break
             }
         }
     }
 
+    // Leaving the app ends the note: the camera is taken away in the background, and the chat
+    // hides behind Notes
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_STOP) cancelAndDiscard(showMessage = false)
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
     DisposableEffect(Unit) {
         onDispose {
-            try {
-                mediaRecorderRef?.stop()
-                mediaRecorderRef?.release()
-            } catch (_: Exception) {}
-            try {
-                cameraRef?.stopPreview()
-                cameraRef?.release()
-            } catch (_: Exception) {}
+            finishRecorder()
+            stopCamera()
         }
     }
 
@@ -292,14 +346,15 @@ fun CircularVideoNoteRecorderDialog(
                 .navigationBarsPadding(),
             contentAlignment = Alignment.Center
         ) {
-            val circleSize = if (maxWidth < 360.dp) 300.dp else if (maxWidth < 400.dp) 330.dp else 340.dp
+            // As big as the screen allows, leaving room for the controls below
+            val circleSize = minOf(maxWidth - 24.dp, maxHeight - 330.dp).coerceAtLeast(220.dp)
 
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center,
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(horizontal = 16.dp, vertical = 12.dp)
+                    .padding(horizontal = 12.dp, vertical = 12.dp)
             ) {
                 // Header status
                 Row(
@@ -367,11 +422,11 @@ fun CircularVideoNoteRecorderDialog(
                                         surfaceTextureRef = surface
                                         startCamera(cameraFacing, surface, width, height)
                                         // Auto-start recording as in Telegram
-                                        beginRecording()
+                                        if (!isCancelled && !beginRecording()) failAndClose()
                                     }
 
                                     override fun onSurfaceTextureSizeChanged(surface: SurfaceTexture, width: Int, height: Int) {
-                                        adjustTextureTransform(this@apply, width, height, previewWidth, previewHeight, cameraFacing == Camera.CameraInfo.CAMERA_FACING_FRONT)
+                                        adjustTextureTransform(this@apply, width, height)
                                     }
 
                                     override fun onSurfaceTextureDestroyed(surface: SurfaceTexture): Boolean {
@@ -545,8 +600,9 @@ fun CircularVideoNoteRecorderDialog(
                                             dragOffsetX = 0f
                                             dragOffsetY = 0f
 
-                                            if (!isRecording) {
-                                                beginRecording()
+                                            if (!isRecording && !beginRecording()) {
+                                                failAndClose()
+                                                return@awaitEachGesture
                                             }
 
                                             var hasTriggeredLock = false
@@ -646,16 +702,7 @@ fun CircularVideoNoteRecorderDialog(
                         // 🔄 Camera Flip Button (Front / Back)
                         IconButton(
                             onClick = {
-                                cameraFacing = if (cameraFacing == Camera.CameraInfo.CAMERA_FACING_FRONT) {
-                                    Camera.CameraInfo.CAMERA_FACING_BACK
-                                } else {
-                                    Camera.CameraInfo.CAMERA_FACING_FRONT
-                                }
-                                surfaceTextureRef?.let { st ->
-                                    val w = textureViewRef?.width ?: 640
-                                    val h = textureViewRef?.height ?: 640
-                                    startCamera(cameraFacing, st, w, h)
-                                }
+                                flipCamera()
                                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                             },
                             modifier = Modifier
@@ -719,29 +766,72 @@ private fun getCameraId(facing: Int): Int {
     return 0
 }
 
-private fun startVideoRecording(context: Context, camera: Camera?, facing: Int, outputFile: File): MediaRecorder? {
-    return try {
-        val cam = camera ?: return null
-        cam.unlock()
-        val recorder = MediaRecorder()
-        recorder.setCamera(cam)
-        recorder.setAudioSource(MediaRecorder.AudioSource.MIC)
-        recorder.setVideoSource(MediaRecorder.VideoSource.CAMERA)
-        val orientationHint = if (facing == Camera.CameraInfo.CAMERA_FACING_FRONT) 270 else 90
+/** Screen rotation in degrees, for turning the camera picture upright. */
+private fun displayRotationDegrees(context: Context): Int =
+    when (ContextCompat.getDisplayOrDefault(context).rotation) {
+        Surface.ROTATION_90 -> 90
+        Surface.ROTATION_180 -> 180
+        Surface.ROTATION_270 -> 270
+        else -> 0
+    }
 
-        val camId = getCameraId(facing)
-        if (CamcorderProfile.hasProfile(camId, CamcorderProfile.QUALITY_LOW)) {
-            val profile = CamcorderProfile.get(camId, CamcorderProfile.QUALITY_LOW)
+/** The recording profile for a video note: 720p where the camera has it, else the best below. */
+private fun videoNoteProfile(cameraId: Int): CamcorderProfile? {
+    val qualities = intArrayOf(
+        CamcorderProfile.QUALITY_720P,
+        CamcorderProfile.QUALITY_480P,
+        CamcorderProfile.QUALITY_HIGH,
+        CamcorderProfile.QUALITY_LOW
+    )
+    for (quality in qualities) {
+        if (!CamcorderProfile.hasProfile(cameraId, quality)) continue
+        val profile = runCatching { CamcorderProfile.get(cameraId, quality) }.getOrNull()
+        if (profile != null) return profile
+    }
+    return null
+}
+
+/**
+ * A preview size shaped like the video, so the picture doesn't change when recording starts, and
+ * sharp enough for a viewfinder [viewSide] px across (up to 1080p).
+ */
+private fun choosePreviewSize(sizes: List<Camera.Size>, videoW: Int, videoH: Int, viewSide: Int): Camera.Size? {
+    if (sizes.isEmpty()) return null
+    val ratio = videoW.toFloat() / videoH
+    val sameShape = sizes.filter { kotlin.math.abs(it.width.toFloat() / it.height - ratio) < 0.03f }
+    val candidates = sameShape.ifEmpty { sizes }.filter { maxOf(it.width, it.height) <= 1920 }.ifEmpty { sizes }
+    val wantedShortSide = maxOf(viewSide, minOf(videoW, videoH))
+    return candidates.filter { minOf(it.width, it.height) >= wantedShortSide }.minByOrNull { it.width * it.height }
+        ?: candidates.maxByOrNull { it.width * it.height }
+}
+
+/** Sharp enough for a round video note while keeping the upload small (about 19 MB a minute). */
+private const val VIDEO_NOTE_BIT_RATE = 2_500_000
+
+private fun startVideoRecording(
+    context: Context,
+    camera: Camera,
+    cameraId: Int,
+    profile: CamcorderProfile?,
+    orientationHint: Int,
+    outputFile: File
+): MediaRecorder? {
+    val recorder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) MediaRecorder(context) else @Suppress("DEPRECATION") MediaRecorder()
+    return try {
+        camera.unlock()
+        recorder.setCamera(camera)
+        recorder.setAudioSource(MediaRecorder.AudioSource.CAMCORDER)
+        recorder.setVideoSource(MediaRecorder.VideoSource.CAMERA)
+        if (profile != null) {
             recorder.setProfile(profile)
-        } else if (CamcorderProfile.hasProfile(camId, CamcorderProfile.QUALITY_480P)) {
-            val profile = CamcorderProfile.get(camId, CamcorderProfile.QUALITY_480P)
-            recorder.setProfile(profile)
+            recorder.setVideoEncodingBitRate(minOf(profile.videoBitRate, VIDEO_NOTE_BIT_RATE))
         } else {
             recorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
             recorder.setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
             recorder.setVideoEncoder(MediaRecorder.VideoEncoder.H264)
-            recorder.setVideoSize(480, 480)
+            recorder.setVideoSize(640, 480)
             recorder.setVideoFrameRate(30)
+            recorder.setVideoEncodingBitRate(VIDEO_NOTE_BIT_RATE)
         }
         recorder.setOutputFile(outputFile.absolutePath)
         recorder.setOrientationHint(orientationHint)
@@ -749,25 +839,12 @@ private fun startVideoRecording(context: Context, camera: Camera?, facing: Int, 
         recorder.start()
         recorder
     } catch (e: Exception) {
+        Log.w("VideoNoteRecorder", "Recording failed to start (camera $cameraId)", e)
+        runCatching { recorder.reset() }
+        runCatching { recorder.release() }
+        // Hand the camera back so the preview keeps working
+        runCatching { camera.lock() }
+        outputFile.delete()
         null
     }
-}
-
-private fun createFallbackVideoFile(outputFile: File) {
-    try {
-        if (!outputFile.exists() || outputFile.length() == 0L) {
-            outputFile.createNewFile()
-            FileOutputStream(outputFile).use { fos ->
-                val ftypBox = byteArrayOf(
-                    0x00, 0x00, 0x00, 0x18,
-                    0x66, 0x74, 0x79, 0x70,
-                    0x6D, 0x70, 0x34, 0x32,
-                    0x00, 0x00, 0x00, 0x00,
-                    0x69, 0x73, 0x6F, 0x6D,
-                    0x6D, 0x70, 0x34, 0x32
-                )
-                fos.write(ftypBox)
-            }
-        }
-    } catch (_: Exception) {}
 }

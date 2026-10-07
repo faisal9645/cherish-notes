@@ -1,5 +1,6 @@
 package com.example.update
 
+import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -46,6 +47,12 @@ class OtaUpdateManager private constructor(private val appContext: Context) {
 
     private val _latestUpdateInfo = MutableStateFlow<UpdateInfo?>(null)
     val latestUpdateInfo: StateFlow<UpdateInfo?> = _latestUpdateInfo.asStateFlow()
+
+    private val prefs by lazy { appContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE) }
+
+    /** True while the system installer or the "install unknown apps" setting is open. */
+    @Volatile
+    private var awaitingReturn = false
 
     suspend fun checkForUpdates(silent: Boolean = false): UpdateInfo? = withContext(Dispatchers.IO) {
         if (!silent) _updateState.value = UpdateState.Checking
@@ -142,6 +149,13 @@ class OtaUpdateManager private constructor(private val appContext: Context) {
             val updatesDir = File(appContext.cacheDir, "updates").apply { mkdirs() }
             val apkFile = File(updatesDir, "cherish_update_${info.latestVersionCode}.apk")
 
+            // Already downloaded, e.g. before the app restarted to get install permission
+            if (info.assetSize > 0 && apkFile.length() == info.assetSize) {
+                _updateState.value = UpdateState.ReadyToInstall(apkFile)
+                withContext(Dispatchers.Main) { installApk(context, apkFile) }
+                return@withContext
+            }
+
             val url = URL(info.downloadUrl)
             val conn = (url.openConnection() as HttpURLConnection).apply {
                 instanceFollowRedirects = true
@@ -208,9 +222,13 @@ class OtaUpdateManager private constructor(private val appContext: Context) {
                         data = Uri.parse("package:${context.packageName}")
                         flags = Intent.FLAG_ACTIVITY_NEW_TASK
                     }
+                    // Allowing installs restarts the app on many phones (which reopens on Notes);
+                    // remembered, so the install carries on when the app is back (onAppResumed)
+                    rememberPendingInstall(apkFile)
                     val prefs = com.example.security.SecurityPreferences.getInstance(context)
                     prefs.ignoreNextPause = true
                     prefs.isExternalPickerActive = true
+                    awaitingReturn = true
                     context.startActivity(intent)
                     Toast.makeText(context, "Please allow Cherish to install updates, then return to install", Toast.LENGTH_LONG).show()
                     return
@@ -231,10 +249,44 @@ class OtaUpdateManager private constructor(private val appContext: Context) {
             val prefs = com.example.security.SecurityPreferences.getInstance(context)
             prefs.ignoreNextPause = true
             prefs.isExternalPickerActive = true
+            awaitingReturn = true
             context.startActivity(intent)
         } catch (e: Exception) {
             Toast.makeText(context, "Failed to launch installer: ${e.message}", Toast.LENGTH_LONG).show()
         }
+    }
+
+    /**
+     * Called each time the app comes back to the front. Ends an installer/settings trip, so
+     * leaving the app afterwards hides it behind Notes again, and carries on an install that was
+     * waiting for the "install unknown apps" permission.
+     */
+    fun onAppResumed(activity: Activity) {
+        if (awaitingReturn) {
+            awaitingReturn = false
+            com.example.security.SecurityPreferences.getInstance(activity).isExternalPickerActive = false
+        }
+        val path = prefs.getString(KEY_PENDING_APK, null) ?: return
+        val since = prefs.getLong(KEY_PENDING_SINCE, 0L)
+        prefs.edit().remove(KEY_PENDING_APK).remove(KEY_PENDING_SINCE).apply()
+        if (System.currentTimeMillis() - since > PENDING_INSTALL_WINDOW_MS) return
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !activity.packageManager.canRequestPackageInstalls()) return
+        val apk = File(path)
+        if (apk.exists() && isNewerThanInstalled(activity, apk)) installApk(activity, apk)
+    }
+
+    private fun rememberPendingInstall(apkFile: File) {
+        prefs.edit()
+            .putString(KEY_PENDING_APK, apkFile.absolutePath)
+            .putLong(KEY_PENDING_SINCE, System.currentTimeMillis())
+            .apply()
+    }
+
+    @Suppress("DEPRECATION")
+    private fun isNewerThanInstalled(context: Context, apk: File): Boolean {
+        val archive = context.packageManager.getPackageArchiveInfo(apk.absolutePath, 0) ?: return false
+        val versionCode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) archive.longVersionCode else archive.versionCode.toLong()
+        return archive.packageName == context.packageName && versionCode > BuildConfig.VERSION_CODE
     }
 
     private fun parseVersionCode(tag: String): Int {
@@ -269,6 +321,11 @@ class OtaUpdateManager private constructor(private val appContext: Context) {
 
     companion object {
         private const val GITHUB_API_LATEST_RELEASE = "https://api.github.com/repos/faisal9645/notes/releases/latest"
+        private const val PREFS_NAME = "cherish_ota"
+        private const val KEY_PENDING_APK = "pending_install_apk"
+        private const val KEY_PENDING_SINCE = "pending_install_since"
+        /** An install waiting for permission is only carried on within this time. */
+        private const val PENDING_INSTALL_WINDOW_MS = 10 * 60 * 1000L
 
         @Volatile
         private var INSTANCE: OtaUpdateManager? = null

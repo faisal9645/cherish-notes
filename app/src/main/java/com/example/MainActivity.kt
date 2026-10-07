@@ -21,10 +21,14 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.DisposableEffect
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import com.example.ui.navigation.CherishNavGraph
 import com.example.ui.theme.CherishTheme
 import com.example.util.BatteryStatusHelper
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
 class MainActivity : FragmentActivity() {
@@ -33,6 +37,9 @@ class MainActivity : FragmentActivity() {
         get() = application as CherishApplication
 
     private val batteryHelper by lazy { BatteryStatusHelper(this) }
+
+    /** Whether the secret app may be what's on screen; stays true until Notes has been drawn. */
+    private var secretAppOnScreen = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -62,11 +69,28 @@ class MainActivity : FragmentActivity() {
         }
         window.decorView.setBackgroundColor(if (isInitialDark) android.graphics.Color.parseColor("#121212") else android.graphics.Color.WHITE)
         setHighRefreshRate()
-        // Screenshot protection removed per user request — FLAG_SECURE is never applied
+        // Screenshots inside the app are allowed; only the recents preview hides the secret chat
+        // (see setSecretAppOnScreen)
         // Only apply default state on cold start.
         // SecurityPreferences init already sets the default state based on isDisguiseModeEnabled().
         // Do not force re-disguise here, as it overrides the in-memory state during Activity recreation.
         handleNotificationIntent(intent)
+
+        // The recents screen must never show the secret chat: its card goes blank while the chat
+        // is open, and shows the Notes screen like any notes app otherwise
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.RESUMED) {
+                app.securityPreferences.isDisguiseActive.collectLatest { disguised ->
+                    if (disguised) {
+                        // Only once Notes has been drawn over the chat
+                        delay(300)
+                        setSecretAppOnScreen(false)
+                    } else {
+                        setSecretAppOnScreen(true)
+                    }
+                }
+            }
+        }
 
         setContent {
             val themeMode by app.securityPreferences.themeMode.collectAsState(initial = 0)
@@ -166,13 +190,35 @@ class MainActivity : FragmentActivity() {
         }
     }
 
+    private fun setSecretAppOnScreen(onScreen: Boolean) {
+        secretAppOnScreen = onScreen
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            // Hides only the recents preview; screenshots inside the app keep working
+            setRecentsScreenshotEnabled(!onScreen)
+        }
+    }
+
+    /**
+     * Before Android 13 the recents preview can only be hidden by marking the window secure. Done
+     * just while leaving with the chat on screen, so screenshots inside the app still work.
+     */
+    private fun hideSecretAppFromRecents() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU && secretAppOnScreen) {
+            window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        }
+    }
+
     override fun onResume() {
         super.onResume()
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+            window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        }
         // Do NOT re-call setDecorFitsSystemWindows here — already set in onCreate.
         // Re-calling it causes a layout recalculation that shifts content after minimize/reopen.
-        // Screenshot protection removed — no FLAG_SECURE applied
         app.authRepository.onAppForegroundStateChanged(true)
         app.securityPreferences.ignoreNextPause = false
+        // Ends an installer trip, or continues an update install that waited for permission
+        com.example.update.OtaUpdateManager.getInstance(this).onAppResumed(this)
         if (app.authRepository.isUserLoggedIn()) {
             val info = batteryHelper.getCurrentBattery()
             lifecycleScope.launch {
@@ -188,6 +234,7 @@ class MainActivity : FragmentActivity() {
     }
 
     override fun onUserLeaveHint() {
+        hideSecretAppFromRecents()
         super.onUserLeaveHint()
         if (isChangingConfigurations) return
         if (!app.securityPreferences.ignoreNextPause && 
@@ -200,6 +247,7 @@ class MainActivity : FragmentActivity() {
     }
 
     override fun onPause() {
+        hideSecretAppFromRecents()
         super.onPause()
     }
 
@@ -219,7 +267,7 @@ class MainActivity : FragmentActivity() {
         if (!app.securityPreferences.isTheaterModeActive && !app.securityPreferences.isExternalPickerActive) {
             app.securityPreferences.ignoreNextPause = false
         }
-        app.googleDriveBackupManager.triggerImmediateAutoBackup()
+        app.googleDriveBackupManager.flushPendingBackup()
     }
 
     override fun onDestroy() {
@@ -228,8 +276,8 @@ class MainActivity : FragmentActivity() {
         app.authRepository.onAppForegroundStateChanged(false)
     }
 
-    // Screenshot protection removed — applyScreenshotProtection() has been deleted.
-    // FLAG_SECURE is never set. Users can freely take screenshots and screen recordings.
+    // Screenshots and screen recordings inside the app are allowed; FLAG_SECURE is only set while
+    // leaving with the chat on screen before Android 13 (hideSecretAppFromRecents).
 
     private fun setHighRefreshRate() {
         try {

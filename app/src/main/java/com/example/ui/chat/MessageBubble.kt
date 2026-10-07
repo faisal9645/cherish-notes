@@ -578,7 +578,8 @@ fun MessageBubble(
                                             onImageClick(clickedUrl)
                                         }
                                     },
-                                    modifier = Modifier.fillMaxWidth()
+                                    modifier = Modifier.fillMaxWidth(),
+                                    previewUrls = remember(message) { mediaList.map(message::thumbnailFor) }
                                 )
 
                                 // When there is no text caption, overlay the time & read status pill on the photo

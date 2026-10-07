@@ -35,6 +35,7 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.draw.shadow
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Logout
@@ -54,6 +55,7 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.BlurEffect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.TileMode
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -186,9 +188,11 @@ fun ChatScreen(
         }
     }
 
-    val currentPlayingId by viewModel.voicePlayerHelper.currentlyPlayingId.collectAsState()
+    val currentPlayingIdState = viewModel.voicePlayerHelper.currentlyPlayingId.collectAsState()
+    val currentPlayingId by currentPlayingIdState
     val isAudioPlaying by viewModel.voicePlayerHelper.isPlaying.collectAsState()
-    val audioProgress by viewModel.voicePlayerHelper.playbackProgress.collectAsState()
+    // Read only inside the playing bubble, so playback progress doesn't recompose the whole screen
+    val audioProgressState = viewModel.voicePlayerHelper.playbackProgress.collectAsState()
     val isRecordingVoice by viewModel.voiceRecorderHelper.isRecording.collectAsState()
     val recordingDurationSec by viewModel.voiceRecorderHelper.recordingDurationSec.collectAsState()
     val recordingAmplitudes by viewModel.voiceRecorderHelper.amplitudes.collectAsState()
@@ -293,6 +297,20 @@ fun ChatScreen(
         }
     }
 
+    // Video notes need both the camera and the microphone; the recorder only opens once both are allowed
+    val videoNotePermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { results ->
+        val prefs = com.example.security.SecurityPreferences.getInstance(context)
+        prefs.isExternalPickerActive = false
+        prefs.ignoreNextPause = false
+        if (results.isNotEmpty() && results.values.all { it }) {
+            showVideoNoteRecorder = true
+        } else {
+            Toast.makeText(context, "Camera and microphone are needed for video notes", Toast.LENGTH_LONG).show()
+        }
+    }
+
     val triggerCameraSnap: () -> Unit = {
         val hasCamera = ContextCompat.checkSelfPermission(
             context,
@@ -308,25 +326,20 @@ fun ChatScreen(
         }
     }
 
-    val isInitialLoad = rememberSaveable { mutableStateOf(true) }
-    val prevMessageCount = rememberSaveable { mutableIntStateOf(uiState.messages.size) }
-
-    LaunchedEffect(uiState.messages.size) {
-        val currentSize = uiState.messages.size
-        if (isInitialLoad.value && currentSize > 0) {
-            // Initial message load: record size without hijacking user's scroll position
-            isInitialLoad.value = false
-            prevMessageCount.intValue = currentSize
-        } else if (!isInitialLoad.value && currentSize > prevMessageCount.intValue) {
-            val isNearBottom = listState.firstVisibleItemIndex <= 1
-            val newestMessage = uiState.messages.maxByOrNull { it.timestamp }
-            val iSentIt = newestMessage?.senderId == uiState.currentUser?.id
-            if (isNearBottom || iSentIt == true) {
-                listState.animateScrollToItem(0)
-            }
-            prevMessageCount.intValue = currentSize
-        } else {
-            prevMessageCount.intValue = currentSize
+    // Follow the conversation only when a NEW message lands at the bottom: always for my own sends,
+    // for the partner's only when already near the bottom. Keyed on the newest message rather than
+    // the message count, so older pages loading at the top never pull the list back down.
+    val newestMessage = uiState.messages.lastOrNull()
+    val newestSeen = remember { arrayOfNulls<Message>(1) }
+    LaunchedEffect(newestMessage?.id) {
+        val newest = newestMessage ?: return@LaunchedEffect
+        val previous = newestSeen[0]
+        newestSeen[0] = newest
+        // First load, or the newest was deleted (an older one is now last): keep the position
+        if (previous == null || newest.timestamp <= previous.timestamp) return@LaunchedEffect
+        val isNearBottom = listState.firstVisibleItemIndex <= 1
+        if (isNearBottom || newest.senderId == uiState.currentUser?.id) {
+            listState.animateScrollToItem(0)
         }
     }
 
@@ -354,7 +367,7 @@ fun ChatScreen(
             .map { it.id }
     }
     LaunchedEffect(unreadIds) {
-        unreadIds.forEach { viewModel.markMessageAsRead(it) }
+        viewModel.markMessagesAsRead(unreadIds)
     }
 
     // Soft tick when a message arrives while the chat is open, and a count on the scroll-down
@@ -420,6 +433,68 @@ fun ChatScreen(
     }
 
     var highlightedMessageId by remember { mutableStateOf<String?>(null) }
+
+    // What a message row can ask of the screen. Created once, reading the latest state when
+    // called, so rows get the same instance every time and can be skipped on recomposition.
+    val latestDisplayedMessages = rememberUpdatedState(displayedMessages)
+    val latestKeyboardController = rememberUpdatedState(keyboardController)
+    val rowActions = remember(viewModel) {
+        ChatRowActions(
+            playAudio = { message ->
+                message.mediaUrl?.let { url -> viewModel.playAudio(message.id, url) }
+            },
+            seekAudio = { message, progress ->
+                if (viewModel.voicePlayerHelper.currentlyPlayingId.value == message.id) {
+                    viewModel.seekAudio(progress)
+                } else {
+                    message.mediaUrl?.let { url ->
+                        viewModel.playAudio(message.id, url)
+                        viewModel.seekAudio(progress)
+                    }
+                }
+            },
+            openMedia = { message, url, siblings ->
+                (context.applicationContext as? com.example.CherishApplication)?.securityPreferences?.isMediaViewerActive = true
+                val isVideo = message.getTypedType() == MessageType.VIDEO || message.isVideoNote || message.isCircularVideoNote()
+                val ownPhotos = siblings ?: message.getAllMediaUrls()
+                val mediaList = when {
+                    isVideo -> listOf(url)
+                    ownPhotos.size > 1 -> ownPhotos
+                    else -> latestDisplayedMessages.value
+                        .filter { it.getTypedType() == MessageType.IMAGE }
+                        .flatMap { it.getAllMediaUrls() }
+                        .distinct()
+                        .ifEmpty { listOf(url) }
+                }
+                viewModel.openFullScreenMedia(url, if (isVideo) MessageType.VIDEO else MessageType.IMAGE, mediaList)
+            },
+            reply = { message -> viewModel.setReplyingTo(message) },
+            longPress = { message, bounds ->
+                latestKeyboardController.value?.hide()
+                focusedBounds = bounds
+                focusedMessage = message
+            },
+            react = { message, emoji -> viewModel.toggleReaction(message.id, emoji) },
+            openTheaterVideo = { videoId -> viewModel.openTheaterVideo(videoId) },
+            toggleVoiceSpeed = { viewModel.toggleVoiceSpeed() },
+            jumpToReply = { replyId ->
+                if (!replyId.isNullOrBlank()) {
+                    // The list is reversed (newest at index 0)
+                    val shown = latestDisplayedMessages.value
+                    val index = shown.indexOfFirst { it.id == replyId }
+                    if (index >= 0) {
+                        scope.launch {
+                            listState.animateScrollToItem(shown.lastIndex - index)
+                            highlightedMessageId = replyId
+                            kotlinx.coroutines.delay(1400)
+                            highlightedMessageId = null
+                        }
+                    }
+                }
+            },
+            toggleSelection = { messageId -> toggleMessageSelection(messageId) }
+        )
+    }
 
     val app = LocalContext.current.applicationContext as com.example.CherishApplication
     val isDisguiseActive by app.securityPreferences.isDisguiseActive.collectAsState()
@@ -523,28 +598,9 @@ fun ChatScreen(
         }
     }
 
-    // Panic Protection: Accelerometer shake listener to trigger instant disguise
+    // Leaving the chat: stop any voice recording and hide the history again
     DisposableEffect(Unit) {
-        val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as? android.hardware.SensorManager
-        val accelerometer = sensorManager?.getDefaultSensor(android.hardware.Sensor.TYPE_ACCELEROMETER)
-        var lastShakeTime = 0L
-        var lastX = 0f
-        var lastY = 0f
-        var lastZ = 0f
-
-        val listener = object : android.hardware.SensorEventListener {
-            override fun onSensorChanged(event: android.hardware.SensorEvent?) {
-                // Sensor listener kept without auto-switching to Notes (Issue 8 & 11)
-            }
-            override fun onAccuracyChanged(sensor: android.hardware.Sensor?, accuracy: Int) {}
-        }
-
-        accelerometer?.let {
-            sensorManager.registerListener(listener, it, android.hardware.SensorManager.SENSOR_DELAY_UI)
-        }
-
         onDispose {
-            sensorManager?.unregisterListener(listener)
             viewModel.cancelVoiceRecording()
             viewModel.safeStopRecordingForBackground()
             viewModel.hideSecretHistory()
@@ -942,12 +998,16 @@ fun ChatScreen(
         bottomBar = {
             val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
             val barBg = if (isDark) TrueDarkSurface else Color.White
-            Surface(
-                color = barBg,
-                tonalElevation = 0.dp,
-                shadowElevation = 8.dp,
-                modifier = Modifier.fillMaxWidth()
+            // Not a Surface, which clips its content: the voice-lock hint floats above the mic button
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .shadow(8.dp, RectangleShape, clip = false)
+                    .background(barBg)
+                    // Touches on the tray stay in the tray
+                    .pointerInput(Unit) {}
             ) {
+                CompositionLocalProvider(LocalContentColor provides contentColorFor(barBg)) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -989,20 +1049,16 @@ fun ChatScreen(
                     onTakePhoto = triggerCameraSnap,
                     onPickAttachment = { showAttachmentSheet = true },
                     onRecordVideoNote = {
-                        val hasCam = ContextCompat.checkSelfPermission(
-                            context,
-                            Manifest.permission.CAMERA
-                        ) == PackageManager.PERMISSION_GRANTED
-                        val hasMic = ContextCompat.checkSelfPermission(
-                            context,
-                            Manifest.permission.RECORD_AUDIO
-                        ) == PackageManager.PERMISSION_GRANTED
-                        if (hasCam && hasMic) {
+                        val missing = listOf(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO).filter {
+                            ContextCompat.checkSelfPermission(context, it) != PackageManager.PERMISSION_GRANTED
+                        }
+                        if (missing.isEmpty()) {
                             showVideoNoteRecorder = true
                         } else {
-                            com.example.security.SecurityPreferences.getInstance(context).ignoreNextPause = true
-                            cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
-                            showVideoNoteRecorder = true
+                            val prefs = com.example.security.SecurityPreferences.getInstance(context)
+                            prefs.isExternalPickerActive = true
+                            prefs.ignoreNextPause = true
+                            videoNotePermissionLauncher.launch(missing.toTypedArray())
                         }
                     },
                     myPhotoUrl = myUser?.photoUrl,
@@ -1016,7 +1072,8 @@ fun ChatScreen(
                 )
 
             }
-        }
+                }
+            }
     },
         containerColor = MaterialTheme.colorScheme.background
     ) { paddingValues ->
@@ -1217,255 +1274,39 @@ fun ChatScreen(
                     ) { index, message ->
                         val isFromMe = message.senderId == currentUserId
                         val isFirstOfDay = index == reversedMessages.lastIndex || !isSameDay(reversedMessages[index + 1].timestamp, message.timestamp)
-
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                // Rows glide aside when messages are added or deleted instead of jumping;
-                                // new arrivals get their own landing below
-                                .animateItem(
-                                    fadeInSpec = null,
-                                    placementSpec = spring(
-                                        dampingRatio = 0.86f,
-                                        stiffness = Spring.StiffnessMediumLow,
-                                        visibilityThreshold = IntOffset.VisibilityThreshold
-                                    ),
-                                    fadeOutSpec = tween(180)
-                                )
-                        ) {
-                            val dateSep = formatDateSeparator(message.timestamp)
-                            if (isFirstOfDay) {
-                                if (dateSep.isNotEmpty()) {
-                                    DateSeparatorBadge(
-                                        dateText = dateSep,
-                                        isPrivateMode = (uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE),
-                                        isDark = isDark
-                                    )
-                                }
-                                if (isFirstOfDay && isToday(message.timestamp)) {
-                                    StrictlyTwoPersonBanner(
-                                        isPrivateMode = (uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE),
-                                        isDark = isDark
-                                    )
-                                }
-                            }
-
-                            // Read marking is handled in the batched LaunchedEffect above the Scaffold.
-                            // Do NOT put Firestore writes inside LazyColumn items — they fire on every scroll.
-
-                            val isPrivate = uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE
-                            val isHighlighted = (highlightedMessageId == message.id)
-                            val isYouTube = remember(message.text) {
-                                YouTubeHelper.extractVideoId(message.text) != null
-                            }
-                            val isSelected = isSelectionMode && message.id in selectedItemIds
-                            val selectionAccent = if (isPrivate) (if (isDark) Color(0xFF9CA3AF) else Color(0xFF6B7280)) else RoseGoldPrimary
-
-                            // A message that arrives while the chat is open lands with a spring: sent ones
-                            // rise from the composer, received ones slide in from the left
-                            val isFreshArrival = remember(message.id) {
-                                index <= 1 && initialSnapshotTaken[0] &&
-                                    message.id !in initialMessageIds && landedMessageIds.add(message.id)
-                            }
-                            val landing = remember(message.id) { Animatable(if (isFreshArrival) 0f else 1f) }
-                            LaunchedEffect(message.id) {
-                                if (isFreshArrival) landing.animateTo(1f, spring(dampingRatio = 0.62f, stiffness = 420f))
-                            }
-
-                            // Jump-to-message highlight: a quick bump, and a glow that fades once released
-                            val glow = remember(message.id) { Animatable(0f) }
-                            val bump = remember(message.id) { Animatable(0f) }
-                            LaunchedEffect(isHighlighted) {
-                                if (isHighlighted) {
-                                    launch {
-                                        bump.animateTo(1f, spring(dampingRatio = 0.5f, stiffness = 900f))
-                                        bump.animateTo(0f, spring(dampingRatio = 0.45f, stiffness = 300f))
-                                    }
-                                    glow.animateTo(1f, tween(200))
-                                } else {
-                                    glow.animateTo(0f, tween(650))
-                                }
-                            }
-                            val glowColor = if (isPrivate) (if (isDark) Color(0xFF6B7280) else Color(0xFF9CA3AF)) else RoseGoldPrimary
-                            val rowTint by animateColorAsState(
-                                targetValue = if (isSelected) selectionAccent.copy(alpha = if (isDark) 0.22f else 0.14f) else Color.Transparent,
-                                animationSpec = tween(160),
-                                label = "row_tint"
-                            )
-                            val bubbleStartPadding by animateDpAsState(
-                                targetValue = if (isSelectionMode) 6.dp else 16.dp,
-                                animationSpec = spring(dampingRatio = 0.85f, stiffness = Spring.StiffnessMediumLow),
-                                label = "row_start_padding"
-                            )
-                            // Where the message sits on screen, for the long-press focus view
-                            val anchor = remember(message.id) { arrayOf(Rect.Zero) }
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .drawBehind { if (rowTint.alpha > 0f) drawRect(rowTint) }
-                                    .then(
-                                        if (isFreshArrival) {
-                                            Modifier.graphicsLayer {
-                                                val p = landing.value
-                                                alpha = p.coerceIn(0f, 1f)
-                                                val s = 0.86f + 0.14f * p
-                                                scaleX = s
-                                                scaleY = s
-                                                transformOrigin = TransformOrigin(if (isFromMe) 1f else 0f, 1f)
-                                                translationY = (1f - p) * 28.dp.toPx()
-                                                if (!isFromMe) translationX = (1f - p) * -20.dp.toPx()
-                                            }
-                                        } else Modifier
-                                    )
-                            ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    AnimatedVisibility(
-                                        visible = isSelectionMode,
-                                        enter = expandHorizontally(spring(dampingRatio = 0.85f, stiffness = Spring.StiffnessMediumLow)) +
-                                            fadeIn(tween(150)) +
-                                            scaleIn(spring(dampingRatio = 0.5f, stiffness = 600f), initialScale = 0.4f),
-                                        exit = shrinkHorizontally(tween(160)) + fadeOut(tween(120))
-                                    ) {
-                                        SelectionCheckBadge(
-                                            isSelected = isSelected,
-                                            accentColor = selectionAccent,
-                                            modifier = Modifier.padding(start = 14.dp)
-                                        )
-                                    }
-                                    Box(
-                                        modifier = Modifier
-                                            .weight(1f)
-                                            .padding(start = bubbleStartPadding, end = 16.dp)
-                                            .onGloballyPositioned { anchor[0] = it.boundsInRoot() }
-                                            .graphicsLayer {
-                                                val grow = 1f + 0.035f * bump.value
-                                                scaleX = grow
-                                                scaleY = grow
-                                                transformOrigin = TransformOrigin(if (isFromMe) 1f else 0f, 0.5f)
-                                            }
-                                            .drawBehind {
-                                                val g = glow.value
-                                                if (g > 0f) {
-                                                    val corner = CornerRadius(16.dp.toPx())
-                                                    drawRoundRect(glowColor.copy(alpha = 0.16f * g), cornerRadius = corner)
-                                                    drawRoundRect(glowColor.copy(alpha = g), cornerRadius = corner, style = Stroke(2.dp.toPx()))
-                                                }
-                                            }
-                                    ) {
-                                        MessageBubble(
-                                            message = message,
-                                            isFromMe = isFromMe,
-                                            isPlayingAudio = (currentPlayingId == message.id && isAudioPlaying),
-                                            audioProgress = { if (currentPlayingId == message.id) audioProgress else 0f },
-                                            gallerySize = uiState.gallerySize,
-                                            onPlayAudio = {
-                                                message.mediaUrl?.let { url ->
-                                                    viewModel.playAudio(message.id, url)
-                                                }
-                                            },
-                                            onSeekAudio = { progress ->
-                                                if (currentPlayingId == message.id) {
-                                                    viewModel.seekAudio(progress)
-                                                } else {
-                                                    message.mediaUrl?.let { url ->
-                                                        viewModel.playAudio(message.id, url)
-                                                        viewModel.seekAudio(progress)
-                                                    }
-                                                }
-                                            },
-                                            onImageClick = { url ->
-                                                val app = context.applicationContext as? com.example.CherishApplication
-                                                app?.securityPreferences?.isMediaViewerActive = true
-                                                val isVideo = message.getTypedType() == MessageType.VIDEO || message.isVideoNote || message.isCircularVideoNote()
-                                                val targetType = if (isVideo) MessageType.VIDEO else MessageType.IMAGE
-                                                val mediaList = if (isVideo) {
-                                                    listOf(url)
-                                                } else {
-                                                    val msgUrls = message.getAllMediaUrls()
-                                                    if (msgUrls.size > 1) {
-                                                        msgUrls
-                                                    } else {
-                                                        val allChatImages = displayedMessages
-                                                            .filter { it.getTypedType() == MessageType.IMAGE }
-                                                            .flatMap { it.getAllMediaUrls() }
-                                                            .distinct()
-                                                        if (allChatImages.isNotEmpty()) allChatImages else listOf(url)
-                                                    }
-                                                }
-                                                viewModel.openFullScreenMedia(url, targetType, mediaList)
-                                            },
-                                            onImageClickWithList = { url, allUrls ->
-                                                val app = context.applicationContext as? com.example.CherishApplication
-                                                app?.securityPreferences?.isMediaViewerActive = true
-                                                val isVideo = message.getTypedType() == MessageType.VIDEO || message.isVideoNote || message.isCircularVideoNote()
-                                                val targetType = if (isVideo) MessageType.VIDEO else MessageType.IMAGE
-                                                val mediaList = if (isVideo) {
-                                                    listOf(url)
-                                                } else if (allUrls.size > 1) {
-                                                    allUrls
-                                                } else {
-                                                    val allChatImages = displayedMessages
-                                                        .filter { it.getTypedType() == MessageType.IMAGE }
-                                                        .flatMap { it.getAllMediaUrls() }
-                                                        .distinct()
-                                                    if (allChatImages.isNotEmpty()) allChatImages else listOf(url)
-                                                }
-                                                viewModel.openFullScreenMedia(url, targetType, mediaList)
-                                            },
-                                            onSwipeToReply = {
-                                                viewModel.setReplyingTo(message)
-                                            },
-                                            onLongClick = {
-                                                keyboardController?.hide()
-                                                focusedBounds = anchor[0]
-                                                focusedMessage = message
-                                            },
-                                            onReactionClick = { emoji ->
-                                                viewModel.toggleReaction(message.id, emoji)
-                                            },
-                                            onOpenTheaterVideo = { videoId ->
-                                                viewModel.openTheaterVideo(videoId)
-                                            },
-                                            voicePlaybackSpeed = uiState.voicePlaybackSpeed,
-                                            onToggleVoiceSpeed = {
-                                                viewModel.toggleVoiceSpeed()
-                                            },
-                                            isHighlighted = isHighlighted,
-                                            onReplyQuoteClick = { replyId ->
-                                                if (!replyId.isNullOrBlank()) {
-                                                    val targetIndex = reversedMessages.indexOfFirst { it.id == replyId }
-                                                    if (targetIndex >= 0) {
-                                                        scope.launch {
-                                                            listState.animateScrollToItem(targetIndex)
-                                                            highlightedMessageId = replyId
-                                                            kotlinx.coroutines.delay(1400)
-                                                            highlightedMessageId = null
-                                                        }
-                                                    }
-                                                }
-                                            },
-                                            isPrivateMode = isPrivate,
-                                            senderPhotoUrl = if (isFromMe) uiState.currentUser?.photoUrl else uiState.partnerUser?.photoUrl
-                                        )
-                                    }
-                                }
-                                if (isSelectionMode) {
-                                    // Covers the whole row, so a tap selects the message instead of opening media,
-                                    // playing audio or swiping to reply
-                                    Box(
-                                        modifier = Modifier
-                                            .matchParentSize()
-                                            .pointerInput(message.id) {
-                                                detectTapGestures(
-                                                    onTap = { toggleMessageSelection(message.id) },
-                                                    onLongPress = { toggleMessageSelection(message.id) }
-                                                )
-                                            }
-                                            .testTag("chat_select_${message.id}")
-                                    )
-                                }
-                            }
+                        // A message that arrives while the chat is open lands with a spring
+                        val isFreshArrival = remember(message.id) {
+                            index <= 1 && initialSnapshotTaken[0] &&
+                                message.id !in initialMessageIds && landedMessageIds.add(message.id)
                         }
+                        ChatMessageRow(
+                            message = message,
+                            isFromMe = isFromMe,
+                            isFirstOfDay = isFirstOfDay,
+                            isFreshArrival = isFreshArrival,
+                            isPrivate = uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE,
+                            isDark = isDark,
+                            isHighlighted = highlightedMessageId == message.id,
+                            isSelectionMode = isSelectionMode,
+                            isSelected = isSelectionMode && message.id in selectedItemIds,
+                            isPlayingAudio = currentPlayingId == message.id && isAudioPlaying,
+                            audioProgress = { if (currentPlayingIdState.value == message.id) audioProgressState.value else 0f },
+                            gallerySize = uiState.gallerySize,
+                            voicePlaybackSpeed = uiState.voicePlaybackSpeed,
+                            senderPhotoUrl = if (isFromMe) uiState.currentUser?.photoUrl else uiState.partnerUser?.photoUrl,
+                            actions = rowActions,
+                            // Rows glide aside when messages are added or deleted instead of jumping;
+                            // new arrivals get their own landing
+                            modifier = Modifier.animateItem(
+                                fadeInSpec = null,
+                                placementSpec = spring(
+                                    dampingRatio = 0.86f,
+                                    stiffness = Spring.StiffnessMediumLow,
+                                    visibilityThreshold = IntOffset.VisibilityThreshold
+                                ),
+                                fadeOutSpec = tween(180)
+                            )
+                        )
                     }
 
                     // 1. Loading older messages indicator (shown at top of list while paginating)
@@ -1512,10 +1353,13 @@ fun ChatScreen(
                     // Strictly 2-Person Beginning of Chat Banner (shown when pagination is exhausted)
             } // Box content end
 
+                // Only at the bottom: while reading older messages it would push the list up and down
+                // (the header still says "typing…")
+                val isAtBottom by remember { derivedStateOf { listState.firstVisibleItemIndex <= 1 } }
                 PartnerTypingBubble(
                     visible = (uiState.isPartnerTyping || uiState.isPartnerRecordingAudio) &&
                         uiState.chatExperienceMode != com.example.ui.chat.ChatExperienceMode.PRIVATE &&
-                        !uiState.isSearching,
+                        !uiState.isSearching && isAtBottom,
                     isRecording = uiState.isPartnerRecordingAudio,
                     partnerPhotoUrl = partner?.photoUrl,
                     partnerName = partnerName,
@@ -2168,6 +2012,193 @@ private fun ChatSelectionTopBar(
             windowInsets = WindowInsets.statusBars
         )
         HorizontalDivider(thickness = 1.dp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+    }
+}
+
+/**
+ * Everything a message row can ask of the chat screen. One instance per screen, so rows receive
+ * the same object every time instead of fresh lambdas.
+ */
+@Stable
+private class ChatRowActions(
+    val playAudio: (Message) -> Unit,
+    val seekAudio: (Message, Float) -> Unit,
+    val openMedia: (message: Message, url: String, siblings: List<String>?) -> Unit,
+    val reply: (Message) -> Unit,
+    val longPress: (message: Message, bounds: Rect) -> Unit,
+    val react: (message: Message, emoji: String) -> Unit,
+    val openTheaterVideo: (String) -> Unit,
+    val toggleVoiceSpeed: () -> Unit,
+    val jumpToReply: (String?) -> Unit,
+    val toggleSelection: (String) -> Unit
+)
+
+/**
+ * One message in the chat list: date separator, landing/selection/highlight animations and the
+ * selection overlay. It only takes plain values, the message and the shared [actions], so a row is
+ * skipped when unrelated chat state (typing, presence, upload or playback progress) changes.
+ */
+@Composable
+private fun ChatMessageRow(
+    message: Message,
+    isFromMe: Boolean,
+    isFirstOfDay: Boolean,
+    isFreshArrival: Boolean,
+    isPrivate: Boolean,
+    isDark: Boolean,
+    isHighlighted: Boolean,
+    isSelectionMode: Boolean,
+    isSelected: Boolean,
+    isPlayingAudio: Boolean,
+    audioProgress: () -> Float,
+    gallerySize: String,
+    voicePlaybackSpeed: Float,
+    senderPhotoUrl: String?,
+    actions: ChatRowActions,
+    modifier: Modifier = Modifier
+) {
+    Column(modifier = modifier.fillMaxWidth()) {
+        if (isFirstOfDay) {
+            val dateSep = formatDateSeparator(message.timestamp)
+            if (dateSep.isNotEmpty()) {
+                DateSeparatorBadge(dateText = dateSep, isPrivateMode = isPrivate, isDark = isDark)
+            }
+            if (isToday(message.timestamp)) {
+                StrictlyTwoPersonBanner(isPrivateMode = isPrivate, isDark = isDark)
+            }
+        }
+
+        // Read marking is handled in the batched LaunchedEffect above the Scaffold.
+        // Do NOT put Firestore writes inside LazyColumn items — they fire on every scroll.
+
+        val selectionAccent = if (isPrivate) (if (isDark) Color(0xFF9CA3AF) else Color(0xFF6B7280)) else RoseGoldPrimary
+
+        // A message that arrives while the chat is open lands with a spring: sent ones rise from
+        // the composer, received ones slide in from the left
+        val landing = remember(message.id) { Animatable(if (isFreshArrival) 0f else 1f) }
+        LaunchedEffect(message.id) {
+            if (isFreshArrival) landing.animateTo(1f, spring(dampingRatio = 0.62f, stiffness = 420f))
+        }
+
+        // Jump-to-message highlight: a quick bump, and a glow that fades once released
+        val glow = remember(message.id) { Animatable(0f) }
+        val bump = remember(message.id) { Animatable(0f) }
+        LaunchedEffect(isHighlighted) {
+            if (isHighlighted) {
+                launch {
+                    bump.animateTo(1f, spring(dampingRatio = 0.5f, stiffness = 900f))
+                    bump.animateTo(0f, spring(dampingRatio = 0.45f, stiffness = 300f))
+                }
+                glow.animateTo(1f, tween(200))
+            } else {
+                glow.animateTo(0f, tween(650))
+            }
+        }
+        val glowColor = if (isPrivate) (if (isDark) Color(0xFF6B7280) else Color(0xFF9CA3AF)) else RoseGoldPrimary
+        val rowTint by animateColorAsState(
+            targetValue = if (isSelected) selectionAccent.copy(alpha = if (isDark) 0.22f else 0.14f) else Color.Transparent,
+            animationSpec = tween(160),
+            label = "row_tint"
+        )
+        val bubbleStartPadding by animateDpAsState(
+            targetValue = if (isSelectionMode) 6.dp else 16.dp,
+            animationSpec = spring(dampingRatio = 0.85f, stiffness = Spring.StiffnessMediumLow),
+            label = "row_start_padding"
+        )
+        // Where the message sits on screen, for the long-press focus view
+        val anchor = remember(message.id) { arrayOf(Rect.Zero) }
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .drawBehind { if (rowTint.alpha > 0f) drawRect(rowTint) }
+                .then(
+                    if (isFreshArrival) {
+                        Modifier.graphicsLayer {
+                            val p = landing.value
+                            alpha = p.coerceIn(0f, 1f)
+                            val s = 0.86f + 0.14f * p
+                            scaleX = s
+                            scaleY = s
+                            transformOrigin = TransformOrigin(if (isFromMe) 1f else 0f, 1f)
+                            translationY = (1f - p) * 28.dp.toPx()
+                            if (!isFromMe) translationX = (1f - p) * -20.dp.toPx()
+                        }
+                    } else Modifier
+                )
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                AnimatedVisibility(
+                    visible = isSelectionMode,
+                    enter = expandHorizontally(spring(dampingRatio = 0.85f, stiffness = Spring.StiffnessMediumLow)) +
+                        fadeIn(tween(150)) +
+                        scaleIn(spring(dampingRatio = 0.5f, stiffness = 600f), initialScale = 0.4f),
+                    exit = shrinkHorizontally(tween(160)) + fadeOut(tween(120))
+                ) {
+                    SelectionCheckBadge(
+                        isSelected = isSelected,
+                        accentColor = selectionAccent,
+                        modifier = Modifier.padding(start = 14.dp)
+                    )
+                }
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(start = bubbleStartPadding, end = 16.dp)
+                        .onGloballyPositioned { anchor[0] = it.boundsInRoot() }
+                        .graphicsLayer {
+                            val grow = 1f + 0.035f * bump.value
+                            scaleX = grow
+                            scaleY = grow
+                            transformOrigin = TransformOrigin(if (isFromMe) 1f else 0f, 0.5f)
+                        }
+                        .drawBehind {
+                            val g = glow.value
+                            if (g > 0f) {
+                                val corner = CornerRadius(16.dp.toPx())
+                                drawRoundRect(glowColor.copy(alpha = 0.16f * g), cornerRadius = corner)
+                                drawRoundRect(glowColor.copy(alpha = g), cornerRadius = corner, style = Stroke(2.dp.toPx()))
+                            }
+                        }
+                ) {
+                    MessageBubble(
+                        message = message,
+                        isFromMe = isFromMe,
+                        isPlayingAudio = isPlayingAudio,
+                        audioProgress = audioProgress,
+                        gallerySize = gallerySize,
+                        onPlayAudio = { actions.playAudio(message) },
+                        onSeekAudio = { progress -> actions.seekAudio(message, progress) },
+                        onImageClick = { url -> actions.openMedia(message, url, null) },
+                        onImageClickWithList = { url, allUrls -> actions.openMedia(message, url, allUrls) },
+                        onSwipeToReply = { actions.reply(message) },
+                        onLongClick = { actions.longPress(message, anchor[0]) },
+                        onReactionClick = { emoji -> actions.react(message, emoji) },
+                        onOpenTheaterVideo = actions.openTheaterVideo,
+                        voicePlaybackSpeed = voicePlaybackSpeed,
+                        onToggleVoiceSpeed = actions.toggleVoiceSpeed,
+                        isHighlighted = isHighlighted,
+                        onReplyQuoteClick = actions.jumpToReply,
+                        isPrivateMode = isPrivate,
+                        senderPhotoUrl = senderPhotoUrl
+                    )
+                }
+            }
+            if (isSelectionMode) {
+                // Covers the whole row, so a tap selects the message instead of opening media,
+                // playing audio or swiping to reply
+                Box(
+                    modifier = Modifier
+                        .matchParentSize()
+                        .pointerInput(message.id) {
+                            detectTapGestures(
+                                onTap = { actions.toggleSelection(message.id) },
+                                onLongPress = { actions.toggleSelection(message.id) }
+                            )
+                        }
+                        .testTag("chat_select_${message.id}")
+                )
+            }
+        }
     }
 }
 

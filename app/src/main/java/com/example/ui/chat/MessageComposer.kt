@@ -1,6 +1,7 @@
 package com.example.ui.chat
 
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
@@ -22,9 +23,11 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
@@ -36,7 +39,9 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -58,9 +63,11 @@ import com.example.ui.theme.appHorizontalGradient
 import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.math.PI
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun MessageComposer(
     text: String,
@@ -97,15 +104,82 @@ fun MessageComposer(
     var dragOffsetY by remember { mutableFloatStateOf(0f) }
     var isVideoMode by remember { mutableStateOf(false) }
 
+    // The emoji board and the keyboard take turns in the same space under the message box. The
+    // board is as tall as the keyboard, and while one slides away the other fills exactly the
+    // space it leaves, so the message box stays put when switching between them.
+    val density = LocalDensity.current
+    val keyboardInsets = WindowInsets.ime.exclude(WindowInsets.navigationBars)
+    val keyboardTargetInsets = WindowInsets.imeAnimationTarget.exclude(WindowInsets.navigationBars)
+    var keyboardHeightPx by rememberSaveable { mutableIntStateOf(0) }
+    // 0 = board hidden, 1 = board at full height (before subtracting the keyboard)
+    val emojiBoardOpen = remember { Animatable(0f) }
+    val isEmojiBoardShown by remember { derivedStateOf { showEmojiPanel || emojiBoardOpen.value > 0f } }
+
+    // The keyboard's full height, taken each time it finishes opening
+    LaunchedEffect(Unit) {
+        snapshotFlow {
+            val now = keyboardInsets.getBottom(density)
+            if (now > 0 && now == keyboardTargetInsets.getBottom(density)) now else 0
+        }.collect { settled -> if (settled > 0) keyboardHeightPx = settled }
+    }
+
+    /** The board shrinks away under the rising keyboard, then goes. */
+    fun giveWayToKeyboard() {
+        showEmojiPanel = false
+        scope.launch {
+            val keyboardOpened = withTimeoutOrNull(800) {
+                snapshotFlow {
+                    val now = keyboardInsets.getBottom(density)
+                    now > 0 && now == keyboardTargetInsets.getBottom(density)
+                }.first { it }
+            } != null
+            if (showEmojiPanel) return@launch
+            if (keyboardOpened) emojiBoardOpen.snapTo(0f) else emojiBoardOpen.animateTo(0f, tween(180))
+        }
+    }
+
+    fun openEmojiBoard() {
+        val keyboardNow = keyboardInsets.getBottom(density)
+        if (keyboardNow > 0) keyboardHeightPx = keyboardNow
+        showEmojiPanel = true
+        keyboardController?.hide()
+        scope.launch {
+            // Taking over from the keyboard: full height at once, uncovered as the keyboard slides down
+            if (keyboardNow > 0) emojiBoardOpen.snapTo(1f)
+            else emojiBoardOpen.animateTo(1f, tween(240, easing = FastOutSlowInEasing))
+        }
+    }
+
+    fun switchToKeyboard() {
+        focusRequester.requestFocus()
+        keyboardController?.show()
+        giveWayToKeyboard()
+    }
+
+    fun closeEmojiBoard() {
+        if (!showEmojiPanel) return
+        showEmojiPanel = false
+        scope.launch { emojiBoardOpen.animateTo(0f, tween(200, easing = FastOutSlowInEasing)) }
+    }
+
+    // Tapping the message box while the board is open brings the keyboard back in its place
+    LaunchedEffect(Unit) {
+        snapshotFlow { keyboardTargetInsets.getBottom(density) > 0 }
+            .collect { keyboardComing -> if (keyboardComing && showEmojiPanel) giveWayToKeyboard() }
+    }
+
+    // Back closes the emoji board first, before anything else on the chat screen
+    BackHandler(enabled = showEmojiPanel) { closeEmojiBoard() }
+
     // When replyingTo message is set (glide/swipe to reply), open keyboard and focus input automatically
     LaunchedEffect(replyingTo) {
         if (replyingTo != null) {
-            showEmojiPanel = false
             kotlinx.coroutines.delay(60)
             try {
                 focusRequester.requestFocus()
                 keyboardController?.show()
             } catch (_: Exception) {}
+            if (showEmojiPanel) giveWayToKeyboard()
             kotlinx.coroutines.delay(120)
             try {
                 focusRequester.requestFocus()
@@ -120,6 +194,8 @@ fun MessageComposer(
             isLockedRecording = false
             dragOffsetX = 0f
             dragOffsetY = 0f
+        } else {
+            closeEmojiBoard()
         }
     }
 
@@ -265,7 +341,12 @@ fun MessageComposer(
             .fillMaxWidth()
             .background(barBg)
     ) {
-        // Reply bar preview - Above the composer row
+        // Reply preview: its own small card above the message box, lined up with it (clear of the
+        // mic/send button), so the close button is easy to hit
+        val replyAccent = if (isPrivateMode) (if (isDark) Color(0xFF9CA3AF) else Color(0xFF6B7280)) else MaterialTheme.colorScheme.primary
+        // Keeps the card filled while it animates away after the reply is cleared
+        val lastReply = remember { arrayOfNulls<Message>(1) }
+        if (replyingTo != null) lastReply[0] = replyingTo
         AnimatedVisibility(
             visible = replyingTo != null,
             enter = expandVertically(
@@ -276,67 +357,69 @@ fun MessageComposer(
                 shrinkTowards = Alignment.Bottom,
                 animationSpec = tween(160)
             ) + fadeOut(animationSpec = tween(120)),
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 2.dp)
+            modifier = Modifier
+                .widthIn(max = 600.dp)
+                .fillMaxWidth()
+                .align(Alignment.CenterHorizontally)
+                .padding(start = 12.dp, end = 70.dp, top = 8.dp)
         ) {
-            if (replyingTo != null) {
-                Surface(
-                    color = Color.Transparent,
-                    shadowElevation = 0.dp,
-                    modifier = Modifier.fillMaxWidth()
+            val reply = replyingTo ?: lastReply[0]
+            if (reply != null) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(pillBg)
+                        .border(BorderStroke(1.dp, pillBorder), RoundedCornerShape(14.dp))
+                        .padding(start = 10.dp, top = 4.dp, bottom = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(
+                    Box(
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 4.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                            .width(3.dp)
+                            .height(26.dp)
+                            .background(replyAccent, CircleShape)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.Reply,
+                        contentDescription = null,
+                        tint = replyAccent,
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        horizontalAlignment = Alignment.Start
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .width(3.5.dp)
-                                .height(30.dp)
-                                .background(if (isPrivateMode) (if (isDark) Color(0xFF9CA3AF) else Color(0xFF6B7280)) else MaterialTheme.colorScheme.primary, CircleShape)
+                        Text(
+                            text = "Replying to ${reply.senderName ?: "Partner"}",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isPrivateMode) (if (isDark) Color(0xFFECECEC) else Color(0xFF111827)) else MaterialTheme.colorScheme.primary,
+                            maxLines = 1,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                         )
-                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = reply.text,
+                            fontSize = 11.5.sp,
+                            maxLines = 1,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                        )
+                    }
+                    IconButton(
+                        onClick = onDismissReply,
+                        modifier = Modifier
+                            .size(36.dp)
+                            .testTag("composer_cancel_reply")
+                    ) {
                         Icon(
-                            imageVector = Icons.AutoMirrored.Filled.Reply,
-                            contentDescription = null,
-                            tint = if (isPrivateMode) (if (isDark) Color(0xFF9CA3AF) else Color(0xFF6B7280)) else MaterialTheme.colorScheme.primary,
+                            Icons.Default.Close,
+                            contentDescription = "Cancel reply",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(16.dp)
                         )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Column(
-                            modifier = Modifier.weight(1f),
-                            horizontalAlignment = Alignment.Start
-                        ) {
-                            Text(
-                                text = "Replying to ${replyingTo.senderName ?: "Partner"}",
-                                fontSize = 11.5.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = if (isPrivateMode) (if (isDark) Color(0xFFECECEC) else Color(0xFF111827)) else MaterialTheme.colorScheme.primary,
-                                textAlign = androidx.compose.ui.text.style.TextAlign.Start,
-                                maxLines = 1,
-                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                            )
-                            Text(
-                                text = replyingTo.text,
-                                fontSize = 12.sp,
-                                maxLines = 1,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                textAlign = androidx.compose.ui.text.style.TextAlign.Start,
-                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                            )
-                        }
-                        IconButton(
-                            onClick = onDismissReply,
-                            modifier = Modifier.size(26.dp)
-                        ) {
-                            Icon(
-                                Icons.Default.Close,
-                                contentDescription = "Cancel reply",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(16.dp)
-                            )
-                        }
                     }
                 }
             }
@@ -350,7 +433,7 @@ fun MessageComposer(
                 .widthIn(max = 600.dp)
                 .fillMaxWidth()
                 .align(Alignment.CenterHorizontally)
-                .padding(start = 12.dp, end = 12.dp, top = 2.dp, bottom = 8.dp),
+                .padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 8.dp),
             verticalAlignment = Alignment.Bottom
         ) {
             Column(
@@ -582,14 +665,7 @@ fun MessageComposer(
                     if (!isPrivateMode) {
                         // Far Left: 🙂 Emoji button
                         IconButton(
-                            onClick = {
-                                if (showEmojiPanel) {
-                                    showEmojiPanel = false
-                                } else {
-                                    keyboardController?.hide()
-                                    showEmojiPanel = true
-                                }
-                            },
+                            onClick = { if (showEmojiPanel) switchToKeyboard() else openEmojiBoard() },
                             modifier = Modifier
                                 .size(38.dp)
                                 .testTag("composer_emoji_button")
@@ -768,7 +844,7 @@ fun MessageComposer(
                                     )
                                     .bounceClick {
                                         onSendText()
-                                        showEmojiPanel = false
+                                        closeEmojiBoard()
                                     }
                                     .testTag("composer_send_button"),
                                 contentAlignment = Alignment.Center
@@ -1030,19 +1106,28 @@ fun MessageComposer(
             }
         }
 
-        // 22. WhatsApp/Telegram-Style Tabbed Emoji Panel
-        AnimatedVisibility(
-            visible = showEmojiPanel && !isRecordingVoice,
-            enter = expandVertically(animationSpec = tween(200)) + fadeIn(tween(200)),
-            exit = shrinkVertically(animationSpec = tween(160)) + fadeOut(tween(160))
-        ) {
+        // 22. WhatsApp/Telegram-Style Tabbed Emoji Panel, in the keyboard's place
+        if (isEmojiBoardShown && !isRecordingVoice) {
+            val boardHeightPx = if (keyboardHeightPx > 0) keyboardHeightPx else with(density) { 280.dp.roundToPx() }
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clipToBounds()
+                    .layout { measurable, constraints ->
+                        // Only the part the keyboard isn't covering takes space; read here, so the
+                        // keyboard's slide moves the board without recomposing the composer
+                        val shownPx = (boardHeightPx * emojiBoardOpen.value - keyboardInsets.getBottom(this))
+                            .roundToInt()
+                            .coerceIn(0, boardHeightPx)
+                        val board = measurable.measure(constraints.copy(minHeight = boardHeightPx, maxHeight = boardHeightPx))
+                        layout(board.width, shownPx) { board.place(0, 0) }
+                    }
+            ) {
             Surface(
                 color = if (isDark) MaterialTheme.colorScheme.surfaceVariant else Color(0xFFF8FAFC),
                 border = BorderStroke(1.dp, pillBorder),
-                shape = RoundedCornerShape(bottomStart = 16.dp, bottomEnd = 16.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(280.dp)
+                shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
+                modifier = Modifier.fillMaxSize()
             ) {
                 Column(modifier = Modifier.fillMaxSize()) {
                     // Category Tab Row (bottom-style like WhatsApp)
@@ -1081,7 +1166,7 @@ fun MessageComposer(
                         
                         // Close button at end
                         IconButton(
-                            onClick = { showEmojiPanel = false },
+                            onClick = { closeEmojiBoard() },
                             modifier = Modifier.size(32.dp)
                         ) {
                             Icon(
@@ -1119,12 +1204,13 @@ fun MessageComposer(
                                         .padding(vertical = 4.dp),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    Text(text = emoji, fontSize = 40.sp)
+                                    Text(text = emoji, fontSize = 34.sp)
                                 }
                             }
                         }
                     }
                 }
+            }
             }
         }
     }

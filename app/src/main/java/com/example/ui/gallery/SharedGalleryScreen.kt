@@ -74,7 +74,9 @@ data class GalleryMediaItem(
     val isVideo: Boolean,
     val durationSeconds: Int,
     val timestamp: Long,
-    val originalMessage: Message
+    val originalMessage: Message,
+    // Small preview for the grid; the viewer opens mediaUrl
+    val previewUrl: String = mediaUrl
 )
 
 data class GalleryLinkItem(
@@ -256,6 +258,7 @@ fun SharedGalleryScreen(
                                 id = "${msg.id}_${url.hashCode()}",
                                 messageId = msg.id,
                                 mediaUrl = url,
+                                previewUrl = msg.thumbnailFor(url),
                                 isVideo = false,
                                 durationSeconds = 0,
                                 timestamp = msg.timestamp,
@@ -722,8 +725,8 @@ fun SharedGalleryScreen(
                                                 )
                                             }
                                     ) {
-                                        val modelData = remember(item.mediaUrl) {
-                                            val url = item.mediaUrl
+                                        val modelData = remember(item.previewUrl) {
+                                            val url = item.previewUrl
                                             if (url.startsWith("data:image")) {
                                                 try {
                                                     val base64 = url.substringAfter("base64,")
@@ -1321,7 +1324,7 @@ fun SharedGalleryScreen(
                                             if (starredUrls.isNotEmpty() && msg.getTypedType() == MessageType.IMAGE) {
                                                 if (starredUrls.size == 1) {
                                                     AsyncImage(
-                                                        model = starredUrls[0],
+                                                        model = msg.thumbnailFor(starredUrls[0]),
                                                         contentDescription = null,
                                                         contentScale = ContentScale.Crop,
                                                         modifier = Modifier
@@ -1342,7 +1345,7 @@ fun SharedGalleryScreen(
                                                     ) {
                                                         starredUrls.forEach { starUrl ->
                                                             AsyncImage(
-                                                                model = starUrl,
+                                                                model = msg.thumbnailFor(starUrl),
                                                                 contentDescription = null,
                                                                 contentScale = ContentScale.Crop,
                                                                 modifier = Modifier

@@ -21,6 +21,12 @@
 }
 -keep class com.example.data.model.** { *; }
 
+# Local backup payload (Moshi). Generated adapters are kept by Moshi's own rules; the reflective
+# KotlinJsonAdapterFactory fallback reads Kotlin metadata
+-keep class com.example.backup.BackupManifest { *; }
+-keep class com.example.backup.FullAppBackupPayload { *; }
+-keep class kotlin.Metadata { *; }
+
 # Security Preferences & Application
 -keep class com.example.security.** { *; }
 -keep class com.example.CherishApplication { *; }

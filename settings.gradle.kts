@@ -25,3 +25,4 @@ dependencyResolutionManagement {
 rootProject.name = "Cherish"
 
 include(":app")
+include(":baselineprofile")

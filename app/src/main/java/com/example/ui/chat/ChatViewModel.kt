@@ -15,6 +15,10 @@ import com.example.data.repository.ChatRepository
 import com.example.data.repository.MediaRepository
 import com.example.CherishApplication
 import com.example.security.SecurityPreferences
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.io.File
@@ -268,8 +272,19 @@ class ChatViewModel(
     val isQueryExhausted: Boolean
         get() = chatRepository.isQueryExhausted
 
+    private var typingIdleJob: Job? = null
+
+    /** Called on every keystroke; the repository only writes when the value changes. */
     fun onTypingChanged(isTyping: Boolean) {
+        typingIdleJob?.cancel()
         authRepository.setTyping(isTyping)
+        if (isTyping) {
+            // Stop showing "typing…" to the partner once the keyboard has been idle a while
+            typingIdleJob = viewModelScope.launch {
+                kotlinx.coroutines.delay(TYPING_IDLE_TIMEOUT_MS)
+                authRepository.setTyping(false)
+            }
+        }
     }
 
     fun sendTextMessage(text: String) {
@@ -299,6 +314,8 @@ class ChatViewModel(
                     File(uri.path ?: "")
                 }
 
+                // The preview uploads alongside the photo, so it doesn't delay the send
+                val thumbnail = if (type == MessageType.IMAGE) async { uploadThumbnail(preparedFile, coupleId) } else null
                 val uploadResult = mediaRepository.uploadFile(
                     file = preparedFile,
                     type = type,
@@ -308,18 +325,20 @@ class ChatViewModel(
 
                 uploadResult.fold(
                     onSuccess = { downloadUrl ->
+                        val thumbnailUrl = thumbnail?.await().orEmpty()
                         chatRepository.sendMessage(
                             text = if (type == MessageType.IMAGE) "Sent a photo" else "Sent a file",
                             type = type,
                             mediaUrl = downloadUrl,
                             mediaName = mediaName ?: preparedFile.name,
                             mediaSize = preparedFile.length(),
-                            replyTo = _uiState.value.replyingToMessage
+                            replyTo = _uiState.value.replyingToMessage,
+                            thumbnailUrls = if (thumbnailUrl.isNotBlank()) listOf(thumbnailUrl) else emptyList()
                         )
                         _uiState.update { it.copy(replyingToMessage = null) }
                     },
                     onFailure = {
-                        // ignore or handle error
+                        thumbnail?.cancel()
                     }
                 )
             } finally {
@@ -328,16 +347,32 @@ class ChatViewModel(
         }
     }
 
+    /**
+     * Uploads a small preview of a prepared photo; "" when it can't. Only real storage URLs are
+     * used, never the inline data fallback, so previews can't bloat the message document.
+     */
+    private suspend fun uploadThumbnail(image: File, coupleId: String): String {
+        val thumbnail = mediaRepository.createThumbnail(image) ?: return ""
+        val url = mediaRepository.uploadFile(file = thumbnail, type = MessageType.IMAGE, coupleId = coupleId)
+            .getOrNull()
+            .orEmpty()
+        return if (url.startsWith("https://") || url.startsWith("http://")) url else ""
+    }
+
     fun sendMultipleImages(uris: List<Uri>) {
         if (uris.isEmpty()) return
         viewModelScope.launch {
             _uiState.update { it.copy(isUploadingMedia = true, uploadProgress = 0.05f) }
             val uploadedUrls = mutableListOf<String>()
+            // Same order as uploadedUrls; each resolves to "" where a preview couldn't be made
+            val thumbnails = mutableListOf<Deferred<String>>()
             val coupleId = chatRepository.getConversationId()
             try {
                 for ((index, uri) in uris.withIndex()) {
                     try {
                         val preparedFile = mediaRepository.compressAndPrepareImage(uri)
+                        // The preview uploads alongside the photo, so it doesn't delay the send
+                        val thumbnail = async { uploadThumbnail(preparedFile, coupleId) }
                         val uploadResult = mediaRepository.uploadFile(
                             file = preparedFile,
                             type = MessageType.IMAGE,
@@ -347,18 +382,24 @@ class ChatViewModel(
                                 _uiState.update { it.copy(uploadProgress = overall) }
                             }
                         )
-                        uploadResult.onSuccess { url ->
+                        val url = uploadResult.getOrNull()
+                        if (url != null) {
                             uploadedUrls.add(url)
+                            thumbnails.add(thumbnail)
+                        } else {
+                            thumbnail.cancel()
                         }
                     } catch (_: Exception) {}
                 }
                 if (uploadedUrls.isNotEmpty()) {
+                    val thumbnailUrls = thumbnails.awaitAll()
                     chatRepository.sendMessage(
                         text = if (uploadedUrls.size == 1) "Sent a photo" else "Sent ${uploadedUrls.size} photos",
                         type = MessageType.IMAGE,
                         mediaUrl = uploadedUrls.firstOrNull(),
                         mediaUrls = uploadedUrls,
-                        replyTo = _uiState.value.replyingToMessage
+                        replyTo = _uiState.value.replyingToMessage,
+                        thumbnailUrls = if (thumbnailUrls.any { it.isNotBlank() }) thumbnailUrls else emptyList()
                     )
                     _uiState.update { it.copy(replyingToMessage = null) }
                 }
@@ -466,9 +507,10 @@ class ChatViewModel(
         }
     }
 
-    fun markMessageAsRead(messageId: String) {
+    fun markMessagesAsRead(messageIds: List<String>) {
+        if (messageIds.isEmpty()) return
         viewModelScope.launch {
-            chatRepository.markAsRead(messageId)
+            chatRepository.markAsRead(messageIds)
         }
     }
 
@@ -726,5 +768,9 @@ class ChatViewModel(
         voiceRecorderHelper.cancelRecording()
         authRepository.setTyping(false)
         authRepository.setRecordingAudio(false)
+    }
+
+    private companion object {
+        const val TYPING_IDLE_TIMEOUT_MS = 5_000L
     }
 }

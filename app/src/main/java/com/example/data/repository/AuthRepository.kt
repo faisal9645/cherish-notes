@@ -783,6 +783,7 @@ class AuthRepository(private val context: Context) {
             if (!online) {
                 updates["typingInChat"] = false
                 updates["recordingAudioInChat"] = false
+                typingWritten = uid to false
             }
             firestore?.collection("users")?.document(uid)?.set(
                 updates,
@@ -793,8 +794,13 @@ class AuthRepository(private val context: Context) {
         }
     }
 
+    // Last "typing" value written per user, so every keystroke doesn't cost a Firestore write
+    @Volatile private var typingWritten: Pair<String, Boolean>? = null
+
     fun setTyping(typing: Boolean) {
         val uid = getCurrentUserId()
+        if (typingWritten == uid to typing) return
+        typingWritten = uid to typing
         try {
             firestore?.collection("users")?.document(uid)?.set(
                 mapOf("typingInChat" to typing),

@@ -38,9 +38,12 @@ fun AdaptiveMediaGrid(
     urls: List<String>,
     gallerySize: String = "large",
     onImageClick: (index: Int, url: String) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    previewUrls: List<String> = emptyList()
 ) {
     if (urls.isEmpty()) return
+    // Tiles show the small preview when there is one; taps still hand out the full photo
+    fun shown(index: Int): String = previewUrls.getOrNull(index)?.takeIf { it.isNotBlank() } ?: urls[index]
 
     val gridHeight: Dp = when (gallerySize.lowercase()) {
         "small" -> 130.dp
@@ -72,7 +75,7 @@ fun AdaptiveMediaGrid(
             // Case 1: Single Photo (No black top/bottom bars, perfectly cropped to thumb height)
             urls.size == 1 -> {
                 MediaTile(
-                    url = urls[0],
+                    url = shown(0),
                     contentScale = ContentScale.FillWidth,
                     modifier = Modifier
                         .fillMaxWidth()
@@ -92,7 +95,7 @@ fun AdaptiveMediaGrid(
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     MediaTile(
-                        url = urls[0],
+                        url = shown(0),
                         contentScale = ContentScale.Crop,
                         modifier = Modifier
                             .weight(1f)
@@ -101,7 +104,7 @@ fun AdaptiveMediaGrid(
                             .clickable { onImageClick(0, urls[0]) }
                     )
                     MediaTile(
-                        url = urls[1],
+                        url = shown(1),
                         contentScale = ContentScale.Crop,
                         modifier = Modifier
                             .weight(1f)
@@ -121,7 +124,7 @@ fun AdaptiveMediaGrid(
                     horizontalArrangement = Arrangement.spacedBy(spacing)
                 ) {
                     MediaTile(
-                        url = urls[0],
+                        url = shown(0),
                         contentScale = ContentScale.Crop,
                         modifier = Modifier
                             .weight(1.2f)
@@ -135,7 +138,7 @@ fun AdaptiveMediaGrid(
                         verticalArrangement = Arrangement.spacedBy(spacing)
                     ) {
                         MediaTile(
-                            url = urls[1],
+                            url = shown(1),
                             contentScale = ContentScale.Crop,
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -143,7 +146,7 @@ fun AdaptiveMediaGrid(
                                 .clickable { onImageClick(1, urls[1]) }
                         )
                         MediaTile(
-                            url = urls[2],
+                            url = shown(2),
                             contentScale = ContentScale.Crop,
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -169,14 +172,14 @@ fun AdaptiveMediaGrid(
                         horizontalArrangement = Arrangement.spacedBy(spacing)
                     ) {
                         MediaTile(
-                            url = urls[0],
+                            url = shown(0),
                             modifier = Modifier
                                 .weight(1f)
                                 .fillMaxHeight()
                                 .clickable { onImageClick(0, urls[0]) }
                         )
                         MediaTile(
-                            url = urls[1],
+                            url = shown(1),
                             modifier = Modifier
                                 .weight(1f)
                                 .fillMaxHeight()
@@ -190,14 +193,14 @@ fun AdaptiveMediaGrid(
                         horizontalArrangement = Arrangement.spacedBy(spacing)
                     ) {
                         MediaTile(
-                            url = urls[2],
+                            url = shown(2),
                             modifier = Modifier
                                 .weight(1f)
                                 .fillMaxHeight()
                                 .clickable { onImageClick(2, urls[2]) }
                         )
                         MediaTile(
-                            url = urls[3],
+                            url = shown(3),
                             modifier = Modifier
                                 .weight(1f)
                                 .fillMaxHeight()
@@ -223,14 +226,14 @@ fun AdaptiveMediaGrid(
                         horizontalArrangement = Arrangement.spacedBy(spacing)
                     ) {
                         MediaTile(
-                            url = urls[0],
+                            url = shown(0),
                             modifier = Modifier
                                 .weight(1f)
                                 .fillMaxHeight()
                                 .clickable { onImageClick(0, urls[0]) }
                         )
                         MediaTile(
-                            url = urls[1],
+                            url = shown(1),
                             modifier = Modifier
                                 .weight(1f)
                                 .fillMaxHeight()
@@ -244,7 +247,7 @@ fun AdaptiveMediaGrid(
                         horizontalArrangement = Arrangement.spacedBy(spacing)
                     ) {
                         MediaTile(
-                            url = urls[2],
+                            url = shown(2),
                             modifier = Modifier
                                 .weight(1f)
                                 .fillMaxHeight()
@@ -258,7 +261,7 @@ fun AdaptiveMediaGrid(
                             contentAlignment = Alignment.Center
                         ) {
                             MediaTile(
-                                url = urls[3],
+                                url = shown(3),
                                 modifier = Modifier.fillMaxSize()
                             )
                             // Dimmed overlay with +N badge

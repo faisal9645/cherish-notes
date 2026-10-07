@@ -47,6 +47,11 @@ import com.example.util.VideoThumbnailHelper
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 
+/** Only one video note plays at a time: starting one stops (and releases) the others. */
+private object VideoNotePlayback {
+    var activeKey by mutableStateOf<Any?>(null)
+}
+
 @Composable
 fun CircularVideoNoteView(
     videoUrl: String,
@@ -56,6 +61,9 @@ fun CircularVideoNoteView(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    // The video player is only created once playback is asked for; until then the note shows its
+    // first frame, so a chat full of video notes doesn't start a decoder for each one
+    var playerRequested by remember { mutableStateOf(autoPlay) }
     var isPlaying by remember { mutableStateOf(autoPlay) }
     var shouldPlayWhenReady by remember { mutableStateOf(autoPlay) }
     var isMuted by remember { mutableStateOf(false) }
@@ -64,8 +72,37 @@ fun CircularVideoNoteView(
     var mediaPlayerRef by remember { mutableStateOf<MediaPlayer?>(null) }
     var isVideoReady by remember { mutableStateOf(false) }
     var thumbnailBitmap by remember { mutableStateOf<Bitmap?>(null) }
+    var thumbnailFailed by remember { mutableStateOf(false) }
     var videoWidth by remember { mutableIntStateOf(0) }
     var videoHeight by remember { mutableIntStateOf(0) }
+    val playbackKey = remember { Any() }
+
+    fun releasePlayer() {
+        playerRequested = false
+        isPlaying = false
+        shouldPlayWhenReady = false
+        isVideoReady = false
+        progress = 0f
+    }
+
+    fun startPlayback() {
+        VideoNotePlayback.activeKey = playbackKey
+        playerRequested = true
+        shouldPlayWhenReady = true
+        isPlaying = true
+    }
+
+    // Another note started playing: let this one go back to its still frame
+    LaunchedEffect(playbackKey) {
+        if (autoPlay) VideoNotePlayback.activeKey = playbackKey
+        snapshotFlow { VideoNotePlayback.activeKey === playbackKey }
+            .collect { isActiveNote -> if (!isActiveNote && playerRequested) releasePlayer() }
+    }
+    DisposableEffect(playbackKey) {
+        onDispose {
+            if (VideoNotePlayback.activeKey === playbackKey) VideoNotePlayback.activeKey = null
+        }
+    }
 
     val parsedUri = remember(videoUrl) {
         when {
@@ -78,31 +115,38 @@ fun CircularVideoNoteView(
 
     LaunchedEffect(videoUrl) {
         if (videoUrl.isNotBlank()) {
-            thumbnailBitmap = VideoThumbnailHelper.getThumbnail(context, videoUrl)
+            val bitmap = VideoThumbnailHelper.getThumbnail(context, videoUrl)
+            thumbnailBitmap = bitmap
+            thumbnailFailed = bitmap == null
         }
     }
 
     // Toggle play / pause helper
     val togglePlayPause: () -> Unit = {
-        videoViewRef?.let { vv ->
-            try {
-                if (vv.isPlaying) {
-                    vv.pause()
-                    isPlaying = false
-                    shouldPlayWhenReady = false
-                } else {
-                    vv.start()
-                    isPlaying = true
-                    shouldPlayWhenReady = true
+        if (!playerRequested) {
+            startPlayback()
+        } else {
+            videoViewRef?.let { vv ->
+                try {
+                    if (vv.isPlaying) {
+                        vv.pause()
+                        isPlaying = false
+                        shouldPlayWhenReady = false
+                    } else {
+                        VideoNotePlayback.activeKey = playbackKey
+                        vv.start()
+                        isPlaying = true
+                        shouldPlayWhenReady = true
+                    }
+                } catch (e: Exception) {
+                    Log.w("CircularVideoNoteView", "Toggle play error", e)
+                    isPlaying = !isPlaying
+                    shouldPlayWhenReady = isPlaying
                 }
-            } catch (e: Exception) {
-                Log.w("CircularVideoNoteView", "Toggle play error", e)
+            } ?: run {
                 isPlaying = !isPlaying
                 shouldPlayWhenReady = isPlaying
             }
-        } ?: run {
-            isPlaying = !isPlaying
-            shouldPlayWhenReady = isPlaying
         }
     }
 
@@ -130,15 +174,14 @@ fun CircularVideoNoteView(
         }
     }
 
-    val scaleFactor = remember(videoWidth, videoHeight) {
+    // The VideoView keeps the video's own shape inside the square; one uniform scale then fills the
+    // circle (centre crop). Scaling only one side would stretch the picture.
+    val cropScale = remember(videoWidth, videoHeight) {
         if (videoWidth > 0 && videoHeight > 0) {
             val aspect = videoWidth.toFloat() / videoHeight.toFloat()
-            // CenterCrop inside circle without stretching
-            val scaleX = if (aspect < 1f) (1f / aspect) else 1.0f
-            val scaleY = if (aspect > 1f) aspect else 1.0f
-            Pair(scaleX, scaleY)
+            if (aspect < 1f) 1f / aspect else aspect
         } else {
-            Pair(1.15f, 1.15f)
+            1.15f
         }
     }
 
@@ -160,8 +203,8 @@ fun CircularVideoNoteView(
             },
         contentAlignment = Alignment.Center
     ) {
-        // Video View surface with center-crop
-        AndroidView(
+        // Video View surface with center-crop, only while playback is wanted
+        if (playerRequested) AndroidView(
             factory = { ctx ->
                 VideoView(ctx).apply {
                     setVideoURI(parsedUri)
@@ -203,16 +246,26 @@ fun CircularVideoNoteView(
             update = { vv ->
                 videoViewRef = vv
             },
+            onRelease = { vv ->
+                try {
+                    vv.stopPlayback()
+                } catch (_: Exception) {}
+                if (videoViewRef === vv) {
+                    videoViewRef = null
+                    mediaPlayerRef = null
+                }
+            },
             modifier = Modifier
                 .fillMaxSize()
                 .graphicsLayer {
-                    scaleX = scaleFactor.first
-                    scaleY = scaleFactor.second
+                    scaleX = cropScale
+                    scaleY = cropScale
                 }
                 .clip(CircleShape)
         )
 
-        // Thumbnail Poster Frame: Displays immediately so circle video is NEVER blank before playing
+        // Thumbnail Poster Frame: shown until the video is actually playing. Coil only fetches the
+        // video when the first-frame helper couldn't, so it isn't downloaded twice.
         if (!isPlaying || !isVideoReady) {
             val bmp = thumbnailBitmap
             if (bmp != null) {
@@ -224,7 +277,7 @@ fun CircularVideoNoteView(
                         .fillMaxSize()
                         .clip(CircleShape)
                 )
-            } else {
+            } else if (thumbnailFailed) {
                 AsyncImage(
                     model = ImageRequest.Builder(context)
                         .data(parsedUri)

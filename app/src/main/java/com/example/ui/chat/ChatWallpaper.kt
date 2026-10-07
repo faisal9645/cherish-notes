@@ -29,6 +29,7 @@ import androidx.compose.animation.core.spring
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -113,7 +114,9 @@ fun LoveImmersiveWallpaper(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(Brush.verticalGradient(listOf(color1, color2)))
+            // Colours are read while drawing, so each animation frame only redraws the gradient
+            // instead of recomposing
+            .drawBehind { drawRect(Brush.verticalGradient(listOf(color1, color2))) }
     )
 }
 

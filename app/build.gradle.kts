@@ -6,6 +6,7 @@ plugins {
   alias(libs.plugins.google.devtools.ksp)
   alias(libs.plugins.secrets)
   alias(libs.plugins.google.services)
+  alias(libs.plugins.baselineprofile)
 }
 
 android {
@@ -16,8 +17,8 @@ android {
     applicationId = "com.cherish.notes"
     minSdk = 24
     targetSdk = 35
-    versionCode = 74
-    versionName = "1.7.2"
+    versionCode = 75
+    versionName = "1.7.3"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     resourceConfigurations += listOf("en")
@@ -52,8 +53,10 @@ android {
   buildTypes {
     release {
       isCrunchPngs = true
-      isMinifyEnabled = false
-      isShrinkResources = false
+      // R8: strips unused code/resources for a smaller APK and faster startup; reflection-based
+      // classes (Firestore models, backup JSON) are kept by proguard-rules.pro
+      isMinifyEnabled = true
+      isShrinkResources = true
       proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
       val hasReleaseConfig = signingConfigs.findByName("release") != null
       signingConfig = if (hasReleaseConfig) signingConfigs.getByName("release") else signingConfigs.getByName("debugConfig")
@@ -87,6 +90,14 @@ secrets {
 
 googleServices { missingGoogleServicesStrategy = MissingGoogleServicesStrategy.WARN }
 
+// Release builds bundle a Baseline Profile (src/main/baseline-prof.txt, plus a recorded one in
+// src/release/generated/baselineProfiles once generated), so startup and chat code runs precompiled
+// instead of interpreted after every install or OTA update.
+// Record one with an Android 13+ device/emulator connected: ./gradlew :app:generateBaselineProfile
+baselineProfile {
+  automaticGenerationDuringBuild = false
+}
+
 // Some unused dependencies are commented out below instead of being removed.
 // This makes it easy to add them back in the future if needed.
 dependencies {
@@ -111,13 +122,13 @@ dependencies {
   implementation(libs.androidx.lifecycle.runtime.ktx)
   implementation(libs.androidx.lifecycle.process)
   implementation(libs.androidx.lifecycle.viewmodel.compose)
+  implementation(libs.androidx.profileinstaller)
   implementation(libs.androidx.navigation.compose)
   implementation(libs.androidx.room.ktx)
   implementation(libs.androidx.room.runtime)
   implementation(libs.coil.compose)
   implementation(libs.coil.video)
   implementation(libs.converter.moshi)
-  implementation(libs.firebase.ai)
   implementation(libs.firebase.firestore)
   implementation(libs.firebase.auth)
   implementation(libs.firebase.storage)
@@ -150,4 +161,5 @@ dependencies {
   debugImplementation(libs.androidx.compose.ui.tooling)
   "ksp"(libs.androidx.room.compiler)
   "ksp"(libs.moshi.kotlin.codegen)
+  "baselineProfile"(project(":baselineprofile"))
 }

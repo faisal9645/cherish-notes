@@ -51,8 +51,16 @@ class ChatRepository(
     val deletionRequestFlow: StateFlow<com.example.data.model.ChatDeletionRequest?> = _deletionRequestFlow.asStateFlow()
 
     private var globalTodayListener: ListenerRegistration? = null
-    private var globalPreviousListener: ListenerRegistration? = null
     private var currentActiveConversationId: String? = null
+
+    // Older chat (before today) comes in pages. Each page has its own listener that starts below the
+    // previous page's oldest message, so every message downloads once and loaded pages still get
+    // live edits, reactions and deletions. All of this is touched on the main thread only.
+    private val olderPageListeners = mutableListOf<ListenerRegistration>()
+    private val olderPages = mutableListOf<List<Message>>()
+    private val olderPageOldestTimestamps = mutableListOf<Long>()
+    private var olderPagesGeneration = 0
+    private var pendingOlderLoad = 0L
     private var isInitialTodaySnapshot = true
     
     private var previousMessageLimit = 0L
@@ -109,14 +117,16 @@ class ChatRepository(
                 .map { it?.coupleId?.trim()?.ifBlank { null } ?: "couple_faisal_shali" }
                 .distinctUntilChanged()
                 .collectLatest { convId ->
-                    previousMessageLimit = 0L
-                    todayMessages = emptyList()
-                    previousMessages = emptyList()
-                    _isQueryExhaustedFlow.value = false
-                    _isLoadingMoreFlow.value = false
-                    _hasPreviousChatsAvailableFlow.value = true
-                    resetGalleryCache()
-                    startGlobalMessagesListener(convId)
+                    // Listener state is only touched on the main thread, like the listener callbacks
+                    withContext(Dispatchers.Main) {
+                        clearOlderPages()
+                        todayMessages = emptyList()
+                        _isQueryExhaustedFlow.value = false
+                        _isLoadingMoreFlow.value = false
+                        _hasPreviousChatsAvailableFlow.value = true
+                        resetGalleryCache()
+                        startGlobalMessagesListener(convId)
+                    }
                 }
         }
     }
@@ -128,27 +138,82 @@ class ChatRepository(
     }
 
     fun loadMoreMessages() {
-        if (_isQueryExhaustedFlow.value || _isLoadingMoreFlow.value) return
-        _isLoadingMoreFlow.value = true
-        if (previousMessageLimit == 0L) {
-            previousMessageLimit = 40L
-        } else {
-            previousMessageLimit += 40L
-        }
-        val convId = currentActiveConversationId ?: getConversationId()
-        if (firestore != null) {
-            startPreviousMessagesListener(convId)
-        } else {
-            _isLoadingMoreFlow.value = false
-            _isQueryExhaustedFlow.value = true
-        }
+        loadOlderPage(OLDER_PAGE_SIZE)
     }
 
+    /** "Show in chat" for an older message: make sure about [SEARCH_OLDER_TARGET] older messages are loaded. */
     fun expandLimitForSearch() {
-        if (previousMessageLimit < 500L) {
-            previousMessageLimit = 500L
-            currentActiveConversationId?.let { startPreviousMessagesListener(it) }
+        val missing = SEARCH_OLDER_TARGET - previousMessageLimit
+        if (missing <= 0L) return
+        if (_isLoadingMoreFlow.value) pendingOlderLoad = missing else loadOlderPage(missing)
+    }
+
+    /** Loads the next page of messages from before today, below the oldest one already loaded. */
+    private fun loadOlderPage(pageSize: Long) {
+        if (pageSize <= 0L || _isQueryExhaustedFlow.value || _isLoadingMoreFlow.value) return
+        val fs = firestore
+        if (fs == null) {
+            _isQueryExhaustedFlow.value = true
+            return
         }
+        val conversationId = currentActiveConversationId ?: getConversationId()
+        val upperBound = olderPageOldestTimestamps.lastOrNull() ?: getStartOfToday()
+        val pageIndex = olderPages.size
+        val generation = olderPagesGeneration
+        olderPages.add(emptyList())
+        previousMessageLimit += pageSize
+        _isLoadingMoreFlow.value = true
+
+        val registration = fs.collection("conversations")
+            .document(conversationId)
+            .collection("messages")
+            .whereLessThan("timestamp", upperBound)
+            .orderBy("timestamp", Query.Direction.DESCENDING)
+            .limit(pageSize)
+            .addSnapshotListener { snapshot, error ->
+                if (generation != olderPagesGeneration) return@addSnapshotListener
+                val isNewestPage = pageIndex == olderPages.lastIndex
+                if (error != null) {
+                    Log.w("ChatRepository", "Listen older messages failed", error)
+                    if (isNewestPage) _isLoadingMoreFlow.value = false
+                    return@addSnapshotListener
+                }
+                if (snapshot == null) return@addSnapshotListener
+                val docs = snapshot.documents
+                if (isNewestPage) {
+                    // Until the next page is requested, the newest page decides where it will start
+                    // and whether history has ended (a first, cache-only answer may still grow)
+                    val oldest = docs.lastOrNull()?.getLong("timestamp") ?: upperBound
+                    if (olderPageOldestTimestamps.size > pageIndex) {
+                        olderPageOldestTimestamps[pageIndex] = oldest
+                    } else {
+                        olderPageOldestTimestamps.add(oldest)
+                    }
+                    _isQueryExhaustedFlow.value = docs.size < pageSize
+                    if (pageIndex == 0) _hasPreviousChatsAvailableFlow.value = docs.isNotEmpty()
+                    _isLoadingMoreFlow.value = false
+                }
+                olderPages[pageIndex] = docs.mapNotNull { it.toMessageOrNull() }
+                previousMessages = olderPages.flatten()
+                mergeAndEmitMessages()
+                if (isNewestPage && pendingOlderLoad > 0L) {
+                    val more = pendingOlderLoad
+                    pendingOlderLoad = 0L
+                    loadOlderPage(more)
+                }
+            }
+        olderPageListeners.add(registration)
+    }
+
+    private fun clearOlderPages() {
+        olderPagesGeneration++
+        olderPageListeners.forEach { it.remove() }
+        olderPageListeners.clear()
+        olderPages.clear()
+        olderPageOldestTimestamps.clear()
+        pendingOlderLoad = 0L
+        previousMessageLimit = 0L
+        previousMessages = emptyList()
     }
 
     /**
@@ -172,7 +237,7 @@ class ChatRepository(
             // network; the server pass then fills in whatever the cache doesn't have yet.
             for (source in listOf(Source.CACHE, Source.SERVER)) {
                 try {
-                    loadGalleryFrom(messagesRef, source)
+                    loadGalleryFrom(messagesRef, source, convId)
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
@@ -187,11 +252,16 @@ class ChatRepository(
         }
     }
 
-    private suspend fun loadGalleryFrom(messagesRef: CollectionReference, source: Source) = coroutineScope {
-        // Photos, videos, voice notes and starred messages can be queried directly
+    private suspend fun loadGalleryFrom(
+        messagesRef: CollectionReference,
+        source: Source,
+        conversationId: String
+    ) = coroutineScope {
+        // Photos, videos, voice notes, starred and link messages can all be queried directly
         val targetedQueries = listOf(
             messagesRef.whereIn("type", listOf(MessageType.IMAGE.name, MessageType.VIDEO.name, MessageType.AUDIO.name)),
-            messagesRef.whereEqualTo("isStarred", true)
+            messagesRef.whereEqualTo("isStarred", true),
+            messagesRef.whereEqualTo("hasLink", true)
         )
         val targeted = targetedQueries
             .map { query -> async { query.get(source).await().documents.mapNotNull { it.toMessageOrNull() } } }
@@ -199,8 +269,11 @@ class ChatRepository(
             .flatten()
         publishGalleryItems(targeted)
 
-        // Links live inside text messages and can't be queried, so page through the whole history
-        // newest first, publishing as pages arrive
+        // Messages from before the hasLink flag existed: page through the history once per phone
+        // (newest first, publishing as pages arrive) and tag the link messages, so from then on the
+        // query above finds them without a scan
+        if (isLinkBackfillDone(conversationId)) return@coroutineScope
+        val untaggedLinkIds = mutableListOf<String>()
         var lastDoc: DocumentSnapshot? = null
         val pending = mutableListOf<Message>()
         var lastPublishAt = 0L
@@ -208,7 +281,11 @@ class ChatRepository(
             var page = messagesRef.orderBy("timestamp", Query.Direction.DESCENDING).limit(GALLERY_SCAN_PAGE_SIZE)
             lastDoc?.let { page = page.startAfter(it) }
             val docs = page.get(source).await().documents
-            docs.mapNotNullTo(pending) { it.toMessageOrNull() }
+            docs.forEach { doc ->
+                val message = doc.toMessageOrNull() ?: return@forEach
+                pending += message
+                if (!message.hasLink && LINK_REGEX.containsMatchIn(message.text)) untaggedLinkIds += message.id
+            }
             val isLastPage = docs.size < GALLERY_SCAN_PAGE_SIZE
             val now = System.currentTimeMillis()
             if (isLastPage || now - lastPublishAt >= GALLERY_PUBLISH_INTERVAL_MS) {
@@ -218,6 +295,36 @@ class ChatRepository(
             }
             if (isLastPage) break
             lastDoc = docs.last()
+        }
+        if (source == Source.SERVER) {
+            tagLinkMessages(messagesRef, untaggedLinkIds)
+            markLinkBackfillDone(conversationId)
+        }
+    }
+
+    private val galleryPrefs by lazy {
+        context.getSharedPreferences("cherish_gallery_prefs", Context.MODE_PRIVATE)
+    }
+
+    private fun isLinkBackfillDone(conversationId: String): Boolean =
+        galleryPrefs.getBoolean("links_tagged_$conversationId", false)
+
+    private fun markLinkBackfillDone(conversationId: String) {
+        galleryPrefs.edit().putBoolean("links_tagged_$conversationId", true).apply()
+    }
+
+    private fun tagLinkMessages(messagesRef: CollectionReference, messageIds: List<String>) {
+        val fs = firestore ?: return
+        messageIds.chunked(FIRESTORE_BATCH_LIMIT).forEach { chunk ->
+            try {
+                val batch = fs.batch()
+                chunk.forEach { batch.update(messagesRef.document(it), "hasLink", true) }
+                batch.commit().addOnFailureListener { e ->
+                    Log.w("ChatRepository", "Failed to tag ${chunk.size} link messages", e)
+                }
+            } catch (e: Exception) {
+                Log.w("ChatRepository", "Failed to tag ${chunk.size} link messages", e)
+            }
         }
     }
 
@@ -270,14 +377,9 @@ class ChatRepository(
 
         // Chat: older history comes back page by page as the user scrolls up
         _hasPreviousChatsAvailableFlow.value = true
-        _isQueryExhaustedFlow.value = false
-        if (previousMessageLimit == 0L) {
-            previousMessageLimit = 40L
-        }
-        val convId = currentActiveConversationId
-        if (convId != null && firestore != null) {
-            _isLoadingMoreFlow.value = true
-            startPreviousMessagesListener(convId)
+        if (olderPages.isEmpty()) {
+            _isQueryExhaustedFlow.value = false
+            loadOlderPage(OLDER_PAGE_SIZE)
         }
         mergeAndEmitMessages()
 
@@ -309,12 +411,9 @@ class ChatRepository(
     }
 
     fun resetPreviousChats() {
-        previousMessageLimit = 0L
-        previousMessages = emptyList()
+        clearOlderPages()
         localBackupMessages = emptyList()
         resetGalleryCache()
-        globalPreviousListener?.remove()
-        globalPreviousListener = null
         _isQueryExhaustedFlow.value = false
         _isLoadingMoreFlow.value = false
         _hasPreviousChatsAvailableFlow.value = true
@@ -324,7 +423,7 @@ class ChatRepository(
     private fun startGlobalMessagesListener(conversationId: String, forceRestart: Boolean = false) {
         if (!forceRestart && currentActiveConversationId == conversationId && globalTodayListener != null) return
         globalTodayListener?.remove()
-        globalPreviousListener?.remove()
+        clearOlderPages()
         currentActiveConversationId = conversationId
         isInitialTodaySnapshot = true
         val fs = firestore
@@ -384,50 +483,18 @@ class ChatRepository(
             }
         }
 
-        // 2. Listen to previous chats (messages before today, loaded with pagination style)
-        if (previousMessageLimit > 0L) {
-            startPreviousMessagesListener(conversationId)
-        } else {
-            convRef.whereLessThan("timestamp", startOfToday)
-                .orderBy("timestamp", Query.Direction.DESCENDING)
-                .limit(1)
-                .get()
-                .addOnSuccessListener { prevSnap ->
-                    val hasPrev = !prevSnap.isEmpty
-                    _hasPreviousChatsAvailableFlow.value = hasPrev
-                    if (!hasPrev) {
-                        _isQueryExhaustedFlow.value = true
-                    }
-                }
-        }
-    }
-
-    private fun startPreviousMessagesListener(conversationId: String) {
-        globalPreviousListener?.remove()
-        val fs = firestore ?: return
-        val startOfToday = getStartOfToday()
-        val convRef = fs.collection("conversations")
-            .document(conversationId)
-            .collection("messages")
-
-        val prevQuery = convRef
-            .whereLessThan("timestamp", startOfToday)
+        // 2. Previous chats (before today) are paged in on scroll; only check whether any exist
+        convRef.whereLessThan("timestamp", startOfToday)
             .orderBy("timestamp", Query.Direction.DESCENDING)
-            .limit(previousMessageLimit)
-
-        globalPreviousListener = prevQuery.addSnapshotListener { snapshot, error ->
-            _isLoadingMoreFlow.value = false
-            if (error != null) {
-                Log.w("ChatRepository", "Listen previous messages failed", error)
-                return@addSnapshotListener
+            .limit(1)
+            .get()
+            .addOnSuccessListener { prevSnap ->
+                val hasPrev = !prevSnap.isEmpty
+                _hasPreviousChatsAvailableFlow.value = hasPrev
+                if (!hasPrev) {
+                    _isQueryExhaustedFlow.value = true
+                }
             }
-            if (snapshot != null) {
-                _hasPreviousChatsAvailableFlow.value = snapshot.documents.isNotEmpty()
-                _isQueryExhaustedFlow.value = (snapshot.documents.size < previousMessageLimit)
-                previousMessages = snapshot.documents.mapNotNull { it.toMessageOrNull() }
-                mergeAndEmitMessages()
-            }
-        }
     }
 
     /**
@@ -494,7 +561,8 @@ class ChatRepository(
         waveform: List<Float> = emptyList(),
         replyTo: Message? = null,
         mediaUrls: List<String> = emptyList(),
-        isVideoNote: Boolean = false
+        isVideoNote: Boolean = false,
+        thumbnailUrls: List<String> = emptyList()
     ): Result<Message> {
         val currentUser = authRepository.currentUserState.value
         val partner = authRepository.partnerUserState.value
@@ -520,7 +588,9 @@ class ChatRepository(
             replyToText = replyTo?.text?.take(80),
             replyToSenderName = replyTo?.senderName,
             mediaUrls = mediaUrls,
-            isVideoNote = isVideoNote
+            isVideoNote = isVideoNote,
+            hasLink = LINK_REGEX.containsMatchIn(text),
+            thumbnailUrls = thumbnailUrls
         )
 
         // Optimistically add to local state
@@ -554,28 +624,38 @@ class ChatRepository(
         }
     }
 
-    suspend fun markAsRead(messageId: String) {
+    /**
+     * Marks the partner's messages as read with a single list update (so the chat and the backup
+     * react once, not once per message) and one batched write. A batch fails as a whole when one of
+     * its messages no longer exists on the server (e.g. kept only in the local backup), so it then
+     * falls back to per-message updates.
+     */
+    suspend fun markAsRead(messageIds: Collection<String>) {
+        val ids = messageIds.toSet()
+        if (ids.isEmpty()) return
         val currentUserId = authRepository.getCurrentUserId()
-        _messagesFlow.value = _messagesFlow.value.map {
-            if (it.id == messageId && it.receiverId == currentUserId) {
-                it.copy(status = MessageStatus.READ.name, readTimestamp = System.currentTimeMillis())
-            } else it
+        val readAt = System.currentTimeMillis()
+        _messagesFlow.update { list ->
+            list.map {
+                if (it.id in ids && it.receiverId == currentUserId) {
+                    it.copy(status = MessageStatus.READ.name, readTimestamp = readAt)
+                } else it
+            }
         }
 
-        try {
-            val convId = getConversationId()
-            firestore?.collection("conversations")
-                ?.document(convId)
-                ?.collection("messages")
-                ?.document(messageId)
-                ?.update(
-                    mapOf(
-                        "status" to MessageStatus.READ.name,
-                        "readTimestamp" to System.currentTimeMillis()
-                    )
-                )
-        } catch (e: Exception) {
-            // ignore
+        val fs = firestore ?: return
+        val messagesRef = fs.collection("conversations").document(getConversationId()).collection("messages")
+        val readUpdate = mapOf<String, Any>("status" to MessageStatus.READ.name, "readTimestamp" to readAt)
+        ids.chunked(FIRESTORE_BATCH_LIMIT).forEach { chunk ->
+            try {
+                val batch = fs.batch()
+                chunk.forEach { batch.update(messagesRef.document(it), readUpdate) }
+                batch.commit().addOnFailureListener {
+                    chunk.forEach { id -> messagesRef.document(id).update(readUpdate) }
+                }
+            } catch (e: Exception) {
+                Log.w("ChatRepository", "Failed to mark ${chunk.size} messages read", e)
+            }
         }
     }
 
@@ -652,7 +732,8 @@ class ChatRepository(
 
     suspend fun editMessage(messageId: String, newText: String) {
         val currentMessage = _messagesFlow.value.find { it.id == messageId } ?: return
-        val updated = currentMessage.copy(text = newText, isEdited = true)
+        val hasLink = LINK_REGEX.containsMatchIn(newText)
+        val updated = currentMessage.copy(text = newText, isEdited = true, hasLink = hasLink)
         _messagesFlow.value = _messagesFlow.value.map { if (it.id == messageId) updated else it }
 
         try {
@@ -661,7 +742,7 @@ class ChatRepository(
                 ?.document(convId)
                 ?.collection("messages")
                 ?.document(messageId)
-                ?.update(mapOf("text" to newText, "isEdited" to true))
+                ?.update(mapOf("text" to newText, "isEdited" to true, "hasLink" to hasLink))
         } catch (e: Exception) {
             // ignore
         }
@@ -716,7 +797,8 @@ class ChatRepository(
         messages.distinctBy { it.id }.forEach { original ->
             val message = findMessage(original.id) ?: original
             val currentUrls = message.getAllMediaUrls()
-            val remaining = currentUrls.filterNot { it in urlsToRemove }
+            val keptIndices = currentUrls.indices.filter { currentUrls[it] !in urlsToRemove }
+            val remaining = keptIndices.map { currentUrls[it] }
             when {
                 remaining.isEmpty() -> emptiedIds += message.id
                 remaining.size < currentUrls.size -> {
@@ -725,21 +807,44 @@ class ChatRepository(
                     } else {
                         message.text
                     }
-                    trimmedMessages += message.copy(mediaUrl = remaining.first(), mediaUrls = remaining, text = caption)
+                    // Previews stay paired with their photos
+                    val thumbnails = if (message.thumbnailUrls.size == currentUrls.size) {
+                        keptIndices.map { message.thumbnailUrls[it] }
+                    } else {
+                        emptyList()
+                    }
+                    trimmedMessages += message.copy(
+                        mediaUrl = remaining.first(),
+                        mediaUrls = remaining,
+                        text = caption,
+                        thumbnailUrls = thumbnails
+                    )
                 }
             }
         }
 
         trimmedMessages.forEach { trimmed ->
             updateMessageEverywhere(trimmed.id) {
-                it.copy(mediaUrl = trimmed.mediaUrl, mediaUrls = trimmed.mediaUrls, text = trimmed.text)
+                it.copy(
+                    mediaUrl = trimmed.mediaUrl,
+                    mediaUrls = trimmed.mediaUrls,
+                    text = trimmed.text,
+                    thumbnailUrls = trimmed.thumbnailUrls
+                )
             }
             try {
                 firestore?.collection("conversations")
                     ?.document(getConversationId())
                     ?.collection("messages")
                     ?.document(trimmed.id)
-                    ?.update(mapOf("mediaUrl" to trimmed.mediaUrl, "mediaUrls" to trimmed.mediaUrls, "text" to trimmed.text))
+                    ?.update(
+                        mapOf(
+                            "mediaUrl" to trimmed.mediaUrl,
+                            "mediaUrls" to trimmed.mediaUrls,
+                            "text" to trimmed.text,
+                            "thumbnailUrls" to trimmed.thumbnailUrls
+                        )
+                    )
                     ?.addOnFailureListener { e -> Log.w("ChatRepository", "Failed to remove photos from ${trimmed.id}", e) }
             } catch (e: Exception) {
                 Log.w("ChatRepository", "Failed to remove photos from ${trimmed.id}", e)
@@ -887,6 +992,8 @@ class ChatRepository(
     }
 
     private companion object {
+        const val OLDER_PAGE_SIZE = 40L
+        const val SEARCH_OLDER_TARGET = 500L
         const val GALLERY_SCAN_PAGE_SIZE = 500L
         const val GALLERY_PUBLISH_INTERVAL_MS = 300L
         const val FIRESTORE_BATCH_LIMIT = 450

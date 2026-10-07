@@ -6,18 +6,30 @@ import com.example.data.model.*
 import com.example.data.repository.AuthRepository
 import com.example.data.repository.ChatRepository
 import com.example.data.repository.CoupleFeaturesRepository
+import com.squareup.moshi.JsonClass
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.receiveAsFlow
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.*
 
+/** Quiet time after the last change before the automatic backup runs. */
+private const val BACKUP_QUIET_PERIOD_MS = 5_000L
+
+@JsonClass(generateAdapter = true)
 data class BackupManifest(
     val appVersion: String = "2.0.0",
     val backupTimestamp: Long = System.currentTimeMillis(),
@@ -32,6 +44,7 @@ data class BackupManifest(
     val storageLocationDesc: String = "Google Drive (Hidden AppData Space: appDataFolder)"
 )
 
+@JsonClass(generateAdapter = true)
 data class FullAppBackupPayload(
     val manifest: BackupManifest,
     val messages: List<Message> = emptyList(),
@@ -58,12 +71,15 @@ data class BackupState(
     val statusMessage: String = "Ready to backup or restore"
 )
 
+@OptIn(FlowPreview::class)
 class GoogleDriveBackupManager(
     private val context: Context,
     private val authRepository: AuthRepository,
     private val chatRepository: ChatRepository,
     private val coupleFeaturesRepository: CoupleFeaturesRepository
 ) {
+    // The payload classes have generated adapters (@JsonClass); the reflective factory only
+    // covers anything that might lack one
     private val moshi = Moshi.Builder()
         .add(KotlinJsonAdapterFactory())
         .build()
@@ -81,49 +97,69 @@ class GoogleDriveBackupManager(
     val backupState: StateFlow<BackupState> = _backupState.asStateFlow()
 
     private val autoBackupScope = kotlinx.coroutines.CoroutineScope(Dispatchers.IO + kotlinx.coroutines.SupervisorJob())
-    private var immediateBackupJob: kotlinx.coroutines.Job? = null
+
+    // Change notifications. A backup runs once things have been quiet for a moment, so a burst of
+    // updates (new messages, read ticks, reactions) costs one backup instead of one each.
+    private val backupRequests = Channel<Unit>(Channel.CONFLATED)
+    @Volatile private var hasUnsavedChanges = false
+    // One backup at a time, so two writers never interleave in the same file
+    private val backupMutex = Mutex()
 
     init {
-        // Continuous Always-On Auto-Backup:
-        // Automatically syncs immediately whenever chat messages, memories, shared notes, or dates are updated
+        // Continuous Always-On Auto-Backup: a startup backup, then one after each burst of changes
+        // to chat messages, memories, shared notes, dates or the bucket list
         autoBackupScope.launch {
             kotlinx.coroutines.delay(1200) // Brief startup settle
-            // Immediate startup auto-backup
             performBackupToGoogleDrive()
 
-            kotlinx.coroutines.flow.combine(
-                chatRepository.messagesFlow,
-                coupleFeaturesRepository.memoriesFlow,
-                coupleFeaturesRepository.notesFlow,
-                coupleFeaturesRepository.datesFlow,
-                coupleFeaturesRepository.bucketListFlow
-            ) { m, mem, n, d, b ->
-                m.size + mem.size + n.size + d.size + b.size
-            }.collect { totalItems ->
-                if (totalItems > 0 && !_backupState.value.isBackingUp && !_backupState.value.isRestoring) {
-                    performBackupToGoogleDrive()
+            launch {
+                kotlinx.coroutines.flow.combine(
+                    chatRepository.messagesFlow,
+                    coupleFeaturesRepository.memoriesFlow,
+                    coupleFeaturesRepository.notesFlow,
+                    coupleFeaturesRepository.datesFlow,
+                    coupleFeaturesRepository.bucketListFlow
+                ) { m, mem, n, d, b ->
+                    m.size + mem.size + n.size + d.size + b.size
                 }
+                    .drop(1) // The startup backup above already covers the current data
+                    .collect { totalItems -> if (totalItems > 0) requestBackup() }
             }
+
+            backupRequests.receiveAsFlow()
+                .debounce(BACKUP_QUIET_PERIOD_MS)
+                .collect {
+                    if (!_backupState.value.isRestoring) performBackupToGoogleDrive()
+                }
         }
     }
 
-    /**
-     * Immediately synchronizes and backs up all chats, media, voice notes, links, and memories.
-     */
-    fun triggerImmediateAutoBackup() {
-        immediateBackupJob?.cancel()
-        immediateBackupJob = autoBackupScope.launch {
-            performBackupToGoogleDrive()
-        }
+    private fun requestBackup() {
+        hasUnsavedChanges = true
+        backupRequests.trySend(Unit)
+    }
+
+    /** Backs up shortly after a change; calls close together collapse into a single backup. */
+    fun triggerImmediateAutoBackup() = requestBackup()
+
+    /** Writes a pending backup right away, e.g. when the app goes to the background. */
+    fun flushPendingBackup() {
+        if (!hasUnsavedChanges) return
+        autoBackupScope.launch { performBackupToGoogleDrive() }
     }
 
     suspend fun performBackupToGoogleDrive(): Result<String> = withContext(Dispatchers.IO) {
+        backupMutex.withLock { writeBackup() }
+    }
+
+    private fun writeBackup(): Result<String> {
+        hasUnsavedChanges = false
         _backupState.value = _backupState.value.copy(
             isBackingUp = true,
             statusMessage = "Packaging chats, media, gallery, and lifetime memories..."
         )
 
-        try {
+        return try {
             val messages = chatRepository.messagesFlow.value
             val memories = coupleFeaturesRepository.memoriesFlow.value
             val yearlyStories = coupleFeaturesRepository.yearlyJourneysFlow.value
