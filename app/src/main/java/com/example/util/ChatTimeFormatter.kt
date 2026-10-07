@@ -8,13 +8,13 @@ import java.util.TimeZone
 
 /**
  * Universal, precision time and date formatter for chat messages.
- * - Logical chat days start at 4:00 AM (late night texting up to 3:59 AM stays in the same active day session).
+ * - Logical chat days start at 6:00 AM (late night texting up to 5:59 AM stays in the same active day session).
  * - Exact message time stamps (AM/PM) ALWAYS show the real, unshifted current local time of the message.
  */
 object ChatTimeFormatter {
 
-    // 4 AM morning logical day rollover offset (4 hours in milliseconds)
-    private const val DAY_ROLLOVER_OFFSET_MS = 4 * 60 * 60 * 1000L
+    // 6 AM morning logical day rollover offset (6 hours in milliseconds)
+    private const val DAY_ROLLOVER_OFFSET_MS = 6 * 60 * 60 * 1000L
 
     fun normalizeTimestamp(rawTimestamp: Long): Long {
         if (rawTimestamp <= 0L) return System.currentTimeMillis()
@@ -23,9 +23,9 @@ object ChatTimeFormatter {
     }
 
     /**
-     * Converts an epoch timestamp to its logical day timestamp starting at 4:00 AM.
-     * Messages sent between 12:00 AM and 3:59:59 AM belong to the ongoing previous night's session.
-     * At 4:00 AM, the new day starts.
+     * Converts an epoch timestamp to its logical day timestamp starting at 6:00 AM.
+     * Messages sent between 12:00 AM and 5:59:59 AM belong to the ongoing previous night's session.
+     * At 6:00 AM, the new day starts.
      */
     private fun getLogicalDayTimestamp(rawTimestamp: Long): Long {
         val timestamp = normalizeTimestamp(rawTimestamp)
@@ -62,7 +62,7 @@ object ChatTimeFormatter {
     }
 
     /**
-     * Checks if a message belongs to Today's logical chat session (4:00 AM to 3:59:59 AM next morning).
+     * Checks if a message belongs to Today's logical chat session (6:00 AM to 5:59:59 AM next morning).
      */
     fun isToday(rawTimestamp: Long): Boolean {
         if (rawTimestamp <= 0L) return false
@@ -82,7 +82,7 @@ object ChatTimeFormatter {
     }
 
     /**
-     * Checks if two messages belong to the same logical 4:00 AM day session.
+     * Checks if two messages belong to the same logical 6:00 AM day session.
      */
     fun isSameDay(t1: Long, t2: Long): Boolean {
         if (t1 <= 0L || t2 <= 0L) return false
@@ -93,7 +93,7 @@ object ChatTimeFormatter {
 
     /**
      * Formats timestamp for conversation list preview:
-     * - Today (from 4 AM): "6:15 PM"
+     * - Today (from 6 AM): "6:15 PM"
      * - Yesterday: "Yesterday"
      * - Older: "Oct 4" (or "Oct 4, 2025" if different year)
      */
@@ -114,7 +114,7 @@ object ChatTimeFormatter {
     }
 
     /**
-     * Formats date separator header for chat message history based on 4 AM rollover.
+     * Formats date separator header for chat message history based on 6 AM rollover.
      */
     fun formatDateSeparator(rawTimestamp: Long): String {
         if (rawTimestamp <= 0L) return ""

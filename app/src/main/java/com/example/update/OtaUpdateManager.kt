@@ -208,6 +208,9 @@ class OtaUpdateManager private constructor(private val appContext: Context) {
                         data = Uri.parse("package:${context.packageName}")
                         flags = Intent.FLAG_ACTIVITY_NEW_TASK
                     }
+                    val prefs = com.example.security.SecurityPreferences.getInstance(context)
+                    prefs.ignoreNextPause = true
+                    prefs.isExternalPickerActive = true
                     context.startActivity(intent)
                     Toast.makeText(context, "Please allow Cherish to install updates, then return to install", Toast.LENGTH_LONG).show()
                     return
@@ -225,6 +228,9 @@ class OtaUpdateManager private constructor(private val appContext: Context) {
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
+            val prefs = com.example.security.SecurityPreferences.getInstance(context)
+            prefs.ignoreNextPause = true
+            prefs.isExternalPickerActive = true
             context.startActivity(intent)
         } catch (e: Exception) {
             Toast.makeText(context, "Failed to launch installer: ${e.message}", Toast.LENGTH_LONG).show()

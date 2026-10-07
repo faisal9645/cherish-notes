@@ -1026,6 +1026,9 @@ fun ChatScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f)
+                    .pointerInput(Unit) {
+                        detectTapGestures(onDoubleTap = { onQuickDisguise() })
+                    }
             ) {
                 if (!uiState.isStealthCurtainActive && uiState.chatExperienceMode != com.example.ui.chat.ChatExperienceMode.PRIVATE) {
                     ChatWallpaper(
