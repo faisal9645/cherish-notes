@@ -111,7 +111,12 @@ class SecurityPreferences(context: Context) {
      * Bypasses transient view flags to immediately disguise into Notes.
      */
     fun forceDisguise() {
-        if (!isDisguiseModeEnabled()) return
+        // An emergency exit always ends on Notes, even with automatic disguise turned off, and
+        // leaves no viewer/picker flag behind that would stop the next automatic disguise
+        isMediaViewerActive = false
+        isTheaterModeActive = false
+        isExternalPickerActive = false
+        ignoreNextPause = false
         _hasRevealedSecretAppInSession.value = false
         _isDisguiseActive.value = true
         setShowPreviousChatsEnabled(false)

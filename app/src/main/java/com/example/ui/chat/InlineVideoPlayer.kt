@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import com.example.ui.security.SecretWindowGuard
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -327,6 +328,9 @@ fun InlineYouTubeCard(
 ) {
     val context = LocalContext.current
     var isPlayingInline by remember { mutableStateOf(false) }
+    // Nothing keeps playing behind Notes once the chat hides
+    val isDisguised by com.example.security.SecurityPreferences.getInstance(context).isDisguiseActive.collectAsState()
+    LaunchedEffect(isDisguised) { if (isDisguised) isPlayingInline = false }
 
     val infiniteTransition = rememberInfiniteTransition(label = "yt_play_pulse")
     val pulseScale by infiniteTransition.animateFloat(
@@ -646,6 +650,8 @@ fun InlineVideoTheaterModal(
                         )
                     }
                 }
+
+                SecretWindowGuard()
             }
         }
     }

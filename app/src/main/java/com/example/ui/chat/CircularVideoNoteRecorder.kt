@@ -28,6 +28,7 @@ import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import com.example.ui.security.SecretWindowGuard
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -104,6 +105,9 @@ fun CircularVideoNoteRecorderDialog(
     var recordingProfile by remember { mutableStateOf<CamcorderProfile?>(null) }
     // Bumped for every recording started, so the timer restarts with it
     var recordingSession by remember { mutableIntStateOf(0) }
+    // Whether the camera hands over a mirrored picture (most front cameras do, not all); read from
+    // the first frame, so the viewfinder can always be shown straight, the way it's recorded
+    var previewMirrored by remember { mutableStateOf<Boolean?>(null) }
 
     /** Centre-crops the camera picture into the square viewfinder, without stretching it. */
     fun adjustTextureTransform(tv: TextureView, viewW: Int, viewH: Int) {
@@ -117,9 +121,10 @@ fun CircularVideoNoteRecorderDialog(
         // The TextureView squeezes the picture into its own shape; scale one side back out
         val scaleX = if (pictureRatio > viewRatio) pictureRatio / viewRatio else 1f
         val scaleY = if (pictureRatio < viewRatio) viewRatio / pictureRatio else 1f
-        val isFront = cameraFacing == Camera.CameraInfo.CAMERA_FACING_FRONT
-        // Front camera: shown the way it is recorded (the camera itself mirrors its preview)
-        tv.setTransform(Matrix().apply { setScale(if (isFront) -scaleX else scaleX, scaleY, viewW / 2f, viewH / 2f) })
+        // Shown straight, the way it's recorded: a mirrored picture is flipped back. Until the first
+        // frame says otherwise, front cameras are taken to be mirrored.
+        val mirrored = previewMirrored ?: (cameraFacing == Camera.CameraInfo.CAMERA_FACING_FRONT)
+        tv.setTransform(Matrix().apply { setScale(if (mirrored) -scaleX else scaleX, scaleY, viewW / 2f, viewH / 2f) })
     }
 
     fun stopCamera() {
@@ -131,6 +136,7 @@ fun CircularVideoNoteRecorderDialog(
 
     fun startCamera(facing: Int, texture: SurfaceTexture, viewW: Int, viewH: Int) {
         stopCamera()
+        previewMirrored = null
         try {
             val id = getCameraId(facing)
             val info = Camera.CameraInfo().also { Camera.getCameraInfo(id, it) }
@@ -435,7 +441,15 @@ fun CircularVideoNoteRecorderDialog(
                                         return true
                                     }
 
-                                    override fun onSurfaceTextureUpdated(surface: SurfaceTexture) {}
+                                    override fun onSurfaceTextureUpdated(surface: SurfaceTexture) {
+                                        if (previewMirrored != null) return
+                                        // The frame's transform flips handedness when the camera mirrors
+                                        // (its matrix always carries one flip of its own, hence > 0)
+                                        val m = FloatArray(16)
+                                        surface.getTransformMatrix(m)
+                                        previewMirrored = m[0] * m[5] - m[4] * m[1] > 0f
+                                        adjustTextureTransform(this@apply, width, height)
+                                    }
                                 }
                             }
                         },
@@ -753,6 +767,8 @@ fun CircularVideoNoteRecorderDialog(
                     tint = Color.White
                 )
             }
+
+            SecretWindowGuard()
         }
     }
 }

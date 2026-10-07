@@ -2,6 +2,7 @@ package com.example.ui.chat
 
 import android.content.Context
 import android.net.Uri
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.audio.ChatSoundEffectsPlayer
@@ -16,12 +17,18 @@ import com.example.data.repository.MediaRepository
 import com.example.CherishApplication
 import com.example.security.SecurityPreferences
 import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.io.File
+
+/** A photo, video or voice message that didn't send; shown above the message box with Retry. */
+data class FailedUpload(val label: String, val retry: () -> Unit)
 
 data class ChatUiState(
     val messages: List<Message> = emptyList(),
@@ -38,6 +45,9 @@ data class ChatUiState(
     val gallerySize: String = "large",
     val isUploadingMedia: Boolean = false,
     val uploadProgress: Float = 0f,
+    // What's uploading ("photo", "3 photos", "voice message"…), and the last send that didn't go out
+    val uploadLabel: String = "",
+    val failedUpload: FailedUpload? = null,
     val deletionRequest: com.example.data.model.ChatDeletionRequest? = null,
     val isStealthCurtainActive: Boolean = false,
     val stealthToastMessage: String? = null,
@@ -303,47 +313,101 @@ class ChatViewModel(
         }
     }
 
-    fun sendMediaFile(uri: Uri, type: MessageType, mediaName: String? = null) {
-        viewModelScope.launch {
-            _uiState.update { it.copy(isUploadingMedia = true, uploadProgress = 0.1f) }
-            try {
-                val coupleId = chatRepository.getConversationId()
-                val preparedFile = if (type == MessageType.IMAGE) {
-                    mediaRepository.compressAndPrepareImage(uri)
-                } else {
-                    File(uri.path ?: "")
-                }
+    private var uploadJob: Job? = null
 
-                // The preview uploads alongside the photo, so it doesn't delay the send
-                val thumbnail = if (type == MessageType.IMAGE) async { uploadThumbnail(preparedFile, coupleId) } else null
-                val uploadResult = mediaRepository.uploadFile(
-                    file = preparedFile,
-                    type = type,
-                    coupleId = coupleId,
-                    onProgress = { p -> _uiState.update { it.copy(uploadProgress = p) } }
-                )
-
-                uploadResult.fold(
-                    onSuccess = { downloadUrl ->
-                        val thumbnailUrl = thumbnail?.await().orEmpty()
-                        chatRepository.sendMessage(
-                            text = if (type == MessageType.IMAGE) "Sent a photo" else "Sent a file",
-                            type = type,
-                            mediaUrl = downloadUrl,
-                            mediaName = mediaName ?: preparedFile.name,
-                            mediaSize = preparedFile.length(),
-                            replyTo = _uiState.value.replyingToMessage,
-                            thumbnailUrls = if (thumbnailUrl.isNotBlank()) listOf(thumbnailUrl) else emptyList()
-                        )
-                        _uiState.update { it.copy(replyingToMessage = null) }
-                    },
-                    onFailure = {
-                        thumbnail?.cancel()
-                    }
-                )
-            } finally {
+    /**
+     * Runs one send of media with its progress shown above the message box. [block] returns null
+     * when everything went out, or what to show (with Retry) for the part that didn't.
+     */
+    private fun runUpload(label: String, retry: () -> Unit, block: suspend CoroutineScope.() -> FailedUpload?) {
+        _uiState.update { it.copy(isUploadingMedia = true, uploadProgress = 0.05f, uploadLabel = label, failedUpload = null) }
+        val job = viewModelScope.launch {
+            val failed = try {
+                coroutineScope { block() }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.w("ChatViewModel", "Sending $label failed", e)
+                FailedUpload(label, retry)
+            }
+            if (failed != null) _uiState.update { it.copy(failedUpload = failed) }
+        }
+        uploadJob = job
+        job.invokeOnCompletion {
+            if (uploadJob === job) {
+                uploadJob = null
                 _uiState.update { it.copy(isUploadingMedia = false, uploadProgress = 0f) }
             }
+        }
+    }
+
+    /** Stops the upload in progress; nothing is sent. */
+    fun cancelUpload() {
+        uploadJob?.cancel()
+    }
+
+    fun retryFailedUpload() {
+        val failed = _uiState.value.failedUpload ?: return
+        _uiState.update { it.copy(failedUpload = null) }
+        failed.retry()
+    }
+
+    fun dismissFailedUpload() {
+        _uiState.update { it.copy(failedUpload = null) }
+    }
+
+    /**
+     * Whether the partner can open [url]: a storage link, or a small inline data URI. The upload
+     * falls back to a local file path when it fails, which only exists on this phone.
+     */
+    private fun isDeliverable(url: String?): Boolean =
+        url != null && (url.startsWith("https://") || url.startsWith("http://") || url.startsWith("data:"))
+
+    private fun reportUploadProgress(progress: Float) {
+        _uiState.update { it.copy(uploadProgress = progress) }
+    }
+
+    fun sendMediaFile(uri: Uri, type: MessageType, mediaName: String? = null) {
+        val label = when (type) {
+            MessageType.IMAGE -> "photo"
+            MessageType.VIDEO -> "video"
+            else -> "file"
+        }
+        val retry = { sendMediaFile(uri, type, mediaName) }
+        runUpload(label, retry) {
+            val coupleId = chatRepository.getConversationId()
+            val preparedFile = if (type == MessageType.IMAGE) {
+                mediaRepository.compressAndPrepareImage(uri)
+            } else {
+                // Picked videos and files arrive as content links: copy them so they can upload
+                mediaRepository.copyToCache(uri, mediaName)
+            }
+
+            // The preview uploads alongside the photo, so it doesn't delay the send
+            val thumbnail = if (type == MessageType.IMAGE) async { uploadThumbnail(preparedFile, coupleId) } else null
+            val url = mediaRepository.uploadFile(
+                file = preparedFile,
+                type = type,
+                coupleId = coupleId,
+                onProgress = ::reportUploadProgress
+            ).getOrNull()
+            if (url == null || !isDeliverable(url)) {
+                thumbnail?.cancel()
+                return@runUpload FailedUpload(label, retry)
+            }
+
+            val thumbnailUrl = thumbnail?.await().orEmpty()
+            chatRepository.sendMessage(
+                text = if (type == MessageType.IMAGE) "Sent a photo" else "Sent a file",
+                type = type,
+                mediaUrl = url,
+                mediaName = mediaName ?: preparedFile.name,
+                mediaSize = preparedFile.length(),
+                replyTo = _uiState.value.replyingToMessage,
+                thumbnailUrls = if (thumbnailUrl.isNotBlank()) listOf(thumbnailUrl) else emptyList()
+            )
+            _uiState.update { it.copy(replyingToMessage = null) }
+            null
         }
     }
 
@@ -361,51 +425,53 @@ class ChatViewModel(
 
     fun sendMultipleImages(uris: List<Uri>) {
         if (uris.isEmpty()) return
-        viewModelScope.launch {
-            _uiState.update { it.copy(isUploadingMedia = true, uploadProgress = 0.05f) }
+        fun labelFor(count: Int) = if (count == 1) "photo" else "$count photos"
+        runUpload(labelFor(uris.size), retry = { sendMultipleImages(uris) }) {
+            val coupleId = chatRepository.getConversationId()
             val uploadedUrls = mutableListOf<String>()
             // Same order as uploadedUrls; each resolves to "" where a preview couldn't be made
             val thumbnails = mutableListOf<Deferred<String>>()
-            val coupleId = chatRepository.getConversationId()
-            try {
-                for ((index, uri) in uris.withIndex()) {
-                    try {
-                        val preparedFile = mediaRepository.compressAndPrepareImage(uri)
-                        // The preview uploads alongside the photo, so it doesn't delay the send
-                        val thumbnail = async { uploadThumbnail(preparedFile, coupleId) }
-                        val uploadResult = mediaRepository.uploadFile(
-                            file = preparedFile,
-                            type = MessageType.IMAGE,
-                            coupleId = coupleId,
-                            onProgress = { p ->
-                                val overall = (index + p) / uris.size.toFloat()
-                                _uiState.update { it.copy(uploadProgress = overall) }
-                            }
-                        )
-                        val url = uploadResult.getOrNull()
-                        if (url != null) {
-                            uploadedUrls.add(url)
-                            thumbnails.add(thumbnail)
-                        } else {
-                            thumbnail.cancel()
-                        }
-                    } catch (_: Exception) {}
-                }
-                if (uploadedUrls.isNotEmpty()) {
-                    val thumbnailUrls = thumbnails.awaitAll()
-                    chatRepository.sendMessage(
-                        text = if (uploadedUrls.size == 1) "Sent a photo" else "Sent ${uploadedUrls.size} photos",
+            val notSent = mutableListOf<Uri>()
+            for ((index, uri) in uris.withIndex()) {
+                val url = try {
+                    val preparedFile = mediaRepository.compressAndPrepareImage(uri)
+                    // The preview uploads alongside the photo, so it doesn't delay the send
+                    val thumbnail = async { uploadThumbnail(preparedFile, coupleId) }
+                    val uploaded = mediaRepository.uploadFile(
+                        file = preparedFile,
                         type = MessageType.IMAGE,
-                        mediaUrl = uploadedUrls.firstOrNull(),
-                        mediaUrls = uploadedUrls,
-                        replyTo = _uiState.value.replyingToMessage,
-                        thumbnailUrls = if (thumbnailUrls.any { it.isNotBlank() }) thumbnailUrls else emptyList()
-                    )
-                    _uiState.update { it.copy(replyingToMessage = null) }
+                        coupleId = coupleId,
+                        onProgress = { p -> reportUploadProgress((index + p) / uris.size.toFloat()) }
+                    ).getOrNull()
+                    if (uploaded != null && isDeliverable(uploaded)) {
+                        thumbnails.add(thumbnail)
+                        uploaded
+                    } else {
+                        thumbnail.cancel()
+                        null
+                    }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    Log.w("ChatViewModel", "Photo ${index + 1} of ${uris.size} failed", e)
+                    null
                 }
-            } finally {
-                _uiState.update { it.copy(isUploadingMedia = false, uploadProgress = 0f) }
+                if (url != null) uploadedUrls.add(url) else notSent.add(uri)
             }
+            if (uploadedUrls.isNotEmpty()) {
+                val thumbnailUrls = thumbnails.awaitAll()
+                chatRepository.sendMessage(
+                    text = if (uploadedUrls.size == 1) "Sent a photo" else "Sent ${uploadedUrls.size} photos",
+                    type = MessageType.IMAGE,
+                    mediaUrl = uploadedUrls.firstOrNull(),
+                    mediaUrls = uploadedUrls,
+                    replyTo = _uiState.value.replyingToMessage,
+                    thumbnailUrls = if (thumbnailUrls.any { it.isNotBlank() }) thumbnailUrls else emptyList()
+                )
+                _uiState.update { it.copy(replyingToMessage = null) }
+            }
+            // Only the photos that didn't go out are offered for retry
+            if (notSent.isEmpty()) null else FailedUpload(labelFor(notSent.size)) { sendMultipleImages(notSent) }
         }
     }
 
@@ -428,24 +494,29 @@ class ChatViewModel(
         val (file, duration) = voiceRecorderHelper.stopRecording()
         if (file != null && duration > 0) {
             soundEffectsPlayer.playSound(ChatSoundEffectsPlayer.SoundType.SENT)
-            viewModelScope.launch {
-                val coupleId = chatRepository.getConversationId()
-                val uploadResult = mediaRepository.uploadFile(
-                    file = file,
-                    type = MessageType.AUDIO,
-                    coupleId = coupleId
-                )
+            val waveform = if (amplitudesSnapshot.isNotEmpty()) amplitudesSnapshot else listOf(0.3f, 0.6f, 0.4f, 0.7f, 0.5f)
+            sendVoiceMessage(file, duration, waveform)
+        }
+    }
 
-                uploadResult.onSuccess { downloadUrl ->
-                    chatRepository.sendMessage(
-                        text = "Voice message ($duration s)",
-                        type = MessageType.AUDIO,
-                        mediaUrl = downloadUrl,
-                        durationSeconds = duration,
-                        waveform = if (amplitudesSnapshot.isNotEmpty()) amplitudesSnapshot else listOf(0.3f, 0.6f, 0.4f, 0.7f, 0.5f)
-                    )
-                }
-            }
+    private fun sendVoiceMessage(file: File, duration: Int, waveform: List<Float>) {
+        val retry = { sendVoiceMessage(file, duration, waveform) }
+        runUpload("voice message", retry) {
+            val url = mediaRepository.uploadFile(
+                file = file,
+                type = MessageType.AUDIO,
+                coupleId = chatRepository.getConversationId(),
+                onProgress = ::reportUploadProgress
+            ).getOrNull()
+            if (url == null || !isDeliverable(url)) return@runUpload FailedUpload("voice message", retry)
+            chatRepository.sendMessage(
+                text = "Voice message ($duration s)",
+                type = MessageType.AUDIO,
+                mediaUrl = url,
+                durationSeconds = duration,
+                waveform = waveform
+            )
+            null
         }
     }
 
@@ -455,7 +526,17 @@ class ChatViewModel(
     }
 
     fun playAudio(messageId: String, audioUrl: String) {
-        voicePlayerHelper.playAudio(messageId, audioUrl)
+        voicePlayerHelper.playAudio(messageId, audioUrl, onCompletion = { playNextVoiceNote(messageId) })
+    }
+
+    /** When a voice note ends, the next message plays on if it's another voice note from the same person. */
+    private fun playNextVoiceNote(finishedId: String) {
+        val messages = _uiState.value.messages
+        val index = messages.indexOfFirst { it.id == finishedId }
+        if (index < 0) return
+        val next = messages.getOrNull(index + 1) ?: return
+        if (next.getTypedType() != MessageType.AUDIO || next.senderId != messages[index].senderId) return
+        next.mediaUrl?.takeIf { it.isNotBlank() }?.let { url -> playAudio(next.id, url) }
     }
 
     fun seekAudio(progress: Float) {
@@ -463,27 +544,25 @@ class ChatViewModel(
     }
 
     fun sendVideoNote(videoFile: java.io.File, durationSeconds: Int) {
-        val coupleId = chatRepository.getConversationId()
-        viewModelScope.launch {
-            _uiState.update { it.copy(isUploadingMedia = true, uploadProgress = 0f) }
-            val uploadResult = mediaRepository.uploadFile(
+        val retry = { sendVideoNote(videoFile, durationSeconds) }
+        runUpload("video note", retry) {
+            val url = mediaRepository.uploadFile(
                 file = videoFile,
                 type = MessageType.VIDEO,
-                coupleId = coupleId,
-                onProgress = { p -> _uiState.update { it.copy(uploadProgress = p) } }
+                coupleId = chatRepository.getConversationId(),
+                onProgress = ::reportUploadProgress
+            ).getOrNull()
+            if (url == null || !isDeliverable(url)) return@runUpload FailedUpload("video note", retry)
+            soundEffectsPlayer.playSound(ChatSoundEffectsPlayer.SoundType.SENT)
+            chatRepository.sendMessage(
+                text = "Video note ($durationSeconds s)",
+                type = MessageType.VIDEO,
+                mediaUrl = url,
+                mediaName = "videonote_${System.currentTimeMillis()}.mp4",
+                durationSeconds = durationSeconds,
+                isVideoNote = true
             )
-            _uiState.update { it.copy(isUploadingMedia = false, uploadProgress = 0f) }
-            uploadResult.onSuccess { downloadUrl ->
-                soundEffectsPlayer.playSound(ChatSoundEffectsPlayer.SoundType.SENT)
-                chatRepository.sendMessage(
-                    text = "Video note ($durationSeconds s)",
-                    type = MessageType.VIDEO,
-                    mediaUrl = downloadUrl,
-                    mediaName = "videonote_${System.currentTimeMillis()}.mp4",
-                    durationSeconds = durationSeconds,
-                    isVideoNote = true
-                )
-            }
+            null
         }
     }
 
@@ -620,6 +699,20 @@ class ChatViewModel(
 
     fun closeFullScreenMedia() {
         _uiState.update { it.copy(fullScreenMediaUrl = null, fullScreenMediaType = null, allMediaUrlsForViewer = emptyList()) }
+    }
+
+    /**
+     * The secret app went behind Notes (emergency exit, or leaving the app): nothing of it may stay
+     * open, recording or playing, and the partner shouldn't keep seeing "typing…".
+     */
+    fun onSecretAppHidden() {
+        closeFullScreenMedia()
+        closeTheaterVideo()
+        if (voiceRecorderHelper.isRecording.value) cancelVoiceRecording()
+        voicePlayerHelper.stop()
+        setSearching(false)
+        setSelectedMessageForActions(null)
+        onTypingChanged(false)
     }
 
     // --- SECRET HISTORY PROTECTION & RECOVERY ---

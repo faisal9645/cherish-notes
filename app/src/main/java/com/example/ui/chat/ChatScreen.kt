@@ -63,7 +63,9 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -154,6 +156,12 @@ fun ChatScreen(
 
     // Incoming messages that arrived while scrolled up, shown on the scroll-down button
     var unseenIncomingCount by remember { mutableIntStateOf(0) }
+
+    // The reply preview floats above the message box; the list keeps this much room for it
+    var replyCardHeightPx by remember { mutableIntStateOf(0) }
+    // Keeps the preview filled while it animates away after the reply is cleared
+    val lastReply = remember { arrayOfNulls<Message>(1) }
+    uiState.replyingToMessage?.let { lastReply[0] = it }
 
     fun exitSelection() {
         isSelectionMode = false
@@ -498,6 +506,25 @@ fun ChatScreen(
 
     val app = LocalContext.current.applicationContext as com.example.CherishApplication
     val isDisguiseActive by app.securityPreferences.isDisguiseActive.collectAsState()
+
+    // Behind Notes nothing of the chat stays open: sheets, dialogs, the recorder, selection, the
+    // keyboard (viewers, recording and playback are stopped in ChatViewModel.onSecretAppHidden)
+    LaunchedEffect(isDisguiseActive) {
+        if (!isDisguiseActive) return@LaunchedEffect
+        showVideoNoteRecorder = false
+        showAttachmentSheet = false
+        showChatMenu = false
+        showHeartbeatTouch = false
+        showMoodPicker = false
+        showClearChatDialog = false
+        showMultiDeleteConfirmDialog = false
+        showDeleteConfirmDialog = null
+        showFullProfilePicViewer = false
+        editingMessage = null
+        focusedMessage = null
+        exitSelection()
+        keyboardController?.hide()
+    }
     val isSideEmergencyExitEnabled by app.securityPreferences.isSideEmergencyExitEnabled.collectAsState()
     val sideEmergencyExitOpacity by app.securityPreferences.sideEmergencyExitOpacity.collectAsState()
     LaunchedEffect(isDisguiseActive) {
@@ -1028,7 +1055,6 @@ fun ChatScreen(
                         viewModel.onTypingChanged(false)
                     },
                     replyingTo = uiState.replyingToMessage,
-                    onDismissReply = { viewModel.setReplyingTo(null) },
                     isRecordingVoice = isRecordingVoice,
                     recordingDurationSec = recordingDurationSec,
                     recordingAmplitudes = recordingAmplitudes,
@@ -1365,6 +1391,17 @@ fun ChatScreen(
                     partnerName = partnerName,
                     isDark = isDark
                 )
+
+                // Room for the floating reply preview, so it never covers the last message (on
+                // either side)
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = uiState.replyingToMessage != null,
+                    enter = expandVertically(spring(dampingRatio = 0.85f, stiffness = Spring.StiffnessMediumLow)),
+                    exit = shrinkVertically(tween(160))
+                ) {
+                    val density = LocalDensity.current
+                    Spacer(modifier = Modifier.height(with(density) { replyCardHeightPx.toDp() } + 12.dp))
+                }
                 } // Column: list + typing bubble
 
             // WhatsApp-style date chip: the date of the messages at the top, shown while scrolling
@@ -1380,8 +1417,20 @@ fun ChatScreen(
             }
             val topVisibleDate by remember(reversedMessages) {
                 derivedStateOf {
-                    val topIndex = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: return@derivedStateOf null
-                    (reversedMessages.getOrNull(topIndex) ?: reversedMessages.lastOrNull())
+                    val layoutInfo = listState.layoutInfo
+                    val topItem = layoutInfo.visibleItemsInfo.lastOrNull() ?: return@derivedStateOf null
+                    val topIndex = topItem.index
+                    val message = reversedMessages.getOrNull(topIndex)
+                    if (message != null) {
+                        // The top message opens its day and its separator ("Yesterday"…) is on screen:
+                        // the date would show twice. (Offsets run from the bottom: the list is reversed.)
+                        val opensDay = topIndex == reversedMessages.lastIndex ||
+                            !isSameDay(reversedMessages[topIndex + 1].timestamp, message.timestamp)
+                        if (opensDay && topItem.offset + topItem.size <= layoutInfo.viewportEndOffset) {
+                            return@derivedStateOf null
+                        }
+                    }
+                    (message ?: reversedMessages.lastOrNull())
                         ?.let { formatDateSeparator(it.timestamp) }
                         ?.takeIf { it.isNotEmpty() }
                 }
@@ -1467,6 +1516,31 @@ fun ChatScreen(
                             )
                         }
                     }
+                }
+            }
+
+            // Reply preview: its own card, lifted above the message box over the chat, lined up
+            // with the box and clear of the mic/send button
+            androidx.compose.animation.AnimatedVisibility(
+                visible = uiState.replyingToMessage != null,
+                enter = slideInVertically(spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessMediumLow)) { it / 2 } + fadeIn(tween(160)),
+                exit = slideOutVertically(tween(160)) { it / 2 } + fadeOut(tween(120)),
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .widthIn(max = 600.dp)
+                    .fillMaxWidth()
+                    .padding(start = 12.dp, end = 70.dp, bottom = 6.dp)
+            ) {
+                val reply = uiState.replyingToMessage ?: lastReply[0]
+                if (reply != null) {
+                    ReplyPreviewCard(
+                        reply = reply,
+                        isPrivateMode = uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE,
+                        onDismiss = { viewModel.setReplyingTo(null) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .onSizeChanged { replyCardHeightPx = it.height }
+                    )
                 }
             }
             } // Close else branch of if (uiState.isStealthCurtainActive)

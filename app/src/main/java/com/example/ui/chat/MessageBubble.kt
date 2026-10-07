@@ -77,20 +77,35 @@ fun MessageBubble(
     onReplyQuoteClick: ((replyToMessageId: String?) -> Unit)? = null,
     isPrivateMode: Boolean = false,
     senderPhotoUrl: String? = null,
-    onSeekAudio: ((Float) -> Unit)? = null
+    onSeekAudio: ((Float) -> Unit)? = null,
+    // Messages a person sends in a row (see ChatScreen) join into one run of bubbles
+    groupedWithPrevious: Boolean = false,
+    groupedWithNext: Boolean = false
 ) {
-    val bubbleShape = if (isPrivateMode) {
-        if (isFromMe) {
-            RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 16.dp, bottomEnd = 4.dp)
-        } else {
-            RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 4.dp, bottomEnd = 16.dp)
-        }
+    // Within a run the corners on the sender's side tighten so the bubbles read as one block;
+    // the tail stays only where the run starts (partner) or ends (me)
+    val joined = 6.dp
+    val bubbleShape = if (isFromMe) {
+        RoundedCornerShape(
+            topStart = 16.dp,
+            topEnd = if (groupedWithPrevious) joined else 16.dp,
+            bottomStart = 16.dp,
+            bottomEnd = if (groupedWithNext) joined else 4.dp
+        )
+    } else if (isPrivateMode) {
+        RoundedCornerShape(
+            topStart = if (groupedWithPrevious) joined else 16.dp,
+            topEnd = 16.dp,
+            bottomStart = if (groupedWithNext) joined else 4.dp,
+            bottomEnd = 16.dp
+        )
     } else {
-        if (isFromMe) {
-            RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 16.dp, bottomEnd = 4.dp)
-        } else {
-            RoundedCornerShape(topStart = 4.dp, topEnd = 16.dp, bottomStart = 16.dp, bottomEnd = 16.dp)
-        }
+        RoundedCornerShape(
+            topStart = if (groupedWithPrevious) joined else 4.dp,
+            topEnd = 16.dp,
+            bottomStart = if (groupedWithNext) joined else 16.dp,
+            bottomEnd = 16.dp
+        )
     }
 
     val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
@@ -674,7 +689,7 @@ fun MessageBubble(
                                 com.example.ui.components.AvatarView(
                                     photoUrl = senderPhotoUrl,
                                     name = message.senderName,
-                                    size = 40.dp,
+                                    size = 50.dp,
                                     isOnline = false,
                                     showOnlineBadge = false
                                 )
@@ -718,7 +733,7 @@ fun MessageBubble(
                                                   else if (isFromMe) Color.White 
                                                   else MaterialTheme.colorScheme.primary,
                                     inactiveColor = if (isPrivateMode) textColor.copy(alpha = 0.35f) 
-                                                    else if (isFromMe) Color.White.copy(alpha = 0.5f) 
+                                                    else if (isFromMe) Color.White.copy(alpha = 0.38f) 
                                                     else MaterialTheme.colorScheme.primary.copy(alpha = 0.35f),
                                     onSeek = onSeekAudio,
                                     height = 36.dp
@@ -796,7 +811,7 @@ fun MessageBubble(
                                 com.example.ui.components.AvatarView(
                                     photoUrl = senderPhotoUrl,
                                     name = message.senderName,
-                                    size = 40.dp,
+                                    size = 50.dp,
                                     isOnline = false,
                                     showOnlineBadge = false
                                 )
@@ -919,12 +934,30 @@ fun MessageBubble(
                     }
                 }
 
-                // Bubble Footer for non-audio, non-image, non-video messages
-                if (message.getTypedType() != MessageType.AUDIO && message.getTypedType() != MessageType.IMAGE && message.getTypedType() != MessageType.VIDEO) {
+                // Bubble Footer for non-audio, non-image, non-video messages. In a run only the last
+                // message shows the time, unless this one is pinned, starred, edited or still sending.
+                val footerNeeded = !groupedWithNext || message.isPinned || message.isStarred || message.isEdited ||
+                    (isFromMe && message.getTypedStatus() == MessageStatus.SENDING)
+                if (footerNeeded && message.getTypedType() != MessageType.AUDIO && message.getTypedType() != MessageType.IMAGE && message.getTypedType() != MessageType.VIDEO) {
+                    // Tapping the time of my message shows when it was seen (or delivered/sent)
+                    var showStatusDetail by remember(message.id) { mutableStateOf(false) }
+                    LaunchedEffect(showStatusDetail) {
+                        if (showStatusDetail) {
+                            kotlinx.coroutines.delay(2500)
+                            showStatusDetail = false
+                        }
+                    }
                     Row(
                         modifier = Modifier
                             .align(Alignment.End)
-                            .padding(top = 2.dp),
+                            .padding(top = 2.dp)
+                            .then(
+                                if (isFromMe) {
+                                    Modifier.pointerInput(message.id) {
+                                        detectTapGestures(onTap = { showStatusDetail = !showStatusDetail })
+                                    }
+                                } else Modifier
+                            ),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         if (message.isPinned) {
@@ -957,11 +990,17 @@ fun MessageBubble(
                             )
                         }
 
-                        Text(
-                            text = formatMessageTime(message.timestamp),
-                            fontSize = 10.sp,
-                            color = timeColor
-                        )
+                        AnimatedContent(
+                            targetState = showStatusDetail,
+                            transitionSpec = { fadeIn(tween(160)) togetherWith fadeOut(tween(120)) using SizeTransform(clip = false) },
+                            label = "status_detail"
+                        ) { detail ->
+                            Text(
+                                text = if (detail) statusDetail(message) else formatMessageTime(message.timestamp),
+                                fontSize = 10.sp,
+                                color = timeColor
+                            )
+                        }
 
                         if (isFromMe) {
                             Spacer(modifier = Modifier.width(4.dp))
@@ -1113,6 +1152,14 @@ fun MessageBubble(
         }
     }
 }
+}
+
+/** When my message was seen, or how far it got: shown for a moment after tapping its time. */
+private fun statusDetail(message: Message): String = when (message.getTypedStatus()) {
+    MessageStatus.READ -> "Seen " + formatMessageTime(message.readTimestamp ?: message.timestamp)
+    MessageStatus.DELIVERED -> "Delivered"
+    MessageStatus.SENT -> "Sent " + formatMessageTime(message.timestamp)
+    MessageStatus.SENDING -> "Sending…"
 }
 
 /** Delivery ticks that pop in when the status changes (sent -> delivered -> read). */

@@ -43,7 +43,11 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.testTag
+import com.example.security.PrivacyShield
+import com.example.ui.security.EmergencyExitHandle
+import com.example.ui.theme.CherishFontFamily
 import com.example.ui.theme.HeartRed
+import com.example.ui.theme.withFontFamily
 import kotlin.math.roundToInt
 import com.example.CherishApplication
 import com.example.ui.auth.AuthScreen
@@ -131,6 +135,25 @@ fun CherishNavGraph(
         )
     }
 
+    // Hiding the secret app (emergency exit, or leaving the app) leaves nothing of it open, recording
+    // or playing behind Notes: viewers, sheets and dialogs close, recording and playback stop.
+    // Other screens are left for the chat with no transition, so their dialogs go at once too.
+    LaunchedEffect(isDisguiseActive) {
+        if (!isDisguiseActive) return@LaunchedEffect
+        sharedChatViewModel.onSecretAppHidden()
+        com.example.ui.components.stopAllVideoNotes()
+        val currentRoute = navController.currentBackStackEntry?.destination?.route
+        if (isUserLoggedIn && currentRoute != null && currentRoute != Screen.Chat.route) {
+            val popped = navController.popBackStack(Screen.Chat.route, inclusive = false)
+            if (!popped) {
+                navController.navigate(Screen.Chat.route) {
+                    popUpTo(0) { inclusive = false }
+                    launchSingleTop = true
+                }
+            }
+        }
+    }
+
     // Issue 12: All ViewModels hoisted here so they survive tab switching.
     // Creating VMs inside composable{} lambdas destroys and recreates them on
     // every navigation, causing Firestore re-requests and scroll position resets.
@@ -177,6 +200,14 @@ fun CherishNavGraph(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
     ) {
+        // The secret app in its own typeface; the Notes disguise below keeps the phone's font
+        val baseTypography = MaterialTheme.typography
+        val secretTypography = remember(baseTypography) { baseTypography.withFontFamily(CherishFontFamily) }
+        MaterialTheme(
+            colorScheme = MaterialTheme.colorScheme,
+            shapes = MaterialTheme.shapes,
+            typography = secretTypography
+        ) {
         NavHost(
             navController = navController,
             startDestination = startDestination,
@@ -190,7 +221,9 @@ fun CherishNavGraph(
         enterTransition = {
             val fromOrder = getTabOrder(initialState.destination.route)
             val toOrder = getTabOrder(targetState.destination.route)
-            if (fromOrder >= 0 && toOrder >= 0 && fromOrder != toOrder) {
+            if (app.securityPreferences.isDisguiseActive()) {
+                EnterTransition.None
+            } else if (fromOrder >= 0 && toOrder >= 0 && fromOrder != toOrder) {
                 if (toOrder > fromOrder) {
                     slideIntoContainer(
                         towards = AnimatedContentTransitionScope.SlideDirection.Left,
@@ -210,7 +243,9 @@ fun CherishNavGraph(
         exitTransition = {
             val fromOrder = getTabOrder(initialState.destination.route)
             val toOrder = getTabOrder(targetState.destination.route)
-            if (fromOrder >= 0 && toOrder >= 0 && fromOrder != toOrder) {
+            if (app.securityPreferences.isDisguiseActive()) {
+                ExitTransition.None
+            } else if (fromOrder >= 0 && toOrder >= 0 && fromOrder != toOrder) {
                 if (toOrder > fromOrder) {
                     slideOutOfContainer(
                         towards = AnimatedContentTransitionScope.SlideDirection.Left,
@@ -230,7 +265,9 @@ fun CherishNavGraph(
         popEnterTransition = {
             val fromOrder = getTabOrder(initialState.destination.route)
             val toOrder = getTabOrder(targetState.destination.route)
-            if (fromOrder >= 0 && toOrder >= 0 && fromOrder != toOrder) {
+            if (app.securityPreferences.isDisguiseActive()) {
+                EnterTransition.None
+            } else if (fromOrder >= 0 && toOrder >= 0 && fromOrder != toOrder) {
                 if (toOrder > fromOrder) {
                     slideIntoContainer(
                         towards = AnimatedContentTransitionScope.SlideDirection.Left,
@@ -250,7 +287,9 @@ fun CherishNavGraph(
         popExitTransition = {
             val fromOrder = getTabOrder(initialState.destination.route)
             val toOrder = getTabOrder(targetState.destination.route)
-            if (fromOrder >= 0 && toOrder >= 0 && fromOrder != toOrder) {
+            if (app.securityPreferences.isDisguiseActive()) {
+                ExitTransition.None
+            } else if (fromOrder >= 0 && toOrder >= 0 && fromOrder != toOrder) {
                 if (toOrder > fromOrder) {
                     slideOutOfContainer(
                         towards = AnimatedContentTransitionScope.SlideDirection.Left,
@@ -470,6 +509,7 @@ fun CherishNavGraph(
             )
         }
     }
+        }
 
     // App Lock overlay if locked and not in disguise
     if (isAppLocked && !isDisguiseActive) {
@@ -520,6 +560,8 @@ fun CherishNavGraph(
     }
     // In-App OTA Updates Dialog: ONLY show inside Cherish app, NEVER inside Notes app
     if (updateState.showDialog && !isDisguiseActive && hasRevealedSecretApp) {
+        // Takes focus without a touch; tells the privacy cover it isn't the user leaving
+        SideEffect { PrivacyShield.noteInAppWindow() }
         AlertDialog(
             onDismissRequest = {
                 if (!updateState.isDownloading) profileViewModel.dismissUpdateDialog()
@@ -715,100 +757,9 @@ fun CherishNavGraph(
         )
     }
 
-    // Universal Side Floating Emergency Exit Toggle: available across ALL screens of Cherish app for emergency
-    val isSideEmergencyExitEnabled by app.securityPreferences.isSideEmergencyExitEnabled.collectAsState()
-    val sideEmergencyExitOpacity by app.securityPreferences.sideEmergencyExitOpacity.collectAsState()
-    if (!isDisguiseActive && hasRevealedSecretApp && !isAppLocked && isSideEmergencyExitEnabled) {
-        val exitOpacity = sideEmergencyExitOpacity.coerceIn(0.1f, 1.0f)
-        val haptic = LocalHapticFeedback.current
-        var dragOffsetY by remember { mutableFloatStateOf(0f) }
-        var dragOffsetX by remember { mutableFloatStateOf(0f) }
-        var isDockedOnLeft by remember { mutableStateOf(false) }
-        val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
-
-        val handleShape = if (isDockedOnLeft) {
-            RoundedCornerShape(topStart = 0.dp, bottomStart = 0.dp, topEnd = 24.dp, bottomEnd = 24.dp)
-        } else {
-            RoundedCornerShape(topStart = 24.dp, bottomStart = 24.dp, topEnd = 0.dp, bottomEnd = 0.dp)
-        }
-
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .zIndex(999f)
-        ) {
-            Surface(
-                shape = handleShape,
-                color = if (isDark) Color(0xFF1E2638).copy(alpha = exitOpacity)
-                        else Color(0xFF1F2937).copy(alpha = exitOpacity),
-                border = BorderStroke(
-                    1.dp,
-                    if (isDark) Color(0xFF2A364F).copy(alpha = (exitOpacity * 0.7f).coerceIn(0.1f, 0.9f))
-                    else Color(0xFF111827).copy(alpha = (exitOpacity * 0.5f).coerceIn(0.1f, 0.8f))
-                ),
-                shadowElevation = 0.dp,
-                tonalElevation = 0.dp,
-                modifier = Modifier
-                    .align(if (isDockedOnLeft) Alignment.CenterStart else Alignment.CenterEnd)
-                    .offset { IntOffset(dragOffsetX.roundToInt(), dragOffsetY.roundToInt()) }
-                    .width(44.dp)
-                    .height(88.dp)
-                    .pointerInput(isDockedOnLeft) {
-                        detectDragGestures(
-                            onDragEnd = {
-                                if (!isDockedOnLeft && dragOffsetX < -90f) {
-                                    isDockedOnLeft = true
-                                } else if (isDockedOnLeft && dragOffsetX > 90f) {
-                                    isDockedOnLeft = false
-                                }
-                                dragOffsetX = 0f
-                            },
-                            onDragCancel = {
-                                dragOffsetX = 0f
-                            },
-                            onDrag = { change, dragAmount ->
-                                change.consume()
-                                dragOffsetX += dragAmount.x
-                                dragOffsetY = (dragOffsetY + dragAmount.y).coerceIn(-500f, 500f)
-                                // Immediate switch when dragged sufficiently across the screen
-                                if (!isDockedOnLeft && dragOffsetX < -180f) {
-                                    isDockedOnLeft = true
-                                    dragOffsetX = 0f
-                                } else if (isDockedOnLeft && dragOffsetX > 180f) {
-                                    isDockedOnLeft = false
-                                    dragOffsetX = 0f
-                                }
-                            }
-                        )
-                    }
-                    .clickable {
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        app.securityPreferences.forceDisguise()
-                    }
-                    .testTag("side_emergency_exit_toggle")
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(start = if (isDockedOnLeft) 4.dp else 0.dp, end = if (!isDockedOnLeft) 4.dp else 0.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ExitToApp,
-                        contentDescription = "Emergency Exit to Notes",
-                        tint = HeartRed.copy(alpha = exitOpacity.coerceAtLeast(0.55f)),
-                        modifier = Modifier
-                            .size(24.dp)
-                            .graphicsLayer {
-                                if (isDockedOnLeft) {
-                                    scaleX = -1f
-                                }
-                            }
-                    )
-                }
-            }
-        }
-    }
+    // Universal side emergency exit: on every screen of the secret app (and inside its full-screen
+    // viewers, which cover this window)
+    EmergencyExitHandle(modifier = Modifier.zIndex(999f))
 
     } // End of Box
 } // End of CherishNavGraph

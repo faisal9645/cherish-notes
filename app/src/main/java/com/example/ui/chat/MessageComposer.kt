@@ -74,7 +74,6 @@ fun MessageComposer(
     onTextChanged: (String) -> Unit,
     onSendText: () -> Unit,
     replyingTo: Message?,
-    onDismissReply: () -> Unit,
     isRecordingVoice: Boolean,
     recordingDurationSec: Int,
     recordingAmplitudes: List<Float>,
@@ -341,90 +340,6 @@ fun MessageComposer(
             .fillMaxWidth()
             .background(barBg)
     ) {
-        // Reply preview: its own small card above the message box, lined up with it (clear of the
-        // mic/send button), so the close button is easy to hit
-        val replyAccent = if (isPrivateMode) (if (isDark) Color(0xFF9CA3AF) else Color(0xFF6B7280)) else MaterialTheme.colorScheme.primary
-        // Keeps the card filled while it animates away after the reply is cleared
-        val lastReply = remember { arrayOfNulls<Message>(1) }
-        if (replyingTo != null) lastReply[0] = replyingTo
-        AnimatedVisibility(
-            visible = replyingTo != null,
-            enter = expandVertically(
-                expandFrom = Alignment.Bottom,
-                animationSpec = spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessMediumLow)
-            ) + fadeIn(animationSpec = tween(180)),
-            exit = shrinkVertically(
-                shrinkTowards = Alignment.Bottom,
-                animationSpec = tween(160)
-            ) + fadeOut(animationSpec = tween(120)),
-            modifier = Modifier
-                .widthIn(max = 600.dp)
-                .fillMaxWidth()
-                .align(Alignment.CenterHorizontally)
-                .padding(start = 12.dp, end = 70.dp, top = 8.dp)
-        ) {
-            val reply = replyingTo ?: lastReply[0]
-            if (reply != null) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(14.dp))
-                        .background(pillBg)
-                        .border(BorderStroke(1.dp, pillBorder), RoundedCornerShape(14.dp))
-                        .padding(start = 10.dp, top = 4.dp, bottom = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .width(3.dp)
-                            .height(26.dp)
-                            .background(replyAccent, CircleShape)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.Reply,
-                        contentDescription = null,
-                        tint = replyAccent,
-                        modifier = Modifier.size(14.dp)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Column(
-                        modifier = Modifier.weight(1f),
-                        horizontalAlignment = Alignment.Start
-                    ) {
-                        Text(
-                            text = "Replying to ${reply.senderName ?: "Partner"}",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = if (isPrivateMode) (if (isDark) Color(0xFFECECEC) else Color(0xFF111827)) else MaterialTheme.colorScheme.primary,
-                            maxLines = 1,
-                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                        )
-                        Text(
-                            text = reply.text,
-                            fontSize = 11.5.sp,
-                            maxLines = 1,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                        )
-                    }
-                    IconButton(
-                        onClick = onDismissReply,
-                        modifier = Modifier
-                            .size(36.dp)
-                            .testTag("composer_cancel_reply")
-                    ) {
-                        Icon(
-                            Icons.Default.Close,
-                            contentDescription = "Cancel reply",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
-                }
-            }
-        }
-
         // 23. WhatsApp-Style Composer Row:
         // [ Reply Bar ]
         // [ 🙂 | Message your love... | 📎 | 📷 | 📹 ]    [ 🎤 / ✈️ ]
@@ -703,6 +618,8 @@ fun MessageComposer(
                             value = text,
                             onValueChange = onTextChanged,
                             textStyle = TextStyle(
+                                // The app's typeface, like the messages
+                                fontFamily = LocalTextStyle.current.fontFamily,
                                 color = if (isPrivateMode) {
                                     if (isDark) Color(0xFFECECEC) else Color(0xFF111827)
                                 } else {
@@ -1211,6 +1128,86 @@ fun MessageComposer(
                     }
                 }
             }
+            }
+        }
+    }
+}
+
+/**
+ * The message being replied to, as its own card: tinted and lifted (shadow) so it reads as
+ * separate from the message box it floats above. The close button is a full-size touch target.
+ */
+@Composable
+fun ReplyPreviewCard(
+    reply: Message,
+    isPrivateMode: Boolean,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+    val accent = if (isPrivateMode) (if (isDark) Color(0xFF9CA3AF) else Color(0xFF6B7280)) else MaterialTheme.colorScheme.primary
+    val cardColor = when {
+        isPrivateMode -> if (isDark) Color(0xFF26272B) else Color(0xFFF3F4F6)
+        isDark -> Color(0xFF263049)
+        else -> androidx.compose.ui.graphics.lerp(Color.White, accent, 0.07f)
+    }
+    Surface(
+        shape = RoundedCornerShape(14.dp),
+        color = cardColor,
+        border = BorderStroke(1.dp, accent.copy(alpha = if (isDark) 0.35f else 0.22f)),
+        shadowElevation = 6.dp,
+        modifier = modifier
+    ) {
+        Row(
+            modifier = Modifier.padding(start = 10.dp, top = 4.dp, bottom = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .width(3.dp)
+                    .height(26.dp)
+                    .background(accent, CircleShape)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.Reply,
+                contentDescription = null,
+                tint = accent,
+                modifier = Modifier.size(14.dp)
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+            Column(
+                modifier = Modifier.weight(1f),
+                horizontalAlignment = Alignment.Start
+            ) {
+                Text(
+                    text = "Replying to ${reply.senderName ?: "Partner"}",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = if (isPrivateMode) (if (isDark) Color(0xFFECECEC) else Color(0xFF111827)) else accent,
+                    maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                )
+                Text(
+                    text = reply.text,
+                    fontSize = 11.5.sp,
+                    maxLines = 1,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                )
+            }
+            IconButton(
+                onClick = onDismiss,
+                modifier = Modifier
+                    .size(36.dp)
+                    .testTag("composer_cancel_reply")
+            ) {
+                Icon(
+                    Icons.Default.Close,
+                    contentDescription = "Cancel reply",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(16.dp)
+                )
             }
         }
     }

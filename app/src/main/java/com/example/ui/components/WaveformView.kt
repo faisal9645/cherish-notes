@@ -50,14 +50,15 @@ fun WaveformView(
     val dropletElevation = remember { Animatable(0f) }
     var isDragging by remember { mutableStateOf(false) }
 
-    // Live continuous animation only active during recording or playback to conserve CPU and battery
-    val wavePhase = if (isRecording) {
+    // Live continuous animation only active during recording or playback to conserve CPU and battery;
+    // a slower sway while a voice note plays (on either side of the chat)
+    val wavePhase = if (isRecording || isPlaying) {
         val transition = rememberInfiniteTransition(label = "waveform_motion")
         val phase by transition.animateFloat(
             initialValue = 0f,
             targetValue = (2 * PI).toFloat(),
             animationSpec = infiniteRepeatable(
-                animation = tween(durationMillis = 1100, easing = LinearEasing),
+                animation = tween(durationMillis = if (isRecording) 1100 else 1500, easing = LinearEasing),
                 repeatMode = RepeatMode.Restart
             ),
             label = "wave_phase"
@@ -198,13 +199,11 @@ fun WaveformView(
                     (rawAmp + waveFlutter).coerceIn(0.18f, 1f)
                 }
                 isPlaying -> {
-                    // Playhead bounce: if this bar is close to the current playhead, give it a bounce
+                    // The whole wave sways while it plays, and the bars at the playhead bounce
+                    val sway = sin(wavePhase + i * 0.55f) * 0.12f
                     val distToPlayhead = kotlin.math.abs(x - playedX)
-                    if (distToPlayhead < step * 1.5f) {
-                        (rawAmp * playheadPulse).coerceIn(0.15f, 1f)
-                    } else {
-                        rawAmp
-                    }
+                    val bounce = if (distToPlayhead < step * 2f) rawAmp * (playheadPulse - 1f) else 0f
+                    (rawAmp + sway + bounce).coerceIn(0.15f, 1f)
                 }
                 else -> rawAmp
             }

@@ -4,6 +4,9 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.view.MotionEvent
+import android.view.View
+import android.view.ViewGroup
 import android.view.WindowManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -24,6 +27,7 @@ import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
+import com.example.security.PrivacyShield
 import com.example.ui.navigation.CherishNavGraph
 import com.example.ui.theme.CherishTheme
 import com.example.util.BatteryStatusHelper
@@ -40,6 +44,10 @@ class MainActivity : FragmentActivity() {
 
     /** Whether the secret app may be what's on screen; stays true until Notes has been drawn. */
     private var secretAppOnScreen = false
+
+    /** Drawn over everything in the window while PrivacyShield is up, so previews show nothing. */
+    private var privacyCover: View? = null
+    private var privacyCoverColor = android.graphics.Color.WHITE
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -69,8 +77,8 @@ class MainActivity : FragmentActivity() {
         }
         window.decorView.setBackgroundColor(if (isInitialDark) android.graphics.Color.parseColor("#121212") else android.graphics.Color.WHITE)
         setHighRefreshRate()
-        // Screenshots inside the app are allowed; only the recents preview hides the secret chat
-        // (see setSecretAppOnScreen)
+        // Screenshots inside the app are allowed; only previews (recent apps) hide the secret chat
+        // (see setSecretAppOnScreen and PrivacyShield)
         // Only apply default state on cold start.
         // SecurityPreferences init already sets the default state based on isDisguiseModeEnabled().
         // Do not force re-disguise here, as it overrides the in-memory state during Activity recreation.
@@ -107,6 +115,7 @@ class MainActivity : FragmentActivity() {
                 insetsController.isAppearanceLightNavigationBars = !useDarkTheme
                 insetsController.show(androidx.core.view.WindowInsetsCompat.Type.systemBars())
                 window.decorView.setBackgroundColor(if (useDarkTheme) android.graphics.Color.BLACK else android.graphics.Color.WHITE)
+                privacyCoverColor = if (useDarkTheme) android.graphics.Color.BLACK else android.graphics.Color.WHITE
                 onDispose {}
             }
 
@@ -164,6 +173,7 @@ class MainActivity : FragmentActivity() {
                 }
             }
         }
+        installPrivacyCover()
     }
 
     override fun onNewIntent(intent: android.content.Intent) {
@@ -190,6 +200,29 @@ class MainActivity : FragmentActivity() {
         }
     }
 
+    /** Adds the privacy cover above all content; PrivacyShield shows and hides it without waiting for a frame. */
+    private fun installPrivacyCover() {
+        val cover = View(this).apply {
+            visibility = View.GONE
+            // Nothing underneath reacts while it's up
+            isClickable = true
+        }
+        (window.decorView as ViewGroup).addView(
+            cover,
+            ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+        )
+        privacyCover = cover
+        PrivacyShield.onChange = { raised ->
+            if (raised) cover.setBackgroundColor(privacyCoverColor)
+            cover.visibility = if (raised) View.VISIBLE else View.GONE
+        }
+    }
+
+    /** Covers the chat when the app is on its way out (home, recent apps, another app). */
+    private fun coverSecretApp() {
+        if (secretAppOnScreen) PrivacyShield.raise()
+    }
+
     private fun setSecretAppOnScreen(onScreen: Boolean) {
         secretAppOnScreen = onScreen
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -198,21 +231,9 @@ class MainActivity : FragmentActivity() {
         }
     }
 
-    /**
-     * Before Android 13 the recents preview can only be hidden by marking the window secure. Done
-     * just while leaving with the chat on screen, so screenshots inside the app still work.
-     */
-    private fun hideSecretAppFromRecents() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU && secretAppOnScreen) {
-            window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
-        }
-    }
-
     override fun onResume() {
         super.onResume()
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
-            window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
-        }
+        PrivacyShield.lower()
         // Do NOT re-call setDecorFitsSystemWindows here — already set in onCreate.
         // Re-calling it causes a layout recalculation that shifts content after minimize/reopen.
         app.authRepository.onAppForegroundStateChanged(true)
@@ -231,10 +252,27 @@ class MainActivity : FragmentActivity() {
         super.onWindowFocusChanged(hasFocus)
         // Window focus changes happen during normal in-app interactions (dialogs, dropdowns,
         // photo viewer, keyboard, bottom sheets, permission popups). NEVER trigger re-disguise here.
+        // Only the privacy cover reacts: the moment focus leaves for the system (recent apps,
+        // notification shade) the chat is covered, and uncovered when it's back.
+        if (hasFocus) {
+            PrivacyShield.lower()
+        } else if (!isInMultiWindowMode && PrivacyShield.isLeavingApp()) {
+            coverSecretApp()
+        }
+    }
+
+    override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
+        PrivacyShield.onTouch(ev)
+        val handled = super.dispatchTouchEvent(ev)
+        // The system took this touch for its home/recents swipe after focus had already left
+        if (ev.actionMasked == MotionEvent.ACTION_CANCEL && !hasWindowFocus() && !isInMultiWindowMode) {
+            coverSecretApp()
+        }
+        return handled
     }
 
     override fun onUserLeaveHint() {
-        hideSecretAppFromRecents()
+        coverSecretApp()
         super.onUserLeaveHint()
         if (isChangingConfigurations) return
         if (!app.securityPreferences.ignoreNextPause && 
@@ -247,7 +285,7 @@ class MainActivity : FragmentActivity() {
     }
 
     override fun onPause() {
-        hideSecretAppFromRecents()
+        coverSecretApp()
         super.onPause()
     }
 
@@ -272,12 +310,13 @@ class MainActivity : FragmentActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
+        if (privacyCover != null) PrivacyShield.onChange = null
         batteryHelper.stop()
         app.authRepository.onAppForegroundStateChanged(false)
     }
 
-    // Screenshots and screen recordings inside the app are allowed; FLAG_SECURE is only set while
-    // leaving with the chat on screen before Android 13 (hideSecretAppFromRecents).
+    // Screenshots and screen recordings inside the app are allowed: FLAG_SECURE is never set.
+    // Recent-apps previews are covered instead (PrivacyShield, setRecentsScreenshotEnabled).
 
     private fun setHighRefreshRate() {
         try {

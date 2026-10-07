@@ -10,6 +10,8 @@ import android.util.Log
 import com.example.data.model.MessageType
 import com.google.firebase.FirebaseApp
 import com.google.firebase.storage.FirebaseStorage
+import android.webkit.MimeTypeMap
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
@@ -161,6 +163,25 @@ class MediaRepository(private val context: Context) {
         }
     }
 
+    /**
+     * A picked video or file (content:// link from the picker, or file://) as a file in the cache,
+     * so it can be uploaded. Keeps the extension, so storage knows what kind of file it is.
+     */
+    suspend fun copyToCache(uri: Uri, name: String? = null): File = withContext(Dispatchers.IO) {
+        if (uri.scheme == "file") {
+            uri.path?.let(::File)?.takeIf { it.exists() }?.let { return@withContext it }
+        }
+        val extension = name?.substringAfterLast('.', "")?.takeIf { it.isNotBlank() && it.length <= 5 }
+            ?: context.contentResolver.getType(uri)?.let { MimeTypeMap.getSingleton().getExtensionFromMimeType(it) }
+            ?: "bin"
+        val dir = File(context.cacheDir, "outgoing_media").apply { mkdirs() }
+        val target = File(dir, "media_${System.currentTimeMillis()}.$extension")
+        val input = context.contentResolver.openInputStream(uri)
+            ?: throw java.io.FileNotFoundException("Can't open $uri")
+        input.use { source -> FileOutputStream(target).use { source.copyTo(it) } }
+        target
+    }
+
     private fun decodeSampledBitmapFromUri(uri: Uri, reqWidth: Int, reqHeight: Int): Bitmap? {
         return try {
             val options = BitmapFactory.Options().apply {
@@ -249,12 +270,20 @@ class MediaRepository(private val context: Context) {
                     }
                 }
 
-                uploadTask.await()
+                try {
+                    uploadTask.await()
+                } catch (e: CancellationException) {
+                    // Cancelled from the chat: stop the upload itself as well
+                    uploadTask.cancel()
+                    throw e
+                }
                 val downloadUrl = storageRef.downloadUrl.await().toString()
                 Result.success(downloadUrl)
             } else {
                 fallbackToInlineOrLocal(file, type, onProgress)
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Log.w("MediaRepository", "Failed to upload file to Cloud Storage, using robust data fallback", e)
             fallbackToInlineOrLocal(file, type, onProgress)

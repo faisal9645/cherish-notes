@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import com.example.ui.security.SecretWindowGuard
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -893,6 +894,8 @@ fun FullScreenMediaViewer(
                     }
                 }
             }
+
+            SecretWindowGuard(ownDialogOpen = showDeleteConfirmDialog)
         }
     }
 }

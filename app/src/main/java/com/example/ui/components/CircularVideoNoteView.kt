@@ -52,6 +52,11 @@ private object VideoNotePlayback {
     var activeKey by mutableStateOf<Any?>(null)
 }
 
+/** Stops whichever video note is playing (each goes back to its still frame), e.g. when the chat hides. */
+fun stopAllVideoNotes() {
+    VideoNotePlayback.activeKey = null
+}
+
 @Composable
 fun CircularVideoNoteView(
     videoUrl: String,
