@@ -67,7 +67,7 @@ def create_github_release(token: str, version_code: int, version_name: str) -> d
     payload = {
         "tag_name": tag,
         "name": f"v{version_name} (build {version_code})",
-        "body": f"Cherish v{version_name} (Build {version_code}):\n• Multi-select & delete in chat screen — long-press any message to enter selection mode\n• Multi-select & delete across all gallery tabs (Media, Voice Notes, Links, Starred)\n• 'Select Message' option added to the message action sheet\n• Smaller APK — R8 minify + resource shrinking enabled\n• All gallery tabs: Select All targets only the current tab\n• Recover All now immediately restores media, voice notes, links & starred items\n• Bug fixes and stability improvements",
+        "body": f"Cherish v{version_name} (Build {version_code}):\n• Scrolling back through older chats no longer jumps to the bottom\n• Faster photos with small previews in chat & gallery\n• Smoother chat scrolling and a quicker app start\n• Emoji board and keyboard switch smoothly, never both open; back closes them first\n• Smileys look the same in chat as while typing; single emojis bigger\n• Neater reply bar and more room around the mic button\n• Video notes: full-width circle, sharper video, no stretching\n• Updates continue properly after allowing installs\n• Recent apps preview stays private\n• Bug fixes and stability improvements",
         "draft": False,
         "prerelease": False,
     }
@@ -124,10 +124,12 @@ def upload_apk_to_release(token: str, release: dict, apk_path: str, version_code
         def __len__(self):
             return self.total
 
+    apk_size = os.path.getsize(apk_path)
     url_with_param = f"{upload_url}?name={asset_name}"
     headers = {
         "Authorization": f"token {token}",
         "Content-Type": "application/vnd.android.package-archive",
+        "Content-Length": str(apk_size),
         "Accept": "application/vnd.github+json",
     }
     print(f"Uploading {apk_path} -> {asset_name} ({os.path.getsize(apk_path)} bytes)...", flush=True)
@@ -148,7 +150,7 @@ def upload_apk_to_release(token: str, release: dict, apk_path: str, version_code
             print(f"Exception during upload: {e}", flush=True)
         
         if attempt < 3:
-            time.sleep(5)
+            time.sleep(15)
             
     if not success:
         print("Upload failed after 3 attempts.", flush=True)
@@ -184,7 +186,7 @@ def build_apk(project_root: str):
     print("Building release APK...", flush=True)
     gradlew = os.path.join(project_root, "gradlew.bat" if os.name == 'nt' else "gradlew")
     try:
-        subprocess.check_call([gradlew, "assembleRelease"], cwd=project_root)
+        subprocess.check_call([gradlew, ":app:assembleRelease"], cwd=project_root)
         print("Build successful!", flush=True)
     except subprocess.CalledProcessError as e:
         print(f"ERROR: Build failed with exit code {e.returncode}")
