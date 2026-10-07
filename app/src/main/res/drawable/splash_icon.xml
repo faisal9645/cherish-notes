@@ -2,7 +2,7 @@
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
     <item
         android:gravity="center"
-        android:width="168dp"
-        android:height="168dp"
+        android:width="220dp"
+        android:height="220dp"
         android:drawable="@mipmap/splash_logo" />
 </layer-list>

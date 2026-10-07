@@ -851,7 +851,7 @@ fun ProfileScreen(
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         OutlinedButton(
-                            onClick = { viewModel.triggerInstantDisguise() },
+                            onClick = { onQuickDisguise() },
                             modifier = Modifier.fillMaxWidth().height(38.dp),
                             shape = RoundedCornerShape(10.dp)
                         ) {

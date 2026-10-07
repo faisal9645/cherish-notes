@@ -12,6 +12,8 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.calculateZoom
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -33,6 +35,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -51,7 +54,9 @@ import com.example.ui.theme.appHorizontalGradient
 import java.text.SimpleDateFormat
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChanged
 import java.util.*
+import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 
 data class GalleryMediaItem(
@@ -390,7 +395,7 @@ fun SharedGalleryScreen(
                             }
                             IconButton(
                                 onClick = {
-                                    if (gridColumnCount > 1) gridColumnCount--
+                                    if (gridColumnCount > 2) gridColumnCount--
                                 }
                             ) {
                                 Icon(
@@ -558,21 +563,49 @@ fun SharedGalleryScreen(
                             }
                             EmptyGalleryNotice(emptyText)
                         } else {
-                            var accumulatedZoom by remember { mutableFloatStateOf(1f) }
+                            val configuration = LocalConfiguration.current
+                            val screenWidthDp = configuration.screenWidthDp.toFloat() - 8f
+                            val minColumns = 2
+                            val maxColumns = 5
+                            val minThumbnailSize = screenWidthDp / maxColumns
+                            val maxThumbnailSize = screenWidthDp / minColumns
+
+                            var activeThumbnailSize by remember { mutableFloatStateOf(screenWidthDp / gridColumnCount) }
+
+                            LaunchedEffect(gridColumnCount) {
+                                activeThumbnailSize = screenWidthDp / gridColumnCount
+                            }
+
                             LazyVerticalGrid(
                                 columns = GridCells.Fixed(gridColumnCount),
                                 modifier = Modifier
                                     .fillMaxSize()
                                     .padding(4.dp)
                                     .pointerInput(Unit) {
-                                        detectTransformGestures { _, _, zoom, _ ->
-                                            accumulatedZoom *= zoom
-                                            if (accumulatedZoom > 1.25f) {
-                                                if (gridColumnCount > 1) gridColumnCount--
-                                                accumulatedZoom = 1f
-                                            } else if (accumulatedZoom < 0.80f) {
-                                                if (gridColumnCount < 5) gridColumnCount++
-                                                accumulatedZoom = 1f
+                                        awaitEachGesture {
+                                            awaitFirstDown()
+                                            var zooming = false
+                                            var currentZoom = 1f
+                                            val startSize = activeThumbnailSize
+
+                                            do {
+                                                val event = awaitPointerEvent()
+                                                val zoomChange = event.calculateZoom()
+                                                if (zoomChange != 1f) {
+                                                    zooming = true
+                                                    currentZoom *= zoomChange
+                                                    activeThumbnailSize = (startSize * currentZoom).coerceIn(minThumbnailSize, maxThumbnailSize)
+                                                    
+                                                    val derivedColumns = (screenWidthDp / activeThumbnailSize).roundToInt().coerceIn(minColumns, maxColumns)
+                                                    if (derivedColumns != gridColumnCount) {
+                                                        gridColumnCount = derivedColumns
+                                                    }
+                                                    event.changes.forEach { if (it.positionChanged()) it.consume() }
+                                                }
+                                            } while (event.changes.any { it.pressed })
+
+                                            if (zooming) {
+                                                activeThumbnailSize = screenWidthDp / gridColumnCount
                                             }
                                         }
                                     },

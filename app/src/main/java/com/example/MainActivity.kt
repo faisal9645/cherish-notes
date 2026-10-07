@@ -172,9 +172,7 @@ class MainActivity : FragmentActivity() {
         // Re-calling it causes a layout recalculation that shifts content after minimize/reopen.
         // Screenshot protection removed — no FLAG_SECURE applied
         app.authRepository.onAppForegroundStateChanged(true)
-        if (!app.securityPreferences.ignoreChatNavigation) {
-            app.securityPreferences.ignoreNextPause = false
-        }
+        app.securityPreferences.ignoreNextPause = false
         if (app.authRepository.isUserLoggedIn()) {
             val info = batteryHelper.getCurrentBattery()
             lifecycleScope.launch {
@@ -193,7 +191,6 @@ class MainActivity : FragmentActivity() {
         super.onUserLeaveHint()
         if (isChangingConfigurations) return
         if (!app.securityPreferences.ignoreNextPause && 
-            !app.securityPreferences.ignoreChatNavigation && 
             !app.securityPreferences.isTheaterModeActive &&
             !app.securityPreferences.isMediaViewerActive &&
             !app.securityPreferences.isExternalPickerActive &&
@@ -213,14 +210,13 @@ class MainActivity : FragmentActivity() {
         // Re-disguise ONLY when the user truly leaves the app (activity stopped without active picker/viewer),
         // and disguise mode is enabled in user settings.
         if (!app.securityPreferences.ignoreNextPause && 
-            !app.securityPreferences.ignoreChatNavigation && 
             !app.securityPreferences.isTheaterModeActive &&
             !app.securityPreferences.isMediaViewerActive &&
             !app.securityPreferences.isExternalPickerActive &&
             app.securityPreferences.isDisguiseModeEnabled()) {
             app.securityPreferences.reDisguise()
         }
-        if (!app.securityPreferences.ignoreChatNavigation && !app.securityPreferences.isTheaterModeActive && !app.securityPreferences.isExternalPickerActive) {
+        if (!app.securityPreferences.isTheaterModeActive && !app.securityPreferences.isExternalPickerActive) {
             app.securityPreferences.ignoreNextPause = false
         }
         app.googleDriveBackupManager.triggerImmediateAutoBackup()

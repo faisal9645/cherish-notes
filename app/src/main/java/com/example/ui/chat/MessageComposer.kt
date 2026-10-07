@@ -265,6 +265,83 @@ fun MessageComposer(
             .fillMaxWidth()
             .background(barBg)
     ) {
+        // Reply bar preview - Above the composer row
+        AnimatedVisibility(
+            visible = replyingTo != null,
+            enter = expandVertically(
+                expandFrom = Alignment.Bottom,
+                animationSpec = spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessMediumLow)
+            ) + fadeIn(animationSpec = tween(180)),
+            exit = shrinkVertically(
+                shrinkTowards = Alignment.Bottom,
+                animationSpec = tween(160)
+            ) + fadeOut(animationSpec = tween(120)),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 2.dp)
+        ) {
+            if (replyingTo != null) {
+                Surface(
+                    color = Color.Transparent,
+                    shadowElevation = 0.dp,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 4.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .width(3.5.dp)
+                                .height(30.dp)
+                                .background(if (isPrivateMode) (if (isDark) Color(0xFF9CA3AF) else Color(0xFF6B7280)) else MaterialTheme.colorScheme.primary, CircleShape)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.Reply,
+                            contentDescription = null,
+                            tint = if (isPrivateMode) (if (isDark) Color(0xFF9CA3AF) else Color(0xFF6B7280)) else MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            horizontalAlignment = Alignment.Start
+                        ) {
+                            Text(
+                                text = "Replying to ${replyingTo.senderName ?: "Partner"}",
+                                fontSize = 11.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (isPrivateMode) (if (isDark) Color(0xFFECECEC) else Color(0xFF111827)) else MaterialTheme.colorScheme.primary,
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Start,
+                                maxLines = 1,
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                            )
+                            Text(
+                                text = replyingTo.text,
+                                fontSize = 12.sp,
+                                maxLines = 1,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Start,
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                            )
+                        }
+                        IconButton(
+                            onClick = onDismissReply,
+                            modifier = Modifier.size(26.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Close,
+                                contentDescription = "Cancel reply",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
         // 23. WhatsApp-Style Composer Row:
         // [ Reply Bar ]
         // [ 🙂 | Message your love... | 📎 | 📷 | 📹 ]    [ 🎤 / ✈️ ]
@@ -280,87 +357,6 @@ fun MessageComposer(
                 modifier = Modifier.weight(1f),
                 horizontalAlignment = Alignment.Start
             ) {
-                // Reply bar preview - Left-aligned, emerging smoothly from the top of the type center bar
-                AnimatedVisibility(
-                    visible = replyingTo != null,
-                    enter = expandVertically(
-                        expandFrom = Alignment.Bottom,
-                        animationSpec = spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessMediumLow)
-                    ) + fadeIn(animationSpec = tween(180)),
-                    exit = shrinkVertically(
-                        shrinkTowards = Alignment.Bottom,
-                        animationSpec = tween(160)
-                    ) + fadeOut(animationSpec = tween(120)),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    if (replyingTo != null) {
-                        Surface(
-                            color = if (isDark) Color(0xFF1E2430) else Color.White,
-                            border = BorderStroke(1.dp, if (isDark) Color(0xFF2A364F) else Color(0xFFE2E8F0)),
-                            shadowElevation = 0.dp,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(bottom = 0.dp),
-                            shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 0.dp, bottomEnd = 0.dp)
-                        ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 10.dp, vertical = 6.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .width(3.5.dp)
-                                        .height(30.dp)
-                                        .background(if (isPrivateMode) (if (isDark) Color(0xFF9CA3AF) else Color(0xFF6B7280)) else MaterialTheme.colorScheme.primary, CircleShape)
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Icon(
-                                    imageVector = Icons.AutoMirrored.Filled.Reply,
-                                    contentDescription = null,
-                                    tint = if (isPrivateMode) (if (isDark) Color(0xFF9CA3AF) else Color(0xFF6B7280)) else MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Column(
-                                    modifier = Modifier.weight(1f),
-                                    horizontalAlignment = Alignment.Start
-                                ) {
-                                    Text(
-                                        text = "Replying to ${replyingTo.senderName ?: "Partner"}",
-                                        fontSize = 11.5.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = if (isPrivateMode) (if (isDark) Color(0xFFECECEC) else Color(0xFF111827)) else MaterialTheme.colorScheme.primary,
-                                        textAlign = androidx.compose.ui.text.style.TextAlign.Start,
-                                        maxLines = 1,
-                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                                    )
-                                    Text(
-                                        text = replyingTo.text,
-                                        fontSize = 12.sp,
-                                        maxLines = 1,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        textAlign = androidx.compose.ui.text.style.TextAlign.Start,
-                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                                    )
-                                }
-                                IconButton(
-                                    onClick = onDismissReply,
-                                    modifier = Modifier.size(26.dp)
-                                ) {
-                                    Icon(
-                                        Icons.Default.Close,
-                                        contentDescription = "Cancel reply",
-                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-
                 // Main Input Pill / Active Recording Bar
                 if (isRecordingVoice) {
                     // ---- WhatsApp-Style Recording Bar ----
@@ -854,10 +850,6 @@ fun MessageComposer(
                                             }
 
                                             if (liftedEarly) {
-                                                // Quick tap: switch back to Voice Note mode (Telegram style)
-                                                isVideoMode = false
-                                                try { haptic.performHapticFeedback(HapticFeedbackType.LongPress) } catch (_: Exception) {}
-                                                Toast.makeText(context, "Switched to Voice Note", Toast.LENGTH_SHORT).show()
                                                 return@awaitEachGesture
                                             }
 
@@ -965,10 +957,6 @@ fun MessageComposer(
                                                 }
 
                                                 if (liftedEarly) {
-                                                    // Quick tap — switch to Video Note mode (Telegram style)
-                                                    isVideoMode = true
-                                                    try { haptic.performHapticFeedback(HapticFeedbackType.LongPress) } catch (_: Exception) {}
-                                                    Toast.makeText(context, "Switched to Video Note (tap to switch back, hold to record)", Toast.LENGTH_SHORT).show()
                                                     return@awaitEachGesture
                                                 }
 

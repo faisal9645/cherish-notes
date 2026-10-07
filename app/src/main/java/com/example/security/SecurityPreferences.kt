@@ -94,7 +94,7 @@ class SecurityPreferences(context: Context) {
 
     fun reDisguise() {
         if (!isDisguiseModeEnabled()) return
-        if (ignoreNextPause || ignoreChatNavigation || isTheaterModeActive || isMediaViewerActive || isExternalPickerActive) return
+        if (ignoreNextPause || isTheaterModeActive || isMediaViewerActive || isExternalPickerActive) return
         _hasRevealedSecretAppInSession.value = false
         _isDisguiseActive.value = true
         setShowPreviousChatsEnabled(false)

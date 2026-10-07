@@ -73,6 +73,7 @@ fun AdaptiveMediaGrid(
                     contentScale = ContentScale.FillWidth,
                     modifier = Modifier
                         .fillMaxWidth()
+                        .defaultMinSize(minHeight = singleImageHeight)
                         .wrapContentHeight()
                         .clip(RoundedCornerShape(cornerRadius))
                         .clickable { onImageClick(0, urls[0]) }
