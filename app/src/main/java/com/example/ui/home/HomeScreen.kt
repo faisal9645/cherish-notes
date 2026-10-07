@@ -55,11 +55,7 @@ fun HomeScreen(
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     BackHandler {
-        val app = context.applicationContext as? com.example.CherishApplication
-        if (app?.securityPreferences?.isDisguiseModeEnabled() == true) {
-            app.securityPreferences.reDisguise()
-        }
-        (context as? android.app.Activity)?.moveTaskToBack(true)
+        onQuickDisguise()
     }
 
     val uiState by viewModel.uiState.collectAsState()

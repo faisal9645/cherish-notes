@@ -719,8 +719,8 @@ fun FullScreenMediaViewer(
                                 colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.88f))
                             )
                         )
-                        .windowInsetsPadding(WindowInsets.navigationBars)
-                        .padding(bottom = 24.dp),
+                        .navigationBarsPadding()
+                        .padding(bottom = 40.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     // Thumbnail filmstrip preview for fast photo browsing (starts from center of screen)

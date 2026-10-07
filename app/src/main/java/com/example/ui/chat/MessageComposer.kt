@@ -295,13 +295,13 @@ fun MessageComposer(
                 ) {
                     if (replyingTo != null) {
                         Surface(
-                            color = if (isDark) Color(0xFF1E2430) else Color(0xFFF1F5F9),
+                            color = if (isDark) Color(0xFF1E2430) else Color.White,
                             border = BorderStroke(1.dp, if (isDark) Color(0xFF2A364F) else Color(0xFFE2E8F0)),
-                            shadowElevation = 2.dp,
+                            shadowElevation = 0.dp,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(bottom = 5.dp),
-                            shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 8.dp, bottomEnd = 8.dp)
+                                .padding(bottom = 0.dp),
+                            shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 0.dp, bottomEnd = 0.dp)
                         ) {
                             Row(
                                 modifier = Modifier

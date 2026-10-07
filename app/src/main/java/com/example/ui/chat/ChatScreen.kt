@@ -401,7 +401,7 @@ fun ChatScreen(
         } else if (uiState.isSearching) {
             viewModel.setSearching(false)
         } else {
-            onNavigateToHome()
+            onQuickDisguise()
         }
     }
 
@@ -1026,9 +1026,6 @@ fun ChatScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f)
-                    .pointerInput(Unit) {
-                        detectTapGestures(onDoubleTap = { onQuickDisguise() })
-                    }
             ) {
                 if (!uiState.isStealthCurtainActive && uiState.chatExperienceMode != com.example.ui.chat.ChatExperienceMode.PRIVATE) {
                     ChatWallpaper(
@@ -1065,7 +1062,11 @@ fun ChatScreen(
 
                 LazyColumn(
                     state = listState,
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .pointerInput(Unit) {
+                            detectTapGestures(onDoubleTap = { onQuickDisguise() })
+                        },
                     reverseLayout = true,
                     contentPadding = PaddingValues(vertical = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp)
@@ -1092,7 +1093,7 @@ fun ChatScreen(
                                         isDark = isDark
                                     )
                                 }
-                                if (isToday(message.timestamp)) {
+                                if (isFirstOfDay && isToday(message.timestamp)) {
                                     StrictlyTwoPersonBanner(
                                         isPrivateMode = (uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE),
                                         isDark = isDark

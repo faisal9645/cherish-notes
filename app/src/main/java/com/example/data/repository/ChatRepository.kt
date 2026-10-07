@@ -47,6 +47,7 @@ class ChatRepository(
     private var previousMessageLimit = 0L
     private var todayMessages: List<Message> = emptyList()
     private var previousMessages: List<Message> = emptyList()
+    private var localBackupMessages: List<Message> = emptyList()
 
     private val _isQueryExhaustedFlow = MutableStateFlow(false)
     val isQueryExhaustedFlow: StateFlow<Boolean> = _isQueryExhaustedFlow.asStateFlow()
@@ -134,7 +135,8 @@ class ChatRepository(
      */
     fun loadAllGalleryMedia() {
         // Collect from all currently loaded messages immediately
-        val localMedia = _messagesFlow.value.filter {
+        val allLocal = _messagesFlow.value + localBackupMessages
+        val localMedia = allLocal.filter {
             !it.isDeleted && (
                 it.type.equals(com.example.data.model.MessageType.IMAGE.name, ignoreCase = true) ||
                 it.type.equals(com.example.data.model.MessageType.VIDEO.name, ignoreCase = true) ||
@@ -196,13 +198,7 @@ class ChatRepository(
                 val adapter = moshi.adapter(com.example.backup.FullAppBackupPayload::class.java)
                 val payload = adapter.fromJson(json)
                 if (payload != null) {
-                    val current = _messagesFlow.value.toMutableList()
-                    val existingIds = current.map { it.id }.toSet()
-                    val toAdd = payload.messages.filter { it.id !in existingIds }
-                    if (toAdd.isNotEmpty()) {
-                        current.addAll(toAdd)
-                        _messagesFlow.value = current.sortedBy { it.timestamp }
-                    }
+                    localBackupMessages = payload.messages
                 }
             }
         } catch (e: Exception) {
@@ -226,6 +222,7 @@ class ChatRepository(
     fun resetPreviousChats() {
         previousMessageLimit = 0L
         previousMessages = emptyList()
+        localBackupMessages = emptyList()
         _galleryMediaMessages.value = emptyList()
         globalPreviousListener?.remove()
         globalPreviousListener = null
@@ -346,14 +343,22 @@ class ChatRepository(
 
     private fun mergeAndEmitMessages() {
         val firestoreMessages = previousMessages + todayMessages
-        val firestoreIds = firestoreMessages.map { it.id }.toSet()
-        val maxFirestoreTimestamp = firestoreMessages.maxOfOrNull { it.timestamp } ?: 0L
+        
+        val localBackupSubset = localBackupMessages
+            .filter { it.timestamp < getStartOfToday() }
+            .sortedByDescending { it.timestamp }
+            .take(previousMessageLimit.toInt())
+            .toList()
+
+        val combinedMessages = firestoreMessages + localBackupSubset
+        val firestoreIds = combinedMessages.map { it.id }.toSet()
+        val maxFirestoreTimestamp = combinedMessages.maxOfOrNull { it.timestamp } ?: 0L
 
         val pendingOptimistic = _messagesFlow.value.filter {
             it.timestamp > maxFirestoreTimestamp && it.id !in firestoreIds
         }
 
-        _messagesFlow.value = (firestoreMessages + pendingOptimistic)
+        _messagesFlow.value = (combinedMessages + pendingOptimistic)
             .sortedBy { it.timestamp }
             .distinctBy { it.id }
     }

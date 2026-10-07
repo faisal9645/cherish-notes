@@ -389,6 +389,7 @@ fun CherishNavGraph(
                         }
                     }
                 },
+                onQuickDisguise = { app.securityPreferences.reDisguise() },
                 onNavigateToChat = {
                     val popped = navController.popBackStack(Screen.Chat.route, inclusive = false)
                     if (!popped) {

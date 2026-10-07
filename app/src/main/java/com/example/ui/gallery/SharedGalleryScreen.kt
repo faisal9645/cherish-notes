@@ -566,15 +566,13 @@ fun SharedGalleryScreen(
                                     .padding(4.dp)
                                     .pointerInput(Unit) {
                                         detectTransformGestures { _, _, zoom, _ ->
-                                            if (zoom != 1f) {
-                                                accumulatedZoom *= zoom
-                                                if (accumulatedZoom > 1.25f) {
-                                                    if (gridColumnCount > 1) gridColumnCount--
-                                                    accumulatedZoom = 1f
-                                                } else if (accumulatedZoom < 0.80f) {
-                                                    if (gridColumnCount < 5) gridColumnCount++
-                                                    accumulatedZoom = 1f
-                                                }
+                                            accumulatedZoom *= zoom
+                                            if (accumulatedZoom > 1.25f) {
+                                                if (gridColumnCount > 1) gridColumnCount--
+                                                accumulatedZoom = 1f
+                                            } else if (accumulatedZoom < 0.80f) {
+                                                if (gridColumnCount < 5) gridColumnCount++
+                                                accumulatedZoom = 1f
                                             }
                                         }
                                     },

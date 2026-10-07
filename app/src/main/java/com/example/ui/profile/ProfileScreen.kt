@@ -107,6 +107,7 @@ private fun SettingsSection(
 fun ProfileScreen(
     viewModel: ProfileViewModel,
     onNavigateBack: () -> Unit,
+    onQuickDisguise: () -> Unit = {},
     onNavigateToCloudBackup: () -> Unit = {},
     onNavigateToPrivacyAudit: () -> Unit = {},
     onNavigateToStorageManager: () -> Unit = {},
@@ -213,7 +214,7 @@ fun ProfileScreen(
 
     // Android back button & edge gesture: re-disguise directly to Notes app for security
     BackHandler {
-        onNavigateBack()
+        onQuickDisguise()
     }
 
     var dragAccumulator by remember { mutableFloatStateOf(0f) }
