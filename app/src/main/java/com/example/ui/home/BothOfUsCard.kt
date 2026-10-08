@@ -1,11 +1,11 @@
 package com.example.ui.home
 
+import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -51,16 +52,16 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.min
 import androidx.compose.ui.unit.sp
+import com.example.ui.chat.FullScreenMediaViewer
 import com.example.ui.components.AvatarView
 import com.example.ui.theme.HeartRed
-import com.example.ui.theme.OnlineGreen
 import com.example.ui.theme.darkTone
 import kotlinx.coroutines.delay
 import java.text.NumberFormat
@@ -91,7 +92,7 @@ data class LovePerson(
 private const val DAY_MS = 86_400_000L
 private val AVATAR_SIZE = 90.dp
 private val AVATAR_BORDER = 2.5.dp
-private val HEART_SIZE = 32.dp
+private val HEART_SIZE = 30.dp
 
 private fun parseDay(date: String?): Calendar? {
     val clean = date?.trim()?.ifBlank { null } ?: return null
@@ -136,26 +137,13 @@ private fun daysToBirthday(born: Calendar, now: Long): Int {
 
 private fun formatNumber(value: Long): String = NumberFormat.getIntegerInstance(Locale.getDefault()).format(value)
 
-/** Same wording as the chat header: "Online", "last seen today at 9:41 PM", ... */
-private fun presenceText(person: LovePerson): String {
-    person.status?.let { return it }
-    if (person.isOnline) return "Online"
-    val lastSeen = person.lastSeen
-    if (lastSeen <= 0L) return "Offline"
-    val time = SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date(lastSeen))
-    return when {
-        android.text.format.DateUtils.isToday(lastSeen) -> "last seen today at $time"
-        android.text.format.DateUtils.isToday(lastSeen + android.text.format.DateUtils.DAY_IN_MILLIS) ->
-            "last seen yesterday at $time"
-        else -> "last seen " + SimpleDateFormat("MMM d, h:mm a", Locale.getDefault()).format(Date(lastSeen))
-    }
-}
-
 /**
- * Both of us, side by side: the same two round photos with a heart between them, and under each
- * one: name, online / last seen, battery, age, days of life (counting live) and the next birthday.
- * Below: our names, the partner's note, the days we've lived and the days together. Tap the
- * numbers under a photo to set or change that birthday.
+ * Both of us card on the Love & Us tab:
+ * - Top: today's date (no calendar icon) and couple names ("Faisal & Shali") once at the top
+ * - Center: two round profile photos touching each other with an interlocking heart connector (same as classic layout)
+ * - Tap either avatar to open full-screen photo view
+ * - No last seen text; shows battery, age, days of life, and birthday countdown
+ * - Bottom: days lived together, days together counter, and chat now shortcut
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -169,7 +157,7 @@ fun BothOfUsCard(
     onOpenChat: () -> Unit,
     onSetTogetherSince: (date: String) -> Unit
 ) {
-    // Ticks every second only while the tab is on screen
+    val context = LocalContext.current
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(isVisible) {
         while (isVisible) {
@@ -179,6 +167,8 @@ fun BothOfUsCard(
     }
     var editing by remember { mutableStateOf<LovePerson?>(null) }
     var editingTogether by remember { mutableStateOf(false) }
+    var viewingPhotoUrl by remember { mutableStateOf<String?>(null) }
+
     val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
     val accent = MaterialTheme.colorScheme.primary
     val cardColor = if (isDark) darkTone(Color(0xFF141923)) else Color(0xFFFBFDFF)
@@ -209,9 +199,9 @@ fun BothOfUsCard(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 14.dp, vertical = 18.dp)
+                    .padding(horizontal = 14.dp, vertical = 14.dp)
             ) {
-                // Today's date, with the year
+                // Today's date (clean text without calendar icon)
                 val today = SimpleDateFormat("EEEE, MMMM d, yyyy", Locale.getDefault()).format(Date(now))
                 Surface(
                     shape = RoundedCornerShape(50),
@@ -219,48 +209,18 @@ fun BothOfUsCard(
                     modifier = Modifier.testTag("both_of_us_today")
                 ) {
                     Text(
-                        text = "📅  $today",
-                        fontSize = 12.5.sp,
+                        text = today,
+                        fontSize = 12.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = accent,
                         maxLines = 1,
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp)
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
                     )
                 }
-                Spacer(modifier = Modifier.height(14.dp))
 
-                // The two of us, same size, with the heart between
-                BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
-                    val columnWidth = min(maxWidth / 2, 136.dp)
-                    Row(
-                        modifier = Modifier.align(Alignment.TopCenter),
-                        verticalAlignment = Alignment.Top
-                    ) {
-                        PersonColumn(me, now, accent, columnWidth) { editing = me }
-                        PersonColumn(partner, now, HeartRed.copy(alpha = 0.8f), columnWidth) { editing = partner }
-                    }
-                    Surface(
-                        shape = CircleShape,
-                        color = HeartRed,
-                        border = BorderStroke(2.dp, cardColor),
-                        shadowElevation = 5.dp,
-                        modifier = Modifier
-                            .align(Alignment.TopCenter)
-                            .padding(top = (AVATAR_SIZE + AVATAR_BORDER * 2 - HEART_SIZE) / 2)
-                            .size(HEART_SIZE)
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                imageVector = Icons.Filled.Favorite,
-                                contentDescription = "Together in love",
-                                tint = Color.White,
-                                modifier = Modifier.size(17.dp)
-                            )
-                        }
-                    }
-                }
+                Spacer(modifier = Modifier.height(8.dp))
 
-                Spacer(modifier = Modifier.height(12.dp))
+                // Couple Names displayed once at the top
                 Text(
                     text = "${me.name} & ${partner.name}",
                     fontSize = 20.sp,
@@ -268,6 +228,7 @@ fun BothOfUsCard(
                     color = MaterialTheme.colorScheme.onSurface,
                     textAlign = TextAlign.Center
                 )
+
                 if (!partnerNote.isNullOrBlank()) {
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
@@ -280,13 +241,123 @@ fun BothOfUsCard(
                     )
                 }
 
-                // Days we've lived between us, and how many of them together
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // Intimate touching profile pictures with center interlocking heart connector
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 2.dp)
+                ) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy((-14).dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.wrapContentWidth()
+                    ) {
+                        // My Avatar
+                        Surface(
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.surface,
+                            shadowElevation = 4.dp,
+                            border = BorderStroke(AVATAR_BORDER, accent)
+                        ) {
+                            AvatarView(
+                                photoUrl = me.photoUrl,
+                                name = me.name,
+                                size = AVATAR_SIZE,
+                                isOnline = me.isOnline,
+                                showOnlineBadge = me.isOnline,
+                                modifier = Modifier
+                                    .clip(CircleShape)
+                                    .clickable {
+                                        if (!me.photoUrl.isNullOrBlank()) {
+                                            viewingPhotoUrl = me.photoUrl
+                                        } else {
+                                            Toast.makeText(context, "No profile photo uploaded yet", Toast.LENGTH_SHORT).show()
+                                        }
+                                    }
+                            )
+                        }
+
+                        // Partner Avatar
+                        Surface(
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.surface,
+                            shadowElevation = 4.dp,
+                            border = BorderStroke(AVATAR_BORDER, HeartRed.copy(alpha = 0.8f))
+                        ) {
+                            AvatarView(
+                                photoUrl = partner.photoUrl,
+                                name = partner.name,
+                                size = AVATAR_SIZE,
+                                isOnline = partner.isOnline,
+                                showOnlineBadge = partner.isOnline,
+                                modifier = Modifier
+                                    .clip(CircleShape)
+                                    .clickable {
+                                        if (!partner.photoUrl.isNullOrBlank()) {
+                                            viewingPhotoUrl = partner.photoUrl
+                                        } else {
+                                            Toast.makeText(context, "No profile photo uploaded yet", Toast.LENGTH_SHORT).show()
+                                        }
+                                    }
+                            )
+                        }
+                    }
+
+                    // Interlocking Heart Connector at the center intersection
+                    Surface(
+                        shape = CircleShape,
+                        color = HeartRed,
+                        border = BorderStroke(2.dp, cardColor),
+                        shadowElevation = 5.dp,
+                        modifier = Modifier
+                            .size(HEART_SIZE)
+                            .align(Alignment.Center)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Filled.Favorite,
+                                contentDescription = "Together in love",
+                                tint = Color.White,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // Stats row (Left = Me, Right = Partner) — compact, well-proportioned
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 6.dp),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    verticalAlignment = Alignment.Top
+                ) {
+                    PersonStatsColumn(
+                        person = me,
+                        now = now,
+                        modifier = Modifier.weight(1f),
+                        onEditBirthday = { editing = me }
+                    )
+                    PersonStatsColumn(
+                        person = partner,
+                        now = now,
+                        modifier = Modifier.weight(1f),
+                        onEditBirthday = { editing = partner }
+                    )
+                }
+
+                // Days lived between us
                 val myBorn = parseDay(me.birthday)
                 val partnerBorn = parseDay(partner.birthday)
                 val together = parseDay(togetherSince)?.takeIf { now >= it.timeInMillis }
                 if (myBorn != null && partnerBorn != null && now >= myBorn.timeInMillis && now >= partnerBorn.timeInMillis) {
                     val lived = (now - myBorn.timeInMillis) / DAY_MS + (now - partnerBorn.timeInMillis) / DAY_MS
-                    Spacer(modifier = Modifier.height(10.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
                     Surface(
                         shape = RoundedCornerShape(12.dp),
                         color = accent.copy(alpha = 0.08f),
@@ -294,17 +365,17 @@ fun BothOfUsCard(
                     ) {
                         Text(
                             text = "Together we've lived ${formatNumber(lived)} days 💛",
-                            fontSize = 12.5.sp,
+                            fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.onSurface,
                             textAlign = TextAlign.Center,
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
                         )
                     }
                 }
 
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(8.dp))
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), thickness = 0.6.dp)
-                Spacer(modifier = Modifier.height(10.dp))
+                Spacer(modifier = Modifier.height(6.dp))
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -321,11 +392,11 @@ fun BothOfUsCard(
                                 .padding(vertical = 4.dp)
                                 .testTag("days_together")
                         ) {
-                            Text(text = "❤️", fontSize = 16.sp)
+                            Text(text = "❤️", fontSize = 15.sp)
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
                                 text = "${formatNumber((now - together.timeInMillis) / DAY_MS + 1)} Days Together",
-                                fontSize = 14.sp,
+                                fontSize = 13.5.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
@@ -367,6 +438,21 @@ fun BothOfUsCard(
                 }
             }
         }
+    }
+
+    // Full photo viewer dialog when tapping either avatar
+    viewingPhotoUrl?.let { url ->
+        val allUrls = remember(me.photoUrl, partner.photoUrl) {
+            listOfNotNull(
+                me.photoUrl?.takeIf { it.isNotBlank() },
+                partner.photoUrl?.takeIf { it.isNotBlank() }
+            ).distinct()
+        }
+        FullScreenMediaViewer(
+            mediaUrl = url,
+            allMediaUrls = allUrls,
+            onDismiss = { viewingPhotoUrl = null }
+        )
     }
 
     editing?.let { person ->
@@ -427,119 +513,84 @@ fun DayPickerDialog(title: String, initial: String?, onPick: (String) -> Unit, o
 }
 
 @Composable
-private fun PersonColumn(
+private fun PersonStatsColumn(
     person: LovePerson,
     now: Long,
-    ringColor: Color,
-    width: androidx.compose.ui.unit.Dp,
+    modifier: Modifier = Modifier,
     onEditBirthday: () -> Unit
 ) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier
-            .width(width)
+        modifier = modifier
+            .clip(RoundedCornerShape(12.dp))
+            .clickable(enabled = person.id.isNotBlank()) { onEditBirthday() }
+            .padding(horizontal = 4.dp, vertical = 2.dp)
             .testTag("both_of_us_${person.id}")
     ) {
-        Surface(
-            shape = CircleShape,
-            color = MaterialTheme.colorScheme.surface,
-            shadowElevation = 4.dp,
-            border = BorderStroke(AVATAR_BORDER, ringColor)
-        ) {
-            AvatarView(
-                photoUrl = person.photoUrl,
-                name = person.name,
-                size = AVATAR_SIZE,
-                isOnline = person.isOnline,
-                showOnlineBadge = person.isOnline,
-                modifier = Modifier.clip(CircleShape)
-            )
-        }
-        Spacer(modifier = Modifier.height(6.dp))
-        Text(
-            text = person.name,
-            fontSize = 14.sp,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onSurface,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
-        Text(
-            text = presenceText(person),
-            fontSize = 11.sp,
-            color = if (person.isOnline && person.status == null) OnlineGreen else MaterialTheme.colorScheme.onSurfaceVariant,
-            fontWeight = if (person.isOnline && person.status == null) FontWeight.SemiBold else FontWeight.Normal,
-            textAlign = TextAlign.Center,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(horizontal = 4.dp)
-        )
+        // Battery status if available
         person.batteryLevel?.takeIf { it in 0..100 }?.let { level ->
-            BatteryChip(level, person.isCharging, Modifier.padding(top = 3.dp))
+            BatteryChip(level, person.isCharging)
+            Spacer(modifier = Modifier.height(3.dp))
         }
 
-        // Age, days of life and birthday (tap to set or change the birthday)
+        // Custom status (e.g. quiet time) if set
+        person.status?.let { st ->
+            Text(
+                text = st,
+                fontSize = 11.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Spacer(modifier = Modifier.height(3.dp))
+        }
+
+        // Age, days of life, and birthday
         val born = parseDay(person.birthday)?.takeIf { now >= it.timeInMillis }
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier
-                .padding(top = 8.dp)
-                .clip(RoundedCornerShape(12.dp))
-                .clickable(enabled = person.id.isNotBlank()) { onEditBirthday() }
-                .padding(horizontal = 6.dp, vertical = 4.dp)
-        ) {
-            if (born == null) {
-                Surface(shape = RoundedCornerShape(50), color = HeartRed.copy(alpha = 0.12f)) {
-                    Text(
-                        text = "+ Add birthday",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = HeartRed,
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
-                    )
-                }
-            } else {
-                val age = ageAt(born, now)
-                val lived = now - born.timeInMillis
-                Text(text = "$age years", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        if (born == null) {
+            Surface(shape = RoundedCornerShape(50), color = HeartRed.copy(alpha = 0.12f)) {
                 Text(
-                    text = formatNumber(lived / DAY_MS),
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary
+                    text = "+ Add birthday",
+                    fontSize = 11.5.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = HeartRed,
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
                 )
-                Text(text = "days of life", fontSize = 10.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        } else {
+            val age = ageAt(born, now)
+            val lived = now - born.timeInMillis
+            Text(
+                text = "$age yrs · ${formatNumber(lived / DAY_MS)} days",
+                fontSize = 12.5.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1
+            )
+            Spacer(modifier = Modifier.height(3.dp))
+            val untilBirthday = daysToBirthday(born, now)
+            Surface(
+                shape = RoundedCornerShape(50),
+                color = if (untilBirthday == 0) HeartRed else HeartRed.copy(alpha = 0.12f)
+            ) {
                 Text(
-                    text = "${formatNumber(lived / 1000L)} sec",
-                    fontSize = 10.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
-                    maxLines = 1
+                    text = when (untilBirthday) {
+                        0 -> "🎉 Today!"
+                        1 -> "🎂 Tomorrow"
+                        else -> "🎂 in $untilBirthday days"
+                    },
+                    fontSize = 10.5.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = if (untilBirthday == 0) Color.White else HeartRed,
+                    maxLines = 1,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
                 )
-                Spacer(modifier = Modifier.height(6.dp))
-                val untilBirthday = daysToBirthday(born, now)
-                Surface(
-                    shape = RoundedCornerShape(50),
-                    color = if (untilBirthday == 0) HeartRed else HeartRed.copy(alpha = 0.12f)
-                ) {
-                    Text(
-                        text = when (untilBirthday) {
-                            0 -> "🎉 Birthday today!"
-                            1 -> "🎂 Tomorrow, turns ${age + 1}"
-                            else -> "🎂 in $untilBirthday days"
-                        },
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = if (untilBirthday == 0) Color.White else HeartRed,
-                        maxLines = 1,
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
-                    )
-                }
             }
         }
     }
 }
 
-/** Battery like in the chat header: level icon (or charging / low) and the percentage. */
+/** Battery indicator: icon (or charging / low) and percentage. */
 @Composable
 private fun BatteryChip(level: Int, isCharging: Boolean, modifier: Modifier = Modifier) {
     val isLow = level <= 20
@@ -563,6 +614,7 @@ private fun BatteryChip(level: Int, isCharging: Boolean, modifier: Modifier = Mo
             tint = tint,
             modifier = Modifier.size(13.dp)
         )
+        Spacer(modifier = Modifier.width(3.dp))
         Text(
             text = if (isCharging) "$level% charging" else "$level%",
             fontSize = 11.sp,

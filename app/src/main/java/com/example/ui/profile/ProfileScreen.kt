@@ -524,43 +524,6 @@ fun ProfileScreen(
                         Icon(Icons.Default.Key, contentDescription = null, tint = primaryAccent)
                     }
                 )
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), thickness = 0.6.dp)
-                // Days together: the day it counts from, shared by both of us (Love & Us, celebrations)
-                val profileApp = context.applicationContext as com.example.CherishApplication
-                val togetherSinceSetting by profileApp.authRepository.togetherSince.collectAsState()
-                val profileDates by profileApp.coupleFeaturesRepository.datesFlow.collectAsState()
-                val togetherSince = remember(profileDates, togetherSinceSetting) {
-                    com.example.ui.dates.DateReminders.togetherSince(profileDates, togetherSinceSetting)
-                }
-                var showTogetherPicker by remember { mutableStateOf(false) }
-                ListItem(
-                    headlineContent = { Text("Days Together Since", fontSize = 15.sp, fontWeight = FontWeight.SemiBold) },
-                    supportingContent = {
-                        val days = com.example.ui.chat.LoveDates.dayNumber(togetherSince)
-                        val since = com.example.ui.chat.LoveDates.formatLong(togetherSince)
-                        Text(
-                            text = if (since != null && days != null) "$since · $days days" else "Not set — tap to choose the day",
-                            fontSize = 13.sp
-                        )
-                    },
-                    leadingContent = {
-                        Icon(Icons.Default.Favorite, contentDescription = null, tint = HeartRed)
-                    },
-                    trailingContent = {
-                        Icon(Icons.Default.Edit, contentDescription = "Change", tint = primaryAccent, modifier = Modifier.size(18.dp))
-                    },
-                    modifier = Modifier
-                        .clickable { showTogetherPicker = true }
-                        .testTag("days_together_setting")
-                )
-                if (showTogetherPicker) {
-                    com.example.ui.home.DayPickerDialog(
-                        title = "Together since",
-                        initial = togetherSince,
-                        onPick = { date -> profileApp.authRepository.setTogetherSince(date) },
-                        onDismiss = { showTogetherPicker = false }
-                    )
-                }
             }
 
 
