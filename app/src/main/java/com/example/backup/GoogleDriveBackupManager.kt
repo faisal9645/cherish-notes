@@ -29,6 +29,9 @@ import java.util.*
 /** Quiet time after the last change before the automatic backup runs. */
 private const val BACKUP_QUIET_PERIOD_MS = 5_000L
 
+/** The first backup after opening the app waits this long, so the chat loads without competition. */
+private const val STARTUP_BACKUP_DELAY_MS = 8_000L
+
 @JsonClass(generateAdapter = true)
 data class BackupManifest(
     val appVersion: String = "2.0.0",
@@ -105,11 +108,20 @@ class GoogleDriveBackupManager(
     // One backup at a time, so two writers never interleave in the same file
     private val backupMutex = Mutex()
 
-    init {
-        // Continuous Always-On Auto-Backup: a startup backup, then one after each burst of changes
-        // to chat messages, memories, shared notes, dates or the bucket list
+    private val started = java.util.concurrent.atomic.AtomicBoolean(false)
+
+    /**
+     * Continuous auto-backup: a backup shortly after the app is opened, then one after each burst of
+     * changes to chat messages, memories, shared notes, dates or the bucket list.
+     *
+     * Started by the app once its first screen is up (not when the process starts), so opening the
+     * app is never slowed down by packaging a backup, and a phone woken in the background by a
+     * push or an alarm doesn't run one. Calling it again does nothing.
+     */
+    fun start() {
+        if (!started.compareAndSet(false, true)) return
         autoBackupScope.launch {
-            kotlinx.coroutines.delay(1200) // Brief startup settle
+            kotlinx.coroutines.delay(STARTUP_BACKUP_DELAY_MS) // Let the chat load first
             performBackupToGoogleDrive()
 
             launch {

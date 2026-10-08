@@ -51,11 +51,20 @@ fun HomeScreen(
     onNavigateToOpenWhen: () -> Unit = {},
     onNavigateToLifetimeJourney: () -> Unit = {},
     onNavigateToCloudBackup: () -> Unit = {},
-    onQuickDisguise: () -> Unit = {}
+    onQuickDisguise: () -> Unit = {},
+    // The chat's view model: Heartbeat Touch and "thinking of you" live on this tab
+    chatViewModel: com.example.ui.chat.ChatViewModel? = null
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     BackHandler {
         onQuickDisguise()
+    }
+
+    val chatState = chatViewModel?.uiState?.collectAsState()?.value
+    var showHeartbeatTouch by remember { mutableStateOf(false) }
+    // The partner started Heartbeat Touch: open it so it can be felt together
+    LaunchedEffect(chatState?.isPartnerHeartTouching) {
+        if (chatState?.isPartnerHeartTouching == true) showHeartbeatTouch = true
     }
 
     val uiState by viewModel.uiState.collectAsState()
@@ -86,16 +95,14 @@ fun HomeScreen(
     var drawnNote by remember { mutableStateOf<LoveJarNote?>(null) }
     var showAddLoveNoteDialog by remember { mutableStateOf(false) }
 
-    val infiniteTransition = rememberInfiniteTransition(label = "heartbeat")
-    val heartScale by infiniteTransition.animateFloat(
-        initialValue = 1f,
-        targetValue = 1.15f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(800, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "heart_pulse"
-    )
+    // The title heart beats a few times when the tab opens, then rests
+    val heartBeat = remember { androidx.compose.animation.core.Animatable(1f) }
+    LaunchedEffect(Unit) {
+        repeat(4) {
+            heartBeat.animateTo(1.15f, tween(800, easing = FastOutSlowInEasing))
+            heartBeat.animateTo(1f, tween(800, easing = FastOutSlowInEasing))
+        }
+    }
 
     var dragAccumulator by remember { mutableFloatStateOf(0f) }
 
@@ -154,8 +161,8 @@ fun HomeScreen(
                             modifier = Modifier
                                 .size(18.dp)
                                 .graphicsLayer {
-                                    scaleX = heartScale
-                                    scaleY = heartScale
+                                    scaleX = heartBeat.value
+                                    scaleY = heartBeat.value
                                 }
                         )
                     }
@@ -169,16 +176,6 @@ fun HomeScreen(
                             imageVector = Icons.Outlined.CloudSync,
                             contentDescription = "Cloud Backup",
                             tint = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                    IconButton(
-                        onClick = onQuickDisguise,
-                        modifier = Modifier.testTag("home_quick_disguise_button")
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Favorite,
-                            contentDescription = "Quick Disguise as Notes",
-                            tint = HeartRed
                         )
                     }
                 },
@@ -272,6 +269,17 @@ fun HomeScreen(
                 }
             }
         },
+        // Heartbeat: at the bottom centre, big enough to reach any time
+        floatingActionButton = {
+            if (chatViewModel != null) {
+                HeartbeatButton(
+                    isPartnerTouching = chatState?.isPartnerHeartTouching == true,
+                    onOpenHeartbeatTouch = { showHeartbeatTouch = true },
+                    onSendThinkingOfYou = { chatViewModel.sendThinkingOfYou() }
+                )
+            }
+        },
+        floatingActionButtonPosition = FabPosition.Center,
         containerColor = MaterialTheme.colorScheme.surface
     ) { paddingValues ->
         Column(
@@ -282,174 +290,55 @@ fun HomeScreen(
                 .padding(horizontal = 16.dp, vertical = 10.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            // 1. Consolidated Hero Couple & Partner Card
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { onNavigateToChat() }
-                    .testTag("partner_profile_card"),
-                shape = RoundedCornerShape(22.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(18.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        AvatarView(
-                            photoUrl = partner?.photoUrl,
-                            name = partnerName,
-                            size = 64.dp,
-                            isOnline = isOnline,
-                            showOnlineBadge = !partnerHasCheckAfter
-                        )
-
-                        Spacer(modifier = Modifier.width(14.dp))
-
-                        Column(modifier = Modifier.weight(1f)) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = partnerName,
-                                    fontSize = 18.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-
-                                Surface(
-                                    shape = RoundedCornerShape(8.dp),
-                                    color = MaterialTheme.colorScheme.surfaceVariant
-                                ) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Lock,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.primary,
-                                            modifier = Modifier.size(11.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Text(
-                                            text = "Private",
-                                            fontSize = 11.sp,
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
-                                }
-                            }
-
-                            Spacer(modifier = Modifier.height(3.dp))
-
-                            if (partnerHasCheckAfter) {
-                                val (remaining, isExpired) = remember(partnerCheckTicker, partnerCheckAfterTarget) {
-                                    CheckAfterHelper.calculateRemaining(partnerCheckAfterTarget)
-                                }
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(
-                                        imageVector = Icons.Filled.HourglassTop,
-                                        contentDescription = null,
-                                        tint = if (isExpired) Color(0xFF2E7D32) else MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(13.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text(
-                                        text = if (isExpired) "✨ You can check now" else "Check after ${CheckAfterHelper.formatTargetTime(partnerCheckAfterTarget)} ($remaining)",
-                                        fontSize = 12.sp,
-                                        color = if (isExpired) Color(0xFF2E7D32) else MaterialTheme.colorScheme.primary,
-                                        fontWeight = FontWeight.SemiBold
-                                    )
-                                }
-                            } else {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(7.dp)
-                                            .clip(CircleShape)
-                                            .background(if (isOnline) OnlineGreen else Color.Gray)
-                                    )
-                                    Spacer(modifier = Modifier.width(5.dp))
-                                    Text(
-                                        text = viewModel.formatLastSeen(partner?.lastSeen ?: 0L, isOnline),
-                                        fontSize = 12.sp,
-                                        color = if (isOnline) OnlineGreen else MaterialTheme.colorScheme.onSurfaceVariant,
-                                        fontWeight = if (isOnline) FontWeight.SemiBold else FontWeight.Normal
-                                    )
-                                }
-                            }
-
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = statusText,
-                                fontSize = 12.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(14.dp))
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), thickness = 0.6.dp)
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    // Bottom Row: Milestone Days Together + Chat Pill
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(text = "❤️", fontSize = 16.sp)
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = "${uiState.daysTogether} Days Together",
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                        }
-
-                        Surface(
-                            shape = RoundedCornerShape(10.dp),
-                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
-                            modifier = Modifier.clickable { onNavigateToChat() }
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
-                            ) {
-                                Text(
-                                    text = "Chat Now",
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Icon(
-                                    imageVector = Icons.Default.ChevronRight,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(14.dp)
-                                )
-                            }
-                        }
-                    }
+            // 1. Both of us, side by side: photos with a heart between, online / last seen, battery,
+            // ages, days of life (live) and birthdays
+            val homeApp = context.applicationContext as com.example.CherishApplication
+            val ourDates by homeApp.coupleFeaturesRepository.datesFlow.collectAsState()
+            val birthdays by homeApp.authRepository.birthdays.collectAsState()
+            val togetherSinceSetting by homeApp.authRepository.togetherSince.collectAsState()
+            val myId = currentUser?.id.orEmpty()
+            val partnerId = (partner?.id ?: currentUser?.partnerId).orEmpty()
+            val homeLifecycle by androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle.currentStateFlow.collectAsState()
+            val homeDisguised by homeApp.securityPreferences.isDisguiseActive.collectAsState()
+            val partnerQuietStatus = if (partnerHasCheckAfter) {
+                val (_, isExpired) = remember(partnerCheckTicker, partnerCheckAfterTarget) {
+                    CheckAfterHelper.calculateRemaining(partnerCheckAfterTarget)
                 }
-            }
+                if (isExpired) "\u2728 You can check now"
+                else "Quiet until ${CheckAfterHelper.formatTargetTime(partnerCheckAfterTarget)}"
+            } else null
+            BothOfUsCard(
+                me = LovePerson(
+                    id = myId,
+                    name = currentUser?.displayName?.ifBlank { null } ?: "Me",
+                    photoUrl = currentUser?.photoUrl,
+                    birthday = birthdays[myId],
+                    isOnline = true,
+                    lastSeen = 0L,
+                    batteryLevel = currentUser?.batteryLevel,
+                    isCharging = currentUser?.isCharging == true
+                ),
+                partner = LovePerson(
+                    id = partnerId,
+                    name = partnerName,
+                    photoUrl = partner?.photoUrl,
+                    birthday = birthdays[partnerId],
+                    isOnline = isOnline,
+                    lastSeen = partner?.lastSeen ?: 0L,
+                    status = partnerQuietStatus,
+                    // Only a live battery: an old reading while offline would mislead
+                    batteryLevel = if (isOnline) partner?.batteryLevel else null,
+                    isCharging = partner?.isCharging == true
+                ),
+                partnerNote = partner?.statusMessage,
+                togetherSince = remember(ourDates, togetherSinceSetting) {
+                    com.example.ui.dates.DateReminders.togetherSince(ourDates, togetherSinceSetting)
+                },
+                isVisible = !homeDisguised && homeLifecycle.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED),
+                onSetBirthday = { userId, date -> homeApp.authRepository.setBirthday(userId, date) },
+                onOpenChat = onNavigateToChat,
+                onSetTogetherSince = { date -> homeApp.authRepository.setTogetherSince(date) }
+            )
 
             // 2. Secret Chat Quick Preview Card
             Card(
@@ -611,32 +500,6 @@ fun HomeScreen(
                 }
             }
 
-            // Both of us: ages, days of life (live) and next birthdays
-            val homeApp = context.applicationContext as com.example.CherishApplication
-            val ourDates by homeApp.coupleFeaturesRepository.datesFlow.collectAsState()
-            val birthdays by homeApp.authRepository.birthdays.collectAsState()
-            val myId = currentUser?.id.orEmpty()
-            val partnerId = (partner?.id ?: currentUser?.partnerId).orEmpty()
-            val homeLifecycle by androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle.currentStateFlow.collectAsState()
-            val homeDisguised by homeApp.securityPreferences.isDisguiseActive.collectAsState()
-            BothOfUsCard(
-                me = LovePerson(
-                    id = myId,
-                    name = currentUser?.displayName?.ifBlank { null } ?: "Me",
-                    photoUrl = currentUser?.photoUrl,
-                    birthday = birthdays[myId]
-                ),
-                partner = LovePerson(
-                    id = partnerId,
-                    name = partnerName,
-                    photoUrl = partner?.photoUrl,
-                    birthday = birthdays[partnerId]
-                ),
-                togetherSince = remember(ourDates) { com.example.ui.dates.DateReminders.togetherSince(ourDates) },
-                isVisible = !homeDisguised && homeLifecycle.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED),
-                onSetBirthday = { userId, date -> homeApp.authRepository.setBirthday(userId, date) }
-            )
-
             // Our dates: what's coming up (both birthdays included), and the way to add birthdays and our days
             val nextDates = remember(ourDates, birthdays, myId, partnerId, partnerName) {
                 val titles = buildMap {
@@ -682,7 +545,7 @@ fun HomeScreen(
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                             Text(
-                                text = if (ourDates.isEmpty()) "Add birthdays, anniversaries, our first meeting..."
+                                text = if (ourDates.isEmpty()) "Add birthdays, anniversaries, our meetings..."
                                 else "Birthdays, anniversaries and our days",
                                 fontSize = 12.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -876,7 +739,8 @@ fun HomeScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(20.dp))
+            // Room to scroll the last card above the heartbeat button
+            Spacer(modifier = Modifier.height(88.dp))
         }
     }
 
@@ -902,6 +766,18 @@ fun HomeScreen(
             onAdd = { text, emoji ->
                 viewModel.addLoveJarNote(text, emoji)
             }
+        )
+    }
+
+    // Heartbeat Touch (moved here from the chat's top bar)
+    if (showHeartbeatTouch && chatViewModel != null) {
+        com.example.ui.chat.HeartbeatTouchDialog(
+            partnerName = partnerName,
+            isPartnerTouching = chatState?.isPartnerHeartTouching == true,
+            isPartnerOnline = chatState?.isPartnerOnline == true,
+            onTouchChanged = { chatViewModel.setHeartbeatTouch(it) },
+            onSyncHeartbeatStreak = { chatViewModel.syncHeartbeatStreak() },
+            onDismiss = { showHeartbeatTouch = false }
         )
     }
 }

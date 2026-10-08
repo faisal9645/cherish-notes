@@ -73,6 +73,9 @@ import com.example.ui.notes.SharedNotesViewModel
 import com.example.ui.profile.ProfileScreen
 import com.example.ui.profile.ProfileViewModel
 
+/** The update check waits this long after the app is opened. */
+private const val UPDATE_CHECK_DELAY_MS = 4_000L
+
 @Composable
 fun CherishNavGraph(
     app: CherishApplication,
@@ -189,6 +192,8 @@ fun CherishNavGraph(
 
     LaunchedEffect(isDisguiseActive, hasRevealedSecretApp) {
         if (!isDisguiseActive && hasRevealedSecretApp) {
+            // A few seconds in, so the chat opens and loads first
+            kotlinx.coroutines.delay(UPDATE_CHECK_DELAY_MS)
             profileViewModel.silentCheckForUpdates(context)
         } else {
             profileViewModel.dismissUpdateDialog()
@@ -336,7 +341,8 @@ fun CherishNavGraph(
                 onNavigateToProfile = { navController.navigate(Screen.Profile.route) { launchSingleTop = true } },
                 onNavigateToLifetimeJourney = { navController.navigate(Screen.LifetimeJourney.route) { launchSingleTop = true } },
                 onNavigateToCloudBackup = { navController.navigate(Screen.CloudBackup.route) { launchSingleTop = true } },
-                onQuickDisguise = { app.securityPreferences.reDisguise() }
+                onQuickDisguise = { app.securityPreferences.reDisguise() },
+                chatViewModel = sharedChatViewModel
             )
         }
 

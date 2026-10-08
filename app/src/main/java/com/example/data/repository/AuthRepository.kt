@@ -41,6 +41,27 @@ class AuthRepository(private val context: Context) {
         lovePrefs.edit().putString("birthdays", org.json.JSONObject(birthdays).toString()).apply()
     }
 
+    private val _togetherSince = MutableStateFlow(lovePrefs.getString("together_since", null))
+    /**
+     * The day "days together" counts from ("yyyy-MM-dd"), set in settings and shared by both phones;
+     * null until set (then the earliest anniversary in our dates is used).
+     */
+    val togetherSince: StateFlow<String?> = _togetherSince.asStateFlow()
+
+    private fun cacheTogetherSince(date: String?) {
+        _togetherSince.value = date
+        lovePrefs.edit().putString("together_since", date).apply()
+    }
+
+    /** Sets the day we got together for both of us. */
+    fun setTogetherSince(date: String) {
+        cacheTogetherSince(date)
+        getCoupleDocRef(_currentUserState.value?.coupleId)?.set(
+            mapOf("togetherSince" to date),
+            com.google.firebase.firestore.SetOptions.merge()
+        )
+    }
+
     /** Sets [userId]'s birthday ("yyyy-MM-dd"); either of us can set both. */
     fun setBirthday(userId: String, date: String) {
         if (userId.isBlank()) return
@@ -206,6 +227,8 @@ class AuthRepository(private val context: Context) {
                     .mapNotNull { (key, value) -> if (key is String && value is String) key to value else null }
                     .toMap()
                 if (birthdays != _birthdays.value) cacheBirthdays(birthdays)
+                val since = snapshot.getString("togetherSince")?.trim()?.ifBlank { null }
+                if (since != _togetherSince.value) cacheTogetherSince(since)
 
                 // A "thinking of you" heartbeat from the partner while this app is running (when
                 // it isn't, the push brings it; whichever comes first plays, the other is ignored)

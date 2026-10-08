@@ -45,14 +45,14 @@ private val CATEGORY_ORDER = listOf(
 /** Quick starts for an empty list. */
 private val SUGGESTIONS = listOf(
     "Our anniversary" to DateCategory.ANNIVERSARY,
-    "The day we first met" to DateCategory.FIRST_DATE,
+    "Our meeting" to DateCategory.FIRST_DATE,
     "Birthday" to DateCategory.BIRTHDAY,
     "Family birthday" to DateCategory.BIRTHDAY,
     "A place we went" to DateCategory.PLACE
 )
 
 /**
- * Our dates: birthdays (ours and family's), anniversaries, the first meeting, places we went...
+ * Our dates: birthdays (ours and family's), anniversaries, meetings, places we went...
  * Shared by both phones. Coming-up dates are shown when the app is opened (a week ahead).
  */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)

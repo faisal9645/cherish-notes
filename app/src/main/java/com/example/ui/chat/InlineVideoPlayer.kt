@@ -34,6 +34,7 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -332,16 +333,15 @@ fun InlineYouTubeCard(
     val isDisguised by com.example.security.SecurityPreferences.getInstance(context).isDisguiseActive.collectAsState()
     LaunchedEffect(isDisguised) { if (isDisguised) isPlayingInline = false }
 
-    val infiniteTransition = rememberInfiniteTransition(label = "yt_play_pulse")
-    val pulseScale by infiniteTransition.animateFloat(
-        initialValue = 1.0f,
-        targetValue = 1.08f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1400, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "pulse_scale"
-    )
+    // The play button pulses a few times when the card appears, then rests (every YouTube card
+    // pulsing forever kept the screen redrawing)
+    val pulse = remember { Animatable(1f) }
+    LaunchedEffect(Unit) {
+        repeat(3) {
+            pulse.animateTo(1.08f, tween(1400, easing = FastOutSlowInEasing))
+            pulse.animateTo(1f, tween(1400, easing = FastOutSlowInEasing))
+        }
+    }
 
     Surface(
         shape = RoundedCornerShape(16.dp),
@@ -393,6 +393,25 @@ fun InlineYouTubeCard(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
+                    // Open the video in the YouTube app (or the browser without it)
+                    IconButton(
+                        onClick = {
+                            isPlayingInline = false
+                            YouTubeHelper.openInYouTube(context, videoId)
+                        },
+                        modifier = Modifier
+                            .size(30.dp)
+                            .background(Color.White.copy(alpha = 0.12f), CircleShape)
+                            .testTag("youtube_open_in_app")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.OpenInNew,
+                            contentDescription = "Open in YouTube app",
+                            tint = Color.White,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+
                     IconButton(
                         onClick = { onOpenTheater(videoId) },
                         modifier = Modifier
@@ -463,7 +482,7 @@ fun InlineYouTubeCard(
                         Canvas(modifier = Modifier.size(64.dp)) {
                             drawCircle(
                                 color = Color(0xFFFF0000).copy(alpha = 0.25f),
-                                radius = (size.minDimension / 2f) * pulseScale
+                                radius = (size.minDimension / 2f) * pulse.value
                             )
                         }
 
@@ -634,6 +653,31 @@ fun InlineVideoTheaterModal(
                         }
                     }
 
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                    // Open in the YouTube app: the theater closes first, so leaving the app hides it
+                    // as usual
+                    IconButton(
+                        onClick = {
+                            onDismiss()
+                            YouTubeHelper.openInYouTube(context, videoId)
+                        },
+                        modifier = Modifier
+                            .size(42.dp)
+                            .background(Color.Black.copy(alpha = 0.75f), CircleShape)
+                            .border(1.dp, Color.White.copy(alpha = 0.35f), CircleShape)
+                            .testTag("theater_open_in_youtube")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.OpenInNew,
+                            contentDescription = "Open in YouTube app",
+                            tint = Color.White,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+
                     // High-Visibility Floating Close Button
                     IconButton(
                         onClick = onDismiss,
@@ -648,6 +692,7 @@ fun InlineVideoTheaterModal(
                             tint = Color.White,
                             modifier = Modifier.size(22.dp)
                         )
+                    }
                     }
                 }
 

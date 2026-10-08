@@ -98,6 +98,56 @@ class ChatViewModel(
     )
     val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
 
+    /** What the chat list shows depends on these (today only / Recover All, starred, search...). */
+    private data class MessageFilter(
+        val messages: List<Message>,
+        val showPreviousChats: Boolean,
+        val starredOnly: Boolean,
+        val clearedBefore: Long,
+        val query: String,
+        val logicalDay: String
+    )
+
+    private fun ChatUiState.messageFilter() = MessageFilter(
+        messages = messages,
+        showPreviousChats = showPreviousChats,
+        starredOnly = filterStarredOnly,
+        clearedBefore = temporaryClearTimestamp,
+        query = searchQuery,
+        logicalDay = logicalDay
+    )
+
+    private fun filterMessages(filter: MessageFilter): List<Message> {
+        var list = filter.messages.filter { !it.isDeleted }
+        if (!filter.showPreviousChats) {
+            list = list.filter { com.example.util.ChatTimeFormatter.isToday(it.timestamp) }
+        }
+        if (filter.starredOnly) {
+            list = list.filter { it.isStarred }
+        }
+        if (filter.clearedBefore > 0L) {
+            list = list.filter { it.timestamp > filter.clearedBefore }
+        }
+        if (filter.query.isNotBlank()) {
+            val q = filter.query.trim()
+            list = list.filter { it.text.contains(q, ignoreCase = true) }
+        }
+        return list
+    }
+
+    /**
+     * The messages the chat shows, worked out off the main thread: with big pages of history
+     * arriving, filtering on the main thread made scrolling stutter. Only recomputed when the
+     * messages or a filter change (not for typing or presence updates).
+     */
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    val displayedMessages: StateFlow<List<Message>> = _uiState
+        .map { it.messageFilter() }
+        .distinctUntilChanged()
+        .mapLatest { filterMessages(it) }
+        .flowOn(kotlinx.coroutines.Dispatchers.Default)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, filterMessages(_uiState.value.messageFilter()))
+
     // Preserved scroll position when navigating between tabs (Chat, Love & Us, Settings)
     var savedScrollIndex: Int = 0
     var savedScrollOffset: Int = 0

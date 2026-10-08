@@ -289,7 +289,7 @@ fun ProfileScreen(
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // 1. Premium Couple Profile Showcase Card
+            // 1. My profile: photo, name, note, edit (the two of us are on the Love & Us tab)
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -327,233 +327,75 @@ fun ProfileScreen(
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         val myName = user?.displayName?.ifBlank { "Me" } ?: "Me"
-                        val partnerName = partner?.displayName?.ifBlank {
-                            user?.partnerEmail?.removeSuffix("@cherish.app") ?: "Partner"
-                        } ?: (user?.partnerEmail?.removeSuffix("@cherish.app") ?: "Partner")
 
-                        // Symmetrical, Intimate Couple Avatars Nestled Close Together with Center Love Heart
+                        // My photo (tap to change it)
                         Box(
                             contentAlignment = Alignment.Center,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(top = 8.dp, bottom = 12.dp)
+                            modifier = Modifier.padding(top = 8.dp, bottom = 10.dp)
                         ) {
-                            Row(
-                                horizontalArrangement = Arrangement.spacedBy((-14).dp),
-                                verticalAlignment = Alignment.Top,
-                                modifier = Modifier.wrapContentWidth()
+                            Surface(
+                                shape = CircleShape,
+                                color = MaterialTheme.colorScheme.surface,
+                                shadowElevation = 4.dp,
+                                border = BorderStroke(2.5.dp, primaryAccent)
                             ) {
-                                // My Avatar Column
-                                Column(
-                                    horizontalAlignment = Alignment.CenterHorizontally
+                                AvatarView(
+                                    photoUrl = user?.photoUrl,
+                                    name = myName,
+                                    size = 90.dp,
+                                    showOnlineBadge = false,
+                                    modifier = Modifier
+                                        .clip(CircleShape)
+                                        .clickable { showAvatarOptionsDialog = true }
+                                )
+                            }
+
+                            if (uiState.isUpdating) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(95.dp)
+                                        .clip(CircleShape)
+                                        .background(Color.Black.copy(alpha = 0.45f)),
+                                    contentAlignment = Alignment.Center
                                 ) {
-                                    Box(contentAlignment = Alignment.BottomStart) {
-                                        Surface(
-                                            shape = CircleShape,
-                                            color = MaterialTheme.colorScheme.surface,
-                                            shadowElevation = 4.dp,
-                                            border = BorderStroke(2.5.dp, primaryAccent)
-                                        ) {
-                                            AvatarView(
-                                                photoUrl = user?.photoUrl,
-                                                name = myName,
-                                                size = 90.dp,
-                                                isOnline = user?.isOnline == true || user?.isEffectivelyOnline() == true,
-                                                showOnlineBadge = true,
-                                                modifier = Modifier
-                                                    .clip(CircleShape)
-                                                    .clickable { showAvatarOptionsDialog = true }
-                                            )
-                                        }
-
-                                        if (uiState.isUpdating) {
-                                            Box(
-                                                modifier = Modifier
-                                                    .size(80.dp)
-                                                    .clip(CircleShape)
-                                                    .background(Color.Black.copy(alpha = 0.45f)),
-                                                contentAlignment = Alignment.Center
-                                            ) {
-                                                CircularProgressIndicator(
-                                                    modifier = Modifier.size(24.dp),
-                                                    color = Color.White,
-                                                    strokeWidth = 2.5.dp
-                                                )
-                                            }
-                                        }
-
-                                        // Camera edit pill on bottom-LEFT side (keeps avatars close without obstruction)
-                                        Surface(
-                                            shape = CircleShape,
-                                            color = primaryAccent,
-                                            border = BorderStroke(2.dp, if (isDark) darkTone(Color(0xFF141923)) else Color.White),
-                                            shadowElevation = 3.dp,
-                                            modifier = Modifier
-                                                .size(26.dp)
-                                                .clickable { showAvatarOptionsDialog = true }
-                                        ) {
-                                            Box(contentAlignment = Alignment.Center) {
-                                                Icon(
-                                                    imageVector = Icons.Default.CameraAlt,
-                                                    contentDescription = "Change profile photo",
-                                                    tint = Color.White,
-                                                    modifier = Modifier.size(13.dp)
-                                                )
-                                            }
-                                        }
-                                    }
-
-                                    Spacer(modifier = Modifier.height(6.dp))
-                                    Text(
-                                        text = myName,
-                                        fontSize = 13.5.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.onSurface,
-                                        maxLines = 1
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(24.dp),
+                                        color = Color.White,
+                                        strokeWidth = 2.5.dp
                                     )
-                                    // My live battery indicator
-                                    val myBattery = user?.batteryLevel
-                                    if (myBattery != null && myBattery in 0..100) {
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            modifier = Modifier.padding(top = 2.dp)
-                                        ) {
-                                            Text(
-                                                text = if (user.isCharging) "⚡ $myBattery%" else "🔋 $myBattery%",
-                                                fontSize = 11.sp,
-                                                fontWeight = FontWeight.SemiBold,
-                                                color = if (user.isCharging) Color(0xFF10B981) else if (myBattery <= 20) Color(0xFFEF4444) else MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-                                        }
-                                    }
-                                }
-
-                                // Partner Avatar Column
-                                Column(
-                                    horizontalAlignment = Alignment.CenterHorizontally
-                                ) {
-                                    val isPartnerOnline = partner?.isEffectivelyOnline() == true || partner?.isOnline == true
-                                    Surface(
-                                        shape = CircleShape,
-                                        color = MaterialTheme.colorScheme.surface,
-                                        shadowElevation = 4.dp,
-                                        border = BorderStroke(2.5.dp, HeartRed.copy(alpha = 0.8f))
-                                    ) {
-                                        AvatarView(
-                                            photoUrl = partner?.photoUrl,
-                                            name = partnerName,
-                                            size = 90.dp,
-                                            isOnline = isPartnerOnline,
-                                            showOnlineBadge = isPartnerOnline,
-                                            modifier = Modifier.clip(CircleShape)
-                                        )
-                                    }
-
-                                    Spacer(modifier = Modifier.height(6.dp))
-                                    Text(
-                                        text = partnerName,
-                                        fontSize = 13.5.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.onSurface,
-                                        maxLines = 1
-                                    )
-                                    // Partner presence status
-                                    val partnerLastSeen = partner?.lastSeen ?: 0L
-                                    val partnerStatusText = when {
-                                        isPartnerOnline -> "Online"
-                                        partnerLastSeen > 0L -> {
-                                            val diffSec = ((System.currentTimeMillis() - partnerLastSeen) / 1000).coerceAtLeast(0)
-                                            when {
-                                                diffSec < 60 -> "just now"
-                                                diffSec < 3600 -> "${diffSec / 60}m ago"
-                                                diffSec < 86400 -> "${diffSec / 3600}h ago"
-                                                else -> "Offline"
-                                            }
-                                        }
-                                        else -> "Offline"
-                                    }
-                                    Text(
-                                        text = partnerStatusText,
-                                        fontSize = 11.sp,
-                                        color = if (isPartnerOnline) OnlineGreen else MaterialTheme.colorScheme.onSurfaceVariant,
-                                        fontWeight = if (isPartnerOnline) FontWeight.SemiBold else FontWeight.Normal
-                                    )
-                                    // Partner live battery: ONLY show when partner is online! Old battery status is hidden.
-                                    val partnerBattery = partner?.batteryLevel
-                                    if (isPartnerOnline && partnerBattery != null && partnerBattery in 0..100) {
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            modifier = Modifier.padding(top = 2.dp)
-                                        ) {
-                                            Text(
-                                                text = if (partner.isCharging) "⚡ $partnerBattery%" else "🔋 $partnerBattery%",
-                                                fontSize = 11.sp,
-                                                fontWeight = FontWeight.SemiBold,
-                                                color = if (partner.isCharging) Color(0xFF10B981) else if (partnerBattery <= 20) Color(0xFFEF4444) else MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-                                        }
-                                    }
                                 }
                             }
 
-                            // Glowing Interlocking Heart Connector at the center intersection
+                            // Camera badge at the bottom right of the photo
                             Surface(
                                 shape = CircleShape,
-                                color = HeartRed,
+                                color = primaryAccent,
                                 border = BorderStroke(2.dp, if (isDark) darkTone(Color(0xFF141923)) else Color.White),
-                                shadowElevation = 5.dp,
+                                shadowElevation = 3.dp,
                                 modifier = Modifier
-                                    .size(30.dp)
-                                    .align(Alignment.Center)
-                                    .offset(y = (-14).dp)
+                                    .align(Alignment.BottomEnd)
+                                    .size(28.dp)
+                                    .clickable { showAvatarOptionsDialog = true }
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
                                     Icon(
-                                        imageVector = Icons.Filled.Favorite,
-                                        contentDescription = "Together in Love",
+                                        imageVector = Icons.Default.CameraAlt,
+                                        contentDescription = "Change profile photo",
                                         tint = Color.White,
-                                        modifier = Modifier.size(16.dp)
+                                        modifier = Modifier.size(14.dp)
                                     )
                                 }
                             }
                         }
 
-                        // Couple Title
                         Text(
-                            text = "$myName & $partnerName",
+                            text = myName,
                             fontSize = 20.sp,
                             fontWeight = FontWeight.ExtraBold,
                             color = MaterialTheme.colorScheme.onSurface
                         )
 
                         Spacer(modifier = Modifier.height(4.dp))
-
-                        // Clean Status Pill: "Strictly Connected Couple Channel"
-                        Surface(
-                            color = primaryAccent.copy(alpha = 0.1f),
-                            shape = RoundedCornerShape(16.dp),
-                            border = BorderStroke(0.8.dp, primaryAccent.copy(alpha = 0.3f)),
-                            modifier = Modifier.padding(vertical = 4.dp)
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.5.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Lock,
-                                    contentDescription = null,
-                                    tint = primaryAccent,
-                                    modifier = Modifier.size(11.dp)
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(
-                                    text = "Private Couple Channel • 2-Way Encrypted",
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = primaryAccent
-                                )
-                            }
-                        }
 
                         if (!user?.email.isNullOrBlank()) {
                             Text(
@@ -682,6 +524,43 @@ fun ProfileScreen(
                         Icon(Icons.Default.Key, contentDescription = null, tint = primaryAccent)
                     }
                 )
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), thickness = 0.6.dp)
+                // Days together: the day it counts from, shared by both of us (Love & Us, celebrations)
+                val profileApp = context.applicationContext as com.example.CherishApplication
+                val togetherSinceSetting by profileApp.authRepository.togetherSince.collectAsState()
+                val profileDates by profileApp.coupleFeaturesRepository.datesFlow.collectAsState()
+                val togetherSince = remember(profileDates, togetherSinceSetting) {
+                    com.example.ui.dates.DateReminders.togetherSince(profileDates, togetherSinceSetting)
+                }
+                var showTogetherPicker by remember { mutableStateOf(false) }
+                ListItem(
+                    headlineContent = { Text("Days Together Since", fontSize = 15.sp, fontWeight = FontWeight.SemiBold) },
+                    supportingContent = {
+                        val days = com.example.ui.chat.LoveDates.dayNumber(togetherSince)
+                        val since = com.example.ui.chat.LoveDates.formatLong(togetherSince)
+                        Text(
+                            text = if (since != null && days != null) "$since · $days days" else "Not set — tap to choose the day",
+                            fontSize = 13.sp
+                        )
+                    },
+                    leadingContent = {
+                        Icon(Icons.Default.Favorite, contentDescription = null, tint = HeartRed)
+                    },
+                    trailingContent = {
+                        Icon(Icons.Default.Edit, contentDescription = "Change", tint = primaryAccent, modifier = Modifier.size(18.dp))
+                    },
+                    modifier = Modifier
+                        .clickable { showTogetherPicker = true }
+                        .testTag("days_together_setting")
+                )
+                if (showTogetherPicker) {
+                    com.example.ui.home.DayPickerDialog(
+                        title = "Together since",
+                        initial = togetherSince,
+                        onPick = { date -> profileApp.authRepository.setTogetherSince(date) },
+                        onDismiss = { showTogetherPicker = false }
+                    )
+                }
             }
 
 

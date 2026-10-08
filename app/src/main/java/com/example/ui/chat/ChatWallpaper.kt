@@ -29,6 +29,7 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.VectorConverter
 import androidx.compose.animation.core.spring
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawBehind
@@ -91,34 +92,38 @@ fun LoveImmersiveWallpaper(
     isDark: Boolean,
     modifier: Modifier = Modifier
 ) {
-    val infiniteTransition = androidx.compose.animation.core.rememberInfiniteTransition(label = "love_bg")
-    
-    val color1 by infiniteTransition.animateColor(
-        initialValue = if (isDark) darkTone(Color(0xFF180A12)) else Color(0xFFFFF0F5),
-        targetValue = if (isDark) darkTone(Color(0xFF28111B)) else Color(0xFFFFE4E1),
-        animationSpec = androidx.compose.animation.core.infiniteRepeatable(
-            animation = androidx.compose.animation.core.tween(6000, easing = androidx.compose.animation.core.FastOutSlowInEasing),
-            repeatMode = androidx.compose.animation.core.RepeatMode.Reverse
-        ),
-        label = "c1"
-    )
-    
-    val color2 by infiniteTransition.animateColor(
-        initialValue = if (isDark) darkTone(Color(0xFF0F060A)) else Color(0xFFFFF8F8),
-        targetValue = if (isDark) darkTone(Color(0xFF1C0A11)) else Color(0xFFFFEBF0),
-        animationSpec = androidx.compose.animation.core.infiniteRepeatable(
-            animation = androidx.compose.animation.core.tween(4500, easing = androidx.compose.animation.core.FastOutSlowInEasing),
-            repeatMode = androidx.compose.animation.core.RepeatMode.Reverse
-        ),
-        label = "c2"
-    )
+    val top1 = if (isDark) darkTone(Color(0xFF180A12)) else Color(0xFFFFF0F5)
+    val top2 = if (isDark) darkTone(Color(0xFF28111B)) else Color(0xFFFFE4E1)
+    val bottom1 = if (isDark) darkTone(Color(0xFF0F060A)) else Color(0xFFFFF8F8)
+    val bottom2 = if (isDark) darkTone(Color(0xFF1C0A11)) else Color(0xFFFFEBF0)
+
+    // The colours drift for about half a minute after the chat opens, then rest (an endless
+    // animation behind the chat kept the phone drawing every frame)
+    val phase = remember { Animatable(0f) }
+    LaunchedEffect(Unit) {
+        val drift = androidx.compose.animation.core.tween<Float>(6000, easing = androidx.compose.animation.core.FastOutSlowInEasing)
+        repeat(2) {
+            phase.animateTo(1f, drift)
+            phase.animateTo(0f, drift)
+        }
+    }
 
     Box(
         modifier = modifier
             .fillMaxSize()
             // Colours are read while drawing, so each animation frame only redraws the gradient
             // instead of recomposing
-            .drawBehind { drawRect(Brush.verticalGradient(listOf(color1, color2))) }
+            .drawBehind {
+                val p = phase.value
+                drawRect(
+                    Brush.verticalGradient(
+                        listOf(
+                            androidx.compose.ui.graphics.lerp(top1, top2, p),
+                            androidx.compose.ui.graphics.lerp(bottom1, bottom2, p)
+                        )
+                    )
+                )
+            }
     )
 }
 
@@ -168,8 +173,14 @@ private fun Modifier.tiltParallax(maxShift: Dp = 10.dp): Modifier {
     val context = LocalContext.current
     val maxShiftPx = with(LocalDensity.current) { maxShift.toPx() }
     val shift = remember { Animatable(Offset.Zero, Offset.VectorConverter) }
+    // The motion sensor only runs while the chat is on screen: not in the background or behind Notes
+    val lifecycleState by androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle.currentStateFlow
+        .collectAsState()
+    val isDisguised by com.example.security.SecurityPreferences.getInstance(context).isDisguiseActive.collectAsState()
+    val isOnScreen = !isDisguised && lifecycleState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)
 
-    LaunchedEffect(maxShiftPx) {
+    LaunchedEffect(maxShiftPx, isOnScreen) {
+        if (!isOnScreen) return@LaunchedEffect
         if (context.areAnimationsDisabled()) return@LaunchedEffect
         val sensorManager = context.getSystemService(SensorManager::class.java) ?: return@LaunchedEffect
         val sensor = sensorManager.getDefaultSensor(Sensor.TYPE_GRAVITY)

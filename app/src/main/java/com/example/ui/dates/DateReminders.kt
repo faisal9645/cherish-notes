@@ -45,7 +45,7 @@ import kotlin.math.roundToInt
 data class UpcomingDate(val date: ImportantDate, val daysUntil: Int, val years: Int?)
 
 /**
- * Our dates: birthdays, anniversaries, first meeting, places we went... Yearly ones come round
+ * Our dates: birthdays, anniversaries, meetings, places we went... Yearly ones come round
  * every year (Feb 29 falls on Feb 28 in other years); one-time ones only on their day.
  */
 object DateReminders {
@@ -116,7 +116,7 @@ object DateReminders {
     fun label(category: DateCategory): String = when (category) {
         DateCategory.ANNIVERSARY -> "Anniversary"
         DateCategory.BIRTHDAY -> "Birthday"
-        DateCategory.FIRST_DATE -> "First meeting"
+        DateCategory.FIRST_DATE -> "Meetings"
         DateCategory.PLACE -> "Place we went"
         DateCategory.FAMILY -> "Family"
         DateCategory.MILESTONE -> "Special day"
@@ -127,10 +127,11 @@ object DateReminders {
         SimpleDateFormat("MMMM d, yyyy", Locale.getDefault()).format(Date(millis))
 
     /**
-     * The day the couple got together, for the chat's days counter and celebrations: the earliest
-     * anniversary in our dates ("yyyy-MM-dd"), or null if none was added.
+     * The day the couple got together ("yyyy-MM-dd"), for "days together" and celebrations: the
+     * day set in settings ([setting]), else the earliest anniversary in our dates, else null.
      */
-    fun togetherSince(dates: List<ImportantDate>): String? {
+    fun togetherSince(dates: List<ImportantDate>, setting: String? = null): String? {
+        setting?.trim()?.ifBlank { null }?.let { return it }
         val first = dates.filter { it.getTypedCategory() == DateCategory.ANNIVERSARY }.minByOrNull { it.dateMillis }
             ?: return null
         return SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date(first.dateMillis))

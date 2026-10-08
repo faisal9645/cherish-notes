@@ -427,30 +427,8 @@ fun ChatScreen(
 
     // Filter messages for search query and starred filter - all messages preserved and displayed based on pagination scroll.
     // Chat from before today stays hidden until "Recover all" (or "Show in chat") turns previous chats on.
-    val displayedMessages = remember(
-        uiState.messages,
-        uiState.searchQuery,
-        uiState.filterStarredOnly,
-        uiState.temporaryClearTimestamp,
-        uiState.showPreviousChats,
-        uiState.logicalDay
-    ) {
-        var list = uiState.messages.filter { !it.isDeleted }
-        if (!uiState.showPreviousChats) {
-            list = list.filter { isToday(it.timestamp) }
-        }
-        if (uiState.filterStarredOnly) {
-            list = list.filter { it.isStarred }
-        }
-        if (uiState.temporaryClearTimestamp > 0L) {
-            list = list.filter { it.timestamp > uiState.temporaryClearTimestamp }
-        }
-        if (uiState.searchQuery.isNotBlank()) {
-            val q = uiState.searchQuery.trim()
-            list = list.filter { it.text.contains(q, ignoreCase = true) }
-        }
-        list
-    }
+    // Filtered (today only / Recover All, starred, search) in the background by the view model
+    val displayedMessages by viewModel.displayedMessages.collectAsState()
 
     var highlightedMessageId by remember { mutableStateOf<String?>(null) }
 
@@ -543,7 +521,10 @@ fun ChatScreen(
         com.example.ui.dates.DateReminders.withBirthdays(ourDates, birthdays, titles)
     }
     val latestOurDates by rememberUpdatedState(datesWithBirthdays)
-    val togetherSince = remember(ourDates) { com.example.ui.dates.DateReminders.togetherSince(ourDates) }
+    val togetherSinceSetting by app.authRepository.togetherSince.collectAsState()
+    val togetherSince = remember(ourDates, togetherSinceSetting) {
+        com.example.ui.dates.DateReminders.togetherSince(ourDates, togetherSinceSetting)
+    }
     val latestTogetherSince by rememberUpdatedState(togetherSince)
     var datesReminder by remember { mutableStateOf<List<com.example.ui.dates.UpcomingDate>>(emptyList()) }
     val sentGoodnightTonight by rememberUpdatedState(
@@ -616,8 +597,6 @@ fun ChatScreen(
         if (!isChatInView) return@LaunchedEffect
         com.example.notifications.ThinkingOfYou.received.collect { heartbeatPulseKey = it }
     }
-    // The heart button's little "sent" float
-    val heartSent = remember { Animatable(0f) }
 
     // The partner is stressed (a fresh mood): offer to send a hug, once per mood
     val partnerMoodAt = partner?.moodAt ?: 0L
@@ -1124,62 +1103,6 @@ fun ChatScreen(
                                     contentDescription = "Check After Timer",
                                     tint = if (partnerHasCheckAfter || iHaveCheckAfter) MaterialTheme.colorScheme.primary else iconTint,
                                     modifier = Modifier.size(23.dp)
-                                )
-                            }
-
-                            // Heart: a tap sends "thinking of you" (a heartbeat on the partner's phone,
-                            // if they're using it right now); a long press opens Heartbeat Touch
-                            Box(
-                                contentAlignment = Alignment.Center,
-                                modifier = Modifier
-                                    .size(40.dp)
-                                    .clip(CircleShape)
-                                    .combinedClickable(
-                                        onClick = {
-                                            if (viewModel.sendThinkingOfYou()) {
-                                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                                scope.launch {
-                                                    heartSent.snapTo(0f)
-                                                    heartSent.animateTo(1f, tween(1_000, easing = FastOutSlowInEasing))
-                                                    heartSent.snapTo(0f)
-                                                }
-                                            }
-                                        },
-                                        onLongClickLabel = "Heartbeat Touch",
-                                        onLongClick = { showHeartbeatTouch = true }
-                                    )
-                                    .testTag("chat_heartbeat_touch_button")
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Favorite,
-                                    contentDescription = "Thinking of you",
-                                    tint = if (uiState.isPartnerHeartTouching) HeartRed else iconTint,
-                                    modifier = Modifier
-                                        .size(23.dp)
-                                        .graphicsLayer {
-                                            val t = heartSent.value
-                                            val bump = when {
-                                                t <= 0f || t >= 0.3f -> 0f
-                                                t < 0.12f -> t / 0.12f
-                                                else -> (0.3f - t) / 0.18f
-                                            } * 0.3f
-                                            scaleX = 1f + bump
-                                            scaleY = 1f + bump
-                                        }
-                                )
-                                // A small heart floats up and fades: sent
-                                Icon(
-                                    imageVector = Icons.Default.Favorite,
-                                    contentDescription = null,
-                                    tint = HeartRed,
-                                    modifier = Modifier
-                                        .size(12.dp)
-                                        .graphicsLayer {
-                                            val t = heartSent.value
-                                            alpha = if (t <= 0f || t >= 1f) 0f else 1f - t
-                                            translationY = -t * 26.dp.toPx()
-                                            translationX = kotlin.math.sin(t * 9f) * 3.dp.toPx()
-                                        }
                                 )
                             }
                         }

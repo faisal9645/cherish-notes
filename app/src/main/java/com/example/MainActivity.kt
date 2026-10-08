@@ -51,13 +51,18 @@ class MainActivity : FragmentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        batteryHelper.start()
-        lifecycleScope.launch {
-            batteryHelper.batteryInfo.collect { info ->
-                if (app.authRepository.isUserLoggedIn()) {
-                    app.authRepository.updateBatteryStatus(info.level, info.isCharging)
+        // Battery tracking and the auto-backup start once the first screen is on screen, so they
+        // never hold up opening the app
+        afterFirstFrame {
+            batteryHelper.start()
+            lifecycleScope.launch {
+                batteryHelper.batteryInfo.collect { info ->
+                    if (app.authRepository.isUserLoggedIn()) {
+                        app.authRepository.updateBatteryStatus(info.level, info.isCharging)
+                    }
                 }
             }
+            app.googleDriveBackupManager.start()
         }
         androidx.core.view.WindowCompat.setDecorFitsSystemWindows(window, false)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -312,6 +317,17 @@ class MainActivity : FragmentActivity() {
 
     // Screenshots and screen recordings inside the app are allowed: FLAG_SECURE is never set.
     // Recent-apps previews are covered instead (PrivacyShield, setRecentsScreenshotEnabled).
+
+    /**
+     * Runs [block] once the first frame has been drawn (posted from just before that draw), so
+     * work in it can't delay the app appearing. Skipped if the activity is already gone.
+     */
+    private fun afterFirstFrame(block: () -> Unit) {
+        val decor = window.decorView
+        androidx.core.view.OneShotPreDrawListener.add(decor) {
+            decor.post { if (!isDestroyed && !isFinishing) block() }
+        }
+    }
 
     private fun setHighRefreshRate() {
         try {

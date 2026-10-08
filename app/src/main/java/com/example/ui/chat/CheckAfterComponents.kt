@@ -136,16 +136,16 @@ fun CheckAfterChatBanner(
         CheckAfterHelper.calculateRemaining(targetMillis)
     }
 
-    val infiniteTransition = rememberInfiniteTransition(label = "banner_pulse")
-    val heartScale by infiniteTransition.animateFloat(
-        initialValue = 1f,
-        targetValue = 1.12f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(900, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "heart_scale"
-    )
+    // The banner's heart beats a few times when it appears, then rests (the banner can stay up
+    // for hours)
+    val heartBeat = remember { androidx.compose.animation.core.Animatable(1f) }
+    LaunchedEffect(Unit) {
+        repeat(4) {
+            heartBeat.animateTo(1.12f, tween(900, easing = FastOutSlowInEasing))
+            heartBeat.animateTo(1f, tween(900, easing = FastOutSlowInEasing))
+        }
+    }
+    val heartScale = heartBeat.value
 
     val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
     val primaryAccent = MaterialTheme.colorScheme.primary
