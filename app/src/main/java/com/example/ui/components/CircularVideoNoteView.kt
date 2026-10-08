@@ -63,8 +63,13 @@ fun CircularVideoNoteView(
     durationSeconds: Int = 0,
     autoPlay: Boolean = false,
     onExpandClick: (() -> Unit)? = null,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    // CircleShape for round video notes; a rounded rectangle for shared videos
+    shape: androidx.compose.ui.graphics.Shape = CircleShape,
+    // Fill the shape (cropping the edges), or show the whole picture with bars
+    cropToFill: Boolean = true
 ) {
+    val isRound = shape == CircleShape
     val context = LocalContext.current
     // The video player is only created once playback is asked for; until then the note shows its
     // first frame, so a chat full of video notes doesn't start a decoder for each one
@@ -181,8 +186,10 @@ fun CircularVideoNoteView(
 
     // The VideoView keeps the video's own shape inside the square; one uniform scale then fills the
     // circle (centre crop). Scaling only one side would stretch the picture.
-    val cropScale = remember(videoWidth, videoHeight) {
-        if (videoWidth > 0 && videoHeight > 0) {
+    val cropScale = remember(videoWidth, videoHeight, cropToFill) {
+        if (!cropToFill) {
+            1f
+        } else if (videoWidth > 0 && videoHeight > 0) {
             val aspect = videoWidth.toFloat() / videoHeight.toFloat()
             if (aspect < 1f) 1f / aspect else aspect
         } else {
@@ -192,10 +199,10 @@ fun CircularVideoNoteView(
 
     Box(
         modifier = modifier
-            .defaultMinSize(minWidth = 220.dp, minHeight = 220.dp)
-            .clip(CircleShape)
+            .then(if (isRound) Modifier.defaultMinSize(minWidth = 220.dp, minHeight = 220.dp) else Modifier)
+            .clip(shape)
             .background(Color.Black)
-            .border(3.5.dp, RoseGoldPrimary.copy(alpha = 0.65f), CircleShape)
+            .then(if (isRound) Modifier.border(3.5.dp, RoseGoldPrimary.copy(alpha = 0.65f), CircleShape) else Modifier)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null
@@ -266,7 +273,7 @@ fun CircularVideoNoteView(
                     scaleX = cropScale
                     scaleY = cropScale
                 }
-                .clip(CircleShape)
+                .clip(shape)
         )
 
         // Thumbnail Poster Frame: shown until the video is actually playing. Coil only fetches the
@@ -277,10 +284,10 @@ fun CircularVideoNoteView(
                 Image(
                     bitmap = bmp.asImageBitmap(),
                     contentDescription = "Video note thumbnail",
-                    contentScale = ContentScale.Crop,
+                    contentScale = if (cropToFill) ContentScale.Crop else ContentScale.Fit,
                     modifier = Modifier
                         .fillMaxSize()
-                        .clip(CircleShape)
+                        .clip(shape)
                 )
             } else if (thumbnailFailed) {
                 AsyncImage(
@@ -289,17 +296,17 @@ fun CircularVideoNoteView(
                         .crossfade(true)
                         .build(),
                     contentDescription = "Video note thumbnail",
-                    contentScale = ContentScale.Crop,
+                    contentScale = if (cropToFill) ContentScale.Crop else ContentScale.Fit,
                     modifier = Modifier
                         .fillMaxSize()
-                        .clip(CircleShape)
+                        .clip(shape)
                 )
             }
         }
 
-        // Circular progress ring around the edge
+        // Circular progress ring around the edge (round notes only)
         val ringColor = RoseGoldPrimary
-        Canvas(modifier = Modifier.fillMaxSize().padding(2.dp)) {
+        if (isRound) Canvas(modifier = Modifier.fillMaxSize().padding(2.dp)) {
             val strokeWidth = 3.5.dp.toPx()
             // Background track
             drawCircle(

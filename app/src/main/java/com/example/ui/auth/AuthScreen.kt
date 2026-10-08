@@ -48,9 +48,11 @@ fun AuthScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
-    var myUsername by remember { mutableStateOf("Faisal") }
-    var partnerName by remember { mutableStateOf("Shali") }
-    var coupleSecretCode by remember { mutableStateOf("faisal-shali") }
+    // Nothing is filled in: the names and the code are only known to the two of you
+    var myUsername by remember { mutableStateOf("") }
+    var partnerName by remember { mutableStateOf("") }
+    var coupleSecretCode by remember { mutableStateOf("") }
+    var showSecretCode by remember { mutableStateOf(false) }
 
     LaunchedEffect(uiState) {
         if (uiState is AuthUiState.Success) {
@@ -212,10 +214,20 @@ fun AuthScreen(
                                 value = coupleSecretCode,
                                 onValueChange = { coupleSecretCode = it },
                                 label = { Text("Couple Secret Code") },
-                                placeholder = { Text("e.g. forever-together") },
                                 supportingText = { Text("Enter the same shared code on both phones") },
                                 leadingIcon = {
                                     Icon(Icons.Default.VpnKey, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                                },
+                                // Hidden as dots, like a password; the eye shows it while typing
+                                visualTransformation = if (showSecretCode) VisualTransformation.None else PasswordVisualTransformation(),
+                                trailingIcon = {
+                                    IconButton(onClick = { showSecretCode = !showSecretCode }) {
+                                        Icon(
+                                            imageVector = if (showSecretCode) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                            contentDescription = if (showSecretCode) "Hide code" else "Show code",
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
                                 },
                                 singleLine = true,
                                 shape = RoundedCornerShape(14.dp),

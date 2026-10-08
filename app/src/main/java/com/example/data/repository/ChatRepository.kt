@@ -443,7 +443,8 @@ class ChatRepository(
             .whereGreaterThanOrEqualTo("timestamp", startOfToday)
             .orderBy("timestamp", Query.Direction.ASCENDING)
 
-        globalTodayListener = todayQuery.addSnapshotListener { snapshot, error ->
+        // Metadata changes too, so my message flips from "sending" to "sent" the moment the server has it
+        globalTodayListener = todayQuery.addSnapshotListener(com.google.firebase.firestore.MetadataChanges.INCLUDE) { snapshot, error ->
             if (error != null) {
                 Log.w("ChatRepository", "Listen today messages failed", error)
                 return@addSnapshotListener
@@ -478,7 +479,20 @@ class ChatRepository(
                 }
                 isInitialTodaySnapshot = false
 
-                todayMessages = snapshot.documents.mapNotNull { it.toMessageOrNull() }
+                val currentUserId = authRepository.getCurrentUserId()
+                todayMessages = snapshot.documents.mapNotNull { doc ->
+                    val msg = doc.toMessageOrNull() ?: return@mapNotNull null
+                    // My message that hasn't reached the server yet is still sending (a clock, not a tick)
+                    if (doc.metadata.hasPendingWrites() && msg.senderId == currentUserId &&
+                        msg.status == MessageStatus.SENT.name
+                    ) {
+                        msg.status = MessageStatus.SENDING.name
+                    }
+                    msg
+                }
+                if (!snapshot.metadata.isFromCache) {
+                    markArrivedAsDelivered(convRef, todayMessages, currentUserId)
+                }
                 mergeAndEmitMessages()
             }
         }
@@ -495,6 +509,31 @@ class ChatRepository(
                     _isQueryExhaustedFlow.value = true
                 }
             }
+    }
+
+    // Partner messages this phone already marked delivered, so each one costs a single write
+    private val deliveredMarkedIds: MutableSet<String> = ConcurrentHashMap.newKeySet()
+
+    /** The partner's messages have reached this phone (straight from the server): tell the sender. */
+    private fun markArrivedAsDelivered(messagesRef: CollectionReference, messages: List<Message>, currentUserId: String) {
+        val fs = firestore ?: return
+        val arrived = messages.filter {
+            it.senderId != currentUserId && !it.isDeleted &&
+                it.status == MessageStatus.SENT.name && deliveredMarkedIds.add(it.id)
+        }
+        if (arrived.isEmpty()) return
+        val deliveredUpdate = mapOf<String, Any>("status" to MessageStatus.DELIVERED.name)
+        arrived.chunked(FIRESTORE_BATCH_LIMIT).forEach { chunk ->
+            try {
+                val batch = fs.batch()
+                chunk.forEach { batch.update(messagesRef.document(it.id), deliveredUpdate) }
+                batch.commit().addOnFailureListener { e ->
+                    Log.w("ChatRepository", "Failed to mark ${chunk.size} messages delivered", e)
+                }
+            } catch (e: Exception) {
+                Log.w("ChatRepository", "Failed to mark ${chunk.size} messages delivered", e)
+            }
+        }
     }
 
     /**
@@ -593,8 +632,8 @@ class ChatRepository(
             thumbnailUrls = thumbnailUrls
         )
 
-        // Optimistically add to local state
-        _messagesFlow.value = _messagesFlow.value + newMessage
+        // Optimistically add to local state, sending until the server has it
+        _messagesFlow.value = _messagesFlow.value + newMessage.copy(status = MessageStatus.SENDING.name)
 
         return try {
             val fs = firestore

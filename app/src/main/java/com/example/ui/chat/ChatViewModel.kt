@@ -398,7 +398,11 @@ class ChatViewModel(
 
             val thumbnailUrl = thumbnail?.await().orEmpty()
             chatRepository.sendMessage(
-                text = if (type == MessageType.IMAGE) "Sent a photo" else "Sent a file",
+                text = when (type) {
+                    MessageType.IMAGE -> "Sent a photo"
+                    MessageType.VIDEO -> "Sent a video"
+                    else -> "Sent a file"
+                },
                 type = type,
                 mediaUrl = url,
                 mediaName = mediaName ?: preparedFile.name,

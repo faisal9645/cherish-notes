@@ -221,11 +221,12 @@ fun FloatingHeartsStream(
         while (isActive && (active || hearts.isNotEmpty())) {
             withFrameMillis { frame ->
                 now = frame
-                if (active && frame - lastSpawn > 170) {
+                // A gentle, unhurried stream: a few hearts drifting up slowly
+                if (active && frame - lastSpawn > 420) {
                     lastSpawn = frame
                     hearts += RisingHeart(
                         bornAt = frame,
-                        lifeMs = 1500L + Random.nextLong(700),
+                        lifeMs = 2800L + Random.nextLong(1000),
                         startOffsetDp = (Random.nextFloat() - 0.5f) * 90f,
                         driftDp = (Random.nextFloat() - 0.5f) * 70f,
                         swayDp = 6f + Random.nextFloat() * 12f,

@@ -82,13 +82,6 @@ class AuthRepository(private val context: Context) {
             listenToCurrentUser(localUser.id)
             connectPartnerListenerOnce()
             localUser.coupleId?.trim()?.ifBlank { null }?.let { listenToCoupleRoom(it, localUser.id) }
-        } else {
-            val currentFirebaseUser = auth?.currentUser
-            val fbUid = currentFirebaseUser?.uid?.trim()?.ifBlank { null }
-            if (fbUid != null) {
-                listenToCurrentUser(fbUid)
-                connectPartnerListenerOnce()
-            }
         }
 
         // When disguise state changes (e.g. entering Notes), update presence immediately
@@ -99,15 +92,26 @@ class AuthRepository(private val context: Context) {
         }
     }
 
+    /**
+     * Logged in = a couple login was made on this phone (saved session). The Firebase anonymous
+     * sign-in alone doesn't count: it also happens before a login's details are checked.
+     */
     fun isUserLoggedIn(): Boolean {
-        return auth?.currentUser != null || _currentUserState.value != null
+        return _currentUserState.value != null
     }
 
+    /**
+     * The logged-in user's id, or "" when nobody is logged in. There's deliberately no stand-in id:
+     * one used to send a logged-out phone's status into someone's real profile (and older
+     * versions created a stray users/local_user_a that way).
+     */
     fun getCurrentUserId(): String {
-        return _currentUserState.value?.id?.trim()?.ifBlank { null }
-            ?: auth?.currentUser?.uid?.trim()?.ifBlank { null }
-            ?: "user_faisal"
+        return _currentUserState.value?.id?.trim().orEmpty()
     }
+
+    /** This user's profile document; null when nobody is logged in, so nothing gets written. */
+    private fun userDocument(uid: String) =
+        if (uid.isBlank()) null else firestore?.collection("users")?.document(uid)
 
     fun setInChatTab(inChat: Boolean) {
         isActivelyInChatTab = inChat
@@ -184,25 +188,31 @@ class AuthRepository(private val context: Context) {
             auth?.signInAnonymously()?.await()
         } catch (_: Exception) {}
 
-        val fs = firestore
-        if (fs != null) {
+        // Only the existing couple gets in: the secret code must match it, and the two names must
+        // be its two members. Nothing new is created from the login screen.
+        val fs = firestore ?: return Result.failure(Exception(CONNECTION_PROBLEM))
+        val coupleDocRef = fs.collection("couples").document(coupleId)
+        val coupleSnap = try {
+            coupleDocRef.get().await()
+        } catch (e: Exception) {
+            Log.w("AuthRepository", "Couple check failed: ${e.message}")
+            return Result.failure(Exception(CONNECTION_PROBLEM))
+        }
+        if (!coupleSnap.exists()) return Result.failure(Exception(WRONG_LOGIN_DETAILS))
+        fun memberId(name: String?) = name?.trim()?.lowercase()?.filter { it.isLetterOrDigit() || it == '_' }
+            ?.takeIf { it.isNotBlank() }?.let { "user_$it" }
+        // By id once someone has joined, otherwise by the name given when the couple was set up
+        val members = setOfNotNull(
+            coupleSnap.getString("partner1Id") ?: memberId(coupleSnap.getString("partner1Name")),
+            coupleSnap.getString("partner2Id") ?: memberId(coupleSnap.getString("partner2Name"))
+        )
+        if (uid == fallbackPartnerId || uid !in members || fallbackPartnerId !in members) {
+            return Result.failure(Exception(WRONG_LOGIN_DETAILS))
+        }
+
+        run {
             try {
-                val coupleDocRef = fs.collection("couples").document(coupleId)
-                val coupleSnap = coupleDocRef.get().await()
-                if (!coupleSnap.exists()) {
-                    coupleDocRef.set(
-                        mapOf(
-                            "coupleId" to coupleId,
-                            "secretCode" to cleanCode,
-                            "partner1Id" to uid,
-                            "partner1Name" to displayName,
-                            "partner2Name" to partnerDisplayName,
-                            "createdAt" to System.currentTimeMillis(),
-                            "updatedAt" to System.currentTimeMillis()
-                        ),
-                        com.google.firebase.firestore.SetOptions.merge()
-                    ).await()
-                } else {
+                run {
                     val p1Id = coupleSnap.getString("partner1Id")
                     val p2Id = coupleSnap.getString("partner2Id")
                     if (p1Id != null && p1Id != uid) {
@@ -439,7 +449,7 @@ class AuthRepository(private val context: Context) {
         saveLocalUserSession(localUser)
 
         try {
-            firestore?.collection("users")?.document(uid)?.set(localUser)
+            userDocument(uid)?.set(localUser)
         } catch (_: Exception) {}
 
         listenToCurrentUser(uid)
@@ -576,7 +586,7 @@ class AuthRepository(private val context: Context) {
             } else if (photoUrl != null) {
                 updates["photoUrl"] = photoUrl
             }
-            firestore?.collection("users")?.document(uid)?.set(updates as Map<String, Any>, com.google.firebase.firestore.SetOptions.merge())
+            userDocument(uid)?.set(updates as Map<String, Any>, com.google.firebase.firestore.SetOptions.merge())
             Result.success(Unit)
         } catch (e: Exception) {
             Log.w("AuthRepository", "Failed to update profile in Firestore, local update kept", e)
@@ -591,7 +601,7 @@ class AuthRepository(private val context: Context) {
         _currentUserState.value = updated
         saveLocalUserSession(updated)
         return try {
-            firestore?.collection("users")?.document(uid)?.set(
+            userDocument(uid)?.set(
                 mapOf("mood" to mood),
                 com.google.firebase.firestore.SetOptions.merge()
             )
@@ -612,7 +622,7 @@ class AuthRepository(private val context: Context) {
         val updated = current.copy(batteryLevel = level, isCharging = isCharging)
         _currentUserState.value = updated
         return try {
-            firestore?.collection("users")?.document(uid)?.set(
+            userDocument(uid)?.set(
                 mapOf("batteryLevel" to level, "isCharging" to isCharging),
                 com.google.firebase.firestore.SetOptions.merge()
             )
@@ -633,7 +643,7 @@ class AuthRepository(private val context: Context) {
         val current = _currentUserState.value ?: User(id = uid)
         _currentUserState.value = current.copy(heartbeatTouchingTimestamp = timestamp)
         try {
-            firestore?.collection("users")?.document(uid)?.set(
+            userDocument(uid)?.set(
                 mapOf("heartbeatTouchingTimestamp" to timestamp),
                 com.google.firebase.firestore.SetOptions.merge()
             )
@@ -645,7 +655,7 @@ class AuthRepository(private val context: Context) {
                     kotlinx.coroutines.delay(2000L)
                     val liveTs = System.currentTimeMillis()
                     try {
-                        firestore?.collection("users")?.document(uid)?.set(
+                        userDocument(uid)?.set(
                             mapOf("heartbeatTouchingTimestamp" to liveTs),
                             com.google.firebase.firestore.SetOptions.merge()
                         )
@@ -670,7 +680,7 @@ class AuthRepository(private val context: Context) {
             
             _currentUserState.value = current.copy(heartbeatStreak = newStreak, lastHeartbeatSync = now)
             try {
-                firestore?.collection("users")?.document(uid)?.set(
+                userDocument(uid)?.set(
                     mapOf("heartbeatStreak" to newStreak, "lastHeartbeatSync" to now),
                     com.google.firebase.firestore.SetOptions.merge()
                 )
@@ -680,6 +690,7 @@ class AuthRepository(private val context: Context) {
 
     suspend fun pairWithPartner(partnerUsername: String, coupleSecretKey: String): Result<User> {
         val uid = getCurrentUserId()
+        if (uid.isBlank()) return Result.failure(Exception("Log in first"))
         val cleanPartner = partnerUsername.trim().lowercase().replace("@", "_").replace(" ", "_").filter { it.isLetterOrDigit() || it == '_' }
         val partnerId = "user_$cleanPartner"
         val partnerEmail = "$cleanPartner@cherish.app"
@@ -745,23 +756,24 @@ class AuthRepository(private val context: Context) {
                             _partnerUserState.value = partner.copy(lastSeen = System.currentTimeMillis())
                         }
                     }
-                    if (uid.isNotBlank() && uid != "local_user_a") {
+                    if (uid.isNotBlank()) {
                         val updates = mapOf<String, Any>(
                             "isOnline" to true,
                             "online" to true,
                             "lastSeen" to System.currentTimeMillis()
                         )
                         try {
-                            firestore?.collection("users")?.document(uid)?.set(
+                            userDocument(uid)?.set(
                                 updates,
                                 com.google.firebase.firestore.SetOptions.merge()
                             )
                         } catch (_: Exception) {}
                     }
-                } else {
+                } else if (_currentUserState.value?.isOnline != false) {
+                    // Disguised as Notes: offline is written once, not on every beat
                     setOnline(false)
                 }
-                kotlinx.coroutines.delay(20_000L)
+                kotlinx.coroutines.delay(User.PRESENCE_HEARTBEAT_MS)
             }
         }
     }
@@ -773,7 +785,6 @@ class AuthRepository(private val context: Context) {
             isOnline = online,
             lastSeen = System.currentTimeMillis()
         )
-        if (uid == "local_user_a") return
         try {
             val updates = mutableMapOf<String, Any>(
                 "isOnline" to online,
@@ -785,7 +796,7 @@ class AuthRepository(private val context: Context) {
                 updates["recordingAudioInChat"] = false
                 typingWritten = uid to false
             }
-            firestore?.collection("users")?.document(uid)?.set(
+            userDocument(uid)?.set(
                 updates,
                 com.google.firebase.firestore.SetOptions.merge()
             )
@@ -802,7 +813,7 @@ class AuthRepository(private val context: Context) {
         if (typingWritten == uid to typing) return
         typingWritten = uid to typing
         try {
-            firestore?.collection("users")?.document(uid)?.set(
+            userDocument(uid)?.set(
                 mapOf("typingInChat" to typing),
                 com.google.firebase.firestore.SetOptions.merge()
             )
@@ -814,7 +825,7 @@ class AuthRepository(private val context: Context) {
     fun setRecordingAudio(recording: Boolean) {
         val uid = getCurrentUserId()
         try {
-            firestore?.collection("users")?.document(uid)?.set(
+            userDocument(uid)?.set(
                 mapOf("recordingAudioInChat" to recording),
                 com.google.firebase.firestore.SetOptions.merge()
             )
@@ -842,7 +853,7 @@ class AuthRepository(private val context: Context) {
         _currentUserState.value = updated
         saveLocalUserSession(updated)
         try {
-            firestore?.collection("users")?.document(uid)?.update(updates)
+            userDocument(uid)?.update(updates)
         } catch (e: Exception) {
             Log.w("AuthRepository", "Failed to update check-after in Firestore", e)
         }
@@ -860,7 +871,7 @@ class AuthRepository(private val context: Context) {
             saveLocalUserSession(updated)
         }
         try {
-            firestore?.collection("users")?.document(uid)?.update(updates)
+            userDocument(uid)?.update(updates)
         } catch (e: Exception) {
             Log.w("AuthRepository", "Failed to cancel check-after in Firestore", e)
         }
@@ -943,25 +954,50 @@ class AuthRepository(private val context: Context) {
                     return@addSnapshotListener
                 }
                 if (snapshot != null && snapshot.exists()) {
-                    var partner = snapshot.toObject(User::class.java)
-                    if (partner != null) {
-                        val boolOnline = snapshot.getBoolean("isOnline")
-                            ?: snapshot.getBoolean("online")
-                            ?: partner.isOnline
-                        val docLastSeen = snapshot.getLong("lastSeen")
-                            ?: snapshot.getDate("lastSeen")?.time
-                            ?: partner.lastSeen
-                        if (partner.isOnline != boolOnline || partner.lastSeen != docLastSeen) {
-                            partner = partner.copy(
-                                isOnline = boolOnline,
-                                lastSeen = docLastSeen
-                            )
-                        }
-                    }
-                    _partnerUserState.value = partner
-                    handlePartnerCheckAfterReminder(partner)
+                    publishPartnerSnapshot(snapshot)
                 }
             }
+    }
+
+    // The partner's lastSeen as last read from the server, and when a live heartbeat last arrived here
+    private var partnerServerLastSeen: Pair<String, Long>? = null
+    private var partnerPresenceReceivedAt = 0L
+
+    /**
+     * Publishes the partner's document from any of the partner listeners. A heartbeat that arrives
+     * while listening (a small step on from the previous one) is timed on this phone's own clock, so
+     * online/offline doesn't depend on the two phones' clocks agreeing. A first copy, or a big jump
+     * after being disconnected, falls back to comparing clocks until the next heartbeat.
+     */
+    private fun publishPartnerSnapshot(doc: com.google.firebase.firestore.DocumentSnapshot) {
+        var partner = doc.toObject(User::class.java)
+        if (partner != null) {
+            val boolOnline = doc.getBoolean("isOnline")
+                ?: doc.getBoolean("online")
+                ?: partner.isOnline
+            val docLastSeen = doc.getLong("lastSeen")
+                ?: doc.getDate("lastSeen")?.time
+                ?: partner.lastSeen
+            if (partner.isOnline != boolOnline || partner.lastSeen != docLastSeen) {
+                partner = partner.copy(
+                    isOnline = boolOnline,
+                    lastSeen = docLastSeen
+                )
+            }
+            if (!doc.metadata.isFromCache) {
+                val previous = partnerServerLastSeen
+                val step = if (previous != null && previous.first == doc.id) docLastSeen - previous.second else -1L
+                if (step in 1L..LIVE_HEARTBEAT_MAX_STEP_MS) {
+                    partnerPresenceReceivedAt = System.currentTimeMillis()
+                } else if (step != 0L) {
+                    partnerPresenceReceivedAt = 0L
+                }
+                partnerServerLastSeen = doc.id to docLastSeen
+            }
+            if (partnerServerLastSeen?.first == doc.id) partner.presenceReceivedAt = partnerPresenceReceivedAt
+        }
+        _partnerUserState.value = partner
+        handlePartnerCheckAfterReminder(partner)
     }
 
     private fun findAndListenToPartner(partnerEmail: String?, coupleId: String?, uid: String) {
@@ -980,23 +1016,7 @@ class AuthRepository(private val context: Context) {
                     }
                     val doc = snapshots?.documents?.firstOrNull { it.id != uid }
                     if (doc != null) {
-                        var partner = doc.toObject(User::class.java)
-                        if (partner != null) {
-                            val boolOnline = doc.getBoolean("isOnline")
-                                ?: doc.getBoolean("online")
-                                ?: partner.isOnline
-                            val docLastSeen = doc.getLong("lastSeen")
-                                ?: doc.getDate("lastSeen")?.time
-                                ?: partner.lastSeen
-                            if (partner.isOnline != boolOnline || partner.lastSeen != docLastSeen) {
-                                partner = partner.copy(
-                                    isOnline = boolOnline,
-                                    lastSeen = docLastSeen
-                                )
-                            }
-                        }
-                        _partnerUserState.value = partner
-                        handlePartnerCheckAfterReminder(partner)
+                        publishPartnerSnapshot(doc)
                         if (_currentUserState.value?.partnerId != doc.id) {
                             val updated = _currentUserState.value?.copy(partnerId = doc.id)
                             if (updated != null) {
@@ -1030,9 +1050,7 @@ class AuthRepository(private val context: Context) {
                     }
                     val doc = snapshots?.documents?.firstOrNull()
                     if (doc != null && doc.id != uid) {
-                        val partner = doc.toObject(User::class.java)
-                        _partnerUserState.value = partner
-                        handlePartnerCheckAfterReminder(partner)
+                        publishPartnerSnapshot(doc)
                         if (_currentUserState.value?.partnerId != doc.id) {
                             val updated = _currentUserState.value?.copy(partnerId = doc.id)
                             if (updated != null) {
@@ -1065,7 +1083,7 @@ class AuthRepository(private val context: Context) {
 
     private suspend fun fetchUserFromFirestore(uid: String): User? {
         return try {
-            val doc = firestore?.collection("users")?.document(uid)?.get()?.await()
+            val doc = userDocument(uid)?.get()?.await()
             doc?.toObject(User::class.java)
         } catch (e: Exception) {
             null
@@ -1084,7 +1102,7 @@ class AuthRepository(private val context: Context) {
             val messaging = FirebaseMessaging.getInstance()
             messaging.token
                 .addOnSuccessListener { token ->
-                    firestore?.collection("users")?.document(uid)?.update("fcmToken", token)
+                    userDocument(uid)?.update("fcmToken", token)
                 }
                 .addOnFailureListener { e ->
                     Log.w("AuthRepository", "FCM token registration failed gracefully: ${e.message}")
@@ -1180,33 +1198,9 @@ class AuthRepository(private val context: Context) {
                     statusMessage = if (partnerUid == "user_shali") "Always with you 💕" else "Forever yours ❤️"
                 )
             }
-        } else {
-            // Default couple setup: Faisal & Shali!
-            val defaultUser = User(
-                id = "user_faisal",
-                email = "faisallasiaff@gmail.com",
-                displayName = "Faisal",
-                partnerId = "user_shali",
-                partnerEmail = "shalihafais36@gmail.com",
-                coupleId = "couple_faisal_shali",
-                statusMessage = "Forever yours ❤️",
-                isOnline = true
-            )
-            _currentUserState.value = defaultUser
-            saveLocalUserSession(defaultUser)
-            securityPrefs.setApprovedPartnerEmail("shalihafais36@gmail.com")
-            securityPrefs.setCoupleSecretKey("couple_faisal_shali")
-            _partnerUserState.value = User(
-                id = "user_shali",
-                email = "shalihafais36@gmail.com",
-                displayName = "Shali",
-                partnerId = "user_faisal",
-                partnerEmail = "faisallasiaff@gmail.com",
-                coupleId = "couple_faisal_shali",
-                isOnline = true,
-                statusMessage = "Always with you 💕"
-            )
         }
+        // No saved login: stay logged out, so the login screen (and only the right details) opens
+        // the app. There used to be an automatic login as a default user here.
     }
 
 
@@ -1215,5 +1209,14 @@ class AuthRepository(private val context: Context) {
             .edit()
             .clear()
             .apply()
+    }
+
+    private companion object {
+        /** Login failed; doesn't say which part was wrong. */
+        const val WRONG_LOGIN_DETAILS = "Login details are incorrect"
+        const val CONNECTION_PROBLEM = "Couldn't check your login. Check your internet connection and try again."
+
+        /** Partner heartbeats ~10 s apart; a bigger jump is a catch-up after a disconnect, not a live beat. */
+        const val LIVE_HEARTBEAT_MAX_STEP_MS = 60_000L
     }
 }

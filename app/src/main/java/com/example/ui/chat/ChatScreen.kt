@@ -47,7 +47,9 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.paint
 import androidx.compose.ui.geometry.CornerRadius
@@ -63,6 +65,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -72,7 +75,9 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -158,7 +163,7 @@ fun ChatScreen(
     var unseenIncomingCount by remember { mutableIntStateOf(0) }
 
     // The reply preview floats above the message box; the list keeps this much room for it
-    var replyCardHeightPx by remember { mutableIntStateOf(0) }
+    var bottomOverlayHeightPx by remember { mutableIntStateOf(0) }
     // Keeps the preview filled while it animates away after the reply is cleared
     val lastReply = remember { arrayOfNulls<Message>(1) }
     uiState.replyingToMessage?.let { lastReply[0] = it }
@@ -419,14 +424,19 @@ fun ChatScreen(
         if (partnerHasCheckAfter) CheckAfterHelper.calculateRemaining(partnerCheckAfterTarget).first else ""
     }
 
-    // Filter messages for search query and starred filter - all messages preserved and displayed based on pagination scroll
+    // Filter messages for search query and starred filter - all messages preserved and displayed based on pagination scroll.
+    // Chat from before today stays hidden until "Recover all" (or "Show in chat") turns previous chats on.
     val displayedMessages = remember(
         uiState.messages,
         uiState.searchQuery,
         uiState.filterStarredOnly,
-        uiState.temporaryClearTimestamp
+        uiState.temporaryClearTimestamp,
+        uiState.showPreviousChats
     ) {
         var list = uiState.messages.filter { !it.isDeleted }
+        if (!uiState.showPreviousChats) {
+            list = list.filter { isToday(it.timestamp) }
+        }
         if (uiState.filterStarredOnly) {
             list = list.filter { it.isStarred }
         }
@@ -634,8 +644,14 @@ fun ChatScreen(
         }
     }
 
-    Scaffold(
+    // The wallpaper sits behind the whole screen, so the top bar can be frosted glass over it
+    val showWallpaper = !uiState.isStealthCurtainActive &&
+        uiState.chatExperienceMode != com.example.ui.chat.ChatExperienceMode.PRIVATE
+    var chatScreenSize by remember { mutableStateOf(IntSize.Zero) }
+    Box(
         modifier = Modifier
+            .fillMaxSize()
+            .onSizeChanged { chatScreenSize = it }
             .graphicsLayer {
                 // The chat blurs behind the long-press focus view (Android 12+)
                 if (android.os.Build.VERSION.SDK_INT >= 31) {
@@ -643,6 +659,15 @@ fun ChatScreen(
                     renderEffect = if (radius > 0.5f) BlurEffect(radius, radius, TileMode.Clamp) else null
                 }
             }
+    ) {
+    if (showWallpaper) {
+        ChatWallpaper(
+            chatBgTheme = uiState.chatBgTheme,
+            modifier = Modifier.fillMaxSize()
+        )
+    }
+    Scaffold(
+        modifier = Modifier
             .pointerInput(Unit) {
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false)
@@ -705,7 +730,23 @@ fun ChatScreen(
                     onClose = { exitSelection() },
                     onDelete = { showMultiDeleteConfirmDialog = true }
                 )
-            } else Column {
+            } else Box {
+                // Frosted glass: the wallpaper behind the bar, blurred (Android 12+; tinted before)
+                if (showWallpaper && android.os.Build.VERSION.SDK_INT >= 31 && chatScreenSize != IntSize.Zero) {
+                    Box(modifier = Modifier.matchParentSize().clipToBounds()) {
+                        ChatWallpaper(
+                            chatBgTheme = uiState.chatBgTheme,
+                            modifier = Modifier
+                                .layout { measurable, constraints ->
+                                    // Laid out like the real wallpaper (whole screen, from the top), so it lines up
+                                    val wallpaper = measurable.measure(Constraints.fixed(chatScreenSize.width, chatScreenSize.height))
+                                    layout(constraints.maxWidth, constraints.maxHeight) { wallpaper.place(0, 0) }
+                                }
+                                .blur(24.dp)
+                        )
+                    }
+                }
+                Column {
                 TopAppBar(
                     title = {
                     if (uiState.isSearching) {
@@ -846,13 +887,15 @@ fun ChatScreen(
                                         uiState.isPartnerTyping -> "typing..."
                                         isPartnerOnline -> "Online"
                                         else -> {
+                                            // The exact time, which stays right while the screen sits open
+                                            // (a "2m ago" would freeze until something else changed)
                                             val lastSeen = partner?.lastSeen ?: 0L
                                             if (lastSeen > 0L) {
-                                                val diffSec = ((System.currentTimeMillis() - lastSeen) / 1000).coerceAtLeast(0)
+                                                val time = SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date(lastSeen))
                                                 when {
-                                                    diffSec < 60 -> "last seen just now"
-                                                    diffSec < 3600 -> "last seen ${diffSec / 60}m ago"
-                                                    diffSec < 86400 -> "last seen ${diffSec / 3600}h ago"
+                                                    android.text.format.DateUtils.isToday(lastSeen) -> "last seen today at $time"
+                                                    android.text.format.DateUtils.isToday(lastSeen + android.text.format.DateUtils.DAY_IN_MILLIS) ->
+                                                        "last seen yesterday at $time"
                                                     else -> {
                                                         val sdf = SimpleDateFormat("MMM d, h:mm a", Locale.getDefault())
                                                         "last seen ${sdf.format(Date(lastSeen))}"
@@ -1014,11 +1057,16 @@ fun ChatScreen(
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface
+                    containerColor = if (showWallpaper) {
+                        MaterialTheme.colorScheme.surface.copy(alpha = if (android.os.Build.VERSION.SDK_INT >= 31) 0.72f else 0.92f)
+                    } else {
+                        MaterialTheme.colorScheme.surface
+                    }
                 ),
                 windowInsets = WindowInsets.statusBars
             )
             HorizontalDivider(thickness = 1.dp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+            }
             }
             }
         },
@@ -1101,7 +1149,7 @@ fun ChatScreen(
                 }
             }
     },
-        containerColor = MaterialTheme.colorScheme.background
+        containerColor = if (showWallpaper) Color.Transparent else MaterialTheme.colorScheme.background
     ) { paddingValues ->
         Column(
             modifier = Modifier
@@ -1244,13 +1292,6 @@ fun ChatScreen(
                     .fillMaxWidth()
                     .weight(1f)
             ) {
-                if (!uiState.isStealthCurtainActive && uiState.chatExperienceMode != com.example.ui.chat.ChatExperienceMode.PRIVATE) {
-                    ChatWallpaper(
-                        chatBgTheme = uiState.chatBgTheme,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                }
-
                 if (uiState.isStealthCurtainActive) {
                     // Emergency Privacy Shield: Harmless daily notes / tasks view hiding all previous chat
                     StealthDisguiseNotesView(
@@ -1259,16 +1300,18 @@ fun ChatScreen(
             } else {
                 val reversedMessages = remember(displayedMessages) { displayedMessages.reversed() }
                 
-                val hasLoadedPreviousChats = remember(displayedMessages) { displayedMessages.any { !isToday(it.timestamp) } }
                 val hasTodayMessages = remember(displayedMessages) { displayedMessages.any { isToday(it.timestamp) } }
+                // An empty day still opens with "Today" and the 2-person banner instead of a blank screen
+                val showEmptyTodayHeader = !hasTodayMessages && uiState.searchQuery.isBlank() && !uiState.filterStarredOnly
 
-                val canLoadMore = !uiState.isPaginationExhausted && !uiState.isLoadingMore && displayedMessages.isNotEmpty()
+                // Older chat only pages in once previous chats are recovered, as the list nears the top
+                val canLoadMore = uiState.showPreviousChats && !uiState.isPaginationExhausted && !uiState.isLoadingMore
                 val shouldLoadMore by remember(canLoadMore) {
                     derivedStateOf {
                         if (!canLoadMore) return@derivedStateOf false
                         val totalItems = listState.layoutInfo.totalItemsCount
                         val lastVisibleItem = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
-                        totalItems > 0 && lastVisibleItem >= totalItems - 4
+                        totalItems == 0 || lastVisibleItem >= totalItems - 4
                     }
                 }
                 LaunchedEffect(shouldLoadMore) {
@@ -1300,6 +1343,10 @@ fun ChatScreen(
                     ) { index, message ->
                         val isFromMe = message.senderId == currentUserId
                         val isFirstOfDay = index == reversedMessages.lastIndex || !isSameDay(reversedMessages[index + 1].timestamp, message.timestamp)
+                        // Messages someone sends in a row (same day, minutes apart) form one run
+                        val groupedWithPrevious = !isFirstOfDay && inSameRun(reversedMessages[index + 1], message)
+                        val newer = reversedMessages.getOrNull(index - 1)
+                        val groupedWithNext = newer != null && isSameDay(message.timestamp, newer.timestamp) && inSameRun(message, newer)
                         // A message that arrives while the chat is open lands with a spring
                         val isFreshArrival = remember(message.id) {
                             index <= 1 && initialSnapshotTaken[0] &&
@@ -1309,6 +1356,8 @@ fun ChatScreen(
                             message = message,
                             isFromMe = isFromMe,
                             isFirstOfDay = isFirstOfDay,
+                            groupedWithPrevious = groupedWithPrevious,
+                            groupedWithNext = groupedWithNext,
                             isFreshArrival = isFreshArrival,
                             isPrivate = uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE,
                             isDark = isDark,
@@ -1379,6 +1428,16 @@ fun ChatScreen(
                     // Strictly 2-Person Beginning of Chat Banner (shown when pagination is exhausted)
             } // Box content end
 
+                // No message yet today: "Today" and the banner sit where the first message will land
+                // (once it does, its row shows them instead)
+                if (showEmptyTodayHeader) {
+                    val isPrivate = uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE
+                    Column(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
+                        DateSeparatorBadge(dateText = "Today", isPrivateMode = isPrivate, isDark = isDark)
+                        StrictlyTwoPersonBanner(isPrivateMode = isPrivate, isDark = isDark)
+                    }
+                }
+
                 // Only at the bottom: while reading older messages it would push the list up and down
                 // (the header still says "typing…")
                 val isAtBottom by remember { derivedStateOf { listState.firstVisibleItemIndex <= 1 } }
@@ -1392,16 +1451,18 @@ fun ChatScreen(
                     isDark = isDark
                 )
 
-                // Room for the floating reply preview, so it never covers the last message (on
-                // either side)
-                androidx.compose.animation.AnimatedVisibility(
-                    visible = uiState.replyingToMessage != null,
-                    enter = expandVertically(spring(dampingRatio = 0.85f, stiffness = Spring.StiffnessMediumLow)),
-                    exit = shrinkVertically(tween(160))
-                ) {
-                    val density = LocalDensity.current
-                    Spacer(modifier = Modifier.height(with(density) { replyCardHeightPx.toDp() } + 12.dp))
-                }
+                // Room for what floats above the message box (upload status, reply preview), so it
+                // never covers the last message on either side; follows its height as it animates
+                Spacer(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .layout { measurable, constraints ->
+                            val overlay = bottomOverlayHeightPx
+                            val height = if (overlay > 0) overlay + 12.dp.roundToPx() else 0
+                            val placeable = measurable.measure(constraints.copy(minHeight = 0, maxHeight = 0))
+                            layout(constraints.maxWidth, height) { placeable.place(0, 0) }
+                        }
+                )
                 } // Column: list + typing bubble
 
             // WhatsApp-style date chip: the date of the messages at the top, shown while scrolling
@@ -1519,28 +1580,49 @@ fun ChatScreen(
                 }
             }
 
-            // Reply preview: its own card, lifted above the message box over the chat, lined up
-            // with the box and clear of the mic/send button
-            androidx.compose.animation.AnimatedVisibility(
-                visible = uiState.replyingToMessage != null,
-                enter = slideInVertically(spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessMediumLow)) { it / 2 } + fadeIn(tween(160)),
-                exit = slideOutVertically(tween(160)) { it / 2 } + fadeOut(tween(120)),
+            // Floating above the message box, over the chat: the upload in progress (or the one that
+            // didn't go out, with Retry) and the reply preview. Lined up with the box, clear of the
+            // mic/send button.
+            Column(
+                verticalArrangement = Arrangement.spacedBy(6.dp),
                 modifier = Modifier
                     .align(Alignment.BottomStart)
                     .widthIn(max = 600.dp)
                     .fillMaxWidth()
                     .padding(start = 12.dp, end = 70.dp, bottom = 6.dp)
+                    .onSizeChanged { bottomOverlayHeightPx = it.height }
             ) {
-                val reply = uiState.replyingToMessage ?: lastReply[0]
-                if (reply != null) {
-                    ReplyPreviewCard(
-                        reply = reply,
-                        isPrivateMode = uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE,
-                        onDismiss = { viewModel.setReplyingTo(null) },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .onSizeChanged { replyCardHeightPx = it.height }
+                val isPrivate = uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE
+                val failedUpload = uiState.failedUpload
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = uiState.isUploadingMedia || failedUpload != null,
+                    enter = slideInVertically(spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessMediumLow)) { it / 2 } + fadeIn(tween(160)),
+                    exit = slideOutVertically(tween(160)) { it / 2 } + fadeOut(tween(120))
+                ) {
+                    UploadStatusPill(
+                        isUploading = uiState.isUploadingMedia,
+                        progress = uiState.uploadProgress,
+                        label = if (uiState.isUploadingMedia) uiState.uploadLabel else failedUpload?.label.orEmpty(),
+                        isPrivateMode = isPrivate,
+                        onCancel = { viewModel.cancelUpload() },
+                        onRetry = { viewModel.retryFailedUpload() },
+                        onDismiss = { viewModel.dismissFailedUpload() }
                     )
+                }
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = uiState.replyingToMessage != null,
+                    enter = slideInVertically(spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessMediumLow)) { it / 2 } + fadeIn(tween(160)),
+                    exit = slideOutVertically(tween(160)) { it / 2 } + fadeOut(tween(120))
+                ) {
+                    val reply = uiState.replyingToMessage ?: lastReply[0]
+                    if (reply != null) {
+                        ReplyPreviewCard(
+                            reply = reply,
+                            isPrivateMode = isPrivate,
+                            onDismiss = { viewModel.setReplyingTo(null) },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
                 }
             }
             } // Close else branch of if (uiState.isStealthCurtainActive)
@@ -1582,6 +1664,7 @@ fun ChatScreen(
             } // Close Box(modifier = Modifier.weight(1f).fillMaxWidth())
         }
     }
+    } // Box: wallpaper + Scaffold
 
     // Long-press focus view over the whole chat; "+" opens the full sheet below
     focusedMessage?.let { focused ->
@@ -2089,6 +2172,81 @@ private fun ChatSelectionTopBar(
     }
 }
 
+/** How far apart two messages can be and still join into one run of bubbles. */
+private const val MESSAGE_RUN_WINDOW_MS = 3 * 60 * 1000L
+
+/** Whether [newer] continues [older]'s run: same sender, sent within a few minutes. */
+private fun inSameRun(older: Message, newer: Message): Boolean =
+    older.senderId == newer.senderId && newer.timestamp - older.timestamp in 0..MESSAGE_RUN_WINDOW_MS
+
+/**
+ * A photo/video/voice upload in progress (progress ring, cancel), or one that didn't go out
+ * (Retry, dismiss). Shown above the message box.
+ */
+@Composable
+private fun UploadStatusPill(
+    isUploading: Boolean,
+    progress: Float,
+    label: String,
+    isPrivateMode: Boolean,
+    onCancel: () -> Unit,
+    onRetry: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+    val accent = if (isPrivateMode) (if (isDark) Color(0xFF9CA3AF) else Color(0xFF6B7280)) else MaterialTheme.colorScheme.primary
+    Surface(
+        shape = RoundedCornerShape(20.dp),
+        color = if (isDark) Color(0xFF263049) else Color.White,
+        border = BorderStroke(1.dp, accent.copy(alpha = if (isDark) 0.35f else 0.22f)),
+        shadowElevation = 6.dp
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(start = 12.dp)
+        ) {
+            if (isUploading) {
+                CircularProgressIndicator(
+                    progress = { progress.coerceIn(0.02f, 1f) },
+                    color = accent,
+                    trackColor = accent.copy(alpha = 0.18f),
+                    strokeWidth = 2.dp,
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Sending $label… ${(progress * 100).toInt().coerceIn(0, 100)}%",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                IconButton(onClick = onCancel, modifier = Modifier.size(36.dp).testTag("upload_cancel")) {
+                    Icon(Icons.Default.Close, contentDescription = "Cancel sending", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(16.dp))
+                }
+            } else {
+                Icon(Icons.Default.ErrorOutline, contentDescription = null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(16.dp))
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = label.replaceFirstChar { it.uppercase() } + " not sent",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                TextButton(
+                    onClick = onRetry,
+                    contentPadding = PaddingValues(horizontal = 10.dp),
+                    modifier = Modifier.height(36.dp).testTag("upload_retry")
+                ) {
+                    Text("Retry", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = accent)
+                }
+                IconButton(onClick = onDismiss, modifier = Modifier.size(36.dp)) {
+                    Icon(Icons.Default.Close, contentDescription = "Dismiss", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(16.dp))
+                }
+            }
+        }
+    }
+}
+
 /**
  * Everything a message row can ask of the chat screen. One instance per screen, so rows receive
  * the same object every time instead of fresh lambdas.
@@ -2117,6 +2275,8 @@ private fun ChatMessageRow(
     message: Message,
     isFromMe: Boolean,
     isFirstOfDay: Boolean,
+    groupedWithPrevious: Boolean,
+    groupedWithNext: Boolean,
     isFreshArrival: Boolean,
     isPrivate: Boolean,
     isDark: Boolean,
@@ -2131,7 +2291,8 @@ private fun ChatMessageRow(
     actions: ChatRowActions,
     modifier: Modifier = Modifier
 ) {
-    Column(modifier = modifier.fillMaxWidth()) {
+    // A little more room between runs than between the bubbles of one run
+    Column(modifier = modifier.fillMaxWidth().padding(top = if (groupedWithPrevious) 0.dp else 6.dp)) {
         if (isFirstOfDay) {
             val dateSep = formatDateSeparator(message.timestamp)
             if (dateSep.isNotEmpty()) {
@@ -2253,7 +2414,9 @@ private fun ChatMessageRow(
                         isHighlighted = isHighlighted,
                         onReplyQuoteClick = actions.jumpToReply,
                         isPrivateMode = isPrivate,
-                        senderPhotoUrl = senderPhotoUrl
+                        senderPhotoUrl = senderPhotoUrl,
+                        groupedWithPrevious = groupedWithPrevious,
+                        groupedWithNext = groupedWithNext
                     )
                 }
             }

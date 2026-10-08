@@ -479,11 +479,22 @@ fun FullScreenMediaViewer(
                         ),
                     contentAlignment = Alignment.Center
                 ) {
-                    if (isVideo) {
+                    if (isVideo && pageUrl.contains("videonote", ignoreCase = true)) {
                         com.example.ui.components.CircularVideoNoteView(
                             videoUrl = pageUrl,
                             autoPlay = true,
                             modifier = Modifier.size(340.dp)
+                        )
+                    } else if (isVideo) {
+                        // A shared video: full width, whole picture shown
+                        com.example.ui.components.CircularVideoNoteView(
+                            videoUrl = pageUrl,
+                            autoPlay = true,
+                            shape = androidx.compose.ui.graphics.RectangleShape,
+                            cropToFill = false,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .fillMaxHeight(0.8f)
                         )
                     } else {
                         val modelData = remember(pageUrl) {

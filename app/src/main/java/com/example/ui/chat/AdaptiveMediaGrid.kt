@@ -10,6 +10,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -33,6 +34,13 @@ import com.example.ui.theme.DayBlueSecondary
  * Dynamically adjusts column arrangements and dimensions based on
  * number of photos and user-selected thumbnail size (small, medium, large).
  */
+/** Photo shapes (width / height) seen so far, so a card has its size straight away when shown again. */
+private val photoRatios = android.util.LruCache<String, Float>(500)
+
+/** The tallest and widest a single photo card gets; beyond that the photo is trimmed to fit. */
+private const val MIN_PHOTO_RATIO = 0.72f
+private const val MAX_PHOTO_RATIO = 1.9f
+
 @Composable
 fun AdaptiveMediaGrid(
     urls: List<String>,
@@ -72,15 +80,24 @@ fun AdaptiveMediaGrid(
             .clip(RoundedCornerShape(cornerRadius))
     ) {
         when {
-            // Case 1: Single Photo (No black top/bottom bars, perfectly cropped to thumb height)
+            // Case 1: Single Photo. The card takes the photo's own shape (very tall or very wide ones
+            // are trimmed a little), so there are no empty bands above or below it.
             urls.size == 1 -> {
+                val key = urls[0]
+                var ratio by remember(key) { mutableFloatStateOf(photoRatios.get(key) ?: 0f) }
                 MediaTile(
                     url = shown(0),
-                    contentScale = ContentScale.FillWidth,
+                    contentScale = ContentScale.Crop,
+                    onAspectRatio = { loaded ->
+                        if (loaded > 0f) {
+                            photoRatios.put(key, loaded)
+                            ratio = loaded
+                        }
+                    },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .defaultMinSize(minHeight = singleImageHeight)
-                        .wrapContentHeight()
+                        // Square until the photo says otherwise
+                        .aspectRatio((if (ratio > 0f) ratio else 1f).coerceIn(MIN_PHOTO_RATIO, MAX_PHOTO_RATIO))
                         .clip(RoundedCornerShape(cornerRadius))
                         .clickable { onImageClick(0, urls[0]) }
                 )
@@ -290,7 +307,8 @@ fun AdaptiveMediaGrid(
 private fun MediaTile(
     url: String,
     modifier: Modifier = Modifier,
-    contentScale: ContentScale = ContentScale.Crop
+    contentScale: ContentScale = ContentScale.Crop,
+    onAspectRatio: ((Float) -> Unit)? = null
 ) {
     val context = LocalContext.current
     val isDark = androidx.compose.material3.MaterialTheme.colorScheme.surface.luminance() < 0.5f
@@ -346,6 +364,10 @@ private fun MediaTile(
                 onState = { state ->
                     isLoading = state is coil.compose.AsyncImagePainter.State.Loading
                     hasFailed = state is coil.compose.AsyncImagePainter.State.Error
+                    if (state is coil.compose.AsyncImagePainter.State.Success && onAspectRatio != null) {
+                        val size = state.painter.intrinsicSize
+                        if (size.width > 0f && size.height > 0f) onAspectRatio(size.width / size.height)
+                    }
                 },
                 modifier = if (contentScale == ContentScale.FillWidth) Modifier.fillMaxWidth().wrapContentHeight() else Modifier.fillMaxSize()
             )

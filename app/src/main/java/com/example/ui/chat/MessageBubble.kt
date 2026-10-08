@@ -224,15 +224,8 @@ fun MessageBubble(
         YouTubeHelper.extractVideoId(message.text) != null
     }
 
-    val isVideoNote = remember(message) {
-        message.isCircularVideoNote() ||
-        message.isVideoNote ||
-        message.type.equals("VIDEO", ignoreCase = true) ||
-        message.getTypedType() == MessageType.VIDEO ||
-        message.mediaUrl?.contains("video", ignoreCase = true) == true ||
-        message.mediaName?.contains("video", ignoreCase = true) == true ||
-        message.text.contains("Video note", ignoreCase = true)
-    }
+    // Round video notes get the circle layout; shared videos are cards in a normal bubble
+    val isVideoNote = remember(message) { message.isCircularVideoNote() }
 
     Box(
         modifier = modifier
@@ -449,6 +442,12 @@ fun MessageBubble(
                     message.text.matches(Regex("""Sent \d+ photos?"""))
                 )
 
+                // A photo with nothing else in the bubble fills it edge to edge: no bubble colour
+                // around it (it used to show in the corner the photo's rounding left open)
+                val isPhotoOnly = message.getTypedType() == MessageType.IMAGE && isGenericPhotoText &&
+                    message.replyToText.isNullOrEmpty()
+                val cardShape = if (isPhotoOnly) RoundedCornerShape(14.dp) else bubbleShape
+
                 val bubbleMinWidth = when (message.getTypedType()) {
                     MessageType.IMAGE -> when (gallerySize.lowercase()) {
                         "small" -> 160.dp
@@ -456,7 +455,7 @@ fun MessageBubble(
                         else -> 280.dp
                     }
                     MessageType.AUDIO -> 260.dp
-                    MessageType.VIDEO -> 195.dp
+                    MessageType.VIDEO -> 240.dp
                     else -> 60.dp
                 }
                 val bubbleMaxWidth = when (message.getTypedType()) {
@@ -478,28 +477,32 @@ fun MessageBubble(
                         }
                         .heartBurst(heartBurst)
                         .then(
-                            if (isPrivateMode) {
-                                Modifier.shadow(0.5.dp, bubbleShape)
+                            if (isPhotoOnly) {
+                                Modifier.shadow(1.dp, cardShape)
+                            } else if (isPrivateMode) {
+                                Modifier.shadow(0.5.dp, cardShape)
                             } else {
-                                if (isFromMe) Modifier.appGradientShadow(bubbleShape)
-                                else Modifier.shadow(0.8.dp, bubbleShape)
+                                if (isFromMe) Modifier.appGradientShadow(cardShape)
+                                else Modifier.shadow(0.8.dp, cardShape)
                             }
                         )
-                        .clip(bubbleShape)
+                        .clip(cardShape)
                         .then(
-                            if (isHighlighted) Modifier.border(BorderStroke(2.dp, if (isPrivateMode) (if (isDark) Color(0xFF6B7280) else Color(0xFF9CA3AF)) else MaterialTheme.colorScheme.primary), bubbleShape)
+                            if (isHighlighted) Modifier.border(BorderStroke(2.dp, if (isPrivateMode) (if (isDark) Color(0xFF6B7280) else Color(0xFF9CA3AF)) else MaterialTheme.colorScheme.primary), cardShape)
+                            else if (isPhotoOnly) Modifier
                             else if (isPrivateMode) Modifier.border(
                                 BorderStroke(0.6.dp, if (isDark) Color(0xFF38393E) else Color(0xFFE5E7EB)),
-                                bubbleShape
+                                cardShape
                             )
                             else if (!isFromMe) Modifier.border(
                                 BorderStroke(0.5.dp, if (isDark) Color(0xFF2A364F) else Color(0xFFE2E8F0)),
-                                bubbleShape
+                                cardShape
                             )
                             else Modifier
                         )
                         .background(
-                            if (isPrivateMode) androidx.compose.ui.graphics.SolidColor(bubbleBg)
+                            if (isPhotoOnly) androidx.compose.ui.graphics.SolidColor(Color.Transparent)
+                            else if (isPrivateMode) androidx.compose.ui.graphics.SolidColor(bubbleBg)
                             else if (isFromMe) appHorizontalGradient()
                             else androidx.compose.ui.graphics.SolidColor(if (isDark) Color(0xFF1E2638) else Color(0xFFF1F5FB))
                         )
@@ -659,13 +662,16 @@ fun MessageBubble(
                                     onImageClick(videoUrl)
                                 }
                             }
+                            // A shared video: a rounded card with its first frame, plays here or full screen
                             com.example.ui.components.CircularVideoNoteView(
                                 videoUrl = videoUrl,
                                 durationSeconds = message.durationSeconds,
                                 onExpandClick = openBigVideo,
+                                shape = RoundedCornerShape(12.dp),
                                 modifier = Modifier
-                                    .padding(vertical = 4.dp)
-                                    .align(Alignment.CenterHorizontally)
+                                    .padding(vertical = 2.dp)
+                                    .fillMaxWidth()
+                                    .aspectRatio(4f / 3f)
                             )
                         }
                     }

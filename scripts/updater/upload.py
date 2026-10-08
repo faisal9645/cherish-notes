@@ -67,7 +67,7 @@ def create_github_release(token: str, version_code: int, version_name: str) -> d
     payload = {
         "tag_name": tag,
         "name": f"v{version_name} (build {version_code})",
-        "body": f"Cherish v{version_name} (Build {version_code}):\n• Scrolling back through older chats no longer jumps to the bottom\n• Faster photos with small previews in chat & gallery\n• Smoother chat scrolling and a quicker app start\n• Emoji board and keyboard switch smoothly, never both open; back closes them first\n• Smileys look the same in chat as while typing; single emojis bigger\n• Neater reply bar and more room around the mic button\n• Video notes: full-width circle, sharper video, no stretching\n• Updates continue properly after allowing installs\n• Recent apps preview stays private\n• Bug fixes and stability improvements",
+        "body": f"Cherish v{version_name} (Build {version_code}):\n• Messages sent in a row group together, with the time on the last one\n• Frosted glass top bar over your wallpaper\n• Sending progress with cancel, and Retry for anything that didn't send\n• Photos show in their real shape, with no empty space or coloured corner\n• Shared videos send properly and show as a video card\n• Safer login: only the correct details open the app\n• Bug fixes and stability improvements",
         "draft": False,
         "prerelease": False,
     }

@@ -1,5 +1,6 @@
 package com.example.data.model
 
+import com.google.firebase.firestore.Exclude
 import com.google.firebase.firestore.IgnoreExtraProperties
 import com.google.firebase.firestore.PropertyName
 import com.squareup.moshi.JsonClass
@@ -74,14 +75,20 @@ data class User(
     val heartbeatStreak: Int = 0,
     val lastHeartbeatSync: Long = 0L
 ) {
+    /**
+     * When this phone received this user's latest live presence update, on this phone's own clock
+     * (0 when unknown, e.g. only a cached or first copy of the document has arrived). Never stored.
+     */
+    @get:Exclude @set:Exclude
+    var presenceReceivedAt: Long = 0L
+
     fun isEffectivelyOnline(): Boolean {
         if (!isOnline) return false
-        val diff = System.currentTimeMillis() - lastSeen
-        // Negative diff indicates partner device clock is slightly ahead, which means they are definitely active
-        if (diff < 0L) return true
-        // If last active within 3 minutes (180s), they are considered online
-        if (diff > 180_000L) return false
-        return true
+        val now = System.currentTimeMillis()
+        // A live update measured on this phone's clock, so a wrong clock on either phone can't matter
+        if (presenceReceivedAt > 0L) return now - presenceReceivedAt <= ONLINE_WINDOW_MS
+        // Otherwise compare clocks; either way, no heartbeat for a few beats means the app is gone
+        return kotlin.math.abs(now - lastSeen) <= ONLINE_WINDOW_MS
     }
 
     fun isEffectivelyTyping(): Boolean {
@@ -100,6 +107,14 @@ data class User(
     fun isCheckAfterExpired(): Boolean {
         val target = checkAfterTimeMillis ?: return false
         return checkAfterActive && target > 0L && System.currentTimeMillis() >= target
+    }
+
+    companion object {
+        /** How often an open app refreshes its "online" heartbeat. */
+        const val PRESENCE_HEARTBEAT_MS = 10_000L
+
+        /** Online only while heartbeats keep arriving: three missed beats and it shows offline. */
+        const val ONLINE_WINDOW_MS = 32_000L
     }
 
     fun getEffectivePresenceStatus(): String {
@@ -149,12 +164,12 @@ data class Message(
 ) {
     @com.google.firebase.firestore.Exclude
     fun isCircularVideoNote(): Boolean {
-        val isTypeVideo = type.equals("VIDEO", ignoreCase = true)
-        val hasVideoNoteName = mediaName?.contains("video", ignoreCase = true) == true ||
-                               mediaUrl?.contains("video", ignoreCase = true) == true ||
-                               mediaUrl?.endsWith(".mp4", ignoreCase = true) == true ||
-                               text.contains("Video note", ignoreCase = true)
-        return isVideoNote || (isTypeVideo && hasVideoNoteName) || isTypeVideo
+        if (isVideoNote) return true
+        if (!type.equals("VIDEO", ignoreCase = true)) return false
+        // Notes sent before the flag existed: recorder file name or text. Shared videos aren't notes.
+        return mediaName?.startsWith("videonote", ignoreCase = true) == true ||
+            mediaUrl?.contains("videonote", ignoreCase = true) == true ||
+            text.startsWith("Video note", ignoreCase = true)
     }
     @com.google.firebase.firestore.Exclude
     fun getTypedType(): MessageType {
