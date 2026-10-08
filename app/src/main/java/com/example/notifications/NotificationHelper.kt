@@ -62,6 +62,15 @@ object NotificationHelper {
      * Check if user is actively inside the chat screen so we don't disturb them
      * with redundant notifications while they are already viewing messages live.
      */
+    fun isAppOpenOnScreen(context: Context): Boolean {
+        return try {
+            val app = context.applicationContext as? com.example.CherishApplication
+            app?.authRepository?.isAppOpenOnScreen() ?: false
+        } catch (_: Exception) {
+            false
+        }
+    }
+
     fun isUserActivelyViewingChat(context: Context): Boolean {
         return try {
             val app = context.applicationContext as? com.example.CherishApplication
@@ -84,8 +93,9 @@ object NotificationHelper {
         conversationId: String? = null,
         messageId: String? = null
     ) {
-        // If user is actively looking at the chat tab in foreground, do not notify
-        if (isUserActivelyViewingChat(context)) {
+        // Nothing pops up while the app is open on screen (any tab, or Notes): the app shows new
+        // messages itself. Notifications are for when it's closed or in the background.
+        if (isAppOpenOnScreen(context)) {
             return
         }
 

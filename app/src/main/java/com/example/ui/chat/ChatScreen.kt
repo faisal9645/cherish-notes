@@ -948,7 +948,9 @@ fun ChatScreen(
                                             Surface(
                                                 shape = RoundedCornerShape(10.dp),
                                                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.75f),
-                                                modifier = Modifier.clickable { showMoodPicker = true }
+                                                modifier = Modifier
+                                                    .weight(1f, fill = false)
+                                                    .clickable { showMoodPicker = true }
                                             ) {
                                                 EmojiText(
                                                     text = partnerMood,
@@ -956,6 +958,7 @@ fun ChatScreen(
                                                     fontWeight = FontWeight.Medium,
                                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                                     maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis,
                                                     emojiScale = 1.2f,
                                                     modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                                                 )
@@ -977,22 +980,34 @@ fun ChatScreen(
                                             ) {
                                                 Row(
                                                     verticalAlignment = Alignment.CenterVertically,
-                                                    modifier = Modifier.padding(horizontal = 4.5.dp, vertical = 2.dp)
+                                                    modifier = Modifier.padding(start = 3.dp, end = 5.dp, top = 2.dp, bottom = 2.dp)
                                                 ) {
-                                                    val icon = when {
-                                                        isCharging -> "⚡"
-                                                        isLow -> "🪫"
-                                                        else -> "🔋"
+                                                    val batteryTint = when {
+                                                        isCharging -> Color(0xFF10B981)
+                                                        isLow -> Color(0xFFEF4444)
+                                                        else -> MaterialTheme.colorScheme.onSurfaceVariant
                                                     }
+                                                    Icon(
+                                                        imageVector = when {
+                                                            isCharging -> Icons.Filled.BatteryChargingFull
+                                                            isLow -> Icons.Filled.BatteryAlert
+                                                            battery >= 90 -> Icons.Filled.BatteryFull
+                                                            battery >= 70 -> Icons.Filled.Battery6Bar
+                                                            battery >= 50 -> Icons.Filled.Battery5Bar
+                                                            battery >= 35 -> Icons.Filled.Battery4Bar
+                                                            else -> Icons.Filled.Battery3Bar
+                                                        },
+                                                        contentDescription = null,
+                                                        tint = batteryTint,
+                                                        modifier = Modifier.size(12.dp)
+                                                    )
                                                     Text(
-                                                        text = "$icon $battery%",
+                                                        text = "$battery%",
                                                         fontSize = 9.5.sp,
                                                         fontWeight = FontWeight.Bold,
-                                                        color = when {
-                                                            isCharging -> Color(0xFF10B981)
-                                                            isLow -> Color(0xFFEF4444)
-                                                            else -> MaterialTheme.colorScheme.onSurfaceVariant
-                                                        }
+                                                        color = batteryTint,
+                                                        maxLines = 1,
+                                                        softWrap = false
                                                     )
                                                 }
                                             }
@@ -1026,15 +1041,12 @@ fun ChatScreen(
                                             }
                                         }
                                     }
-                                    val daysLabel = remember(togetherSince, uiState.logicalDay) { daysTogetherLabel(togetherSince) }
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
                                     Text(
                                         text = statusText,
                                         fontSize = 12.sp,
                                         lineHeight = 14.sp,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis,
-                                        modifier = Modifier.weight(1f, fill = false),
                                         color = if (partnerHasCheckAfter) {
                                             Color(0xFF3B82F6)
                                         } else if (uiState.isPartnerRecordingAudio || uiState.isPartnerTyping || isPartnerOnline) {
@@ -1044,10 +1056,6 @@ fun ChatScreen(
                                         },
                                         fontWeight = FontWeight.Normal
                                     )
-                                    if (daysLabel != null) {
-                                        DaysTogetherText(label = daysLabel, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    }
-                                    }
                                 }
                             }
                         }

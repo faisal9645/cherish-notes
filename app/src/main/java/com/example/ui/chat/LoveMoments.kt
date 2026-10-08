@@ -14,7 +14,6 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -634,18 +633,5 @@ fun HugNudgeCard(partnerName: String, mood: String, onSendHug: () -> Unit, onDis
                 }
             }
         }
-    }
-}
-
-/** "Day 412 💛" for the chat header, or null when the start day isn't set. */
-fun daysTogetherLabel(since: String?): String? =
-    LoveDates.dayNumber(since)?.let { "Day $it 💛" }
-
-/** The days counter after the header's status, as one soft line. */
-@Composable
-fun DaysTogetherText(label: String, color: Color) {
-    Row(horizontalArrangement = Arrangement.Start, verticalAlignment = Alignment.CenterVertically) {
-        Text(text = "  ·  ", fontSize = 12.sp, lineHeight = 14.sp, color = color.copy(alpha = 0.6f))
-        Text(text = label, fontSize = 12.sp, lineHeight = 14.sp, color = color, maxLines = 1)
     }
 }
