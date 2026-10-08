@@ -318,6 +318,36 @@ fun YouTubeWebView(
     }
 }
 
+/** A small round button for the YouTube card's header; its touch area is exactly what's drawn. */
+@Composable
+private fun CardHeaderButton(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    contentDescription: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    iconSize: androidx.compose.ui.unit.Dp = 18.dp
+) {
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = modifier
+            .size(32.dp)
+            .clip(CircleShape)
+            .background(Color.White.copy(alpha = 0.12f))
+            .clickable(
+                onClickLabel = contentDescription,
+                role = androidx.compose.ui.semantics.Role.Button,
+                onClick = onClick
+            )
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = contentDescription,
+            tint = Color.White,
+            modifier = Modifier.size(iconSize)
+        )
+    }
+}
+
 /**
  * Telegram/WhatsApp-style Inline YouTube Video Player Card
  */
@@ -362,10 +392,10 @@ fun InlineYouTubeCard(
                     .fillMaxWidth()
                     .background(Color(0xFF202024))
                     .padding(horizontal = 12.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                // The title gives way (ends in "…") so the buttons always keep their room
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
                     Box(
                         modifier = Modifier
                             .size(22.dp)
@@ -385,55 +415,44 @@ fun InlineYouTubeCard(
                         text = "YouTube Player",
                         color = Color.White,
                         fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
 
+                Spacer(modifier = Modifier.width(8.dp))
+
+                // Same-size round buttons, each tappable only where it's drawn
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     // Open the video in the YouTube app (or the browser without it)
-                    IconButton(
+                    CardHeaderButton(
+                        icon = Icons.Default.OpenInNew,
+                        contentDescription = "Open in YouTube app",
+                        iconSize = 16.dp,
+                        modifier = Modifier.testTag("youtube_open_in_app"),
                         onClick = {
                             isPlayingInline = false
                             YouTubeHelper.openInYouTube(context, videoId)
-                        },
-                        modifier = Modifier
-                            .size(30.dp)
-                            .background(Color.White.copy(alpha = 0.12f), CircleShape)
-                            .testTag("youtube_open_in_app")
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.OpenInNew,
-                            contentDescription = "Open in YouTube app",
-                            tint = Color.White,
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
-
-                    IconButton(
-                        onClick = { onOpenTheater(videoId) },
-                        modifier = Modifier
-                            .size(30.dp)
-                            .background(Color.White.copy(alpha = 0.12f), CircleShape)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Fullscreen,
-                            contentDescription = "Theater Mode (Landscape Full Screen)",
-                            tint = Color.White,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-
-                    if (isPlayingInline) {
-                        TextButton(
-                            onClick = { isPlayingInline = false },
-                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
-                            modifier = Modifier.height(26.dp)
-                        ) {
-                            Text("✕ Close", color = Color(0xFFA1A1AA), fontSize = 11.5.sp)
                         }
+                    )
+                    CardHeaderButton(
+                        icon = Icons.Default.Fullscreen,
+                        contentDescription = "Theater Mode (Landscape Full Screen)",
+                        modifier = Modifier.testTag("youtube_theater"),
+                        onClick = { onOpenTheater(videoId) }
+                    )
+                    if (isPlayingInline) {
+                        CardHeaderButton(
+                            icon = Icons.Default.Close,
+                            contentDescription = "Close player",
+                            iconSize = 16.dp,
+                            modifier = Modifier.testTag("youtube_close_inline"),
+                            onClick = { isPlayingInline = false }
+                        )
                     }
                 }
             }
