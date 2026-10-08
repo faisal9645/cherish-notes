@@ -3,6 +3,7 @@ package com.example.ui.home
 import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -11,6 +12,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -62,6 +64,7 @@ import androidx.compose.ui.unit.sp
 import com.example.ui.chat.FullScreenMediaViewer
 import com.example.ui.components.AvatarView
 import com.example.ui.theme.HeartRed
+import com.example.ui.theme.OnlineGreen
 import com.example.ui.theme.darkTone
 import kotlinx.coroutines.delay
 import java.text.NumberFormat
@@ -255,54 +258,74 @@ fun BothOfUsCard(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.wrapContentWidth()
                     ) {
-                        // My Avatar
-                        Surface(
-                            shape = CircleShape,
-                            color = MaterialTheme.colorScheme.surface,
-                            shadowElevation = 4.dp,
-                            border = BorderStroke(AVATAR_BORDER, accent)
-                        ) {
-                            AvatarView(
-                                photoUrl = me.photoUrl,
-                                name = me.name,
-                                size = AVATAR_SIZE,
-                                isOnline = me.isOnline,
-                                showOnlineBadge = me.isOnline,
-                                modifier = Modifier
-                                    .clip(CircleShape)
-                                    .clickable {
+                        // My Avatar with online badge
+                        Box(contentAlignment = Alignment.BottomEnd) {
+                            Surface(
+                                shape = CircleShape,
+                                color = MaterialTheme.colorScheme.surface,
+                                shadowElevation = 4.dp,
+                                border = BorderStroke(AVATAR_BORDER, accent)
+                            ) {
+                                AvatarView(
+                                    photoUrl = me.photoUrl,
+                                    name = me.name,
+                                    size = AVATAR_SIZE,
+                                    isOnline = false,
+                                    showOnlineBadge = false,
+                                    modifier = Modifier.clickable {
                                         if (!me.photoUrl.isNullOrBlank()) {
                                             viewingPhotoUrl = me.photoUrl
                                         } else {
                                             Toast.makeText(context, "No profile photo uploaded yet", Toast.LENGTH_SHORT).show()
                                         }
                                     }
-                            )
+                                )
+                            }
+                            if (me.isOnline) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(17.dp)
+                                        .offset(x = (-3).dp, y = (-3).dp)
+                                        .clip(CircleShape)
+                                        .background(OnlineGreen)
+                                        .border(2.5.dp, cardColor, CircleShape)
+                                )
+                            }
                         }
 
-                        // Partner Avatar
-                        Surface(
-                            shape = CircleShape,
-                            color = MaterialTheme.colorScheme.surface,
-                            shadowElevation = 4.dp,
-                            border = BorderStroke(AVATAR_BORDER, HeartRed.copy(alpha = 0.8f))
-                        ) {
-                            AvatarView(
-                                photoUrl = partner.photoUrl,
-                                name = partner.name,
-                                size = AVATAR_SIZE,
-                                isOnline = partner.isOnline,
-                                showOnlineBadge = partner.isOnline,
-                                modifier = Modifier
-                                    .clip(CircleShape)
-                                    .clickable {
+                        // Partner Avatar with online badge
+                        Box(contentAlignment = Alignment.BottomEnd) {
+                            Surface(
+                                shape = CircleShape,
+                                color = MaterialTheme.colorScheme.surface,
+                                shadowElevation = 4.dp,
+                                border = BorderStroke(AVATAR_BORDER, HeartRed.copy(alpha = 0.8f))
+                            ) {
+                                AvatarView(
+                                    photoUrl = partner.photoUrl,
+                                    name = partner.name,
+                                    size = AVATAR_SIZE,
+                                    isOnline = false,
+                                    showOnlineBadge = false,
+                                    modifier = Modifier.clickable {
                                         if (!partner.photoUrl.isNullOrBlank()) {
                                             viewingPhotoUrl = partner.photoUrl
                                         } else {
                                             Toast.makeText(context, "No profile photo uploaded yet", Toast.LENGTH_SHORT).show()
                                         }
                                     }
-                            )
+                                )
+                            }
+                            if (partner.isOnline) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(17.dp)
+                                        .offset(x = (-3).dp, y = (-3).dp)
+                                        .clip(CircleShape)
+                                        .background(OnlineGreen)
+                                        .border(2.5.dp, cardColor, CircleShape)
+                                )
+                            }
                         }
                     }
 
@@ -351,12 +374,10 @@ fun BothOfUsCard(
                     )
                 }
 
-                // Days lived between us
-                val myBorn = parseDay(me.birthday)
-                val partnerBorn = parseDay(partner.birthday)
-                val together = parseDay(togetherSince)?.takeIf { now >= it.timeInMillis }
-                if (myBorn != null && partnerBorn != null && now >= myBorn.timeInMillis && now >= partnerBorn.timeInMillis) {
-                    val lived = (now - myBorn.timeInMillis) / DAY_MS + (now - partnerBorn.timeInMillis) / DAY_MS
+                // Days we've lived together, counted from the together date (like a date
+                // calculator: the start day is 0)
+                val togetherDays = com.example.ui.chat.LoveDates.daysTogether(togetherSince, now)
+                if (togetherDays != null) {
                     Spacer(modifier = Modifier.height(8.dp))
                     Surface(
                         shape = RoundedCornerShape(12.dp),
@@ -364,7 +385,11 @@ fun BothOfUsCard(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text(
-                            text = "Together we've lived ${formatNumber(lived)} days 💛",
+                            text = when (togetherDays) {
+                                0 -> "Our first day together 💛"
+                                1 -> "Together we've lived 1 day 💛"
+                                else -> "Together we've lived ${formatNumber(togetherDays.toLong())} days 💛"
+                            },
                             fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.onSurface,
                             textAlign = TextAlign.Center,
@@ -382,8 +407,9 @@ fun BothOfUsCard(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Tap to set or change the day we got together
-                    if (together != null) {
+                    // The together date (tap to set or change it)
+                    val sinceText = com.example.ui.chat.LoveDates.formatLong(togetherSince)
+                    if (togetherDays != null && sinceText != null) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier
@@ -395,7 +421,7 @@ fun BothOfUsCard(
                             Text(text = "❤️", fontSize = 15.sp)
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = "${formatNumber((now - together.timeInMillis) / DAY_MS + 1)} Days Together",
+                                text = "Since $sinceText",
                                 fontSize = 13.5.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurface
@@ -527,22 +553,56 @@ private fun PersonStatsColumn(
             .padding(horizontal = 4.dp, vertical = 2.dp)
             .testTag("both_of_us_${person.id}")
     ) {
-        // Battery status if available
-        person.batteryLevel?.takeIf { it in 0..100 }?.let { level ->
-            BatteryChip(level, person.isCharging)
-            Spacer(modifier = Modifier.height(3.dp))
-        }
-
-        // Custom status (e.g. quiet time) if set
-        person.status?.let { st ->
-            Text(
-                text = st,
-                fontSize = 11.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            Spacer(modifier = Modifier.height(3.dp))
+        // Status / Online & Battery row
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center,
+            modifier = Modifier.padding(bottom = 3.dp)
+        ) {
+            if (person.isOnline) {
+                Box(
+                    modifier = Modifier
+                        .size(6.5.dp)
+                        .clip(CircleShape)
+                        .background(OnlineGreen)
+                )
+                Spacer(modifier = Modifier.width(3.5.dp))
+                Text(
+                    text = "Online",
+                    fontSize = 11.5.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = OnlineGreen
+                )
+                Spacer(modifier = Modifier.width(5.dp))
+                Text(
+                    text = "·",
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                )
+                Spacer(modifier = Modifier.width(5.dp))
+                BatteryChip(
+                    level = person.batteryLevel,
+                    isCharging = person.isCharging,
+                    showPercentage = true
+                )
+            } else {
+                if (!person.status.isNullOrBlank()) {
+                    Text(
+                        text = person.status,
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                }
+                // When not online: battery icon only without percentage
+                BatteryChip(
+                    level = person.batteryLevel,
+                    isCharging = person.isCharging,
+                    showPercentage = false
+                )
+            }
         }
 
         // Age, days of life, and birthday
@@ -590,13 +650,19 @@ private fun PersonStatsColumn(
     }
 }
 
-/** Battery indicator: icon (or charging / low) and percentage. */
+/** Battery indicator: icon (or charging / low) and optional percentage. */
 @Composable
-private fun BatteryChip(level: Int, isCharging: Boolean, modifier: Modifier = Modifier) {
-    val isLow = level <= 20
+private fun BatteryChip(
+    level: Int?,
+    isCharging: Boolean,
+    showPercentage: Boolean,
+    modifier: Modifier = Modifier
+) {
+    val lvl = level ?: 100
+    val isLow = lvl <= 20
     val tint = when {
         isCharging -> Color(0xFF10B981)
-        isLow -> Color(0xFFEF4444)
+        isLow && showPercentage -> Color(0xFFEF4444)
         else -> MaterialTheme.colorScheme.onSurfaceVariant
     }
     Row(verticalAlignment = Alignment.CenterVertically, modifier = modifier) {
@@ -604,23 +670,25 @@ private fun BatteryChip(level: Int, isCharging: Boolean, modifier: Modifier = Mo
             imageVector = when {
                 isCharging -> Icons.Filled.BatteryChargingFull
                 isLow -> Icons.Filled.BatteryAlert
-                level >= 90 -> Icons.Filled.BatteryFull
-                level >= 70 -> Icons.Filled.Battery6Bar
-                level >= 50 -> Icons.Filled.Battery5Bar
-                level >= 35 -> Icons.Filled.Battery4Bar
+                lvl >= 90 -> Icons.Filled.BatteryFull
+                lvl >= 70 -> Icons.Filled.Battery6Bar
+                lvl >= 50 -> Icons.Filled.Battery5Bar
+                lvl >= 35 -> Icons.Filled.Battery4Bar
                 else -> Icons.Filled.Battery3Bar
             },
-            contentDescription = null,
+            contentDescription = if (level != null) "$level% battery" else "Battery",
             tint = tint,
             modifier = Modifier.size(13.dp)
         )
-        Spacer(modifier = Modifier.width(3.dp))
-        Text(
-            text = if (isCharging) "$level% charging" else "$level%",
-            fontSize = 11.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = tint,
-            maxLines = 1
-        )
+        if (showPercentage && level != null && level in 0..100) {
+            Spacer(modifier = Modifier.width(3.dp))
+            Text(
+                text = if (isCharging) "$level% charging" else "$level%",
+                fontSize = 11.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = tint,
+                maxLines = 1
+            )
+        }
     }
 }

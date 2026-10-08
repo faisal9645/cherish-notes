@@ -47,6 +47,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
@@ -289,202 +290,111 @@ fun ProfileScreen(
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // 1. My profile: photo, name, note, edit (the two of us are on the Love & Us tab)
+            // 1. My profile, plain like any settings screen: photo, name, email and note; tap the
+            // photo to change it, the row or the pencil to edit (the two of us are on Love & Us)
+            val myName = user?.displayName?.ifBlank { "Me" } ?: "Me"
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
                     .testTag("profile_header_card"),
-                shape = RoundedCornerShape(24.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = if (isDark) darkTone(Color(0xFF141923)) else Color(0xFFFBFDFF)
-                ),
-                border = BorderStroke(
-                    1.dp,
-                    if (isDark) darkTone(Color(0xFF232D3F)) else Color(0xFFE2E8F0)
-                ),
-                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                shape = RoundedCornerShape(18.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
+                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
             ) {
-                Box(modifier = Modifier.fillMaxWidth()) {
-                    // Subtle romantic ambient glow in header background
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(110.dp)
-                            .background(
-                                Brush.verticalGradient(
-                                    colors = listOf(
-                                        primaryAccent.copy(alpha = if (isDark) 0.18f else 0.12f),
-                                        Color.Transparent
-                                    )
-                                )
-                            )
-                    )
-
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(20.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        val myName = user?.displayName?.ifBlank { "Me" } ?: "Me"
-
-                        // My photo (tap to change it)
-                        Box(
-                            contentAlignment = Alignment.Center,
-                            modifier = Modifier.padding(top = 8.dp, bottom = 10.dp)
-                        ) {
-                            Surface(
-                                shape = CircleShape,
-                                color = MaterialTheme.colorScheme.surface,
-                                shadowElevation = 4.dp,
-                                border = BorderStroke(2.5.dp, primaryAccent)
-                            ) {
-                                AvatarView(
-                                    photoUrl = user?.photoUrl,
-                                    name = myName,
-                                    size = 90.dp,
-                                    showOnlineBadge = false,
-                                    modifier = Modifier
-                                        .clip(CircleShape)
-                                        .clickable { showAvatarOptionsDialog = true }
-                                )
-                            }
-
-                            if (uiState.isUpdating) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(95.dp)
-                                        .clip(CircleShape)
-                                        .background(Color.Black.copy(alpha = 0.45f)),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    CircularProgressIndicator(
-                                        modifier = Modifier.size(24.dp),
-                                        color = Color.White,
-                                        strokeWidth = 2.5.dp
-                                    )
-                                }
-                            }
-
-                            // Camera badge at the bottom right of the photo
-                            Surface(
-                                shape = CircleShape,
-                                color = primaryAccent,
-                                border = BorderStroke(2.dp, if (isDark) darkTone(Color(0xFF141923)) else Color.White),
-                                shadowElevation = 3.dp,
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { showEditProfileDialog = true }
+                        .padding(horizontal = 16.dp, vertical = 14.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        AvatarView(
+                            photoUrl = user?.photoUrl,
+                            name = myName,
+                            size = 68.dp,
+                            showOnlineBadge = false,
+                            modifier = Modifier
+                                .clip(CircleShape)
+                                .clickable { showAvatarOptionsDialog = true }
+                                .testTag("change_photo_button")
+                        )
+                        if (uiState.isUpdating) {
+                            Box(
                                 modifier = Modifier
-                                    .align(Alignment.BottomEnd)
-                                    .size(28.dp)
-                                    .clickable { showAvatarOptionsDialog = true }
+                                    .size(68.dp)
+                                    .clip(CircleShape)
+                                    .background(Color.Black.copy(alpha = 0.45f)),
+                                contentAlignment = Alignment.Center
                             ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Icon(
-                                        imageVector = Icons.Default.CameraAlt,
-                                        contentDescription = "Change profile photo",
-                                        tint = Color.White,
-                                        modifier = Modifier.size(14.dp)
-                                    )
-                                }
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(22.dp),
+                                    color = Color.White,
+                                    strokeWidth = 2.dp
+                                )
                             }
                         }
+                        // Small camera badge: change photo
+                        Surface(
+                            shape = CircleShape,
+                            color = primaryAccent,
+                            border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.surface),
+                            modifier = Modifier
+                                .align(Alignment.BottomEnd)
+                                .size(22.dp)
+                                .clickable { showAvatarOptionsDialog = true }
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.Default.CameraAlt,
+                                    contentDescription = "Change profile photo",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(12.dp)
+                                )
+                            }
+                        }
+                    }
 
+                    Spacer(modifier = Modifier.width(14.dp))
+
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = myName,
-                            fontSize = 20.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = MaterialTheme.colorScheme.onSurface
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
-
-                        Spacer(modifier = Modifier.height(4.dp))
-
                         if (!user?.email.isNullOrBlank()) {
                             Text(
                                 text = user.email,
                                 fontSize = 12.5.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = user?.statusMessage?.ifBlank { null } ?: "Add a note",
+                            fontSize = 13.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
 
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        // Custom Bio / Love Note Quote Bubble
-                        Surface(
-                            color = if (isDark) darkTone(Color(0xFF1A2230)) else Color(0xFFF1F5F9),
-                            shape = RoundedCornerShape(14.dp),
-                            border = BorderStroke(1.dp, if (isDark) darkTone(Color(0xFF2A364F)) else Color(0xFFE2E8F0)),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { showEditProfileDialog = true }
-                                .padding(horizontal = 4.dp)
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 9.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = "“",
-                                    fontSize = 18.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = primaryAccent
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(
-                                    text = user?.statusMessage?.ifBlank { "Loving every moment with you ✨" } ?: "Loving every moment with you ✨",
-                                    fontSize = 13.sp,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    fontWeight = FontWeight.Medium,
-                                    modifier = Modifier.weight(1f)
-                                )
-                                Icon(
-                                    imageVector = Icons.Default.Edit,
-                                    contentDescription = "Edit note",
-                                    tint = primaryAccent.copy(alpha = 0.7f),
-                                    modifier = Modifier.size(14.dp)
-                                )
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(14.dp))
-
-                        // Dual Action Buttons: Edit Profile & Change Photo
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            Button(
-                                onClick = { showEditProfileDialog = true },
-                                shape = RoundedCornerShape(14.dp),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = primaryAccent,
-                                    contentColor = Color.White
-                                ),
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(42.dp)
-                                    .testTag("edit_profile_button")
-                            ) {
-                                Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(15.dp))
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("Edit Profile", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                            }
-
-                            OutlinedButton(
-                                onClick = { showAvatarOptionsDialog = true },
-                                shape = RoundedCornerShape(14.dp),
-                                border = BorderStroke(1.dp, primaryAccent.copy(alpha = 0.5f)),
-                                colors = ButtonDefaults.outlinedButtonColors(
-                                    contentColor = primaryAccent
-                                ),
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(42.dp)
-                                    .testTag("change_photo_button")
-                            ) {
-                                Icon(Icons.Default.CameraAlt, contentDescription = null, modifier = Modifier.size(15.dp))
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("Change Photo", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                            }
-                        }
+                    IconButton(
+                        onClick = { showEditProfileDialog = true },
+                        modifier = Modifier.testTag("edit_profile_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Edit,
+                            contentDescription = "Edit profile",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 }
             }

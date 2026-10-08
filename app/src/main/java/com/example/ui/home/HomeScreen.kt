@@ -326,8 +326,7 @@ fun HomeScreen(
                     isOnline = isOnline,
                     lastSeen = partner?.lastSeen ?: 0L,
                     status = partnerQuietStatus,
-                    // Only a live battery: an old reading while offline would mislead
-                    batteryLevel = if (isOnline) partner?.batteryLevel else null,
+                    batteryLevel = partner?.batteryLevel,
                     isCharging = partner?.isCharging == true
                 ),
                 partnerNote = partner?.statusMessage,

@@ -95,8 +95,11 @@ object LoveDates {
         }
     }
 
-    /** "Day N together": the first day is Day 1. Null when unset or in the future. */
-    fun dayNumber(since: String?, now: Long = System.currentTimeMillis()): Int? {
+    /**
+     * Days together: whole days since the together date, counted like a date calculator (the
+     * start day is 0, the next day 1). Null when unset or in the future.
+     */
+    fun daysTogether(since: String?, now: Long = System.currentTimeMillis()): Int? {
         val start = parse(since) ?: return null
         val today = Calendar.getInstance().apply {
             timeInMillis = now
@@ -105,9 +108,9 @@ object LoveDates {
             set(Calendar.SECOND, 0)
             set(Calendar.MILLISECOND, 0)
         }
-        // Rounded, so a daylight-saving hour doesn't shift the count
+        // Midnight to midnight, rounded, so a daylight-saving hour doesn't shift the count
         val days = ((today.timeInMillis - start.timeInMillis) / 86_400_000.0).roundToInt()
-        return if (days < 0) null else days + 1
+        return if (days < 0) null else days
     }
 
     /**
@@ -128,8 +131,8 @@ object LoveDates {
                 "Happy $months ${if (months == 1) "month" else "months"}, us"
             }
         }
-        val day = dayNumber(since, now) ?: return null
-        return if (day >= 100 && day % 100 == 0) "Day $day together" else null
+        val days = daysTogether(since, now) ?: return null
+        return if (days >= 100 && days % 100 == 0) "$days days together" else null
     }
 
     fun formatLong(since: String?): String? {
