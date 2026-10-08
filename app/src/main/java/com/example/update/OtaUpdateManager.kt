@@ -320,7 +320,7 @@ class OtaUpdateManager private constructor(private val appContext: Context) {
     }
 
     companion object {
-        private const val GITHUB_API_LATEST_RELEASE = "https://api.github.com/repos/faisal9645/notes/releases/latest"
+        private const val GITHUB_API_LATEST_RELEASE = "https://api.github.com/repos/faisal9645/cherish-notes/releases/latest"
         private const val PREFS_NAME = "cherish_ota"
         private const val KEY_PENDING_APK = "pending_install_apk"
         private const val KEY_PENDING_SINCE = "pending_install_since"

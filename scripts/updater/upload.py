@@ -6,7 +6,10 @@ import requests
 import firebase_admin
 from firebase_admin import credentials, firestore
 
-GITHUB_REPO = "faisal9645/notes"
+# Where installed apps look for updates (OtaUpdateManager.GITHUB_API_LATEST_RELEASE must match).
+# `--also owner/repo` publishes the same release there too, e.g. an old home that phones on an
+# older version still check.
+GITHUB_REPO = "faisal9645/cherish-notes"
 GITHUB_API  = "https://api.github.com"
 
 
@@ -49,7 +52,7 @@ def get_apk_path(project_root: str) -> str:
         return debug
 
 
-def create_github_release(token: str, version_code: int, version_name: str) -> dict:
+def create_github_release(token: str, repo: str, version_code: int, version_name: str) -> dict:
     tag = f"v{version_name}-{version_code}"
     headers = {
         "Authorization": f"token {token}",
@@ -57,7 +60,7 @@ def create_github_release(token: str, version_code: int, version_name: str) -> d
     }
     # Check if release already exists
     try:
-        check = requests.get(f"{GITHUB_API}/repos/{GITHUB_REPO}/releases/tags/{tag}", headers=headers, timeout=15)
+        check = requests.get(f"{GITHUB_API}/repos/{repo}/releases/tags/{tag}", headers=headers, timeout=15)
         if check.status_code == 200:
             print(f"Release {tag} already exists — reusing it.")
             return check.json()
@@ -67,26 +70,26 @@ def create_github_release(token: str, version_code: int, version_name: str) -> d
     payload = {
         "tag_name": tag,
         "name": f"v{version_name} (build {version_code})",
-        "body": f"Cherish v{version_name} (Build {version_code}):\n• Both of us: ages, days of life counting live, and birthday countdowns\n• Birthdays now appear in Our Dates and its reminders\n• Bug fixes and improvements",
+        "body": f"Notes v{version_name} (Build {version_code}):\n• Updates now come from the app's new home\n• Bug fixes and improvements",
         "draft": False,
         "prerelease": False,
     }
-    resp = requests.post(f"{GITHUB_API}/repos/{GITHUB_REPO}/releases", headers=headers, json=payload, timeout=20)
+    resp = requests.post(f"{GITHUB_API}/repos/{repo}/releases", headers=headers, json=payload, timeout=20)
     if resp.status_code not in (200, 201):
-        print(f"ERROR creating GitHub release: {resp.status_code} — {resp.text}")
+        print(f"ERROR creating GitHub release on {repo}: {resp.status_code} — {resp.text}")
         sys.exit(1)
-    print(f"GitHub release created: {tag}")
+    print(f"GitHub release created on {repo}: {tag}")
     return resp.json()
 
 
-def upload_apk_to_release(token: str, release: dict, apk_path: str, version_code: int) -> str:
+def upload_apk_to_release(token: str, repo: str, release: dict, apk_path: str, version_code: int) -> str:
     upload_url = release["upload_url"].replace("{?name,label}", "")
     asset_name = f"app_update_{version_code}.apk"
 
     # Refresh release details to get up-to-date asset list
     try:
         rel_resp = requests.get(
-            f"{GITHUB_API}/repos/{GITHUB_REPO}/releases/{release['id']}",
+            f"{GITHUB_API}/repos/{repo}/releases/{release['id']}",
             headers={"Authorization": f"token {token}", "Accept": "application/vnd.github+json"},
             timeout=15
         )
@@ -100,7 +103,7 @@ def upload_apk_to_release(token: str, release: dict, apk_path: str, version_code
         if asset["name"] == asset_name:
             print(f"Deleting existing asset: {asset_name} (id {asset['id']})")
             requests.delete(
-                f"{GITHUB_API}/repos/{GITHUB_REPO}/releases/assets/{asset['id']}",
+                f"{GITHUB_API}/repos/{repo}/releases/assets/{asset['id']}",
                 headers={"Authorization": f"token {token}", "Accept": "application/vnd.github+json"},
                 timeout=15
             )
@@ -157,7 +160,7 @@ def upload_apk_to_release(token: str, release: dict, apk_path: str, version_code
         sys.exit(1)
 
     # Direct download URL (no login required)
-    download_url = f"https://github.com/{GITHUB_REPO}/releases/download/{release['tag_name']}/{asset_name}"
+    download_url = f"https://github.com/{repo}/releases/download/{release['tag_name']}/{asset_name}"
     print(f"Upload complete!\nDownload URL: {download_url}")
     return download_url
 
@@ -198,6 +201,9 @@ def main():
     script_dir   = os.path.dirname(os.path.abspath(__file__))
     project_root = os.path.abspath(os.path.join(script_dir, "..", ".."))
 
+    args = sys.argv[1:]
+    extra_repos = [args[i + 1] for i, a in enumerate(args[:-1]) if a == "--also"]
+
     build_apk(project_root)
 
     token                    = get_github_token(project_root)
@@ -207,8 +213,13 @@ def main():
     print(f"Version  : {version_name} (code {version_code})")
     print(f"APK      : {apk_path}")
 
-    release      = create_github_release(token, version_code, version_name)
-    download_url = upload_apk_to_release(token, release, apk_path, version_code)
+    for repo in extra_repos:
+        print(f"\nAlso publishing to {repo}...")
+        extra_release = create_github_release(token, repo, version_code, version_name)
+        upload_apk_to_release(token, repo, extra_release, apk_path, version_code)
+
+    release      = create_github_release(token, GITHUB_REPO, version_code, version_name)
+    download_url = upload_apk_to_release(token, GITHUB_REPO, release, apk_path, version_code)
     update_firestore(project_root, version_code, version_name, download_url)
 
     print("\nOTA update pushed successfully via GitHub Releases!")

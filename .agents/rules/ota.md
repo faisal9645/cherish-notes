@@ -29,7 +29,7 @@ $env:JAVA_HOME="C:\Program Files\Android\Android Studio\jbr"; ./gradlew assemble
 ## How it works
 1. **Gradle** builds the debug APK (`assembleDebug`)
 2. **upload.py** reads the version from `app/build.gradle.kts`
-3. Creates a **GitHub Release** at `https://github.com/faisal9645/notes/releases`
+3. Creates a **GitHub Release** at `https://github.com/faisal9645/cherish-notes/releases`
 4. Uploads the APK as a release asset (free, public download link)
 5. Updates **Firestore** `app_config/version` with the download URL
 
