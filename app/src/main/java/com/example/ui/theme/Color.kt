@@ -24,6 +24,12 @@ val DarkBlueSecondary = Color(0xFF1E40AF)
 val DarkBlueTertiary = Color(0xFF172554)
 val DarkBlueBubble = Color(0xFF1D4ED8)
 
+// Black (AMOLED) theme: graphite instead of blue for bubbles, buttons and headers, grey accents
+val BlackGradientStart = Color(0xFF3A3A3C)
+val BlackGradientMid = Color(0xFF2C2C2E)
+val BlackGradientEnd = Color(0xFF1C1C1E)
+val BlackAccent = Color(0xFF8E8E93)
+
 @Composable
 @ReadOnlyComposable
 fun isAppInDark(): Boolean {
@@ -37,29 +43,30 @@ fun isAppInDark(): Boolean {
 val AppGradientStart: Color
     @Composable
     @ReadOnlyComposable
-    get() = if (isAppInDark()) DarkBlueSecondary else DayBlueSecondary
+    get() = if (LocalAmoledBlack.current) BlackGradientStart else if (isAppInDark()) DarkBlueSecondary else DayBlueSecondary
 
 val AppGradientMid: Color
     @Composable
     @ReadOnlyComposable
-    get() = if (isAppInDark()) DarkBluePrimary else DayBluePrimary
+    get() = if (LocalAmoledBlack.current) BlackGradientMid else if (isAppInDark()) DarkBluePrimary else DayBluePrimary
 
 val AppGradientEnd: Color
     @Composable
     @ReadOnlyComposable
-    get() = if (isAppInDark()) DarkBlueTertiary else DayBlueTertiary
+    get() = if (LocalAmoledBlack.current) BlackGradientEnd else if (isAppInDark()) DarkBlueTertiary else DayBlueTertiary
 
 val AppGradientShadow: Color
     @Composable
     @ReadOnlyComposable
-    get() = if (isAppInDark()) Color(0x351D4ED8) else Color(0x353048F5)
+    get() = if (LocalAmoledBlack.current) Color(0x35000000) else if (isAppInDark()) Color(0x351D4ED8) else Color(0x353048F5)
 
 @Composable
 fun appHorizontalGradient(): Brush {
     val isDark = isAppInDark()
-    val start = if (isDark) DarkBlueSecondary else DayBlueSecondary
-    val mid = if (isDark) DarkBluePrimary else DayBluePrimary
-    val end = if (isDark) DarkBlueTertiary else DayBlueTertiary
+    val black = LocalAmoledBlack.current
+    val start = if (black) BlackGradientStart else if (isDark) DarkBlueSecondary else DayBlueSecondary
+    val mid = if (black) BlackGradientMid else if (isDark) DarkBluePrimary else DayBluePrimary
+    val end = if (black) BlackGradientEnd else if (isDark) DarkBlueTertiary else DayBlueTertiary
     return Brush.horizontalGradient(
         0.0f to start,
         0.55f to mid,
@@ -70,9 +77,10 @@ fun appHorizontalGradient(): Brush {
 @Composable
 fun appVerticalGradient(): Brush {
     val isDark = isAppInDark()
-    val start = if (isDark) DarkBlueSecondary else DayBlueSecondary
-    val mid = if (isDark) DarkBluePrimary else DayBluePrimary
-    val end = if (isDark) DarkBlueTertiary else DayBlueTertiary
+    val black = LocalAmoledBlack.current
+    val start = if (black) BlackGradientStart else if (isDark) DarkBlueSecondary else DayBlueSecondary
+    val mid = if (black) BlackGradientMid else if (isDark) DarkBluePrimary else DayBluePrimary
+    val end = if (black) BlackGradientEnd else if (isDark) DarkBlueTertiary else DayBlueTertiary
     return Brush.verticalGradient(
         0.0f to start,
         0.55f to mid,
@@ -82,7 +90,7 @@ fun appVerticalGradient(): Brush {
 
 @Composable
 fun Modifier.appGradientShadow(shape: Shape = RoundedCornerShape(16.dp)): Modifier {
-    val shadowColor = if (isAppInDark()) Color(0x351D4ED8) else Color(0x353048F5)
+    val shadowColor = if (LocalAmoledBlack.current) Color(0x35000000) else if (isAppInDark()) Color(0x351D4ED8) else Color(0x353048F5)
     return this.shadow(
         elevation = 8.dp,
         shape = shape,
@@ -95,42 +103,42 @@ fun Modifier.appGradientShadow(shape: Shape = RoundedCornerShape(16.dp)): Modifi
 val RoseGoldPrimary: Color
     @Composable
     @ReadOnlyComposable
-    get() = if (isAppInDark()) DarkBluePrimary else DayBluePrimary
+    get() = if (LocalAmoledBlack.current) BlackAccent else if (isAppInDark()) DarkBluePrimary else DayBluePrimary
 
 val RoseGoldOnPrimary = Color(0xFFFFFFFF)
 
 val RoseGoldContainer: Color
     @Composable
     @ReadOnlyComposable
-    get() = if (isAppInDark()) Color(0xFF0F172A) else Color(0xFFEFF4FF)
+    get() = if (LocalAmoledBlack.current) Color(0xFF1A1A1A) else if (isAppInDark()) Color(0xFF0F172A) else Color(0xFFEFF4FF)
 
 val OnRoseGoldContainer = Color(0xFF1E293B)
 
 val ChampagneSecondary: Color
     @Composable
     @ReadOnlyComposable
-    get() = if (isAppInDark()) DarkBlueSecondary else DayBlueSecondary
+    get() = if (LocalAmoledBlack.current) BlackAccent else if (isAppInDark()) DarkBlueSecondary else DayBlueSecondary
 
 val ChampagneOnSecondary = Color(0xFFFFFFFF)
 
 val ChampagneContainer: Color
     @Composable
     @ReadOnlyComposable
-    get() = if (isAppInDark()) Color(0xFF172554) else Color(0xFFE0E7FF)
+    get() = if (LocalAmoledBlack.current) Color(0xFF1A1A1A) else if (isAppInDark()) Color(0xFF172554) else Color(0xFFE0E7FF)
 
 val OnChampagneContainer = Color(0xFF0A1033)
 
 val AmethystTertiary: Color
     @Composable
     @ReadOnlyComposable
-    get() = if (isAppInDark()) DarkBlueTertiary else DayBlueTertiary
+    get() = if (LocalAmoledBlack.current) BlackAccent else if (isAppInDark()) DarkBlueTertiary else DayBlueTertiary
 
 val AmethystOnTertiary = Color(0xFFFFFFFF)
 
 val AmethystContainer: Color
     @Composable
     @ReadOnlyComposable
-    get() = if (isAppInDark()) Color(0xFF0F172A) else Color(0xFFDBEAFE)
+    get() = if (LocalAmoledBlack.current) Color(0xFF141414) else if (isAppInDark()) Color(0xFF0F172A) else Color(0xFFDBEAFE)
 
 val OnAmethystContainer = Color(0xFF0F172A)
 
@@ -173,7 +181,7 @@ val LightOutlineVariant = Color(0xFFEDF2F7)
 val HeartRed: Color
     @Composable
     @ReadOnlyComposable
-    get() = if (isAppInDark()) DarkBluePrimary else DayBluePrimary
+    get() = if (LocalAmoledBlack.current) BlackAccent else if (isAppInDark()) DarkBluePrimary else DayBluePrimary
 
 val SoftBlush = Color(0xFFEEF5FF)
 val DeepWine = Color(0xFF0E1342)
@@ -183,9 +191,9 @@ val GoldMilestone = Color(0xFFF59E0B)
 val BubbleSent: Color
     @Composable
     @ReadOnlyComposable
-    get() = if (isAppInDark()) DarkBlueBubble else DayBluePrimary
+    get() = if (LocalAmoledBlack.current) BlackGradientMid else if (isAppInDark()) DarkBlueBubble else DayBluePrimary
 
 val BubbleReceived: Color
     @Composable
     @ReadOnlyComposable
-    get() = if (isAppInDark()) Color(0xFF131A2A) else Color(0xFFF1F5FB)
+    get() = if (LocalAmoledBlack.current) Color(0xFF141414) else if (isAppInDark()) Color(0xFF131A2A) else Color(0xFFF1F5FB)

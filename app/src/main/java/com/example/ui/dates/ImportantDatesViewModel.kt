@@ -27,9 +27,9 @@ class ImportantDatesViewModel(
         }
     }
 
-    fun addDate(title: String, dateMillis: Long, category: DateCategory, notes: String?) {
+    fun addDate(title: String, dateMillis: Long, category: DateCategory, notes: String?, repeatAnnually: Boolean) {
         viewModelScope.launch {
-            coupleFeaturesRepository.addImportantDate(title, dateMillis, category, notes)
+            coupleFeaturesRepository.addImportantDate(title, dateMillis, category, notes, repeatAnnually)
         }
     }
 

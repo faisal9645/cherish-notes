@@ -226,8 +226,8 @@ fun HomeScreen(
                                 selectedIconColor = MaterialTheme.colorScheme.primary,
                                 selectedTextColor = MaterialTheme.colorScheme.primary,
                                 indicatorColor = if (isDark) MaterialTheme.colorScheme.primaryContainer else Color(0xFFEFF4FF),
-                                unselectedIconColor = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B),
-                                unselectedTextColor = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
+                                unselectedIconColor = if (isDark) darkTone(Color(0xFF94A3B8)) else Color(0xFF64748B),
+                                unselectedTextColor = if (isDark) darkTone(Color(0xFF94A3B8)) else Color(0xFF64748B)
                             )
                         )
                         NavigationBarItem(
@@ -251,8 +251,8 @@ fun HomeScreen(
                                 selectedIconColor = MaterialTheme.colorScheme.primary,
                                 selectedTextColor = MaterialTheme.colorScheme.primary,
                                 indicatorColor = if (isDark) MaterialTheme.colorScheme.primaryContainer else Color(0xFFEFF4FF),
-                                unselectedIconColor = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B),
-                                unselectedTextColor = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
+                                unselectedIconColor = if (isDark) darkTone(Color(0xFF94A3B8)) else Color(0xFF64748B),
+                                unselectedTextColor = if (isDark) darkTone(Color(0xFF94A3B8)) else Color(0xFF64748B)
                             )
                         )
                         NavigationBarItem(
@@ -264,8 +264,8 @@ fun HomeScreen(
                                 selectedIconColor = MaterialTheme.colorScheme.primary,
                                 selectedTextColor = MaterialTheme.colorScheme.primary,
                                 indicatorColor = if (isDark) MaterialTheme.colorScheme.primaryContainer else Color(0xFFEFF4FF),
-                                unselectedIconColor = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B),
-                                unselectedTextColor = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
+                                unselectedIconColor = if (isDark) darkTone(Color(0xFF94A3B8)) else Color(0xFF64748B),
+                                unselectedTextColor = if (isDark) darkTone(Color(0xFF94A3B8)) else Color(0xFF64748B)
                             )
                         )
                     }
@@ -608,6 +608,99 @@ fun HomeScreen(
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(20.dp)
                     )
+                }
+            }
+
+            // Both of us: ages, days of life (live) and next birthdays
+            val homeApp = context.applicationContext as com.example.CherishApplication
+            val ourDates by homeApp.coupleFeaturesRepository.datesFlow.collectAsState()
+            val birthdays by homeApp.authRepository.birthdays.collectAsState()
+            val myId = currentUser?.id.orEmpty()
+            val partnerId = (partner?.id ?: currentUser?.partnerId).orEmpty()
+            val homeLifecycle by androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle.currentStateFlow.collectAsState()
+            val homeDisguised by homeApp.securityPreferences.isDisguiseActive.collectAsState()
+            BothOfUsCard(
+                me = LovePerson(
+                    id = myId,
+                    name = currentUser?.displayName?.ifBlank { null } ?: "Me",
+                    photoUrl = currentUser?.photoUrl,
+                    birthday = birthdays[myId]
+                ),
+                partner = LovePerson(
+                    id = partnerId,
+                    name = partnerName,
+                    photoUrl = partner?.photoUrl,
+                    birthday = birthdays[partnerId]
+                ),
+                togetherSince = remember(ourDates) { com.example.ui.dates.DateReminders.togetherSince(ourDates) },
+                isVisible = !homeDisguised && homeLifecycle.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED),
+                onSetBirthday = { userId, date -> homeApp.authRepository.setBirthday(userId, date) }
+            )
+
+            // Our dates: what's coming up (both birthdays included), and the way to add birthdays and our days
+            val nextDates = remember(ourDates, birthdays, myId, partnerId, partnerName) {
+                val titles = buildMap {
+                    if (myId.isNotBlank()) put(myId, "Your birthday")
+                    if (partnerId.isNotBlank()) put(partnerId, "$partnerName's birthday")
+                }
+                com.example.ui.dates.DateReminders.upcoming(
+                    com.example.ui.dates.DateReminders.withBirthdays(ourDates, birthdays, titles), 366
+                ).take(3)
+            }
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onNavigateToDates() }
+                    .testTag("our_dates_card"),
+                shape = RoundedCornerShape(18.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+            ) {
+                Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                        Box(
+                            modifier = Modifier
+                                .size(38.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Event,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Our Dates",
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = if (ourDates.isEmpty()) "Add birthdays, anniversaries, our first meeting..."
+                                else "Birthdays, anniversaries and our days",
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Icon(
+                            imageVector = if (ourDates.isEmpty()) Icons.Default.Add else Icons.Default.ChevronRight,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    if (nextDates.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            nextDates.forEach { com.example.ui.dates.UpcomingDateRow(it) }
+                        }
+                    }
                 }
             }
 

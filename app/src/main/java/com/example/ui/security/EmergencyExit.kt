@@ -1,5 +1,7 @@
 package com.example.ui.security
 
+import com.example.ui.theme.darkTone
+
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -83,10 +85,10 @@ fun EmergencyExitHandle(modifier: Modifier = Modifier) {
     Box(modifier = modifier.fillMaxSize()) {
         Surface(
             shape = handleShape,
-            color = (if (isDark) Color(0xFF1E2638) else Color(0xFF1F2937)).copy(alpha = exitOpacity),
+            color = (if (isDark) darkTone(Color(0xFF1E2638)) else Color(0xFF1F2937)).copy(alpha = exitOpacity),
             border = BorderStroke(
                 1.dp,
-                if (isDark) Color(0xFF2A364F).copy(alpha = (exitOpacity * 0.7f).coerceIn(0.1f, 0.9f))
+                if (isDark) darkTone(Color(0xFF2A364F)).copy(alpha = (exitOpacity * 0.7f).coerceIn(0.1f, 0.9f))
                 else Color(0xFF111827).copy(alpha = (exitOpacity * 0.5f).coerceIn(0.1f, 0.8f))
             ),
             modifier = Modifier

@@ -19,35 +19,65 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.DateCategory
 import com.example.data.model.ImportantDate
 import com.example.ui.theme.ChampagneSecondary
-import com.example.ui.theme.GoldMilestone
-import com.example.ui.theme.HeartRed
 import com.example.ui.theme.RoseGoldPrimary
 import com.example.ui.theme.appGradientShadow
 import com.example.ui.theme.appHorizontalGradient
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
+import java.util.Calendar
+import java.util.TimeZone
 
-@OptIn(ExperimentalMaterial3Api::class)
+/** Categories in the order they're offered when adding a date. */
+private val CATEGORY_ORDER = listOf(
+    DateCategory.ANNIVERSARY,
+    DateCategory.BIRTHDAY,
+    DateCategory.FIRST_DATE,
+    DateCategory.PLACE,
+    DateCategory.FAMILY,
+    DateCategory.MILESTONE,
+    DateCategory.CUSTOM
+)
+
+/** Quick starts for an empty list. */
+private val SUGGESTIONS = listOf(
+    "Our anniversary" to DateCategory.ANNIVERSARY,
+    "The day we first met" to DateCategory.FIRST_DATE,
+    "Birthday" to DateCategory.BIRTHDAY,
+    "Family birthday" to DateCategory.BIRTHDAY,
+    "A place we went" to DateCategory.PLACE
+)
+
+/**
+ * Our dates: birthdays (ours and family's), anniversaries, the first meeting, places we went...
+ * Shared by both phones. Coming-up dates are shown when the app is opened (a week ahead).
+ */
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun ImportantDatesScreen(
     viewModel: ImportantDatesViewModel,
     onNavigateBack: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    var showAddDialog by remember { mutableStateOf(false) }
+    var addDialogFor by remember { mutableStateOf<Pair<String, DateCategory>?>(null) }
+    var pendingDelete by remember { mutableStateOf<ImportantDate?>(null) }
+
+    // Coming up (soonest first), then one-time dates that have passed
+    val (upcoming, past) = remember(uiState.dates) {
+        val next = uiState.dates.mapNotNull { DateReminders.next(it) }.sortedBy { it.daysUntil }
+        val nextIds = next.map { it.date.id }.toSet()
+        next to uiState.dates.filter { it.id !in nextIds }.sortedByDescending { it.dateMillis }
+    }
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = {
                     Text(
-                        "Milestones & Dates",
+                        "Our Dates",
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
                     )
@@ -72,13 +102,13 @@ fun ImportantDatesScreen(
                     .clip(CircleShape)
                     .background(appHorizontalGradient())
                     .size(56.dp)
-                    .clickable { showAddDialog = true }
+                    .clickable { addDialogFor = "" to DateCategory.ANNIVERSARY }
                     .testTag("add_date_fab"),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = Icons.Default.Add,
-                    contentDescription = "Add Important Date",
+                    contentDescription = "Add a date",
                     tint = Color.White,
                     modifier = Modifier.size(24.dp)
                 )
@@ -90,222 +120,376 @@ fun ImportantDatesScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .padding(horizontal = 20.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+                .padding(horizontal = 18.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            items(uiState.dates, key = { it.id }) { dateItem ->
-                DateCard(
-                    dateItem = dateItem,
-                    onDelete = { viewModel.deleteDate(dateItem.id) }
+            item {
+                Text(
+                    text = "Birthdays, anniversaries and our special days. When one is a week away, you'll see it as soon as you open the app.",
+                    fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp, bottom = 4.dp)
                 )
             }
-            item {
-                Spacer(modifier = Modifier.height(72.dp))
+
+            if (uiState.dates.isEmpty()) {
+                item {
+                    EmptyDates(onPick = { title, category -> addDialogFor = title to category })
+                }
             }
+
+            items(upcoming, key = { it.date.id }) { next ->
+                DateCard(
+                    title = next.date.title,
+                    category = next.date.getTypedCategory(),
+                    dateMillis = next.date.dateMillis,
+                    repeats = next.date.repeatAnnually,
+                    notes = next.date.notes,
+                    pill = DateReminders.whenLabel(next.daysUntil),
+                    pillHighlighted = next.daysUntil <= 1,
+                    extra = DateReminders.yearsLabel(next),
+                    onDelete = { pendingDelete = next.date }
+                )
+            }
+
+            if (past.isNotEmpty()) {
+                item {
+                    Text(
+                        text = "Memories",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 10.dp)
+                    )
+                }
+                items(past, key = { it.id }) { date ->
+                    val daysAgo = ((System.currentTimeMillis() - date.dateMillis) / 86_400_000L).toInt()
+                    DateCard(
+                        title = date.title,
+                        category = date.getTypedCategory(),
+                        dateMillis = date.dateMillis,
+                        repeats = false,
+                        notes = date.notes,
+                        pill = if (daysAgo <= 1) "Yesterday" else "$daysAgo days ago",
+                        pillHighlighted = false,
+                        extra = null,
+                        onDelete = { pendingDelete = date }
+                    )
+                }
+            }
+
+            item { Spacer(modifier = Modifier.height(88.dp)) }
         }
     }
 
-    if (showAddDialog) {
+    addDialogFor?.let { (title, category) ->
         AddDateDialog(
-            onDismiss = { showAddDialog = false },
-            onAdd = { title, timeMillis, cat, notes ->
-                viewModel.addDate(title, timeMillis, cat, notes)
-                showAddDialog = false
+            initialTitle = title,
+            initialCategory = category,
+            onDismiss = { addDialogFor = null },
+            onAdd = { newTitle, millis, newCategory, notes, repeats ->
+                viewModel.addDate(newTitle, millis, newCategory, notes, repeats)
+                addDialogFor = null
+            }
+        )
+    }
+
+    pendingDelete?.let { date ->
+        AlertDialog(
+            onDismissRequest = { pendingDelete = null },
+            title = { Text("Delete this date?") },
+            text = { Text("\"${date.title}\" will be removed for both of you.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.deleteDate(date.id)
+                    pendingDelete = null
+                }) {
+                    Text("Delete", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingDelete = null }) { Text("Cancel") }
             }
         )
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun DateCard(
-    dateItem: ImportantDate,
-    onDelete: () -> Unit
-) {
-    val now = System.currentTimeMillis()
-    val diffDays = ((dateItem.dateMillis - now) / (1000 * 60 * 60 * 24)).toInt()
-    val isFuture = diffDays >= 0
-
-    val icon = when (dateItem.getTypedCategory()) {
-        DateCategory.ANNIVERSARY -> "💍"
-        DateCategory.BIRTHDAY -> "🎂"
-        DateCategory.FIRST_DATE -> "☕"
-        DateCategory.MILESTONE -> "🌟"
-        DateCategory.CUSTOM -> "❤️"
-    }
-
+private fun EmptyDates(onPick: (String, DateCategory) -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(22.dp),
+        colors = CardDefaults.cardColors(containerColor = RoseGoldPrimary.copy(alpha = 0.08f))
+    ) {
+        Column(modifier = Modifier.padding(18.dp)) {
+            Text(text = "📅", fontSize = 30.sp)
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                text = "No dates yet",
+                fontSize = 17.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                text = "Start with one of these:",
+                fontSize = 13.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                SUGGESTIONS.forEach { (title, category) ->
+                    AssistChip(
+                        onClick = { onPick(title, category) },
+                        label = { Text("${DateReminders.emoji(category)}  $title", fontSize = 13.sp) }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DateCard(
+    title: String,
+    category: DateCategory,
+    dateMillis: Long,
+    repeats: Boolean,
+    notes: String?,
+    pill: String,
+    pillHighlighted: Boolean,
+    extra: String?,
+    onDelete: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(18.dp),
+                .padding(start = 16.dp, top = 14.dp, bottom = 14.dp, end = 6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Category Icon Badge
             Box(
                 modifier = Modifier
-                    .size(52.dp)
+                    .size(48.dp)
                     .background(
                         Brush.radialGradient(listOf(RoseGoldPrimary.copy(alpha = 0.2f), ChampagneSecondary.copy(alpha = 0.2f))),
                         CircleShape
                     ),
                 contentAlignment = Alignment.Center
             ) {
-                Text(text = icon, fontSize = 26.sp)
+                Text(text = DateReminders.emoji(category), fontSize = 24.sp)
             }
 
-            Spacer(modifier = Modifier.width(16.dp))
+            Spacer(modifier = Modifier.width(14.dp))
 
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = dateItem.title,
-                    style = MaterialTheme.typography.titleMedium,
+                    text = title,
+                    fontSize = 16.sp,
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
-
-                val sdf = SimpleDateFormat("MMMM d, yyyy", Locale.getDefault())
                 Text(
-                    text = sdf.format(Date(dateItem.dateMillis)),
-                    style = MaterialTheme.typography.bodySmall,
+                    text = DateReminders.formatDate(dateMillis) + if (repeats) "  ·  every year" else "",
+                    fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-
-                if (!dateItem.notes.isNullOrEmpty()) {
-                    Spacer(modifier = Modifier.height(4.dp))
+                if (!notes.isNullOrBlank()) {
                     Text(
-                        text = dateItem.notes,
-                        style = MaterialTheme.typography.bodySmall,
+                        text = notes,
+                        fontSize = 12.sp,
                         color = RoseGoldPrimary,
-                        maxLines = 1
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
             }
 
-            // Days counter pill
-            Column(
-                horizontalAlignment = Alignment.End,
-                verticalArrangement = Arrangement.Center
-            ) {
+            Column(horizontalAlignment = Alignment.End) {
                 Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = if (isFuture) RoseGoldPrimary.copy(alpha = 0.15f) else ChampagneSecondary.copy(alpha = 0.15f)
+                    shape = RoundedCornerShape(50),
+                    color = if (pillHighlighted) RoseGoldPrimary else RoseGoldPrimary.copy(alpha = 0.13f)
                 ) {
-                    Column(
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Text(
-                            text = if (isFuture) "$diffDays" else "${kotlin.math.abs(diffDays)}",
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 16.sp,
-                            color = if (isFuture) RoseGoldPrimary else ChampagneSecondary
-                        )
-                        Text(
-                            text = if (isFuture) "days to go" else "days ago",
-                            fontSize = 9.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-
-                IconButton(
-                    onClick = onDelete,
-                    modifier = Modifier.size(28.dp).padding(top = 4.dp)
-                ) {
-                    Icon(
-                        Icons.Default.Delete,
-                        contentDescription = "Delete",
-                        tint = MaterialTheme.colorScheme.outlineVariant,
-                        modifier = Modifier.size(16.dp)
+                    Text(
+                        text = pill,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = if (pillHighlighted) Color.White else RoseGoldPrimary,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
                     )
                 }
+                if (extra != null) {
+                    Text(
+                        text = extra,
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 3.dp, end = 4.dp)
+                    )
+                }
+            }
+
+            IconButton(onClick = onDelete, modifier = Modifier.size(36.dp)) {
+                Icon(
+                    Icons.Default.Delete,
+                    contentDescription = "Delete",
+                    tint = MaterialTheme.colorScheme.outline,
+                    modifier = Modifier.size(18.dp)
+                )
             }
         }
     }
 }
 
+/** The picker works in UTC days; dates are stored as the local midnight of that day. */
+private fun utcDayToLocalMidnight(utcMillis: Long): Long {
+    val utc = Calendar.getInstance(TimeZone.getTimeZone("UTC")).apply { timeInMillis = utcMillis }
+    return Calendar.getInstance().apply {
+        clear()
+        set(utc.get(Calendar.YEAR), utc.get(Calendar.MONTH), utc.get(Calendar.DAY_OF_MONTH))
+    }.timeInMillis
+}
+
+private fun localDayToUtcMidnight(localMillis: Long): Long {
+    val local = Calendar.getInstance().apply { timeInMillis = localMillis }
+    return Calendar.getInstance(TimeZone.getTimeZone("UTC")).apply {
+        clear()
+        set(local.get(Calendar.YEAR), local.get(Calendar.MONTH), local.get(Calendar.DAY_OF_MONTH))
+    }.timeInMillis
+}
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
-fun AddDateDialog(
+private fun AddDateDialog(
+    initialTitle: String,
+    initialCategory: DateCategory,
     onDismiss: () -> Unit,
-    onAdd: (String, Long, DateCategory, String?) -> Unit
+    onAdd: (String, Long, DateCategory, String?, Boolean) -> Unit
 ) {
-    var title by remember { mutableStateOf("") }
+    var title by remember { mutableStateOf(initialTitle) }
     var notes by remember { mutableStateOf("") }
-    var selectedCategory by remember { mutableStateOf(DateCategory.ANNIVERSARY) }
-    var daysOffset by remember { mutableStateOf("30") }
+    var category by remember { mutableStateOf(initialCategory) }
+    var dateMillis by remember { mutableStateOf<Long?>(null) }
+    var repeats by remember { mutableStateOf(true) }
+    var showPicker by remember { mutableStateOf(false) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Add Milestone Date") },
+        title = { Text("Add a date") },
         text = {
             Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 4.dp),
+                modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 OutlinedTextField(
                     value = title,
                     onValueChange = { title = it },
-                    label = { Text("Title (e.g. Next Anniversary)") },
+                    label = { Text("What's the day?") },
+                    placeholder = { Text("e.g. Mom's birthday") },
                     singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("date_title_field")
                 )
 
-                OutlinedTextField(
-                    value = daysOffset,
-                    onValueChange = { daysOffset = it.filter { ch -> ch.isDigit() } },
-                    label = { Text("Days from today (or past days)") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    CATEGORY_ORDER.forEach { option ->
+                        FilterChip(
+                            selected = category == option,
+                            onClick = { category = option },
+                            label = {
+                                Text("${DateReminders.emoji(option)} ${DateReminders.label(option)}", fontSize = 12.sp)
+                            }
+                        )
+                    }
+                }
+
+                OutlinedButton(
+                    onClick = { showPicker = true },
+                    shape = RoundedCornerShape(14.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("date_pick_button")
+                ) {
+                    Icon(Icons.Default.CalendarMonth, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(dateMillis?.let { DateReminders.formatDate(it) } ?: "Choose the date")
+                }
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .clickable { repeats = !repeats }
+                        .padding(vertical = 2.dp)
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Every year", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                        Text(
+                            "Reminds you every year on this day",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Switch(checked = repeats, onCheckedChange = { repeats = it })
+                }
 
                 OutlinedTextField(
                     value = notes,
                     onValueChange = { notes = it },
-                    label = { Text("Love note or plan") },
+                    label = { Text("Note (optional)") },
+                    placeholder = { Text("A plan, a gift idea, a memory...") },
                     modifier = Modifier.fillMaxWidth()
                 )
-
-                // Category chips
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    DateCategory.values().forEach { cat ->
-                        FilterChip(
-                            selected = selectedCategory == cat,
-                            onClick = { selectedCategory = cat },
-                            label = { Text(cat.name.take(4), fontSize = 11.sp) }
-                        )
-                    }
-                }
             }
         },
         confirmButton = {
             Button(
                 onClick = {
-                    if (title.isNotBlank()) {
-                        val offset = daysOffset.toLongOrNull() ?: 30L
-                        val targetMillis = System.currentTimeMillis() + (offset * 24L * 3600L * 1000L)
-                        onAdd(title, targetMillis, selectedCategory, notes.ifBlank { null })
-                    }
+                    val day = dateMillis ?: return@Button
+                    onAdd(title.trim(), day, category, notes.trim().ifBlank { null }, repeats)
                 },
-                enabled = title.isNotBlank()
+                enabled = title.isNotBlank() && dateMillis != null,
+                modifier = Modifier.testTag("date_save_button")
             ) {
-                Text("Save Date")
+                Text("Save")
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel")
-            }
+            TextButton(onClick = onDismiss) { Text("Cancel") }
         }
     )
-}
 
+    if (showPicker) {
+        val pickerState = rememberDatePickerState(
+            initialSelectedDateMillis = localDayToUtcMidnight(dateMillis ?: System.currentTimeMillis())
+        )
+        DatePickerDialog(
+            onDismissRequest = { showPicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    pickerState.selectedDateMillis?.let { dateMillis = utcDayToLocalMidnight(it) }
+                    showPicker = false
+                }) { Text("OK") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showPicker = false }) { Text("Cancel") }
+            }
+        ) {
+            DatePicker(state = pickerState)
+        }
+    }
+}

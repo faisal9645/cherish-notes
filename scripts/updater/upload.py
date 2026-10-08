@@ -67,7 +67,7 @@ def create_github_release(token: str, version_code: int, version_name: str) -> d
     payload = {
         "tag_name": tag,
         "name": f"v{version_name} (build {version_code})",
-        "body": f"Cherish v{version_name} (Build {version_code}):\n• Messages sent in a row group together, with the time on the last one\n• Frosted glass top bar over your wallpaper\n• Sending progress with cancel, and Retry for anything that didn't send\n• Photos show in their real shape, with no empty space or coloured corner\n• Shared videos send properly and show as a video card\n• Safer login: only the correct details open the app\n• Bug fixes and stability improvements",
+        "body": f"Cherish v{version_name} (Build {version_code}):\n• Both of us: ages, days of life counting live, and birthday countdowns\n• Birthdays now appear in Our Dates and its reminders\n• Bug fixes and improvements",
         "draft": False,
         "prerelease": False,
     }

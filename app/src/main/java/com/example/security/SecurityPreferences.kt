@@ -85,11 +85,8 @@ class SecurityPreferences(context: Context) {
     fun revealSecretApp() {
         _hasRevealedSecretAppInSession.value = true
         _isDisguiseActive.value = false
-        // Every time the secret app is opened, default to showing only today's chats
-        setShowPreviousChatsEnabled(false)
-        try {
-            com.example.CherishApplication.instance.chatRepository.resetPreviousChats()
-        } catch (_: Exception) {}
+        // What's shown follows "Recover all" for the 6 AM day (today only unless recovered); loaded
+        // history stays on the phone, so opening never wipes or re-downloads it
     }
 
     fun reDisguise() {
@@ -97,10 +94,6 @@ class SecurityPreferences(context: Context) {
         if (ignoreNextPause || isTheaterModeActive || isMediaViewerActive || isExternalPickerActive) return
         _hasRevealedSecretAppInSession.value = false
         _isDisguiseActive.value = true
-        setShowPreviousChatsEnabled(false)
-        try {
-            com.example.CherishApplication.instance.chatRepository.resetPreviousChats()
-        } catch (_: Exception) {}
         // Ensure that when the app is backgrounded in Private Mode, 
         // it does not restore to the private chat screen upon reopening.
         setChatExperienceMode(com.example.ui.chat.ChatExperienceMode.NORMAL)
@@ -119,10 +112,6 @@ class SecurityPreferences(context: Context) {
         ignoreNextPause = false
         _hasRevealedSecretAppInSession.value = false
         _isDisguiseActive.value = true
-        setShowPreviousChatsEnabled(false)
-        try {
-            com.example.CherishApplication.instance.chatRepository.resetPreviousChats()
-        } catch (_: Exception) {}
         setChatExperienceMode(com.example.ui.chat.ChatExperienceMode.NORMAL)
     }
 
@@ -139,11 +128,18 @@ class SecurityPreferences(context: Context) {
         _isSecretHistoryRevealed.value = false
     }
 
+    /**
+     * The day "Recover all" applies to. Days start at 6 AM, like the chat's "Today": recovering at
+     * 1 AM lasts until 6 AM, and everything is hidden again from 6 AM.
+     */
+    fun logicalDayKey(now: Long = System.currentTimeMillis()): String =
+        java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date(now - 6 * 60 * 60 * 1000L))
+
     private val _showPreviousChats = MutableStateFlow(isShowPreviousChatsEnabled())
     val showPreviousChats: StateFlow<Boolean> = _showPreviousChats.asStateFlow()
 
     fun isShowPreviousChatsEnabled(): Boolean {
-        val todayStr = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date())
+        val todayStr = logicalDayKey()
         val savedDate = prefs.getString(KEY_SHOW_PREVIOUS_CHATS_DATE, null)
         return savedDate == todayStr
     }
@@ -151,7 +147,7 @@ class SecurityPreferences(context: Context) {
     fun setShowPreviousChatsEnabled(enabled: Boolean) {
         if (enabled) {
             setTemporaryClearTimestamp(0L)
-            val todayStr = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date())
+            val todayStr = logicalDayKey()
             prefs.edit().putString(KEY_SHOW_PREVIOUS_CHATS_DATE, todayStr).apply()
         } else {
             prefs.edit().remove(KEY_SHOW_PREVIOUS_CHATS_DATE).apply()
@@ -163,13 +159,13 @@ class SecurityPreferences(context: Context) {
     val isAllGalleryRecovered: StateFlow<Boolean> = _isAllGalleryRecovered.asStateFlow()
 
     fun isAllGalleryRecovered(): Boolean {
-        val todayStr = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date())
+        val todayStr = logicalDayKey()
         val savedDate = prefs.getString(KEY_ALL_GALLERY_RECOVERED_DATE, null)
         return savedDate == todayStr
     }
 
     fun setAllGalleryRecovered(recovered: Boolean) {
-        val todayStr = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date())
+        val todayStr = logicalDayKey()
         if (recovered) {
             prefs.edit().putString(KEY_ALL_GALLERY_RECOVERED_DATE, todayStr).apply()
         } else {
@@ -217,10 +213,10 @@ class SecurityPreferences(context: Context) {
     private val _themeMode = MutableStateFlow(getThemeMode())
     val themeMode: StateFlow<Int> = _themeMode.asStateFlow()
 
-    // 0 = System, 1 = Light / Day, 2 = Dark
+    // 0 = System, 1 = Light / Day, 2 = Dark, 3 = Black (pure black for AMOLED screens)
     fun getThemeMode(): Int {
         val mode = prefs.getInt("theme_mode", 0)
-        return if (mode > 2) 2 else mode
+        return if (mode > 3) 2 else mode
     }
 
     fun setThemeMode(mode: Int) {

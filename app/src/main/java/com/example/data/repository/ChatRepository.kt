@@ -233,16 +233,35 @@ class ChatRepository(
         _isGalleryLoadingFlow.value = true
         val messagesRef = fs.collection("conversations").document(convId).collection("messages")
         val job = repoScope.launch {
-            // The cache pass shows everything already synced to this device without waiting on the
-            // network; the server pass then fills in whatever the cache doesn't have yet.
-            for (source in listOf(Source.CACHE, Source.SERVER)) {
-                try {
-                    loadGalleryFrom(messagesRef, source, convId)
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (e: Exception) {
-                    Log.w("ChatRepository", "Gallery load from $source failed", e)
+            // Everything already on the phone shows at once from its cache. From the server only
+            // what's new since the last check is fetched; the whole gallery once a week, to pick up
+            // changes to older items.
+            try {
+                loadGalleryFrom(messagesRef, Source.CACHE, convId)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.w("ChatRepository", "Gallery load from cache failed", e)
+            }
+            try {
+                val lastSync = galleryPrefs.getLong("gallery_synced_$convId", 0L)
+                val lastFullSync = galleryPrefs.getLong("gallery_full_synced_$convId", 0L)
+                val syncStartedAt = System.currentTimeMillis()
+                if (lastSync > 0L && syncStartedAt - lastFullSync < GALLERY_FULL_SYNC_INTERVAL_MS) {
+                    val newer = messagesRef
+                        .whereGreaterThan("timestamp", lastSync - GALLERY_SYNC_OVERLAP_MS)
+                        .get(Source.SERVER).await()
+                        .documents.mapNotNull { it.toMessageOrNull() }
+                    publishGalleryItems(newer)
+                } else {
+                    loadGalleryFrom(messagesRef, Source.SERVER, convId)
+                    galleryPrefs.edit().putLong("gallery_full_synced_$convId", syncStartedAt).apply()
                 }
+                galleryPrefs.edit().putLong("gallery_synced_$convId", syncStartedAt).apply()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.w("ChatRepository", "Gallery sync from server failed", e)
             }
             galleryLoadedConversationId = convId
         }
@@ -373,7 +392,8 @@ class ChatRepository(
         }
 
         // Gallery: every photo, video, voice note, link and starred message comes back right away
-        loadAllGalleryMedia(forceRefresh = true)
+        // (from what's already on the phone; it's only fetched when it isn't)
+        loadAllGalleryMedia()
 
         // Chat: older history comes back page by page as the user scrolls up
         _hasPreviousChatsAvailableFlow.value = true
@@ -408,6 +428,15 @@ class ChatRepository(
             Log.e("ChatRepository", "Failed to load local backup for recoverAllMessages", e)
             emptyList()
         }
+    }
+
+    /**
+     * 6 AM: a new day. Yesterday's chat and media are hidden again, and "today" is listened to from
+     * the new 6 AM (the running listener still started from yesterday's).
+     */
+    fun startNewDay() {
+        resetPreviousChats()
+        currentActiveConversationId?.let { startGlobalMessagesListener(it, forceRestart = true) }
     }
 
     fun resetPreviousChats() {
@@ -601,7 +630,8 @@ class ChatRepository(
         replyTo: Message? = null,
         mediaUrls: List<String> = emptyList(),
         isVideoNote: Boolean = false,
-        thumbnailUrls: List<String> = emptyList()
+        thumbnailUrls: List<String> = emptyList(),
+        effect: String? = null
     ): Result<Message> {
         val currentUser = authRepository.currentUserState.value
         val partner = authRepository.partnerUserState.value
@@ -629,7 +659,8 @@ class ChatRepository(
             mediaUrls = mediaUrls,
             isVideoNote = isVideoNote,
             hasLink = LINK_REGEX.containsMatchIn(text),
-            thumbnailUrls = thumbnailUrls
+            thumbnailUrls = thumbnailUrls,
+            effect = effect
         )
 
         // Optimistically add to local state, sending until the server has it
@@ -1031,9 +1062,13 @@ class ChatRepository(
     }
 
     private companion object {
-        const val OLDER_PAGE_SIZE = 40L
+        const val OLDER_PAGE_SIZE = 60L
         const val SEARCH_OLDER_TARGET = 500L
         const val GALLERY_SCAN_PAGE_SIZE = 500L
+        /** The gallery is fully re-read from the server this often; otherwise only new items. */
+        const val GALLERY_FULL_SYNC_INTERVAL_MS = 7L * 24 * 60 * 60 * 1000
+        /** New-items check reaches a little before the last one, for clock or write delays. */
+        const val GALLERY_SYNC_OVERLAP_MS = 60L * 60 * 1000
         const val GALLERY_PUBLISH_INTERVAL_MS = 300L
         const val FIRESTORE_BATCH_LIMIT = 450
         val LINK_REGEX = Regex("""(https?://\S+)|(www\.\S+)""", RegexOption.IGNORE_CASE)

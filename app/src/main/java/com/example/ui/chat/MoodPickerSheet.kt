@@ -26,13 +26,14 @@ fun MoodPickerSheet(
     onClearMood: () -> Unit,
     onDismiss: () -> Unit
 ) {
+    // The quick check-in: one tap, shown softly in the partner's header ("Stressed" offers them
+    // to send a hug)
+    val quickMoods = listOf("Happy ☀️", "Tired 😴", "Missing you 🥰", "Stressed 😣")
     val presets = listOf(
-        "Missing you 🥰",
         "Thinking of you 💭",
         "At work 💼",
         "Studying 📚",
         "Need hugs 🥺",
-        "Happy ☀️",
         "Sleepy 😴",
         "Cozy in bed 🌙",
         "Driving 🚗",
@@ -55,19 +56,59 @@ fun MoodPickerSheet(
                 .navigationBarsPadding()
         ) {
             Text(
-                text = "Set Your Mood & Status",
+                text = "How are you feeling?",
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onSurface
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = "Your partner will see this right next to your name in chat.",
+                text = "Your partner sees it softly next to your name in chat.",
                 fontSize = 12.5.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
             Spacer(modifier = Modifier.height(16.dp))
+
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                quickMoods.forEach { mood ->
+                    val isSelected = mood == currentMood
+                    Surface(
+                        shape = RoundedCornerShape(18.dp),
+                        color = if (isSelected) RoseGoldPrimary.copy(alpha = 0.18f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                        border = androidx.compose.foundation.BorderStroke(
+                            1.dp,
+                            if (isSelected) RoseGoldPrimary else Color.Transparent
+                        ),
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable {
+                                onSelectMood(mood)
+                                onDismiss()
+                            }
+                    ) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier.padding(vertical = 12.dp, horizontal = 4.dp)
+                        ) {
+                            Text(text = mood.substringAfterLast(' '), fontSize = 28.sp)
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = mood.substringBeforeLast(' '),
+                                fontSize = 11.5.sp,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                color = if (isSelected) RoseGoldPrimary else MaterialTheme.colorScheme.onSurface,
+                                maxLines = 1
+                            )
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
 
             // Presets grid
             LazyVerticalGrid(

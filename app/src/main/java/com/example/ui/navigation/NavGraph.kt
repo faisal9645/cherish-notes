@@ -354,6 +354,10 @@ fun CherishNavGraph(
                     navController.navigate(Screen.SharedGallery.route)
                 },
                 onQuickDisguise = { app.securityPreferences.forceDisguise() },
+                onNavigateToDates = {
+                    app.securityPreferences.ignoreChatNavigation = true
+                    navController.navigate(Screen.ImportantDates.route) { launchSingleTop = true }
+                },
                 onNavigateToHome = {
                     app.securityPreferences.ignoreChatNavigation = true
                     val popped = navController.popBackStack(Screen.Home.route, inclusive = false)
@@ -409,9 +413,12 @@ fun CherishNavGraph(
                     navController.popBackStack()
                 },
                 onNavigateToMessage = { messageId ->
-                    sharedChatViewModel.navigateToMessageInChat(messageId)
-                    app.securityPreferences.ignoreChatNavigation = false
-                    navController.popBackStack()
+                    if (sharedChatViewModel.navigateToMessageInChat(messageId)) {
+                        app.securityPreferences.ignoreChatNavigation = false
+                        navController.popBackStack()
+                    } else {
+                        android.widget.Toast.makeText(context, "Older chat is hidden. Use Recover All in settings to see it.", android.widget.Toast.LENGTH_LONG).show()
+                    }
                 }
             )
         }

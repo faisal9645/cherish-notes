@@ -25,7 +25,11 @@ enum class DateCategory {
     BIRTHDAY,
     FIRST_DATE,
     MILESTONE,
-    CUSTOM
+    CUSTOM,
+    // A place we went (remembered every year on its day)
+    PLACE,
+    // Family days (other family events; family birthdays are BIRTHDAY)
+    FAMILY
 }
 
 enum class NoteCategory {
@@ -69,6 +73,8 @@ data class User(
     val activityStatusNote: String? = null,
     val isActivityHidden: Boolean = false,
     val mood: String? = null,
+    // When the mood was set (0 for moods set before this existed); old moods fade from the header
+    val moodAt: Long = 0L,
     val batteryLevel: Int? = null,
     val isCharging: Boolean = false,
     val heartbeatTouchingTimestamp: Long = 0L,
@@ -160,7 +166,9 @@ data class Message(
     // Text contains a web link; lets the gallery query links instead of scanning every message
     var hasLink: Boolean = false,
     // Small previews for chat bubbles and the gallery, same order as getAllMediaUrls()
-    var thumbnailUrls: List<String> = emptyList()
+    var thumbnailUrls: List<String> = emptyList(),
+    // A special message: "goodnight" dims the partner's screen with stars when they see it
+    var effect: String? = null
 ) {
     @com.google.firebase.firestore.Exclude
     fun isCircularVideoNote(): Boolean {

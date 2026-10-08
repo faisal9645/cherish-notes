@@ -14,6 +14,7 @@ class BootReceiver : BroadcastReceiver() {
         if (action == Intent.ACTION_BOOT_COMPLETED || action == Intent.ACTION_MY_PACKAGE_REPLACED) {
             val app = context.applicationContext as? CherishApplication ?: return
             NoteReminderScheduler.rescheduleAllUpcomingReminders(context, app.notesRepository)
+            ScheduledMessageScheduler.rescheduleAll(context)
         }
     }
 }

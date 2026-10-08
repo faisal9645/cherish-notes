@@ -77,60 +77,45 @@ fun MessageBubble(
     onReplyQuoteClick: ((replyToMessageId: String?) -> Unit)? = null,
     isPrivateMode: Boolean = false,
     senderPhotoUrl: String? = null,
-    onSeekAudio: ((Float) -> Unit)? = null,
-    // Messages a person sends in a row (see ChatScreen) join into one run of bubbles
-    groupedWithPrevious: Boolean = false,
-    groupedWithNext: Boolean = false
+    onSeekAudio: ((Float) -> Unit)? = null
 ) {
-    // Within a run the corners on the sender's side tighten so the bubbles read as one block;
-    // the tail stays only where the run starts (partner) or ends (me)
-    val joined = 6.dp
-    val bubbleShape = if (isFromMe) {
-        RoundedCornerShape(
-            topStart = 16.dp,
-            topEnd = if (groupedWithPrevious) joined else 16.dp,
-            bottomStart = 16.dp,
-            bottomEnd = if (groupedWithNext) joined else 4.dp
-        )
-    } else if (isPrivateMode) {
-        RoundedCornerShape(
-            topStart = if (groupedWithPrevious) joined else 16.dp,
-            topEnd = 16.dp,
-            bottomStart = if (groupedWithNext) joined else 4.dp,
-            bottomEnd = 16.dp
-        )
+    val bubbleShape = if (isPrivateMode) {
+        if (isFromMe) {
+            RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 16.dp, bottomEnd = 4.dp)
+        } else {
+            RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 4.dp, bottomEnd = 16.dp)
+        }
     } else {
-        RoundedCornerShape(
-            topStart = if (groupedWithPrevious) joined else 4.dp,
-            topEnd = 16.dp,
-            bottomStart = if (groupedWithNext) joined else 16.dp,
-            bottomEnd = 16.dp
-        )
+        if (isFromMe) {
+            RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 16.dp, bottomEnd = 4.dp)
+        } else {
+            RoundedCornerShape(topStart = 4.dp, topEnd = 16.dp, bottomStart = 16.dp, bottomEnd = 16.dp)
+        }
     }
 
     val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
 
     val bubbleBg = if (isPrivateMode) {
         if (isFromMe) {
-            if (isDark) Color(0xFF2E2F33) else Color(0xFFE5E7EB)
+            if (isDark) darkTone(Color(0xFF2E2F33)) else Color(0xFFE5E7EB)
         } else {
-            if (isDark) Color(0xFF1E1F22) else Color(0xFFF3F4F6)
+            if (isDark) darkTone(Color(0xFF1E1F22)) else Color(0xFFF3F4F6)
         }
     } else {
         if (isFromMe) {
-            DayBluePrimary
+            darkTone(DayBluePrimary)
         } else {
-            if (isDark) Color(0xFF1E2638) else Color(0xFFF1F5FB)
+            if (isDark) darkSurface(Color(0xFF1E2638)) else Color(0xFFF1F5FB)
         }
     }
 
     val textColor = if (isPrivateMode) {
-        if (isDark) Color(0xFFECECEC) else Color(0xFF111827)
+        if (isDark) darkTone(Color(0xFFECECEC)) else Color(0xFF111827)
     } else {
         if (isFromMe) {
             Color.White
         } else {
-            if (isDark) Color(0xFFF8FAFC) else Color(0xFF0F172A)
+            if (isDark) darkTone(Color(0xFFF8FAFC)) else Color(0xFF0F172A)
         }
     }
 
@@ -138,7 +123,7 @@ fun MessageBubble(
         textColor.copy(alpha = 0.65f)
     } else {
         if (isFromMe) Color.White.copy(alpha = 0.85f)
-        else DayBlueSecondary
+        else darkTone(DayBlueSecondary)
     }
 
     val scope = rememberCoroutineScope()
@@ -488,14 +473,14 @@ fun MessageBubble(
                         )
                         .clip(cardShape)
                         .then(
-                            if (isHighlighted) Modifier.border(BorderStroke(2.dp, if (isPrivateMode) (if (isDark) Color(0xFF6B7280) else Color(0xFF9CA3AF)) else MaterialTheme.colorScheme.primary), cardShape)
-                            else if (isPhotoOnly) Modifier
+                            // (A jumped-to message is shown by the chat row's soft glow, not a border)
+                            if (isPhotoOnly) Modifier
                             else if (isPrivateMode) Modifier.border(
-                                BorderStroke(0.6.dp, if (isDark) Color(0xFF38393E) else Color(0xFFE5E7EB)),
+                                BorderStroke(0.6.dp, if (isDark) darkTone(Color(0xFF38393E)) else Color(0xFFE5E7EB)),
                                 cardShape
                             )
                             else if (!isFromMe) Modifier.border(
-                                BorderStroke(0.5.dp, if (isDark) Color(0xFF2A364F) else Color(0xFFE2E8F0)),
+                                BorderStroke(0.5.dp, if (isDark) darkSurface(Color(0xFF2A364F), Color(0xFF262626)) else Color(0xFFE2E8F0)),
                                 cardShape
                             )
                             else Modifier
@@ -504,7 +489,7 @@ fun MessageBubble(
                             if (isPhotoOnly) androidx.compose.ui.graphics.SolidColor(Color.Transparent)
                             else if (isPrivateMode) androidx.compose.ui.graphics.SolidColor(bubbleBg)
                             else if (isFromMe) appHorizontalGradient()
-                            else androidx.compose.ui.graphics.SolidColor(if (isDark) Color(0xFF1E2638) else Color(0xFFF1F5FB))
+                            else androidx.compose.ui.graphics.SolidColor(if (isDark) darkSurface(Color(0xFF1E2638)) else Color(0xFFF1F5FB))
                         )
                         .pointerInput(message.id) {
                             detectTapGestures(
@@ -558,7 +543,7 @@ fun MessageBubble(
                                 modifier = Modifier
                                     .width(3.dp)
                                     .height(28.dp)
-                                    .background(if (isPrivateMode) (if (isDark) Color(0xFF9CA3AF) else Color(0xFF6B7280)) else (if (isFromMe) Color.White else MaterialTheme.colorScheme.primary), CircleShape)
+                                    .background(if (isPrivateMode) (if (isDark) darkTone(Color(0xFF9CA3AF)) else Color(0xFF6B7280)) else (if (isFromMe) Color.White else MaterialTheme.colorScheme.primary), CircleShape)
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Column {
@@ -709,7 +694,7 @@ fun MessageBubble(
                                     .then(
                                         if (isPrivateMode) {
                                             Modifier.background(
-                                                (if (isDark) Color(0xFFECECEC) else Color(0xFF1F2937)).copy(alpha = 0.2f),
+                                                (if (isDark) darkTone(Color(0xFFECECEC)) else Color(0xFF1F2937)).copy(alpha = 0.2f),
                                                 CircleShape
                                             )
                                         } else if (isFromMe) {
@@ -757,13 +742,13 @@ fun MessageBubble(
                                             fontWeight = FontWeight.Medium,
                                             color = if (isPrivateMode) textColor.copy(alpha = 0.8f) 
                                                     else if (isFromMe) Color.White.copy(alpha = 0.9f) 
-                                                    else (if (isDark) Color(0xFFCBD5E1) else Color(0xFF0F172A))
+                                                    else (if (isDark) darkTone(Color(0xFFCBD5E1)) else Color(0xFF0F172A))
                                         )
                                         if (isPlayingAudio && onToggleVoiceSpeed != null) {
                                             Spacer(modifier = Modifier.width(6.dp))
                                             Surface(
                                                 shape = RoundedCornerShape(6.dp),
-                                                color = (if (isPrivateMode) textColor else if (isFromMe) Color.White else DayBluePrimary).copy(alpha = 0.2f),
+                                                color = (if (isPrivateMode) textColor else if (isFromMe) Color.White else darkTone(DayBluePrimary)).copy(alpha = 0.2f),
                                                 modifier = Modifier.clickable { onToggleVoiceSpeed() }
                                             ) {
                                                 val speedLabel = when (voicePlaybackSpeed) {
@@ -775,7 +760,7 @@ fun MessageBubble(
                                                     text = speedLabel,
                                                     fontSize = 10.sp,
                                                     fontWeight = FontWeight.Bold,
-                                                    color = if (isPrivateMode) textColor else if (isFromMe) Color.White else DayBluePrimary,
+                                                    color = if (isPrivateMode) textColor else if (isFromMe) Color.White else darkTone(DayBluePrimary),
                                                     modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
                                                 )
                                             }
@@ -867,7 +852,7 @@ fun MessageBubble(
                             fontWeight = FontWeight.Normal,
                             color = if (isPrivateMode) textColor
                                     else if (isFromMe) Color.White 
-                                    else (if (isDark) Color(0xFFCBD5E1) else Color(0xFF0F172A))
+                                    else (if (isDark) darkTone(Color(0xFFCBD5E1)) else Color(0xFF0F172A))
                         )
                         Spacer(modifier = Modifier.height(2.dp))
                         Row(
@@ -940,11 +925,8 @@ fun MessageBubble(
                     }
                 }
 
-                // Bubble Footer for non-audio, non-image, non-video messages. In a run only the last
-                // message shows the time, unless this one is pinned, starred, edited or still sending.
-                val footerNeeded = !groupedWithNext || message.isPinned || message.isStarred || message.isEdited ||
-                    (isFromMe && message.getTypedStatus() == MessageStatus.SENDING)
-                if (footerNeeded && message.getTypedType() != MessageType.AUDIO && message.getTypedType() != MessageType.IMAGE && message.getTypedType() != MessageType.VIDEO) {
+                // Bubble Footer for non-audio, non-image, non-video messages: the time on every message
+                if (message.getTypedType() != MessageType.AUDIO && message.getTypedType() != MessageType.IMAGE && message.getTypedType() != MessageType.VIDEO) {
                     // Tapping the time of my message shows when it was seen (or delivered/sent)
                     var showStatusDetail by remember(message.id) { mutableStateOf(false) }
                     LaunchedEffect(showStatusDetail) {
@@ -1200,8 +1182,8 @@ private fun ReplyIndicator(
 
     val backgroundColor = when {
         isReached -> if (isPrivateMode) Color(0xFF4B5563) else RoseGoldPrimary
-        isPrivateMode -> if (isDark) Color(0xFF1F2937) else Color(0xFFF3F4F6)
-        isDark -> Color(0xFF2C2227)
+        isPrivateMode -> if (isDark) darkTone(Color(0xFF1F2937)) else Color(0xFFF3F4F6)
+        isDark -> darkTone(Color(0xFF2C2227))
         else -> Color(0xFFFFF0F5)
     }
 
@@ -1213,7 +1195,7 @@ private fun ReplyIndicator(
 
     val borderColor = when {
         isReached -> if (isPrivateMode) Color(0xFF9CA3AF) else RoseGoldPrimary
-        isPrivateMode -> if (isDark) Color(0xFF4B5563) else Color(0xFFD1D5DB)
+        isPrivateMode -> if (isDark) darkTone(Color(0xFF4B5563)) else Color(0xFFD1D5DB)
         else -> RoseGoldPrimary.copy(alpha = 0.5f)
     }
 

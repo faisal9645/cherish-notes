@@ -1,5 +1,7 @@
 package com.example.ui.chat
 
+import com.example.ui.theme.darkTone
+
 import android.app.TimePickerDialog
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
@@ -209,7 +211,7 @@ fun CheckAfterChatBanner(
                         },
                         fontWeight = FontWeight.Bold,
                         fontSize = 13.sp,
-                        color = if (isExpired) (if (isDark) Color(0xFF86EFAC) else Color(0xFF1B5E20)) else MaterialTheme.colorScheme.onSurface,
+                        color = if (isExpired) (if (isDark) darkTone(Color(0xFF86EFAC)) else Color(0xFF1B5E20)) else MaterialTheme.colorScheme.onSurface,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )

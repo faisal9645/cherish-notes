@@ -20,6 +20,9 @@ import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
@@ -174,7 +177,7 @@ fun SharedGalleryScreen(
         (chatState.messages + allGalleryItems).distinctBy { it.id }
     }
 
-    val filteredMessages = remember(sourceMessages, selectedDateMillis, isAllGalleryRecovered) {
+    val filteredMessages = remember(sourceMessages, selectedDateMillis, isAllGalleryRecovered, chatState.logicalDay) {
         var list = sourceMessages.filter { !it.isDeleted }
 
         // Filter out any messages containing "today start 6 am" or similar variations
@@ -696,7 +699,27 @@ fun SharedGalleryScreen(
                                 horizontalArrangement = Arrangement.spacedBy(4.dp),
                                 verticalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
-                                items(galleryMediaItems, key = { it.id }) { item ->
+                                // A card of photos from this date in earlier years, above the newest month
+                                if (selectedDateMillis == null && !isSelectionMode) {
+                                    val memories = galleryOnThisDay(galleryMediaItems)
+                                    if (memories.isNotEmpty()) {
+                                        item(key = "on_this_day", span = { GridItemSpan(maxLineSpan) }) {
+                                            OnThisDayCard(
+                                                items = memories,
+                                                onOpen = { picked ->
+                                                    selectedMediaUrl = picked.mediaUrl
+                                                    selectedMessageIdForViewer = picked.messageId
+                                                }
+                                            )
+                                        }
+                                    }
+                                }
+                                // Month by month, newest first: an "October 2026" header over each month's photos
+                                galleryByMonth(galleryMediaItems).forEach { (month, monthItems) ->
+                                    item(key = "month_$month", span = { GridItemSpan(maxLineSpan) }) {
+                                        GalleryMonthHeader(month = month, count = monthItems.size)
+                                    }
+                                    items(monthItems, key = { it.id }) { item ->
                                     val isSelected = selectedItemIds.contains(item.id)
 
                                     Box(
@@ -854,6 +877,7 @@ fun SharedGalleryScreen(
                                             }
                                         }
                                     }
+                                }
                                 }
                             }
                         }
@@ -1595,9 +1619,95 @@ private fun getDomainBadgeColor(host: String): Color {
     }
 }
 
+/** Photos and videos grouped by month ("October 2026"), in the order given (newest first). */
+private fun galleryByMonth(items: List<GalleryMediaItem>): List<Pair<String, List<GalleryMediaItem>>> {
+    val format = SimpleDateFormat("MMMM yyyy", Locale.getDefault())
+    return items.groupBy { format.format(Date(it.timestamp)) }.toList()
+}
 
+/** Photos and videos from today's date in earlier years, newest first. */
+private fun galleryOnThisDay(items: List<GalleryMediaItem>): List<GalleryMediaItem> {
+    val today = Calendar.getInstance()
+    val then = Calendar.getInstance()
+    return items.filter {
+        then.timeInMillis = it.timestamp
+        then.get(Calendar.YEAR) < today.get(Calendar.YEAR) &&
+            then.get(Calendar.MONTH) == today.get(Calendar.MONTH) &&
+            then.get(Calendar.DAY_OF_MONTH) == today.get(Calendar.DAY_OF_MONTH)
+    }
+}
 
+@Composable
+private fun GalleryMonthHeader(month: String, count: Int) {
+    Row(
+        verticalAlignment = Alignment.Bottom,
+        modifier = Modifier.padding(start = 4.dp, top = 14.dp, bottom = 4.dp)
+    ) {
+        Text(
+            text = month,
+            fontSize = 15.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Spacer(modifier = Modifier.width(6.dp))
+        Text(
+            text = count.toString(),
+            fontSize = 12.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 1.dp)
+        )
+    }
+}
 
-
-
-
+/** "On this day": a row of photos from this date in earlier years; tapping one opens it. */
+@Composable
+private fun OnThisDayCard(items: List<GalleryMediaItem>, onOpen: (GalleryMediaItem) -> Unit) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val yearsAgo = remember(items) {
+        val now = Calendar.getInstance().get(Calendar.YEAR)
+        val then = Calendar.getInstance().apply { timeInMillis = items.first().timestamp }.get(Calendar.YEAR)
+        now - then
+    }
+    Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 4.dp, bottom = 6.dp)
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Text(
+                text = "On this day",
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                text = if (yearsAgo <= 1) "1 year ago today" else "$yearsAgo years ago today",
+                fontSize = 12.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.height(10.dp))
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                modifier = Modifier.horizontalScroll(rememberScrollState())
+            ) {
+                items.take(10).forEach { memory ->
+                    AsyncImage(
+                        model = coil.request.ImageRequest.Builder(context)
+                            .data(memory.previewUrl)
+                            .apply { if (memory.isVideo) decoderFactory(coil.decode.VideoFrameDecoder.Factory()) }
+                            .crossfade(true)
+                            .build(),
+                        contentDescription = "Memory from this day",
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .size(92.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .clickable { onOpen(memory) }
+                    )
+                }
+            }
+        }
+    }
+}

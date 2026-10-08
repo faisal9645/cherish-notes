@@ -296,11 +296,11 @@ fun ProfileScreen(
                     .testTag("profile_header_card"),
                 shape = RoundedCornerShape(24.dp),
                 colors = CardDefaults.cardColors(
-                    containerColor = if (isDark) Color(0xFF141923) else Color(0xFFFBFDFF)
+                    containerColor = if (isDark) darkTone(Color(0xFF141923)) else Color(0xFFFBFDFF)
                 ),
                 border = BorderStroke(
                     1.dp,
-                    if (isDark) Color(0xFF232D3F) else Color(0xFFE2E8F0)
+                    if (isDark) darkTone(Color(0xFF232D3F)) else Color(0xFFE2E8F0)
                 ),
                 elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
             ) {
@@ -386,7 +386,7 @@ fun ProfileScreen(
                                         Surface(
                                             shape = CircleShape,
                                             color = primaryAccent,
-                                            border = BorderStroke(2.dp, if (isDark) Color(0xFF141923) else Color.White),
+                                            border = BorderStroke(2.dp, if (isDark) darkTone(Color(0xFF141923)) else Color.White),
                                             shadowElevation = 3.dp,
                                             modifier = Modifier
                                                 .size(26.dp)
@@ -500,7 +500,7 @@ fun ProfileScreen(
                             Surface(
                                 shape = CircleShape,
                                 color = HeartRed,
-                                border = BorderStroke(2.dp, if (isDark) Color(0xFF141923) else Color.White),
+                                border = BorderStroke(2.dp, if (isDark) darkTone(Color(0xFF141923)) else Color.White),
                                 shadowElevation = 5.dp,
                                 modifier = Modifier
                                     .size(30.dp)
@@ -567,9 +567,9 @@ fun ProfileScreen(
 
                         // Custom Bio / Love Note Quote Bubble
                         Surface(
-                            color = if (isDark) Color(0xFF1A2230) else Color(0xFFF1F5F9),
+                            color = if (isDark) darkTone(Color(0xFF1A2230)) else Color(0xFFF1F5F9),
                             shape = RoundedCornerShape(14.dp),
-                            border = BorderStroke(1.dp, if (isDark) Color(0xFF2A364F) else Color(0xFFE2E8F0)),
+                            border = BorderStroke(1.dp, if (isDark) darkTone(Color(0xFF2A364F)) else Color(0xFFE2E8F0)),
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clickable { showEditProfileDialog = true }
@@ -897,7 +897,7 @@ fun ProfileScreen(
                             // Live preview of the stealth edge toggle at current opacity!
                             Surface(
                                 shape = RoundedCornerShape(topStart = 10.dp, bottomStart = 10.dp, topEnd = 0.dp, bottomEnd = 0.dp),
-                                color = if (isDark) Color(0xFF26272B).copy(alpha = uiState.sideEmergencyExitOpacity)
+                                color = if (isDark) darkTone(Color(0xFF26272B)).copy(alpha = uiState.sideEmergencyExitOpacity)
                                         else Color(0xFF1F2937).copy(alpha = uiState.sideEmergencyExitOpacity),
                                 border = BorderStroke(1.dp, if (isDark) Color.White.copy(alpha = (uiState.sideEmergencyExitOpacity * 0.4f).coerceIn(0.05f, 0.9f))
                                         else Color.Black.copy(alpha = (uiState.sideEmergencyExitOpacity * 0.4f).coerceIn(0.05f, 0.9f))),
@@ -1085,7 +1085,9 @@ fun ProfileScreen(
                     listOf(
                         0 to "System",
                         1 to "Day",
-                        2 to "Dark"
+                        2 to "Dark",
+                        // Pure black for AMOLED screens; applies to Notes too
+                        3 to "Black"
                     ).forEach { (mode, label) ->
                         val isSelected = uiState.themeMode == mode
                         Box(
@@ -1463,7 +1465,7 @@ fun ProfileScreen(
                         Text(
                             text = if (isExpired) "✨ You can check now" else "⏳ $remaining",
                             fontSize = 13.sp,
-                            color = if (isExpired) (if (isDark) Color(0xFF86EFAC) else Color(0xFF2E7D32)) else MaterialTheme.colorScheme.onSurfaceVariant
+                            color = if (isExpired) (if (isDark) darkTone(Color(0xFF86EFAC)) else Color(0xFF2E7D32)) else MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 } else {

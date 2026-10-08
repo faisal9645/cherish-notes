@@ -1,5 +1,7 @@
 package com.example.ui.home
 
+import com.example.ui.theme.darkTone
+
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
@@ -262,7 +264,7 @@ fun EnvelopeCard(
             val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
             Surface(
                 shape = RoundedCornerShape(12.dp),
-                color = if (letter.isOpened) (if (isDark) Color(0xFF1E3A8A) else Color(0xFFE8F5E9)) else (if (isDark) MaterialTheme.colorScheme.surfaceVariant else Color(0xFFF3F0F7))
+                color = if (letter.isOpened) (if (isDark) darkTone(Color(0xFF1E3A8A)) else Color(0xFFE8F5E9)) else (if (isDark) MaterialTheme.colorScheme.surfaceVariant else Color(0xFFF3F0F7))
             ) {
                 Row(
                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
@@ -272,14 +274,14 @@ fun EnvelopeCard(
                         imageVector = if (letter.isOpened) Icons.Filled.Check else Icons.Outlined.Lock,
                         contentDescription = null,
                         modifier = Modifier.size(11.dp),
-                        tint = if (letter.isOpened) (if (isDark) Color(0xFF93C5FD) else Color(0xFF2E7D32)) else RoseGoldPrimary
+                        tint = if (letter.isOpened) (if (isDark) darkTone(Color(0xFF93C5FD)) else Color(0xFF2E7D32)) else RoseGoldPrimary
                     )
                     Spacer(modifier = Modifier.width(3.dp))
                     Text(
                         text = if (letter.isOpened) "Opened" else "Locked",
                         fontSize = 10.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = if (letter.isOpened) (if (isDark) Color(0xFF93C5FD) else Color(0xFF2E7D32)) else RoseGoldPrimary
+                        color = if (letter.isOpened) (if (isDark) darkTone(Color(0xFF93C5FD)) else Color(0xFF2E7D32)) else RoseGoldPrimary
                     )
                 }
             }

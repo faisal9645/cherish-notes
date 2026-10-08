@@ -200,53 +200,45 @@ fun FullScreenMediaViewer(
         }
     }
 
-    // Save image to Android gallery
-    fun saveImageToGallery() {
+    // Save the photo or video on screen to the phone's gallery (the original file, unchanged)
+    var isSaving by remember { mutableStateOf(false) }
+    fun saveToGallery() {
+        if (isSaving) return
+        val url = currentUrl
+        isSaving = true
         scope.launch {
-            try {
-                withContext(Dispatchers.IO) {
-                    val loader = ImageLoader(context)
-                    val request = ImageRequest.Builder(context)
-                        .data(currentUrl)
-                        .allowHardware(false)
-                        .build()
-                    val result = (loader.execute(request) as? SuccessResult)?.drawable
-                    val bitmap = (result as? BitmapDrawable)?.bitmap
-
-                    if (bitmap != null) {
-                        val filename = "Cherish_${System.currentTimeMillis()}.jpg"
-                        var fos: OutputStream? = null
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                            val resolver = context.contentResolver
-                            val contentValues = android.content.ContentValues().apply {
-                                put(MediaStore.MediaColumns.DISPLAY_NAME, filename)
-                                put(MediaStore.MediaColumns.MIME_TYPE, "image/jpeg")
-                                put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/Cherish")
-                            }
-                            val imageUri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues)
-                            if (imageUri != null) {
-                                fos = resolver.openOutputStream(imageUri)
-                            }
-                        } else {
-                            val imagesDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES).toString() + "/Cherish"
-                            val file = File(imagesDir)
-                            if (!file.exists()) file.mkdirs()
-                            val image = File(imagesDir, filename)
-                            fos = FileOutputStream(image)
-                        }
-                        fos?.use {
-                            bitmap.compress(Bitmap.CompressFormat.JPEG, 95, it)
-                        }
-                    }
-                }
-                withContext(Dispatchers.Main) {
-                    Toast.makeText(context, "Saved to Photos gallery ✨", Toast.LENGTH_SHORT).show()
-                }
-            } catch (e: Exception) {
-                withContext(Dispatchers.Main) {
-                    Toast.makeText(context, "Photo ready in memory 💕", Toast.LENGTH_SHORT).show()
-                }
-            }
+            val saved = com.example.util.MediaSaver.saveToGallery(context, url)
+            isSaving = false
+            Toast.makeText(
+                context,
+                when {
+                    !saved -> "Couldn't save. Check your connection and try again."
+                    com.example.util.MediaSaver.looksLikeVideo(url) -> "Video saved to gallery"
+                    else -> "Photo saved to gallery"
+                },
+                Toast.LENGTH_SHORT
+            ).show()
+        }
+    }
+    // Android 9 and older need the storage permission first
+    val storagePermissionLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            saveToGallery()
+        } else {
+            Toast.makeText(context, "Storage permission is needed to save", Toast.LENGTH_SHORT).show()
+        }
+    }
+    fun saveImageToGallery() {
+        val allowed = !com.example.util.MediaSaver.needsStoragePermission ||
+            androidx.core.content.ContextCompat.checkSelfPermission(
+                context, android.Manifest.permission.WRITE_EXTERNAL_STORAGE
+            ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        if (allowed) {
+            saveToGallery()
+        } else {
+            storagePermissionLauncher.launch(android.Manifest.permission.WRITE_EXTERNAL_STORAGE)
         }
     }
 

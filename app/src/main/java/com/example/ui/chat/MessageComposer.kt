@@ -1,5 +1,7 @@
 package com.example.ui.chat
 
+import com.example.ui.theme.darkTone
+
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
@@ -60,6 +62,7 @@ import com.example.ui.theme.DayBluePrimary
 import com.example.ui.theme.HeartRed
 import com.example.ui.theme.appGradientShadow
 import com.example.ui.theme.appHorizontalGradient
+import com.example.ui.theme.darkSurface
 import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.math.PI
@@ -83,6 +86,8 @@ fun MessageComposer(
     onTakePhoto: () -> Unit,
     onPickAttachment: () -> Unit,
     onRecordVideoNote: () -> Unit = {},
+    // Long-press on send: send this text later (e.g. "Good morning" at 7 AM)
+    onScheduleText: (() -> Unit)? = null,
     myPhotoUrl: String? = null,
     myName: String = "Me",
     placeholder: String = "Message your love...",
@@ -216,14 +221,14 @@ fun MessageComposer(
     val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
     val barBg = MaterialTheme.colorScheme.surface
     val pillBg = if (isPrivateMode) {
-        if (isDark) Color(0xFF212124) else Color(0xFFF3F4F6)
+        if (isDark) darkTone(Color(0xFF212124)) else Color(0xFFF3F4F6)
     } else {
-        if (isDark) Color(0xFF1E2638) else Color.White
+        if (isDark) darkSurface(Color(0xFF1E2638)) else Color.White
     }
     val pillBorder = if (isPrivateMode) {
-        if (isDark) Color(0xFF2E2F33) else Color(0xFFE5E7EB)
+        if (isDark) darkTone(Color(0xFF2E2F33)) else Color(0xFFE5E7EB)
     } else {
-        if (isDark) Color(0xFF2A364F) else Color(0xFFE2E8F0)
+        if (isDark) darkSurface(Color(0xFF2A364F), Color(0xFF262626)) else Color(0xFFE2E8F0)
     }
 
     // Comprehensive emoji categories like WhatsApp / Telegram
@@ -365,7 +370,7 @@ fun MessageComposer(
                                 .fillMaxWidth()
                                 .heightIn(min = 52.dp)
                                 .clip(RoundedCornerShape(26.dp))
-                                .background(if (isDark) Color(0xFF1E2638) else Color.White)
+                                .background(if (isDark) darkSurface(Color(0xFF1E2638)) else Color.White)
                                 .border(BorderStroke(1.dp, pillBorder), RoundedCornerShape(26.dp))
                                 .padding(horizontal = 8.dp, vertical = 6.dp),
                             verticalAlignment = Alignment.CenterVertically
@@ -449,7 +454,7 @@ fun MessageComposer(
                             .fillMaxWidth()
                             .heightIn(min = 52.dp)
                             .clip(RoundedCornerShape(26.dp))
-                            .background(if (isDark) Color(0xFF1E2638) else Color.White)
+                            .background(if (isDark) darkSurface(Color(0xFF1E2638)) else Color.White)
                             .border(BorderStroke(1.dp, pillBorder), RoundedCornerShape(26.dp))
                             .padding(horizontal = 8.dp, vertical = 6.dp),
                         verticalAlignment = Alignment.CenterVertically
@@ -605,7 +610,7 @@ fun MessageComposer(
                             Text(
                                 text = placeholder,
                                 color = if (isPrivateMode) {
-                                    if (isDark) Color(0xFF9CA3AF) else Color(0xFF6B7280)
+                                    if (isDark) darkTone(Color(0xFF9CA3AF)) else Color(0xFF6B7280)
                                 } else {
                                     Color(0xFF64748B)
                                 },
@@ -621,14 +626,14 @@ fun MessageComposer(
                                 // The app's typeface, like the messages
                                 fontFamily = LocalTextStyle.current.fontFamily,
                                 color = if (isPrivateMode) {
-                                    if (isDark) Color(0xFFECECEC) else Color(0xFF111827)
+                                    if (isDark) darkTone(Color(0xFFECECEC)) else Color(0xFF111827)
                                 } else {
                                     if (isDark) Color.White else Color(0xFF0F172A)
                                 },
                                 fontSize = 14.sp,
                                 lineHeight = 18.sp
                             ),
-                            cursorBrush = SolidColor(if (isPrivateMode) (if (isDark) Color(0xFFD1D5DB) else Color(0xFF374151)) else DayBluePrimary),
+                            cursorBrush = SolidColor(if (isPrivateMode) (if (isDark) darkTone(Color(0xFFD1D5DB)) else Color(0xFF374151)) else DayBluePrimary),
                             maxLines = 5,
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -743,10 +748,10 @@ fun MessageComposer(
                     when (state) {
                         "SEND_TEXT" -> {
                             val sendBg = if (isPrivateMode) {
-                                if (isDark) Color(0xFFECECEC) else Color(0xFF1F2937)
+                                if (isDark) darkTone(Color(0xFFECECEC)) else Color(0xFF1F2937)
                             } else null
                             val sendTint = if (isPrivateMode) {
-                                if (isDark) Color(0xFF111827) else Color.White
+                                if (isDark) darkTone(Color(0xFF111827)) else Color.White
                             } else Color.White
 
                             Box(
@@ -759,7 +764,14 @@ fun MessageComposer(
                                             .clip(CircleShape)
                                             .background(appHorizontalGradient())
                                     )
-                                    .bounceClick {
+                                    .bounceClick(
+                                        onLongClick = onScheduleText?.let { schedule ->
+                                            {
+                                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                schedule()
+                                            }
+                                        }
+                                    ) {
                                         onSendText()
                                         closeEmojiBoard()
                                     }
@@ -776,10 +788,10 @@ fun MessageComposer(
                         }
                         "SEND_VOICE" -> {
                             val sendBg = if (isPrivateMode) {
-                                if (isDark) Color(0xFFECECEC) else Color(0xFF1F2937)
+                                if (isDark) darkTone(Color(0xFFECECEC)) else Color(0xFF1F2937)
                             } else null
                             val sendTint = if (isPrivateMode) {
-                                if (isDark) Color(0xFF111827) else Color.White
+                                if (isDark) darkTone(Color(0xFF111827)) else Color.White
                             } else Color.White
 
                             Box(
@@ -810,10 +822,10 @@ fun MessageComposer(
                         }
                         "VIDEO_NOTE" -> {
                             val videoBg = if (isPrivateMode) {
-                                if (isDark) Color(0xFF2E2F33) else Color(0xFFE5E7EB)
+                                if (isDark) darkTone(Color(0xFF2E2F33)) else Color(0xFFE5E7EB)
                             } else null
                             val videoTint = if (isPrivateMode) {
-                                if (isDark) Color(0xFFD1D5DB) else Color(0xFF374151)
+                                if (isDark) darkTone(Color(0xFFD1D5DB)) else Color(0xFF374151)
                             } else Color.White
 
                             Box(
@@ -865,16 +877,16 @@ fun MessageComposer(
                         "MIC" -> {
                             val micBg = if (isPrivateMode) {
                                 if (isRecordingVoice) {
-                                    if (isDark) Color(0xFFE5E7EB) else Color(0xFF374151)
+                                    if (isDark) darkTone(Color(0xFFE5E7EB)) else Color(0xFF374151)
                                 } else {
-                                    if (isDark) Color(0xFF2E2F33) else Color(0xFFE5E7EB)
+                                    if (isDark) darkTone(Color(0xFF2E2F33)) else Color(0xFFE5E7EB)
                                 }
                             } else if (isRecordingVoice) Color(0xFFE11D48) else null
                             val micTint = if (isPrivateMode) {
                                 if (isRecordingVoice) {
-                                    if (isDark) Color(0xFF111827) else Color.White
+                                    if (isDark) darkTone(Color(0xFF111827)) else Color.White
                                 } else {
-                                    if (isDark) Color(0xFFD1D5DB) else Color(0xFF374151)
+                                    if (isDark) darkTone(Color(0xFFD1D5DB)) else Color(0xFF374151)
                                 }
                             } else Color.White
 
@@ -1051,7 +1063,7 @@ fun MessageComposer(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .background(if (isDark) Color(0xFF1A1C22) else Color(0xFFF1F3F5))
+                            .background(if (isDark) darkTone(Color(0xFF1A1C22)) else Color(0xFFF1F3F5))
                             .padding(horizontal = 4.dp, vertical = 2.dp),
                         horizontalArrangement = Arrangement.SpaceEvenly,
                         verticalAlignment = Alignment.CenterVertically
@@ -1145,10 +1157,10 @@ fun ReplyPreviewCard(
     modifier: Modifier = Modifier
 ) {
     val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
-    val accent = if (isPrivateMode) (if (isDark) Color(0xFF9CA3AF) else Color(0xFF6B7280)) else MaterialTheme.colorScheme.primary
+    val accent = if (isPrivateMode) (if (isDark) darkTone(Color(0xFF9CA3AF)) else Color(0xFF6B7280)) else MaterialTheme.colorScheme.primary
     val cardColor = when {
-        isPrivateMode -> if (isDark) Color(0xFF26272B) else Color(0xFFF3F4F6)
-        isDark -> Color(0xFF263049)
+        isPrivateMode -> if (isDark) darkTone(Color(0xFF26272B)) else Color(0xFFF3F4F6)
+        isDark -> darkSurface(Color(0xFF263049), Color(0xFF181818))
         else -> androidx.compose.ui.graphics.lerp(Color.White, accent, 0.07f)
     }
     Surface(
@@ -1184,7 +1196,7 @@ fun ReplyPreviewCard(
                     text = "Replying to ${reply.senderName ?: "Partner"}",
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
-                    color = if (isPrivateMode) (if (isDark) Color(0xFFECECEC) else Color(0xFF111827)) else accent,
+                    color = if (isPrivateMode) (if (isDark) darkTone(Color(0xFFECECEC)) else Color(0xFF111827)) else accent,
                     maxLines = 1,
                     overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                 )
@@ -1216,8 +1228,11 @@ fun ReplyPreviewCard(
 @Composable
 fun Modifier.bounceClick(
     scaleDown: Float = 0.88f,
+    onLongClick: (() -> Unit)? = null,
     onClick: () -> Unit
 ): Modifier {
+    val currentOnClick by rememberUpdatedState(onClick)
+    val currentOnLongClick by rememberUpdatedState(onLongClick)
     var isPressed by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(
         targetValue = if (isPressed) scaleDown else 1f,
@@ -1230,14 +1245,15 @@ fun Modifier.bounceClick(
             scaleX = scale
             scaleY = scale
         }
-        .pointerInput(Unit) {
+        .pointerInput(onLongClick != null) {
             detectTapGestures(
                 onPress = {
                     isPressed = true
                     tryAwaitRelease()
                     isPressed = false
                 },
-                onTap = { onClick() }
+                onLongPress = if (onLongClick != null) { _ -> currentOnLongClick?.invoke() } else null,
+                onTap = { currentOnClick() }
             )
         }
 }

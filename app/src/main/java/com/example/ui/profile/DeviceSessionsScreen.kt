@@ -1,5 +1,7 @@
 package com.example.ui.profile
 
+import com.example.ui.theme.darkTone
+
 import android.os.Build
 import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
@@ -337,13 +339,13 @@ fun DeviceSessionsScreen(
                             modifier = Modifier
                                 .size(44.dp)
                                 .clip(CircleShape)
-                                .background(if (session.isCurrent) (if (isDark) Color(0xFF1E3A8A) else Color(0xFFE8F5E9)) else MaterialTheme.colorScheme.surfaceVariant),
+                                .background(if (session.isCurrent) (if (isDark) darkTone(Color(0xFF1E3A8A)) else Color(0xFFE8F5E9)) else MaterialTheme.colorScheme.surfaceVariant),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 imageVector = if (session.isCurrent) Icons.Default.Smartphone else Icons.Default.Devices,
                                 contentDescription = null,
-                                tint = if (session.isCurrent) (if (isDark) Color(0xFF93C5FD) else Color(0xFF2E7D32)) else RoseGoldPrimary,
+                                tint = if (session.isCurrent) (if (isDark) darkTone(Color(0xFF93C5FD)) else Color(0xFF2E7D32)) else RoseGoldPrimary,
                                 modifier = Modifier.size(24.dp)
                             )
                         }
@@ -362,7 +364,7 @@ fun DeviceSessionsScreen(
                                     Spacer(modifier = Modifier.width(6.dp))
                                     Surface(
                                         shape = RoundedCornerShape(6.dp),
-                                        color = if (isDark) Color(0xFF1E3A8A) else Color(0xFF2E7D32)
+                                        color = if (isDark) darkTone(Color(0xFF1E3A8A)) else Color(0xFF2E7D32)
                                     ) {
                                         Text(
                                             "This Phone",
@@ -379,7 +381,7 @@ fun DeviceSessionsScreen(
                             Text(
                                 session.ipOrLocation,
                                 fontSize = 11.sp,
-                                color = if (session.isCurrent) (if (isDark) Color(0xFF93C5FD) else Color(0xFF2E7D32)) else MaterialTheme.colorScheme.onSurfaceVariant
+                                color = if (session.isCurrent) (if (isDark) darkTone(Color(0xFF93C5FD)) else Color(0xFF2E7D32)) else MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
 

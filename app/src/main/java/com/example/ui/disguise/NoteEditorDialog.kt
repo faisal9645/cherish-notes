@@ -85,8 +85,9 @@ fun NoteEditorScreen(
     var reminderTime by remember { mutableStateOf(initialNote?.reminderTime) }
     var showReminderDialog by remember { mutableStateOf(false) }
 
-    val editorTheme = remember(colorHex, isDark) {
-        resolveNoteCardColors(colorHex, isDark)
+    val amoledBlack = com.example.ui.theme.LocalAmoledBlack.current
+    val editorTheme = remember(colorHex, isDark, amoledBlack) {
+        resolveNoteCardColors(colorHex, isDark, amoledBlack)
     }
 
     var isChecklistMode by remember {
@@ -274,7 +275,7 @@ fun NoteEditorScreen(
                             ) {
                                 colorPalettes.forEach { (hex, label) ->
                                     val isSelected = colorHex.equals(hex, ignoreCase = true)
-                                    val chipTheme = resolveNoteCardColors(hex, isDark)
+                                    val chipTheme = resolveNoteCardColors(hex, isDark, amoledBlack)
                                     Box(
                                         modifier = Modifier
                                             .size(28.dp)

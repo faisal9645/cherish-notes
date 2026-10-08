@@ -285,7 +285,7 @@ fun DailyQuestionCard(
                 val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
                 Surface(
                     shape = RoundedCornerShape(10.dp),
-                    color = if (isDark) Color(0xFF2E1C0C) else Color(0xFFFFF3E0)
+                    color = if (isDark) darkTone(Color(0xFF2E1C0C)) else Color(0xFFFFF3E0)
                 ) {
                     Row(
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
@@ -297,7 +297,7 @@ fun DailyQuestionCard(
                             text = "${dailyQuestion.streakDays} Day Streak",
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
-                            color = if (isDark) Color(0xFFFDBA74) else Color(0xFFE65100)
+                            color = if (isDark) darkTone(Color(0xFFFDBA74)) else Color(0xFFE65100)
                         )
                     }
                 }

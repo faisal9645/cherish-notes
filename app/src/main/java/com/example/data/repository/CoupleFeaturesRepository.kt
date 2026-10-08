@@ -35,7 +35,8 @@ class CoupleFeaturesRepository(
     private val _memoriesFlow = MutableStateFlow<List<Memory>>(getSampleMemories())
     val memoriesFlow: StateFlow<List<Memory>> = _memoriesFlow.asStateFlow()
 
-    private val _datesFlow = MutableStateFlow<List<ImportantDate>>(getSampleImportantDates())
+    // Only real dates: reminders and the days counter must never show made-up ones
+    private val _datesFlow = MutableStateFlow<List<ImportantDate>>(emptyList())
     val datesFlow: StateFlow<List<ImportantDate>> = _datesFlow.asStateFlow()
 
     private val _notesFlow = MutableStateFlow<List<SharedNote>>(getSampleNotes())
@@ -136,12 +137,10 @@ class CoupleFeaturesRepository(
                     if (error != null) {
                         return@addSnapshotListener
                     }
-                    if (snapshot != null && !snapshot.isEmpty) {
+                    if (snapshot != null) {
                         val items = snapshot.documents.mapNotNull { it.toObject(ImportantDate::class.java) }
                         _datesFlow.value = items
                         trySend(items)
-                    } else {
-                        trySend(_datesFlow.value)
                     }
                 }
             awaitClose { reg.remove() }
@@ -151,7 +150,13 @@ class CoupleFeaturesRepository(
         }
     }
 
-    suspend fun addImportantDate(title: String, dateMillis: Long, category: DateCategory, notes: String? = null) {
+    suspend fun addImportantDate(
+        title: String,
+        dateMillis: Long,
+        category: DateCategory,
+        notes: String? = null,
+        repeatAnnually: Boolean = true
+    ) {
         val coupleId = getCoupleId()
         val item = ImportantDate(
             id = UUID.randomUUID().toString(),
@@ -159,7 +164,8 @@ class CoupleFeaturesRepository(
             title = title,
             dateMillis = dateMillis,
             category = category.name,
-            notes = notes
+            notes = notes,
+            repeatAnnually = repeatAnnually
         )
         _datesFlow.value = (_datesFlow.value + item).sortedBy { it.dateMillis }
         try {

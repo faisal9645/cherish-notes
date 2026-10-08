@@ -1,5 +1,7 @@
 package com.example.ui.profile
 
+import com.example.ui.theme.darkTone
+
 import android.content.Context
 import android.widget.Toast
 import androidx.compose.animation.*
@@ -201,10 +203,10 @@ fun StorageManagerScreen(
                             modifier = Modifier
                                 .size(40.dp)
                                 .clip(CircleShape)
-                                .background(if (isDark) Color(0xFF1E3A8A) else Color(0xFFE8F5E9)),
+                                .background(if (isDark) darkTone(Color(0xFF1E3A8A)) else Color(0xFFE8F5E9)),
                             contentAlignment = Alignment.Center
                         ) {
-                            Icon(Icons.Filled.CleaningServices, contentDescription = null, tint = if (isDark) Color(0xFF93C5FD) else Color(0xFF2E7D32), modifier = Modifier.size(20.dp))
+                            Icon(Icons.Filled.CleaningServices, contentDescription = null, tint = if (isDark) darkTone(Color(0xFF93C5FD)) else Color(0xFF2E7D32), modifier = Modifier.size(20.dp))
                         }
                         Spacer(modifier = Modifier.width(12.dp))
                         Column(modifier = Modifier.weight(1f)) {

@@ -23,6 +23,33 @@ import kotlinx.coroutines.tasks.await
 
 class AuthRepository(private val context: Context) {
     private val securityPrefs = SecurityPreferences.getInstance(context)
+    private val lovePrefs = context.getSharedPreferences("cherish_love", Context.MODE_PRIVATE)
+
+    private val _birthdays = MutableStateFlow(readBirthdays(lovePrefs.getString("birthdays", null)))
+    /** Each of us's birthday ("yyyy-MM-dd") by user id, kept on the couple record for both phones. */
+    val birthdays: StateFlow<Map<String, String>> = _birthdays.asStateFlow()
+
+    private fun readBirthdays(json: String?): Map<String, String> = try {
+        val obj = org.json.JSONObject(json ?: "{}")
+        obj.keys().asSequence().associateWith { obj.getString(it) }
+    } catch (_: Exception) {
+        emptyMap()
+    }
+
+    private fun cacheBirthdays(birthdays: Map<String, String>) {
+        _birthdays.value = birthdays
+        lovePrefs.edit().putString("birthdays", org.json.JSONObject(birthdays).toString()).apply()
+    }
+
+    /** Sets [userId]'s birthday ("yyyy-MM-dd"); either of us can set both. */
+    fun setBirthday(userId: String, date: String) {
+        if (userId.isBlank()) return
+        cacheBirthdays(_birthdays.value + (userId to date))
+        getCoupleDocRef(_currentUserState.value?.coupleId)?.set(
+            mapOf("birthdays" to mapOf(userId to date)),
+            com.google.firebase.firestore.SetOptions.merge()
+        )
+    }
 
     private val auth: FirebaseAuth? by lazy {
         try {
@@ -79,6 +106,9 @@ class AuthRepository(private val context: Context) {
         loadLocalUserSession()
         val localUser = _currentUserState.value
         if (localUser != null && localUser.id.isNotBlank()) {
+            // Every start: keep this phone's push address on the profile current, so message
+            // notifications arrive even when the app is closed
+            updateFcmToken(localUser.id)
             listenToCurrentUser(localUser.id)
             connectPartnerListenerOnce()
             localUser.coupleId?.trim()?.ifBlank { null }?.let { listenToCoupleRoom(it, localUser.id) }
@@ -125,6 +155,7 @@ class AuthRepository(private val context: Context) {
 
     fun onAppForegroundStateChanged(inForeground: Boolean) {
         isAppInForeground = inForeground
+        if (inForeground) wasForegroundThisProcess = true
         updatePresence()
         if (inForeground) {
             startHeartbeat()
@@ -137,8 +168,13 @@ class AuthRepository(private val context: Context) {
         val isDisguised = securityPrefs.isDisguiseActive.value
         // Show Online whenever actively in the Cherish app (foreground and not disguised as Notes)
         val shouldBeOnline = isAppInForeground && !isDisguised
+        // Started in the background (a message push or an alarm) and never opened: leave the
+        // profile alone, or the partner would see "last seen just now" for every message they send
+        if (!shouldBeOnline && !wasForegroundThisProcess) return
         setOnline(shouldBeOnline)
     }
+
+    @Volatile private var wasForegroundThisProcess = false
 
     fun listenToCoupleRoom(coupleId: String, currentUid: String) {
         val cleanCoupleId = coupleId.trim().ifBlank { null } ?: return
@@ -161,7 +197,41 @@ class AuthRepository(private val context: Context) {
                         listenToPartner(otherId)
                     }
                 }
+
+                // Both birthdays (ages and days lived on the Love & Us tab)
+                val birthdays = (snapshot.get("birthdays") as? Map<*, *>).orEmpty()
+                    .mapNotNull { (key, value) -> if (key is String && value is String) key to value else null }
+                    .toMap()
+                if (birthdays != _birthdays.value) cacheBirthdays(birthdays)
+
+                // A "thinking of you" heartbeat from the partner while this app is running (when
+                // it isn't, the push brings it; whichever comes first plays, the other is ignored)
+                (snapshot.get("signal") as? Map<*, *>)?.let { signal ->
+                    val senderId = signal["senderId"] as? String
+                    if (signal["type"] == "heartbeat" && !senderId.isNullOrBlank() && senderId != cleanUid) {
+                        val sentAt = (signal["at"] as? com.google.firebase.Timestamp)?.toDate()?.time ?: 0L
+                        com.example.notifications.ThinkingOfYou.onSignal(context, signal["id"] as? String ?: "", sentAt)
+                    }
+                }
             }
+    }
+
+    /**
+     * "Thinking of you": a heartbeat on the partner's phone (only if they're using it right now).
+     * False when there's no couple to send it to.
+     */
+    fun sendThinkingOfYou(): Boolean {
+        val uid = getCurrentUserId()
+        val coupleRef = getCoupleDocRef(_currentUserState.value?.coupleId) ?: return false
+        if (uid.isBlank()) return false
+        val signal = mapOf(
+            "id" to java.util.UUID.randomUUID().toString(),
+            "type" to "heartbeat",
+            "senderId" to uid,
+            "at" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+        )
+        coupleRef.set(mapOf("signal" to signal), com.google.firebase.firestore.SetOptions.merge())
+        return true
     }
 
     suspend fun loginWithCoupleCredentials(
@@ -597,12 +667,13 @@ class AuthRepository(private val context: Context) {
     suspend fun updateMood(mood: String): Result<Unit> {
         val uid = getCurrentUserId()
         val current = _currentUserState.value ?: User(id = uid)
-        val updated = current.copy(mood = mood)
+        val moodAt = if (mood.isBlank()) 0L else System.currentTimeMillis()
+        val updated = current.copy(mood = mood, moodAt = moodAt)
         _currentUserState.value = updated
         saveLocalUserSession(updated)
         return try {
             userDocument(uid)?.set(
-                mapOf("mood" to mood),
+                mapOf("mood" to mood, "moodAt" to moodAt),
                 com.google.firebase.firestore.SetOptions.merge()
             )
             Result.success(Unit)
@@ -1090,6 +1161,13 @@ class AuthRepository(private val context: Context) {
         }
     }
 
+    /** Stores this phone's push token on the logged-in profile (when the token changes). */
+    fun saveFcmToken(token: String) {
+        val uid = getCurrentUserId()
+        if (uid.isBlank()) return
+        userDocument(uid)?.set(mapOf("fcmToken" to token), com.google.firebase.firestore.SetOptions.merge())
+    }
+
     private fun updateFcmToken(uid: String) {
         try {
             val availability = com.google.android.gms.common.GoogleApiAvailability.getInstance()
@@ -1102,7 +1180,7 @@ class AuthRepository(private val context: Context) {
             val messaging = FirebaseMessaging.getInstance()
             messaging.token
                 .addOnSuccessListener { token ->
-                    userDocument(uid)?.update("fcmToken", token)
+                    userDocument(uid)?.set(mapOf("fcmToken" to token), com.google.firebase.firestore.SetOptions.merge())
                 }
                 .addOnFailureListener { e ->
                     Log.w("AuthRepository", "FCM token registration failed gracefully: ${e.message}")

@@ -18,6 +18,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -106,6 +107,7 @@ fun ChatScreen(
     onQuickDisguise: () -> Unit = {},
     onNavigateToHome: () -> Unit = {},
     onNavigateToProfile: () -> Unit = {},
+    onNavigateToDates: () -> Unit = {},
     onLoggedOut: () -> Unit = {}
 ) {
     val context = LocalContext.current
@@ -138,6 +140,8 @@ fun ChatScreen(
     var showVideoNoteRecorder by remember { mutableStateOf(false) }
     var showHeartbeatTouch by remember { mutableStateOf(false) }
     var showMoodPicker by remember { mutableStateOf(false) }
+    var showScheduleSheet by remember { mutableStateOf(false) }
+    var showScheduledList by remember { mutableStateOf(false) }
     val view = LocalView.current
 
     // Long-press focus view (message lifted over the dimmed, blurred chat)
@@ -379,9 +383,6 @@ fun ChatScreen(
             .filter { it.senderId != currentUserId && it.getTypedStatus() != com.example.data.model.MessageStatus.READ && !it.isDeleted }
             .map { it.id }
     }
-    LaunchedEffect(unreadIds) {
-        viewModel.markMessagesAsRead(unreadIds)
-    }
 
     // Soft tick when a message arrives while the chat is open, and a count on the scroll-down
     // button when scrolled up. Compared with the partner's own earlier timestamps, so a clock
@@ -431,7 +432,8 @@ fun ChatScreen(
         uiState.searchQuery,
         uiState.filterStarredOnly,
         uiState.temporaryClearTimestamp,
-        uiState.showPreviousChats
+        uiState.showPreviousChats,
+        uiState.logicalDay
     ) {
         var list = uiState.messages.filter { !it.isDeleted }
         if (!uiState.showPreviousChats) {
@@ -502,7 +504,7 @@ fun ChatScreen(
                     val index = shown.indexOfFirst { it.id == replyId }
                     if (index >= 0) {
                         scope.launch {
-                            listState.animateScrollToItem(shown.lastIndex - index)
+                            listState.revealMessage(shown.lastIndex - index)
                             highlightedMessageId = replyId
                             kotlinx.coroutines.delay(1400)
                             highlightedMessageId = null
@@ -517,6 +519,116 @@ fun ChatScreen(
     val app = LocalContext.current.applicationContext as com.example.CherishApplication
     val isDisguiseActive by app.securityPreferences.isDisguiseActive.collectAsState()
 
+    // Read ticks only when the chat is really in front of you: not hidden behind Notes or the
+    // stealth curtain, and with the app open. (Arrival while hidden still counts as delivered.)
+    val chatLifecycleState by androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle.currentStateFlow.collectAsState()
+    val isChatInView = !isDisguiseActive && !uiState.isStealthCurtainActive &&
+        chatLifecycleState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)
+    // Moments, one after another when the chat is opened: good morning (7 AM to noon, once a day),
+    // the anniversary / monthly date / 100th day (once that day), and from 10 PM the goodnight card
+    // (once a night, unless a goodnight was already sent tonight)
+    var showGoodMorning by remember { mutableStateOf(false) }
+    var celebration by remember { mutableStateOf<String?>(null) }
+    var showGoodnightCard by remember { mutableStateOf(false) }
+    var showGoodnightStars by remember { mutableStateOf(false) }
+    // Our dates (shared by both phones): the earliest anniversary starts the days counter
+    val ourDates by app.coupleFeaturesRepository.datesFlow.collectAsState()
+    // Reminders also cover both of our birthdays (set on the Love & Us tab)
+    val birthdays by app.authRepository.birthdays.collectAsState()
+    val datesWithBirthdays = remember(ourDates, birthdays, myUser?.id, partner?.id, partnerName) {
+        val titles = buildMap {
+            myUser?.id?.ifBlank { null }?.let { put(it, "Your birthday") }
+            (partner?.id ?: myUser?.partnerId)?.ifBlank { null }?.let { put(it, "$partnerName's birthday") }
+        }
+        com.example.ui.dates.DateReminders.withBirthdays(ourDates, birthdays, titles)
+    }
+    val latestOurDates by rememberUpdatedState(datesWithBirthdays)
+    val togetherSince = remember(ourDates) { com.example.ui.dates.DateReminders.togetherSince(ourDates) }
+    val latestTogetherSince by rememberUpdatedState(togetherSince)
+    var datesReminder by remember { mutableStateOf<List<com.example.ui.dates.UpcomingDate>>(emptyList()) }
+    val sentGoodnightTonight by rememberUpdatedState(
+        uiState.messages.any {
+            it.effect == EFFECT_GOODNIGHT && it.senderId == currentUserId && it.timestamp >= tonightStartMillis()
+        }
+    )
+    LaunchedEffect(isChatInView) {
+        if (!isChatInView) return@LaunchedEffect
+        try {
+            delay(450)
+            if (isGoodMorningDue(context)) {
+                markGoodMorningShown(context)
+                showGoodMorning = true
+                delay(4_500)
+                showGoodMorning = false
+                delay(400)
+            }
+            dueCelebration(context, latestTogetherSince)?.let { title ->
+                markCelebrated(context)
+                celebration = title
+                delay(6_000)
+                celebration = null
+                delay(400)
+            }
+            // Birthdays, anniversaries and our days coming up this week: once a day
+            val reminders = com.example.ui.dates.DateReminders.dueReminder(context, latestOurDates)
+            if (reminders.isNotEmpty()) {
+                com.example.ui.dates.DateReminders.markReminderShown(context)
+                datesReminder = reminders
+                while (datesReminder.isNotEmpty()) delay(250)
+                delay(300)
+            }
+            if (isGoodnightDue(context) && !sentGoodnightTonight) {
+                while (showGoodnightStars) delay(250)
+                markGoodnightShown(context)
+                showGoodnightCard = true
+            }
+        } finally {
+            showGoodMorning = false
+            celebration = null
+        }
+    }
+
+    // The partner said goodnight: the first time it's seen (within the night), the screen softly
+    // dims with stars
+    val latestGoodnight = remember(uiState.messages, currentUserId) {
+        uiState.messages
+            .filter { it.effect == EFFECT_GOODNIGHT && it.senderId != currentUserId && !it.isDeleted }
+            .maxByOrNull { it.timestamp }
+    }
+    LaunchedEffect(latestGoodnight?.id, isChatInView) {
+        val goodnight = latestGoodnight ?: return@LaunchedEffect
+        if (!isChatInView || isGoodnightStarsSeen(context, goodnight.id)) return@LaunchedEffect
+        if (System.currentTimeMillis() - goodnight.timestamp > 10L * 60 * 60 * 1000) return@LaunchedEffect
+        delay(600)
+        while (showGoodMorning || celebration != null || showGoodnightCard) delay(250)
+        markGoodnightStarsSeen(context, goodnight.id)
+        try {
+            showGoodnightStars = true
+            delay(7_000)
+        } finally {
+            showGoodnightStars = false
+        }
+    }
+
+    // A "thinking of you" heartbeat arrived while the chat is open: a heart beats with it
+    var heartbeatPulseKey by remember { mutableStateOf(0L) }
+    LaunchedEffect(isChatInView) {
+        if (!isChatInView) return@LaunchedEffect
+        com.example.notifications.ThinkingOfYou.received.collect { heartbeatPulseKey = it }
+    }
+    // The heart button's little "sent" float
+    val heartSent = remember { Animatable(0f) }
+
+    // The partner is stressed (a fresh mood): offer to send a hug, once per mood
+    val partnerMoodAt = partner?.moodAt ?: 0L
+    var hugNudgeHandled by remember { mutableStateOf(hugNudgeHandledFor(context)) }
+    val showHugNudge = isChatInView && isStressedMood(partner?.mood) && partnerMoodAt > 0L &&
+        System.currentTimeMillis() - partnerMoodAt < MOOD_FRESH_MS && hugNudgeHandled != partnerMoodAt
+
+    LaunchedEffect(unreadIds, isChatInView) {
+        if (isChatInView) viewModel.markMessagesAsRead(unreadIds)
+    }
+
     // Behind Notes nothing of the chat stays open: sheets, dialogs, the recorder, selection, the
     // keyboard (viewers, recording and playback are stopped in ChatViewModel.onSecretAppHidden)
     LaunchedEffect(isDisguiseActive) {
@@ -526,6 +638,11 @@ fun ChatScreen(
         showChatMenu = false
         showHeartbeatTouch = false
         showMoodPicker = false
+        showGoodnightCard = false
+        showGoodnightStars = false
+        datesReminder = emptyList()
+        showScheduleSheet = false
+        showScheduledList = false
         showClearChatDialog = false
         showMultiDeleteConfirmDialog = false
         showDeleteConfirmDialog = null
@@ -626,7 +743,7 @@ fun ChatScreen(
             val reversedMessages = displayedMessages.reversed()
             val targetIndex = reversedMessages.indexOfFirst { it.id == targetId }
             if (targetIndex >= 0) {
-                listState.animateScrollToItem(index = targetIndex, scrollOffset = -150)
+                listState.revealMessage(targetIndex)
                 highlightedMessageId = targetId
                 kotlinx.coroutines.delay(2500)
                 highlightedMessageId = null
@@ -823,7 +940,10 @@ fun ChatScreen(
                                         )
 
                                         // Partner Mood Pill
-                                        val partnerMood = partner?.mood
+                                        val partnerMood = partner?.mood?.takeIf {
+                                            val moodAt = partner?.moodAt ?: 0L
+                                            moodAt == 0L || System.currentTimeMillis() - moodAt < MOOD_FRESH_MS
+                                        }
                                         if (!partnerMood.isNullOrBlank()) {
                                             Surface(
                                                 shape = RoundedCornerShape(10.dp),
@@ -906,12 +1026,15 @@ fun ChatScreen(
                                             }
                                         }
                                     }
+                                    val daysLabel = remember(togetherSince, uiState.logicalDay) { daysTogetherLabel(togetherSince) }
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
                                     Text(
                                         text = statusText,
                                         fontSize = 12.sp,
                                         lineHeight = 14.sp,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.weight(1f, fill = false),
                                         color = if (partnerHasCheckAfter) {
                                             Color(0xFF3B82F6)
                                         } else if (uiState.isPartnerRecordingAudio || uiState.isPartnerTyping || isPartnerOnline) {
@@ -921,6 +1044,10 @@ fun ChatScreen(
                                         },
                                         fontWeight = FontWeight.Normal
                                     )
+                                    if (daysLabel != null) {
+                                        DaysTogetherText(label = daysLabel, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                    }
                                 }
                             }
                         }
@@ -992,18 +1119,59 @@ fun ChatScreen(
                                 )
                             }
 
-                            // Heartbeat Touch Icon Button
-                            IconButton(
-                                onClick = { showHeartbeatTouch = true },
+                            // Heart: a tap sends "thinking of you" (a heartbeat on the partner's phone,
+                            // if they're using it right now); a long press opens Heartbeat Touch
+                            Box(
+                                contentAlignment = Alignment.Center,
                                 modifier = Modifier
                                     .size(40.dp)
+                                    .clip(CircleShape)
+                                    .combinedClickable(
+                                        onClick = {
+                                            if (viewModel.sendThinkingOfYou()) {
+                                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                                scope.launch {
+                                                    heartSent.snapTo(0f)
+                                                    heartSent.animateTo(1f, tween(1_000, easing = FastOutSlowInEasing))
+                                                    heartSent.snapTo(0f)
+                                                }
+                                            }
+                                        },
+                                        onLongClickLabel = "Heartbeat Touch",
+                                        onLongClick = { showHeartbeatTouch = true }
+                                    )
                                     .testTag("chat_heartbeat_touch_button")
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Favorite,
-                                    contentDescription = "Heartbeat Touch",
+                                    contentDescription = "Thinking of you",
                                     tint = if (uiState.isPartnerHeartTouching) HeartRed else iconTint,
-                                    modifier = Modifier.size(23.dp)
+                                    modifier = Modifier
+                                        .size(23.dp)
+                                        .graphicsLayer {
+                                            val t = heartSent.value
+                                            val bump = when {
+                                                t <= 0f || t >= 0.3f -> 0f
+                                                t < 0.12f -> t / 0.12f
+                                                else -> (0.3f - t) / 0.18f
+                                            } * 0.3f
+                                            scaleX = 1f + bump
+                                            scaleY = 1f + bump
+                                        }
+                                )
+                                // A small heart floats up and fades: sent
+                                Icon(
+                                    imageVector = Icons.Default.Favorite,
+                                    contentDescription = null,
+                                    tint = HeartRed,
+                                    modifier = Modifier
+                                        .size(12.dp)
+                                        .graphicsLayer {
+                                            val t = heartSent.value
+                                            alpha = if (t <= 0f || t >= 1f) 0f else 1f - t
+                                            translationY = -t * 26.dp.toPx()
+                                            translationX = kotlin.math.sin(t * 9f) * 3.dp.toPx()
+                                        }
                                 )
                             }
                         }
@@ -1122,6 +1290,7 @@ fun ChatScreen(
                     onCancelVoiceRecord = { viewModel.cancelVoiceRecording() },
                     onTakePhoto = triggerCameraSnap,
                     onPickAttachment = { showAttachmentSheet = true },
+                    onScheduleText = { if (composerText.isNotBlank()) showScheduleSheet = true },
                     onRecordVideoNote = {
                         val missing = listOf(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO).filter {
                             ContextCompat.checkSelfPermission(context, it) != PackageManager.PERMISSION_GRANTED
@@ -1241,7 +1410,7 @@ fun ChatScreen(
                             val index = displayedMessages.indexOfFirst { it.id == pinned.id }
                             if (index >= 0) {
                                 scope.launch {
-                                    listState.animateScrollToItem(displayedMessages.lastIndex - index)
+                                    listState.revealMessage(displayedMessages.lastIndex - index)
                                     highlightedMessageId = pinned.id
                                     delay(1400)
                                     highlightedMessageId = null
@@ -1311,7 +1480,7 @@ fun ChatScreen(
                         if (!canLoadMore) return@derivedStateOf false
                         val totalItems = listState.layoutInfo.totalItemsCount
                         val lastVisibleItem = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
-                        totalItems == 0 || lastVisibleItem >= totalItems - 4
+                        totalItems == 0 || lastVisibleItem >= totalItems - HISTORY_PREFETCH_ITEMS
                     }
                 }
                 LaunchedEffect(shouldLoadMore) {
@@ -1343,10 +1512,6 @@ fun ChatScreen(
                     ) { index, message ->
                         val isFromMe = message.senderId == currentUserId
                         val isFirstOfDay = index == reversedMessages.lastIndex || !isSameDay(reversedMessages[index + 1].timestamp, message.timestamp)
-                        // Messages someone sends in a row (same day, minutes apart) form one run
-                        val groupedWithPrevious = !isFirstOfDay && inSameRun(reversedMessages[index + 1], message)
-                        val newer = reversedMessages.getOrNull(index - 1)
-                        val groupedWithNext = newer != null && isSameDay(message.timestamp, newer.timestamp) && inSameRun(message, newer)
                         // A message that arrives while the chat is open lands with a spring
                         val isFreshArrival = remember(message.id) {
                             index <= 1 && initialSnapshotTaken[0] &&
@@ -1356,8 +1521,6 @@ fun ChatScreen(
                             message = message,
                             isFromMe = isFromMe,
                             isFirstOfDay = isFirstOfDay,
-                            groupedWithPrevious = groupedWithPrevious,
-                            groupedWithNext = groupedWithNext,
                             isFreshArrival = isFreshArrival,
                             isPrivate = uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE,
                             isDark = isDark,
@@ -1396,7 +1559,7 @@ fun ChatScreen(
                             ) {
                                 Surface(
                                     shape = RoundedCornerShape(20.dp),
-                                    color = if (isDark) Color(0xFF1E2430).copy(alpha = 0.95f) else Color.White.copy(alpha = 0.95f),
+                                    color = if (isDark) darkTone(Color(0xFF1E2430)).copy(alpha = 0.95f) else Color.White.copy(alpha = 0.95f),
                                     border = BorderStroke(
                                         1.dp,
                                         if (isDark) Color.White.copy(alpha = 0.12f) else Color.Black.copy(alpha = 0.08f)
@@ -1539,8 +1702,8 @@ fun ChatScreen(
                                 }
                             }
                         },
-                        containerColor = if (isPrivate) (if (isDark) Color(0xFF2E2F33) else Color(0xFFE5E7EB)) else MaterialTheme.colorScheme.primaryContainer,
-                        contentColor = if (isPrivate) (if (isDark) Color(0xFFECECEC) else Color(0xFF1F2937)) else MaterialTheme.colorScheme.onPrimaryContainer,
+                        containerColor = if (isPrivate) (if (isDark) darkTone(Color(0xFF2E2F33)) else Color(0xFFE5E7EB)) else MaterialTheme.colorScheme.primaryContainer,
+                        contentColor = if (isPrivate) (if (isDark) darkTone(Color(0xFFECECEC)) else Color(0xFF1F2937)) else MaterialTheme.colorScheme.onPrimaryContainer,
                         shape = CircleShape
                     ) {
                         Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Scroll to bottom")
@@ -1562,7 +1725,7 @@ fun ChatScreen(
                                 }
                                 .defaultMinSize(minWidth = 18.dp, minHeight = 18.dp)
                                 .background(
-                                    if (isPrivate) (if (isDark) Color(0xFFECECEC) else Color(0xFF1F2937)) else HeartRed,
+                                    if (isPrivate) (if (isDark) darkTone(Color(0xFFECECEC)) else Color(0xFF1F2937)) else HeartRed,
                                     CircleShape
                                 )
                                 .padding(horizontal = 4.dp)
@@ -1593,6 +1756,16 @@ fun ChatScreen(
                     .onSizeChanged { bottomOverlayHeightPx = it.height }
             ) {
                 val isPrivate = uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE
+                val scheduled by viewModel.scheduledMessages.collectAsState()
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = scheduled.isNotEmpty(),
+                    enter = slideInVertically(spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessMediumLow)) { it / 2 } + fadeIn(tween(160)),
+                    exit = slideOutVertically(tween(160)) { it / 2 } + fadeOut(tween(120))
+                ) {
+                    scheduled.firstOrNull()?.let { next ->
+                        ScheduledMessagesPill(next = next, count = scheduled.size, onClick = { showScheduledList = true })
+                    }
+                }
                 val failedUpload = uiState.failedUpload
                 androidx.compose.animation.AnimatedVisibility(
                     visible = uiState.isUploadingMedia || failedUpload != null,
@@ -1665,6 +1838,96 @@ fun ChatScreen(
         }
     }
     } // Box: wallpaper + Scaffold
+
+    androidx.compose.animation.AnimatedVisibility(
+        visible = showGoodMorning,
+        enter = fadeIn(tween(350)),
+        exit = fadeOut(tween(500))
+    ) {
+        GoodMorningGreeting(
+            myName = myUser?.displayName?.ifBlank { null } ?: "love",
+            partnerName = partnerName,
+            onDismiss = { showGoodMorning = false }
+        )
+    }
+
+    androidx.compose.animation.AnimatedVisibility(
+        visible = celebration != null,
+        enter = fadeIn(tween(350)),
+        exit = fadeOut(tween(600))
+    ) {
+        // Kept while fading out
+        val title = remember { celebration } ?: return@AnimatedVisibility
+        LoveCelebration(
+            title = "$title \uD83D\uDC9B",
+            subtitle = LoveDates.formatLong(togetherSince)?.let { "Together since $it" },
+            onDismiss = { celebration = null }
+        )
+    }
+
+    androidx.compose.animation.AnimatedVisibility(
+        visible = datesReminder.isNotEmpty(),
+        enter = fadeIn(tween(300)),
+        exit = fadeOut(tween(300))
+    ) {
+        // Kept while fading out
+        val shown = remember { datesReminder }
+        com.example.ui.dates.DatesReminderCard(
+            reminders = shown,
+            onSeeAll = {
+                datesReminder = emptyList()
+                onNavigateToDates()
+            },
+            onDismiss = { datesReminder = emptyList() }
+        )
+    }
+
+    androidx.compose.animation.AnimatedVisibility(
+        visible = showGoodnightCard,
+        enter = fadeIn(tween(400)),
+        exit = fadeOut(tween(500))
+    ) {
+        GoodnightCard(
+            partnerName = partnerName,
+            onSendGoodnight = { viewModel.sendGoodnight() },
+            onDismiss = { showGoodnightCard = false }
+        )
+    }
+
+    androidx.compose.animation.AnimatedVisibility(
+        visible = showGoodnightStars,
+        enter = fadeIn(tween(900)),
+        exit = fadeOut(tween(1_200))
+    ) {
+        GoodnightStarsOverlay(partnerName = partnerName, onDismiss = { showGoodnightStars = false })
+    }
+
+    if (heartbeatPulseKey != 0L) {
+        key(heartbeatPulseKey) {
+            HeartbeatReceivedPulse(onDone = { heartbeatPulseKey = 0L })
+        }
+    }
+
+    androidx.compose.animation.AnimatedVisibility(
+        visible = showHugNudge,
+        enter = fadeIn(tween(300)) + slideInVertically(tween(350)) { -it / 2 },
+        exit = fadeOut(tween(250)) + slideOutVertically(tween(250)) { -it / 2 }
+    ) {
+        HugNudgeCard(
+            partnerName = partnerName,
+            mood = partner?.mood.orEmpty(),
+            onSendHug = {
+                viewModel.sendHug()
+                viewModel.sendThinkingOfYou()
+                markHugNudgeHandled(context, partnerMoodAt)
+                hugNudgeHandled = partnerMoodAt
+            },
+            onDismiss = {
+                markHugNudgeHandled(context, partnerMoodAt)
+                hugNudgeHandled = partnerMoodAt
+            }
+        )
+    }
 
     // Long-press focus view over the whole chat; "+" opens the full sheet below
     focusedMessage?.let { focused ->
@@ -1768,6 +2031,31 @@ fun ChatScreen(
             onSaveToMemories = {
                 Toast.makeText(context, "Saved to Our Memories ❤️", Toast.LENGTH_SHORT).show()
             }
+        )
+    }
+
+    // Send later: pick when (long-press on send)
+    if (showScheduleSheet) {
+        ScheduleMessageDialog(
+            text = composerText,
+            onSchedule = { sendAt ->
+                viewModel.scheduleMessage(composerText, sendAt)
+                composerText = ""
+                viewModel.onTypingChanged(false)
+                showScheduleSheet = false
+                Toast.makeText(context, "Scheduled for " + formatScheduleTime(sendAt), Toast.LENGTH_SHORT).show()
+            },
+            onDismiss = { showScheduleSheet = false }
+        )
+    }
+
+    // Scheduled messages waiting to go out, each can be cancelled
+    if (showScheduledList) {
+        val scheduled by viewModel.scheduledMessages.collectAsState()
+        ScheduledMessagesDialog(
+            messages = scheduled,
+            onCancel = { id -> viewModel.cancelScheduledMessage(id) },
+            onDismiss = { showScheduledList = false }
         )
     }
 
@@ -1961,8 +2249,8 @@ fun ChatScreen(
             openFrom = openFrom,
             onShowInChat = { clickedUrl ->
                 val targetMsg = uiState.messages.find { it.mediaUrl == clickedUrl || it.getAllMediaUrls().contains(clickedUrl) }
-                if (targetMsg != null) {
-                    viewModel.navigateToMessageInChat(targetMsg.id)
+                if (targetMsg != null && !viewModel.navigateToMessageInChat(targetMsg.id)) {
+                    Toast.makeText(context, "Older chat is hidden. Use Recover All in settings to see it.", Toast.LENGTH_LONG).show()
                 }
             },
             onDeleteMedia = { clickedUrl ->
@@ -2172,13 +2460,6 @@ private fun ChatSelectionTopBar(
     }
 }
 
-/** How far apart two messages can be and still join into one run of bubbles. */
-private const val MESSAGE_RUN_WINDOW_MS = 3 * 60 * 1000L
-
-/** Whether [newer] continues [older]'s run: same sender, sent within a few minutes. */
-private fun inSameRun(older: Message, newer: Message): Boolean =
-    older.senderId == newer.senderId && newer.timestamp - older.timestamp in 0..MESSAGE_RUN_WINDOW_MS
-
 /**
  * A photo/video/voice upload in progress (progress ring, cancel), or one that didn't go out
  * (Retry, dismiss). Shown above the message box.
@@ -2194,10 +2475,10 @@ private fun UploadStatusPill(
     onDismiss: () -> Unit
 ) {
     val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
-    val accent = if (isPrivateMode) (if (isDark) Color(0xFF9CA3AF) else Color(0xFF6B7280)) else MaterialTheme.colorScheme.primary
+    val accent = if (isPrivateMode) (if (isDark) darkTone(Color(0xFF9CA3AF)) else Color(0xFF6B7280)) else MaterialTheme.colorScheme.primary
     Surface(
         shape = RoundedCornerShape(20.dp),
-        color = if (isDark) Color(0xFF263049) else Color.White,
+        color = if (isDark) darkSurface(Color(0xFF263049), Color(0xFF181818)) else Color.White,
         border = BorderStroke(1.dp, accent.copy(alpha = if (isDark) 0.35f else 0.22f)),
         shadowElevation = 6.dp
     ) {
@@ -2247,6 +2528,280 @@ private fun UploadStatusPill(
     }
 }
 
+private const val GOOD_MORNING_FROM_HOUR = 7
+private const val GOOD_MORNING_UNTIL_HOUR = 12
+
+private fun greetingPrefs(context: android.content.Context) =
+    context.getSharedPreferences("cherish_greetings", android.content.Context.MODE_PRIVATE)
+
+private fun todayKey(): String =
+    java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date())
+
+/** Morning (7 AM to noon) and today's greeting hasn't been shown yet. */
+private fun isGoodMorningDue(context: android.content.Context): Boolean {
+    val hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
+    if (hour < GOOD_MORNING_FROM_HOUR || hour >= GOOD_MORNING_UNTIL_HOUR) return false
+    return greetingPrefs(context).getString("good_morning_shown", null) != todayKey()
+}
+
+private fun markGoodMorningShown(context: android.content.Context) {
+    greetingPrefs(context).edit().putString("good_morning_shown", todayKey()).apply()
+}
+
+/** A sunrise card over the chat: the sun rises, "Good morning, <name>", the date, a line for two. */
+@Composable
+private fun GoodMorningGreeting(myName: String, partnerName: String, onDismiss: () -> Unit) {
+    val rise = remember { Animatable(0f) }
+    val cardIn = remember { Animatable(0.86f) }
+    LaunchedEffect(Unit) {
+        launch { cardIn.animateTo(1f, spring(dampingRatio = 0.62f, stiffness = 380f)) }
+        rise.animateTo(1f, tween(1400, easing = FastOutSlowInEasing))
+    }
+    val glow = rememberInfiniteTransition(label = "sun_glow")
+    val glowScale by glow.animateFloat(
+        initialValue = 0.9f,
+        targetValue = 1.12f,
+        animationSpec = infiniteRepeatable(tween(1600, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+        label = "sun_glow_scale"
+    )
+    val date = remember {
+        java.text.SimpleDateFormat("EEEE, MMMM d", java.util.Locale.getDefault()).format(java.util.Date())
+    }
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.3f))
+            .pointerInput(Unit) { detectTapGestures { onDismiss() } }
+            .testTag("good_morning_greeting"),
+        contentAlignment = Alignment.Center
+    ) {
+        Box(
+            modifier = Modifier
+                .padding(horizontal = 32.dp)
+                .fillMaxWidth()
+                .graphicsLayer {
+                    scaleX = cardIn.value
+                    scaleY = cardIn.value
+                }
+                .shadow(18.dp, RoundedCornerShape(28.dp))
+                .clip(RoundedCornerShape(28.dp))
+                .background(
+                    Brush.verticalGradient(
+                        listOf(Color(0xFFFFE6B8), Color(0xFFFFC2A1), Color(0xFFFF9EB5))
+                    )
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.padding(horizontal = 24.dp, vertical = 26.dp)
+            ) {
+                // The sun rising behind a soft glow
+                Box(modifier = Modifier.size(110.dp), contentAlignment = Alignment.Center) {
+                    Box(
+                        modifier = Modifier
+                            .size(92.dp)
+                            .graphicsLayer {
+                                scaleX = glowScale
+                                scaleY = glowScale
+                                alpha = rise.value * 0.55f
+                            }
+                            .background(
+                                Brush.radialGradient(listOf(Color(0xFFFFF3C4), Color(0x00FFF3C4))),
+                                CircleShape
+                            )
+                    )
+                    Text(
+                        text = "\u2600\uFE0F",
+                        fontSize = 58.sp,
+                        modifier = Modifier.graphicsLayer {
+                            translationY = (1f - rise.value) * 46.dp.toPx()
+                            alpha = rise.value.coerceIn(0f, 1f)
+                            rotationZ = rise.value * 25f
+                        }
+                    )
+                }
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = "Good morning, $myName",
+                    fontSize = 24.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF4A2A2E),
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(text = date, fontSize = 13.sp, color = Color(0xFF7A4A4E))
+                Spacer(modifier = Modifier.height(14.dp))
+                Text(
+                    text = "A new day with $partnerName \uD83D\uDC9B",
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = Color(0xFF5E3438),
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                )
+            }
+        }
+    }
+}
+
+/** The next [hour]:[minute] from now (today if it's still ahead, else tomorrow). */
+private fun nextTimeAt(hour: Int, minute: Int = 0): Long {
+    val cal = java.util.Calendar.getInstance().apply {
+        set(java.util.Calendar.HOUR_OF_DAY, hour)
+        set(java.util.Calendar.MINUTE, minute)
+        set(java.util.Calendar.SECOND, 0)
+        set(java.util.Calendar.MILLISECOND, 0)
+    }
+    if (cal.timeInMillis <= System.currentTimeMillis() + 60_000L) cal.add(java.util.Calendar.DAY_OF_YEAR, 1)
+    return cal.timeInMillis
+}
+
+/** "Today 10:00 PM", "Tomorrow 7:00 AM" or "Oct 12, 7:00 AM". */
+private fun formatScheduleTime(at: Long): String {
+    val time = java.text.SimpleDateFormat("h:mm a", java.util.Locale.getDefault()).format(java.util.Date(at))
+    val day = java.util.Calendar.getInstance().apply { timeInMillis = at }
+    val today = java.util.Calendar.getInstance()
+    val tomorrow = java.util.Calendar.getInstance().apply { add(java.util.Calendar.DAY_OF_YEAR, 1) }
+    fun sameDay(a: java.util.Calendar, b: java.util.Calendar) =
+        a.get(java.util.Calendar.YEAR) == b.get(java.util.Calendar.YEAR) && a.get(java.util.Calendar.DAY_OF_YEAR) == b.get(java.util.Calendar.DAY_OF_YEAR)
+    return when {
+        sameDay(day, today) -> "Today $time"
+        sameDay(day, tomorrow) -> "Tomorrow $time"
+        else -> java.text.SimpleDateFormat("MMM d", java.util.Locale.getDefault()).format(java.util.Date(at)) + ", $time"
+    }
+}
+
+/** Pick when to send [text]: quick choices, or any time from the clock. */
+@Composable
+private fun ScheduleMessageDialog(text: String, onSchedule: (Long) -> Unit, onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    val choices = remember {
+        listOf(
+            nextTimeAt(7),
+            nextTimeAt(22),
+            System.currentTimeMillis() + 60 * 60 * 1000L
+        )
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Send later", fontWeight = FontWeight.Bold) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    text = "\u201C" + text.trim() + "\u201D",
+                    maxLines = 2,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 13.sp
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                choices.forEachIndexed { i, at ->
+                    OutlinedButton(
+                        onClick = { onSchedule(at) },
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(if (i == 2) "In 1 hour" else formatScheduleTime(at))
+                    }
+                }
+                OutlinedButton(
+                    onClick = {
+                        val now = java.util.Calendar.getInstance()
+                        android.app.TimePickerDialog(
+                            context,
+                            { _, hour, minute -> onSchedule(nextTimeAt(hour, minute)) },
+                            now.get(java.util.Calendar.HOUR_OF_DAY),
+                            now.get(java.util.Calendar.MINUTE),
+                            false
+                        ).show()
+                    },
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(Icons.Default.Schedule, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Pick a time")
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+    )
+}
+
+/** Above the message box: the next scheduled message (and how many are waiting). */
+@Composable
+private fun ScheduledMessagesPill(next: com.example.notifications.ScheduledMessage, count: Int, onClick: () -> Unit) {
+    val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+    Surface(
+        shape = RoundedCornerShape(20.dp),
+        color = if (isDark) darkSurface(Color(0xFF263049), Color(0xFF181818)) else Color.White,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = if (isDark) 0.35f else 0.22f)),
+        shadowElevation = 6.dp,
+        modifier = Modifier.clickable(onClick = onClick).testTag("scheduled_messages_pill")
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+        ) {
+            Icon(Icons.Default.Schedule, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = (if (count > 1) "$count scheduled \u00B7 next " else "Scheduled \u00B7 ") + formatScheduleTime(next.sendAt),
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1
+            )
+        }
+    }
+}
+
+/** The scheduled messages waiting to go out, each with a cancel button. */
+@Composable
+private fun ScheduledMessagesDialog(
+    messages: List<com.example.notifications.ScheduledMessage>,
+    onCancel: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    LaunchedEffect(messages.isEmpty()) { if (messages.isEmpty()) onDismiss() }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Scheduled messages", fontWeight = FontWeight.Bold) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                messages.forEach { message ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(formatScheduleTime(message.sendAt), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                            Text(message.text, fontSize = 13.sp, maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                        }
+                        IconButton(onClick = { onCancel(message.id) }) {
+                            Icon(Icons.Default.Close, contentDescription = "Cancel scheduled message", tint = MaterialTheme.colorScheme.error)
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Done") } }
+    )
+}
+
+/**
+ * Scrolls the (bottom-up) chat list to a message and lifts it about a third of the way up the
+ * screen, so a jumped-to message isn't left sitting under the typing bar.
+ */
+private suspend fun androidx.compose.foundation.lazy.LazyListState.revealMessage(index: Int) {
+    val viewport = layoutInfo.viewportEndOffset - layoutInfo.viewportStartOffset
+    animateScrollToItem(index, scrollOffset = -(viewport * 0.3f).toInt())
+}
+
+/**
+ * Older chat starts loading this many messages before the top, so the next page is usually there
+ * before the user reaches it and scrolling up doesn't stall.
+ */
+private const val HISTORY_PREFETCH_ITEMS = 15
+
 /**
  * Everything a message row can ask of the chat screen. One instance per screen, so rows receive
  * the same object every time instead of fresh lambdas.
@@ -2275,8 +2830,6 @@ private fun ChatMessageRow(
     message: Message,
     isFromMe: Boolean,
     isFirstOfDay: Boolean,
-    groupedWithPrevious: Boolean,
-    groupedWithNext: Boolean,
     isFreshArrival: Boolean,
     isPrivate: Boolean,
     isDark: Boolean,
@@ -2291,8 +2844,7 @@ private fun ChatMessageRow(
     actions: ChatRowActions,
     modifier: Modifier = Modifier
 ) {
-    // A little more room between runs than between the bubbles of one run
-    Column(modifier = modifier.fillMaxWidth().padding(top = if (groupedWithPrevious) 0.dp else 6.dp)) {
+    Column(modifier = modifier.fillMaxWidth()) {
         if (isFirstOfDay) {
             val dateSep = formatDateSeparator(message.timestamp)
             if (dateSep.isNotEmpty()) {
@@ -2306,7 +2858,7 @@ private fun ChatMessageRow(
         // Read marking is handled in the batched LaunchedEffect above the Scaffold.
         // Do NOT put Firestore writes inside LazyColumn items — they fire on every scroll.
 
-        val selectionAccent = if (isPrivate) (if (isDark) Color(0xFF9CA3AF) else Color(0xFF6B7280)) else RoseGoldPrimary
+        val selectionAccent = if (isPrivate) (if (isDark) darkTone(Color(0xFF9CA3AF)) else Color(0xFF6B7280)) else RoseGoldPrimary
 
         // A message that arrives while the chat is open lands with a spring: sent ones rise from
         // the composer, received ones slide in from the left
@@ -2315,21 +2867,23 @@ private fun ChatMessageRow(
             if (isFreshArrival) landing.animateTo(1f, spring(dampingRatio = 0.62f, stiffness = 420f))
         }
 
-        // Jump-to-message highlight: a quick bump, and a glow that fades once released
+        // Jump-to-message highlight: a soft wash of colour across the row (no outlines) and a
+        // quick bump of the bubble; the wash fades slowly once released
         val glow = remember(message.id) { Animatable(0f) }
         val bump = remember(message.id) { Animatable(0f) }
         LaunchedEffect(isHighlighted) {
             if (isHighlighted) {
                 launch {
+                    delay(120)
                     bump.animateTo(1f, spring(dampingRatio = 0.5f, stiffness = 900f))
                     bump.animateTo(0f, spring(dampingRatio = 0.45f, stiffness = 300f))
                 }
-                glow.animateTo(1f, tween(200))
+                glow.animateTo(1f, tween(260, easing = FastOutSlowInEasing))
             } else {
-                glow.animateTo(0f, tween(650))
+                glow.animateTo(0f, tween(900, easing = FastOutSlowInEasing))
             }
         }
-        val glowColor = if (isPrivate) (if (isDark) Color(0xFF6B7280) else Color(0xFF9CA3AF)) else RoseGoldPrimary
+        val glowColor = if (isPrivate) (if (isDark) darkTone(Color(0xFF6B7280)) else Color(0xFF9CA3AF)) else RoseGoldPrimary
         val rowTint by animateColorAsState(
             targetValue = if (isSelected) selectionAccent.copy(alpha = if (isDark) 0.22f else 0.14f) else Color.Transparent,
             animationSpec = tween(160),
@@ -2345,7 +2899,22 @@ private fun ChatMessageRow(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .drawBehind { if (rowTint.alpha > 0f) drawRect(rowTint) }
+                .drawBehind {
+                    if (rowTint.alpha > 0f) drawRect(rowTint)
+                    val g = glow.value
+                    if (g > 0f) {
+                        // Edge to edge, soft at the top and bottom
+                        val wash = glowColor.copy(alpha = (if (isDark) 0.26f else 0.18f) * g)
+                        drawRect(
+                            Brush.verticalGradient(
+                                0f to Color.Transparent,
+                                0.22f to wash,
+                                0.78f to wash,
+                                1f to Color.Transparent
+                            )
+                        )
+                    }
+                }
                 .then(
                     if (isFreshArrival) {
                         Modifier.graphicsLayer {
@@ -2386,14 +2955,6 @@ private fun ChatMessageRow(
                             scaleY = grow
                             transformOrigin = TransformOrigin(if (isFromMe) 1f else 0f, 0.5f)
                         }
-                        .drawBehind {
-                            val g = glow.value
-                            if (g > 0f) {
-                                val corner = CornerRadius(16.dp.toPx())
-                                drawRoundRect(glowColor.copy(alpha = 0.16f * g), cornerRadius = corner)
-                                drawRoundRect(glowColor.copy(alpha = g), cornerRadius = corner, style = Stroke(2.dp.toPx()))
-                            }
-                        }
                 ) {
                     MessageBubble(
                         message = message,
@@ -2414,9 +2975,7 @@ private fun ChatMessageRow(
                         isHighlighted = isHighlighted,
                         onReplyQuoteClick = actions.jumpToReply,
                         isPrivateMode = isPrivate,
-                        senderPhotoUrl = senderPhotoUrl,
-                        groupedWithPrevious = groupedWithPrevious,
-                        groupedWithNext = groupedWithNext
+                        senderPhotoUrl = senderPhotoUrl
                     )
                 }
             }
@@ -2747,8 +3306,8 @@ private fun PartnerTypingBubble(
             Spacer(modifier = Modifier.width(6.dp))
             Surface(
                 shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomEnd = 16.dp, bottomStart = 4.dp),
-                color = if (isDark) Color(0xFF1E2638) else Color(0xFFF1F5FB),
-                border = BorderStroke(0.5.dp, if (isDark) Color(0xFF2A364F) else Color(0xFFE2E8F0)),
+                color = if (isDark) darkSurface(Color(0xFF1E2638)) else Color(0xFFF1F5FB),
+                border = BorderStroke(0.5.dp, if (isDark) darkSurface(Color(0xFF2A364F), Color(0xFF262626)) else Color(0xFFE2E8F0)),
                 shadowElevation = 0.8.dp
             ) {
                 Box(
@@ -2758,7 +3317,7 @@ private fun PartnerTypingBubble(
                     if (isRecording) {
                         RecordingBars(color = HeartRed)
                     } else {
-                        BouncingDots(color = if (isDark) Color(0xFFCBD5E1) else Color(0xFF64748B))
+                        BouncingDots(color = if (isDark) darkTone(Color(0xFFCBD5E1)) else Color(0xFF64748B))
                     }
                 }
             }
@@ -2865,9 +3424,9 @@ fun DateSeparatorBadge(
         horizontalArrangement = Arrangement.Center
     ) {
         val lineColor = if (isPrivateMode) {
-            if (isDark) Color(0xFF2A2B30) else Color(0xFFE5E7EB)
+            if (isDark) darkTone(Color(0xFF2A2B30)) else Color(0xFFE5E7EB)
         } else {
-            if (isDark) Color(0xFF334155).copy(alpha = 0.5f) else Color(0xFFCBD5E1).copy(alpha = 0.7f)
+            if (isDark) darkTone(Color(0xFF334155)).copy(alpha = 0.5f) else Color(0xFFCBD5E1).copy(alpha = 0.7f)
         }
 
         Box(
@@ -2913,16 +3472,16 @@ fun DateChip(
     Surface(
         shape = RoundedCornerShape(12.dp),
         color = if (isPrivateMode) {
-            if (isDark) Color(0xFF232428).copy(alpha = 0.95f) else Color(0xFFF3F4F6)
+            if (isDark) darkTone(Color(0xFF232428)).copy(alpha = 0.95f) else Color(0xFFF3F4F6)
         } else {
-            if (isDark) Color(0xFF1E293B).copy(alpha = 0.92f) else Color(0xFFF1F5F9).copy(alpha = 0.95f)
+            if (isDark) darkSurface(Color(0xFF1E293B)).copy(alpha = 0.92f) else Color(0xFFF1F5F9).copy(alpha = 0.95f)
         },
         border = BorderStroke(
             0.8.dp,
             if (isPrivateMode) {
-                if (isDark) Color(0xFF374151).copy(alpha = 0.6f) else Color(0xFFE5E7EB)
+                if (isDark) darkTone(Color(0xFF374151)).copy(alpha = 0.6f) else Color(0xFFE5E7EB)
             } else {
-                if (isDark) Color(0xFF475569).copy(alpha = 0.4f) else Color(0xFFE2E8F0)
+                if (isDark) darkTone(Color(0xFF475569)).copy(alpha = 0.4f) else Color(0xFFE2E8F0)
             }
         ),
         shadowElevation = shadowElevation,
@@ -2933,9 +3492,9 @@ fun DateChip(
             fontSize = 11.5.sp,
             fontWeight = FontWeight.SemiBold,
             color = if (isPrivateMode) {
-                if (isDark) Color(0xFF9CA3AF) else Color(0xFF4B5563)
+                if (isDark) darkTone(Color(0xFF9CA3AF)) else Color(0xFF4B5563)
             } else {
-                if (isDark) Color(0xFF94A3B8) else Color(0xFF475569)
+                if (isDark) darkTone(Color(0xFF94A3B8)) else Color(0xFF475569)
             },
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
         )
@@ -2957,16 +3516,16 @@ fun StrictlyTwoPersonBanner(
         Surface(
             shape = RoundedCornerShape(14.dp),
             color = if (isPrivateMode) {
-                if (isDark) Color(0xFF1E2024).copy(alpha = 0.90f) else Color(0xFFF3F4F6)
+                if (isDark) darkTone(Color(0xFF1E2024)).copy(alpha = 0.90f) else Color(0xFFF3F4F6)
             } else {
-                if (isDark) Color(0xFF152033).copy(alpha = 0.92f) else Color(0xFFEFF6FF)
+                if (isDark) darkTone(Color(0xFF152033)).copy(alpha = 0.92f) else Color(0xFFEFF6FF)
             },
             border = BorderStroke(
                 1.dp,
                 if (isPrivateMode) {
-                    if (isDark) Color(0xFF33353C) else Color(0xFFE5E7EB)
+                    if (isDark) darkTone(Color(0xFF33353C)) else Color(0xFFE5E7EB)
                 } else {
-                    if (isDark) Color(0xFF2563EB).copy(alpha = 0.35f) else Color(0xFF93C5FD).copy(alpha = 0.55f)
+                    if (isDark) darkTone(Color(0xFF2563EB)).copy(alpha = 0.35f) else Color(0xFF93C5FD).copy(alpha = 0.55f)
                 }
             )
         ) {
@@ -2979,9 +3538,9 @@ fun StrictlyTwoPersonBanner(
                     imageVector = Icons.Default.Lock,
                     contentDescription = null,
                     tint = if (isPrivateMode) {
-                        if (isDark) Color(0xFF9CA3AF) else Color(0xFF4B5563)
+                        if (isDark) darkTone(Color(0xFF9CA3AF)) else Color(0xFF4B5563)
                     } else {
-                        if (isDark) Color(0xFF60A5FA) else Color(0xFF2563EB)
+                        if (isDark) darkTone(Color(0xFF60A5FA)) else Color(0xFF2563EB)
                     },
                     modifier = Modifier.size(13.dp)
                 )
@@ -2991,9 +3550,9 @@ fun StrictlyTwoPersonBanner(
                     fontSize = 11.5.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = if (isPrivateMode) {
-                        if (isDark) Color(0xFFD1D5DB) else Color(0xFF374151)
+                        if (isDark) darkTone(Color(0xFFD1D5DB)) else Color(0xFF374151)
                     } else {
-                        if (isDark) Color(0xFF93C5FD) else Color(0xFF1E40AF)
+                        if (isDark) darkTone(Color(0xFF93C5FD)) else Color(0xFF1E40AF)
                     }
                 )
             }
@@ -3019,8 +3578,8 @@ fun StrictlyPrivateChatBeginningBanner(
         if (isPrivateMode) {
             Surface(
                 shape = RoundedCornerShape(16.dp),
-                color = if (isDark) Color(0xFF1E2024).copy(alpha = 0.85f) else Color(0xFFF3F4F6),
-                border = BorderStroke(1.dp, if (isDark) Color(0xFF2E3036) else Color(0xFFE5E7EB)),
+                color = if (isDark) darkTone(Color(0xFF1E2024)).copy(alpha = 0.85f) else Color(0xFFF3F4F6),
+                border = BorderStroke(1.dp, if (isDark) darkTone(Color(0xFF2E3036)) else Color(0xFFE5E7EB)),
                 modifier = Modifier.fillMaxWidth(0.92f)
             ) {
                 Column(
@@ -3034,7 +3593,7 @@ fun StrictlyPrivateChatBeginningBanner(
                         Icon(
                             imageVector = Icons.Default.Lock,
                             contentDescription = null,
-                            tint = if (isDark) Color(0xFF9CA3AF) else Color(0xFF4B5563),
+                            tint = if (isDark) darkTone(Color(0xFF9CA3AF)) else Color(0xFF4B5563),
                             modifier = Modifier.size(15.dp)
                         )
                         Spacer(modifier = Modifier.width(6.dp))
@@ -3042,14 +3601,14 @@ fun StrictlyPrivateChatBeginningBanner(
                             text = "Strictly 2-Person Private Channel",
                             fontWeight = FontWeight.Bold,
                             fontSize = 12.5.sp,
-                            color = if (isDark) Color(0xFFE5E7EB) else Color(0xFF1F2937)
+                            color = if (isDark) darkTone(Color(0xFFE5E7EB)) else Color(0xFF1F2937)
                         )
                     }
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
                         text = "Messages, voice notes, and media are strictly between you and $partnerName. End-to-end encrypted.",
                         fontSize = 11.5.sp,
-                        color = if (isDark) Color(0xFF9CA3AF) else Color(0xFF6B7280),
+                        color = if (isDark) darkTone(Color(0xFF9CA3AF)) else Color(0xFF6B7280),
                         textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                         lineHeight = 16.sp
                     )
@@ -3065,7 +3624,7 @@ fun StrictlyPrivateChatBeginningBanner(
                 },
                 border = BorderStroke(
                     1.dp,
-                    if (isDark) Color(0xFF2B3954).copy(alpha = 0.6f) else Color(0xFFE2E8F0)
+                    if (isDark) darkTone(Color(0xFF2B3954)).copy(alpha = 0.6f) else Color(0xFFE2E8F0)
                 ),
                 shadowElevation = 2.dp,
                 modifier = Modifier.fillMaxWidth(0.95f)

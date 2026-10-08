@@ -1,5 +1,7 @@
 package com.example.ui.chat
 
+import com.example.ui.theme.darkTone
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -312,7 +314,7 @@ private fun MediaTile(
 ) {
     val context = LocalContext.current
     val isDark = androidx.compose.material3.MaterialTheme.colorScheme.surface.luminance() < 0.5f
-    val tileBg = if (isDark) Color(0xFF131824) else Color(0xFFE2E8F0)
+    val tileBg = if (isDark) darkTone(Color(0xFF131824)) else Color(0xFFE2E8F0)
     // Shimmer while the photo loads; the placeholder icon only when there is nothing to show
     var isLoading by remember(url) { mutableStateOf(url.isNotBlank()) }
     var hasFailed by remember(url) { mutableStateOf(false) }
@@ -333,7 +335,7 @@ private fun MediaTile(
             Icon(
                 imageVector = Icons.Default.Image,
                 contentDescription = "Photo placeholder",
-                tint = DayBlueSecondary.copy(alpha = 0.6f),
+                tint = darkTone(DayBlueSecondary).copy(alpha = 0.6f),
                 modifier = Modifier.size(36.dp)
             )
         }

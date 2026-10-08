@@ -44,7 +44,24 @@ data class NoteCardThemeColors(
     val secondaryTextColor: Color
 )
 
-fun resolveNoteCardColors(colorHex: String?, isDark: Boolean): NoteCardThemeColors {
+/** [amoledBlack]: the Black theme, where every card sits on near-black instead of a tinted navy. */
+fun resolveNoteCardColors(colorHex: String?, isDark: Boolean, amoledBlack: Boolean = false): NoteCardThemeColors {
+    val colors = noteCardColors(colorHex, isDark)
+    if (!(isDark && amoledBlack)) return colors
+    // Black theme: near-black card, every blue border/accent/badge turned neutral grey
+    return NoteCardThemeColors(
+        containerColor = Color(0xFF0D0D0D),
+        borderColor = colors.borderColor.withoutBlue(),
+        accentPrimary = colors.accentPrimary.withoutBlue(),
+        accentContainer = colors.accentContainer.withoutBlue(),
+        categoryBadgeText = colors.categoryBadgeText.withoutBlue(),
+        titleColor = colors.titleColor.withoutBlue(),
+        contentColor = colors.contentColor.withoutBlue(),
+        secondaryTextColor = colors.secondaryTextColor.withoutBlue()
+    )
+}
+
+private fun noteCardColors(colorHex: String?, isDark: Boolean): NoteCardThemeColors {
     val cleanHex = (colorHex ?: "#FFFFFF").trim().uppercase()
     return if (isDark) {
         when (cleanHex) {
@@ -222,8 +239,9 @@ fun NoteCard(
     var showMenu by remember { mutableStateOf(false) }
     val checklist = remember(note.checklistJson) { note.getChecklist() }
     val isDark = isAppInDark()
-    val themeColors = remember(note.colorHex, isDark) {
-        resolveNoteCardColors(note.colorHex, isDark)
+    val amoledBlack = com.example.ui.theme.LocalAmoledBlack.current
+    val themeColors = remember(note.colorHex, isDark, amoledBlack) {
+        resolveNoteCardColors(note.colorHex, isDark, amoledBlack)
     }
 
     val totalItems = checklist.size
@@ -294,7 +312,7 @@ fun NoteCard(
                             modifier = Modifier
                                 .size(26.dp)
                                 .clip(CircleShape)
-                                .background(if (isSelected) themeColors.accentPrimary else if (isDark) Color(0xFF0F172A) else Color.White)
+                                .background(if (isSelected) themeColors.accentPrimary else if (isDark) darkTone(Color(0xFF0F172A)) else Color.White)
                                 .border(
                                     width = if (isSelected) 0.dp else 2.dp,
                                     color = if (isSelected) themeColors.accentPrimary else themeColors.borderColor,
@@ -494,7 +512,7 @@ fun NoteCard(
                                 .size(18.dp)
                                 .clip(RoundedCornerShape(5.dp))
                                 .background(
-                                    if (item.isDone) themeColors.accentPrimary else if (isDark) Color(0xFF0F172A) else Color.White
+                                    if (item.isDone) themeColors.accentPrimary else if (isDark) darkTone(Color(0xFF0F172A)) else Color.White
                                 )
                                 .border(
                                     width = 1.dp,
@@ -552,7 +570,7 @@ fun NoteCard(
                 Surface(
                     shape = RoundedCornerShape(8.dp),
                     color = if (isPast) {
-                        if (isDark) Color(0xFF1E293B) else Color(0xFFF1F5F9)
+                        if (isDark) darkTone(Color(0xFF1E293B)) else Color(0xFFF1F5F9)
                     } else {
                         themeColors.accentContainer
                     },

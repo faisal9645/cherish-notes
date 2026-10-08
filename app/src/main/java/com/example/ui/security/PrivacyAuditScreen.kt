@@ -1,5 +1,7 @@
 package com.example.ui.security
 
+import com.example.ui.theme.darkTone
+
 import android.app.Activity
 import android.view.WindowManager
 import androidx.compose.animation.*
@@ -162,8 +164,8 @@ fun PrivacyAuditScreen(
             // Hero Status Badge
             Surface(
                 shape = RoundedCornerShape(24.dp),
-                color = if (isAllPassed) (if (isDark) Color(0xFF0F291E) else Color(0xFFF1F8E9)) else (if (isDark) Color(0xFF2E1C0C) else Color(0xFFFFF3E0)),
-                border = BorderStroke(1.dp, if (isAllPassed) (if (isDark) Color(0xFF1B5E20) else Color(0xFF81C784)) else (if (isDark) Color(0xFF7C2D12) else Color(0xFFFFB74D))),
+                color = if (isAllPassed) (if (isDark) darkTone(Color(0xFF0F291E)) else Color(0xFFF1F8E9)) else (if (isDark) darkTone(Color(0xFF2E1C0C)) else Color(0xFFFFF3E0)),
+                border = BorderStroke(1.dp, if (isAllPassed) (if (isDark) darkTone(Color(0xFF1B5E20)) else Color(0xFF81C784)) else (if (isDark) darkTone(Color(0xFF7C2D12)) else Color(0xFFFFB74D))),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(
@@ -198,7 +200,7 @@ fun PrivacyAuditScreen(
                         text = "$passedCount / $totalCount Protections Active",
                         fontSize = 20.sp,
                         fontWeight = FontWeight.Bold,
-                        color = if (isAllPassed) (if (isDark) Color(0xFF86EFAC) else Color(0xFF1B5E20)) else (if (isDark) Color(0xFFFDBA74) else Color(0xFFE65100))
+                        color = if (isAllPassed) (if (isDark) darkTone(Color(0xFF86EFAC)) else Color(0xFF1B5E20)) else (if (isDark) darkTone(Color(0xFFFDBA74)) else Color(0xFFE65100))
                     )
 
                     Spacer(modifier = Modifier.height(4.dp))
@@ -368,13 +370,13 @@ fun PrivacyAuditScreen(
                             modifier = Modifier
                                 .size(32.dp)
                                 .clip(CircleShape)
-                                .background(if (check.isPassed) (if (isDark) Color(0xFF1E3A8A) else Color(0xFFE8F5E9)) else (if (isDark) Color(0xFF450A0A) else Color(0xFFFFEBEE))),
+                                .background(if (check.isPassed) (if (isDark) darkTone(Color(0xFF1E3A8A)) else Color(0xFFE8F5E9)) else (if (isDark) darkTone(Color(0xFF450A0A)) else Color(0xFFFFEBEE))),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 imageVector = if (check.isPassed) Icons.Filled.Check else Icons.Filled.Close,
                                 contentDescription = null,
-                                tint = if (check.isPassed) (if (isDark) Color(0xFF93C5FD) else Color(0xFF2E7D32)) else (if (isDark) Color(0xFFFCA5A5) else Color(0xFFC62828)),
+                                tint = if (check.isPassed) (if (isDark) darkTone(Color(0xFF93C5FD)) else Color(0xFF2E7D32)) else (if (isDark) darkTone(Color(0xFFFCA5A5)) else Color(0xFFC62828)),
                                 modifier = Modifier.size(18.dp)
                             )
                         }
@@ -420,13 +422,13 @@ fun PrivacyAuditScreen(
                         } else {
                             Surface(
                                 shape = RoundedCornerShape(8.dp),
-                                color = if (check.isPassed) (if (isDark) Color(0xFF1E3A8A) else Color(0xFFE8F5E9)) else (if (isDark) Color(0xFF450A0A) else Color(0xFFFFEBEE))
+                                color = if (check.isPassed) (if (isDark) darkTone(Color(0xFF1E3A8A)) else Color(0xFFE8F5E9)) else (if (isDark) darkTone(Color(0xFF450A0A)) else Color(0xFFFFEBEE))
                             ) {
                                 Text(
                                     text = check.actionText ?: if (check.isPassed) "Active" else "Action Needed",
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = if (check.isPassed) (if (isDark) Color(0xFF93C5FD) else Color(0xFF2E7D32)) else (if (isDark) Color(0xFFFCA5A5) else Color(0xFFE65100)),
+                                    color = if (check.isPassed) (if (isDark) darkTone(Color(0xFF93C5FD)) else Color(0xFF2E7D32)) else (if (isDark) darkTone(Color(0xFFFCA5A5)) else Color(0xFFE65100)),
                                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                                 )
                             }

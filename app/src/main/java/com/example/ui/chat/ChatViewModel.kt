@@ -68,8 +68,13 @@ data class ChatUiState(
     val targetScrollMessageId: String? = null,
     val temporaryClearTimestamp: Long = 0L,
     val chatBgTheme: Int = 0,
-    val chatExperienceMode: ChatExperienceMode = ChatExperienceMode.NORMAL
+    val chatExperienceMode: ChatExperienceMode = ChatExperienceMode.NORMAL,
+    // The current 6 AM day; changes at 6 AM so "today only" filters recompute
+    val logicalDay: String = ""
 )
+
+/** How many pages "Show in chat" loads at most looking for an older message (60 messages each). */
+private const val MAX_PAGES_TO_FIND_MESSAGE = 40
 
 class ChatViewModel(
     private val authRepository: AuthRepository,
@@ -220,6 +225,24 @@ class ChatViewModel(
             }
         }
         
+        com.example.notifications.ScheduledMessageStore.load(CherishApplication.instance)
+
+        // A new day starts at 6 AM: previous chat and media hide again until "Recover all". Checked
+        // every minute (a long sleep wouldn't fire on time if the phone dozes through 6 AM).
+        viewModelScope.launch {
+            _uiState.update { it.copy(logicalDay = securityPreferences.logicalDayKey()) }
+            while (true) {
+                kotlinx.coroutines.delay(60_000L)
+                val day = securityPreferences.logicalDayKey()
+                if (day != _uiState.value.logicalDay) {
+                    securityPreferences.setShowPreviousChatsEnabled(false)
+                    securityPreferences.setAllGalleryRecovered(false)
+                    chatRepository.startNewDay()
+                    _uiState.update { it.copy(logicalDay = day) }
+                }
+            }
+        }
+
         // Ticker to evaluate effective online/typing/heartbeat status without unnecessary CPU load
         viewModelScope.launch {
             while (true) {
@@ -584,6 +607,29 @@ class ChatViewModel(
         }
     }
 
+    /** One tap: a heartbeat on the partner's phone. Rate-limited so taps don't stack up. */
+    fun sendThinkingOfYou(): Boolean {
+        val now = System.currentTimeMillis()
+        if (now - lastThinkingOfYouAt < 3_000L) return false
+        lastThinkingOfYouAt = now
+        return authRepository.sendThinkingOfYou()
+    }
+
+    private var lastThinkingOfYouAt = 0L
+
+    /** The goodnight message; it dims the partner's screen with stars when they see it. */
+    fun sendGoodnight() {
+        viewModelScope.launch {
+            chatRepository.sendMessage(text = "Goodnight, sleep well my love \uD83C\uDF19\u2728", effect = EFFECT_GOODNIGHT)
+        }
+    }
+
+    fun sendHug() {
+        viewModelScope.launch {
+            chatRepository.sendMessage(text = "Sending you the biggest hug \uD83E\uDD17\uD83D\uDC9B")
+        }
+    }
+
     fun clearMood() {
         viewModelScope.launch {
             authRepository.updateMood("")
@@ -746,15 +792,58 @@ class ChatViewModel(
         }
     }
 
-    fun navigateToMessageInChat(messageId: String) {
-        securityPreferences.revealSecretHistory()
-        securityPreferences.setShowPreviousChatsEnabled(true)
-        chatRepository.expandLimitForSearch()
-        _uiState.update {
-            it.copy(
-                targetScrollMessageId = messageId
-            )
+    /**
+     * "Show in chat": jumps to the message. Today's messages are always there; an older one only
+     * after "Recover all", loading earlier pages until it's found. False when it's older and Recover
+     * all hasn't been used (nothing older is revealed).
+     */
+    fun navigateToMessageInChat(messageId: String): Boolean {
+        val target = _uiState.value.messages.find { it.id == messageId }
+            ?: chatRepository.galleryMediaMessages.value.find { it.id == messageId }
+        val isTodays = target != null && com.example.util.ChatTimeFormatter.isToday(target.timestamp)
+        if (!isTodays) {
+            val recovered = securityPreferences.isAllGalleryRecovered() || securityPreferences.isShowPreviousChatsEnabled()
+            if (!recovered) return false
+            securityPreferences.revealSecretHistory()
+            securityPreferences.setShowPreviousChatsEnabled(true)
+            loadHistoryUntil(messageId)
         }
+        _uiState.update { it.copy(targetScrollMessageId = messageId) }
+        return true
+    }
+
+    /** Loads earlier pages of chat until [messageId] is among them (or the history ends). */
+    private fun loadHistoryUntil(messageId: String) {
+        viewModelScope.launch {
+            repeat(MAX_PAGES_TO_FIND_MESSAGE) {
+                if (_uiState.value.messages.any { it.id == messageId } || chatRepository.isQueryExhausted) return@launch
+                chatRepository.loadMoreMessages()
+                kotlinx.coroutines.delay(150)
+                kotlinx.coroutines.withTimeoutOrNull(10_000L) {
+                    while (chatRepository.isLoadingMore) kotlinx.coroutines.delay(150)
+                }
+            }
+        }
+    }
+
+    // --- Scheduled messages (sent by an alarm at their time, even with the app closed) ---
+
+    val scheduledMessages: StateFlow<List<com.example.notifications.ScheduledMessage>> =
+        com.example.notifications.ScheduledMessageStore.messages
+
+    fun scheduleMessage(text: String, sendAt: Long) {
+        val clean = text.trim()
+        if (clean.isEmpty()) return
+        val context = CherishApplication.instance
+        val message = com.example.notifications.ScheduledMessage(java.util.UUID.randomUUID().toString(), clean, sendAt)
+        com.example.notifications.ScheduledMessageStore.add(context, message)
+        com.example.notifications.ScheduledMessageScheduler.schedule(context, message)
+    }
+
+    fun cancelScheduledMessage(id: String) {
+        val context = CherishApplication.instance
+        com.example.notifications.ScheduledMessageScheduler.cancel(context, id)
+        com.example.notifications.ScheduledMessageStore.remove(context, id)
     }
 
     fun clearTargetScrollMessageId() {

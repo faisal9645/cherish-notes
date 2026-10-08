@@ -1,5 +1,7 @@
 package com.example.ui.chat
 
+import com.example.ui.theme.darkTone
+
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -77,7 +79,7 @@ fun NormalWallpaper(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(if (isDark) Color(0xFF000000) else Color(0xFFFFFFFF))
+            .background(if (isDark) darkTone(Color(0xFF000000)) else Color(0xFFFFFFFF))
     )
 }
 
@@ -92,8 +94,8 @@ fun LoveImmersiveWallpaper(
     val infiniteTransition = androidx.compose.animation.core.rememberInfiniteTransition(label = "love_bg")
     
     val color1 by infiniteTransition.animateColor(
-        initialValue = if (isDark) Color(0xFF180A12) else Color(0xFFFFF0F5),
-        targetValue = if (isDark) Color(0xFF28111B) else Color(0xFFFFE4E1),
+        initialValue = if (isDark) darkTone(Color(0xFF180A12)) else Color(0xFFFFF0F5),
+        targetValue = if (isDark) darkTone(Color(0xFF28111B)) else Color(0xFFFFE4E1),
         animationSpec = androidx.compose.animation.core.infiniteRepeatable(
             animation = androidx.compose.animation.core.tween(6000, easing = androidx.compose.animation.core.FastOutSlowInEasing),
             repeatMode = androidx.compose.animation.core.RepeatMode.Reverse
@@ -102,8 +104,8 @@ fun LoveImmersiveWallpaper(
     )
     
     val color2 by infiniteTransition.animateColor(
-        initialValue = if (isDark) Color(0xFF0F060A) else Color(0xFFFFF8F8),
-        targetValue = if (isDark) Color(0xFF1C0A11) else Color(0xFFFFEBF0),
+        initialValue = if (isDark) darkTone(Color(0xFF0F060A)) else Color(0xFFFFF8F8),
+        targetValue = if (isDark) darkTone(Color(0xFF1C0A11)) else Color(0xFFFFEBF0),
         animationSpec = androidx.compose.animation.core.infiniteRepeatable(
             animation = androidx.compose.animation.core.tween(4500, easing = androidx.compose.animation.core.FastOutSlowInEasing),
             repeatMode = androidx.compose.animation.core.RepeatMode.Reverse

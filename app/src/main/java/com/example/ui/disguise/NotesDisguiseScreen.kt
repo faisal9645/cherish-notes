@@ -197,8 +197,10 @@ fun NotesDisguiseScreen(
     }
 
     val isDark = isAppInDark()
+    val isBlackTheme = LocalAmoledBlack.current
     val currentColorScheme = MaterialTheme.colorScheme
-    val notesColorScheme = if (isDark) {
+    // The Black theme keeps its neutral colours; Dark gets Notes' blue accents
+    val notesColorScheme = if (isDark && !isBlackTheme) {
         currentColorScheme.copy(
             primary = DayBluePrimary,
             secondary = DayBlueSecondary,
@@ -211,7 +213,8 @@ fun NotesDisguiseScreen(
     }
 
     val notesHorizontalGradient = androidx.compose.ui.graphics.Brush.horizontalGradient(
-        listOf(DayBlueSecondary, DayBluePrimary, DayBlueTertiary)
+        if (isBlackTheme) listOf(BlackGradientStart, BlackGradientMid, BlackGradientEnd)
+        else listOf(DayBlueSecondary, DayBluePrimary, DayBlueTertiary)
     )
 
     MaterialTheme(
@@ -580,7 +583,7 @@ fun NotesDisguiseScreen(
                                     .border(
                                         width = 3.dp,
                                         brush = androidx.compose.ui.graphics.Brush.sweepGradient(
-                                            listOf(DayBlueSecondary, DayBluePrimary, DayBlueTertiary, DayBlueSecondary)
+                                            listOf(DayBlueSecondary, darkTone(DayBluePrimary), darkTone(DayBlueTertiary), darkTone(DayBlueSecondary))
                                         ),
                                         shape = CircleShape
                                     )
@@ -589,9 +592,9 @@ fun NotesDisguiseScreen(
                             // Circular loader ring
                             CircularProgressIndicator(
                                 modifier = Modifier.size(66.dp),
-                                color = DayBluePrimary,
+                                color = darkTone(DayBluePrimary),
                                 strokeWidth = 3.5.dp,
-                                trackColor = DayBluePrimary.copy(alpha = 0.2f)
+                                trackColor = darkTone(DayBluePrimary).copy(alpha = 0.2f)
                             )
                         }
 
@@ -897,7 +900,7 @@ fun NotesDisguiseScreen(
                     ) {
                         CircularProgressIndicator(
                             modifier = Modifier.size(16.dp),
-                            color = DayBluePrimary,
+                            color = darkTone(DayBluePrimary),
                             strokeWidth = 2.2.dp
                         )
                         Text(
@@ -1061,8 +1064,8 @@ fun NotesSettingsDialog(
                 // Setting Item: Reminder Notifications
                 Surface(
                     shape = RoundedCornerShape(16.dp),
-                    color = if (isDark) Color(0xFF1E293B) else Color(0xFFF8FAFC),
-                    border = BorderStroke(1.dp, if (isDark) Color(0xFF334155) else MaterialTheme.colorScheme.outlineVariant)
+                    color = if (isDark) darkSurface(Color(0xFF1E293B), Color(0xFF121212)) else Color(0xFFF8FAFC),
+                    border = BorderStroke(1.dp, if (isDark) darkSurface(Color(0xFF334155), Color(0xFF262626)) else MaterialTheme.colorScheme.outlineVariant)
                 ) {
                     Row(
                         modifier = Modifier
