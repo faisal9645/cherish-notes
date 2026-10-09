@@ -55,14 +55,47 @@ import kotlin.random.Random
 enum class ChatHaptic { Tick, Send, Receive, LongPress, Delete }
 
 fun View.chatHaptic(type: ChatHaptic) {
-    val constant = when (type) {
-        ChatHaptic.Tick -> HapticFeedbackConstants.CLOCK_TICK
-        ChatHaptic.Send -> if (Build.VERSION.SDK_INT >= 30) HapticFeedbackConstants.CONFIRM else HapticFeedbackConstants.VIRTUAL_KEY
-        ChatHaptic.Receive -> HapticFeedbackConstants.CONTEXT_CLICK
-        ChatHaptic.LongPress -> HapticFeedbackConstants.LONG_PRESS
-        ChatHaptic.Delete -> if (Build.VERSION.SDK_INT >= 30) HapticFeedbackConstants.REJECT else HapticFeedbackConstants.LONG_PRESS
+    // Settings > Haptic Feedback (all of it) and its separate send / new message / long-press choices
+    val prefs = com.example.security.SecurityPreferences.getInstance(context)
+    if (!prefs.isHapticFeedbackEnabled()) return
+    when (type) {
+        // A soft tick when a message goes out
+        ChatHaptic.Send -> if (prefs.isHapticOnSend()) performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+        // A gentle buzz when a new message arrives in the open chat
+        ChatHaptic.Receive -> if (prefs.isHapticOnReceive()) context.vibrateGentle()
+        // A heartbeat on long-press (or the usual long-press click when that's off)
+        ChatHaptic.LongPress ->
+            if (prefs.isHeartbeatOnLongPress()) context.vibrateHeartbeat()
+            else performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+        ChatHaptic.Tick -> performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+        ChatHaptic.Delete -> performHapticFeedback(
+            if (Build.VERSION.SDK_INT >= 30) HapticFeedbackConstants.REJECT else HapticFeedbackConstants.LONG_PRESS
+        )
     }
-    performHapticFeedback(constant)
+}
+
+/** One short, soft buzz. */
+fun Context.vibrateGentle() {
+    try {
+        val vibrator = if (Build.VERSION.SDK_INT >= 31) {
+            getSystemService(VibratorManager::class.java)?.defaultVibrator
+        } else {
+            @Suppress("DEPRECATION")
+            getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+        } ?: return
+        if (!vibrator.hasVibrator()) return
+        if (Build.VERSION.SDK_INT >= 26) {
+            val effect = VibrationEffect.createOneShot(28, if (vibrator.hasAmplitudeControl()) 90 else VibrationEffect.DEFAULT_AMPLITUDE)
+            if (Build.VERSION.SDK_INT >= 33) {
+                vibrator.vibrate(effect, VibrationAttributes.createForUsage(VibrationAttributes.USAGE_TOUCH))
+            } else {
+                vibrator.vibrate(effect)
+            }
+        } else {
+            @Suppress("DEPRECATION")
+            vibrator.vibrate(28)
+        }
+    } catch (_: Exception) {}
 }
 
 /** One "lub-dub" heartbeat. On Android 13+ it follows the touch-vibration setting. */

@@ -67,8 +67,11 @@ object ThinkingOfYou {
         return keyguard?.isKeyguardLocked != true
     }
 
-    /** Two soft heartbeats. Played as a notification vibration, so it also works from the background. */
-    private fun playHeartbeat(context: Context) {
+    /**
+     * Two soft heartbeats (thump-thump... thump-thump). Played as a notification vibration, so it
+     * also works from the background. Also played on the sender's phone as the heartbeat goes out.
+     */
+    fun playHeartbeat(context: Context) {
         try {
             val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 (context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager)?.defaultVibrator

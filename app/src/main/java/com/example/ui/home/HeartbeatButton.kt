@@ -24,12 +24,16 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
-import com.example.ui.theme.HeartRed
 import kotlinx.coroutines.launch
+
+/**
+ * The heartbeat colours, also used by Heartbeat Touch and the Both of us card: pink and the app's
+ * own blue, the same in every theme.
+ */
+val HeartbeatPink = Color(0xFFFF4F9A) // neon rose
+val HeartbeatBlue = com.example.ui.theme.DayBluePrimary
 
 /**
  * The heart at the bottom of Love & Us: a tap opens Heartbeat Touch; a long press sends a
@@ -44,7 +48,6 @@ fun HeartbeatButton(
     onSendThinkingOfYou: () -> Boolean,
     modifier: Modifier = Modifier
 ) {
-    val haptic = LocalHapticFeedback.current
     val scope = rememberCoroutineScope()
     val sent = remember { Animatable(0f) }
     // Beats only while the partner is touching (no animation running the rest of the time)
@@ -64,7 +67,7 @@ fun HeartbeatButton(
         Box(
             contentAlignment = Alignment.Center,
             modifier = Modifier
-                .size(64.dp)
+                .size(72.dp)
                 .graphicsLayer {
                     val t = sent.value
                     val bump = when {
@@ -77,15 +80,18 @@ fun HeartbeatButton(
                 }
                 .shadow(10.dp, CircleShape)
                 .clip(CircleShape)
-                .background(Brush.linearGradient(listOf(Color(0xFFFF6B8B), HeartRed)))
+                // Pink to the app's blue, in every theme
+                .background(Brush.linearGradient(listOf(HeartbeatPink, HeartbeatBlue)))
                 .border(2.dp, Color.White.copy(alpha = 0.7f), CircleShape)
                 .combinedClickable(
                     onClickLabel = "Heartbeat Touch",
                     onClick = onOpenHeartbeatTouch,
                     onLongClickLabel = "Send a heartbeat",
+                    // The heartbeat itself is the feedback (no extra click buzz before it)
+                    hapticFeedbackEnabled = false,
                     onLongClick = {
+                        // Sending also plays the thump-thump on this phone
                         if (onSendThinkingOfYou()) {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                             scope.launch {
                                 sent.snapTo(0f)
                                 sent.animateTo(1f, tween(1_100, easing = FastOutSlowInEasing))
@@ -100,14 +106,14 @@ fun HeartbeatButton(
                 imageVector = Icons.Filled.Favorite,
                 contentDescription = "Heartbeat Touch",
                 tint = Color.White,
-                modifier = Modifier.size(30.dp)
+                modifier = Modifier.size(34.dp)
             )
         }
         // A small heart floats up: the heartbeat was sent
         Icon(
             imageVector = Icons.Filled.Favorite,
             contentDescription = null,
-            tint = HeartRed,
+            tint = HeartbeatBlue,
             modifier = Modifier
                 .size(16.dp)
                 .graphicsLayer {

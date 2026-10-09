@@ -178,6 +178,10 @@ fun MessageBubble(
         derivedStateOf { abs(swipeOffset.value) >= thresholdPx }
     }
     var hasTriggeredThresholdHaptic by remember { mutableStateOf(false) }
+    // Which way the bubble is pulled: these change once per swipe, not every drag frame, so a
+    // swipe doesn't rebuild the whole message (heavy for a YouTube or photo card) 60 times a second
+    val isSwipedRight by remember { derivedStateOf { swipeOffset.value > 0f } }
+    val isSwipedLeft by remember { derivedStateOf { swipeOffset.value < 0f } }
 
     fun triggerHeartBurst() {
         if (isPrivateMode) return
@@ -219,10 +223,10 @@ fun MessageBubble(
         contentAlignment = if (isFromMe) Alignment.CenterEnd else Alignment.CenterStart
     ) {
         // Stationary background reply indicator on the left (revealed when swiping right on partner message)
-        if (onSwipeToReply != null && !isFromMe && swipeOffset.value > 0f) {
+        if (onSwipeToReply != null && !isFromMe && isSwipedRight) {
             ReplyIndicator(
                 isReached = isReplyReached,
-                progress = replyProgress,
+                progress = { replyProgress },
                 isDark = isDark,
                 isPrivateMode = isPrivateMode,
                 modifier = Modifier
@@ -232,10 +236,10 @@ fun MessageBubble(
         }
 
         // Stationary background reply indicator on the right (revealed when swiping left on user message)
-        if (onSwipeToReply != null && isFromMe && swipeOffset.value < 0f) {
+        if (onSwipeToReply != null && isFromMe && isSwipedLeft) {
             ReplyIndicator(
                 isReached = isReplyReached,
-                progress = replyProgress,
+                progress = { replyProgress },
                 isDark = isDark,
                 isPrivateMode = isPrivateMode,
                 modifier = Modifier
@@ -251,10 +255,10 @@ fun MessageBubble(
                 .offset { androidx.compose.ui.unit.IntOffset(swipeOffset.value.roundToInt(), 0) }
         ) {
             // Adjacent reply indicator (revealed to the left when user swipes their own message right)
-            if (onSwipeToReply != null && isFromMe && swipeOffset.value > 0f) {
+            if (onSwipeToReply != null && isFromMe && isSwipedRight) {
                 ReplyIndicator(
                     isReached = isReplyReached,
-                    progress = replyProgress,
+                    progress = { replyProgress },
                     isDark = isDark,
                     isPrivateMode = isPrivateMode,
                     modifier = Modifier.padding(end = 10.dp)
@@ -1129,10 +1133,10 @@ fun MessageBubble(
         }
 
         // Adjacent reply indicator when partner message is swiped left
-        if (onSwipeToReply != null && !isFromMe && swipeOffset.value < 0f) {
+        if (onSwipeToReply != null && !isFromMe && isSwipedLeft) {
             ReplyIndicator(
                 isReached = isReplyReached,
-                progress = replyProgress,
+                progress = { replyProgress },
                 isDark = isDark,
                 isPrivateMode = isPrivateMode,
                 modifier = Modifier.padding(start = 10.dp)
@@ -1172,13 +1176,12 @@ private fun MessageStatusTicks(
 @Composable
 private fun ReplyIndicator(
     isReached: Boolean,
-    progress: Float,
+    // Read while drawing, so the arrow grows with the swipe without recomposing anything
+    progress: () -> Float,
     isDark: Boolean,
     isPrivateMode: Boolean,
     modifier: Modifier = Modifier
 ) {
-    val scale = (0.55f + (progress * 0.45f)).coerceIn(0.55f, if (isReached) 1.15f else 1.0f)
-    val alpha = progress.coerceIn(0.2f, 1f)
 
     val backgroundColor = when {
         isReached -> if (isPrivateMode) Color(0xFF4B5563) else RoseGoldPrimary
@@ -1203,9 +1206,11 @@ private fun ReplyIndicator(
         modifier = modifier
             .size(36.dp)
             .graphicsLayer {
+                val p = progress()
+                val scale = (0.55f + (p * 0.45f)).coerceIn(0.55f, if (isReached) 1.15f else 1.0f)
                 scaleX = scale
                 scaleY = scale
-                this.alpha = alpha
+                this.alpha = p.coerceIn(0.2f, 1f)
             }
             .shadow(
                 elevation = if (isReached) 4.dp else 2.dp,

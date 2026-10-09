@@ -137,6 +137,9 @@ class ChatSoundEffectsPlayer private constructor(
 
     fun playSound(type: SoundType) {
         if (!securityPreferences.isChatSoundsEnabled()) return
+        // Settings > sound volume (0 = silent)
+        val volume = securityPreferences.getAppSoundVolume() / 100f
+        if (volume <= 0f) return
 
         // Respect user's device silent / vibrate mode
         val ringer = audioManager?.ringerMode ?: AudioManager.RINGER_MODE_NORMAL
@@ -180,6 +183,7 @@ class ChatSoundEffectsPlayer private constructor(
                 }
 
                 track.write(pcm, 0, pcm.size)
+                track.setVolume(volume)
                 track.play()
 
                 val durationMs = (pcm.size * 1000L) / 44100L + 50L

@@ -662,7 +662,10 @@ class ChatViewModel(
         val now = System.currentTimeMillis()
         if (now - lastThinkingOfYouAt < 3_000L) return false
         lastThinkingOfYouAt = now
-        return authRepository.sendThinkingOfYou()
+        val sent = authRepository.sendThinkingOfYou()
+        // The sender feels the same thump-thump as it goes out
+        if (sent) com.example.notifications.ThinkingOfYou.playHeartbeat(CherishApplication.instance)
+        return sent
     }
 
     private var lastThinkingOfYouAt = 0L

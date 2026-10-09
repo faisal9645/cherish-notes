@@ -798,6 +798,86 @@ fun ProfileScreen(
                     }
                 )
 
+                // What a masked notification says
+                val maskPrefs = remember { com.example.security.SecurityPreferences.getInstance(context) }
+                var maskedTitle by remember { mutableStateOf(maskPrefs.getMaskedNotificationTitle()) }
+                var maskedText by remember { mutableStateOf(maskPrefs.getMaskedNotificationText()) }
+                var showMaskedEditor by remember { mutableStateOf(false) }
+                ListItem(
+                    headlineContent = { Text("Masked Notification Text", fontSize = 15.sp, fontWeight = FontWeight.SemiBold) },
+                    supportingContent = { Text("$maskedTitle \u00B7 $maskedText", fontSize = 13.sp, maxLines = 1) },
+                    leadingContent = { Icon(Icons.Default.Edit, contentDescription = null, tint = primaryAccent) },
+                    modifier = Modifier
+                        .clickable { showMaskedEditor = true }
+                        .testTag("masked_notification_text")
+                )
+                if (showMaskedEditor) {
+                    var titleInput by remember { mutableStateOf(maskedTitle) }
+                    var textInput by remember { mutableStateOf(maskedText) }
+                    AlertDialog(
+                        onDismissRequest = { showMaskedEditor = false },
+                        title = { Text("Masked notification") },
+                        text = {
+                            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                Text(
+                                    "What hidden or disguised message notifications say.",
+                                    fontSize = 13.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                OutlinedTextField(
+                                    value = titleInput,
+                                    onValueChange = { titleInput = it.take(40) },
+                                    label = { Text("Title (e.g. Notes)") },
+                                    singleLine = true,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                                OutlinedTextField(
+                                    value = textInput,
+                                    onValueChange = { textInput = it.take(80) },
+                                    label = { Text("Text (e.g. Shopping list updated)") },
+                                    singleLine = true,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                                // Preview
+                                Surface(
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = MaterialTheme.colorScheme.surfaceVariant,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Column(modifier = Modifier.padding(10.dp)) {
+                                        Text(
+                                            titleInput.ifBlank { com.example.security.SecurityPreferences.DEFAULT_MASKED_TITLE },
+                                            fontWeight = FontWeight.SemiBold,
+                                            fontSize = 13.sp
+                                        )
+                                        Text(
+                                            textInput.ifBlank { com.example.security.SecurityPreferences.DEFAULT_MASKED_TEXT },
+                                            fontSize = 12.sp,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                            }
+                        },
+                        confirmButton = {
+                            TextButton(onClick = {
+                                maskPrefs.setMaskedNotificationText(titleInput, textInput)
+                                maskedTitle = maskPrefs.getMaskedNotificationTitle()
+                                maskedText = maskPrefs.getMaskedNotificationText()
+                                showMaskedEditor = false
+                            }) { Text("Save") }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = {
+                                maskPrefs.setMaskedNotificationText("", "")
+                                maskedTitle = maskPrefs.getMaskedNotificationTitle()
+                                maskedText = maskPrefs.getMaskedNotificationText()
+                                showMaskedEditor = false
+                            }) { Text("Reset") }
+                        }
+                    )
+                }
+
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), thickness = 0.6.dp)
 
                 // App Icon Badge Notification
@@ -995,6 +1075,28 @@ fun ProfileScreen(
                         )
                     }
                 )
+                // Which ones (each only while Haptic Feedback is on)
+                val hapticPrefs = remember { com.example.security.SecurityPreferences.getInstance(context) }
+                var hapticSend by remember { mutableStateOf(hapticPrefs.isHapticOnSend()) }
+                var hapticReceive by remember { mutableStateOf(hapticPrefs.isHapticOnReceive()) }
+                var hapticHeartbeat by remember { mutableStateOf(hapticPrefs.isHeartbeatOnLongPress()) }
+                listOf(
+                    Triple("Soft tick when sending", hapticSend) { on: Boolean -> hapticSend = on; hapticPrefs.setHapticOnSend(on) },
+                    Triple("Gentle buzz on new messages", hapticReceive) { on: Boolean -> hapticReceive = on; hapticPrefs.setHapticOnReceive(on) },
+                    Triple("Heartbeat on long-press", hapticHeartbeat) { on: Boolean -> hapticHeartbeat = on; hapticPrefs.setHeartbeatOnLongPress(on) }
+                ).forEach { (label, checked, onChange) ->
+                    ListItem(
+                        headlineContent = { Text(label, fontSize = 14.sp) },
+                        modifier = Modifier.padding(start = 16.dp),
+                        trailingContent = {
+                            Switch(
+                                checked = checked && uiState.isHapticEnabled,
+                                enabled = uiState.isHapticEnabled,
+                                onCheckedChange = onChange
+                            )
+                        }
+                    )
+                }
             }
             // Chat Experience Mode Selector
             SettingsSection(title = "Chat Experience", icon = Icons.Default.ChatBubble) {
@@ -1141,6 +1243,35 @@ fun ProfileScreen(
                                 )
                             )
                         }
+                    }
+
+                    // How loud the app's sounds play (a sample plays when you let go)
+                    val soundPrefs = remember { com.example.security.SecurityPreferences.getInstance(context) }
+                    var soundVolume by remember { mutableFloatStateOf(soundPrefs.getAppSoundVolume().toFloat()) }
+                    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                            Icon(
+                                imageVector = if (soundVolume <= 0f) Icons.Default.VolumeOff else Icons.Default.VolumeUp,
+                                contentDescription = null,
+                                tint = primaryAccent,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Text("Sound volume", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                            Text("${soundVolume.toInt()}%", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        androidx.compose.material3.Slider(
+                            value = soundVolume,
+                            onValueChange = { soundVolume = it },
+                            onValueChangeFinished = {
+                                soundPrefs.setAppSoundVolume(soundVolume.toInt())
+                                com.example.audio.ChatSoundEffectsPlayer.getInstance(context)
+                                    .playSound(com.example.audio.ChatSoundEffectsPlayer.SoundType.SENT)
+                            },
+                            valueRange = 0f..100f,
+                            enabled = uiState.isChatSoundsEnabled,
+                            modifier = Modifier.testTag("app_sound_volume")
+                        )
                     }
                 }
             }

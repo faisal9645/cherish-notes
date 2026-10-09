@@ -16,9 +16,9 @@ data class LifetimeJourneyUiState(
     val profile: LifetimeAgeProfile = LifetimeAgeProfile(),
     val journeys: List<YearlyJourneyEntry> = emptyList(),
     val currentYear: Int = Calendar.getInstance().get(Calendar.YEAR),
-    val myCurrentAge: Int = 34,
-    val partnerCurrentAge: Int = 31,
-    val totalYearsTogether: Int = 3
+    val myCurrentAge: Int = 0,
+    val partnerCurrentAge: Int = 0,
+    val totalYearsTogether: Int = 1
 )
 
 class LifetimeJourneyViewModel(
@@ -29,11 +29,13 @@ class LifetimeJourneyViewModel(
     val uiState: StateFlow<LifetimeJourneyUiState> = _uiState.asStateFlow()
 
     init {
+        repository.rebuildLoveUs()
         viewModelScope.launch {
             repository.lifetimeProfileFlow.collect { profile ->
                 val currentYear = Calendar.getInstance().get(Calendar.YEAR)
-                val myAge = currentYear - profile.myBirthYear
-                val partnerAge = currentYear - profile.partnerBirthYear
+                // 0 = not known yet (no birthday set)
+                val myAge = if (profile.myBirthYear > 0) currentYear - profile.myBirthYear else 0
+                val partnerAge = if (profile.partnerBirthYear > 0) currentYear - profile.partnerBirthYear else 0
                 val yearsTogether = maxOf(1, currentYear - profile.relationshipStartYear + 1)
 
                 _uiState.value = _uiState.value.copy(

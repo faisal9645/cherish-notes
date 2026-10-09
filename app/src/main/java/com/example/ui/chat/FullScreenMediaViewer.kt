@@ -32,7 +32,19 @@ import androidx.compose.runtime.*
 import com.example.ui.security.SecretWindowGuard
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.composed
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.RoundRect
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Outline
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.onPlaced
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -90,18 +102,34 @@ fun FullScreenMediaViewer(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
-    // Zooms out of the point that was tapped (openFrom, as a fraction of the screen) and back into
-    // it when closed by the user
+    // Opened from a photo in the chat or gallery: it grows out of that photo into full screen and
+    // shrinks back into it when closed. Otherwise it zooms out of the point that was tapped
+    // (openFrom, as a fraction of the screen).
+    val openedTile = remember { MediaOpenOrigin.take() }
+    val viewerCoords = remember { arrayOfNulls<LayoutCoordinates>(1) }
+    fun tileRectInViewer(): Rect? {
+        val tile = openedTile?.takeIf { it.isAttached } ?: return null
+        val viewer = viewerCoords[0]?.takeIf { it.isAttached } ?: return null
+        return try {
+            val topLeft = viewer.screenToLocal(tile.localToScreen(Offset.Zero))
+            val bottomRight = viewer.screenToLocal(
+                tile.localToScreen(Offset(tile.size.width.toFloat(), tile.size.height.toFloat()))
+            )
+            Rect(topLeft, bottomRight).takeIf { it.width > 1f && it.height > 1f }
+        } catch (_: Exception) {
+            null
+        }
+    }
     val entrance = remember { Animatable(0f) }
     LaunchedEffect(Unit) {
-        entrance.animateTo(1f, spring(dampingRatio = 0.82f, stiffness = 420f))
+        entrance.animateTo(1f, spring(dampingRatio = 0.9f, stiffness = 340f))
     }
     var isClosing by remember { mutableStateOf(false) }
     val closeAnimated: () -> Unit = {
         if (!isClosing) {
             isClosing = true
             scope.launch {
-                entrance.animateTo(0f, tween(180, easing = FastOutLinearInEasing))
+                entrance.animateTo(0f, tween(200, easing = FastOutSlowInEasing))
                 onDismiss()
             }
         }
@@ -282,8 +310,15 @@ fun FullScreenMediaViewer(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .graphicsLayer { alpha = entrance.value.coerceIn(0f, 1f) }
-                .background(Color.Black.copy(alpha = backgroundAlpha))
+                .onPlaced { viewerCoords[0] = it }
+                // Growing out of a photo, the photo shows at once and only the black fades in
+                .graphicsLayer {
+                    alpha = if (openedTile != null) (entrance.value * 3f).coerceIn(0f, 1f) else entrance.value.coerceIn(0f, 1f)
+                }
+                .drawBehind {
+                    val fade = if (openedTile != null) entrance.value.coerceIn(0f, 1f) else 1f
+                    drawRect(Color.Black.copy(alpha = backgroundAlpha * fade))
+                }
                 .testTag("full_screen_media_dialog")
         ) {
             // Main Interactive Zoomable & Pannable Photo with Horizontal Pager
@@ -299,10 +334,42 @@ fun FullScreenMediaViewer(
                 modifier = Modifier
                     .fillMaxSize()
                     .graphicsLayer {
-                        val zoom = 0.32f + 0.68f * entrance.value
-                        scaleX = zoom
-                        scaleY = zoom
-                        transformOrigin = openFrom
+                        val t = entrance.value
+                        // Back into the photo only while still on it (after a swipe to another one,
+                        // it zooms away instead)
+                        val from = if (pagerState.currentPage == initialIdx) tileRectInViewer() else null
+                        if (from != null && size.width > 0f && size.height > 0f) {
+                            // At the start the photo (fitted to the screen) is exactly the tile's size,
+                            // over the tile, cut to the tile's rounded shape
+                            val s0 = maxOf(from.width / size.width, from.height / size.height)
+                            val zoom = s0 + (1f - s0) * t
+                            scaleX = zoom
+                            scaleY = zoom
+                            transformOrigin = TransformOrigin.Center
+                            translationX = (from.center.x - size.width / 2f) * (1f - t)
+                            translationY = (from.center.y - size.height / 2f) * (1f - t)
+                            val open = t.coerceIn(0f, 1f)
+                            if (open < 0.999f) {
+                                val startW = from.width / s0
+                                val startH = from.height / s0
+                                shape = CenteredRoundRect(
+                                    width = startW + (size.width - startW) * open,
+                                    height = startH + (size.height - startH) * open,
+                                    radius = 14.dp.toPx() / s0 * (1f - open)
+                                )
+                                clip = true
+                            } else {
+                                clip = false
+                            }
+                        } else {
+                            val zoom = 0.18f + 0.82f * t
+                            scaleX = zoom
+                            scaleY = zoom
+                            translationX = 0f
+                            translationY = 0f
+                            clip = false
+                            transformOrigin = openFrom
+                        }
                     }
             ) { page ->
                 val pageUrl = mediaList.getOrNull(page) ?: currentUrl
@@ -900,5 +967,56 @@ fun FullScreenMediaViewer(
 
             SecretWindowGuard(ownDialogOpen = showDeleteConfirmDialog)
         }
+    }
+}
+
+/**
+ * The photo (a chat bubble or a gallery tile) that was just tapped to open, so the viewer can grow
+ * out of it. The viewer takes it once; a tap from more than a moment ago doesn't count.
+ */
+object MediaOpenOrigin {
+    private var tile: LayoutCoordinates? = null
+    private var at = 0L
+
+    fun record(coordinates: LayoutCoordinates?) {
+        tile = coordinates
+        at = android.os.SystemClock.uptimeMillis()
+    }
+
+    fun take(): LayoutCoordinates? {
+        val picked = tile?.takeIf { android.os.SystemClock.uptimeMillis() - at < 1500 && it.isAttached }
+        tile = null
+        return picked
+    }
+}
+
+/** Where a photo sits on screen; [open] tells the viewer, just before opening it. */
+class MediaTileAnchor {
+    var coordinates: LayoutCoordinates? = null
+    fun open() = MediaOpenOrigin.record(coordinates)
+}
+
+fun Modifier.mediaTileAnchor(anchor: MediaTileAnchor): Modifier = onPlaced { anchor.coordinates = it }
+
+/** A tappable photo that the viewer grows out of when it opens. */
+fun Modifier.openableMedia(onClick: () -> Unit): Modifier = composed {
+    val anchor = remember { MediaTileAnchor() }
+    mediaTileAnchor(anchor).clickable {
+        anchor.open()
+        onClick()
+    }
+}
+
+/** A rounded rectangle [width] x [height] (px) in the middle of the layer. */
+private class CenteredRoundRect(
+    private val width: Float,
+    private val height: Float,
+    private val radius: Float
+) : Shape {
+    override fun createOutline(size: Size, layoutDirection: LayoutDirection, density: Density): Outline {
+        val left = (size.width - width) / 2f
+        val top = (size.height - height) / 2f
+        val r = radius.coerceAtLeast(0f)
+        return Outline.Rounded(RoundRect(left, top, left + width, top + height, CornerRadius(r, r)))
     }
 }

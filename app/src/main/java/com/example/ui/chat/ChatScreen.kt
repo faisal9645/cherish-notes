@@ -40,6 +40,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.automirrored.filled.Reply
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
@@ -108,6 +109,7 @@ fun ChatScreen(
     onNavigateToHome: () -> Unit = {},
     onNavigateToProfile: () -> Unit = {},
     onNavigateToDates: () -> Unit = {},
+    onNavigateToOurWords: () -> Unit = {},
     onLoggedOut: () -> Unit = {}
 ) {
     val context = LocalContext.current
@@ -527,6 +529,9 @@ fun ChatScreen(
     }
     val latestTogetherSince by rememberUpdatedState(togetherSince)
     var datesReminder by remember { mutableStateOf<List<com.example.ui.dates.UpcomingDate>>(emptyList()) }
+    // In the first days of a month: last month's story is offered, and plays when asked
+    var monthRecapInvite by remember { mutableStateOf<com.example.ui.recap.MonthRecap?>(null) }
+    var monthRecapStory by remember { mutableStateOf<com.example.ui.recap.MonthRecap?>(null) }
     val sentGoodnightTonight by rememberUpdatedState(
         uiState.messages.any {
             it.effect == EFFECT_GOODNIGHT && it.senderId == currentUserId && it.timestamp >= tonightStartMillis()
@@ -558,6 +563,22 @@ fun ChatScreen(
                 while (datesReminder.isNotEmpty()) delay(250)
                 delay(300)
             }
+            // A new month: "Our October is ready" (once; it waits a while, then steps aside)
+            if (com.example.ui.recap.OurMonthRecap.isInviteDue(context)) {
+                val recap = com.example.ui.recap.OurMonthRecap.load(context, viewModel.uiState.value.currentUser?.id.orEmpty())
+                if (recap != null && recap.totalMessages > 0) {
+                    com.example.ui.recap.OurMonthRecap.markInvited(context)
+                    monthRecapInvite = recap
+                    var waited = 0
+                    while (monthRecapInvite != null && waited < 15_000) {
+                        delay(250)
+                        waited += 250
+                    }
+                    monthRecapInvite = null
+                    while (monthRecapStory != null) delay(250)
+                    delay(300)
+                }
+            }
             if (isGoodnightDue(context) && !sentGoodnightTonight) {
                 while (showGoodnightStars) delay(250)
                 markGoodnightShown(context)
@@ -566,6 +587,7 @@ fun ChatScreen(
         } finally {
             showGoodMorning = false
             celebration = null
+            monthRecapInvite = null
         }
     }
 
@@ -604,8 +626,32 @@ fun ChatScreen(
     val showHugNudge = isChatInView && isStressedMood(partner?.mood) && partnerMoodAt > 0L &&
         System.currentTimeMillis() - partnerMoodAt < MOOD_FRESH_MS && hugNudgeHandled != partnerMoodAt
 
+    // Jump-to-unread: the messages that were unread when the chat came into view (gathered for a
+    // few seconds, as they load, before they show as read), so a pill can take you to the first one
+    var unreadOnOpen by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var unreadJumpDone by remember { mutableStateOf(false) }
+    val chatInViewSince = remember { longArrayOf(-1L) }
+    if (!isChatInView) {
+        chatInViewSince[0] = -1L
+    } else if (chatInViewSince[0] < 0L) {
+        chatInViewSince[0] = android.os.SystemClock.uptimeMillis()
+    }
+    LaunchedEffect(isChatInView) {
+        if (!isChatInView) {
+            unreadOnOpen = emptySet()
+            unreadJumpDone = false
+        }
+    }
+
     LaunchedEffect(unreadIds, isChatInView) {
-        if (isChatInView) viewModel.markMessagesAsRead(unreadIds)
+        if (isChatInView) {
+            // Taken here, just before they're marked read
+            val sinceInView = android.os.SystemClock.uptimeMillis() - chatInViewSince[0]
+            if (!unreadJumpDone && unreadIds.isNotEmpty() && sinceInView in 0L..4000L) {
+                unreadOnOpen = unreadOnOpen + unreadIds
+            }
+            viewModel.markMessagesAsRead(unreadIds)
+        }
     }
 
     // Behind Notes nothing of the chat stays open: sheets, dialogs, the recorder, selection, the
@@ -943,54 +989,6 @@ fun ChatScreen(
                                                 )
                                             }
                                         }
-
-                                        // Partner Battery Status Pill - Only shown when partner is online (no stale offline battery)
-                                        val battery = partner?.batteryLevel
-                                        if (uiState.isPartnerOnline && battery != null && battery in 0..100) {
-                                            val isCharging = partner.isCharging
-                                            val isLow = battery <= 20
-                                            Surface(
-                                                shape = RoundedCornerShape(8.dp),
-                                                color = when {
-                                                    isCharging -> Color(0xFF10B981).copy(alpha = 0.15f)
-                                                    isLow -> Color(0xFFEF4444).copy(alpha = 0.15f)
-                                                    else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
-                                                }
-                                            ) {
-                                                Row(
-                                                    verticalAlignment = Alignment.CenterVertically,
-                                                    modifier = Modifier.padding(start = 3.dp, end = 5.dp, top = 2.dp, bottom = 2.dp)
-                                                ) {
-                                                    val batteryTint = when {
-                                                        isCharging -> Color(0xFF10B981)
-                                                        isLow -> Color(0xFFEF4444)
-                                                        else -> MaterialTheme.colorScheme.onSurfaceVariant
-                                                    }
-                                                    Icon(
-                                                        imageVector = when {
-                                                            isCharging -> Icons.Filled.BatteryChargingFull
-                                                            isLow -> Icons.Filled.BatteryAlert
-                                                            battery >= 90 -> Icons.Filled.BatteryFull
-                                                            battery >= 70 -> Icons.Filled.Battery6Bar
-                                                            battery >= 50 -> Icons.Filled.Battery5Bar
-                                                            battery >= 35 -> Icons.Filled.Battery4Bar
-                                                            else -> Icons.Filled.Battery3Bar
-                                                        },
-                                                        contentDescription = null,
-                                                        tint = batteryTint,
-                                                        modifier = Modifier.size(12.dp)
-                                                    )
-                                                    Text(
-                                                        text = "$battery%",
-                                                        fontSize = 9.5.sp,
-                                                        fontWeight = FontWeight.Bold,
-                                                        color = batteryTint,
-                                                        maxLines = 1,
-                                                        softWrap = false
-                                                    )
-                                                }
-                                            }
-                                        }
                                     }
                                     val statusText = when {
                                         partnerHasCheckAfter -> {
@@ -1134,6 +1132,16 @@ fun ChatScreen(
                                     },
                                     leadingIcon = { Icon(Icons.Outlined.Star, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface) }
                                 )
+                                // The starred messages as a little book
+                                DropdownMenuItem(
+                                    text = { Text("Our Words") },
+                                    onClick = {
+                                        showChatMenu = false
+                                        onNavigateToOurWords()
+                                    },
+                                    leadingIcon = { Icon(Icons.AutoMirrored.Filled.MenuBook, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface) },
+                                    modifier = Modifier.testTag("chat_menu_our_words")
+                                )
                                 DropdownMenuItem(
                                     text = { Text("Clear Chat") },
                                     onClick = {
@@ -1197,6 +1205,7 @@ fun ChatScreen(
                     },
                     onSendText = {
                         if (composerText.isNotBlank()) view.chatHaptic(ChatHaptic.Send)
+                        unreadJumpDone = true
                         viewModel.sendTextMessage(composerText)
                         composerText = ""
                         viewModel.onTypingChanged(false)
@@ -1432,9 +1441,20 @@ fun ChatScreen(
                         },
                     reverseLayout = true,
                     contentPadding = PaddingValues(vertical = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                    // A short chat (e.g. a new day) starts at the top, under the header, instead of
+                    // sitting at the bottom by the message box
+                    verticalArrangement = Arrangement.spacedBy(4.dp, Alignment.Top)
                 ) {
-
+                    // A new day with nothing shown yet: "Today" and the banner open the chat at the top
+                    if (showEmptyTodayHeader && reversedMessages.isEmpty()) {
+                        item(key = "empty_today_header", contentType = "today_header") {
+                            val isPrivate = uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE
+                            Column(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
+                                DateSeparatorBadge(dateText = "Today", isPrivateMode = isPrivate, isDark = isDark)
+                                StrictlyTwoPersonBanner(isPrivateMode = isPrivate, isDark = isDark)
+                            }
+                        }
+                    }
 
                     itemsIndexed(
                         items = reversedMessages,
@@ -1522,9 +1542,9 @@ fun ChatScreen(
                     // Strictly 2-Person Beginning of Chat Banner (shown when pagination is exhausted)
             } // Box content end
 
-                // No message yet today: "Today" and the banner sit where the first message will land
-                // (once it does, its row shows them instead)
-                if (showEmptyTodayHeader) {
+                // No message yet today but older ones are shown (Recover all): "Today" and the banner
+                // follow them, where the first message will land (once it does, its row shows them)
+                if (showEmptyTodayHeader && reversedMessages.isNotEmpty()) {
                     val isPrivate = uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE
                     Column(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
                         DateSeparatorBadge(dateText = "Today", isPrivateMode = isPrivate, isDark = isDark)
@@ -1606,6 +1626,88 @@ fun ChatScreen(
                     isDark = isDark,
                     shadowElevation = 3.dp
                 )
+            }
+
+            // Jump-to-unread pill: "N new messages" while the first of them is off screen; a tap
+            // goes straight there. Gone once it has been on screen.
+            val unreadJumpCount = remember(reversedMessages, unreadOnOpen) {
+                if (unreadOnOpen.isEmpty()) 0 else reversedMessages.count { it.id in unreadOnOpen }
+            }
+            // The oldest of them (the list runs bottom-up, so the highest index)
+            val unreadJumpIndex = remember(reversedMessages, unreadOnOpen) {
+                if (unreadOnOpen.isEmpty()) -1 else reversedMessages.indexOfLast { it.id in unreadOnOpen }
+            }
+            // 1 = above the screen, -1 = below it, 0 = on screen, null = not known yet
+            val unreadJumpWhere by remember(unreadJumpIndex) {
+                derivedStateOf {
+                    val visible = listState.layoutInfo.visibleItemsInfo
+                    when {
+                        unreadJumpIndex < 0 || visible.isEmpty() -> null
+                        unreadJumpIndex > visible.last().index -> 1
+                        unreadJumpIndex < visible.first().index -> -1
+                        else -> 0
+                    }
+                }
+            }
+            LaunchedEffect(unreadJumpWhere) {
+                if (unreadJumpWhere == 0) unreadJumpDone = true
+            }
+            val unreadJumpUp = remember { booleanArrayOf(true) }
+            unreadJumpWhere?.takeIf { it != 0 }?.let { unreadJumpUp[0] = it == 1 }
+            val showUnreadJump = !unreadJumpDone && unreadJumpCount > 0 && (unreadJumpWhere == 1 || unreadJumpWhere == -1)
+            val unreadJumpDrop by animateDpAsState(
+                targetValue = if (showDateChip && topVisibleDate != null) 40.dp else 0.dp,
+                animationSpec = spring(dampingRatio = 0.85f, stiffness = 500f),
+                label = "unread_jump_drop"
+            )
+            androidx.compose.animation.AnimatedVisibility(
+                visible = showUnreadJump,
+                enter = fadeIn(tween(180)) + slideInVertically(spring(dampingRatio = 0.75f, stiffness = 500f)) { -it },
+                exit = fadeOut(tween(200)) + scaleOut(tween(200), targetScale = 0.85f),
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = 10.dp)
+                    .offset { IntOffset(0, unreadJumpDrop.roundToPx()) }
+            ) {
+                val isPrivate = uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE
+                Surface(
+                    onClick = {
+                        val index = unreadJumpIndex
+                        unreadJumpDone = true
+                        val target = reversedMessages.getOrNull(index)
+                        if (target != null) {
+                            view.chatHaptic(ChatHaptic.Tick)
+                            scope.launch {
+                                listState.revealMessage(index)
+                                highlightedMessageId = target.id
+                                delay(2200)
+                                if (highlightedMessageId == target.id) highlightedMessageId = null
+                            }
+                        }
+                    },
+                    shape = CircleShape,
+                    color = if (isPrivate) (if (isDark) darkTone(Color(0xFF2E2F33)) else Color(0xFFE5E7EB)) else MaterialTheme.colorScheme.primary,
+                    contentColor = if (isPrivate) (if (isDark) darkTone(Color(0xFFECECEC)) else Color(0xFF1F2937)) else MaterialTheme.colorScheme.onPrimary,
+                    shadowElevation = 4.dp,
+                    modifier = Modifier.testTag("jump_to_unread")
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(start = 10.dp, end = 14.dp, top = 7.dp, bottom = 7.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (unreadJumpUp[0]) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = if (unreadJumpCount == 1) "1 new message" else "$unreadJumpCount new messages",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
             }
 
             // Floating scroll to bottom button
@@ -1837,6 +1939,31 @@ fun ChatScreen(
         key(heartbeatPulseKey) {
             HeartbeatReceivedPulse(onDone = { heartbeatPulseKey = 0L })
         }
+    }
+
+    androidx.compose.animation.AnimatedVisibility(
+        visible = monthRecapInvite != null,
+        enter = fadeIn(tween(300)) + slideInVertically(tween(350)) { -it / 2 },
+        exit = fadeOut(tween(250)) + slideOutVertically(tween(250)) { -it / 2 }
+    ) {
+        // Kept while fading out
+        val shown = remember { monthRecapInvite } ?: return@AnimatedVisibility
+        com.example.ui.recap.OurMonthInviteCard(
+            recap = shown,
+            onWatch = {
+                monthRecapStory = shown
+                monthRecapInvite = null
+            },
+            onDismiss = { monthRecapInvite = null }
+        )
+    }
+    monthRecapStory?.let { recap ->
+        com.example.ui.recap.OurMonthStory(
+            recap = recap,
+            myName = myUser?.displayName?.ifBlank { null } ?: "Me",
+            partnerName = partnerName,
+            onDismiss = { monthRecapStory = null }
+        )
     }
 
     androidx.compose.animation.AnimatedVisibility(

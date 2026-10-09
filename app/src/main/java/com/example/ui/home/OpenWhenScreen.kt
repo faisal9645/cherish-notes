@@ -43,73 +43,12 @@ fun OpenWhenScreen(
     onNavigateBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    // Default romantic pre-curated envelopes
-    var envelopes by remember {
-        mutableStateOf(
-            listOf(
-                OpenWhenLetter(
-                    id = "env_1",
-                    title = "Open when you miss me",
-                    category = "MISS_YOU",
-                    envelopeEmoji = "💌",
-                    content = "Whenever you feel a million miles away, close your eyes and remember: every single beat of my heart belongs to you. You are my home, no matter where we are. Call me whenever you need my voice. ❤️",
-                    authorName = "Your Love",
-                    unlockCondition = "Open when longing for my warmth",
-                    isOpened = false
-                ),
-                OpenWhenLetter(
-                    id = "env_2",
-                    title = "Open when you have a bad day",
-                    category = "BAD_DAY",
-                    envelopeEmoji = "🌧️",
-                    content = "Take a deep breath, my darling. Today was just one tough chapter, not the entire book. You are stronger, braver, and more resilient than you know. When you get home, everything is going to be okay. I'm right here with you. 🫂",
-                    authorName = "Your Love",
-                    unlockCondition = "Open when the world feels too heavy",
-                    isOpened = false
-                ),
-                OpenWhenLetter(
-                    id = "env_3",
-                    title = "Open when you can't sleep",
-                    category = "CANT_SLEEP",
-                    envelopeEmoji = "🌙",
-                    content = "It's late, the night is quiet, and the stars are out. Imagine my arms wrapped around you, whispering sweet things in your ear. Rest your mind, close your eyes, and dream of our next sunrise together. Sweet dreams my angel. ✨",
-                    authorName = "Your Love",
-                    unlockCondition = "Open past midnight when thoughts wander",
-                    isOpened = false
-                ),
-                OpenWhenLetter(
-                    id = "env_4",
-                    title = "Open on our anniversary",
-                    category = "ANNIVERSARY",
-                    envelopeEmoji = "💍",
-                    content = "Happy Anniversary to the one who made my life an extraordinary adventure. From the very first glance to this exact second, loving you has been the easiest, truest decision I've ever made. Here is to our entire lifetime together! 🥂❤️",
-                    authorName = "Your Love",
-                    unlockCondition = "Locked until our milestone day",
-                    isOpened = false
-                ),
-                OpenWhenLetter(
-                    id = "env_5",
-                    title = "Open when you need motivation",
-                    category = "MOTIVATION",
-                    envelopeEmoji = "🔥",
-                    content = "Look at how far you've come! I believe in your genius, your ambition, and your boundless potential even when you doubt yourself. Go out there and conquer it — I am your biggest cheerleader forever! 🌟",
-                    authorName = "Your Love",
-                    unlockCondition = "Open before a big challenge",
-                    isOpened = false
-                ),
-                OpenWhenLetter(
-                    id = "env_6",
-                    title = "Open when you want a silly laugh",
-                    category = "FUNNY",
-                    envelopeEmoji = "😜",
-                    content = "Remember that time we got hopelessly lost and ended up laughing until our stomachs hurt? You have the most infectious, adorable laugh on this planet. Smile right now, you gorgeous human! 😂💕",
-                    authorName = "Your Love",
-                    unlockCondition = "Open when you need an instant grin",
-                    isOpened = false
-                )
-            )
-        )
-    }
+    // Our real letters, kept on the couple's document: the ones written for me and the ones I wrote
+    val app = androidx.compose.ui.platform.LocalContext.current.applicationContext as com.example.CherishApplication
+    val repository = app.coupleFeaturesRepository
+    LaunchedEffect(Unit) { repository.rebuildLoveUs() }
+    val envelopes by repository.openWhenFlow.collectAsState()
+    val myId = app.authRepository.getCurrentUserId()
 
     var selectedLetter by remember { mutableStateOf<OpenWhenLetter?>(null) }
     var showCreateDialog by remember { mutableStateOf(false) }
@@ -150,7 +89,30 @@ fun OpenWhenScreen(
         },
         containerColor = MaterialTheme.colorScheme.background
     ) { paddingValues ->
-        LazyVerticalGrid(
+        if (envelopes.isEmpty()) {
+            // No letters yet
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues)
+                    .padding(32.dp)
+            ) {
+                Text("\uD83D\uDC8C", fontSize = 44.sp)
+                Spacer(modifier = Modifier.height(10.dp))
+                Text("No letters yet", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = MaterialTheme.colorScheme.onSurface)
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    "Write a sealed letter for the moments your love will need it most",
+                    fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                Button(onClick = { showCreateDialog = true }) { Text("Write a letter") }
+            }
+        } else LazyVerticalGrid(
             columns = GridCells.Fixed(2),
             modifier = modifier
                 .fillMaxSize()
@@ -176,9 +138,8 @@ fun OpenWhenScreen(
             letter = letter,
             onDismiss = { selectedLetter = null },
             onMarkOpened = {
-                envelopes = envelopes.map {
-                    if (it.id == letter.id) it.copy(isOpened = true, openedAt = System.currentTimeMillis()) else it
-                }
+                // Marked opened only when it's a letter written for me (mine just show)
+                repository.markOpenWhenOpened(letter.id)
                 selectedLetter = letter.copy(isOpened = true)
             }
         )
@@ -189,16 +150,7 @@ fun OpenWhenScreen(
         CreateEnvelopeDialog(
             onDismiss = { showCreateDialog = false },
             onCreate = { title, condition, text, emoji ->
-                val newLetter = OpenWhenLetter(
-                    id = "env_${System.currentTimeMillis()}",
-                    title = title,
-                    envelopeEmoji = emoji,
-                    content = text,
-                    authorName = "Me",
-                    unlockCondition = condition,
-                    isOpened = false
-                )
-                envelopes = envelopes + newLetter
+                repository.addOpenWhenLetter(title, condition, text, emoji)
                 showCreateDialog = false
             }
         )

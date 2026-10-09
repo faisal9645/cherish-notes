@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <style name="Theme.MyApplication" parent="android:Theme.Material.Light.NoActionBar">
+        <!-- The app draws its own dark mode: the phone mustn't darken it again (it turned light
+             cards black on phones with "dark mode for apps") -->
+        <item name="android:forceDarkAllowed">false</item>
         <item name="android:windowBackground">#FFFFFF</item>
         <item name="android:colorBackground">#FFFFFF</item>
         <item name="android:statusBarColor">#FFFFFF</item>

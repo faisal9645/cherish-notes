@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import java.util.UUID
 
@@ -32,17 +33,20 @@ class CoupleFeaturesRepository(
         }
     }
 
-    private val _memoriesFlow = MutableStateFlow<List<Memory>>(getSampleMemories())
+    // Only real memories (no made-up samples)
+    private val _memoriesFlow = MutableStateFlow<List<Memory>>(emptyList())
     val memoriesFlow: StateFlow<List<Memory>> = _memoriesFlow.asStateFlow()
 
     // Only real dates: reminders and the days counter must never show made-up ones
     private val _datesFlow = MutableStateFlow<List<ImportantDate>>(emptyList())
     val datesFlow: StateFlow<List<ImportantDate>> = _datesFlow.asStateFlow()
 
-    private val _notesFlow = MutableStateFlow<List<SharedNote>>(getSampleNotes())
+    // Only real notes (no made-up samples)
+    private val _notesFlow = MutableStateFlow<List<SharedNote>>(emptyList())
     val notesFlow: StateFlow<List<SharedNote>> = _notesFlow.asStateFlow()
 
-    private fun getCoupleId(): String {
+    /** The couple's id (their Firestore and Storage folder). */
+    fun getCoupleId(): String {
         return authRepository.currentUserState.value?.coupleId?.trim()?.ifBlank { null } ?: "couple_faisal_shali"
     }
 
@@ -66,12 +70,10 @@ class CoupleFeaturesRepository(
                         Log.w("CoupleFeaturesRepo", "Listen memories failed", error)
                         return@addSnapshotListener
                     }
-                    if (snapshot != null && !snapshot.isEmpty) {
+                    if (snapshot != null) {
                         val items = snapshot.documents.mapNotNull { it.toObject(Memory::class.java) }
                         _memoriesFlow.value = items
                         trySend(items)
-                    } else {
-                        trySend(_memoriesFlow.value)
                     }
                 }
             awaitClose { reg.remove() }
@@ -206,12 +208,10 @@ class CoupleFeaturesRepository(
                 .orderBy("updatedAt", Query.Direction.DESCENDING)
                 .addSnapshotListener { snapshot, error ->
                     if (error != null) return@addSnapshotListener
-                    if (snapshot != null && !snapshot.isEmpty) {
+                    if (snapshot != null) {
                         val items = snapshot.documents.mapNotNull { it.toObject(SharedNote::class.java) }
                         _notesFlow.value = items
                         trySend(items)
-                    } else {
-                        trySend(_notesFlow.value)
                     }
                 }
             awaitClose { reg.remove() }
@@ -395,34 +395,62 @@ class CoupleFeaturesRepository(
         )
     }
 
-    // Daily Us (Question of the Day for Deep Lovers)
-    private val _dailyQuestionFlow = MutableStateFlow(
-        com.example.data.model.DailyQuestion(
-            id = "q_today",
-            question = "What is a small, quiet moment with me that made you feel deeply loved?",
-            category = "Deep Connection",
-            myAnswer = null,
-            partnerAnswer = "When we made dinner together in our socks and you held my hand while the pasta was boiling ❤️",
-            isMyAnswerSubmitted = false,
-            isPartnerAnswerSubmitted = true,
-            isLikedByPartner = false,
-            streakDays = 14
-        )
-    )
+    // Daily Us: one question a day (the same on both phones), both answers kept on the couple's
+    // document; each one's answer is revealed to the other once they've answered too
+    private val _dailyQuestionFlow = MutableStateFlow(com.example.data.model.DailyQuestion())
     val dailyQuestionFlow: StateFlow<com.example.data.model.DailyQuestion> = _dailyQuestionFlow.asStateFlow()
 
+    /** Saves my answer to today's question; when both have answered, the streak grows (once a day). */
     fun submitMyDailyAnswer(answer: String) {
-        val current = _dailyQuestionFlow.value
-        _dailyQuestionFlow.value = current.copy(
-            myAnswer = answer.trim(),
-            isMyAnswerSubmitted = true,
-            streakDays = current.streakDays + 1
-        )
+        val text = answer.trim().ifBlank { return }
+        val uid = authRepository.getCurrentUserId().ifBlank { return }
+        val ref = loveCoupleRef() ?: return
+        val fs = firestore ?: return
+        _dailyQuestionFlow.value = _dailyQuestionFlow.value.copy(myAnswer = text, isMyAnswerSubmitted = true)
+        val today = dayKey()
+        val yesterday = dayKey(System.currentTimeMillis() - DAY_MS)
+        fs.runTransaction { tx ->
+            val snap = tx.get(ref)
+            val daily = snap.get("dailyUs") as? Map<*, *>
+            val sameDay = daily?.get("date") == today
+            val answers = mutableMapOf<String, Any?>()
+            val likes = mutableMapOf<String, Any?>()
+            if (sameDay) {
+                (daily?.get("answers") as? Map<*, *>)?.forEach { (k, v) -> if (k is String) answers[k] = v }
+                (daily?.get("likes") as? Map<*, *>)?.forEach { (k, v) -> if (k is String) likes[k] = v }
+            }
+            answers[uid] = text
+            tx.set(
+                ref,
+                mapOf("dailyUs" to mapOf("date" to today, "answers" to answers, "likes" to likes)),
+                com.google.firebase.firestore.SetOptions.mergeFields("dailyUs")
+            )
+            if (answers.size >= 2) {
+                val streak = snap.get("dailyStreak") as? Map<*, *>
+                val lastDate = streak?.get("lastDate") as? String
+                if (lastDate != today) {
+                    val count = (streak?.get("count") as? Number)?.toInt() ?: 0
+                    tx.set(
+                        ref,
+                        mapOf("dailyStreak" to mapOf("count" to if (lastDate == yesterday) count + 1 else 1, "lastDate" to today)),
+                        com.google.firebase.firestore.SetOptions.mergeFields("dailyStreak")
+                    )
+                }
+            }
+            null
+        }.addOnFailureListener { Log.w("CoupleFeaturesRepo", "Saving the daily answer failed", it) }
     }
 
+    /** Loves (or un-loves) the partner's answer today. */
     fun toggleLikeDailyAnswer() {
+        val uid = authRepository.getCurrentUserId().ifBlank { return }
+        val ref = loveCoupleRef() ?: return
         val current = _dailyQuestionFlow.value
-        _dailyQuestionFlow.value = current.copy(isLikedByPartner = !current.isLikedByPartner)
+        if (!current.isPartnerAnswerSubmitted) return
+        val liked = !current.isLikedByPartner
+        _dailyQuestionFlow.value = current.copy(isLikedByPartner = liked)
+        ref.update(com.google.firebase.firestore.FieldPath.of("dailyUs", "likes", uid), liked)
+            .addOnFailureListener { Log.w("CoupleFeaturesRepo", "Saving the like failed", it) }
     }
 
     // Love Jar (Reasons Why I Love You)
@@ -482,79 +510,298 @@ class CoupleFeaturesRepository(
         _bucketListFlow.value = _bucketListFlow.value + item
     }
 
-    // --- LIFETIME LOVE & AGE JOURNEY (For couples whose connection lasts their entire life) ---
-    private val _lifetimeProfileFlow = MutableStateFlow(
-        com.example.data.model.LifetimeAgeProfile(
-            myBirthYear = 1992,
-            partnerBirthYear = 1995,
-            relationshipStartYear = 2024,
-            secretVow = "We may not wear rings before the world, but our hearts took a vow that no paper could ever hold. We chose each other freely in secret, and our connection is an eternal sanctuary for our entire lives."
-        )
-    )
+    // ---- Lifetime Story: ages from our real birthdays and together date; the vow and the yearly
+    // stories kept on the couple's document for both phones ----
+    private val _lifetimeProfileFlow = MutableStateFlow(com.example.data.model.LifetimeAgeProfile(0, 0, 0))
     val lifetimeProfileFlow: StateFlow<com.example.data.model.LifetimeAgeProfile> = _lifetimeProfileFlow.asStateFlow()
 
-    private val _yearlyJourneysFlow = MutableStateFlow<List<com.example.data.model.YearlyJourneyEntry>>(
-        listOf(
-            com.example.data.model.YearlyJourneyEntry(
-                id = "year_2024",
-                year = 2024,
-                myAge = 32,
-                partnerAge = 29,
-                yearTheme = "The Spark That Ignited Our Secret World",
-                placesWent = "Midnight drives through city hills, secluded rooftop lounge, the secret seaside bungalow",
-                howWeEnjoyed = "We discovered each other in breathless secret conversations that lasted till dawn. Every glance across crowded rooms carried electric sparks that only we understood. Escaping into our private hideaway for hours where the rest of the world completely ceased to exist.",
-                specialMemory = "The stormy rainy night in October when you looked into my eyes and whispered: 'No matter what happens, you are my real home.'",
-                songOrQuote = "Our Anthem: 'Until I Found You' • Secret Codeword: 'Forever'",
-                passionRating = 5
-            ),
-            com.example.data.model.YearlyJourneyEntry(
-                id = "year_2025",
-                year = 2025,
-                myAge = 33,
-                partnerAge = 30,
-                yearTheme = "Stolen Escapes & Deep Intimacy",
-                placesWent = "Hidden cabin in the misty pine mountains, boutique hotel suite 402, quiet sunset beach cove",
-                howWeEnjoyed = "We learned to live two lives: what the outside world sees, and the breathtaking paradise we share together. Cooking breakfast together in secret at 2 PM, laughing uncontrollably, slow dancing in dim light without any shoes, touching with a hunger that only grew deeper.",
-                specialMemory = "Waking up before dawn tangled in blankets, watching the golden sun touch your face, and promising that distance and circumstances will never tear us apart.",
-                songOrQuote = "Quote: 'True love does not need a wedding ring; it needs two souls who choose each other every day.'",
-                passionRating = 5
-            ),
-            com.example.data.model.YearlyJourneyEntry(
-                id = "year_2026",
-                year = 2026,
-                myAge = 34,
-                partnerAge = 31,
-                yearTheme = "Soulmates Bound for Life",
-                placesWent = "Scenic mountain overlook, cozy weekend getaway, our private sacred sanctuary",
-                howWeEnjoyed = "Total emotional synchronization. We support each other through life's hardships, celebrating private victories, holding each other through quiet tears and fierce passion. We don't just love each other—we protect each other's peace.",
-                specialMemory = "Sitting side by side under the stars, renewing our secret oath: to grow old together in our hearts, year by year, age by age, until the very end.",
-                songOrQuote = "Motto: 'My heart has belonged to you since day one, and it will be yours forever.'",
-                passionRating = 5
-            )
-        )
-    )
+    private val _yearlyJourneysFlow = MutableStateFlow<List<com.example.data.model.YearlyJourneyEntry>>(emptyList())
     val yearlyJourneysFlow: StateFlow<List<com.example.data.model.YearlyJourneyEntry>> = _yearlyJourneysFlow.asStateFlow()
 
+    /** Birth years and start year are used only until real birthdays / a together date are set. */
     fun updateLifetimeProfile(myBirthYear: Int, partnerBirthYear: Int, startYear: Int, vow: String) {
-        _lifetimeProfileFlow.value = com.example.data.model.LifetimeAgeProfile(
-            myBirthYear = myBirthYear,
-            partnerBirthYear = partnerBirthYear,
-            relationshipStartYear = startYear,
-            secretVow = vow.trim()
+        val ref = loveCoupleRef() ?: return
+        val myId = authRepository.getCurrentUserId()
+        val birthYears = buildMap<String, Any> {
+            if (myId.isNotBlank()) put(myId, myBirthYear)
+            partnerIdOrNull()?.let { put(it, partnerBirthYear) }
+        }
+        _lifetimeProfileFlow.value = com.example.data.model.LifetimeAgeProfile(myBirthYear, partnerBirthYear, startYear, vow.trim())
+        ref.set(
+            mapOf("lifetime" to mapOf("birthYears" to birthYears, "startYear" to startYear, "vow" to vow.trim())),
+            com.google.firebase.firestore.SetOptions.merge()
+        ).addOnFailureListener { Log.w("CoupleFeaturesRepo", "Saving the lifetime profile failed", it) }
+    }
+
+    fun addYearlyJourney(entry: com.example.data.model.YearlyJourneyEntry) = saveYearlyJourney(entry)
+
+    fun updateYearlyJourney(entry: com.example.data.model.YearlyJourneyEntry) = saveYearlyJourney(entry)
+
+    private fun saveYearlyJourney(entry: com.example.data.model.YearlyJourneyEntry) {
+        val ref = loveCoupleRef() ?: return
+        _yearlyJourneysFlow.value = (_yearlyJourneysFlow.value.filterNot { it.id == entry.id } + entry).sortedByDescending { it.year }
+        // Ages are stored from the writer's side ("my" age is the author's)
+        val stored = mapOf(
+            "year" to entry.year,
+            "myAge" to entry.myAge,
+            "partnerAge" to entry.partnerAge,
+            "yearTheme" to entry.yearTheme,
+            "placesWent" to entry.placesWent,
+            "howWeEnjoyed" to entry.howWeEnjoyed,
+            "specialMemory" to entry.specialMemory,
+            "songOrQuote" to entry.songOrQuote,
+            "passionRating" to entry.passionRating,
+            "photoUrl" to entry.photoUrl,
+            "createdAt" to entry.createdAt,
+            "authorId" to authRepository.getCurrentUserId()
         )
-    }
-
-    fun addYearlyJourney(entry: com.example.data.model.YearlyJourneyEntry) {
-        _yearlyJourneysFlow.value = (listOf(entry) + _yearlyJourneysFlow.value).sortedByDescending { it.year }
-    }
-
-    fun updateYearlyJourney(entry: com.example.data.model.YearlyJourneyEntry) {
-        _yearlyJourneysFlow.value = _yearlyJourneysFlow.value.map {
-            if (it.id == entry.id) entry else it
-        }.sortedByDescending { it.year }
+        ref.set(mapOf("journeys" to mapOf(entry.id to stored)), com.google.firebase.firestore.SetOptions.merge())
+            .addOnFailureListener { Log.w("CoupleFeaturesRepo", "Saving the yearly story failed", it) }
     }
 
     fun deleteYearlyJourney(id: String) {
         _yearlyJourneysFlow.value = _yearlyJourneysFlow.value.filterNot { it.id == id }
+        loveCoupleRef()?.update(com.google.firebase.firestore.FieldPath.of("journeys", id), com.google.firebase.firestore.FieldValue.delete())
+            ?.addOnFailureListener { Log.w("CoupleFeaturesRepo", "Deleting the yearly story failed", it) }
+    }
+
+    // ---- Open When letters: written for the other one, kept on the couple's document ----
+    private val _openWhenFlow = MutableStateFlow<List<com.example.data.model.OpenWhenLetter>>(emptyList())
+    /** All our letters, newest first: the ones written for me and the ones I wrote. */
+    val openWhenFlow: StateFlow<List<com.example.data.model.OpenWhenLetter>> = _openWhenFlow.asStateFlow()
+
+    fun addOpenWhenLetter(title: String, condition: String, content: String, emoji: String) {
+        val ref = loveCoupleRef() ?: return
+        val myId = authRepository.getCurrentUserId()
+        val id = UUID.randomUUID().toString()
+        val now = System.currentTimeMillis()
+        val myName = authRepository.currentUserState.value?.displayName?.ifBlank { null } ?: "Me"
+        _openWhenFlow.value = listOf(
+            com.example.data.model.OpenWhenLetter(
+                id = id, title = title.trim(), envelopeEmoji = emoji, content = content.trim(),
+                authorId = myId, authorName = myName, createdAt = now, unlockCondition = condition.trim()
+            )
+        ) + _openWhenFlow.value
+        val letter = mapOf(
+            "title" to title.trim(),
+            "condition" to condition.trim(),
+            "content" to content.trim(),
+            "emoji" to emoji,
+            "authorId" to myId,
+            "createdAt" to now
+        )
+        ref.set(mapOf("openWhen" to mapOf(id to letter)), com.google.firebase.firestore.SetOptions.merge())
+            .addOnFailureListener { Log.w("CoupleFeaturesRepo", "Saving the letter failed", it) }
+    }
+
+    /** The reader broke the seal (only letters written for me are marked). */
+    fun markOpenWhenOpened(id: String) {
+        val letter = _openWhenFlow.value.firstOrNull { it.id == id } ?: return
+        if (letter.isOpened || letter.authorId == authRepository.getCurrentUserId()) return
+        val now = System.currentTimeMillis()
+        _openWhenFlow.value = _openWhenFlow.value.map { if (it.id == id) it.copy(isOpened = true, openedAt = now) else it }
+        loveCoupleRef()?.update(com.google.firebase.firestore.FieldPath.of("openWhen", id, "openedAt"), now)
+            ?.addOnFailureListener { Log.w("CoupleFeaturesRepo", "Marking the letter opened failed", it) }
+    }
+
+    /** Deletes one of my own letters. */
+    fun deleteOpenWhenLetter(id: String) {
+        val letter = _openWhenFlow.value.firstOrNull { it.id == id } ?: return
+        if (letter.authorId != authRepository.getCurrentUserId()) return
+        _openWhenFlow.value = _openWhenFlow.value.filterNot { it.id == id }
+        loveCoupleRef()?.update(com.google.firebase.firestore.FieldPath.of("openWhen", id), com.google.firebase.firestore.FieldValue.delete())
+            ?.addOnFailureListener { Log.w("CoupleFeaturesRepo", "Deleting the letter failed", it) }
+    }
+
+    // ---- The couple's document, read by Daily Us, Open When and Lifetime Story ----
+    private var coupleDocListener: com.google.firebase.firestore.ListenerRegistration? = null
+    private var loveListeningCoupleId: String? = null
+    @Volatile private var coupleDocData: Map<String, Any?> = emptyMap()
+    private val loveScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Main)
+
+    private fun loveCoupleRef() = authRepository.currentUserState.value?.coupleId?.trim()?.ifBlank { null }
+        ?.let { firestore?.collection("couples")?.document(it) }
+
+    private fun partnerIdOrNull(): String? =
+        (authRepository.partnerUserState.value?.id ?: authRepository.currentUserState.value?.partnerId)?.trim()?.ifBlank { null }
+
+    /** The 6 AM day ("yyyy-MM-dd"), as everywhere else in the app. */
+    private fun dayKey(now: Long = System.currentTimeMillis()): String =
+        com.example.security.SecurityPreferences.getInstance(context).logicalDayKey(now)
+
+    /** Listens to the couple's document once a couple is known (again if it changes). */
+    fun ensureLoveUsListener() {
+        val coupleId = authRepository.currentUserState.value?.coupleId?.trim()?.ifBlank { null } ?: return
+        if (loveListeningCoupleId == coupleId) return
+        val fs = firestore ?: return
+        coupleDocListener?.remove()
+        loveListeningCoupleId = coupleId
+        coupleDocListener = fs.collection("couples").document(coupleId).addSnapshotListener { snapshot, error ->
+            if (error != null || snapshot == null) return@addSnapshotListener
+            coupleDocData = snapshot.data ?: emptyMap()
+            rebuildLoveUs()
+        }
+    }
+
+    /** Re-reads everything (also called when Love & Us opens, so a new day gets its new question). */
+    fun rebuildLoveUs() {
+        ensureLoveUsListener()
+        val doc = coupleDocData
+        val myId = authRepository.getCurrentUserId()
+        val partnerId = partnerIdOrNull()
+        val myName = authRepository.currentUserState.value?.displayName?.ifBlank { null } ?: "Me"
+        val partnerName = authRepository.partnerUserState.value?.displayName?.ifBlank { null } ?: "Your love"
+
+        // Daily Us
+        val today = dayKey()
+        val yesterday = dayKey(System.currentTimeMillis() - DAY_MS)
+        val daily = doc["dailyUs"] as? Map<*, *>
+        val sameDay = daily?.get("date") == today
+        val answers = (if (sameDay) daily?.get("answers") as? Map<*, *> else null).orEmpty()
+        val likes = (if (sameDay) daily?.get("likes") as? Map<*, *> else null).orEmpty()
+        val theirKey = partnerId ?: answers.keys.firstOrNull { it != myId } as? String
+        val mine = answers[myId] as? String
+        val theirs = theirKey?.let { answers[it] } as? String
+        val streak = doc["dailyStreak"] as? Map<*, *>
+        val lastStreakDay = streak?.get("lastDate") as? String
+        val streakDays = if (lastStreakDay == today || lastStreakDay == yesterday) (streak?.get("count") as? Number)?.toInt() ?: 0 else 0
+        val (question, category) = dailyQuestionFor(today)
+        _dailyQuestionFlow.value = com.example.data.model.DailyQuestion(
+            id = today,
+            question = question,
+            category = category,
+            myAnswer = mine,
+            partnerAnswer = theirs,
+            isMyAnswerSubmitted = mine != null,
+            isPartnerAnswerSubmitted = theirs != null,
+            isLikedByPartner = likes[myId] == true,
+            partnerLovedMyAnswer = theirKey != null && likes[theirKey] == true,
+            streakDays = streakDays
+        )
+
+        // Open When
+        _openWhenFlow.value = (doc["openWhen"] as? Map<*, *>).orEmpty().mapNotNull { (key, value) ->
+            val id = key as? String ?: return@mapNotNull null
+            val letter = value as? Map<*, *> ?: return@mapNotNull null
+            val authorId = letter["authorId"] as? String ?: ""
+            val openedAt = (letter["openedAt"] as? Number)?.toLong()
+            com.example.data.model.OpenWhenLetter(
+                id = id,
+                title = letter["title"] as? String ?: "",
+                envelopeEmoji = letter["emoji"] as? String ?: "\uD83D\uDC8C",
+                content = letter["content"] as? String ?: "",
+                authorId = authorId,
+                authorName = if (authorId == myId) myName else partnerName,
+                createdAt = (letter["createdAt"] as? Number)?.toLong() ?: 0L,
+                unlockCondition = letter["condition"] as? String ?: "",
+                isOpened = openedAt != null,
+                openedAt = openedAt
+            )
+        }.sortedByDescending { it.createdAt }
+
+        // Lifetime Story: real birthdays and together date first, what was typed otherwise
+        val life = doc["lifetime"] as? Map<*, *>
+        val birthYears = (life?.get("birthYears") as? Map<*, *>).orEmpty()
+        val birthdays = authRepository.birthdays.value
+        fun yearOf(date: String?) = date?.take(4)?.toIntOrNull()
+        val myBirthYear = yearOf(birthdays[myId]) ?: (birthYears[myId] as? Number)?.toInt() ?: 0
+        val partnerBirthYear = partnerId?.let { yearOf(birthdays[it]) ?: (birthYears[it] as? Number)?.toInt() } ?: 0
+        val since = authRepository.togetherSince.value ?: _datesFlow.value
+            .filter { it.getTypedCategory() == DateCategory.ANNIVERSARY }
+            .minByOrNull { it.dateMillis }
+            ?.let { java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date(it.dateMillis)) }
+        val startYear = yearOf(since) ?: (life?.get("startYear") as? Number)?.toInt() ?: java.util.Calendar.getInstance().get(java.util.Calendar.YEAR)
+        val vow = (life?.get("vow") as? String)?.ifBlank { null } ?: com.example.data.model.LifetimeAgeProfile().secretVow
+        _lifetimeProfileFlow.value = com.example.data.model.LifetimeAgeProfile(myBirthYear, partnerBirthYear, startYear, vow)
+
+        _yearlyJourneysFlow.value = (doc["journeys"] as? Map<*, *>).orEmpty().mapNotNull { (key, value) ->
+            val id = key as? String ?: return@mapNotNull null
+            val entry = value as? Map<*, *> ?: return@mapNotNull null
+            val authorId = entry["authorId"] as? String ?: ""
+            val authorAge = (entry["myAge"] as? Number)?.toInt() ?: 0
+            val otherAge = (entry["partnerAge"] as? Number)?.toInt() ?: 0
+            // Ages were stored from the writer's side: swap them for the other one of us
+            val writtenByMe = authorId.isBlank() || authorId == myId
+            com.example.data.model.YearlyJourneyEntry(
+                id = id,
+                year = (entry["year"] as? Number)?.toInt() ?: 0,
+                myAge = if (writtenByMe) authorAge else otherAge,
+                partnerAge = if (writtenByMe) otherAge else authorAge,
+                yearTheme = entry["yearTheme"] as? String ?: "",
+                placesWent = entry["placesWent"] as? String ?: "",
+                howWeEnjoyed = entry["howWeEnjoyed"] as? String ?: "",
+                specialMemory = entry["specialMemory"] as? String ?: "",
+                songOrQuote = entry["songOrQuote"] as? String ?: "",
+                passionRating = (entry["passionRating"] as? Number)?.toInt() ?: 5,
+                photoUrl = entry["photoUrl"] as? String,
+                createdAt = (entry["createdAt"] as? Number)?.toLong() ?: 0L,
+                authorId = authorId
+            )
+        }.sortedByDescending { it.year }
+    }
+
+    init {
+        // Ages, the together date and the couple itself can change: re-read when they do
+        loveScope.launch {
+            kotlinx.coroutines.flow.combine(
+                authRepository.birthdays,
+                authRepository.togetherSince,
+                authRepository.currentUserState,
+                authRepository.partnerUserState
+            ) { _, _, _, _ -> }.collect { rebuildLoveUs() }
+        }
+    }
+
+    private companion object {
+        const val DAY_MS = 86_400_000L
+
+        /** One question a day, the same on both phones: (question, category). */
+        val DAILY_QUESTIONS = listOf(
+            "What is a small, quiet moment with me that made you feel deeply loved?" to "Deep Connection",
+            "What was your very first impression of me?" to "Our Story",
+            "Which song always makes you think of us?" to "Little Things",
+            "What is one dream you want us to live together?" to "Future",
+            "When do you feel closest to me?" to "Deep Connection",
+            "What made you smile today?" to "Today",
+            "What's one thing I do that always makes your day better?" to "Little Things",
+            "Where would you take me if we could go anywhere tomorrow?" to "Adventure",
+            "What is your favourite memory of us so far?" to "Our Story",
+            "What do you love most about the way we talk to each other?" to "Deep Connection",
+            "What's a tiny habit of mine you secretly love?" to "Little Things",
+            "What would our perfect lazy Sunday look like?" to "Cozy",
+            "What is something new you'd like us to try together?" to "Adventure",
+            "Which moment made you sure about us?" to "Our Story",
+            "What do you need more of from me this week?" to "Care",
+            "What is one thing you've never told me but want to?" to "Deep Connection",
+            "Describe me in three words." to "Playful",
+            "What's your favourite photo of us, and why?" to "Memories",
+            "What does home mean to you?" to "Deep Connection",
+            "What are you most grateful for about us today?" to "Gratitude",
+            "What would you write in a letter to us ten years from now?" to "Future",
+            "Which day with me would you love to live again?" to "Memories",
+            "What makes you feel safe with me?" to "Care",
+            "What's a silly thing that always makes us laugh?" to "Playful",
+            "What's a goal you want my support with?" to "Care",
+            "What is your favourite way I show love?" to "Love Languages",
+            "If we had a whole day with no plans, how would you spend it with me?" to "Cozy",
+            "What is something about me that surprised you?" to "Our Story",
+            "Which place reminds you of us the most?" to "Memories",
+            "What do you want to celebrate together this year?" to "Future",
+            "What's one thing you love about yourself when you're with me?" to "Deep Connection",
+            "What would you cook for me on a special night?" to "Playful",
+            "What's the sweetest message I ever sent you?" to "Memories",
+            "How can I make tomorrow a little easier for you?" to "Care",
+            "What are you looking forward to most with me?" to "Future",
+            "What is a promise you want to make to me today?" to "Deep Connection"
+        )
+
+        fun dailyQuestionFor(day: String): Pair<String, String> {
+            val dayNumber = try {
+                java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).parse(day)?.time?.div(DAY_MS) ?: 0L
+            } catch (_: Exception) {
+                0L
+            }
+            return DAILY_QUESTIONS[(Math.floorMod(dayNumber, DAILY_QUESTIONS.size.toLong())).toInt()]
+        }
     }
 }

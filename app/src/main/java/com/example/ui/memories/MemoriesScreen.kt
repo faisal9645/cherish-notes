@@ -151,13 +151,25 @@ fun MemoriesScreen(
         }
     }
 
+    // The dialog stays open while the photo uploads, and closes once the memory is saved
+    val savedCount = uiState.savedCount
+    var savedCountWhenOpened by remember { mutableIntStateOf(savedCount) }
+    LaunchedEffect(savedCount) {
+        if (showAddDialog && savedCount > savedCountWhenOpened) showAddDialog = false
+    }
     if (showAddDialog) {
         AddMemoryDialog(
             isUploading = uiState.isUploadingPhoto,
-            onDismiss = { showAddDialog = false },
+            error = uiState.addError,
+            onDismiss = {
+                if (!uiState.isUploadingPhoto) {
+                    viewModel.clearAddError()
+                    showAddDialog = false
+                }
+            },
             onAdd = { title, desc, date, uri, loc ->
+                savedCountWhenOpened = savedCount
                 viewModel.addMemory(title, desc, date, uri, loc)
-                showAddDialog = false
             }
         )
     }
@@ -252,6 +264,7 @@ fun MemoryCard(
 @Composable
 fun AddMemoryDialog(
     isUploading: Boolean,
+    error: String? = null,
     onDismiss: () -> Unit,
     onAdd: (String, String, Long, Uri?, String?) -> Unit
 ) {
@@ -321,6 +334,18 @@ fun AddMemoryDialog(
 
                 if (isUploading) {
                     LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                    Text(
+                        text = "Uploading the photo\u2026",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                if (error != null && !isUploading) {
+                    Text(
+                        text = error,
+                        fontSize = 12.5.sp,
+                        color = MaterialTheme.colorScheme.error
+                    )
                 }
             }
         },

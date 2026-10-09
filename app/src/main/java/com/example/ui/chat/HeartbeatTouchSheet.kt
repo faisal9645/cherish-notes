@@ -18,6 +18,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -31,8 +32,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import com.example.ui.theme.HeartRed
-import com.example.ui.theme.RoseGoldPrimary
+import com.example.ui.home.HeartbeatPink
+import com.example.ui.home.HeartbeatBlue
 import com.example.util.HeartbeatHapticHelper
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -162,7 +163,7 @@ fun HeartbeatTouchDialog(
             contentAlignment = Alignment.Center
         ) {
             // Background Ambient Glow
-            val glowColor = (if (isConnected) HeartRed else RoseGoldPrimary).copy(alpha = glowAlpha * 0.45f)
+            val glowColor = (if (isConnected) HeartbeatBlue else HeartbeatPink).copy(alpha = glowAlpha * 0.45f)
             Canvas(modifier = Modifier.fillMaxSize()) {
                 val center = Offset(size.width / 2f, size.height / 2f)
                 val radius = size.width * (if (isConnected) 0.70f else 0.4f)
@@ -219,10 +220,10 @@ fun HeartbeatTouchDialog(
                 // Live status banner
                 Surface(
                     shape = RoundedCornerShape(16.dp),
-                    color = if (isConnected) HeartRed.copy(alpha = 0.28f) else Color.White.copy(alpha = 0.08f),
+                    color = if (isConnected) HeartbeatBlue.copy(alpha = 0.28f) else Color.White.copy(alpha = 0.08f),
                     border = androidx.compose.foundation.BorderStroke(
                         1.dp,
-                        if (isConnected) HeartRed.copy(alpha = 0.7f) else Color.White.copy(alpha = 0.15f)
+                        if (isConnected) HeartbeatBlue.copy(alpha = 0.7f) else Color.White.copy(alpha = 0.15f)
                     )
                 ) {
                     Text(
@@ -254,7 +255,7 @@ fun HeartbeatTouchDialog(
                         Surface(
                             shape = RoundedCornerShape(14.dp),
                             color = Color(0xFF3B1028).copy(alpha = 0.75f),
-                            border = androidx.compose.foundation.BorderStroke(1.dp, HeartRed.copy(alpha = 0.5f))
+                            border = androidx.compose.foundation.BorderStroke(1.dp, HeartbeatBlue.copy(alpha = 0.5f))
                         ) {
                             Crossfade(
                                 targetState = currentLoveMessage,
@@ -293,33 +294,37 @@ fun HeartbeatTouchDialog(
                             .fillMaxSize()
                             .clip(CircleShape)
                             .background(
-                                (if (isConnected) HeartRed else RoseGoldPrimary)
+                                (if (isConnected) HeartbeatBlue else HeartbeatPink)
                                     .copy(alpha = glowAlpha * 0.30f)
                             )
                             .border(
                                 3.dp,
-                                (if (isConnected) HeartRed else RoseGoldPrimary).copy(alpha = glowAlpha),
+                                (if (isConnected) HeartbeatBlue else HeartbeatPink).copy(alpha = glowAlpha),
                                 CircleShape
                             )
                     )
 
-                    // Inner circle
-                    Surface(
-                        shape = CircleShape,
-                        color = if (isConnected) HeartRed else if (isMeTouching) RoseGoldPrimary else Color.White.copy(alpha = 0.12f),
-                        shadowElevation = if (isConnected) 20.dp else 4.dp,
-                        modifier = Modifier.size(130.dp)
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                imageVector = Icons.Default.Favorite,
-                                contentDescription = "Heart symbol",
-                                tint = if (isConnected || isMeTouching) Color.White else HeartRed.copy(alpha = 0.9f),
-                                modifier = Modifier
-                                    .size(62.dp)
-                                    .scale(if (isConnected) pulseScale / 1.15f else 1.0f)
+                    // Inner circle: pink to blue like the heartbeat button, softer until someone holds it
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier
+                            .size(130.dp)
+                            .shadow(if (isConnected) 20.dp else 6.dp, CircleShape)
+                            .clip(CircleShape)
+                            .background(
+                                Brush.linearGradient(listOf(HeartbeatPink, HeartbeatBlue)),
+                                alpha = if (isConnected || isMeTouching || isPartnerTouching) 1f else 0.6f
                             )
-                        }
+                            .border(2.dp, Color.White.copy(alpha = 0.55f), CircleShape)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Favorite,
+                            contentDescription = "Heart symbol",
+                            tint = Color.White,
+                            modifier = Modifier
+                                .size(62.dp)
+                                .scale(if (isConnected) pulseScale / 1.15f else 1.0f)
+                        )
                     }
                 }
 

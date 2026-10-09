@@ -42,6 +42,11 @@ class CherishApplication : Application(), coil.ImageLoaderFactory {
     lateinit var coupleFeaturesRepository: CoupleFeaturesRepository
         private set
 
+    /** Love Synchronicity moments; created on first use (Love & Us). */
+    val synchronicityRepository by lazy {
+        com.example.data.repository.SynchronicityRepository(this, authRepository)
+    }
+
     lateinit var voiceRecorderHelper: VoiceRecorderHelper
         private set
 

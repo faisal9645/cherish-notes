@@ -1,25 +1,31 @@
 package com.example.ui.home
 
 import android.widget.Toast
-import androidx.compose.foundation.BorderStroke
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AllInclusive
 import androidx.compose.material.icons.filled.Battery3Bar
 import androidx.compose.material.icons.filled.Battery4Bar
 import androidx.compose.material.icons.filled.Battery5Bar
@@ -27,45 +33,67 @@ import androidx.compose.material.icons.filled.Battery6Bar
 import androidx.compose.material.icons.filled.BatteryAlert
 import androidx.compose.material.icons.filled.BatteryChargingFull
 import androidx.compose.material.icons.filled.BatteryFull
+import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.EditNote
+import androidx.compose.material.icons.filled.EventAvailable
 import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
+import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.drawscope.scale
+import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.graphics.drawscope.withTransform
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.min
 import androidx.compose.ui.unit.sp
+import com.example.R
 import com.example.ui.chat.FullScreenMediaViewer
 import com.example.ui.components.AvatarView
-import com.example.ui.theme.HeartRed
 import com.example.ui.theme.OnlineGreen
-import com.example.ui.theme.darkTone
 import kotlinx.coroutines.delay
 import java.text.NumberFormat
 import java.text.SimpleDateFormat
@@ -73,7 +101,9 @@ import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
+import kotlin.math.PI
 import kotlin.math.roundToInt
+import kotlin.math.sin
 
 /**
  * One of us on the Love & Us tab.
@@ -93,9 +123,62 @@ data class LovePerson(
 )
 
 private const val DAY_MS = 86_400_000L
-private val AVATAR_SIZE = 90.dp
-private val AVATAR_BORDER = 2.5.dp
-private val HEART_SIZE = 30.dp
+
+/** The couple card's colours: white by day, deep navy by night, the same pink and blue on both. */
+private class CardColors(
+    val isLight: Boolean,
+    val background: Brush,
+    val border: Color,
+    val ink: Color, // main text and icons
+    val softInk: Color, // the note, small lines
+    val pill: Color, // pill fill
+    val dimInk: Color, // "Offline"
+    val hairline: Color, // thin dividers
+    val blueInk: Color // blue that reads well on this card
+)
+
+// Blush pink at the top left, through white, to a pale blue at the bottom right
+private val DayCard = CardColors(
+    isLight = true,
+    background = SolidColor(Color(0xFFFEFEFF)),
+    border = HeartbeatBlue.copy(alpha = 0.12f),
+    ink = Color(0xFF1E1B4B),
+    softInk = Color(0xFF5B5F7E),
+    pill = Color.White,
+    dimInk = Color(0xFF6B7280),
+    hairline = Color(0xFF1E1B4B).copy(alpha = 0.10f),
+    blueInk = HeartbeatBlue
+)
+
+// Night: a deep navy from the app's own blue family (not grey, not neon); the rings, names and
+// decorations stay the same pink and blue as by day
+private val NightCard = CardColors(
+    isLight = false,
+    background = Brush.verticalGradient(listOf(Color(0xFF111B45), Color(0xFF0B1233))),
+    border = HeartbeatBlue.copy(alpha = 0.28f),
+    ink = Color(0xFFF3F4FA),
+    softInk = Color(0xFFBAC2E8),
+    pill = Color.White.copy(alpha = 0.08f),
+    dimInk = Color(0xFFA6ADCB),
+    hairline = Color.White.copy(alpha = 0.12f),
+    blueInk = HeartbeatBlue
+)
+
+/** The navy behind the night card's hearts (their separating edge matches it). */
+private val NightCardEdge = Color(0xFF0E1638)
+
+private val LocalCardColors = staticCompositionLocalOf { DayCard }
+
+/** The couple's names: a handwritten signature. */
+private val SignatureFont = FontFamily(Font(R.font.great_vibes_regular))
+
+private val AVATAR_SIZE = 96.dp
+private val RING_WIDTH = 2.5.dp
+/**
+ * Space between the two photo boxes. Negative: the boxes' 4dp margins overlap, leaving the rings
+ * about 4dp apart, with the two hearts over the join.
+ */
+private val AVATAR_GAP = (-4).dp
 
 private fun parseDay(date: String?): Calendar? {
     val clean = date?.trim()?.ifBlank { null } ?: return null
@@ -140,15 +223,24 @@ private fun daysToBirthday(born: Calendar, now: Long): Int {
 
 private fun formatNumber(value: Long): String = NumberFormat.getIntegerInstance(Locale.getDefault()).format(value)
 
+/** A heart shape about [size] wide, centred on ([cx], [cy]). */
+private fun heartPath(cx: Float, cy: Float, size: Float): Path = Path().apply {
+    val h = size * 0.92f
+    moveTo(cx, cy + h * 0.38f)
+    cubicTo(cx - size * 0.62f, cy - h * 0.02f, cx - size * 0.36f, cy - h * 0.62f, cx, cy - h * 0.2f)
+    cubicTo(cx + size * 0.36f, cy - h * 0.62f, cx + size * 0.62f, cy - h * 0.02f, cx, cy + h * 0.38f)
+    close()
+}
+
 /**
- * Both of us card on the Love & Us tab:
- * - Top: today's date (no calendar icon) and couple names ("Faisal & Shali") once at the top
- * - Center: two round profile photos touching each other with an interlocking heart connector (same as classic layout)
- * - Tap either avatar to open full-screen photo view
- * - No last seen text; shows battery, age, days of life, and birthday countdown
- * - Bottom: days lived together, days together counter, and chat now shortcut
+ * Both of us. Today's date, our names as a handwritten signature and the partner's note; our
+ * photos close together (pink ring on the left, blue on the right) with two hearts between them;
+ * under each: online / offline and battery, age and days of life, and the birthday countdown;
+ * our places (gallery, memories, dates, notes); since when and how many days together.
+ *
+ * Soft and calm: the same pastel card in day and night mode, no glows. The two of us
+ * are in the same order on both phones (by user id), so each keeps their colour.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BothOfUsCard(
     me: LovePerson,
@@ -158,307 +250,257 @@ fun BothOfUsCard(
     isVisible: Boolean,
     onSetBirthday: (userId: String, date: String) -> Unit,
     onOpenChat: () -> Unit,
-    onSetTogetherSince: (date: String) -> Unit
+    onSetTogetherSince: (date: String) -> Unit,
+    onOpenGallery: () -> Unit = {},
+    onOpenMemories: () -> Unit = {},
+    onOpenDates: () -> Unit = {},
+    onOpenNotes: () -> Unit = {}
 ) {
-    val context = LocalContext.current
+    // Everything shown is by the day: a minute tick is plenty (and only while on screen)
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(isVisible) {
         while (isVisible) {
             now = System.currentTimeMillis()
-            delay(1_000L - now % 1_000L)
+            delay(60_000L - now % 60_000L)
         }
     }
     var editing by remember { mutableStateOf<LovePerson?>(null) }
     var editingTogether by remember { mutableStateOf(false) }
     var viewingPhotoUrl by remember { mutableStateOf<String?>(null) }
 
-    val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
-    val accent = MaterialTheme.colorScheme.primary
-    val cardColor = if (isDark) darkTone(Color(0xFF141923)) else Color(0xFFFBFDFF)
+    // Same sides on both phones: pink on the left, blue on the right
+    val (left, right) = if (me.id >= partner.id) me to partner else partner to me
+    val pink = HeartbeatPink
+    // The same soft pastel card in day and night mode (same rings, text and colours)
+    val cardColors = if (MaterialTheme.colorScheme.surface.luminance() < 0.5f) NightCard else DayCard
+    val blue = cardColors.blueInk
 
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .testTag("both_of_us_card"),
-        shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(containerColor = cardColor),
-        border = BorderStroke(1.dp, if (isDark) darkTone(Color(0xFF232D3F)) else Color(0xFFE2E8F0)),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-    ) {
-        Box(modifier = Modifier.fillMaxWidth()) {
-            // Soft glow behind the photos
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(110.dp)
-                    .background(
-                        Brush.verticalGradient(
-                            listOf(accent.copy(alpha = if (isDark) 0.18f else 0.12f), Color.Transparent)
-                        )
-                    )
-            )
+    // The two hearts beat gently, only while the tab is on screen (read while drawing only)
+    val still = remember { mutableFloatStateOf(0f) }
+    val beat: State<Float> = if (isVisible) {
+        rememberInfiniteTransition(label = "couple_hearts").animateFloat(
+            initialValue = 0f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(tween(1_100, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+            label = "couple_heart_beat"
+        )
+    } else {
+        still
+    }
 
+    // The background hearts float very slowly (one gentle clock, read only while drawing)
+    val drift: State<Float> = if (isVisible) {
+        rememberInfiniteTransition(label = "couple_background").animateFloat(
+            initialValue = 0f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(tween(7_000, easing = LinearEasing), RepeatMode.Restart),
+            label = "couple_background_drift"
+        )
+    } else {
+        still
+    }
+    val flight: State<Float> = if (isVisible) {
+        rememberInfiniteTransition(label = "couple_flying_hearts").animateFloat(
+            initialValue = 0f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(tween(11_000, easing = LinearEasing), RepeatMode.Restart),
+            label = "couple_flying_hearts_rise"
+        )
+    } else {
+        still
+    }
+
+    val cardShape = RoundedCornerShape(24.dp)
+    CompositionLocalProvider(LocalCardColors provides cardColors) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .shadow(if (cardColors.isLight) 2.dp else 0.dp, cardShape)
+                .clip(cardShape)
+                .background(cardColors.background)
+                .loveBackground(HeartbeatPink, HeartbeatBlue, drift, flight, strength = if (cardColors.isLight) 1f else 1.6f)
+                .border(1.dp, cardColors.border, cardShape)
+                .testTag("both_of_us_card")
+        ) {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 14.dp, vertical = 14.dp)
+                    .padding(horizontal = 20.dp, vertical = 16.dp)
             ) {
-                // Today's date (clean text without calendar icon)
+                // Today's date in a small pill
                 val today = SimpleDateFormat("EEEE, MMMM d, yyyy", Locale.getDefault()).format(Date(now))
-                Surface(
-                    shape = RoundedCornerShape(50),
-                    color = accent.copy(alpha = 0.10f),
-                    modifier = Modifier.testTag("both_of_us_today")
-                ) {
-                    Text(
-                        text = today,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = accent,
-                        maxLines = 1,
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                // Couple Names displayed once at the top
-                Text(
-                    text = "${me.name} & ${partner.name}",
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    textAlign = TextAlign.Center
-                )
-
-                if (!partnerNote.isNullOrBlank()) {
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(
-                        text = "“$partnerNote”",
-                        fontSize = 12.5.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        textAlign = TextAlign.Center,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(10.dp))
-
-                // Intimate touching profile pictures with center interlocking heart connector
-                Box(
-                    contentAlignment = Alignment.Center,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 2.dp)
-                ) {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy((-14).dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.wrapContentWidth()
-                    ) {
-                        // My Avatar with online badge
-                        Box(contentAlignment = Alignment.BottomEnd) {
-                            Surface(
-                                shape = CircleShape,
-                                color = MaterialTheme.colorScheme.surface,
-                                shadowElevation = 4.dp,
-                                border = BorderStroke(AVATAR_BORDER, accent)
-                            ) {
-                                AvatarView(
-                                    photoUrl = me.photoUrl,
-                                    name = me.name,
-                                    size = AVATAR_SIZE,
-                                    isOnline = false,
-                                    showOnlineBadge = false,
-                                    modifier = Modifier.clickable {
-                                        if (!me.photoUrl.isNullOrBlank()) {
-                                            viewingPhotoUrl = me.photoUrl
-                                        } else {
-                                            Toast.makeText(context, "No profile photo uploaded yet", Toast.LENGTH_SHORT).show()
-                                        }
-                                    }
-                                )
-                            }
-                            if (me.isOnline) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(17.dp)
-                                        .offset(x = (-3).dp, y = (-3).dp)
-                                        .clip(CircleShape)
-                                        .background(OnlineGreen)
-                                        .border(2.5.dp, cardColor, CircleShape)
-                                )
-                            }
-                        }
-
-                        // Partner Avatar with online badge
-                        Box(contentAlignment = Alignment.BottomEnd) {
-                            Surface(
-                                shape = CircleShape,
-                                color = MaterialTheme.colorScheme.surface,
-                                shadowElevation = 4.dp,
-                                border = BorderStroke(AVATAR_BORDER, HeartRed.copy(alpha = 0.8f))
-                            ) {
-                                AvatarView(
-                                    photoUrl = partner.photoUrl,
-                                    name = partner.name,
-                                    size = AVATAR_SIZE,
-                                    isOnline = false,
-                                    showOnlineBadge = false,
-                                    modifier = Modifier.clickable {
-                                        if (!partner.photoUrl.isNullOrBlank()) {
-                                            viewingPhotoUrl = partner.photoUrl
-                                        } else {
-                                            Toast.makeText(context, "No profile photo uploaded yet", Toast.LENGTH_SHORT).show()
-                                        }
-                                    }
-                                )
-                            }
-                            if (partner.isOnline) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(17.dp)
-                                        .offset(x = (-3).dp, y = (-3).dp)
-                                        .clip(CircleShape)
-                                        .background(OnlineGreen)
-                                        .border(2.5.dp, cardColor, CircleShape)
-                                )
-                            }
-                        }
-                    }
-
-                    // Interlocking Heart Connector at the center intersection
-                    Surface(
-                        shape = CircleShape,
-                        color = HeartRed,
-                        border = BorderStroke(2.dp, cardColor),
-                        shadowElevation = 5.dp,
-                        modifier = Modifier
-                            .size(HEART_SIZE)
-                            .align(Alignment.Center)
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                imageVector = Icons.Filled.Favorite,
-                                contentDescription = "Together in love",
-                                tint = Color.White,
-                                modifier = Modifier.size(16.dp)
-                            )
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(10.dp))
-
-                // Stats row (Left = Me, Right = Partner) — compact, well-proportioned
                 Row(
+                    verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 6.dp),
-                    horizontalArrangement = Arrangement.SpaceEvenly,
-                    verticalAlignment = Alignment.Top
+                        .clip(RoundedCornerShape(50))
+                        .background(cardColors.pill)
+                        .border(1.dp, cardColors.hairline, RoundedCornerShape(50))
+                        .padding(horizontal = 14.dp, vertical = 6.dp)
+                        .testTag("both_of_us_today")
                 ) {
-                    PersonStatsColumn(
-                        person = me,
-                        now = now,
-                        modifier = Modifier.weight(1f),
-                        onEditBirthday = { editing = me }
-                    )
-                    PersonStatsColumn(
-                        person = partner,
-                        now = now,
-                        modifier = Modifier.weight(1f),
-                        onEditBirthday = { editing = partner }
-                    )
+                    Icon(Icons.Filled.CalendarMonth, contentDescription = null, tint = cardColors.softInk, modifier = Modifier.size(14.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(text = today, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, color = cardColors.ink, maxLines = 1)
                 }
 
-                // Days we've lived together, counted from the together date (like a date
-                // calculator: the start day is 0)
-                val togetherDays = com.example.ui.chat.LoveDates.daysTogether(togetherSince, now)
-                if (togetherDays != null) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        color = accent.copy(alpha = 0.08f),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text(
-                            text = when (togetherDays) {
-                                0 -> "Our first day together 💛"
-                                1 -> "Together we've lived 1 day 💛"
-                                else -> "Together we've lived ${formatNumber(togetherDays.toLong())} days 💛"
-                            },
-                            fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(8.dp))
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), thickness = 0.6.dp)
                 Spacer(modifier = Modifier.height(6.dp))
 
+                // Our names, a handwritten signature: "shali & faisal" in pink and blue
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
+                    Icon(Icons.Filled.FavoriteBorder, contentDescription = null, tint = pink, modifier = Modifier.size(15.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = buildAnnotatedString {
+                            withStyle(SpanStyle(color = pink)) { append(left.name.lowercase()) }
+                            append("  &  ")
+                            withStyle(SpanStyle(color = blue)) { append(right.name.lowercase()) }
+                        },
+                        style = TextStyle(
+                            fontFamily = SignatureFont,
+                            fontSize = 34.sp,
+                            fontWeight = FontWeight.Normal,
+                            color = cardColors.ink,
+                            textAlign = TextAlign.Center
+                        ),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Icon(Icons.Filled.FavoriteBorder, contentDescription = null, tint = blue, modifier = Modifier.size(15.dp))
+                }
+
+                // The note, under the names
+                Text(
+                    text = "“${partnerNote?.ifBlank { null } ?: "Loving every moment with you ✨"}”",
+                    fontSize = 14.sp,
+                    color = cardColors.softInk,
+                    textAlign = TextAlign.Center,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(horizontal = 8.dp)
+                )
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // The two of us close together with the hearts between; details under each
+                BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                    // The details get columns this wide, centred under the photos
+                    val column = min(maxWidth / 2, 138.dp)
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+                        Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxWidth()) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(AVATAR_GAP)
+                            ) {
+                                RingedAvatar(left, pink) { viewingPhotoUrl = it }
+                                RingedAvatar(right, blue) { viewingPhotoUrl = it }
+                            }
+                            TwinHearts(pink, blue, beat)
+                        }
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        // Under each photo: online / battery, age and days, birthday
+                        Row(verticalAlignment = Alignment.Top) {
+                            PersonDetails(left, pink, now, Modifier.width(column)) { editing = left }
+                            PersonDetails(right, blue, now, Modifier.width(column)) { editing = right }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(1.dp)
+                        .background(cardColors.hairline)
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Our places: gallery, memories, dates and notes
+                LovePlaces(
+                    pink = pink,
+                    blue = blue,
+                    onOpenGallery = onOpenGallery,
+                    onOpenMemories = onOpenMemories,
+                    onOpenDates = onOpenDates,
+                    onOpenNotes = onOpenNotes
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(1.dp)
+                        .background(cardColors.hairline)
+                )
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // Since when (left) and how many days together (the blue pill); either one sets or
+                // changes the date. Until it's set, the pill is Chat Now.
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // The together date (tap to set or change it)
-                    val sinceText = com.example.ui.chat.LoveDates.formatLong(togetherSince)
-                    if (togetherDays != null && sinceText != null) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
+                    val togetherDays = com.example.ui.chat.LoveDates.daysTogether(togetherSince, now)
+                    val sinceText = parseDay(togetherSince)?.let { SimpleDateFormat("MMM d, yyyy", Locale.getDefault()).format(it.time) }
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .weight(1f, fill = false)
+                            .clip(RoundedCornerShape(12.dp))
+                            .clickable { editingTogether = true }
+                            .padding(vertical = 6.dp, horizontal = 2.dp)
+                            .testTag("days_together")
+                    ) {
+                        Box(
+                            contentAlignment = Alignment.Center,
                             modifier = Modifier
-                                .clip(RoundedCornerShape(8.dp))
-                                .clickable { editingTogether = true }
-                                .padding(vertical = 4.dp)
-                                .testTag("days_together")
+                                .size(30.dp)
+                                .clip(CircleShape)
+                                .background(pink.copy(alpha = 0.14f))
                         ) {
-                            Text(text = "❤️", fontSize = 15.sp)
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = "Since $sinceText",
-                                fontSize = 13.5.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
+                            Icon(Icons.Filled.Favorite, contentDescription = null, tint = pink, modifier = Modifier.size(17.dp))
                         }
-                    } else {
+                        Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "❤️ Set days together",
-                            fontSize = 13.sp,
+                            text = if (togetherDays != null && sinceText != null) "Since $sinceText" else "Set days together",
+                            fontSize = 14.sp,
                             fontWeight = FontWeight.SemiBold,
-                            color = accent,
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(8.dp))
-                                .clickable { editingTogether = true }
-                                .padding(vertical = 4.dp)
-                                .testTag("days_together")
+                            color = cardColors.ink,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
-                    Surface(
-                        shape = RoundedCornerShape(10.dp),
-                        color = accent.copy(alpha = 0.12f),
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier
-                            .clip(RoundedCornerShape(10.dp))
-                            .clickable { onOpenChat() }
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(blue.copy(alpha = if (cardColors.isLight) 0.12f else 0.35f))
+                            .clickable { if (togetherDays != null) editingTogether = true else onOpenChat() }
+                            .padding(start = 14.dp, end = if (togetherDays != null) 14.dp else 10.dp, top = 8.dp, bottom = 8.dp)
+                            .testTag("both_of_us_days_count")
                     ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
-                        ) {
-                            Text(text = "Chat Now", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = accent)
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Icon(
-                                imageVector = Icons.Default.ChevronRight,
-                                contentDescription = null,
-                                tint = accent,
-                                modifier = Modifier.size(14.dp)
+                        if (togetherDays != null) {
+                            Text(
+                                text = when (togetherDays) {
+                                    0 -> "First day together"
+                                    1 -> "1 day together"
+                                    else -> "${formatNumber(togetherDays.toLong())} days together"
+                                },
+                                fontSize = 13.5.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = if (cardColors.isLight) blue else Color.White,
+                                maxLines = 1
                             )
+                        } else {
+                            Text(text = "Chat Now", fontSize = 13.5.sp, fontWeight = FontWeight.SemiBold, color = if (cardColors.isLight) blue else Color.White)
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Icon(Icons.Filled.ChevronRight, contentDescription = null, tint = if (cardColors.isLight) blue else Color.White, modifier = Modifier.size(18.dp))
                         }
                     }
                 }
@@ -466,19 +508,12 @@ fun BothOfUsCard(
         }
     }
 
-    // Full photo viewer dialog when tapping either avatar
+    // Full photo viewer when tapping a photo
     viewingPhotoUrl?.let { url ->
-        val allUrls = remember(me.photoUrl, partner.photoUrl) {
-            listOfNotNull(
-                me.photoUrl?.takeIf { it.isNotBlank() },
-                partner.photoUrl?.takeIf { it.isNotBlank() }
-            ).distinct()
+        val allUrls = remember(left.photoUrl, right.photoUrl) {
+            listOfNotNull(left.photoUrl?.takeIf { it.isNotBlank() }, right.photoUrl?.takeIf { it.isNotBlank() }).distinct()
         }
-        FullScreenMediaViewer(
-            mediaUrl = url,
-            allMediaUrls = allUrls,
-            onDismiss = { viewingPhotoUrl = null }
-        )
+        FullScreenMediaViewer(mediaUrl = url, allMediaUrls = allUrls, onDismiss = { viewingPhotoUrl = null })
     }
 
     editing?.let { person ->
@@ -496,6 +531,507 @@ fun BothOfUsCard(
             onPick = onSetTogetherSince,
             onDismiss = { editingTogether = false }
         )
+    }
+}
+
+/** A background heart: where (fractions of the card), how big, how strong, and its style. */
+private class BgHeart(
+    val x: Float,
+    val y: Float,
+    val sizeDp: Float,
+    val alpha: Float,
+    val outline: Boolean,
+    val glow: Boolean,
+    val tilt: Float,
+    val phase: Float
+)
+
+// Around the edges and corners; the middle (photos and text) stays clean
+private val BgHearts = listOf(
+    BgHeart(0.07f, 0.06f, 18f, 0.13f, outline = false, glow = true, tilt = -12f, phase = 0.00f),
+    BgHeart(0.19f, 0.03f, 9f, 0.30f, outline = true, glow = false, tilt = 10f, phase = 0.30f),
+    BgHeart(0.04f, 0.22f, 10f, 0.10f, outline = false, glow = false, tilt = -6f, phase = 0.60f),
+    BgHeart(0.93f, 0.07f, 20f, 0.11f, outline = false, glow = true, tilt = 14f, phase = 0.20f),
+    BgHeart(0.80f, 0.035f, 8f, 0.30f, outline = true, glow = false, tilt = -8f, phase = 0.50f),
+    BgHeart(0.965f, 0.25f, 10f, 0.10f, outline = false, glow = false, tilt = 6f, phase = 0.80f),
+    BgHeart(0.035f, 0.43f, 13f, 0.22f, outline = true, glow = false, tilt = -10f, phase = 0.15f),
+    BgHeart(0.965f, 0.46f, 14f, 0.22f, outline = true, glow = false, tilt = 12f, phase = 0.45f),
+    BgHeart(0.05f, 0.64f, 11f, 0.10f, outline = false, glow = true, tilt = 8f, phase = 0.70f),
+    BgHeart(0.95f, 0.66f, 11f, 0.10f, outline = false, glow = true, tilt = -8f, phase = 0.35f),
+    BgHeart(0.04f, 0.90f, 14f, 0.08f, outline = false, glow = false, tilt = -14f, phase = 0.90f),
+    BgHeart(0.96f, 0.91f, 15f, 0.08f, outline = false, glow = false, tilt = 12f, phase = 0.25f)
+)
+
+/** A heart flying up a side of the card: its lane, size, start, sway (dp) and strength. */
+private class FlyingHeart(val x: Float, val sizeDp: Float, val phase: Float, val sway: Float, val alpha: Float)
+
+private val FlyingHearts = listOf(
+    FlyingHeart(0.06f, 13f, 0.00f, 6f, 0.55f),
+    FlyingHeart(0.15f, 9f, 0.21f, 5f, 0.45f),
+    FlyingHeart(0.04f, 16f, 0.43f, 7f, 0.40f),
+    FlyingHeart(0.19f, 10f, 0.64f, 5f, 0.50f),
+    FlyingHeart(0.10f, 8f, 0.84f, 4f, 0.45f)
+)
+
+// Same lanes on the right, starting at other moments so the two sides don't mirror each other
+private val FlyingHeartsRight = listOf(
+    FlyingHeart(0.07f, 12f, 0.11f, 6f, 0.55f),
+    FlyingHeart(0.16f, 9f, 0.32f, 5f, 0.45f),
+    FlyingHeart(0.04f, 15f, 0.53f, 7f, 0.40f),
+    FlyingHeart(0.19f, 10f, 0.74f, 5f, 0.50f),
+    FlyingHeart(0.11f, 8f, 0.93f, 4f, 0.45f)
+)
+
+// Tiny dots (x, y, radius dp, alpha) and four-point sparkles (x, y, alpha)
+private val BgDots = listOf(
+    floatArrayOf(0.13f, 0.12f, 1.6f, 0.30f), floatArrayOf(0.26f, 0.08f, 1.2f, 0.22f),
+    floatArrayOf(0.86f, 0.14f, 1.6f, 0.30f), floatArrayOf(0.73f, 0.07f, 1.2f, 0.22f),
+    floatArrayOf(0.02f, 0.34f, 1.4f, 0.25f), floatArrayOf(0.98f, 0.36f, 1.4f, 0.25f),
+    floatArrayOf(0.09f, 0.54f, 1.2f, 0.20f), floatArrayOf(0.91f, 0.56f, 1.2f, 0.20f),
+    floatArrayOf(0.03f, 0.78f, 1.5f, 0.22f), floatArrayOf(0.97f, 0.79f, 1.5f, 0.22f),
+    floatArrayOf(0.12f, 0.95f, 1.3f, 0.25f), floatArrayOf(0.88f, 0.96f, 1.3f, 0.25f)
+)
+private val BgSparkles = listOf(
+    floatArrayOf(0.30f, 0.045f, 0.30f), floatArrayOf(0.69f, 0.05f, 0.30f),
+    floatArrayOf(0.025f, 0.13f, 0.25f), floatArrayOf(0.975f, 0.15f, 0.25f),
+    floatArrayOf(0.08f, 0.82f, 0.22f), floatArrayOf(0.92f, 0.84f, 0.22f)
+)
+
+/**
+ * The card's background on white: pink decorations on the left (her side), the app's blue on the
+ * right, at different strengths. Hearts around the edges (a few with a soft glow), tiny dots and
+ * sparkles, and soft curves at the top and bottom running from pink into blue; the middle stays
+ * clean. Built once per size; each frame only lets the hearts float a little.
+ */
+private fun Modifier.loveBackground(
+    pink: Color,
+    blue: Color,
+    drift: State<Float>,
+    flight: State<Float>,
+    strength: Float = 1f
+) = drawWithCache {
+    val w = size.width
+    val h = size.height
+    val unitHeart = heartPath(0f, 0f, 1f)
+    // Faint corner tints of the same blue
+    val topTint = Brush.radialGradient(listOf(pink.copy(alpha = 0.06f), Color.Transparent), center = Offset(0f, 0f), radius = w * 0.6f)
+    val bottomTint = Brush.radialGradient(listOf(blue.copy(alpha = 0.05f), Color.Transparent), center = Offset(w, h), radius = w * 0.6f)
+    // Soft flowing curves near the top and bottom edges
+    val topCurve = Path().apply {
+        moveTo(-0.05f * w, 0.12f * h)
+        cubicTo(0.25f * w, -0.02f * h, 0.62f * w, 0.17f * h, 1.05f * w, 0.03f * h)
+    }
+    val topCurve2 = Path().apply {
+        moveTo(-0.05f * w, 0.17f * h)
+        cubicTo(0.3f * w, 0.06f * h, 0.66f * w, 0.22f * h, 1.05f * w, 0.09f * h)
+    }
+    val bottomCurve = Path().apply {
+        moveTo(-0.05f * w, 0.88f * h)
+        cubicTo(0.32f * w, 0.99f * h, 0.66f * w, 0.80f * h, 1.05f * w, 0.93f * h)
+    }
+    // Curves run from pink on the left into blue on the right
+    val curveBrush = Brush.horizontalGradient(listOf(pink, blue), startX = 0f, endX = w)
+    fun sideColor(x: Float) = if (x < 0.5f) pink else blue
+    val soft = Stroke(width = 10.dp.toPx())
+    val fine = Stroke(width = 1.2.dp.toPx())
+    val sparkle = Stroke(width = 1.dp.toPx())
+    onDrawBehind {
+        val t = drift.value
+        drawCircle(topTint, radius = w * 0.6f, center = Offset(0f, 0f))
+        drawCircle(bottomTint, radius = w * 0.6f, center = Offset(w, h))
+
+        drawPath(topCurve, curveBrush, alpha = 0.035f * strength, style = soft)
+        drawPath(topCurve, curveBrush, alpha = 0.12f * strength, style = fine)
+        drawPath(topCurve2, curveBrush, alpha = 0.07f * strength, style = fine)
+        drawPath(bottomCurve, curveBrush, alpha = 0.035f * strength, style = soft)
+        drawPath(bottomCurve, curveBrush, alpha = 0.12f * strength, style = fine)
+
+        BgHearts.forEach { heart ->
+            val color = sideColor(heart.x)
+            val px = heart.sizeDp.dp.toPx()
+            val cx = heart.x * w
+            val cy = heart.y * h + sin(2f * PI.toFloat() * (t + heart.phase)) * 2.5.dp.toPx()
+            if (heart.glow) {
+                drawCircle(
+                    Brush.radialGradient(listOf(color.copy(alpha = 0.10f), Color.Transparent), center = Offset(cx, cy), radius = px * 1.4f),
+                    radius = px * 1.4f,
+                    center = Offset(cx, cy)
+                )
+            }
+            withTransform({
+                translate(cx, cy)
+                rotate(heart.tilt, pivot = Offset.Zero)
+                scale(px, px, pivot = Offset.Zero)
+            }) {
+                if (heart.outline) {
+                    drawPath(unitHeart, color, alpha = (heart.alpha * strength).coerceAtMost(1f), style = Stroke(width = 1.2.dp.toPx() / px))
+                } else {
+                    drawPath(unitHeart, color, alpha = (heart.alpha * strength).coerceAtMost(1f))
+                }
+            }
+        }
+        BgDots.forEach { d -> drawCircle(sideColor(d[0]), radius = d[2].dp.toPx(), center = Offset(d[0] * w, d[1] * h), alpha = (d[3] * strength).coerceAtMost(1f)) }
+
+        // Hearts flying up the sides: pink on her side (left), blue on his (right). Each one rises
+        // from the bottom with a gentle sway and tilt, fading in and out, so the loop never shows
+        val f = flight.value
+        fun flyingHeart(heart: FlyingHeart, color: Color, mirror: Boolean) {
+            val t = (f + heart.phase) % 1f
+            val fadeIn = (t / 0.15f).coerceAtMost(1f)
+            val fadeOut = ((1f - t) / 0.3f).coerceAtMost(1f)
+            val alpha = (heart.alpha * fadeIn * fadeOut * strength).coerceIn(0f, 1f)
+            if (alpha <= 0.01f) return
+            val swing = sin(2f * PI.toFloat() * (t * 1.6f + heart.phase))
+            val baseX = if (mirror) 1f - heart.x else heart.x
+            val cx = baseX * w + swing * heart.sway.dp.toPx()
+            val cy = h * (1.06f - 1.14f * t)
+            val px = heart.sizeDp.dp.toPx() * (0.85f + 0.3f * t)
+            withTransform({
+                translate(cx, cy)
+                rotate(swing * 14f, pivot = Offset.Zero)
+                scale(px, px, pivot = Offset.Zero)
+            }) {
+                drawPath(unitHeart, color, alpha = alpha)
+            }
+        }
+        FlyingHearts.forEach { flyingHeart(it, pink, mirror = false) }
+        FlyingHeartsRight.forEach { flyingHeart(it, blue, mirror = true) }
+        BgSparkles.forEach { sp ->
+            val c = Offset(sp[0] * w, sp[1] * h)
+            val r = 3.5.dp.toPx()
+            val sparkleColor = sideColor(sp[0])
+            drawLine(sparkleColor, Offset(c.x - r, c.y), Offset(c.x + r, c.y), strokeWidth = sparkle.width, alpha = (sp[2] * strength).coerceAtMost(1f))
+            drawLine(sparkleColor, Offset(c.x, c.y - r), Offset(c.x, c.y + r), strokeWidth = sparkle.width, alpha = (sp[2] * strength).coerceAtMost(1f))
+        }
+    }
+}
+
+/** A round photo with a plain coloured ring and a small heart on it. */
+@Composable
+private fun RingedAvatar(person: LovePerson, color: Color, onOpenPhoto: (String) -> Unit) {
+    val context = LocalContext.current
+    val cardColors = LocalCardColors.current
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = Modifier.size(AVATAR_SIZE + 8.dp)
+    ) {
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier
+                .size(AVATAR_SIZE)
+                .clip(CircleShape)
+                .background(cardColors.pill)
+                .border(RING_WIDTH, color, CircleShape)
+        ) {
+            AvatarView(
+                photoUrl = person.photoUrl,
+                name = person.name,
+                size = AVATAR_SIZE - RING_WIDTH * 2 - 3.dp,
+                isOnline = false,
+                showOnlineBadge = false,
+                showRing = false,
+                modifier = Modifier
+                    .clip(CircleShape)
+                    .clickable {
+                        val url = person.photoUrl
+                        if (!url.isNullOrBlank()) onOpenPhoto(url)
+                        else Toast.makeText(context, "No profile photo uploaded yet", Toast.LENGTH_SHORT).show()
+                    }
+            )
+        }
+        // A small heart on the ring
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(top = 4.dp, end = 4.dp)
+                .size(20.dp)
+                .clip(CircleShape)
+                .background(cardColors.pill)
+        ) {
+            Icon(Icons.Filled.Favorite, contentDescription = null, tint = color, modifier = Modifier.size(13.dp))
+        }
+    }
+}
+
+/** Two hearts, pink and blue, overlapping between us and beating gently. Plain colours, no glow. */
+@Composable
+private fun TwinHearts(pink: Color, blue: Color, beat: State<Float>) {
+    val outline = LocalCardColors.current.pill.copy(alpha = 1f)
+    val cardIsLight = LocalCardColors.current.isLight
+    Box(
+        modifier = Modifier
+            .size(width = 60.dp, height = 46.dp)
+            .drawWithCache {
+                val unitHeart = heartPath(0f, 0f, 1f)
+                val heartSize = 28.dp.toPx()
+                val pinkAt = Offset(size.width / 2f - 7.dp.toPx(), size.height / 2f + 1.dp.toPx())
+                val blueAt = Offset(size.width / 2f + 7.dp.toPx(), size.height / 2f + 4.dp.toPx())
+                val edge = Stroke(width = 3.dp.toPx() / heartSize)
+                // The edge matches the card behind, so the overlapping hearts read as two
+                val edgeColor = if (cardIsLight) outline else NightCardEdge
+                onDrawBehind {
+                    val s = heartSize * (1f + 0.06f * beat.value)
+                    fun heart(at: Offset, color: Color) {
+                        withTransform({
+                            translate(at.x, at.y)
+                            scale(s, s, pivot = Offset.Zero)
+                        }) {
+                            drawPath(unitHeart, edgeColor, style = edge)
+                            drawPath(unitHeart, color)
+                        }
+                    }
+                    heart(pinkAt, pink)
+                    heart(blueAt, blue)
+                }
+            }
+            .testTag("both_of_us_hearts")
+    )
+}
+
+/** Under a photo: online / offline and battery, age and days of life, the birthday countdown. */
+@Composable
+private fun PersonDetails(
+    person: LovePerson,
+    color: Color,
+    now: Long,
+    modifier: Modifier = Modifier,
+    onEditBirthday: () -> Unit
+) {
+    val cc = LocalCardColors.current
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = modifier
+            .padding(horizontal = 3.dp)
+            .testTag("both_of_us_${person.id}")
+    ) {
+        // ● Online | battery
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .clip(RoundedCornerShape(50))
+                .background(cc.pill)
+                .border(1.dp, color.copy(alpha = 0.35f), RoundedCornerShape(50))
+                .padding(horizontal = 8.dp, vertical = 5.dp)
+        ) {
+            Box(
+                Modifier
+                    .size(7.dp)
+                    .clip(CircleShape)
+                    .background(if (person.isOnline) OnlineGreen else cc.dimInk)
+            )
+            Spacer(modifier = Modifier.width(5.dp))
+            Text(
+                text = when {
+                    person.isOnline -> "Online"
+                    !person.status.isNullOrBlank() -> person.status
+                    else -> "Offline"
+                },
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = if (person.isOnline) OnlineGreen else cc.dimInk,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false)
+            )
+            Spacer(modifier = Modifier.width(7.dp))
+            Box(
+                Modifier
+                    .width(1.dp)
+                    .height(12.dp)
+                    .background(cc.hairline)
+            )
+            Spacer(modifier = Modifier.width(7.dp))
+            CardBattery(level = person.batteryLevel, isCharging = person.isCharging, showPercentage = person.isOnline)
+        }
+
+        // Age, days of life and birthday (tap to set or change the birthday)
+        val born = parseDay(person.birthday)?.takeIf { now >= it.timeInMillis }
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier
+                .padding(top = 6.dp)
+                .clip(RoundedCornerShape(14.dp))
+                .clickable(enabled = person.id.isNotBlank()) { onEditBirthday() }
+                .padding(horizontal = 4.dp, vertical = 3.dp)
+        ) {
+            if (born == null) {
+                SoftPill(color = color) {
+                    Text(text = "+ Add birthday", fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, color = color)
+                }
+            } else {
+                val age = ageAt(born, now)
+                Text(
+                    text = "$age yrs · ${formatNumber((now - born.timeInMillis) / DAY_MS)} days",
+                    fontSize = 13.5.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = cc.ink,
+                    maxLines = 1
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+                val untilBirthday = daysToBirthday(born, now)
+                if (untilBirthday == 0) {
+                    // Birthday today: a pink-to-blue pill
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(50))
+                            .background(Brush.horizontalGradient(listOf(HeartbeatPink, HeartbeatBlue)))
+                            .padding(horizontal = 12.dp, vertical = 6.dp)
+                    ) {
+                        Text(text = "🎂 BIRTHDAY TODAY", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White, maxLines = 1)
+                    }
+                } else {
+                    SoftPill(color = color) {
+                        Text(
+                            text = if (untilBirthday == 1) "🎂 Tomorrow" else "🎂 in $untilBirthday days",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = color,
+                            maxLines = 1
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** A soft tinted pill in [color]. */
+@Composable
+private fun SoftPill(color: Color, content: @Composable () -> Unit) {
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = Modifier
+            .clip(RoundedCornerShape(50))
+            .background(color.copy(alpha = 0.12f))
+            .padding(horizontal = 12.dp, vertical = 5.dp)
+    ) { content() }
+}
+
+/**
+ * Our places, in the card's colours from pink (left) to blue (right): the gallery, memories, our
+ * dates and notes, each opening its screen.
+ */
+@Composable
+private fun LovePlaces(
+    pink: Color,
+    blue: Color,
+    onOpenGallery: () -> Unit,
+    onOpenMemories: () -> Unit,
+    onOpenDates: () -> Unit,
+    onOpenNotes: () -> Unit
+) {
+    val cc = LocalCardColors.current
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("love_places")
+    ) {
+        val places = listOf(
+            Triple(Icons.Filled.PhotoLibrary, "Our Gallery", "Photos & Videos") to onOpenGallery,
+            Triple(Icons.Filled.AllInclusive, "Our Memories", "Special Moments") to onOpenMemories,
+            Triple(Icons.Filled.EventAvailable, "Our Dates", "Important Days") to onOpenDates,
+            Triple(Icons.Filled.EditNote, "Our Notes", "Love Notes") to onOpenNotes
+        )
+        places.forEachIndexed { i, (place, onOpen) ->
+            if (i > 0) {
+                Box(
+                    Modifier
+                        .width(1.dp)
+                        .height(40.dp)
+                        .background(cc.hairline)
+                )
+            }
+            PlaceTile(
+                icon = place.first,
+                title = place.second,
+                subtitle = place.third,
+                color = lerp(pink, blue, i / (places.size - 1f)),
+                onClick = onOpen,
+                modifier = Modifier.weight(1f)
+            )
+        }
+    }
+}
+
+/** One place: a soft tinted icon tile, its name and a short line under it. */
+@Composable
+private fun PlaceTile(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+    subtitle: String,
+    color: Color,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val cc = LocalCardColors.current
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = modifier
+            .clip(RoundedCornerShape(14.dp))
+            .clickable(onClick = onClick)
+            .padding(vertical = 6.dp, horizontal = 2.dp)
+            .testTag("love_place_${title.lowercase().replace(' ', '_')}")
+    ) {
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier
+                .padding(2.dp)
+                .size(44.dp)
+                .clip(RoundedCornerShape(14.dp))
+                .background(color.copy(alpha = 0.13f))
+        ) {
+            Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(24.dp))
+        }
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = title,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = cc.ink,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+        Text(
+            text = subtitle,
+            fontSize = 10.sp,
+            color = cc.softInk,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+/** Battery on the card: the icon (green while charging, pink when low) and the percentage. */
+@Composable
+private fun CardBattery(level: Int?, isCharging: Boolean, showPercentage: Boolean) {
+    val lvl = level ?: 100
+    val isLow = lvl <= 20
+    val tint = when {
+        isCharging -> OnlineGreen
+        isLow && level != null -> HeartbeatPink
+        else -> LocalCardColors.current.softInk
+    }
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Icon(
+            imageVector = when {
+                isCharging -> Icons.Filled.BatteryChargingFull
+                isLow && level != null -> Icons.Filled.BatteryAlert
+                lvl >= 90 -> Icons.Filled.BatteryFull
+                lvl >= 70 -> Icons.Filled.Battery6Bar
+                lvl >= 50 -> Icons.Filled.Battery5Bar
+                lvl >= 35 -> Icons.Filled.Battery4Bar
+                else -> Icons.Filled.Battery3Bar
+            },
+            contentDescription = if (level != null) "$level% battery" else "Battery",
+            tint = tint,
+            modifier = Modifier.size(14.dp)
+        )
+        if (showPercentage && level != null && level in 0..100) {
+            Spacer(modifier = Modifier.width(2.dp))
+            Text(text = "$level%", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = tint, maxLines = 1)
+        }
     }
 }
 
@@ -535,160 +1071,5 @@ fun DayPickerDialog(title: String, initial: String?, onPick: (String) -> Unit, o
                 Text(text = title, modifier = Modifier.padding(start = 24.dp, end = 12.dp, top = 16.dp))
             }
         )
-    }
-}
-
-@Composable
-private fun PersonStatsColumn(
-    person: LovePerson,
-    now: Long,
-    modifier: Modifier = Modifier,
-    onEditBirthday: () -> Unit
-) {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = modifier
-            .clip(RoundedCornerShape(12.dp))
-            .clickable(enabled = person.id.isNotBlank()) { onEditBirthday() }
-            .padding(horizontal = 4.dp, vertical = 2.dp)
-            .testTag("both_of_us_${person.id}")
-    ) {
-        // Status / Online & Battery row
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center,
-            modifier = Modifier.padding(bottom = 3.dp)
-        ) {
-            if (person.isOnline) {
-                Box(
-                    modifier = Modifier
-                        .size(6.5.dp)
-                        .clip(CircleShape)
-                        .background(OnlineGreen)
-                )
-                Spacer(modifier = Modifier.width(3.5.dp))
-                Text(
-                    text = "Online",
-                    fontSize = 11.5.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = OnlineGreen
-                )
-                Spacer(modifier = Modifier.width(5.dp))
-                Text(
-                    text = "·",
-                    fontSize = 11.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-                )
-                Spacer(modifier = Modifier.width(5.dp))
-                BatteryChip(
-                    level = person.batteryLevel,
-                    isCharging = person.isCharging,
-                    showPercentage = true
-                )
-            } else {
-                if (!person.status.isNullOrBlank()) {
-                    Text(
-                        text = person.status,
-                        fontSize = 11.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                }
-                // When not online: battery icon only without percentage
-                BatteryChip(
-                    level = person.batteryLevel,
-                    isCharging = person.isCharging,
-                    showPercentage = false
-                )
-            }
-        }
-
-        // Age, days of life, and birthday
-        val born = parseDay(person.birthday)?.takeIf { now >= it.timeInMillis }
-        if (born == null) {
-            Surface(shape = RoundedCornerShape(50), color = HeartRed.copy(alpha = 0.12f)) {
-                Text(
-                    text = "+ Add birthday",
-                    fontSize = 11.5.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = HeartRed,
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-                )
-            }
-        } else {
-            val age = ageAt(born, now)
-            val lived = now - born.timeInMillis
-            Text(
-                text = "$age yrs · ${formatNumber(lived / DAY_MS)} days",
-                fontSize = 12.5.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1
-            )
-            Spacer(modifier = Modifier.height(3.dp))
-            val untilBirthday = daysToBirthday(born, now)
-            Surface(
-                shape = RoundedCornerShape(50),
-                color = if (untilBirthday == 0) HeartRed else HeartRed.copy(alpha = 0.12f)
-            ) {
-                Text(
-                    text = when (untilBirthday) {
-                        0 -> "🎉 Today!"
-                        1 -> "🎂 Tomorrow"
-                        else -> "🎂 in $untilBirthday days"
-                    },
-                    fontSize = 10.5.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = if (untilBirthday == 0) Color.White else HeartRed,
-                    maxLines = 1,
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                )
-            }
-        }
-    }
-}
-
-/** Battery indicator: icon (or charging / low) and optional percentage. */
-@Composable
-private fun BatteryChip(
-    level: Int?,
-    isCharging: Boolean,
-    showPercentage: Boolean,
-    modifier: Modifier = Modifier
-) {
-    val lvl = level ?: 100
-    val isLow = lvl <= 20
-    val tint = when {
-        isCharging -> Color(0xFF10B981)
-        isLow && showPercentage -> Color(0xFFEF4444)
-        else -> MaterialTheme.colorScheme.onSurfaceVariant
-    }
-    Row(verticalAlignment = Alignment.CenterVertically, modifier = modifier) {
-        Icon(
-            imageVector = when {
-                isCharging -> Icons.Filled.BatteryChargingFull
-                isLow -> Icons.Filled.BatteryAlert
-                lvl >= 90 -> Icons.Filled.BatteryFull
-                lvl >= 70 -> Icons.Filled.Battery6Bar
-                lvl >= 50 -> Icons.Filled.Battery5Bar
-                lvl >= 35 -> Icons.Filled.Battery4Bar
-                else -> Icons.Filled.Battery3Bar
-            },
-            contentDescription = if (level != null) "$level% battery" else "Battery",
-            tint = tint,
-            modifier = Modifier.size(13.dp)
-        )
-        if (showPercentage && level != null && level in 0..100) {
-            Spacer(modifier = Modifier.width(3.dp))
-            Text(
-                text = if (isCharging) "$level% charging" else "$level%",
-                fontSize = 11.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = tint,
-                maxLines = 1
-            )
-        }
     }
 }

@@ -141,6 +141,40 @@ class ChatRepository(
         loadOlderPage(OLDER_PAGE_SIZE)
     }
 
+    /**
+     * Every message sent from [from] (inclusive) until [until] (exclusive), oldest first, read in
+     * pages straight from Firestore (for the monthly recap). Null when it couldn't be read.
+     */
+    suspend fun loadMessagesBetween(from: Long, until: Long): List<Message>? {
+        val fs = firestore ?: return null
+        val messagesRef = fs.collection("conversations")
+            .document(currentActiveConversationId ?: getConversationId())
+            .collection("messages")
+        return try {
+            val all = mutableListOf<Message>()
+            var lastDoc: DocumentSnapshot? = null
+            while (true) {
+                var page = messagesRef
+                    .whereGreaterThanOrEqualTo("timestamp", from)
+                    .whereLessThan("timestamp", until)
+                    .orderBy("timestamp", Query.Direction.ASCENDING)
+                    .limit(RANGE_PAGE_SIZE)
+                lastDoc?.let { page = page.startAfter(it) }
+                // From the server: a cache-only answer could be missing messages
+                val docs = page.get(Source.SERVER).await().documents
+                docs.mapNotNullTo(all) { it.toMessageOrNull() }
+                if (docs.size < RANGE_PAGE_SIZE) break
+                lastDoc = docs.last()
+            }
+            all
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w("ChatRepository", "Couldn't read messages for the range", e)
+            null
+        }
+    }
+
     /** "Show in chat" for an older message: make sure about [SEARCH_OLDER_TARGET] older messages are loaded. */
     fun expandLimitForSearch() {
         val missing = SEARCH_OLDER_TARGET - previousMessageLimit
@@ -1065,6 +1099,7 @@ class ChatRepository(
         const val OLDER_PAGE_SIZE = 60L
         const val SEARCH_OLDER_TARGET = 500L
         const val GALLERY_SCAN_PAGE_SIZE = 500L
+        const val RANGE_PAGE_SIZE = 500L
         /** The gallery is fully re-read from the server this often; otherwise only new items. */
         const val GALLERY_FULL_SYNC_INTERVAL_MS = 7L * 24 * 60 * 60 * 1000
         /** New-items check reaches a little before the last one, for clock or write delays. */

@@ -283,8 +283,12 @@ data class DailyQuestion(
     val partnerAnswer: String? = null,
     val isMyAnswerSubmitted: Boolean = false,
     val isPartnerAnswerSubmitted: Boolean = false,
+    // I loved the partner's answer today
     val isLikedByPartner: Boolean = false,
-    val streakDays: Int = 12
+    // The partner loved my answer today
+    val partnerLovedMyAnswer: Boolean = false,
+    // Days in a row we've both answered
+    val streakDays: Int = 0
 )
 
 @IgnoreExtraProperties
@@ -369,7 +373,9 @@ data class YearlyJourneyEntry(
     val songOrQuote: String = "",
     val passionRating: Int = 5,
     val photoUrl: String? = null,
-    val createdAt: Long = System.currentTimeMillis()
+    val createdAt: Long = System.currentTimeMillis(),
+    // Who wrote it ("my" age is theirs); blank for older entries
+    val authorId: String = ""
 )
 
 @IgnoreExtraProperties

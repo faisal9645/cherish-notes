@@ -424,6 +424,30 @@ class SecurityPreferences(context: Context) {
         prefs.edit().putBoolean(KEY_HAPTIC_FEEDBACK_ENABLED, enabled).apply()
     }
 
+    // Each haptic can be switched off on its own (all only while "Haptic Feedback" is on)
+    fun isHapticOnSend(): Boolean = prefs.getBoolean(KEY_HAPTIC_SEND, true)
+    fun setHapticOnSend(enabled: Boolean) = prefs.edit().putBoolean(KEY_HAPTIC_SEND, enabled).apply()
+    fun isHapticOnReceive(): Boolean = prefs.getBoolean(KEY_HAPTIC_RECEIVE, true)
+    fun setHapticOnReceive(enabled: Boolean) = prefs.edit().putBoolean(KEY_HAPTIC_RECEIVE, enabled).apply()
+    fun isHeartbeatOnLongPress(): Boolean = prefs.getBoolean(KEY_HAPTIC_HEARTBEAT_LONG_PRESS, true)
+    fun setHeartbeatOnLongPress(enabled: Boolean) = prefs.edit().putBoolean(KEY_HAPTIC_HEARTBEAT_LONG_PRESS, enabled).apply()
+
+    /** How loud the app's own sounds play, 0 to 100 (100 = full). */
+    fun getAppSoundVolume(): Int = prefs.getInt(KEY_APP_SOUND_VOLUME, 100)
+    fun setAppSoundVolume(volume: Int) = prefs.edit().putInt(KEY_APP_SOUND_VOLUME, volume.coerceIn(0, 100)).apply()
+
+    /** What a masked (hidden-content / disguised) notification says. */
+    fun getMaskedNotificationTitle(): String =
+        prefs.getString(KEY_MASKED_NOTIFICATION_TITLE, null)?.ifBlank { null } ?: DEFAULT_MASKED_TITLE
+    fun getMaskedNotificationText(): String =
+        prefs.getString(KEY_MASKED_NOTIFICATION_TEXT, null)?.ifBlank { null } ?: DEFAULT_MASKED_TEXT
+    fun setMaskedNotificationText(title: String, text: String) {
+        prefs.edit()
+            .putString(KEY_MASKED_NOTIFICATION_TITLE, title.trim())
+            .putString(KEY_MASKED_NOTIFICATION_TEXT, text.trim())
+            .apply()
+    }
+
     fun isAutoPlayMedia(): Boolean = prefs.getBoolean(KEY_AUTOPLAY_MEDIA, true)
 
     fun setAutoPlayMedia(enabled: Boolean) {
@@ -545,6 +569,14 @@ class SecurityPreferences(context: Context) {
         private const val KEY_PLUS_HOLD_DURATION = "plus_hold_duration_sec"
         private const val KEY_IMAGE_GALLERY_SIZE = "image_gallery_size"
         private const val KEY_HAPTIC_FEEDBACK_ENABLED = "haptic_feedback_enabled"
+        private const val KEY_HAPTIC_SEND = "haptic_on_send"
+        private const val KEY_HAPTIC_RECEIVE = "haptic_on_receive"
+        private const val KEY_HAPTIC_HEARTBEAT_LONG_PRESS = "haptic_heartbeat_long_press"
+        private const val KEY_APP_SOUND_VOLUME = "app_sound_volume"
+        private const val KEY_MASKED_NOTIFICATION_TITLE = "masked_notification_title"
+        private const val KEY_MASKED_NOTIFICATION_TEXT = "masked_notification_text"
+        const val DEFAULT_MASKED_TITLE = "Notes"
+        const val DEFAULT_MASKED_TEXT = "Checklist reminder updated"
         private const val KEY_AUTOPLAY_MEDIA = "autoplay_media"
         private const val KEY_HIGH_QUALITY_MEDIA = "high_quality_media"
         private const val KEY_DOUBLE_TAP_ZOOM = "double_tap_zoom"

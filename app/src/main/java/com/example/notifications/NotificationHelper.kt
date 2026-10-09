@@ -127,20 +127,23 @@ object NotificationHelper {
         )
 
         // When discreet/hidden mode is enabled, notification payloads mask sender names and contents
-        val displayTitle = if (isDiscreet) "Notes" else senderName
+        // Masked: what was chosen in Settings (by default "Notes" / "Checklist reminder updated")
+        val maskedTitle = prefs.getMaskedNotificationTitle()
+        val maskedText = prefs.getMaskedNotificationText()
+        val displayTitle = if (isDiscreet) maskedTitle else senderName
         val displayText = if (isDiscreet) {
-            "Checklist reminder updated"
+            maskedText
         } else {
             messageText.ifBlank { "New message" }
         }
-        val subText = if (isDiscreet) "Notes" else "Cherish"
+        val subText = if (isDiscreet) maskedTitle else "Cherish"
 
         // Public version shown on secure lock screens
         val publicNotification = NotificationCompat.Builder(context, CHANNEL_MESSAGES_ID)
             .setSmallIcon(R.mipmap.ic_launcher)
-            .setContentTitle("Notes")
-            .setContentText("Checklist reminder updated")
-            .setSubText("Notes")
+            .setContentTitle(maskedTitle)
+            .setContentText(maskedText)
+            .setSubText(maskedTitle)
             .setBadgeIconType(NotificationCompat.BADGE_ICON_SMALL)
             .setNumber(1)
             .build()
@@ -234,7 +237,7 @@ object NotificationHelper {
         )
 
         val isDisguised = prefs.isHideNotificationContent() || prefs.isDisguiseModeEnabled()
-        val displayTitle = if (isDisguised) "Notes" else "❤️ It's time to check"
+        val displayTitle = if (isDisguised) prefs.getMaskedNotificationTitle() else "❤️ It's time to check"
         val displayText = if (isDisguised) {
             "Reminder schedule completed"
         } else {
@@ -245,7 +248,7 @@ object NotificationHelper {
             .setSmallIcon(if (isDisguised) R.mipmap.ic_launcher else R.drawable.ic_cherish_heart)
             .setContentTitle(displayTitle)
             .setContentText(displayText)
-            .setSubText(if (isDisguised) "Notes" else "Cherish")
+            .setSubText(if (isDisguised) prefs.getMaskedNotificationTitle() else "Cherish")
             .setAutoCancel(true)
             .setContentIntent(pendingIntent)
             .setPriority(NotificationCompat.PRIORITY_HIGH)

@@ -32,7 +32,9 @@ fun AvatarView(
     size: Dp = 48.dp,
     isOnline: Boolean = false,
     showOnlineBadge: Boolean = true,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    // The blue ring; off where the photo sits in a ring of its own (e.g. the couple card)
+    showRing: Boolean = true
 ) {
     Box(
         modifier = modifier.size(size),
@@ -40,14 +42,18 @@ fun AvatarView(
     ) {
         // Glowing vibrant royal blue ring around avatar
         Box(
-            modifier = Modifier
-                .size((size - 4.dp).coerceAtLeast(24.dp))
-                .border(
-                    width = 2.dp,
-                    brush = appHorizontalGradient(),
-                    shape = CircleShape
-                )
-                .padding(1.5.dp)
+            modifier = (if (showRing) {
+                Modifier
+                    .size((size - 4.dp).coerceAtLeast(24.dp))
+                    .border(
+                        width = 2.dp,
+                        brush = appHorizontalGradient(),
+                        shape = CircleShape
+                    )
+                    .padding(1.5.dp)
+            } else {
+                Modifier.size(size)
+            })
                 .clip(CircleShape)
                 .background(MaterialTheme.colorScheme.surfaceVariant),
             contentAlignment = Alignment.Center

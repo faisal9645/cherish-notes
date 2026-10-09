@@ -182,7 +182,7 @@ fun LifetimeJourneyScreen(
                                         color = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f)
                                     )
                                     Text(
-                                        text = "${uiState.myCurrentAge} Years",
+                                        text = if (uiState.myCurrentAge > 0) "${uiState.myCurrentAge} Years" else "Add birthday",
                                         fontSize = 17.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = MaterialTheme.colorScheme.surface
@@ -205,7 +205,7 @@ fun LifetimeJourneyScreen(
                                         color = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f)
                                     )
                                     Text(
-                                        text = "${uiState.partnerCurrentAge} Years",
+                                        text = if (uiState.partnerCurrentAge > 0) "${uiState.partnerCurrentAge} Years" else "Add birthday",
                                         fontSize = 17.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = MaterialTheme.colorScheme.surface

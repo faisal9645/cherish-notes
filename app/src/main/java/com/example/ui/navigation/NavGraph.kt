@@ -183,6 +183,9 @@ fun CherishNavGraph(
     val lifetimeViewModel = remember {
         LifetimeJourneyViewModel(app.coupleFeaturesRepository)
     }
+    val synchronicityViewModel = remember {
+        com.example.ui.synchronicity.SynchronicityViewModel(app.synchronicityRepository, app.authRepository, app.securityPreferences)
+    }
     val backupViewModel = remember {
         GoogleDriveBackupViewModel(app.googleDriveBackupManager)
     }
@@ -337,6 +340,8 @@ fun CherishNavGraph(
                 onNavigateToDates = { navController.navigate(Screen.ImportantDates.route) { launchSingleTop = true } },
                 onNavigateToNotes = { navController.navigate(Screen.SharedNotes.route) { launchSingleTop = true } },
                 onNavigateToOpenWhen = { navController.navigate(Screen.OpenWhen.route) { launchSingleTop = true } },
+                onNavigateToSynchronicity = { navController.navigate(Screen.Synchronicity.route) { launchSingleTop = true } },
+                synchronicityViewModel = synchronicityViewModel,
                 onNavigateToGallery = { navController.navigate(Screen.SharedGallery.route) { launchSingleTop = true } },
                 onNavigateToProfile = { navController.navigate(Screen.Profile.route) { launchSingleTop = true } },
                 onNavigateToLifetimeJourney = { navController.navigate(Screen.LifetimeJourney.route) { launchSingleTop = true } },
@@ -363,6 +368,10 @@ fun CherishNavGraph(
                 onNavigateToDates = {
                     app.securityPreferences.ignoreChatNavigation = true
                     navController.navigate(Screen.ImportantDates.route) { launchSingleTop = true }
+                },
+                onNavigateToOurWords = {
+                    app.securityPreferences.ignoreChatNavigation = true
+                    navController.navigate(Screen.OurWords.route) { launchSingleTop = true }
                 },
                 onNavigateToHome = {
                     app.securityPreferences.ignoreChatNavigation = true
@@ -422,6 +431,27 @@ fun CherishNavGraph(
                     if (sharedChatViewModel.navigateToMessageInChat(messageId)) {
                         app.securityPreferences.ignoreChatNavigation = false
                         navController.popBackStack()
+                    } else {
+                        android.widget.Toast.makeText(context, "Older chat is hidden. Use Recover All in settings to see it.", android.widget.Toast.LENGTH_LONG).show()
+                    }
+                }
+            )
+        }
+
+        composable(Screen.OurWords.route) {
+            com.example.ui.chat.OurWordsScreen(
+                chatViewModel = sharedChatViewModel,
+                onNavigateBack = {
+                    app.securityPreferences.ignoreChatNavigation = false
+                    navController.popBackStack()
+                },
+                onShowInChat = { messageId ->
+                    if (sharedChatViewModel.navigateToMessageInChat(messageId)) {
+                        app.securityPreferences.ignoreChatNavigation = false
+                        val popped = navController.popBackStack(Screen.Chat.route, inclusive = false)
+                        if (!popped) {
+                            navController.navigate(Screen.Chat.route) { launchSingleTop = true }
+                        }
                     } else {
                         android.widget.Toast.makeText(context, "Older chat is hidden. Use Recover All in settings to see it.", android.widget.Toast.LENGTH_LONG).show()
                     }
@@ -500,6 +530,15 @@ fun CherishNavGraph(
 
         composable(Screen.OpenWhen.route) {
             com.example.ui.home.OpenWhenScreen(
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(Screen.Synchronicity.route) {
+            val homeState by homeViewModel.uiState.collectAsState()
+            com.example.ui.synchronicity.SynchronicityScreen(
+                viewModel = synchronicityViewModel,
+                partnerName = homeState.partnerUser?.displayName?.ifBlank { null } ?: "Partner",
                 onNavigateBack = { navController.popBackStack() }
             )
         }

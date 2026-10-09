@@ -51,17 +51,10 @@ class MainActivity : FragmentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // Battery tracking and the auto-backup start once the first screen is on screen, so they
-        // never hold up opening the app
+        // The auto-backup starts once the first screen is on screen, so it never holds up opening
+        // the app. (The battery isn't watched continuously: it's read once when the app opens, in
+        // onResume, and refreshed every few minutes only while the Love & Us tab is on screen.)
         afterFirstFrame {
-            batteryHelper.start()
-            lifecycleScope.launch {
-                batteryHelper.batteryInfo.collect { info ->
-                    if (app.authRepository.isUserLoggedIn()) {
-                        app.authRepository.updateBatteryStatus(info.level, info.isCharging)
-                    }
-                }
-            }
             app.googleDriveBackupManager.start()
         }
         androidx.core.view.WindowCompat.setDecorFitsSystemWindows(window, false)

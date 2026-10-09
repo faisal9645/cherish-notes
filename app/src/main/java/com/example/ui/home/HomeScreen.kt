@@ -38,6 +38,9 @@ import com.example.ui.chat.CheckAfterHelper
 import kotlinx.coroutines.delay
 import com.example.ui.theme.*
 
+/** How often the battery is re-read while the Love & Us tab is on screen. */
+private const val BATTERY_REFRESH_MS = 3 * 60 * 1000L
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
@@ -49,6 +52,8 @@ fun HomeScreen(
     onNavigateToGallery: () -> Unit,
     onNavigateToProfile: () -> Unit,
     onNavigateToOpenWhen: () -> Unit = {},
+    onNavigateToSynchronicity: () -> Unit = {},
+    synchronicityViewModel: com.example.ui.synchronicity.SynchronicityViewModel? = null,
     onNavigateToLifetimeJourney: () -> Unit = {},
     onNavigateToCloudBackup: () -> Unit = {},
     onQuickDisguise: () -> Unit = {},
@@ -235,7 +240,7 @@ fun HomeScreen(
                                     badge = {
                                         if (uiState.unreadCount > 0) {
                                             Badge(containerColor = HeartRed) {
-                                                Text("1")
+                                                Text(if (uiState.unreadCount > 99) "99+" else uiState.unreadCount.toString())
                                             }
                                         }
                                     }
@@ -300,6 +305,20 @@ fun HomeScreen(
             val partnerId = (partner?.id ?: currentUser?.partnerId).orEmpty()
             val homeLifecycle by androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle.currentStateFlow.collectAsState()
             val homeDisguised by homeApp.securityPreferences.isDisguiseActive.collectAsState()
+            // My battery for the card (and the partner's view of it): read now and every few
+            // minutes, only while this tab is on screen; nothing listens to the battery otherwise
+            val loveUsOnScreen = !homeDisguised && homeLifecycle.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)
+            LaunchedEffect(loveUsOnScreen) {
+                // Today's question (a new one each 6 AM day) and our shared Love & Us data
+                if (loveUsOnScreen) homeApp.coupleFeaturesRepository.rebuildLoveUs()
+                if (!loveUsOnScreen || !homeApp.authRepository.isUserLoggedIn()) return@LaunchedEffect
+                val battery = com.example.util.BatteryStatusHelper(context)
+                while (true) {
+                    val info = battery.getCurrentBattery()
+                    homeApp.authRepository.updateBatteryStatus(info.level, info.isCharging)
+                    delay(BATTERY_REFRESH_MS)
+                }
+            }
             val partnerQuietStatus = if (partnerHasCheckAfter) {
                 val (_, isExpired) = remember(partnerCheckTicker, partnerCheckAfterTarget) {
                     CheckAfterHelper.calculateRemaining(partnerCheckAfterTarget)
@@ -336,7 +355,11 @@ fun HomeScreen(
                 isVisible = !homeDisguised && homeLifecycle.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED),
                 onSetBirthday = { userId, date -> homeApp.authRepository.setBirthday(userId, date) },
                 onOpenChat = onNavigateToChat,
-                onSetTogetherSince = { date -> homeApp.authRepository.setTogetherSince(date) }
+                onSetTogetherSince = { date -> homeApp.authRepository.setTogetherSince(date) },
+                onOpenGallery = onNavigateToGallery,
+                onOpenMemories = onNavigateToMemories,
+                onOpenDates = onNavigateToDates,
+                onOpenNotes = onNavigateToNotes
             )
 
             // 2. Secret Chat Quick Preview Card
@@ -405,7 +428,7 @@ fun HomeScreen(
                             )
                         } else if (uiState.lastMessage != null) {
                             Text(
-                                text = uiState.lastMessage!!.text,
+                                text = lastMessagePreview(uiState.lastMessage!!),
                                 fontSize = 13.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 maxLines = 1,
@@ -428,7 +451,7 @@ fun HomeScreen(
                                 .padding(horizontal = 7.dp, vertical = 3.dp)
                         ) {
                             Text(
-                                text = "1",
+                                text = if (uiState.unreadCount > 99) "99+" else uiState.unreadCount.toString(),
                                 color = Color.White,
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold
@@ -646,97 +669,31 @@ fun HomeScreen(
                 }
             )
 
-            // 6. Our Love Growth Card
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(18.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Default.TrendingUp,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "Our Love Growth",
-                                fontSize = 15.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                        }
-
-                        Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
-                        ) {
-                            Text(
-                                text = "Level 3: Soulmates 💖",
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    Text(
-                        text = "14 Days Unbroken Connection Streak. Next milestone at 20 days!",
-                        fontSize = 13.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    LinearProgressIndicator(
-                        progress = { 0.7f },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(6.dp)
-                            .clip(CircleShape),
-                        color = MaterialTheme.colorScheme.primary,
-                        trackColor = MaterialTheme.colorScheme.surfaceVariant
-                    )
-
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    Surface(
-                        shape = RoundedCornerShape(10.dp),
-                        color = MaterialTheme.colorScheme.surfaceVariant,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(10.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(text = "💡", fontSize = 16.sp)
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "Today's Habit: Hug for at least 20 continuous seconds to deepen connection.",
-                                fontSize = 12.sp,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                lineHeight = 16.sp
-                            )
-                        }
-                    }
-                }
+            // Love Synchronicity: the repeating numbers we noticed (11:11, 444...), recorded on purpose
+            if (synchronicityViewModel != null) {
+                com.example.ui.synchronicity.SynchronicityCard(
+                    viewModel = synchronicityViewModel,
+                    partnerName = partnerName,
+                    isOnScreen = loveUsOnScreen,
+                    onOpenHistory = onNavigateToSynchronicity
+                )
             }
+
+            // 6. Our month: last month as a little story (with the numbers, emoji, photos, streak)
+            com.example.ui.recap.OurMonthCard(
+                myId = myId,
+                myName = currentUser?.displayName?.ifBlank { null } ?: "Me",
+                partnerName = partnerName
+            )
+
+            // 7. Our Love Growth: real numbers (days together, Daily Us and Heartbeat Touch streaks)
+            LoveGrowthCard(
+                daysTogether = com.example.ui.chat.LoveDates.daysTogether(
+                    com.example.ui.dates.DateReminders.togetherSince(ourDates, togetherSinceSetting)
+                ),
+                dailyStreak = uiState.dailyQuestion.streakDays,
+                heartbeatStreak = currentUser?.heartbeatStreak ?: 0
+            )
 
             // Room to scroll the last card above the heartbeat button
             Spacer(modifier = Modifier.height(88.dp))

@@ -53,6 +53,36 @@ class AuthRepository(private val context: Context) {
         lovePrefs.edit().putString("together_since", date).apply()
     }
 
+    private val _syncPatterns = MutableStateFlow(
+        lovePrefs.getString("sync_patterns", null)?.split('\n')?.filter { it.isNotBlank() }.orEmpty()
+    )
+    /** Our own Love Synchronicity numbers (beyond 11:11, 444...), shared by both phones. */
+    val syncPatterns: StateFlow<List<String>> = _syncPatterns.asStateFlow()
+
+    private fun cacheSyncPatterns(patterns: List<String>) {
+        _syncPatterns.value = patterns
+        lovePrefs.edit().putString("sync_patterns", patterns.joinToString("\n")).apply()
+    }
+
+    /** Adds one of our own numbers for both of us (already checked by SyncPatterns.normalize). */
+    fun addSyncPattern(pattern: String) {
+        if (pattern.isBlank() || pattern in _syncPatterns.value) return
+        cacheSyncPatterns(_syncPatterns.value + pattern)
+        getCoupleDocRef(_currentUserState.value?.coupleId)?.set(
+            mapOf("synchronicityPatterns" to com.google.firebase.firestore.FieldValue.arrayUnion(pattern)),
+            com.google.firebase.firestore.SetOptions.merge()
+        )
+    }
+
+    /** Removes one of our own numbers (moments already recorded with it stay). */
+    fun removeSyncPattern(pattern: String) {
+        cacheSyncPatterns(_syncPatterns.value - pattern)
+        getCoupleDocRef(_currentUserState.value?.coupleId)?.set(
+            mapOf("synchronicityPatterns" to com.google.firebase.firestore.FieldValue.arrayRemove(pattern)),
+            com.google.firebase.firestore.SetOptions.merge()
+        )
+    }
+
     /** Sets the day we got together for both of us. */
     fun setTogetherSince(date: String) {
         cacheTogetherSince(date)
@@ -229,6 +259,10 @@ class AuthRepository(private val context: Context) {
                 if (birthdays != _birthdays.value) cacheBirthdays(birthdays)
                 val since = snapshot.getString("togetherSince")?.trim()?.ifBlank { null }
                 if (since != _togetherSince.value) cacheTogetherSince(since)
+                // Our own Love Synchronicity numbers
+                val syncPatterns = (snapshot.get("synchronicityPatterns") as? List<*>).orEmpty()
+                    .filterIsInstance<String>().filter { it.isNotBlank() }.distinct()
+                if (syncPatterns != _syncPatterns.value) cacheSyncPatterns(syncPatterns)
 
                 // A "thinking of you" heartbeat from the partner while this app is running (when
                 // it isn't, the push brings it; whichever comes first plays, the other is ignored)

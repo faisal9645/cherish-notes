@@ -56,6 +56,10 @@ import com.example.data.model.Message
 import com.example.data.model.MessageType
 import com.example.ui.chat.ChatViewModel
 import com.example.ui.chat.FullScreenMediaViewer
+import com.example.ui.chat.MediaTileAnchor
+import com.example.ui.chat.mediaTileAnchor
+import com.example.ui.chat.openableMedia
+import androidx.compose.ui.graphics.graphicsLayer
 import com.example.ui.components.SelectionCheckBadge
 import com.example.ui.components.WaveformView
 import com.example.ui.theme.AppGradientStart
@@ -663,10 +667,14 @@ fun SharedGalleryScreen(
                                 activeThumbnailSize = screenWidthDp / gridColumnCount
                             }
 
+                            // The grid fades in as it opens instead of popping in
+                            val gridEntrance = remember { androidx.compose.animation.core.Animatable(0f) }
+                            LaunchedEffect(Unit) { gridEntrance.animateTo(1f, tween(320)) }
                             LazyVerticalGrid(
                                 columns = GridCells.Fixed(gridColumnCount),
                                 modifier = Modifier
                                     .fillMaxSize()
+                                    .graphicsLayer { alpha = gridEntrance.value }
                                     .padding(4.dp)
                                     .pointerInput(Unit) {
                                         awaitEachGesture {
@@ -721,11 +729,16 @@ fun SharedGalleryScreen(
                                     }
                                     items(monthItems, key = { it.id }) { item ->
                                     val isSelected = selectedItemIds.contains(item.id)
+                                    val tileAnchor = remember(item.id) { MediaTileAnchor() }
 
                                     Box(
                                         modifier = Modifier
+                                            // New photos fade in and the rest glide into place
+                                            .animateItem(fadeInSpec = tween(260), fadeOutSpec = tween(180))
                                             .aspectRatio(1f)
                                             .clip(RoundedCornerShape(8.dp))
+                                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f))
+                                            .mediaTileAnchor(tileAnchor)
                                             .then(
                                                 if (isSelected) Modifier.border(2.5.dp, RoseGoldPrimary, RoundedCornerShape(8.dp))
                                                 else Modifier
@@ -741,6 +754,7 @@ fun SharedGalleryScreen(
                                                         if (isSelectionMode) {
                                                             toggleSelection(item.id)
                                                         } else {
+                                                            tileAnchor.open()
                                                             selectedMediaUrl = item.mediaUrl
                                                             selectedMessageIdForViewer = item.messageId
                                                         }
@@ -773,7 +787,7 @@ fun SharedGalleryScreen(
                                                         decoderFactory(coil.decode.VideoFrameDecoder.Factory())
                                                     }
                                                 }
-                                                .crossfade(true)
+                                                .crossfade(260)
                                                 .build(),
                                             contentDescription = if (isVideoItem) "Shared video note" else "Shared photo",
                                             contentScale = ContentScale.Crop,
@@ -1355,7 +1369,7 @@ fun SharedGalleryScreen(
                                                             .fillMaxWidth()
                                                             .height(140.dp)
                                                             .clip(RoundedCornerShape(10.dp))
-                                                            .clickable {
+                                                            .openableMedia {
                                                                 selectedMediaUrl = starredUrls[0]
                                                                 selectedMessageIdForViewer = msg.id
                                                             }
@@ -1376,7 +1390,7 @@ fun SharedGalleryScreen(
                                                                     .weight(1f)
                                                                     .fillMaxHeight()
                                                                     .clip(RoundedCornerShape(10.dp))
-                                                                    .clickable {
+                                                                    .openableMedia {
                                                                         selectedMediaUrl = starUrl
                                                                         selectedMessageIdForViewer = msg.id
                                                                     }
@@ -1704,7 +1718,7 @@ private fun OnThisDayCard(items: List<GalleryMediaItem>, onOpen: (GalleryMediaIt
                         modifier = Modifier
                             .size(92.dp)
                             .clip(RoundedCornerShape(12.dp))
-                            .clickable { onOpen(memory) }
+                            .openableMedia { onOpen(memory) }
                     )
                 }
             }

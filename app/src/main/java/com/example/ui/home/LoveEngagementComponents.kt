@@ -345,7 +345,8 @@ fun DailyQuestionCard(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "🔒 Answer to reveal $partnerName's answer",
+                        text = if (dailyQuestion.isPartnerAnswerSubmitted) "🔒 $partnerName has answered: answer to see it"
+                        else "🔒 Answer to reveal $partnerName's answer",
                         fontSize = 11.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -381,11 +382,20 @@ fun DailyQuestionCard(
                     }
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = dailyQuestion.myAnswer ?: "Loved every moment.",
+                        text = dailyQuestion.myAnswer.orEmpty(),
                         fontSize = 14.sp,
                         color = MaterialTheme.colorScheme.onBackground,
                         lineHeight = 20.sp
                     )
+                    if (dailyQuestion.partnerLovedMyAnswer) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "❤️ $partnerName loved your answer",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = HeartRed
+                        )
+                    }
 
                     HorizontalDivider(
                         color = MaterialTheme.colorScheme.outline,
@@ -405,7 +415,7 @@ fun DailyQuestionCard(
                             Text(text = "• Today", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
 
-                        IconButton(
+                        if (dailyQuestion.isPartnerAnswerSubmitted) IconButton(
                             onClick = onToggleLike,
                             modifier = Modifier.size(28.dp)
                         ) {
@@ -419,7 +429,7 @@ fun DailyQuestionCard(
                     }
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = dailyQuestion.partnerAnswer ?: "Waiting for answer...",
+                        text = dailyQuestion.partnerAnswer ?: "Waiting for $partnerName's answer…",
                         fontSize = 14.sp,
                         color = MaterialTheme.colorScheme.onBackground,
                         lineHeight = 20.sp
@@ -432,7 +442,8 @@ fun DailyQuestionCard(
                     horizontalArrangement = Arrangement.Center
                 ) {
                     Text(
-                        text = "Both answered today! Connection renewed 💕",
+                        text = if (dailyQuestion.isPartnerAnswerSubmitted) "Both answered today! Connection renewed 💕"
+                        else "Your answer is saved. $partnerName sees it once they answer too",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = RoseGoldPrimary
