@@ -13,6 +13,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -24,7 +25,10 @@ fun MoodPickerSheet(
     currentMood: String?,
     onSelectMood: (String) -> Unit,
     onClearMood: () -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    // When my mood was set (0 = before this was kept) and who sees it
+    currentMoodAt: Long = 0L,
+    partnerName: String = "Your partner"
 ) {
     // The quick check-in: one tap, shown softly in the partner's header ("Stressed" offers them
     // to send a hug)
@@ -42,7 +46,9 @@ fun MoodPickerSheet(
         "Excited 🎉"
     )
 
-    var customMoodText by remember { mutableStateOf("") }
+    // My own words stay in the box (they're not one of the buttons above)
+    val myCustomMood = currentMood?.trim()?.takeIf { it.isNotBlank() && it !in quickMoods && it !in presets }
+    var customMoodText by remember { mutableStateOf(myCustomMood.orEmpty()) }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -67,6 +73,51 @@ fun MoodPickerSheet(
                 fontSize = 12.5.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+
+            // My mood as it is now, also a custom one (the partner sees it for 12 hours)
+            if (!currentMood.isNullOrBlank()) {
+                val now = System.currentTimeMillis()
+                val showing = currentMoodAt == 0L || now - currentMoodAt < MOOD_FRESH_MS
+                Spacer(modifier = Modifier.height(12.dp))
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = RoseGoldPrimary.copy(alpha = 0.10f),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, RoseGoldPrimary.copy(alpha = 0.35f)),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("my_current_mood")
+                ) {
+                    Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
+                        Text(
+                            text = "Your mood now",
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = RoseGoldPrimary
+                        )
+                        EmojiText(
+                            text = currentMood,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            emojiScale = 1.2f,
+                            maxLines = 2
+                        )
+                        Text(
+                            text = when {
+                                !showing -> "Not showing anymore (moods show for 12 hours). Set it again to show it."
+                                currentMoodAt == 0L -> "$partnerName sees it next to your name"
+                                else -> {
+                                    val until = java.text.SimpleDateFormat("h:mm a", java.util.Locale.getDefault())
+                                        .format(java.util.Date(currentMoodAt + MOOD_FRESH_MS))
+                                    "$partnerName sees it until $until"
+                                }
+                            },
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
 
             Spacer(modifier = Modifier.height(16.dp))
 
@@ -152,11 +203,17 @@ fun MoodPickerSheet(
                 value = customMoodText,
                 onValueChange = { customMoodText = it },
                 placeholder = { Text("Or type a custom status...") },
+                label = if (myCustomMood != null && customMoodText.trim() == myCustomMood) {
+                    { Text("Your custom mood") }
+                } else null,
                 singleLine = true,
                 shape = RoundedCornerShape(14.dp),
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("custom_mood_field"),
                 trailingIcon = {
-                    if (customMoodText.isNotBlank()) {
+                    // Nothing to set when it's already my mood
+                    if (customMoodText.isNotBlank() && customMoodText.trim() != currentMood?.trim()) {
                         TextButton(
                             onClick = {
                                 onSelectMood(customMoodText.trim())

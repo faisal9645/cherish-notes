@@ -1117,7 +1117,16 @@ fun ChatScreen(
                                 onDismissRequest = { showChatMenu = false }
                             ) {
                                 DropdownMenuItem(
-                                    text = { Text("Set Mood Status") },
+                                    text = {
+                                        val myMood = myUser?.mood?.takeIf {
+                                            it.isNotBlank() && (myUser?.moodAt ?: 0L).let { at -> at == 0L || System.currentTimeMillis() - at < MOOD_FRESH_MS }
+                                        }
+                                        Text(
+                                            text = if (myMood != null) "Mood: $myMood" else "Set Mood Status",
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    },
                                     onClick = {
                                         showChatMenu = false
                                         showMoodPicker = true
@@ -1358,6 +1367,29 @@ fun ChatScreen(
                             }
                         },
                         onUnpin = { viewModel.togglePin(pinned.id) }
+                    )
+                }
+            }
+
+            // Personal space (a Check-After over 2 days): the partner's request to answer, mine
+            // waiting for them, or their answer to mine
+            val spaceRequest by viewModel.spaceRequest.collectAsState()
+            spaceRequest?.let { request ->
+                if (!uiState.isStealthCurtainActive) {
+                    var answerSeen by remember(request.id) { mutableStateOf(viewModel.isSpaceAnswerSeen(request.id)) }
+                    SpaceRequestCard(
+                        request = request,
+                        myId = currentUserId,
+                        partnerName = partnerName,
+                        answerSeen = answerSeen,
+                        onAccept = { viewModel.respondToSpaceRequest(accept = true) },
+                        onDecline = { viewModel.respondToSpaceRequest(accept = false) },
+                        onCancel = { viewModel.cancelSpaceRequest() },
+                        onAnswerSeen = {
+                            viewModel.markSpaceAnswerSeen(request.id)
+                            answerSeen = true
+                        },
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
                     )
                 }
             }
@@ -2145,7 +2177,9 @@ fun ChatScreen(
             currentMood = myUser?.mood,
             onSelectMood = { viewModel.updateMood(it) },
             onClearMood = { viewModel.clearMood() },
-            onDismiss = { showMoodPicker = false }
+            onDismiss = { showMoodPicker = false },
+            currentMoodAt = myUser?.moodAt ?: 0L,
+            partnerName = partnerName
         )
     }
 
@@ -2469,6 +2503,13 @@ fun ChatScreen(
         },
         onExtend = { duration ->
             viewModel.extendCheckAfter(duration)
+        },
+        onRequestSpace = { target, note ->
+            if (viewModel.requestSpace(target, note)) {
+                Toast.makeText(context, "Asked $partnerName. It starts when they accept.", Toast.LENGTH_LONG).show()
+            } else {
+                Toast.makeText(context, "Couldn't send the request. Try again.", Toast.LENGTH_SHORT).show()
+            }
         }
     )
 }

@@ -335,7 +335,8 @@ fun HomeScreen(
                     isOnline = true,
                     lastSeen = 0L,
                     batteryLevel = currentUser?.batteryLevel,
-                    isCharging = currentUser?.isCharging == true
+                    isCharging = currentUser?.isCharging == true,
+                    email = currentUser?.email
                 ),
                 partner = LovePerson(
                     id = partnerId,
@@ -346,7 +347,8 @@ fun HomeScreen(
                     lastSeen = partner?.lastSeen ?: 0L,
                     status = partnerQuietStatus,
                     batteryLevel = partner?.batteryLevel,
-                    isCharging = partner?.isCharging == true
+                    isCharging = partner?.isCharging == true,
+                    email = partner?.email?.ifBlank { null } ?: currentUser?.partnerEmail
                 ),
                 partnerNote = partner?.statusMessage,
                 togetherSince = remember(ourDates, togetherSinceSetting) {

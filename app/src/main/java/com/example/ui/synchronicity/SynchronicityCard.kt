@@ -28,6 +28,7 @@ import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -53,8 +54,9 @@ import com.example.data.model.SyncMoment
 import com.example.data.model.SyncPatterns
 import com.example.data.model.SyncStatus
 import com.example.data.repository.SynchronicityRepository
-import com.example.ui.home.HeartbeatBlue
-import com.example.ui.home.HeartbeatPink
+import com.example.ui.theme.AppGradientEnd
+import com.example.ui.theme.AppGradientMid
+import com.example.ui.theme.AppGradientStart
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -63,15 +65,23 @@ import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
 
-private val TimeTile = Brush.linearGradient(listOf(HeartbeatPink, HeartbeatBlue))
-private val NumberTile = Brush.linearGradient(listOf(Color(0xFF7C5CFF), HeartbeatBlue))
-private val OwnTile = Brush.linearGradient(listOf(Color(0xFFFF8A65), HeartbeatPink))
-
+/**
+ * The number tiles, in the app's own blues (day and night): times go sky to royal blue, numbers
+ * royal to deep blue, our own numbers the other way round.
+ */
+@Composable
 internal fun tileBrush(pattern: String, isCustom: Boolean): Brush = when {
-    isCustom -> OwnTile
-    SyncPatterns.isTime(pattern) -> TimeTile
-    else -> NumberTile
+    isCustom -> Brush.linearGradient(listOf(AppGradientEnd, AppGradientStart))
+    SyncPatterns.isTime(pattern) -> Brush.linearGradient(listOf(AppGradientStart, AppGradientMid))
+    else -> Brush.linearGradient(listOf(AppGradientMid, AppGradientEnd))
 }
+
+/** Chips turn the app's blue when chosen. */
+@Composable
+private fun syncChipColors() = FilterChipDefaults.filterChipColors(
+    selectedContainerColor = MaterialTheme.colorScheme.primary,
+    selectedLabelColor = MaterialTheme.colorScheme.onPrimary
+)
 
 /** Who saw it: "You", the partner's name, or "Partner" in Private Mode. */
 internal fun whoSaw(moment: SyncMoment, myId: String, partnerName: String, privateMode: Boolean): String = when {
@@ -161,6 +171,8 @@ fun SynchronicityCard(
     var removePattern by remember { mutableStateOf<String?>(null) }
     var editing by remember { mutableStateOf<SyncMoment?>(null) }
     val privateMode = remember { viewModel.isPrivateMode() }
+    val accent = MaterialTheme.colorScheme.primary
+    val accentSoft = MaterialTheme.colorScheme.secondary
 
     Card(
         modifier = Modifier
@@ -174,11 +186,11 @@ fun SynchronicityCard(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                // A soft pink and blue glow in the corners
+                // A soft blue glow in the corners
                 .drawBehind {
                     drawCircle(
                         Brush.radialGradient(
-                            listOf(HeartbeatPink.copy(alpha = 0.10f), Color.Transparent),
+                            listOf(accent.copy(alpha = 0.10f), Color.Transparent),
                             center = Offset(size.width, 0f),
                             radius = size.width * 0.6f
                         ),
@@ -187,7 +199,7 @@ fun SynchronicityCard(
                     )
                     drawCircle(
                         Brush.radialGradient(
-                            listOf(HeartbeatBlue.copy(alpha = 0.08f), Color.Transparent),
+                            listOf(accentSoft.copy(alpha = 0.08f), Color.Transparent),
                             center = Offset(0f, size.height),
                             radius = size.width * 0.55f
                         ),
@@ -203,7 +215,7 @@ fun SynchronicityCard(
                     modifier = Modifier
                         .size(38.dp)
                         .clip(CircleShape)
-                        .background(TimeTile)
+                        .background(Brush.linearGradient(listOf(AppGradientStart, AppGradientMid)))
                 ) {
                     Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
                 }
@@ -213,16 +225,24 @@ fun SynchronicityCard(
                     Text("Numbers that find us", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 if (state.streak > 0) {
-                    Surface(shape = RoundedCornerShape(50), color = HeartbeatPink.copy(alpha = 0.12f)) {
-                        Text(
-                            "🔥 ${state.streak} ${if (state.streak == 1) "day" else "days"}",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = HeartbeatPink,
+                    Surface(shape = RoundedCornerShape(50), color = accent.copy(alpha = 0.12f)) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier
-                                .padding(horizontal = 10.dp, vertical = 5.dp)
-                                .semantics { contentDescription = "Synchronicity streak: ${state.streak} days in a row" }
-                        )
+                                .padding(start = 8.dp, end = 10.dp, top = 5.dp, bottom = 5.dp)
+                                .semantics(mergeDescendants = true) {
+                                    contentDescription = "Synchronicity streak: ${state.streak} days in a row"
+                                }
+                        ) {
+                            Icon(Icons.Default.LocalFireDepartment, contentDescription = null, tint = accent, modifier = Modifier.size(15.dp))
+                            Spacer(modifier = Modifier.width(3.dp))
+                            Text(
+                                "${state.streak} ${if (state.streak == 1) "day" else "days"}",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = accent
+                            )
+                        }
                     }
                 }
             }
@@ -272,7 +292,7 @@ fun SynchronicityCard(
                                 .testTag("synchronicity_add_pattern")
                         ) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                                Icon(Icons.Default.Add, contentDescription = null, tint = HeartbeatPink)
+                                Icon(Icons.Default.Add, contentDescription = null, tint = accent)
                                 Text("Ours", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                         }
@@ -305,7 +325,7 @@ fun SynchronicityCard(
             if (recent.isEmpty()) {
                 Text(
                     if (state.status == SyncStatus.LOADING) "Gathering our moments…"
-                    else "Noticed 11:11 or 444 together? Tap the number to keep the moment ✨",
+                    else "Noticed 11:11 or 444 together? Tap the number to keep the moment.",
                     fontSize = 13.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(vertical = 4.dp)
@@ -329,7 +349,7 @@ fun SynchronicityCard(
                         recordPattern = null
                         showRecord = true
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = HeartbeatPink, contentColor = Color.White),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary),
                     modifier = Modifier
                         .weight(1f)
                         .testTag("synchronicity_record")
@@ -597,10 +617,7 @@ internal fun RecordMomentSheet(
                         selected = selected,
                         onClick = { pattern = option },
                         label = { Text(option, fontWeight = FontWeight.Bold) },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = HeartbeatPink,
-                            selectedLabelColor = Color.White
-                        ),
+                        colors = syncChipColors(),
                         modifier = Modifier.testTag("synchronicity_pick_$option")
                     )
                 }
@@ -610,11 +627,20 @@ internal fun RecordMomentSheet(
                 Spacer(modifier = Modifier.height(12.dp))
                 Surface(
                     shape = RoundedCornerShape(14.dp),
-                    color = HeartbeatPink.copy(alpha = 0.08f),
+                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(modifier = Modifier.padding(12.dp)) {
-                        Text("✨ $chosen · ${SyncPatterns.meaning(chosen)}", fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                Icons.Default.AutoAwesome,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("$chosen · ${SyncPatterns.meaning(chosen)}", fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                        }
                         Text(
                             "A sweet meaning, just for fun — not a prediction.",
                             fontSize = 11.sp,
@@ -633,23 +659,31 @@ internal fun RecordMomentSheet(
                     selected = seenAt == null,
                     onClick = { seenAt = null },
                     label = { Text("Just now") },
+                    colors = syncChipColors(),
                     modifier = Modifier.testTag("synchronicity_when_now")
                 )
                 quickTimes.forEach { time ->
                     FilterChip(
                         selected = seenAt == time,
                         onClick = { seenAt = time },
-                        label = { Text(seenLabel(time, state.today)) }
+                        label = { Text(seenLabel(time, state.today)) },
+                        colors = syncChipColors()
                     )
                 }
                 // A time picked earlier (or the one being edited) that isn't a quick choice
                 val picked = seenAt
                 if (picked != null && picked !in quickTimes) {
-                    FilterChip(selected = true, onClick = { showDatePicker = true }, label = { Text(seenLabel(picked, state.today)) })
+                    FilterChip(
+                        selected = true,
+                        onClick = { showDatePicker = true },
+                        label = { Text(seenLabel(picked, state.today)) },
+                        colors = syncChipColors()
+                    )
                 }
                 AssistChip(
                     onClick = { showDatePicker = true },
                     label = { Text("Earlier…") },
+                    colors = AssistChipDefaults.assistChipColors(labelColor = MaterialTheme.colorScheme.primary),
                     modifier = Modifier.testTag("synchronicity_when_pick")
                 )
             }
@@ -712,7 +746,7 @@ internal fun RecordMomentSheet(
                     }
                 },
                 enabled = pattern != null && !isSaving,
-                colors = ButtonDefaults.buttonColors(containerColor = HeartbeatPink, contentColor = Color.White),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary),
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(50.dp)

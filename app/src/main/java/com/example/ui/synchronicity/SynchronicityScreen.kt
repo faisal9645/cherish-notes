@@ -30,7 +30,6 @@ import androidx.compose.ui.unit.sp
 import com.example.data.model.SyncMoment
 import com.example.data.model.SyncPatterns
 import com.example.data.repository.SynchronicityRepository
-import com.example.ui.home.HeartbeatPink
 import java.text.DateFormatSymbols
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -116,8 +115,8 @@ fun SynchronicityScreen(
         floatingActionButton = {
             ExtendedFloatingActionButton(
                 onClick = { showRecord = true },
-                containerColor = HeartbeatPink,
-                contentColor = Color.White,
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
                 icon = { Icon(Icons.Default.AutoAwesome, contentDescription = null) },
                 text = { Text("Record moment") },
                 modifier = Modifier.testTag("synchronicity_history_record")
@@ -200,7 +199,7 @@ fun SynchronicityScreen(
             when {
                 isLoading -> item(key = "loading") {
                     Box(modifier = Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator(color = HeartbeatPink)
+                        CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
                     }
                 }
                 loadFailed -> item(key = "failed") {
@@ -211,7 +210,7 @@ fun SynchronicityScreen(
                 }
                 moments.isEmpty() -> item(key = "empty") {
                     Text(
-                        if (isCurrent) "No moments yet this month. When a number finds you, record it ✨"
+                        if (isCurrent) "No moments yet this month. When a number finds you, record it."
                         else "No moments in ${monthTitle(month)}.",
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontSize = 14.sp,
@@ -226,7 +225,7 @@ fun SynchronicityScreen(
                                 dayLabel(day, state.today),
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = HeartbeatPink,
+                                color = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.padding(top = 4.dp)
                             )
                         }
@@ -246,7 +245,7 @@ fun SynchronicityScreen(
             item(key = "meanings") {
                 Card(
                     shape = RoundedCornerShape(18.dp),
-                    colors = CardDefaults.cardColors(containerColor = HeartbeatPink.copy(alpha = 0.06f)),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.06f)),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -288,7 +287,7 @@ fun SynchronicityScreen(
     }
 }
 
-/** A month grid: days with moments glow pink (deeper with more), today has a ring; tap to see that day. */
+/** A month grid: days with moments glow blue (deeper with more), today has a ring; tap to see that day. */
 @Composable
 private fun MonthCalendar(
     month: String,
@@ -344,13 +343,13 @@ private fun MonthCalendar(
                                     .fillMaxSize()
                                     .clip(CircleShape)
                                     .background(
-                                        if (count > 0) HeartbeatPink.copy(alpha = (0.22f + 0.16f * minOf(count, 4)).coerceAtMost(0.86f))
+                                        if (count > 0) MaterialTheme.colorScheme.primary.copy(alpha = (0.22f + 0.16f * minOf(count, 4)).coerceAtMost(0.86f))
                                         else Color.Transparent
                                     )
                                     .then(
                                         when {
-                                            isSelected -> Modifier.border(2.dp, HeartbeatPink, CircleShape)
-                                            isToday -> Modifier.border(1.5.dp, MaterialTheme.colorScheme.primary, CircleShape)
+                                            isSelected -> Modifier.border(2.5.dp, MaterialTheme.colorScheme.primary, CircleShape)
+                                            isToday -> Modifier.border(1.5.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.45f), CircleShape)
                                             else -> Modifier
                                         }
                                     )

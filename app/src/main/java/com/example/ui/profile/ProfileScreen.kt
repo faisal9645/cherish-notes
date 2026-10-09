@@ -2029,6 +2029,14 @@ fun ProfileScreen(
         },
         onExtend = { duration ->
             viewModel.extendCheckAfter(duration)
+        },
+        onRequestSpace = { target, note ->
+            val asked = viewModel.requestSpace(target, note)
+            android.widget.Toast.makeText(
+                context,
+                if (asked) "Asked your partner. It starts when they accept." else "Couldn't send the request. Try again.",
+                android.widget.Toast.LENGTH_LONG
+            ).show()
         }
     )
 }

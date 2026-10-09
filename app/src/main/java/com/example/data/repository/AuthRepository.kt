@@ -2,6 +2,7 @@ package com.example.data.repository
 
 import android.content.Context
 import android.util.Log
+import com.example.data.model.SpaceRequest
 import com.example.data.model.User
 import com.example.security.SecurityPreferences
 import com.google.firebase.FirebaseApp
@@ -81,6 +82,107 @@ class AuthRepository(private val context: Context) {
             mapOf("synchronicityPatterns" to com.google.firebase.firestore.FieldValue.arrayRemove(pattern)),
             com.google.firebase.firestore.SetOptions.merge()
         )
+    }
+
+    private val _spaceRequest = MutableStateFlow<SpaceRequest?>(null)
+    /** The latest personal-space request between us (a Check-After over 2 days, see [requestSpace]). */
+    val spaceRequest: StateFlow<SpaceRequest?> = _spaceRequest.asStateFlow()
+
+    /**
+     * Asks the partner for a Check-After until [targetMillis] (more than 2 days). It starts only
+     * when they accept. False when there's no couple to ask.
+     */
+    fun requestSpace(targetMillis: Long, note: String): Boolean {
+        val myId = getCurrentUserId().ifBlank { null } ?: return false
+        val ref = getCoupleDocRef(_currentUserState.value?.coupleId) ?: return false
+        val now = System.currentTimeMillis()
+        val request = SpaceRequest(
+            id = java.util.UUID.randomUUID().toString(),
+            fromId = myId,
+            targetMillis = targetMillis,
+            note = note.trim(),
+            requestedAt = now
+        )
+        _spaceRequest.value = request
+        ref.set(
+            mapOf(
+                "spaceRequest" to mapOf(
+                    "id" to request.id,
+                    "fromId" to request.fromId,
+                    "targetMillis" to request.targetMillis,
+                    "note" to request.note,
+                    "requestedAt" to request.requestedAt,
+                    "status" to SpaceRequest.STATUS_PENDING,
+                    "respondedAt" to 0L
+                )
+            ),
+            // The whole request is replaced (no answer left over from an earlier one)
+            com.google.firebase.firestore.SetOptions.mergeFields("spaceRequest")
+        )
+        return true
+    }
+
+    /** My answer to the partner's request. Accepting starts their Check-After on both phones. */
+    fun respondToSpaceRequest(accept: Boolean) {
+        val request = _spaceRequest.value ?: return
+        val myId = getCurrentUserId()
+        if (!request.isPending || request.fromId == myId) return
+        val ref = getCoupleDocRef(_currentUserState.value?.coupleId) ?: return
+        val now = System.currentTimeMillis()
+        val status = if (accept) SpaceRequest.STATUS_ACCEPTED else SpaceRequest.STATUS_DECLINED
+        _spaceRequest.value = request.copy(status = status, respondedAt = now)
+        ref.set(
+            mapOf("spaceRequest" to mapOf("status" to status, "respondedAt" to now, "respondedBy" to myId)),
+            com.google.firebase.firestore.SetOptions.merge()
+        )
+        if (accept) {
+            // Their Check-After starts now, even while their phone is off (it also sets it itself
+            // when it sees the answer)
+            userDocument(request.fromId)?.set(
+                mapOf(
+                    "checkAfterTimeMillis" to request.targetMillis,
+                    "checkAfterNote" to request.note,
+                    "checkAfterCreatedAt" to now,
+                    "checkAfterActive" to true
+                ),
+                com.google.firebase.firestore.SetOptions.merge()
+            )
+        }
+    }
+
+    /** Takes back my request while it's still waiting. */
+    fun cancelSpaceRequest() {
+        val request = _spaceRequest.value ?: return
+        if (request.fromId != getCurrentUserId() || request.status != SpaceRequest.STATUS_PENDING) return
+        val ref = getCoupleDocRef(_currentUserState.value?.coupleId) ?: return
+        val now = System.currentTimeMillis()
+        _spaceRequest.value = request.copy(status = SpaceRequest.STATUS_CANCELLED, respondedAt = now)
+        ref.set(
+            mapOf("spaceRequest" to mapOf("status" to SpaceRequest.STATUS_CANCELLED, "respondedAt" to now)),
+            com.google.firebase.firestore.SetOptions.merge()
+        )
+    }
+
+    /** The partner's answer to my request has been seen (its note isn't shown again). */
+    fun isSpaceAnswerSeen(requestId: String): Boolean = lovePrefs.getBoolean("space_answer_seen_$requestId", false)
+
+    fun markSpaceAnswerSeen(requestId: String) {
+        lovePrefs.edit().putBoolean("space_answer_seen_$requestId", true).apply()
+    }
+
+    /**
+     * My request was accepted: it becomes my Check-After, once (cancelling it later isn't undone
+     * when the app starts again).
+     */
+    private fun applyAcceptedSpace(request: SpaceRequest?, myId: String) {
+        if (request == null || request.status != SpaceRequest.STATUS_ACCEPTED || request.fromId != myId) return
+        val key = "space_applied_${request.id}"
+        if (lovePrefs.getBoolean(key, false)) return
+        lovePrefs.edit().putBoolean(key, true).apply()
+        if (request.targetMillis <= System.currentTimeMillis()) return
+        val me = _currentUserState.value ?: return
+        if (me.checkAfterActive && me.checkAfterTimeMillis == request.targetMillis) return
+        setCheckAfter(request.targetMillis, request.note)
     }
 
     /** Sets the day we got together for both of us. */
@@ -259,6 +361,20 @@ class AuthRepository(private val context: Context) {
                 if (birthdays != _birthdays.value) cacheBirthdays(birthdays)
                 val since = snapshot.getString("togetherSince")?.trim()?.ifBlank { null }
                 if (since != _togetherSince.value) cacheTogetherSince(since)
+                // A personal-space request (a Check-After over 2 days) and the partner's answer
+                val request = (snapshot.get("spaceRequest") as? Map<*, *>)?.let { m ->
+                    SpaceRequest(
+                        id = m["id"] as? String ?: "",
+                        fromId = m["fromId"] as? String ?: "",
+                        targetMillis = (m["targetMillis"] as? Number)?.toLong() ?: 0L,
+                        note = m["note"] as? String ?: "",
+                        requestedAt = (m["requestedAt"] as? Number)?.toLong() ?: 0L,
+                        status = m["status"] as? String ?: SpaceRequest.STATUS_PENDING,
+                        respondedAt = (m["respondedAt"] as? Number)?.toLong() ?: 0L
+                    )
+                }?.takeIf { it.id.isNotBlank() }
+                if (request != _spaceRequest.value) _spaceRequest.value = request
+                applyAcceptedSpace(request, cleanUid)
                 // Our own Love Synchronicity numbers
                 val syncPatterns = (snapshot.get("synchronicityPatterns") as? List<*>).orEmpty()
                     .filterIsInstance<String>().filter { it.isNotBlank() }.distinct()

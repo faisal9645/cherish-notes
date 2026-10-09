@@ -119,10 +119,37 @@ data class LovePerson(
     val lastSeen: Long,
     val status: String? = null,
     val batteryLevel: Int? = null,
-    val isCharging: Boolean = false
+    val isCharging: Boolean = false,
+    // Only used to tell which of us is which side
+    val email: String? = null
 )
 
 private const val DAY_MS = 86_400_000L
+
+// Her side is pink, on the left; his blue, on the right (like the heartbeat button). She and he are
+// recognised by name, id or email, so it's right whatever way each of us signed in (a Google
+// sign-in gives a random id).
+private val HER_MARKERS = listOf("shali")
+private val HIS_MARKERS = listOf("faisal")
+
+private fun LovePerson.isMarked(markers: List<String>): Boolean {
+    val text = listOfNotNull(id, name, email).joinToString(" ").lowercase(Locale.ROOT)
+    return markers.any { it in text }
+}
+
+/**
+ * Her first (pink, left), him second (blue, right), the same on both phones. Only when neither
+ * name, id nor email tells, a stable order by user id decides.
+ */
+private fun herFirst(me: LovePerson, partner: LovePerson): Pair<LovePerson, LovePerson> {
+    val meHer = me.isMarked(HER_MARKERS)
+    val partnerHer = partner.isMarked(HER_MARKERS)
+    if (meHer != partnerHer) return if (meHer) me to partner else partner to me
+    val meHim = me.isMarked(HIS_MARKERS)
+    val partnerHim = partner.isMarked(HIS_MARKERS)
+    if (meHim != partnerHim) return if (meHim) partner to me else me to partner
+    return if (me.id >= partner.id) me to partner else partner to me
+}
 
 /** The couple card's colours: white by day, deep navy by night, the same pink and blue on both. */
 private class CardColors(
@@ -238,8 +265,8 @@ private fun heartPath(cx: Float, cy: Float, size: Float): Path = Path().apply {
  * under each: online / offline and battery, age and days of life, and the birthday countdown;
  * our places (gallery, memories, dates, notes); since when and how many days together.
  *
- * Soft and calm: the same pastel card in day and night mode, no glows. The two of us
- * are in the same order on both phones (by user id), so each keeps their colour.
+ * Soft and calm: the same pastel card in day and night mode, no glows. She is always on the
+ * left in pink and he on the right in blue, on both phones (see [herFirst]).
  */
 @Composable
 fun BothOfUsCard(
@@ -268,8 +295,8 @@ fun BothOfUsCard(
     var editingTogether by remember { mutableStateOf(false) }
     var viewingPhotoUrl by remember { mutableStateOf<String?>(null) }
 
-    // Same sides on both phones: pink on the left, blue on the right
-    val (left, right) = if (me.id >= partner.id) me to partner else partner to me
+    // Same sides on both phones: her on the left in pink, him on the right in blue
+    val (left, right) = remember(me, partner) { herFirst(me, partner) }
     val pink = HeartbeatPink
     // The same soft pastel card in day and night mode (same rings, text and colours)
     val cardColors = if (MaterialTheme.colorScheme.surface.luminance() < 0.5f) NightCard else DayCard

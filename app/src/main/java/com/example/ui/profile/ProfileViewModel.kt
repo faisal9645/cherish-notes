@@ -403,6 +403,9 @@ class ProfileViewModel(
         authRepository.cancelCheckAfter()
     }
 
+    /** A Check-After over 2 days: asked of the partner, it starts when they accept. */
+    fun requestSpace(targetMillis: Long, note: String): Boolean = authRepository.requestSpace(targetMillis, note)
+
     fun extendCheckAfter(additionalMillis: Long) {
         authRepository.extendCheckAfter(additionalMillis)
     }

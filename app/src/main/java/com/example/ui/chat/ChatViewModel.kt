@@ -961,6 +961,19 @@ class ChatViewModel(
     }
 
     // --- CHECK-AFTER FEATURE ---
+    /** Personal space: a Check-After over 2 days is asked of the partner first. */
+    val spaceRequest: StateFlow<com.example.data.model.SpaceRequest?> = authRepository.spaceRequest
+
+    fun requestSpace(targetMillis: Long, note: String): Boolean = authRepository.requestSpace(targetMillis, note)
+
+    fun respondToSpaceRequest(accept: Boolean) = authRepository.respondToSpaceRequest(accept)
+
+    fun cancelSpaceRequest() = authRepository.cancelSpaceRequest()
+
+    fun isSpaceAnswerSeen(requestId: String) = authRepository.isSpaceAnswerSeen(requestId)
+
+    fun markSpaceAnswerSeen(requestId: String) = authRepository.markSpaceAnswerSeen(requestId)
+
     fun openCheckAfterSheet() {
         _uiState.update { it.copy(isCheckAfterSheetOpen = true) }
     }

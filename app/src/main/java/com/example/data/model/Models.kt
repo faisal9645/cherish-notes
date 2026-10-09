@@ -409,3 +409,39 @@ data class ChatDeletionRequest(
     }
 }
 
+/**
+ * A Check-After of more than 2 days ("personal space"), asked of the partner. It's kept on the
+ * couple record and becomes the asker's Check-After once the partner accepts.
+ */
+data class SpaceRequest(
+    val id: String = "",
+    val fromId: String = "",
+    val targetMillis: Long = 0L,
+    val note: String = "",
+    val requestedAt: Long = 0L,
+    /** [STATUS_PENDING], [STATUS_ACCEPTED], [STATUS_DECLINED] or [STATUS_CANCELLED]. */
+    val status: String = STATUS_PENDING,
+    val respondedAt: Long = 0L
+) {
+    /** Still waiting for an answer (a week-old or already-passed request no longer counts). */
+    val isPending: Boolean
+        get() {
+            val now = System.currentTimeMillis()
+            return status == STATUS_PENDING && targetMillis > now && now - requestedAt < PENDING_FOR_MS
+        }
+
+    /** How many days it asks for. */
+    val days: Int
+        get() = ((targetMillis - requestedAt + DAY_MS / 2) / DAY_MS).toInt().coerceAtLeast(1)
+
+    companion object {
+        const val STATUS_PENDING = "pending"
+        const val STATUS_ACCEPTED = "accepted"
+        const val STATUS_DECLINED = "declined"
+        const val STATUS_CANCELLED = "cancelled"
+        const val DAY_MS = 24L * 60 * 60 * 1000
+        /** A Check-After longer than this needs the partner's OK. */
+        const val NEEDS_OK_AFTER_MS = 2 * DAY_MS
+        private const val PENDING_FOR_MS = 7 * DAY_MS
+    }
+}
