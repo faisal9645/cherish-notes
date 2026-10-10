@@ -615,6 +615,7 @@ class ChatRepository(
         message.isStarred = flag("isStarred", "starred") ?: message.isStarred
         message.isPinned = flag("isPinned", "pinned") ?: message.isPinned
         message.isEdited = flag("isEdited", "edited") ?: message.isEdited
+        message.isAudioPlayed = flag("isAudioPlayed", "audioPlayed") ?: message.isAudioPlayed
         return message
     }
 

@@ -182,6 +182,9 @@ private fun LovePerson.isMarked(markers: List<String>): Boolean {
  * Her first (pink, left), him second (blue, right), the same on both phones. Only when neither
  * name, id nor email tells, a stable order by user id decides.
  */
+/** Her user id (the pink side), the same on both phones. */
+fun herUserId(me: LovePerson, partner: LovePerson): String = herFirst(me, partner).first.id
+
 private fun herFirst(me: LovePerson, partner: LovePerson): Pair<LovePerson, LovePerson> {
     val meHer = me.isMarked(HER_MARKERS)
     val partnerHer = partner.isMarked(HER_MARKERS)
@@ -901,7 +904,7 @@ private fun RingedAvatar(person: LovePerson, color: Color, onOpenPhoto: (String)
     }
 }
 
-/** Two hearts, pink and blue, overlapping between us and beating gently. Plain colours, no glow. */
+/** Two hearts beating gently between us: his blue one in front, holding her pink one. */
 @Composable
 private fun TwinHearts(pink: Color, blue: Color, beat: State<Float>) {
     val outline = LocalCardColors.current.pill.copy(alpha = 1f)
@@ -912,24 +915,25 @@ private fun TwinHearts(pink: Color, blue: Color, beat: State<Float>) {
             .drawWithCache {
                 val unitHeart = heartPath(0f, 0f, 1f)
                 val heartSize = 28.dp.toPx()
-                val pinkAt = Offset(size.width / 2f - 7.dp.toPx(), size.height / 2f + 1.dp.toPx())
-                val blueAt = Offset(size.width / 2f + 7.dp.toPx(), size.height / 2f + 4.dp.toPx())
+                // His (blue) heart in front and a little higher; hers (pink) lower, tucked behind it
+                val pinkAt = Offset(size.width / 2f - 6.dp.toPx(), size.height / 2f + 5.dp.toPx())
+                val blueAt = Offset(size.width / 2f + 6.dp.toPx(), size.height / 2f - 1.dp.toPx())
                 val edge = Stroke(width = 3.dp.toPx() / heartSize)
                 // The edge matches the card behind, so the overlapping hearts read as two
                 val edgeColor = if (cardIsLight) outline else NightCardEdge
                 onDrawBehind {
                     val s = heartSize * (1f + 0.045f * beat.value)
-                    fun heart(at: Offset, color: Color) {
+                    fun heart(at: Offset, color: Color, grow: Float = 1f) {
                         withTransform({
                             translate(at.x, at.y)
-                            scale(s, s, pivot = Offset.Zero)
+                            scale(s * grow, s * grow, pivot = Offset.Zero)
                         }) {
                             drawPath(unitHeart, edgeColor, style = edge)
                             drawPath(unitHeart, color)
                         }
                     }
-                    heart(blueAt, blue)
                     heart(pinkAt, pink)
+                    heart(blueAt, blue, grow = 1.06f)
                 }
             }
             .testTag("both_of_us_hearts")

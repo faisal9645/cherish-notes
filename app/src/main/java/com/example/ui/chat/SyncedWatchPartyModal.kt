@@ -69,8 +69,11 @@ fun SyncedWatchPartyModal(
             dismissOnClickOutside = false
         )
     ) {
+        // The app's theme: its own background by day and by night, the app's blue for accents
+        val accent = MaterialTheme.colorScheme.primary
+        val ink = MaterialTheme.colorScheme.onBackground
         Surface(
-            color = Color(0xFF0F0B1E),
+            color = MaterialTheme.colorScheme.background,
             modifier = Modifier.fillMaxSize()
         ) {
             Column(
@@ -89,14 +92,14 @@ fun SyncedWatchPartyModal(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Surface(
                             shape = CircleShape,
-                            color = Color(0xFFEC4899).copy(alpha = 0.2f),
+                            color = accent.copy(alpha = 0.15f),
                             modifier = Modifier.size(36.dp)
                         ) {
                             Box(contentAlignment = Alignment.Center) {
                                 Icon(
                                     imageVector = Icons.Default.Movie,
                                     contentDescription = null,
-                                    tint = Color(0xFFEC4899),
+                                    tint = accent,
                                     modifier = Modifier.size(20.dp)
                                 )
                             }
@@ -108,12 +111,12 @@ fun SyncedWatchPartyModal(
                                     text = "Synced Watch Party",
                                     fontSize = 16.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = Color.White
+                                    color = ink
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Surface(
                                     shape = RoundedCornerShape(4.dp),
-                                    color = if (session.isPlaying) Color(0xFF10B981) else Color(0xFFF59E0B)
+                                    color = if (session.isPlaying) accent else MaterialTheme.colorScheme.outline
                                 ) {
                                     Text(
                                         text = if (session.isPlaying) "SYNCED • PLAYING" else "PAUSED",
@@ -127,7 +130,7 @@ fun SyncedWatchPartyModal(
                             Text(
                                 text = session.title.ifBlank { "Ambient Listening with Partner 💕" },
                                 fontSize = 12.sp,
-                                color = Color.White.copy(alpha = 0.7f),
+                                color = ink.copy(alpha = 0.7f),
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
@@ -139,9 +142,9 @@ fun SyncedWatchPartyModal(
                         modifier = Modifier
                             .size(36.dp)
                             .clip(CircleShape)
-                            .background(Color.White.copy(alpha = 0.12f))
+                            .background(ink.copy(alpha = 0.08f))
                     ) {
-                        Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.White)
+                        Icon(Icons.Default.Close, contentDescription = "Close", tint = ink)
                     }
                 }
 
@@ -166,7 +169,7 @@ fun SyncedWatchPartyModal(
                             Icon(
                                 imageVector = Icons.Default.Headphones,
                                 contentDescription = null,
-                                tint = Color(0xFFEC4899),
+                                tint = accent,
                                 modifier = Modifier.size(64.dp)
                             )
                             Spacer(modifier = Modifier.height(16.dp))
@@ -187,7 +190,7 @@ fun SyncedWatchPartyModal(
 
                 // Bottom Synced Control Deck
                 Surface(
-                    color = Color(0xFF16112C),
+                    color = MaterialTheme.colorScheme.surfaceVariant,
                     tonalElevation = 6.dp,
                     modifier = Modifier.fillMaxWidth()
                 ) {
@@ -210,20 +213,20 @@ fun SyncedWatchPartyModal(
                                 text = timeStr,
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.SemiBold,
-                                color = Color.White.copy(alpha = 0.8f)
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(
                                     Icons.Default.Sync,
                                     contentDescription = null,
-                                    tint = Color(0xFF38BDF8),
+                                    tint = accent,
                                     modifier = Modifier.size(13.dp)
                                 )
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Text(
                                     text = "Both phones in sync",
                                     fontSize = 11.sp,
-                                    color = Color(0xFF38BDF8),
+                                    color = accent,
                                     fontWeight = FontWeight.Medium
                                 )
                             }
@@ -241,9 +244,9 @@ fun SyncedWatchPartyModal(
                             },
                             valueRange = 0f..600f,
                             colors = SliderDefaults.colors(
-                                thumbColor = Color(0xFFEC4899),
-                                activeTrackColor = Color(0xFFEC4899),
-                                inactiveTrackColor = Color.White.copy(alpha = 0.2f)
+                                thumbColor = accent,
+                                activeTrackColor = accent,
+                                inactiveTrackColor = accent.copy(alpha = 0.2f)
                             ),
                             modifier = Modifier.fillMaxWidth().testTag("watch_party_progress_slider")
                         )
@@ -264,7 +267,7 @@ fun SyncedWatchPartyModal(
                                     onSeek(newPos)
                                 }
                             ) {
-                                Icon(Icons.Default.Replay10, contentDescription = "Rewind 10s", tint = Color.White)
+                                Icon(Icons.Default.Replay10, contentDescription = "Rewind 10s", tint = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
 
                             // Shared Play / Pause Primary Button
@@ -273,13 +276,13 @@ fun SyncedWatchPartyModal(
                                     val nextPlayState = !session.isPlaying
                                     onPlayPause(nextPlayState, currentProgress)
                                 },
-                                colors = IconButtonDefaults.filledIconButtonColors(containerColor = Color(0xFFEC4899)),
+                                colors = IconButtonDefaults.filledIconButtonColors(containerColor = accent),
                                 modifier = Modifier.size(56.dp).testTag("watch_party_play_pause_btn")
                             ) {
                                 Icon(
                                     imageVector = if (session.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                                     contentDescription = if (session.isPlaying) "Pause" else "Play",
-                                    tint = Color.White,
+                                    tint = MaterialTheme.colorScheme.onPrimary,
                                     modifier = Modifier.size(32.dp)
                                 )
                             }
@@ -292,7 +295,7 @@ fun SyncedWatchPartyModal(
                                     onSeek(newPos)
                                 }
                             ) {
-                                Icon(Icons.Default.Forward10, contentDescription = "Forward 10s", tint = Color.White)
+                                Icon(Icons.Default.Forward10, contentDescription = "Forward 10s", tint = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
 
                             // Leave / End Party
@@ -302,7 +305,7 @@ fun SyncedWatchPartyModal(
                                     onDismiss()
                                 }
                             ) {
-                                Text("End Party", color = Color(0xFFEF4444), fontSize = 13.sp)
+                                Text("End Party", color = MaterialTheme.colorScheme.error, fontSize = 13.sp)
                             }
                         }
                     }

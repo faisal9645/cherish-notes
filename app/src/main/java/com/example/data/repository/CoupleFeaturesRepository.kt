@@ -16,6 +16,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import java.util.UUID
@@ -510,201 +512,138 @@ class CoupleFeaturesRepository(
         _bucketListFlow.value = _bucketListFlow.value + item
     }
 
-    // Our Shared Movies (Watched List and Suggested Movies)
-    private val _moviesFlow = MutableStateFlow(
-        listOf(
-            com.example.data.model.MovieItem("m1", "About Time", "Romance / Drama", "⏳", true, 5, "Sep 14", "Both", "Our favorite movie about cherishing ordinary days together"),
-            com.example.data.model.MovieItem("m2", "La La Land", "Romance / Musical", "🌆", true, 5, "Aug 20", "Shali", "City of stars, lovely music and bittersweet dreams"),
-            com.example.data.model.MovieItem("m3", "The Notebook", "Romance / Drama", "💌", true, 5, "Jul 10", "Faisal", "Crying our eyes out on the sofa wrapped in blankets"),
-            com.example.data.model.MovieItem("m4", "Before Sunrise", "Romantic Walk", "🚂", false, 5, null, "Shali", "Suggested for next Friday cozy night"),
-            com.example.data.model.MovieItem("m5", "Pride & Prejudice", "Period Romance", "🌿", false, 5, null, "Shali", "Suggested classic romance night"),
-            com.example.data.model.MovieItem("m6", "Your Name", "Anime / Romance", "✨", false, 5, null, "Faisal", "Suggested date night under the stars"),
-            com.example.data.model.MovieItem("m7", "Crazy Rich Asians", "RomCom", "💍", false, 5, null, "Both", "Suggested fun popcorn date")
-        )
-    )
+    // ---- Our movies, kept on the couple's record: suggested by one of us, then watched by each of
+    // us (per person, so both phones agree on who watched it first and second) ----
+    private val _moviesFlow = MutableStateFlow<List<com.example.data.model.MovieItem>>(emptyList())
     val moviesFlow: StateFlow<List<com.example.data.model.MovieItem>> = _moviesFlow.asStateFlow()
 
-    fun toggleMovieWatched(id: String, rating: Int = 5) {
-        val sdf = java.text.SimpleDateFormat("MMM d", java.util.Locale.getDefault())
-        val dateText = sdf.format(java.util.Date())
-        val myName = authRepository.currentUserState.value?.displayName?.ifBlank { "Me" } ?: "Me"
-        _moviesFlow.value = _moviesFlow.value.map {
-            if (it.id == id) {
-                val nowWatched = !it.isWatched
-                it.copy(
-                    isWatched = nowWatched,
-                    rating = rating,
-                    watchedDate = if (nowWatched) (it.watchedDate ?: dateText) else null,
-                    watchedFirstBy = if (nowWatched && it.watchedFirstBy == null) myName else it.watchedFirstBy
-                )
-            } else it
-        }
-    }
-
-    fun updateMovieWatchedOrder(id: String, watchedFirstBy: String?, watchedSecondBy: String?) {
-        _moviesFlow.value = _moviesFlow.value.map {
-            if (it.id == id) {
-                it.copy(watchedFirstBy = watchedFirstBy, watchedSecondBy = watchedSecondBy)
-            } else it
-        }
-    }
-
-    fun addMovie(title: String, genre: String, emoji: String, isWatched: Boolean, notes: String = "") {
-        val sdf = java.text.SimpleDateFormat("MMM d", java.util.Locale.getDefault())
-        val authorName = authRepository.currentUserState.value?.displayName?.ifBlank { "Me" } ?: "Me"
+    /** Adds a movie; [watchedTogether] marks it watched by both of us already. */
+    fun addMovie(title: String, genre: String, emoji: String, watchedTogether: Boolean, notes: String = "") {
+        val ref = loveCoupleRef() ?: return
+        val myId = authRepository.getCurrentUserId().ifBlank { null } ?: return
+        val now = System.currentTimeMillis()
+        val watched = if (watchedTogether) listOfNotNull(myId, partnerIdOrNull()).associateWith { now } else emptyMap()
         val item = com.example.data.model.MovieItem(
             id = UUID.randomUUID().toString(),
             title = title.trim(),
             genre = genre.trim().ifBlank { "Romance" },
             emoji = emoji.ifBlank { "🎬" },
-            isWatched = isWatched,
-            rating = 5,
-            watchedDate = if (isWatched) sdf.format(java.util.Date()) else null,
-            suggestedBy = authorName,
-            watchedFirstBy = if (isWatched) authorName else null,
-            notes = notes.trim()
+            notes = notes.trim(),
+            addedBy = myId,
+            addedAt = now,
+            watchedAt = watched
         )
         _moviesFlow.value = listOf(item) + _moviesFlow.value
+        ref.set(
+            mapOf(
+                "movies" to mapOf(
+                    item.id to mapOf(
+                        "title" to item.title,
+                        "genre" to item.genre,
+                        "emoji" to item.emoji,
+                        "notes" to item.notes,
+                        "addedBy" to item.addedBy,
+                        "addedAt" to item.addedAt,
+                        "watchedAt" to item.watchedAt
+                    )
+                )
+            ),
+            com.google.firebase.firestore.SetOptions.merge()
+        ).addOnFailureListener { Log.w("CoupleFeaturesRepo", "Saving the movie failed", it) }
+    }
+
+    /** I watched it (or take that back). The order between us comes from these times. */
+    fun toggleMovieWatched(id: String) {
+        val ref = loveCoupleRef() ?: return
+        val myId = authRepository.getCurrentUserId().ifBlank { null } ?: return
+        val movie = _moviesFlow.value.firstOrNull { it.id == id } ?: return
+        val watchedNow = myId !in movie.watchedAt
+        val now = System.currentTimeMillis()
+        _moviesFlow.value = _moviesFlow.value.map {
+            if (it.id != id) it
+            else it.copy(watchedAt = if (watchedNow) it.watchedAt + (myId to now) else it.watchedAt - myId)
+        }
+        ref.update(
+            com.google.firebase.firestore.FieldPath.of("movies", id, "watchedAt", myId),
+            if (watchedNow) now else com.google.firebase.firestore.FieldValue.delete()
+        ).addOnFailureListener { Log.w("CoupleFeaturesRepo", "Saving the watched mark failed", it) }
     }
 
     fun deleteMovie(id: String) {
-        _moviesFlow.value = _moviesFlow.value.filter { it.id != id }
+        _moviesFlow.value = _moviesFlow.value.filterNot { it.id == id }
+        loveCoupleRef()?.update(com.google.firebase.firestore.FieldPath.of("movies", id), com.google.firebase.firestore.FieldValue.delete())
+            ?.addOnFailureListener { Log.w("CoupleFeaturesRepo", "Deleting the movie failed", it) }
     }
 
-    // ---- Our Shared Books: Book suggestions, count, dual page progress & finished order ----
-    private val _booksFlow = MutableStateFlow(
-        listOf(
-            com.example.data.model.BookItem(
-                id = "b1",
-                title = "The Little Prince",
-                author = "Antoine de Saint-Exupéry",
-                totalPages = 140,
-                myCurrentPage = 140,
-                partnerCurrentPage = 140,
-                isCompletedByMe = true,
-                isCompletedByPartner = true,
-                firstFinishedBy = "Faisal",
-                secondFinishedBy = "Shali",
-                suggestedBy = "Shali",
-                genre = "Classic / Romance",
-                emoji = "🌹",
-                notes = "“It is only with the heart that one can see rightly; what is essential is invisible to the eye.”"
-            ),
-            com.example.data.model.BookItem(
-                id = "b2",
-                title = "Normal People",
-                author = "Sally Rooney",
-                totalPages = 273,
-                myCurrentPage = 185,
-                partnerCurrentPage = 210,
-                isCompletedByMe = false,
-                isCompletedByPartner = false,
-                firstFinishedBy = null,
-                secondFinishedBy = null,
-                suggestedBy = "Faisal",
-                genre = "Modern Fiction",
-                emoji = "📖",
-                notes = "Reading along every evening before bed."
-            ),
-            com.example.data.model.BookItem(
-                id = "b3",
-                title = "Atomic Habits",
-                author = "James Clear",
-                totalPages = 320,
-                myCurrentPage = 320,
-                partnerCurrentPage = 280,
-                isCompletedByMe = true,
-                isCompletedByPartner = false,
-                firstFinishedBy = "Faisal",
-                secondFinishedBy = null,
-                suggestedBy = "Faisal",
-                genre = "Growth / Habits",
-                emoji = "⚡",
-                notes = "Building small daily routines together."
-            ),
-            com.example.data.model.BookItem(
-                id = "b4",
-                title = "Before the Coffee Gets Cold",
-                author = "Toshikazu Kawaguchi",
-                totalPages = 213,
-                myCurrentPage = 45,
-                partnerCurrentPage = 70,
-                isCompletedByMe = false,
-                isCompletedByPartner = false,
-                suggestedBy = "Shali",
-                genre = "Heartwarming / Fantasy",
-                emoji = "☕",
-                notes = "A cozy cafe in Tokyo that travels through time."
-            )
-        )
-    )
+    // ---- Our books, kept on the couple's record: each of us has our own page and finish time, so
+    // it shows who's reading what right now and who finished first ----
+    private val _booksFlow = MutableStateFlow<List<com.example.data.model.BookItem>>(emptyList())
     val booksFlow: StateFlow<List<com.example.data.model.BookItem>> = _booksFlow.asStateFlow()
 
-    fun updateBookProgress(id: String, myPage: Int? = null, partnerPage: Int? = null) {
-        val myName = authRepository.currentUserState.value?.displayName?.ifBlank { "Me" } ?: "Me"
-        val partnerName = authRepository.partnerUserState.value?.displayName?.ifBlank { "Partner" } ?: "Partner"
-        _booksFlow.value = _booksFlow.value.map { book ->
-            if (book.id == id) {
-                val newMyPage = myPage ?: book.myCurrentPage
-                val newPartnerPage = partnerPage ?: book.partnerCurrentPage
-                val completedByMe = newMyPage >= book.totalPages
-                val completedByPartner = newPartnerPage >= book.totalPages
-
-                var first = book.firstFinishedBy
-                var second = book.secondFinishedBy
-
-                if (completedByMe && first == null && !book.isCompletedByPartner) {
-                    first = myName
-                } else if (completedByPartner && first == null && !book.isCompletedByMe) {
-                    first = partnerName
-                }
-
-                if (completedByMe && completedByPartner) {
-                    if (first == myName && second == null) second = partnerName
-                    else if (first == partnerName && second == null) second = myName
-                    else if (first == null) {
-                        first = myName
-                        second = partnerName
-                    }
-                }
-
-                book.copy(
-                    myCurrentPage = newMyPage.coerceIn(0, book.totalPages),
-                    partnerCurrentPage = newPartnerPage.coerceIn(0, book.totalPages),
-                    isCompletedByMe = completedByMe,
-                    isCompletedByPartner = completedByPartner,
-                    firstFinishedBy = first,
-                    secondFinishedBy = second
-                )
-            } else book
-        }
-    }
-
-    fun updateBookFinishedOrder(id: String, first: String?, second: String?) {
-        _booksFlow.value = _booksFlow.value.map {
-            if (it.id == id) it.copy(firstFinishedBy = first, secondFinishedBy = second) else it
-        }
-    }
-
     fun addBook(title: String, author: String, totalPages: Int, genre: String, emoji: String, notes: String = "") {
-        val authorName = authRepository.currentUserState.value?.displayName?.ifBlank { "Me" } ?: "Me"
+        val ref = loveCoupleRef() ?: return
+        val myId = authRepository.getCurrentUserId().ifBlank { null } ?: return
         val item = com.example.data.model.BookItem(
             id = UUID.randomUUID().toString(),
             title = title.trim(),
-            author = author.trim().ifBlank { "Unknown Author" },
-            totalPages = totalPages.coerceAtLeast(1),
-            myCurrentPage = 0,
-            partnerCurrentPage = 0,
-            suggestedBy = authorName,
-            genre = genre.trim().ifBlank { "Fiction" },
+            author = author.trim(),
+            totalPages = totalPages.coerceIn(1, 20_000),
+            genre = genre.trim(),
             emoji = emoji.ifBlank { "📖" },
-            notes = notes.trim()
+            notes = notes.trim(),
+            addedBy = myId,
+            addedAt = System.currentTimeMillis()
         )
         _booksFlow.value = listOf(item) + _booksFlow.value
+        ref.set(
+            mapOf(
+                "books" to mapOf(
+                    item.id to mapOf(
+                        "title" to item.title,
+                        "author" to item.author,
+                        "totalPages" to item.totalPages,
+                        "genre" to item.genre,
+                        "emoji" to item.emoji,
+                        "notes" to item.notes,
+                        "addedBy" to item.addedBy,
+                        "addedAt" to item.addedAt
+                    )
+                )
+            ),
+            com.google.firebase.firestore.SetOptions.merge()
+        ).addOnFailureListener { Log.w("CoupleFeaturesRepo", "Saving the book failed", it) }
+    }
+
+    /** The page I'm on; the last page means I finished it (the first time is kept for the order). */
+    fun updateMyBookPage(id: String, page: Int) {
+        val ref = loveCoupleRef() ?: return
+        val myId = authRepository.getCurrentUserId().ifBlank { null } ?: return
+        val book = _booksFlow.value.firstOrNull { it.id == id } ?: return
+        val clean = page.coerceIn(0, book.totalPages)
+        val finished = clean >= book.totalPages
+        val finishedAt = when {
+            finished && !book.isFinishedBy(myId) -> System.currentTimeMillis()
+            finished -> book.finishedAt[myId]
+            else -> null
+        }
+        _booksFlow.value = _booksFlow.value.map {
+            if (it.id != id) it
+            else it.copy(
+                pages = it.pages + (myId to clean),
+                finishedAt = if (finishedAt != null) it.finishedAt + (myId to finishedAt) else it.finishedAt - myId
+            )
+        }
+        ref.update(
+            com.google.firebase.firestore.FieldPath.of("books", id, "pages", myId), clean,
+            com.google.firebase.firestore.FieldPath.of("books", id, "finishedAt", myId),
+            finishedAt ?: com.google.firebase.firestore.FieldValue.delete()
+        ).addOnFailureListener { Log.w("CoupleFeaturesRepo", "Saving the page failed", it) }
     }
 
     fun deleteBook(id: String) {
-        _booksFlow.value = _booksFlow.value.filter { it.id != id }
+        _booksFlow.value = _booksFlow.value.filterNot { it.id == id }
+        loveCoupleRef()?.update(com.google.firebase.firestore.FieldPath.of("books", id), com.google.firebase.firestore.FieldValue.delete())
+            ?.addOnFailureListener { Log.w("CoupleFeaturesRepo", "Deleting the book failed", it) }
     }
 
     // ---- Synced Ambient Listening / Watch Party: shared YouTube videos or music links ----
@@ -783,6 +722,11 @@ class CoupleFeaturesRepository(
             isAsleep = true
         )
         _sleepSyncFlow.value = event
+        // My note comes back when I wake up (only "Asleep" shows meanwhile)
+        val currentNote = authRepository.currentUserState.value?.statusMessage.orEmpty()
+        if (currentNote.isNotBlank() && currentNote != "Asleep 🌙") {
+            context.getSharedPreferences("cherish_love", Context.MODE_PRIVATE).edit().putString("note_before_sleep", currentNote).apply()
+        }
         authRepository.updateStatusMessage("Asleep 🌙")
         loveCoupleRef()?.set(
             mapOf(
@@ -800,7 +744,10 @@ class CoupleFeaturesRepository(
 
     fun wakeUpFromSleep() {
         _sleepSyncFlow.value = null
-        authRepository.updateStatusMessage("Loving every moment with you ✨")
+        val love = context.getSharedPreferences("cherish_love", Context.MODE_PRIVATE)
+        val note = love.getString("note_before_sleep", null)?.ifBlank { null } ?: "Loving every moment with you ✨"
+        love.edit().remove("note_before_sleep").apply()
+        authRepository.updateStatusMessage(note)
         loveCoupleRef()?.update(com.google.firebase.firestore.FieldPath.of("sleepSync", "isAsleep"), false)
     }
 
@@ -1033,6 +980,50 @@ class CoupleFeaturesRepository(
             )
         }.sortedByDescending { it.year }
 
+        // Our movies and books
+        fun longs(value: Any?): Map<String, Long> = (value as? Map<*, *>).orEmpty().mapNotNull { (k, v) ->
+            val key = k as? String ?: return@mapNotNull null
+            val time = (v as? Number)?.toLong() ?: return@mapNotNull null
+            key to time
+        }.toMap()
+        _moviesFlow.value = (doc["movies"] as? Map<*, *>).orEmpty().mapNotNull { (key, value) ->
+            val id = key as? String ?: return@mapNotNull null
+            val m = value as? Map<*, *> ?: return@mapNotNull null
+            val title = (m["title"] as? String)?.ifBlank { null } ?: return@mapNotNull null
+            com.example.data.model.MovieItem(
+                id = id,
+                title = title,
+                genre = m["genre"] as? String ?: "",
+                emoji = (m["emoji"] as? String)?.ifBlank { null } ?: "\uD83C\uDFAC",
+                notes = m["notes"] as? String ?: "",
+                addedBy = m["addedBy"] as? String ?: "",
+                addedAt = (m["addedAt"] as? Number)?.toLong() ?: 0L,
+                watchedAt = longs(m["watchedAt"])
+            )
+        }.sortedByDescending { it.addedAt }
+        _booksFlow.value = (doc["books"] as? Map<*, *>).orEmpty().mapNotNull { (key, value) ->
+            val id = key as? String ?: return@mapNotNull null
+            val b = value as? Map<*, *> ?: return@mapNotNull null
+            val title = (b["title"] as? String)?.ifBlank { null } ?: return@mapNotNull null
+            com.example.data.model.BookItem(
+                id = id,
+                title = title,
+                author = b["author"] as? String ?: "",
+                totalPages = (b["totalPages"] as? Number)?.toInt()?.coerceAtLeast(1) ?: 1,
+                genre = b["genre"] as? String ?: "",
+                emoji = (b["emoji"] as? String)?.ifBlank { null } ?: "\uD83D\uDCD6",
+                notes = b["notes"] as? String ?: "",
+                addedBy = b["addedBy"] as? String ?: "",
+                addedAt = (b["addedAt"] as? Number)?.toLong() ?: 0L,
+                pages = (b["pages"] as? Map<*, *>).orEmpty().mapNotNull { (k, v) ->
+                    val user = k as? String ?: return@mapNotNull null
+                    val page = (v as? Number)?.toInt() ?: return@mapNotNull null
+                    user to page
+                }.toMap(),
+                finishedAt = longs(b["finishedAt"])
+            )
+        }.sortedByDescending { it.addedAt }
+
         // Synced Watch Party
         val wp = doc["watchParty"] as? Map<*, *>
         if (wp != null && wp["isActive"] == true) {
@@ -1071,11 +1062,17 @@ class CoupleFeaturesRepository(
     init {
         // Ages, the together date and the couple itself can change: re-read when they do
         loveScope.launch {
+            // Only what Love & Us shows: who we are and our couple (a partner going online, typing
+            // or charging changes nothing here, so it doesn't re-read everything each time)
             kotlinx.coroutines.flow.combine(
                 authRepository.birthdays,
                 authRepository.togetherSince,
-                authRepository.currentUserState,
+                authRepository.currentUserState
+                    .map { user -> listOf(user?.id, user?.coupleId, user?.partnerId, user?.displayName) }
+                    .distinctUntilChanged(),
                 authRepository.partnerUserState
+                    .map { partner -> partner?.id to partner?.displayName }
+                    .distinctUntilChanged()
             ) { _, _, _, _ -> }.collect { rebuildLoveUs() }
         }
     }

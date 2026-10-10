@@ -62,6 +62,8 @@ data class User(
     var isOnline: Boolean = false,
     val lastSeen: Long = System.currentTimeMillis(),
     val typingInChat: Boolean = false,
+    // How fast they're typing: 0 paused, 1 slow, 2 fast (their typing dots follow it)
+    val typingPace: Int = 0,
     val fcmToken: String? = null,
     val createdAt: Long = System.currentTimeMillis(),
     val checkAfterTimeMillis: Long? = null,
@@ -363,19 +365,61 @@ data class BucketListItem(
     val completedDate: String? = null
 )
 
-@IgnoreExtraProperties
-@JsonClass(generateAdapter = true)
+/**
+ * A movie on our list, kept on the couple's record: suggested by one of us, then watched by each
+ * of us (when, per person), so both phones agree on who watched it first and second.
+ */
 data class MovieItem(
     val id: String = "",
     val title: String = "",
     val genre: String = "Romance",
     val emoji: String = "🎬",
-    val isWatched: Boolean = false,
-    val rating: Int = 5,
-    val watchedDate: String? = null,
-    val suggestedBy: String = "Us",
-    val notes: String = ""
-)
+    val notes: String = "",
+    /** User id of whoever added it. */
+    val addedBy: String = "",
+    val addedAt: Long = 0L,
+    /** User id -> when they watched it. */
+    val watchedAt: Map<String, Long> = emptyMap()
+) {
+    val isWatched: Boolean get() = watchedAt.isNotEmpty()
+
+    /** Who watched it, first to last. */
+    val watchOrder: List<String> get() = watchedAt.entries.sortedBy { it.value }.map { it.key }
+
+    /** Both watched it within an hour of each other: together. */
+    val watchedTogether: Boolean
+        get() = watchedAt.size >= 2 && (watchedAt.values.maxOrNull()!! - watchedAt.values.minOrNull()!!) < 60L * 60 * 1000
+}
+
+/**
+ * A book on our shelf, kept on the couple's record: each of us has our own page and finish time,
+ * so it shows who's reading what right now and who finished first.
+ */
+data class BookItem(
+    val id: String = "",
+    val title: String = "",
+    val author: String = "",
+    val totalPages: Int = 0,
+    val genre: String = "",
+    val emoji: String = "📖",
+    val notes: String = "",
+    val addedBy: String = "",
+    val addedAt: Long = 0L,
+    /** User id -> the page they're on. */
+    val pages: Map<String, Int> = emptyMap(),
+    /** User id -> when they finished it. */
+    val finishedAt: Map<String, Long> = emptyMap()
+) {
+    fun pageOf(userId: String): Int = pages[userId] ?: 0
+    fun isFinishedBy(userId: String): Boolean = userId in finishedAt
+    fun isReadingBy(userId: String): Boolean = !isFinishedBy(userId) && pageOf(userId) > 0
+
+    /** Someone has started it (otherwise it's still a suggestion). */
+    val isStarted: Boolean get() = finishedAt.isNotEmpty() || pages.values.any { it > 0 }
+
+    /** Who finished it, first to last. */
+    val finishOrder: List<String> get() = finishedAt.entries.sortedBy { it.value }.map { it.key }
+}
 
 @IgnoreExtraProperties
 @JsonClass(generateAdapter = true)

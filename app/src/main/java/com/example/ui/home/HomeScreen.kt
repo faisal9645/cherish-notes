@@ -102,7 +102,6 @@ fun HomeScreen(
     var drawnNote by remember { mutableStateOf<LoveJarNote?>(null) }
     var showAddLoveNoteDialog by remember { mutableStateOf(false) }
     var showAddMovieDialog by remember { mutableStateOf(false) }
-    var showPickTonightDialog by remember { mutableStateOf(false) }
     var showAddBookDialog by remember { mutableStateOf(false) }
     var showSleepSyncModal by remember { mutableStateOf(false) }
     var showWatchPartyModal by remember { mutableStateOf(false) }
@@ -336,71 +335,6 @@ fun HomeScreen(
             val activeWatchParty by homeApp.coupleFeaturesRepository.watchPartyFlow.collectAsState()
             val activeSleepSync by homeApp.coupleFeaturesRepository.sleepSyncFlow.collectAsState()
 
-            if (currentUser?.statusMessage == "Asleep 🌙") {
-                Surface(
-                    shape = RoundedCornerShape(14.dp),
-                    color = Color(0xFFFEF3C7),
-                    border = BorderStroke(1.dp, Color(0xFFF59E0B)),
-                    modifier = Modifier.fillMaxWidth().testTag("wake_up_banner")
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text("Good morning! Status is Asleep 🌙", fontSize = 12.5.sp, color = Color(0xFF92400E))
-                        TextButton(
-                            onClick = { homeApp.coupleFeaturesRepository.wakeUpFromSleep() }
-                        ) {
-                            Text("Wake Up ☀️", fontWeight = FontWeight.Bold, color = Color(0xFFB45309))
-                        }
-                    }
-                }
-            }
-
-            if (activeWatchParty?.isActive == true) {
-                Surface(
-                    shape = RoundedCornerShape(16.dp),
-                    color = Color(0xFF1E1538),
-                    border = BorderStroke(1.dp, Color(0xFFEC4899).copy(alpha = 0.5f)),
-                    onClick = { showWatchPartyModal = true },
-                    modifier = Modifier.fillMaxWidth().testTag("active_watch_party_banner")
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("🎬", fontSize = 20.sp)
-                            Spacer(modifier = Modifier.width(10.dp))
-                            Column {
-                                Text(
-                                    text = "Watch Party Active • In Sync",
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.White
-                                )
-                                Text(
-                                    text = activeWatchParty?.title ?: "Ambient Listening",
-                                    fontSize = 11.5.sp,
-                                    color = Color.White.copy(alpha = 0.7f),
-                                    maxLines = 1
-                                )
-                            }
-                        }
-                        Button(
-                            onClick = { showWatchPartyModal = true },
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEC4899)),
-                            shape = CircleShape,
-                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
-                        ) {
-                            Text("Join 🎧", fontSize = 12.sp, color = Color.White)
-                        }
-                    }
-                }
-            }
-
             val effectivePartnerTz = partner?.timeZone?.takeIf { it.isNotBlank() } ?: java.util.TimeZone.getDefault().id
             val myTz = currentUser?.timeZone?.takeIf { it.isNotBlank() } ?: java.util.TimeZone.getDefault().id
             val partnerStatusText = when {
@@ -408,8 +342,7 @@ fun HomeScreen(
                 !partnerQuietStatus.isNullOrBlank() -> partnerQuietStatus
                 else -> null
             }
-            BothOfUsCard(
-                me = LovePerson(
+            val mePerson = LovePerson(
                     id = myId,
                     name = currentUser?.displayName?.ifBlank { null } ?: "Me",
                     photoUrl = currentUser?.photoUrl,
@@ -420,8 +353,8 @@ fun HomeScreen(
                     isCharging = currentUser?.isCharging == true,
                     email = currentUser?.email,
                     timeZone = myTz
-                ),
-                partner = LovePerson(
+                )
+            val partnerPerson = LovePerson(
                     id = partnerId,
                     name = partnerName,
                     photoUrl = partner?.photoUrl,
@@ -433,7 +366,10 @@ fun HomeScreen(
                     isCharging = partner?.isCharging == true,
                     email = partner?.email?.ifBlank { null } ?: currentUser?.partnerEmail,
                     timeZone = effectivePartnerTz
-                ),
+                )
+            BothOfUsCard(
+                me = mePerson,
+                partner = partnerPerson,
                 partnerNote = partner?.statusMessage,
                 togetherSince = remember(ourDates, togetherSinceSetting) {
                     com.example.ui.dates.DateReminders.togetherSince(ourDates, togetherSinceSetting)
@@ -448,66 +384,39 @@ fun HomeScreen(
                 onOpenNotes = onNavigateToNotes
             )
 
+            // Under the card: Goodnight Kiss (Wake up once I'm asleep) and Watch Party (Join while
+            // one is on)
+            val iAmAsleep = currentUser?.statusMessage == "Asleep 🌙"
+            val partyIsOn = activeWatchParty?.isActive == true
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Surface(
-                    onClick = { showSleepSyncModal = true },
-                    shape = RoundedCornerShape(14.dp),
-                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)),
-                    modifier = Modifier.weight(1f).testTag("goodnight_kiss_sleep_sync_button")
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center
-                    ) {
-                        Text("🌙", fontSize = 15.sp)
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = "Goodnight Kiss",
-                            fontSize = 12.5.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
-                    }
-                }
-
-                Surface(
+                LoveActionButton(
+                    emoji = if (iAmAsleep) "☀️" else "🌙",
+                    label = if (iAmAsleep) "Wake up" else "Goodnight Kiss",
+                    highlighted = iAmAsleep,
+                    tag = if (iAmAsleep) "wake_up_button" else "goodnight_kiss_sleep_sync_button",
+                    modifier = Modifier.weight(1f),
                     onClick = {
-                        val session = activeWatchParty ?: com.example.data.model.WatchPartySession(
-                            videoId = "dQw4w9WgXcQ",
-                            title = "Cozy Ambient Music",
-                            isActive = true
-                        )
-                        if (activeWatchParty == null) {
-                            homeApp.coupleFeaturesRepository.startWatchParty(session.videoId, session.title, "")
+                        if (iAmAsleep) homeApp.coupleFeaturesRepository.wakeUpFromSleep() else showSleepSyncModal = true
+                    }
+                )
+                LoveActionButton(
+                    emoji = if (partyIsOn) "🎧" else "🍿",
+                    label = if (partyIsOn) "Join Watch Party" else "Watch Party",
+                    highlighted = partyIsOn,
+                    live = partyIsOn,
+                    tag = if (partyIsOn) "join_watch_party_button" else "ambient_watch_party_button",
+                    modifier = Modifier.weight(1f),
+                    onClick = {
+                        if (!partyIsOn) {
+                            homeApp.coupleFeaturesRepository.startWatchParty("dQw4w9WgXcQ", "Cozy Ambient Music", "")
                         }
                         showWatchPartyModal = true
-                    },
-                    shape = RoundedCornerShape(14.dp),
-                    color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.45f),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.secondary.copy(alpha = 0.25f)),
-                    modifier = Modifier.weight(1f).testTag("ambient_watch_party_button")
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center
-                    ) {
-                        Text("🍿", fontSize = 15.sp)
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = "Watch Party",
-                            fontSize = 12.5.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSecondaryContainer
-                        )
                     }
-                }
+                )
             }
 
             // 2. Secret Chat Quick Preview Card
@@ -827,30 +736,28 @@ fun HomeScreen(
                 )
             }
 
-            // 6. Our Movies (Watched List & Suggested Movies)
+            // 6. Our movies (who watched each first and second) and our books (who's reading what)
+            val people = remember(myId, partnerId, partnerName, mePerson, partnerPerson) {
+                CouplePeople(
+                    myId = myId,
+                    partnerId = partnerId,
+                    myName = mePerson.name,
+                    partnerName = partnerName,
+                    herId = herUserId(mePerson, partnerPerson)
+                )
+            }
             CoupleMoviesCard(
                 movies = ourMovies,
-                onToggleWatched = { id, rating ->
-                    homeApp.coupleFeaturesRepository.toggleMovieWatched(id, rating)
-                },
-                onDeleteMovie = { id ->
-                    homeApp.coupleFeaturesRepository.deleteMovie(id)
-                },
-                onAddNew = { showAddMovieDialog = true },
-                onPickTonight = { showPickTonightDialog = true }
+                people = people,
+                onToggleWatched = { id -> homeApp.coupleFeaturesRepository.toggleMovieWatched(id) },
+                onDeleteMovie = { id -> homeApp.coupleFeaturesRepository.deleteMovie(id) },
+                onAddNew = { showAddMovieDialog = true }
             )
-
-            // 6b. Our Books (Reading Progress for Both & Suggested Books)
             CoupleBooksCard(
                 books = ourBooks,
-                myName = currentUser?.displayName?.ifBlank { "Me" } ?: "Me",
-                partnerName = partnerName,
-                onUpdateProgress = { id, myPage, partnerPage ->
-                    homeApp.coupleFeaturesRepository.updateBookProgress(id, myPage, partnerPage)
-                },
-                onDeleteBook = { id ->
-                    homeApp.coupleFeaturesRepository.deleteBook(id)
-                },
+                people = people,
+                onUpdateMyPage = { id, page -> homeApp.coupleFeaturesRepository.updateMyBookPage(id, page) },
+                onDeleteBook = { id -> homeApp.coupleFeaturesRepository.deleteBook(id) },
                 onAddNew = { showAddBookDialog = true }
             )
 
@@ -903,18 +810,8 @@ fun HomeScreen(
     if (showAddMovieDialog) {
         AddMovieDialog(
             onDismiss = { showAddMovieDialog = false },
-            onAdd = { title, genre, emoji, isWatched, notes ->
-                homeApp.coupleFeaturesRepository.addMovie(title, genre, emoji, isWatched, notes)
-            }
-        )
-    }
-
-    if (showPickTonightDialog) {
-        RandomMoviePickerDialog(
-            movies = ourMovies,
-            onDismiss = { showPickTonightDialog = false },
-            onMarkWatched = { id ->
-                homeApp.coupleFeaturesRepository.toggleMovieWatched(id)
+            onAdd = { title, genre, emoji, watchedTogether, notes ->
+                homeApp.coupleFeaturesRepository.addMovie(title, genre, emoji, watchedTogether, notes)
             }
         )
     }
@@ -924,7 +821,6 @@ fun HomeScreen(
             onDismiss = { showAddBookDialog = false },
             onAdd = { title, author, pages, genre, emoji, notes ->
                 homeApp.coupleFeaturesRepository.addBook(title, author, pages, genre, emoji, notes)
-                showAddBookDialog = false
             }
         )
     }
@@ -974,5 +870,48 @@ fun HomeScreen(
     }
 }
 
-
-
+/** A button in the row under the couple card; [live] adds a small dot (something's on now). */
+@Composable
+private fun LoveActionButton(
+    emoji: String,
+    label: String,
+    highlighted: Boolean,
+    tag: String,
+    modifier: Modifier = Modifier,
+    live: Boolean = false,
+    onClick: () -> Unit
+) {
+    val accent = MaterialTheme.colorScheme.primary
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(14.dp),
+        color = if (highlighted) accent else MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f),
+        border = BorderStroke(1.dp, accent.copy(alpha = if (highlighted) 0f else 0.25f)),
+        modifier = modifier.testTag(tag)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
+        ) {
+            if (live) {
+                Box(
+                    modifier = Modifier
+                        .size(7.dp)
+                        .clip(CircleShape)
+                        .background(com.example.ui.theme.OnlineGreen)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+            }
+            Text(emoji, fontSize = 15.sp)
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(
+                text = label,
+                fontSize = 12.5.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = if (highlighted) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onPrimaryContainer,
+                maxLines = 1
+            )
+        }
+    }
+}

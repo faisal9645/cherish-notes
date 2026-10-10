@@ -109,24 +109,6 @@ fun MessageComposer(
     var dragOffsetX by remember { mutableFloatStateOf(0f) }
     var dragOffsetY by remember { mutableFloatStateOf(0f) }
     var isVideoMode by remember { mutableStateOf(false) }
-    var showModeSwitchHint by remember { mutableStateOf(false) }
-    var hintSessionId by remember { mutableIntStateOf(0) }
-
-    // Telegram-style hint: briefly display on initial open to inform user of tap-to-switch
-    LaunchedEffect(Unit) {
-        delay(700L)
-        showModeSwitchHint = true
-        delay(3200L)
-        showModeSwitchHint = false
-    }
-
-    // Auto-dismiss tooltip after 2.5 seconds when user toggles
-    LaunchedEffect(hintSessionId) {
-        if (hintSessionId > 0 && showModeSwitchHint) {
-            delay(2500L)
-            showModeSwitchHint = false
-        }
-    }
 
     // The emoji board and the keyboard take turns in the same space under the message box. The
     // board is as tall as the keyboard, and while one slides away the other fills exactly the
@@ -226,20 +208,30 @@ fun MessageComposer(
     // Tiny bounce animation when tapping send
     val sendBounce = remember { Animatable(1f) }
 
-    // Pulsing animations for active recording
-    val infiniteTransition = rememberInfiniteTransition(label = "recording_fx")
-    val pulseAlpha by infiniteTransition.animateFloat(
-        initialValue = 0.3f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(tween(550, easing = FastOutSlowInEasing), RepeatMode.Reverse),
-        label = "pulse_alpha"
-    )
-    val shimmerOffset by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = -14f,
-        animationSpec = infiniteRepeatable(tween(750, easing = LinearEasing), RepeatMode.Restart),
-        label = "shimmer_offset"
-    )
+    // Pulsing animations, only while a voice note is being recorded (running all the time, they'd
+    // rebuild the whole message box every frame for as long as the chat is open)
+    val pulseAlpha: Float
+    val shimmerOffset: Float
+    if (isRecordingVoice) {
+        val infiniteTransition = rememberInfiniteTransition(label = "recording_fx")
+        val pulse by infiniteTransition.animateFloat(
+            initialValue = 0.3f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(tween(550, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+            label = "pulse_alpha"
+        )
+        val shimmer by infiniteTransition.animateFloat(
+            initialValue = 0f,
+            targetValue = -14f,
+            animationSpec = infiniteRepeatable(tween(750, easing = LinearEasing), RepeatMode.Restart),
+            label = "shimmer_offset"
+        )
+        pulseAlpha = pulse
+        shimmerOffset = shimmer
+    } else {
+        pulseAlpha = 0f
+        shimmerOffset = 0f
+    }
 
     val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
     val barBg = MaterialTheme.colorScheme.surface
@@ -704,7 +696,7 @@ fun MessageComposer(
             Spacer(modifier = Modifier.width(6.dp))
 
             // Right-Side Action Circle: 🎤 Mic button (transitions to ✈️ Send button)
-            // Fixed 48.dp width prevents the voice/mic icon from jumping left when the wider tooltip appears!
+            // Fixed 48.dp width so the mic / send button never shifts
             Box(
                 modifier = Modifier.width(48.dp),
                 contentAlignment = Alignment.BottomCenter
@@ -872,8 +864,6 @@ fun MessageComposer(
                                                 if (liftedEarly) {
                                                     try { haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove) } catch (_: Exception) {}
                                                     isVideoMode = false
-                                                    showModeSwitchHint = true
-                                                    hintSessionId++
                                                     return@awaitEachGesture
                                                 }
 
@@ -1003,8 +993,6 @@ fun MessageComposer(
                                                 if (liftedEarly) {
                                                     try { haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove) } catch (_: Exception) {}
                                                     isVideoMode = true
-                                                    showModeSwitchHint = true
-                                                    hintSessionId++
                                                     return@awaitEachGesture
                                                 }
 

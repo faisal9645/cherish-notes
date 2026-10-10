@@ -1504,6 +1504,14 @@ fun ChatScreen(
                     }
                 }
 
+                // The newest of my messages she has read: her small photo sits under it ("seen")
+                val lastPartnerReadMessageId = remember(uiState.messages, currentUserId) {
+                    uiState.messages
+                        .filter { it.senderId == currentUserId && (it.getTypedStatus() == com.example.data.model.MessageStatus.READ || it.readTimestamp != null) }
+                        .maxByOrNull { it.timestamp }
+                        ?.id
+                }
+
                 // The typing bubble sits under the list, so as it grows the newest messages move up
                 Column(modifier = Modifier.fillMaxSize()) {
                 LazyColumn(
@@ -1531,12 +1539,6 @@ fun ChatScreen(
                         }
                     }
 
-                    val lastPartnerReadMessageId = remember(uiState.messages) {
-                        uiState.messages
-                            .filter { it.senderId == currentUserId && (it.getTypedStatus() == com.example.data.model.MessageStatus.READ || it.readTimestamp != null) }
-                            .maxByOrNull { it.timestamp }
-                            ?.id
-                    }
 
                     itemsIndexed(
                         items = reversedMessages,
@@ -1647,7 +1649,8 @@ fun ChatScreen(
                     isRecording = uiState.isPartnerRecordingAudio,
                     partnerPhotoUrl = partner?.photoUrl,
                     partnerName = partnerName,
-                    isDark = isDark
+                    isDark = isDark,
+                    typingPace = partner?.typingPace ?: 1
                 )
 
                 // Room for what floats above the message box (upload status, reply preview), so it
@@ -3467,7 +3470,8 @@ private fun PartnerTypingBubble(
     isRecording: Boolean,
     partnerPhotoUrl: String?,
     partnerName: String,
-    isDark: Boolean
+    isDark: Boolean,
+    typingPace: Int = 1
 ) {
     AnimatedVisibility(
         visible = visible,
@@ -3504,7 +3508,7 @@ private fun PartnerTypingBubble(
                     if (isRecording) {
                         RecordingBars(color = HeartRed)
                     } else {
-                        BouncingDots(color = if (isDark) darkTone(Color(0xFFCBD5E1)) else Color(0xFF64748B))
+                        BouncingDots(color = if (isDark) darkTone(Color(0xFFCBD5E1)) else Color(0xFF64748B), pace = typingPace)
                     }
                 }
             }
@@ -3547,44 +3551,48 @@ private fun RecordingBars(color: Color) {
     }
 }
 
+/**
+ * Typing dots with rhythm: they bounce faster while the partner types fast, slower while they type
+ * slowly, and drift gently while they pause (pace from their phone: 0 paused, 1 slow, 2 fast). The
+ * speed eases between paces without restarting, and the dots move in the draw phase only.
+ */
 @Composable
-fun BouncingDots(color: Color = RoseGoldPrimary) {
-    val infiniteTransition = rememberInfiniteTransition(label = "bouncing_dots_rhythm")
-    // Typing dots with rhythm: modulates between bouncy rapid typing tempo and gentle paused cadence
-    val time by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(4400, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "rhythm_time"
+fun BouncingDots(color: Color = RoseGoldPrimary, pace: Int = 1) {
+    val speed by animateFloatAsState(
+        targetValue = when (pace) {
+            2 -> 1.9f
+            1 -> 1.15f
+            else -> 0.5f
+        },
+        animationSpec = tween(600),
+        label = "typing_dots_speed"
     )
-
-    val progress = time % 1f
-    fun computeBounce(dotIdx: Int): Float {
-        val phaseAngle = if (progress < 0.52f) {
-            // Rapid fast bounce when typing quickly (accelerated frequency)
-            (progress / 0.52f) * 6f * 2f * Math.PI.toFloat()
-        } else {
-            // Slow, thoughtful gentle wave when pausing / thinking
-            6f * 2f * Math.PI.toFloat() + ((progress - 0.52f) / 0.48f) * 2f * 2f * Math.PI.toFloat()
+    val height by animateFloatAsState(if (pace == 0) 3.5f else 6.5f, tween(600), label = "typing_dots_height")
+    val phase = remember { mutableFloatStateOf(0f) }
+    LaunchedEffect(Unit) {
+        var last = 0L
+        while (true) {
+            withFrameNanos { now ->
+                if (last != 0L) phase.floatValue = (phase.floatValue + (now - last) / 1_000_000_000f * speed) % 1_000f
+                last = now
+            }
         }
-        val wave = kotlin.math.sin((phaseAngle - dotIdx * 0.72f).toDouble()).toFloat()
-        return if (wave > 0f) -wave * 6.5f else 0f
     }
-
-    val dot1 = computeBounce(0)
-    val dot2 = computeBounce(1)
-    val dot3 = computeBounce(2)
-
     Row(
         horizontalArrangement = Arrangement.spacedBy(3.5.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Box(modifier = Modifier.offset(y = dot1.dp).size(6.dp).background(color, CircleShape))
-        Box(modifier = Modifier.offset(y = dot2.dp).size(6.dp).background(color, CircleShape))
-        Box(modifier = Modifier.offset(y = dot3.dp).size(6.dp).background(color, CircleShape))
+        repeat(3) { dot ->
+            Box(
+                modifier = Modifier
+                    .graphicsLayer {
+                        val wave = kotlin.math.sin(phase.floatValue * 2f * Math.PI.toFloat() - dot * 0.9f)
+                        translationY = if (wave > 0f) -wave * height.dp.toPx() else 0f
+                    }
+                    .size(6.dp)
+                    .background(color, CircleShape)
+            )
+        }
     }
 }
 

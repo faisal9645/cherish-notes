@@ -1157,7 +1157,13 @@ fun MessageBubble(
                 }
             }
             // Seen photo (small): a tiny round photo of your partner sits under the last message they've read and glides down as they read more, like Messenger
-            if (isFromMe && isLastReadMessage) {
+            // It leaves the message she'd read before and slides down into place under this one
+            androidx.compose.animation.AnimatedVisibility(
+                visible = isFromMe && isLastReadMessage,
+                enter = androidx.compose.animation.expandVertically(tween(280)) +
+                    slideInVertically(tween(320)) { -it } + fadeIn(tween(260)),
+                exit = androidx.compose.animation.shrinkVertically(tween(240)) + fadeOut(tween(180))
+            ) {
                 Row(
                     horizontalArrangement = Arrangement.End,
                     modifier = Modifier
@@ -1176,6 +1182,7 @@ fun MessageBubble(
         }
         }
     }
+}
 }
 
 /** When my message was seen, or how far it got: shown for a moment after tapping its time. */

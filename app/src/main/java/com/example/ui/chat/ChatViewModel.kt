@@ -361,12 +361,48 @@ class ChatViewModel(
     fun onTypingChanged(isTyping: Boolean) {
         typingIdleJob?.cancel()
         authRepository.setTyping(isTyping)
+        updateTypingPace(isTyping)
         if (isTyping) {
             // Stop showing "typing…" to the partner once the keyboard has been idle a while
             typingIdleJob = viewModelScope.launch {
                 kotlinx.coroutines.delay(TYPING_IDLE_TIMEOUT_MS)
                 authRepository.setTyping(false)
             }
+        }
+    }
+
+    // Recent keystroke times (last 3 s) and when the pace drops to "paused"
+    private val keystrokeTimes = ArrayDeque<Long>()
+    private var typingPauseJob: Job? = null
+    private var typingPace = 0
+
+    /**
+     * My typing pace for the partner's dots: fast (2) from about 3 keys a second, slow (1) below
+     * that (with a little gap between, so it doesn't flicker), paused (0) after 2.5 s without a key.
+     * Only changes are written.
+     */
+    private fun updateTypingPace(isTyping: Boolean) {
+        typingPauseJob?.cancel()
+        if (!isTyping) {
+            keystrokeTimes.clear()
+            typingPace = 0
+            authRepository.setTypingPace(0)
+            return
+        }
+        val now = android.os.SystemClock.elapsedRealtime()
+        keystrokeTimes.addLast(now)
+        while (keystrokeTimes.isNotEmpty() && now - keystrokeTimes.first() > 3_000L) keystrokeTimes.removeFirst()
+        typingPace = when {
+            keystrokeTimes.size >= 9 -> 2
+            keystrokeTimes.size <= 5 -> 1
+            else -> typingPace.coerceAtLeast(1)
+        }
+        authRepository.setTypingPace(typingPace)
+        typingPauseJob = viewModelScope.launch {
+            kotlinx.coroutines.delay(2_500L)
+            typingPace = 0
+            keystrokeTimes.clear()
+            authRepository.setTypingPace(0)
         }
     }
 
@@ -603,7 +639,12 @@ class ChatViewModel(
     }
 
     fun playAudio(messageId: String, audioUrl: String) {
-        chatRepository.markAudioPlayed(messageId)
+        // "Not heard yet" is about the other one listening: my own replay doesn't count
+        val message = _uiState.value.messages.find { it.id == messageId }
+        val myId = _uiState.value.currentUser?.id
+        if (message != null && message.senderId != myId && !message.isAudioPlayed) {
+            chatRepository.markAudioPlayed(messageId)
+        }
         voicePlayerHelper.playAudio(messageId, audioUrl, onCompletion = { playNextVoiceNote(messageId) })
     }
 

@@ -224,8 +224,12 @@ class MainActivity : FragmentActivity() {
         }
     }
 
+    /** Set when the app comes back, so the next window focus can drop a left-over keyboard. */
+    private var hideKeyboardOnFocus = false
+
     override fun onResume() {
         super.onResume()
+        hideKeyboardOnFocus = true
         applyScreenshotProtection()
         PrivacyShield.lower()
         // Do NOT re-call setDecorFitsSystemWindows here — already set in onCreate.
@@ -258,6 +262,15 @@ class MainActivity : FragmentActivity() {
         // notification shade) the chat is covered, and uncovered when it's back.
         if (hasFocus) {
             PrivacyShield.lower()
+            // Back in the app on Notes: no keyboard left over from the chat's message box underneath
+            // (only after coming back from outside, not when an in-app dialog closes)
+            val justCameBack = hideKeyboardOnFocus
+            hideKeyboardOnFocus = false
+            if (justCameBack && app.securityPreferences.isDisguiseActive()) {
+                currentFocus?.clearFocus()
+                (getSystemService(INPUT_METHOD_SERVICE) as? android.view.inputmethod.InputMethodManager)
+                    ?.hideSoftInputFromWindow(window.decorView.windowToken, 0)
+            }
         } else if (!isInMultiWindowMode && PrivacyShield.isLeavingApp()) {
             coverSecretApp()
         }

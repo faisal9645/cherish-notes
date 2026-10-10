@@ -587,6 +587,9 @@ fun CherishNavGraph(
         if (isDisguiseActive) {
             navFocusManager.clearFocus(force = true)
             navKeyboardController?.hide()
+            // Android can bring the keyboard back for the chat's message box a moment later
+            kotlinx.coroutines.delay(350)
+            navKeyboardController?.hide()
         }
     }
 

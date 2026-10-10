@@ -1087,6 +1087,24 @@ class AuthRepository(private val context: Context) {
         }
     }
 
+    // Last typing pace written per user (only changes are written)
+    @Volatile private var typingPaceWritten: Pair<String, Int>? = null
+
+    /** How fast I'm typing (0 paused, 1 slow, 2 fast), so the partner's typing dots follow it. */
+    fun setTypingPace(pace: Int) {
+        val uid = getCurrentUserId()
+        if (uid.isBlank() || typingPaceWritten == uid to pace) return
+        typingPaceWritten = uid to pace
+        try {
+            userDocument(uid)?.set(
+                mapOf("typingPace" to pace),
+                com.google.firebase.firestore.SetOptions.merge()
+            )
+        } catch (e: Exception) {
+            // ignore
+        }
+    }
+
     fun setRecordingAudio(recording: Boolean) {
         val uid = getCurrentUserId()
         try {

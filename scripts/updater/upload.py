@@ -70,7 +70,7 @@ def create_github_release(token: str, repo: str, version_code: int, version_name
     payload = {
         "tag_name": tag,
         "name": f"v{version_name} (build {version_code})",
-        "body": f"Notes v{version_name} (Build {version_code}):\n• New app icon and splash screen\n• Reminders can now last several days\n• Your status is shown back to you\n• Bug fixes and improvements",
+        "body": f"Notes v{version_name} (Build {version_code}):\n• Movie and book lists with reading progress\n• Keyboard no longer pops up after switching apps\n• Faster photo loading and smoother scrolling\n• Bug fixes and improvements",
         "draft": False,
         "prerelease": False,
     }

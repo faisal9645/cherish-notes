@@ -21,6 +21,17 @@ class CherishApplication : Application(), coil.ImageLoaderFactory {
                 add(coil.decode.VideoFrameDecoder.Factory())
             }
             .crossfade(true)
+            // Recent photos stay in memory; up to a few percent of the disk keeps the rest
+            .memoryCache { coil.memory.MemoryCache.Builder(this).maxSizePercent(0.25).build() }
+            .diskCache {
+                coil.disk.DiskCache.Builder()
+                    .directory(cacheDir.resolve("image_cache"))
+                    .maxSizePercent(0.03)
+                    .build()
+            }
+            // A chat photo's address never changes, so it's kept on disk even when the server says
+            // "don't cache": scrolling back through chat or gallery doesn't download it again
+            .respectCacheHeaders(false)
             .build()
     }
 
