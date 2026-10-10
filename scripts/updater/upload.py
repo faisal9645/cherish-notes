@@ -70,7 +70,7 @@ def create_github_release(token: str, repo: str, version_code: int, version_name
     payload = {
         "tag_name": tag,
         "name": f"v{version_name} (build {version_code})",
-        "body": f"Notes v{version_name} (Build {version_code}):\n• YouTube layout & synchronized watch party fixes\n• Both of us crossing hearts connecting profile rings\n• Performance and sync improvements",
+        "body": f"Notes v{version_name} (Build {version_code}):\n• Live couple avatars & connection status in Watch Party\n• Double-tap video to send synced heartbursts to partner\n• Partner play/pause notifications",
         "draft": False,
         "prerelease": False,
     }
@@ -179,7 +179,7 @@ def update_firestore(project_root: str, version_code: int, version_name: str, do
         "versionName":  version_name,
         "downloadUrl":  download_url,
         "releaseDate":  firestore.SERVER_TIMESTAMP,
-        "releaseNotes": f"v{version_name} — Multi-select delete in chat & gallery, Recover All fixed, smaller APK",
+        "releaseNotes": f"v{version_name} — Live couple avatars, Double-tap heartbursts, and Watch Party sync notifications",
     }, merge=True)
     print("Firestore app_config/version updated successfully!")
 

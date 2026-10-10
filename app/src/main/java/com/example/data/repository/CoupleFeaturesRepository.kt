@@ -650,8 +650,17 @@ class CoupleFeaturesRepository(
     private val _watchPartyFlow = MutableStateFlow<com.example.data.model.WatchPartySession?>(null)
     val watchPartyFlow: StateFlow<com.example.data.model.WatchPartySession?> = _watchPartyFlow.asStateFlow()
 
+    /** Starts a party with this video, or switches the video of the one that's on (it keeps going). */
     fun startWatchParty(videoId: String, title: String, mediaUrl: String) {
         val myId = authRepository.getCurrentUserId()
+        val now = System.currentTimeMillis()
+        val ongoing = _watchPartyFlow.value?.takeIf { it.isActive }
+        // A new party starts with only me watching; a new video keeps whoever is watching
+        val watching = ongoing?.watching?.plus(myId to now)
+            ?: buildMap {
+                put(myId, now)
+                partnerIdOrNull()?.let { put(it, 0L) }
+            }
         val session = com.example.data.model.WatchPartySession(
             id = "active",
             videoId = videoId,
@@ -659,10 +668,12 @@ class CoupleFeaturesRepository(
             title = title.ifBlank { "Watch Party" },
             isPlaying = true,
             positionSeconds = 0f,
-            updatedAt = System.currentTimeMillis(),
+            updatedAt = now,
             updatedBy = myId,
             startedBy = myId,
-            isActive = true
+            isActive = true,
+            startedAt = ongoing?.startedAt?.takeIf { it > 0L } ?: now,
+            watching = watching
         )
         _watchPartyFlow.value = session
         val ref = loveCoupleRef() ?: return
@@ -675,9 +686,52 @@ class CoupleFeaturesRepository(
             "updatedAt" to session.updatedAt,
             "updatedBy" to session.updatedBy,
             "startedBy" to session.startedBy,
-            "isActive" to session.isActive
+            "isActive" to session.isActive,
+            "startedAt" to session.startedAt,
+            "watching" to watching
         )
         ref.set(mapOf("watchParty" to map), com.google.firebase.firestore.SetOptions.merge())
+            .addOnFailureListener { Log.w("CoupleFeaturesRepo", "Starting the watch party failed", it) }
+    }
+
+    /** My phone has the party open ([watching]), said about once a minute, or I left it. */
+    fun markWatchingParty(watching: Boolean) {
+        val current = _watchPartyFlow.value?.takeIf { it.isActive } ?: return
+        val myId = authRepository.getCurrentUserId().ifBlank { return }
+        val value = if (watching) System.currentTimeMillis() else 0L
+        _watchPartyFlow.value = current.copy(watching = current.watching + (myId to value))
+        val ref = loveCoupleRef() ?: return
+        ref.set(
+            mapOf("watchParty" to mapOf("watching" to mapOf(myId to value))),
+            com.google.firebase.firestore.SetOptions.merge()
+        ).addOnFailureListener { Log.w("CoupleFeaturesRepo", "Saving who's watching failed", it) }
+    }
+
+    /** I close the party: it goes on while my partner's watching, otherwise it's over. */
+    fun leaveWatchParty() {
+        val current = _watchPartyFlow.value?.takeIf { it.isActive } ?: return
+        if (current.isWatchedBy(partnerIdOrNull())) markWatchingParty(false) else endWatchParty()
+    }
+
+    /** An emoji reaction ([count] taps of it) floats up on both screens. */
+    fun sendWatchPartyReaction(emoji: String, count: Int) {
+        val current = _watchPartyFlow.value?.takeIf { it.isActive } ?: return
+        val myId = authRepository.getCurrentUserId()
+        val now = System.currentTimeMillis()
+        val id = "$myId-$now"
+        _watchPartyFlow.value = current.copy(
+            reactionId = id,
+            reactionEmoji = emoji,
+            reactionBy = myId,
+            reactionAt = now,
+            reactionCount = count
+        )
+        val ref = loveCoupleRef() ?: return
+        val reaction = mapOf("id" to id, "e" to emoji, "by" to myId, "at" to now, "n" to count)
+        ref.set(
+            mapOf("watchParty" to mapOf("reaction" to reaction)),
+            com.google.firebase.firestore.SetOptions.merge()
+        ).addOnFailureListener { Log.w("CoupleFeaturesRepo", "Sending the reaction failed", it) }
     }
 
     fun updateWatchPartyPlayback(isPlaying: Boolean, positionSeconds: Float) {
@@ -698,6 +752,25 @@ class CoupleFeaturesRepository(
             "updatedBy" to myId
         )
         ref.set(mapOf("watchParty" to map), com.google.firebase.firestore.SetOptions.merge())
+            .addOnFailureListener { Log.w("CoupleFeaturesRepo", "Saving play / pause failed", it) }
+    }
+
+    /** A heartbeat (double-tap on the video): my partner's phone beats once it arrives. */
+    fun sendWatchPartyHeartburst() {
+        val current = _watchPartyFlow.value?.takeIf { it.isActive } ?: return
+        val myId = authRepository.getCurrentUserId()
+        val updated = current.copy(
+            lastHeartburstAt = System.currentTimeMillis(),
+            lastHeartburstBy = myId
+        )
+        _watchPartyFlow.value = updated
+        val ref = loveCoupleRef() ?: return
+        val map = mapOf(
+            "lastHeartburstAt" to updated.lastHeartburstAt,
+            "lastHeartburstBy" to myId
+        )
+        ref.set(mapOf("watchParty" to map), com.google.firebase.firestore.SetOptions.merge())
+            .addOnFailureListener { Log.w("CoupleFeaturesRepo", "Sending the heartbeat failed", it) }
     }
 
     fun endWatchParty() {
@@ -1034,13 +1107,21 @@ class CoupleFeaturesRepository(
 
         // Synced Watch Party: on from Start until either of us ends it
         val wp = doc["watchParty"] as? Map<*, *>
+        val wpUpdatedAt = (wp?.get("updatedAt") as? Number)?.toLong() ?: 0L
+        val wpWatching = (wp?.get("watching") as? Map<*, *>)?.entries?.mapNotNull { (k, v) ->
+            val userId = k as? String ?: return@mapNotNull null
+            userId to ((v as? Number)?.toLong() ?: 0L)
+        }?.toMap().orEmpty()
+        // Idle: nobody has played, paused, moved or had it open for a while
+        val wpLastActive = maxOf(wpUpdatedAt, wpWatching.values.maxOrNull() ?: 0L)
         val wpOver = wp != null && (
             wp["isActive"] != true ||
-                System.currentTimeMillis() - ((wp["updatedAt"] as? Number)?.toLong() ?: 0L) > WATCH_PARTY_IDLE_MS ||
+                System.currentTimeMillis() - wpLastActive > WATCH_PARTY_IDLE_MS ||
                 // The sample video older versions started by themselves whenever the button was tapped
                 (wp["videoId"] == "dQw4w9WgXcQ" && wp["title"] == "Cozy Ambient Music")
             )
         if (wp != null && !wpOver) {
+            val reaction = wp["reaction"] as? Map<*, *>
             _watchPartyFlow.value = com.example.data.model.WatchPartySession(
                 id = "active",
                 videoId = wp["videoId"] as? String ?: "",
@@ -1048,10 +1129,19 @@ class CoupleFeaturesRepository(
                 title = wp["title"] as? String ?: "Watch Party",
                 isPlaying = wp["isPlaying"] as? Boolean ?: false,
                 positionSeconds = (wp["positionSeconds"] as? Number)?.toFloat() ?: 0f,
-                updatedAt = (wp["updatedAt"] as? Number)?.toLong() ?: 0L,
+                updatedAt = wpUpdatedAt,
                 updatedBy = wp["updatedBy"] as? String ?: "",
                 startedBy = wp["startedBy"] as? String ?: "",
-                isActive = true
+                isActive = true,
+                lastHeartburstAt = (wp["lastHeartburstAt"] as? Number)?.toLong() ?: 0L,
+                lastHeartburstBy = wp["lastHeartburstBy"] as? String ?: "",
+                startedAt = (wp["startedAt"] as? Number)?.toLong() ?: 0L,
+                reactionId = reaction?.get("id") as? String ?: "",
+                reactionEmoji = reaction?.get("e") as? String ?: "",
+                reactionBy = reaction?.get("by") as? String ?: "",
+                reactionAt = (reaction?.get("at") as? Number)?.toLong() ?: 0L,
+                reactionCount = (reaction?.get("n") as? Number)?.toInt() ?: 1,
+                watching = wpWatching
             )
         } else if (wpOver) {
             _watchPartyFlow.value = null

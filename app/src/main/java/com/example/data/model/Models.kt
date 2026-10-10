@@ -433,8 +433,33 @@ data class WatchPartySession(
     val updatedAt: Long = 0L,
     val updatedBy: String = "",
     val startedBy: String = "",
-    val isActive: Boolean = false
-)
+    val isActive: Boolean = false,
+    /** The last heartbeat sent by double-tapping the video: when, and by whom. */
+    val lastHeartburstAt: Long = 0L,
+    val lastHeartburstBy: String = "",
+    /** When this party began (changing the video keeps it); a new party is a new invite. */
+    val startedAt: Long = 0L,
+    /** The latest emoji reaction either of us sent: its id, the emoji, who, when and how many. */
+    val reactionId: String = "",
+    val reactionEmoji: String = "",
+    val reactionBy: String = "",
+    val reactionAt: Long = 0L,
+    val reactionCount: Int = 0,
+    /** Who has it open: user id to the last time their phone said so (0 once they left). */
+    val watching: Map<String, Long> = emptyMap()
+) {
+    /** Where the video is right now on both phones: the saved spot, plus the time since if playing. */
+    fun positionAt(now: Long = System.currentTimeMillis()): Float =
+        if (isPlaying) positionSeconds + (now - updatedAt).coerceAtLeast(0L) / 1000f else positionSeconds
+
+    /** Whether [userId] has it open (their phone says so about once a minute while it is). */
+    fun isWatchedBy(userId: String?, now: Long = System.currentTimeMillis()): Boolean =
+        userId != null && now - (watching[userId] ?: 0L) < WATCHING_FRESH_MS
+
+    companion object {
+        const val WATCHING_FRESH_MS = 150_000L
+    }
+}
 
 @IgnoreExtraProperties
 @JsonClass(generateAdapter = true)

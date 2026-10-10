@@ -561,6 +561,19 @@ fun CherishNavGraph(
             )
         }
     }
+
+        // The Watch Party above every screen (full screen, in the chat's bar, or small elsewhere);
+        // the lock and Notes cover it, and nothing of it is kept running behind them
+        LaunchedEffect(navController) {
+            com.example.ui.watchparty.WatchPartyUi.openChat = {
+                val popped = navController.popBackStack(Screen.Chat.route, inclusive = false)
+                if (!popped) navController.navigate(Screen.Chat.route) { launchSingleTop = true }
+            }
+        }
+        com.example.ui.watchparty.WatchPartyHost(
+            app = app,
+            allowed = !isDisguiseActive && !isAppLocked
+        )
         }
 
     // App Lock overlay if locked and not in disguise

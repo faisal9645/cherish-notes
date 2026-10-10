@@ -104,7 +104,6 @@ fun HomeScreen(
     var showAddLoveNoteDialog by remember { mutableStateOf(false) }
     var showAddMovieDialog by remember { mutableStateOf(false) }
     var showAddBookDialog by remember { mutableStateOf(false) }
-    var showWatchPartyModal by remember { mutableStateOf(false) }
     var showWatchPartySetup by remember { mutableStateOf(false) }
 
     // The title heart beats a few times when the tab opens, then rests
@@ -302,6 +301,9 @@ fun HomeScreen(
                 .padding(horizontal = 16.dp, vertical = 10.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
+            // A watch party is on and I'm not in it: join it right from here
+            com.example.ui.watchparty.WatchPartyInvite()
+
             // 1. Both of us, side by side: photos with a heart between, online / last seen, battery,
             // ages, days of life (live) and birthdays
             val homeApp = context.applicationContext as com.example.CherishApplication
@@ -402,15 +404,23 @@ fun HomeScreen(
                         onClick = { homeApp.coupleFeaturesRepository.wakeUpFromSleep() }
                     )
                 }
+                val iAmWatching = com.example.ui.watchparty.WatchPartyUi.mode !=
+                    com.example.ui.watchparty.WatchPartyMode.Hidden
                 LoveActionButton(
                     emoji = if (partyIsOn) "🎧" else "🍿",
-                    label = if (partyIsOn) "Join Watch Party" else "Watch Party",
+                    label = when {
+                        partyIsOn && iAmWatching -> "Open Watch Party"
+                        partyIsOn -> "Join Watch Party"
+                        else -> "Watch Party"
+                    },
                     highlighted = partyIsOn,
                     live = partyIsOn,
                     tag = if (partyIsOn) "join_watch_party_button" else "ambient_watch_party_button",
                     modifier = Modifier.weight(1f),
                     // Starting one means picking a video first; while one is on, this joins it
-                    onClick = { if (partyIsOn) showWatchPartyModal = true else showWatchPartySetup = true }
+                    onClick = {
+                        if (partyIsOn) com.example.ui.watchparty.WatchPartyUi.openTheater() else showWatchPartySetup = true
+                    }
                 )
             }
 
@@ -837,42 +847,9 @@ fun HomeScreen(
             onStart = { videoId, title ->
                 homeApp.coupleFeaturesRepository.startWatchParty(videoId, title, "")
                 showWatchPartySetup = false
-                showWatchPartyModal = true
+                com.example.ui.watchparty.WatchPartyUi.openTheater()
             },
             onDismiss = { showWatchPartySetup = false }
-        )
-    }
-
-    // Shown only while a party is really on; when either of us ends it, it closes here too
-    val liveParty = watchParty?.takeIf { it.isActive }
-    var lastObservedPartyStart by remember { mutableLongStateOf(0L) }
-    LaunchedEffect(liveParty?.updatedAt) {
-        val party = liveParty ?: return@LaunchedEffect
-        if (party.isActive && party.updatedAt != lastObservedPartyStart) {
-            lastObservedPartyStart = party.updatedAt
-            showWatchPartyModal = true
-        }
-    }
-    LaunchedEffect(liveParty == null) {
-        if (liveParty == null) {
-            delay(400) // not for a moment's gap while a new party is being saved
-            showWatchPartyModal = false
-        }
-    }
-    if (showWatchPartyModal && liveParty != null) {
-        com.example.ui.chat.SyncedWatchPartyModal(
-            session = liveParty,
-            onPlayPause = { isPlaying, pos ->
-                homeApp.coupleFeaturesRepository.updateWatchPartyPlayback(isPlaying, pos)
-            },
-            onSeek = { pos ->
-                homeApp.coupleFeaturesRepository.updateWatchPartyPlayback(liveParty.isPlaying, pos)
-            },
-            onEndSession = {
-                homeApp.coupleFeaturesRepository.endWatchParty()
-                showWatchPartyModal = false
-            },
-            onDismiss = { showWatchPartyModal = false }
         )
     }
 }

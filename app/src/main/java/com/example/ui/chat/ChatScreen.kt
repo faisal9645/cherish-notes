@@ -537,24 +537,6 @@ fun ChatScreen(
     var showGoodnightStars by remember { mutableStateOf(false) }
     // Our dates (shared by both phones): the earliest anniversary starts the days counter
     val ourDates by app.coupleFeaturesRepository.datesFlow.collectAsState()
-    // Synced Watch Party observation in chat
-    val liveChatParty by app.coupleFeaturesRepository.watchPartyFlow.collectAsState()
-    var showChatWatchPartyModal by remember { mutableStateOf(false) }
-    var lastObservedChatPartyStart by remember { mutableLongStateOf(0L) }
-    val activeChatParty = liveChatParty?.takeIf { it.isActive }
-
-    LaunchedEffect(activeChatParty?.updatedAt) {
-        val party = activeChatParty ?: return@LaunchedEffect
-        if (party.isActive && party.updatedAt != lastObservedChatPartyStart) {
-            lastObservedChatPartyStart = party.updatedAt
-            showChatWatchPartyModal = true
-        }
-    }
-    LaunchedEffect(activeChatParty == null) {
-        if (activeChatParty == null) {
-            showChatWatchPartyModal = false
-        }
-    }
     // Reminders also cover both of our birthdays (set on the Love & Us tab)
     val birthdays by app.authRepository.birthdays.collectAsState()
     val datesWithBirthdays = remember(ourDates, birthdays, myUser?.id, partner?.id, partnerName) {
@@ -1335,6 +1317,13 @@ fun ChatScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
+            // Watch Party: the bar while watching here, or the invite to join one that's on (not in
+            // private chat or under the curtain)
+            com.example.ui.watchparty.ChatWatchPartySlot(
+                blocked = uiState.isStealthCurtainActive ||
+                    uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE
+            )
+
             // Starred Messages Filter Header Banner
             AnimatedVisibility(visible = uiState.filterStarredOnly) {
                 Surface(
@@ -2450,24 +2439,6 @@ fun ChatScreen(
         InlineVideoTheaterModal(
             videoId = videoId,
             onDismiss = { viewModel.closeTheaterVideo() }
-        )
-    }
-
-    // Synced Watch Party Modal for real-time video sync with partner
-    if (showChatWatchPartyModal && activeChatParty != null) {
-        SyncedWatchPartyModal(
-            session = activeChatParty,
-            onPlayPause = { isPlaying, pos ->
-                app.coupleFeaturesRepository.updateWatchPartyPlayback(isPlaying, pos)
-            },
-            onSeek = { pos ->
-                app.coupleFeaturesRepository.updateWatchPartyPlayback(activeChatParty.isPlaying, pos)
-            },
-            onEndSession = {
-                app.coupleFeaturesRepository.endWatchParty()
-                showChatWatchPartyModal = false
-            },
-            onDismiss = { showChatWatchPartyModal = false }
         )
     }
 

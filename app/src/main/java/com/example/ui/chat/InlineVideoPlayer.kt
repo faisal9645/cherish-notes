@@ -543,8 +543,11 @@ fun InlineYouTubeCard(
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             FilledTonalButton(
                                 onClick = {
+                                    // Watched together instead: the party's theater opens, this card stops
                                     val cherishApp = context.applicationContext as? com.example.CherishApplication
-                                    cherishApp?.coupleFeaturesRepository?.startWatchParty(videoId, "Shared Video", "")
+                                    cherishApp?.coupleFeaturesRepository?.startWatchParty(videoId, "Shared video", "")
+                                    isPlayingInline = false
+                                    com.example.ui.watchparty.WatchPartyUi.openTheater()
                                 },
                                 contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
                                 modifier = Modifier.height(28.dp).testTag("watch_party_sync_btn"),
@@ -654,41 +657,15 @@ fun InlineVideoTheaterModal(
                     modifier = Modifier.fillMaxSize()
                 )
 
-                // Top Floating Bar (Landscape Mode)
+                // Top Floating Bar (Landscape Mode): just the buttons, on the right
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .safeDrawingPadding()
                         .padding(horizontal = 32.dp, vertical = 16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
+                    horizontalArrangement = Arrangement.End,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Theater Badge
-                    Surface(
-                        shape = CircleShape,
-                        color = Color.Black.copy(alpha = 0.75f),
-                        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.25f))
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                Icons.Filled.Movie,
-                                contentDescription = null,
-                                tint = Color.White,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = "Cherish Theater • Landscape Full View",
-                                color = Color.White,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 12.sp
-                            )
-                        }
-                    }
-
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
