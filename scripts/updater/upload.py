@@ -70,7 +70,7 @@ def create_github_release(token: str, repo: str, version_code: int, version_name
     payload = {
         "tag_name": tag,
         "name": f"v{version_name} (build {version_code})",
-        "body": f"Notes v{version_name} (Build {version_code}):\n• Live couple avatars & connection status in Watch Party\n• Double-tap video to send synced heartbursts to partner\n• Partner play/pause notifications",
+        "body": f"Notes v{version_name} (Build {version_code}):\n• More videos play inside the app\n• Smoother video playback\n• Easier navigation\n• Bug fixes and improvements",
         "draft": False,
         "prerelease": False,
     }

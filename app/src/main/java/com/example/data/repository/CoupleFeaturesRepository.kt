@@ -821,6 +821,24 @@ class CoupleFeaturesRepository(
             .addOnFailureListener { Log.w("CoupleFeaturesRepo", "Saving play / pause failed", it) }
     }
 
+    /**
+     * My phone is loading or showing an ad (or no longer is): only said, so my partner's phone can
+     * show it. The party itself keeps going; my phone catches up once it plays again.
+     */
+    fun markWatchPartyWaiting(isBuffering: Boolean, isAd: Boolean) {
+        val current = _watchPartyFlow.value?.takeIf { it.isActive } ?: return
+        val myId = authRepository.getCurrentUserId()
+        val bufferingBy = if (isBuffering) myId else current.bufferingBy.takeIf { it != myId }.orEmpty()
+        val adBy = if (isAd) myId else current.adBy.takeIf { it != myId }.orEmpty()
+        if (bufferingBy == current.bufferingBy && adBy == current.adBy) return
+        _watchPartyFlow.value = current.copy(bufferingBy = bufferingBy, adBy = adBy)
+        val ref = loveCoupleRef() ?: return
+        ref.set(
+            mapOf("watchParty" to mapOf("bufferingBy" to bufferingBy, "adBy" to adBy)),
+            com.google.firebase.firestore.SetOptions.merge()
+        ).addOnFailureListener { Log.w("CoupleFeaturesRepo", "Saving loading / ad failed", it) }
+    }
+
     fun updateWatchPartySpeed(rate: Float) {
         val current = _watchPartyFlow.value?.takeIf { it.isActive } ?: return
         _watchPartyFlow.value = current.copy(playbackRate = rate)

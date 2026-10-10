@@ -446,6 +446,9 @@ fun ChatScreen(
     val displayedMessages by viewModel.displayedMessages.collectAsState()
 
     var highlightedMessageId by remember { mutableStateOf<String?>(null) }
+    // Messages whose reply quote was tapped, to come back to (the last one first), like WhatsApp and
+    // Telegram: the down arrow returns there before it goes to the newest messages
+    val replyReturns = remember { mutableStateListOf<String>() }
 
     // What a message row can ask of the screen. Created once, reading the latest state when
     // called, so rows get the same instance every time and can be skipped on recomposition.
@@ -490,12 +493,15 @@ fun ChatScreen(
             react = { message, emoji -> viewModel.toggleReaction(message.id, emoji) },
             openTheaterVideo = { videoId -> viewModel.openTheaterVideo(videoId) },
             toggleVoiceSpeed = { viewModel.toggleVoiceSpeed() },
-            jumpToReply = { replyId ->
+            jumpToReply = { fromMessageId, replyId ->
                 if (!replyId.isNullOrBlank()) {
                     // The list is reversed (newest at index 0)
                     val shown = latestDisplayedMessages.value
                     val index = shown.indexOfFirst { it.id == replyId }
                     if (index >= 0) {
+                        replyReturns.remove(fromMessageId)
+                        replyReturns.add(fromMessageId)
+                        if (replyReturns.size > 20) replyReturns.removeAt(0)
                         scope.launch {
                             highlightedMessageId = replyId
                             listState.revealMessage(shown.lastIndex - index)
@@ -1814,6 +1820,42 @@ fun ChatScreen(
                     listState.firstVisibleItemIndex > 3
                 }
             }
+            // Scrolled back to the replied message by hand, or all the way down: nothing to return to
+            LaunchedEffect(listState) {
+                var watched: String? = null
+                var leftIt = false
+                var leftBottom = false
+                snapshotFlow {
+                    val top = replyReturns.lastOrNull()
+                    Triple(
+                        top,
+                        top != null && listState.layoutInfo.visibleItemsInfo.any { it.key == top },
+                        listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset < 8
+                    )
+                }.collect { (top, onScreen, atBottom) ->
+                    if (top == null) {
+                        watched = null
+                        return@collect
+                    }
+                    if (top != watched) {
+                        watched = top
+                        leftIt = !onScreen
+                        leftBottom = !atBottom
+                    }
+                    if (!onScreen) leftIt = true
+                    if (!atBottom) leftBottom = true
+                    when {
+                        atBottom && leftBottom -> {
+                            replyReturns.clear()
+                            watched = null
+                        }
+                        onScreen && leftIt -> {
+                            replyReturns.remove(top)
+                            watched = null
+                        }
+                    }
+                }
+            }
 
             androidx.compose.animation.AnimatedVisibility(
                 visible = showScrollButton,
@@ -1827,8 +1869,23 @@ fun ChatScreen(
                 Box {
                     SmallFloatingActionButton(
                         onClick = {
+                            // Back to the message whose reply quote was tapped, if any; then the newest
+                            var back: String? = null
+                            var backIndex = -1
+                            while (backIndex < 0 && replyReturns.isNotEmpty()) {
+                                val id = replyReturns.removeAt(replyReturns.lastIndex)
+                                back = id
+                                backIndex = reversedMessages.indexOfFirst { it.id == id }
+                            }
+                            val returnTo = back.takeIf { backIndex >= 0 }
+                            val returnIndex = backIndex
                             scope.launch {
-                                if (displayedMessages.isNotEmpty()) {
+                                if (returnTo != null) {
+                                    highlightedMessageId = returnTo
+                                    listState.revealMessage(returnIndex)
+                                    delay(800)
+                                    if (highlightedMessageId == returnTo) highlightedMessageId = null
+                                } else if (displayedMessages.isNotEmpty()) {
                                     listState.animateScrollToItem(0)
                                 }
                             }
@@ -2994,7 +3051,8 @@ private class ChatRowActions(
     val react: (message: Message, emoji: String) -> Unit,
     val openTheaterVideo: (String) -> Unit,
     val toggleVoiceSpeed: () -> Unit,
-    val jumpToReply: (String?) -> Unit,
+    /** The reply quote in a message ([fromMessageId]) was tapped: go to the message it quotes. */
+    val jumpToReply: (fromMessageId: String, replyId: String?) -> Unit,
     val toggleSelection: (String) -> Unit
 )
 
@@ -3173,7 +3231,7 @@ private fun ChatMessageRow(
                         voicePlaybackSpeed = voicePlaybackSpeed,
                         onToggleVoiceSpeed = actions.toggleVoiceSpeed,
                         isHighlighted = isHighlighted,
-                        onReplyQuoteClick = actions.jumpToReply,
+                        onReplyQuoteClick = { replyId -> actions.jumpToReply(message.id, replyId) },
                         isPrivateMode = isPrivate,
                         senderPhotoUrl = senderPhotoUrl,
                         isLastReadMessage = isLastReadMessage,

@@ -186,7 +186,9 @@ fun WatchPartyInvite(modifier: Modifier = Modifier) {
             animationSpec = infiniteRepeatable(tween(1300, easing = FastOutSlowInEasing), RepeatMode.Reverse),
             label = "invite_pulse"
         )
+        // The whole pill opens it full screen, not only its button
         Surface(
+            onClick = { WatchPartyUi.openTheater() },
             shape = RoundedCornerShape(50),
             color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f),
             border = BorderStroke(1.5.dp, accent.copy(alpha = pulse)),

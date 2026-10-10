@@ -481,11 +481,12 @@ fun InlineYouTubeCard(
                     )
                 }
             } else {
+                // A tap opens it full view; "Play here" keeps it in the card
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .aspectRatio(16f / 9f)
-                        .clickable { isPlayingInline = true },
+                        .clickable { onOpenTheater(videoId) },
                     contentAlignment = Alignment.Center
                 ) {
                     AsyncImage(
@@ -526,7 +527,7 @@ fun InlineYouTubeCard(
                         ) {
                             Icon(
                                 imageVector = Icons.Filled.PlayArrow,
-                                contentDescription = "Play Inline",
+                                contentDescription = "Watch in full view",
                                 tint = Color.White,
                                 modifier = Modifier.size(28.dp)
                             )
@@ -544,7 +545,7 @@ fun InlineYouTubeCard(
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Text(
-                            text = "▶ Tap to play inline",
+                            text = "▶ Tap for full view",
                             color = Color.White.copy(alpha = 0.9f),
                             fontSize = 11.5.sp,
                             fontWeight = FontWeight.Medium
@@ -570,17 +571,19 @@ fun InlineYouTubeCard(
                             }
                             Spacer(modifier = Modifier.width(6.dp))
                             FilledTonalButton(
-                                onClick = { onOpenTheater(videoId) },
+                                onClick = { isPlayingInline = true },
                                 contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                                modifier = Modifier.height(28.dp),
+                                modifier = Modifier
+                                    .height(28.dp)
+                                    .testTag("youtube_play_here"),
                                 colors = ButtonDefaults.filledTonalButtonColors(
                                     containerColor = Color.White.copy(alpha = 0.25f),
                                     contentColor = Color.White
                                 )
                             ) {
-                                Icon(Icons.Default.Fullscreen, contentDescription = null, modifier = Modifier.size(15.dp))
+                                Icon(Icons.Filled.PlayArrow, contentDescription = null, modifier = Modifier.size(15.dp))
                                 Spacer(modifier = Modifier.width(4.dp))
-                                Text("Theater", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                Text("Play here", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                             }
                         }
                     }

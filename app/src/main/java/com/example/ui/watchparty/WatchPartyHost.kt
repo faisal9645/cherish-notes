@@ -528,8 +528,14 @@ private fun KeepInSync(party: WatchPartySession, player: WatchPartyPlayer, repo:
             if (end > 1f) target = target.coerceAtMost(end - 0.3f)
             val over = end > 1f && player.state == YtState.ENDED && target >= end - 1f
             val off = abs(player.currentTime - target)
-            // Right away when anything changed; later only if it drifted
-            val seek = !over && (if (pass == 0 || player.state != YtState.PLAYING) off > 0.8f else off > 1.5f)
+            // Right away when anything changed; later only if it drifted. A phone still loading is
+            // left to load (seeking it again only starts the loading over), and an ad isn't touched.
+            val seek = !over && player.state != YtState.AD && when {
+                pass == 0 -> off > 0.8f
+                player.state == YtState.PLAYING -> off > 1.5f
+                player.state == YtState.PAUSED -> off > 0.8f
+                else -> false
+            }
             val now = com.example.data.repository.ServerTime.now()
             val shouldPlay = p.isPlaying && p.playScheduledAt <= now
             if (seek) player.seekTo(target)
@@ -560,15 +566,26 @@ private fun KeepInSync(party: WatchPartySession, player: WatchPartyPlayer, repo:
         action ?: return@LaunchedEffect
         delay(450) // a double tap toggles twice, and then nothing changed
         if (player.state != action.state) return@LaunchedEffect
-        val playing = action.state == YtState.PLAYING
-        val buffering = action.state == YtState.BUFFERING
-        val isAd = action.state == YtState.AD
-        val wasBuffering = latest.bufferingBy == myId
-        val wasAd = latest.adBy == myId
-        if (player.state == YtState.ENDED && latest.queue.isNotEmpty()) {
-            repo.dequeueWatchPartyVideo(latest.videoId)
-        } else if (playing != latest.isPlaying || buffering != wasBuffering || isAd != wasAd) {
-            repo.updateWatchPartyPlayback(playing, player.currentTime, isBuffering = buffering, isAd = isAd)
+        val p = latest
+        when (action.state) {
+            // Loading or an ad here is only said (my partner's phone shows it); the party itself
+            // goes on, and this phone catches up once it plays. Pausing it for both left it paused.
+            YtState.BUFFERING, YtState.AD ->
+                repo.markWatchPartyWaiting(isBuffering = action.state == YtState.BUFFERING, isAd = action.state == YtState.AD)
+            YtState.ENDED ->
+                if (p.queue.isNotEmpty()) {
+                    repo.dequeueWatchPartyVideo(p.videoId)
+                } else if (p.isPlaying) {
+                    repo.updateWatchPartyPlayback(false, player.currentTime)
+                }
+            else -> {
+                val playing = action.state == YtState.PLAYING
+                if (playing != p.isPlaying) {
+                    repo.updateWatchPartyPlayback(playing, player.currentTime)
+                } else if (p.bufferingBy == myId || p.adBy == myId) {
+                    repo.markWatchPartyWaiting(isBuffering = false, isAd = false)
+                }
+            }
         }
     }
 }
@@ -753,15 +770,20 @@ private fun VideoLayer(
                     textAlign = TextAlign.Center
                 )
                 if (!compact) {
+                    // Most refusals already moved on to YouTube's own page; what's left is said here
                     val reason = when (player.errorCode) {
-                        101, 150 -> "Its owner allows it only on YouTube."
                         100 -> "It's private or was removed."
                         2 -> "The link doesn't point to a video."
-                        else -> "YouTube won't play it in this player."
+                        -1 -> "YouTube wants a sign-in for this one (an age limit, or its \"not a bot\" check)."
+                        else -> "YouTube won't play it here."
                     }
                     Text(reason, color = Color.White.copy(alpha = 0.7f), fontSize = 12.sp, textAlign = TextAlign.Center)
                     Row(modifier = Modifier.padding(top = 6.dp)) {
                         TextButton(onClick = onPickAnother) { Text("Pick another") }
+                        if (player.errorCode == -1) {
+                            // Shows YouTube's page as it is, with its own Sign in button
+                            TextButton(onClick = { player.errorCode = 0 }) { Text("Sign in") }
+                        }
                         TextButton(onClick = { YouTubeHelper.openInYouTube(context, party.videoId) }) { Text("Open YouTube") }
                     }
                 }
