@@ -84,6 +84,19 @@ fun NoteEditorScreen(
     var isPinned by remember { mutableStateOf(initialNote?.isPinned ?: false) }
     var reminderTime by remember { mutableStateOf(initialNote?.reminderTime) }
     var showReminderDialog by remember { mutableStateOf(false) }
+    // Asked from here (the editor stays open), so the answer still arrives after the picker closes
+    val reminderPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (!granted) onToast("Allow notifications so the reminder can alert you")
+    }
+    val requestReminderPermission: () -> Unit = {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            reminderPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
 
     val amoledBlack = com.example.ui.theme.LocalAmoledBlack.current
     val editorTheme = remember(colorHex, isDark, amoledBlack) {
@@ -98,7 +111,6 @@ fun NoteEditorScreen(
         mutableStateOf(initialNote?.getChecklist() ?: emptyList())
     }
     var newChecklistInput by remember { mutableStateOf("") }
-    var showFormattingBar by remember { mutableStateOf(false) }
 
     val categories = remember { listOf("Personal", "Work", "Lists", "Ideas", "Journal", "Urgent") }
     val colorPalettes = remember {
@@ -145,7 +157,11 @@ fun NoteEditorScreen(
                         text = if (initialNote == null) "New Note" else "Edit Note",
                         fontSize = 17.sp,
                         fontWeight = FontWeight.Bold,
-                        color = editorTheme.titleColor
+                        color = editorTheme.titleColor,
+                        maxLines = 1,
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(start = 4.dp)
                     )
 
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -173,15 +189,6 @@ fun NoteEditorScreen(
                                 imageVector = if (isChecklistMode) Icons.Filled.Checklist else Icons.Outlined.Checklist,
                                 contentDescription = "Toggle Checklist",
                                 tint = if (isChecklistMode) editorTheme.accentPrimary else editorTheme.secondaryTextColor
-                            )
-                        }
-
-                        // Category & Color formatting toggle
-                        IconButton(onClick = { showFormattingBar = !showFormattingBar }) {
-                            Icon(
-                                imageVector = Icons.Outlined.Palette,
-                                contentDescription = "Style note",
-                                tint = if (showFormattingBar) editorTheme.accentPrimary else editorTheme.secondaryTextColor
                             )
                         }
 
@@ -218,90 +225,88 @@ fun NoteEditorScreen(
                         .background(editorTheme.containerColor)
                         .navigationBarsPadding()
                 ) {
-                    // Expandable Styling & Category Bar
-                    AnimatedVisibility(visible = showFormattingBar) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .background(editorTheme.accentContainer.copy(alpha = 0.35f))
-                                .padding(horizontal = 16.dp, vertical = 10.dp)
+                    // Category and card accent, always shown
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(editorTheme.accentContainer.copy(alpha = 0.35f))
+                            .padding(horizontal = 16.dp, vertical = 10.dp)
+                    ) {
+                        // Category chips
+                        Text(
+                            text = "Category",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = editorTheme.secondaryTextColor
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        LazyRow(
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            modifier = Modifier.fillMaxWidth()
                         ) {
-                            // Category chips
-                            Text(
-                                text = "Category",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = editorTheme.secondaryTextColor
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            LazyRow(
-                                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                items(categories, key = { it }) { cat ->
-                                    val isSelected = category == cat
-                                    Surface(
-                                        shape = RoundedCornerShape(10.dp),
-                                        color = if (isSelected) editorTheme.accentPrimary else editorTheme.containerColor,
-                                        border = if (isSelected) null else BorderStroke(1.dp, editorTheme.borderColor),
-                                        modifier = Modifier
-                                            .clip(RoundedCornerShape(10.dp))
-                                            .clickable { category = cat }
-                                    ) {
-                                        Text(
-                                            text = cat,
-                                            color = if (isSelected) Color.White else editorTheme.titleColor,
-                                            fontSize = 11.sp,
-                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-                                        )
-                                    }
+                            items(categories, key = { it }) { cat ->
+                                val isSelected = category == cat
+                                Surface(
+                                    shape = RoundedCornerShape(10.dp),
+                                    color = if (isSelected) editorTheme.accentPrimary else editorTheme.containerColor,
+                                    border = if (isSelected) null else BorderStroke(1.dp, editorTheme.borderColor),
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .clickable { category = cat }
+                                ) {
+                                    Text(
+                                        text = cat,
+                                        color = if (isSelected) Color.White else editorTheme.titleColor,
+                                        fontSize = 11.sp,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                                    )
                                 }
                             }
+                        }
 
-                            Spacer(modifier = Modifier.height(8.dp))
+                        Spacer(modifier = Modifier.height(8.dp))
 
-                            // Color chips
-                            Text(
-                                text = "Card Accent Tint",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = editorTheme.secondaryTextColor
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Row(
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                colorPalettes.forEach { (hex, label) ->
-                                    val isSelected = colorHex.equals(hex, ignoreCase = true)
-                                    val chipTheme = resolveNoteCardColors(hex, isDark, amoledBlack)
+                        // Color chips
+                        Text(
+                            text = "Card Accent Tint",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = editorTheme.secondaryTextColor
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            colorPalettes.forEach { (hex, label) ->
+                                val isSelected = colorHex.equals(hex, ignoreCase = true)
+                                val chipTheme = resolveNoteCardColors(hex, isDark, amoledBlack)
+                                Box(
+                                    modifier = Modifier
+                                        .size(28.dp)
+                                        .clip(CircleShape)
+                                        .background(chipTheme.containerColor)
+                                        .border(
+                                            width = if (isSelected) 2.dp else 1.dp,
+                                            color = if (isSelected) chipTheme.accentPrimary else chipTheme.borderColor,
+                                            shape = CircleShape
+                                        )
+                                        .clickable { colorHex = hex },
+                                    contentAlignment = Alignment.Center
+                                ) {
                                     Box(
                                         modifier = Modifier
-                                            .size(28.dp)
-                                            .clip(CircleShape)
-                                            .background(chipTheme.containerColor)
-                                            .border(
-                                                width = if (isSelected) 2.dp else 1.dp,
-                                                color = if (isSelected) chipTheme.accentPrimary else chipTheme.borderColor,
-                                                shape = CircleShape
-                                            )
-                                            .clickable { colorHex = hex },
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Box(
-                                            modifier = Modifier
-                                                .size(10.dp)
-                                                .background(chipTheme.accentPrimary, CircleShape)
+                                            .size(10.dp)
+                                            .background(chipTheme.accentPrimary, CircleShape)
+                                    )
+                                    if (isSelected) {
+                                        Icon(
+                                            imageVector = Icons.Default.Check,
+                                            contentDescription = label,
+                                            tint = if (chipTheme.containerColor.luminance() > 0.5f) chipTheme.accentPrimary else Color.White,
+                                            modifier = Modifier.size(14.dp)
                                         )
-                                        if (isSelected) {
-                                            Icon(
-                                                imageVector = Icons.Default.Check,
-                                                contentDescription = label,
-                                                tint = if (chipTheme.containerColor.luminance() > 0.5f) chipTheme.accentPrimary else Color.White,
-                                                modifier = Modifier.size(14.dp)
-                                            )
-                                        }
                                     }
                                 }
                             }
@@ -663,36 +668,35 @@ fun NoteEditorScreen(
                 reminderTime = null
                 onToast("Reminder removed")
             },
-            onDismiss = { showReminderDialog = false }
+            onDismiss = { showReminderDialog = false },
+            requestNotificationPermission = requestReminderPermission
         )
     }
 }
 }
 
+/**
+ * The reminder picker: a quick timer (in a few minutes), a few set times, or any date and time.
+ * Everything follows the Notes app's theme, day and night.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NoteReminderPickerDialog(
     currentReminderTime: Long?,
     onReminderSelected: (Long) -> Unit,
     onClearReminder: () -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    // Asks for the notification permission (from the editor, which stays open)
+    requestNotificationPermission: () -> Unit = {}
 ) {
     val context = LocalContext.current
-    val calendar = remember { Calendar.getInstance() }
+    var showDatePicker by remember { mutableStateOf(false) }
+    var pickedDateUtc by remember { mutableStateOf<Long?>(null) }
 
-    val notifPermissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission()
-    ) { isGranted ->
-        if (!isGranted) {
-            Toast.makeText(context, "Notification permission is needed for reminder alerts", Toast.LENGTH_LONG).show()
-        }
-    }
-
-    val requestNotifPermissionIfNeeded = {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            if (ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-                notifPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-            }
-        }
+    val choose: (Long) -> Unit = { timeMillis ->
+        requestNotificationPermission()
+        onReminderSelected(timeMillis)
+        onDismiss()
     }
 
     AlertDialog(
@@ -717,6 +721,7 @@ fun NoteReminderPickerDialog(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
                     .padding(vertical = 4.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
@@ -725,9 +730,46 @@ fun NoteReminderPickerDialog(
                     fontSize = 13.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                Spacer(modifier = Modifier.height(4.dp))
 
-                // Option 1: In 3 hours (Later Today)
+                // Timer: remind me in a little while
+                Text(
+                    text = "Timer",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
+                    listOf(10 to "10 min", 30 to "30 min", 60 to "1 hour", 120 to "2 hours").forEach { (minutes, label) ->
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = MaterialTheme.colorScheme.primaryContainer,
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(10.dp))
+                                .clickable { choose(System.currentTimeMillis() + minutes * 60_000L) }
+                                .testTag("note_reminder_timer_$minutes")
+                        ) {
+                            Text(
+                                text = label,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.primary,
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                maxLines = 1,
+                                modifier = Modifier.padding(vertical = 9.dp)
+                            )
+                        }
+                    }
+                }
+
+                Text(
+                    text = "Or at",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                // Later today (in 3 hours)
                 ReminderPresetOption(
                     title = "Later Today (+3 hours)",
                     subtitle = remember {
@@ -736,115 +778,50 @@ fun NoteReminderPickerDialog(
                     },
                     icon = Icons.Outlined.AccessTime,
                     onClick = {
-                        val cal = Calendar.getInstance().apply { add(Calendar.HOUR_OF_DAY, 3) }
-                        requestNotifPermissionIfNeeded()
-                        onReminderSelected(cal.timeInMillis)
-                        onDismiss()
+                        choose(Calendar.getInstance().apply { add(Calendar.HOUR_OF_DAY, 3) }.timeInMillis)
                     }
                 )
 
-                // Option 2: Tonight (8:00 PM)
+                // Tonight at 8 PM (tomorrow's when it's already past)
+                val tonight = remember {
+                    Calendar.getInstance().apply {
+                        set(Calendar.HOUR_OF_DAY, 20)
+                        set(Calendar.MINUTE, 0)
+                        set(Calendar.SECOND, 0)
+                        set(Calendar.MILLISECOND, 0)
+                        if (timeInMillis <= System.currentTimeMillis()) add(Calendar.DAY_OF_YEAR, 1)
+                    }.timeInMillis
+                }
                 ReminderPresetOption(
                     title = "Tonight (8:00 PM)",
-                    subtitle = remember {
-                        val cal = Calendar.getInstance().apply {
-                            set(Calendar.HOUR_OF_DAY, 20)
-                            set(Calendar.MINUTE, 0)
-                            set(Calendar.SECOND, 0)
-                            if (timeInMillis <= System.currentTimeMillis()) {
-                                add(Calendar.DAY_OF_YEAR, 1)
-                            }
-                        }
-                        val sdf = SimpleDateFormat("EEE, h:mm a", Locale.getDefault())
-                        sdf.format(cal.time)
-                    },
+                    subtitle = remember { SimpleDateFormat("EEE, h:mm a", Locale.getDefault()).format(Date(tonight)) },
                     icon = Icons.Outlined.Nightlight,
-                    onClick = {
-                        val cal = Calendar.getInstance().apply {
-                            set(Calendar.HOUR_OF_DAY, 20)
-                            set(Calendar.MINUTE, 0)
-                            set(Calendar.SECOND, 0)
-                            if (timeInMillis <= System.currentTimeMillis()) {
-                                add(Calendar.DAY_OF_YEAR, 1)
-                            }
-                        }
-                        requestNotifPermissionIfNeeded()
-                        onReminderSelected(cal.timeInMillis)
-                        onDismiss()
-                    }
+                    onClick = { choose(tonight) }
                 )
 
-                // Option 3: Tomorrow Morning (9:00 AM)
+                // Tomorrow at 9 AM
+                val tomorrowMorning = remember {
+                    Calendar.getInstance().apply {
+                        add(Calendar.DAY_OF_YEAR, 1)
+                        set(Calendar.HOUR_OF_DAY, 9)
+                        set(Calendar.MINUTE, 0)
+                        set(Calendar.SECOND, 0)
+                        set(Calendar.MILLISECOND, 0)
+                    }.timeInMillis
+                }
                 ReminderPresetOption(
                     title = "Tomorrow Morning (9:00 AM)",
-                    subtitle = remember {
-                        val cal = Calendar.getInstance().apply {
-                            add(Calendar.DAY_OF_YEAR, 1)
-                            set(Calendar.HOUR_OF_DAY, 9)
-                            set(Calendar.MINUTE, 0)
-                            set(Calendar.SECOND, 0)
-                        }
-                        val sdf = SimpleDateFormat("EEE, MMM d • 9:00 AM", Locale.getDefault())
-                        sdf.format(cal.time)
-                    },
+                    subtitle = remember { SimpleDateFormat("EEE, MMM d • h:mm a", Locale.getDefault()).format(Date(tomorrowMorning)) },
                     icon = Icons.Outlined.WbSunny,
-                    onClick = {
-                        val cal = Calendar.getInstance().apply {
-                            add(Calendar.DAY_OF_YEAR, 1)
-                            set(Calendar.HOUR_OF_DAY, 9)
-                            set(Calendar.MINUTE, 0)
-                            set(Calendar.SECOND, 0)
-                        }
-                        requestNotifPermissionIfNeeded()
-                        onReminderSelected(cal.timeInMillis)
-                        onDismiss()
-                    }
+                    onClick = { choose(tomorrowMorning) }
                 )
 
-                // Option 4: Custom Date & Time
+                // Any date and time
                 ReminderPresetOption(
                     title = "Pick Custom Date & Time",
                     subtitle = "Select exact date & time",
                     icon = Icons.Outlined.CalendarMonth,
-                    onClick = {
-                        val currentYear = calendar.get(Calendar.YEAR)
-                        val currentMonth = calendar.get(Calendar.MONTH)
-                        val currentDay = calendar.get(Calendar.DAY_OF_MONTH)
-                        val currentHour = calendar.get(Calendar.HOUR_OF_DAY)
-                        val currentMinute = calendar.get(Calendar.MINUTE)
-
-                        android.app.DatePickerDialog(
-                            context,
-                            { _, year, month, dayOfMonth ->
-                                android.app.TimePickerDialog(
-                                    context,
-                                    { _, hourOfDay, minute ->
-                                        val pickedCal = Calendar.getInstance().apply {
-                                            set(Calendar.YEAR, year)
-                                            set(Calendar.MONTH, month)
-                                            set(Calendar.DAY_OF_MONTH, dayOfMonth)
-                                            set(Calendar.HOUR_OF_DAY, hourOfDay)
-                                            set(Calendar.MINUTE, minute)
-                                            set(Calendar.SECOND, 0)
-                                        }
-                                        if (pickedCal.timeInMillis > System.currentTimeMillis()) {
-                                            requestNotifPermissionIfNeeded()
-                                            onReminderSelected(pickedCal.timeInMillis)
-                                            onDismiss()
-                                        } else {
-                                            Toast.makeText(context, "Please choose a future date & time for the reminder", Toast.LENGTH_SHORT).show()
-                                        }
-                                    },
-                                    currentHour,
-                                    currentMinute,
-                                    false
-                                ).show()
-                            },
-                            currentYear,
-                            currentMonth,
-                            currentDay
-                        ).show()
-                    }
+                    onClick = { showDatePicker = true }
                 )
 
                 if (currentReminderTime != null) {
@@ -875,6 +852,67 @@ fun NoteReminderPickerDialog(
         shape = RoundedCornerShape(20.dp),
         containerColor = MaterialTheme.colorScheme.surface
     )
+
+    // The day (today or later), then the time
+    if (showDatePicker) {
+        val todayUtc = remember {
+            val local = Calendar.getInstance()
+            Calendar.getInstance(java.util.TimeZone.getTimeZone("UTC")).apply {
+                clear()
+                set(local.get(Calendar.YEAR), local.get(Calendar.MONTH), local.get(Calendar.DAY_OF_MONTH))
+            }.timeInMillis
+        }
+        val dateState = rememberDatePickerState(
+            initialSelectedDateMillis = todayUtc,
+            selectableDates = object : SelectableDates {
+                override fun isSelectableDate(utcTimeMillis: Long) = utcTimeMillis >= todayUtc
+            }
+        )
+        DatePickerDialog(
+            onDismissRequest = { showDatePicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    pickedDateUtc = dateState.selectedDateMillis
+                    showDatePicker = false
+                }) { Text("Next") }
+            },
+            dismissButton = { TextButton(onClick = { showDatePicker = false }) { Text("Cancel") } }
+        ) {
+            DatePicker(state = dateState)
+        }
+    }
+    pickedDateUtc?.let { dateUtc ->
+        val start = remember { Calendar.getInstance().apply { add(Calendar.HOUR_OF_DAY, 1) } }
+        val timeState = rememberTimePickerState(
+            initialHour = start.get(Calendar.HOUR_OF_DAY),
+            initialMinute = 0,
+            is24Hour = android.text.format.DateFormat.is24HourFormat(context)
+        )
+        AlertDialog(
+            onDismissRequest = { pickedDateUtc = null },
+            title = { Text("Reminder time", fontWeight = FontWeight.Bold) },
+            text = { TimePicker(state = timeState) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val day = Calendar.getInstance(java.util.TimeZone.getTimeZone("UTC")).apply { timeInMillis = dateUtc }
+                        val picked = Calendar.getInstance().apply {
+                            set(day.get(Calendar.YEAR), day.get(Calendar.MONTH), day.get(Calendar.DAY_OF_MONTH), timeState.hour, timeState.minute, 0)
+                            set(Calendar.MILLISECOND, 0)
+                        }.timeInMillis
+                        if (picked > System.currentTimeMillis()) {
+                            pickedDateUtc = null
+                            choose(picked)
+                        } else {
+                            Toast.makeText(context, "Please choose a future time for the reminder", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    modifier = Modifier.testTag("note_reminder_time_set")
+                ) { Text("Set") }
+            },
+            dismissButton = { TextButton(onClick = { pickedDateUtc = null }) { Text("Cancel") } }
+        )
+    }
 }
 
 @Composable

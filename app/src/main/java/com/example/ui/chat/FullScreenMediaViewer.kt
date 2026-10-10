@@ -138,6 +138,8 @@ fun FullScreenMediaViewer(
     var showDeleteConfirmDialog by remember { mutableStateOf(false) }
 
     val app = context.applicationContext as? CherishApplication
+    // Settings > Double-Tap Zoom in Viewer
+    val doubleTapZoom = remember { app?.securityPreferences?.isDoubleTapZoomEnabled() ?: true }
     DisposableEffect(Unit) {
         val prefs = app?.securityPreferences
         prefs?.isMediaViewerActive = true
@@ -501,7 +503,7 @@ fun FullScreenMediaViewer(
                                             val tapPos = down.position
                                             if (now - lastTapTime < 380L && (tapPos - lastTapOffset).getDistance() < 120f) {
                                                 // Double tap
-                                                toggleMaxMinZoom(tapPos)
+                                                if (doubleTapZoom) toggleMaxMinZoom(tapPos)
                                                 lastTapTime = 0L
                                             } else {
                                                 lastTapTime = now

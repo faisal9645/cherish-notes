@@ -66,6 +66,8 @@ import com.example.ui.theme.darkSurface
 import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.math.PI
+import com.example.ui.theme.RoseGoldPrimary
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
@@ -107,6 +109,24 @@ fun MessageComposer(
     var dragOffsetX by remember { mutableFloatStateOf(0f) }
     var dragOffsetY by remember { mutableFloatStateOf(0f) }
     var isVideoMode by remember { mutableStateOf(false) }
+    var showModeSwitchHint by remember { mutableStateOf(false) }
+    var hintSessionId by remember { mutableIntStateOf(0) }
+
+    // Telegram-style hint: briefly display on initial open to inform user of tap-to-switch
+    LaunchedEffect(Unit) {
+        delay(700L)
+        showModeSwitchHint = true
+        delay(3200L)
+        showModeSwitchHint = false
+    }
+
+    // Auto-dismiss tooltip after 2.5 seconds when user toggles
+    LaunchedEffect(hintSessionId) {
+        if (hintSessionId > 0 && showModeSwitchHint) {
+            delay(2500L)
+            showModeSwitchHint = false
+        }
+    }
 
     // The emoji board and the keyboard take turns in the same space under the message box. The
     // board is as tall as the keyboard, and while one slides away the other fills exactly the
@@ -673,31 +693,6 @@ fun MessageComposer(
                             )
                         }
 
-                        // Right inside pill: 📹 Circular Video Note button
-                        IconButton(
-                            onClick = onRecordVideoNote,
-                            modifier = Modifier
-                                .size(36.dp)
-                                .testTag("composer_video_note_button")
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(26.dp)
-                                    .border(
-                                        width = 1.8.dp,
-                                        color = if (isPrivateMode) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.primary,
-                                        shape = CircleShape
-                                    ),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Videocam,
-                                    contentDescription = "Circular Video Note",
-                                    tint = if (isPrivateMode) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(15.dp)
-                                )
-                            }
-                        }
                     }
                 }
             }
@@ -707,6 +702,41 @@ fun MessageComposer(
 
             // Right-Side Action Circle: 🎤 Mic button (transitions to ✈️ Send button)
             Box(contentAlignment = Alignment.BottomCenter) {
+                // Telegram-Style Floating Mode Hint Tooltip
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = showModeSwitchHint && text.isBlank() && !isRecordingVoice,
+                    enter = fadeIn() + slideInVertically { it / 2 } + scaleIn(initialScale = 0.85f),
+                    exit = fadeOut() + slideOutVertically { it / 2 } + scaleOut(targetScale = 0.85f),
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .offset(y = (-52).dp)
+                ) {
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = Color(0xFF1E293B).copy(alpha = 0.95f),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.18f)),
+                        shadowElevation = 6.dp
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                        ) {
+                            Icon(
+                                imageVector = if (isVideoMode) Icons.Default.Videocam else Icons.Default.Mic,
+                                contentDescription = null,
+                                tint = RoseGoldPrimary,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = if (isVideoMode) "Hold for Video • Tap for Voice" else "Hold for Voice • Tap for Video",
+                                color = Color.White,
+                                fontSize = 11.5.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
+                }
                 // Lock indicator shown while holding Mic
                 if (isRecordingVoice && !isLockedRecording) {
                     Column(
@@ -828,50 +858,75 @@ fun MessageComposer(
                                 if (isDark) darkTone(Color(0xFFD1D5DB)) else Color(0xFF374151)
                             } else Color.White
 
-                            Box(
-                                modifier = Modifier
-                                    .size(52.dp)
-                                    .then(
-                                        if (isPrivateMode) Modifier.clip(CircleShape).background(videoBg ?: Color.Gray)
-                                        else Modifier
-                                            .appGradientShadow(CircleShape)
-                                            .clip(CircleShape)
-                                            .background(appHorizontalGradient())
-                                    )
-                                    .pointerInput(Unit) {
-                                        awaitEachGesture {
-                                            val down = awaitFirstDown(requireUnconsumed = false)
-                                            down.consume()
-                                            var liftedEarly = false
-                                            withTimeoutOrNull(220L) {
-                                                while (true) {
-                                                    val ev = awaitPointerEvent()
-                                                    val ch = ev.changes.firstOrNull { it.id == down.id }
-                                                    if (ch == null || !ch.pressed) {
-                                                        liftedEarly = true
-                                                        break
+                            Box(contentAlignment = Alignment.Center) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(52.dp)
+                                        .then(
+                                            if (isPrivateMode) Modifier.clip(CircleShape).background(videoBg ?: Color.Gray)
+                                            else Modifier
+                                                .appGradientShadow(CircleShape)
+                                                .clip(CircleShape)
+                                                .background(appHorizontalGradient())
+                                        )
+                                        .pointerInput(Unit) {
+                                            awaitEachGesture {
+                                                val down = awaitFirstDown(requireUnconsumed = false)
+                                                down.consume()
+                                                var liftedEarly = false
+                                                withTimeoutOrNull(220L) {
+                                                    while (true) {
+                                                        val ev = awaitPointerEvent()
+                                                        val ch = ev.changes.firstOrNull { it.id == down.id }
+                                                        if (ch == null || !ch.pressed) {
+                                                            liftedEarly = true
+                                                            break
+                                                        }
                                                     }
                                                 }
-                                            }
 
-                                            if (liftedEarly) {
-                                                return@awaitEachGesture
-                                            }
+                                                if (liftedEarly) {
+                                                    try { haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove) } catch (_: Exception) {}
+                                                    isVideoMode = false
+                                                    showModeSwitchHint = true
+                                                    hintSessionId++
+                                                    return@awaitEachGesture
+                                                }
 
-                                            // Confirmed hold: record circular video note
-                                            try { haptic.performHapticFeedback(HapticFeedbackType.LongPress) } catch (_: Exception) {}
-                                            onRecordVideoNote()
+                                                // Confirmed hold: record circular video note
+                                                try { haptic.performHapticFeedback(HapticFeedbackType.LongPress) } catch (_: Exception) {}
+                                                onRecordVideoNote()
+                                            }
                                         }
-                                    }
-                                    .testTag("composer_video_note_action_button"),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Videocam,
-                                    contentDescription = "Circular Video Note (tap to switch to Mic, hold to record)",
-                                    tint = videoTint,
-                                    modifier = Modifier.size(26.dp)
-                                )
+                                        .testTag("composer_video_note_action_button"),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Videocam,
+                                        contentDescription = "Circular Video Note (tap to switch to Mic, hold to record)",
+                                        tint = videoTint,
+                                        modifier = Modifier.size(26.dp)
+                                    )
+                                }
+
+                                // Secondary mode badge: Mic (tap switches to audio note)
+                                Box(
+                                    modifier = Modifier
+                                        .align(Alignment.BottomEnd)
+                                        .offset(x = 1.dp, y = 1.dp)
+                                        .size(18.dp)
+                                        .clip(CircleShape)
+                                        .background(Color(0xFF0F172A))
+                                        .border(1.2.dp, RoseGoldPrimary, CircleShape),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Mic,
+                                        contentDescription = null,
+                                        tint = Color.White,
+                                        modifier = Modifier.size(10.dp)
+                                    )
+                                }
                             }
                         }
                         "MIC" -> {
@@ -962,6 +1017,10 @@ fun MessageComposer(
                                                 }
 
                                                 if (liftedEarly) {
+                                                    try { haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove) } catch (_: Exception) {}
+                                                    isVideoMode = true
+                                                    showModeSwitchHint = true
+                                                    hintSessionId++
                                                     return@awaitEachGesture
                                                 }
 
@@ -1027,6 +1086,27 @@ fun MessageComposer(
                                         tint = micTint,
                                         modifier = Modifier.size(24.dp)
                                     )
+                                }
+
+                                // Secondary mode badge: Videocam (tap switches to video note)
+                                if (!isRecordingVoice) {
+                                    Box(
+                                        modifier = Modifier
+                                            .align(Alignment.BottomEnd)
+                                            .offset(x = 1.dp, y = 1.dp)
+                                            .size(18.dp)
+                                            .clip(CircleShape)
+                                            .background(Color(0xFF0F172A))
+                                            .border(1.2.dp, RoseGoldPrimary, CircleShape),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Videocam,
+                                            contentDescription = null,
+                                            tint = Color.White,
+                                            modifier = Modifier.size(10.dp)
+                                        )
+                                    }
                                 }
                             }
                         }

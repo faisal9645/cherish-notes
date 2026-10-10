@@ -82,43 +82,13 @@ class MediaRepository(private val context: Context) {
         val compressedFile = File(cacheDir, "img_${UUID.randomUUID()}.jpg")
 
         try {
-            val bitmap = decodeSampledBitmapFromUri(uri, 1280, 1280)
-            if (bitmap != null) {
-                val rotatedBitmap = rotateBitmapIfRequired(uri, bitmap)
-                val maxDim = 1280
-                val ratio = (rotatedBitmap.width.toFloat() / rotatedBitmap.height.toFloat())
-                val targetWidth: Int
-                val targetHeight: Int
-                if (rotatedBitmap.width > rotatedBitmap.height) {
-                    targetWidth = if (rotatedBitmap.width > maxDim) maxDim else rotatedBitmap.width
-                    targetHeight = (targetWidth / ratio).toInt().coerceAtLeast(1)
-                } else {
-                    targetHeight = if (rotatedBitmap.height > maxDim) maxDim else rotatedBitmap.height
-                    targetWidth = (targetHeight * ratio).toInt().coerceAtLeast(1)
-                }
-
-                val resized = Bitmap.createScaledBitmap(rotatedBitmap, targetWidth, targetHeight, true)
-                FileOutputStream(compressedFile).use { outStream ->
-                    resized.compress(Bitmap.CompressFormat.JPEG, 80, outStream)
-                    outStream.flush()
-                }
-                if (resized != rotatedBitmap) resized.recycle()
-                if (rotatedBitmap != bitmap) rotatedBitmap.recycle()
-                bitmap.recycle()
-            } else {
-                context.contentResolver.openInputStream(uri)?.use { input ->
-                    FileOutputStream(compressedFile).use { output ->
-                        input.copyTo(output)
-                    }
-                }
-            }
-        } catch (e: Exception) {
-            Log.e("MediaRepository", "compressAndPrepareImage failed, copying stream directly", e)
             context.contentResolver.openInputStream(uri)?.use { input ->
                 FileOutputStream(compressedFile).use { output ->
                     input.copyTo(output)
                 }
             }
+        } catch (e: Exception) {
+            Log.e("MediaRepository", "compressAndPrepareImage failed, copying stream directly", e)
         }
 
         compressedFile

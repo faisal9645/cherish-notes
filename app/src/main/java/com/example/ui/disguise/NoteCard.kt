@@ -85,9 +85,9 @@ private fun noteCardColors(colorHex: String?, isDark: Boolean): NoteCardThemeCol
                 contentColor = Color(0xFFCBD5E1),
                 secondaryTextColor = Color(0xFF94A3B8)
             )
-            "#F8FAFC", "#FFFFFF" -> NoteCardThemeColors( // Clean Tint
-                containerColor = Color(0xFF0F172A),
-                borderColor = Color(0xFF334155).copy(alpha = 0.6f),
+            "#F8FAFC", "#FFFFFF" -> NoteCardThemeColors( // Clean Tint: pure AMOLED black with the blue accent
+                containerColor = Color(0xFF000000),
+                borderColor = Color(0xFF334155).copy(alpha = 0.85f),
                 accentPrimary = DayBluePrimary, // Same day mode blue in notes app
                 accentContainer = DayBluePrimary.copy(alpha = 0.2f),
                 categoryBadgeText = DayBlueSecondary,

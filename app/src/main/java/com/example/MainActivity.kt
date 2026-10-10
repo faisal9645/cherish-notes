@@ -226,6 +226,7 @@ class MainActivity : FragmentActivity() {
 
     override fun onResume() {
         super.onResume()
+        applyScreenshotProtection()
         PrivacyShield.lower()
         // Do NOT re-call setDecorFitsSystemWindows here — already set in onCreate.
         // Re-calling it causes a layout recalculation that shifts content after minimize/reopen.
@@ -308,8 +309,13 @@ class MainActivity : FragmentActivity() {
         app.authRepository.onAppForegroundStateChanged(false)
     }
 
-    // Screenshots and screen recordings inside the app are allowed: FLAG_SECURE is never set.
-    // Recent-apps previews are covered instead (PrivacyShield, setRecentsScreenshotEnabled).
+    // Screenshots and screen recordings are allowed unless Settings > Screenshot Protection is on.
+    // Recent-apps previews are always covered (PrivacyShield, setRecentsScreenshotEnabled).
+    private fun applyScreenshotProtection() {
+        val flag = android.view.WindowManager.LayoutParams.FLAG_SECURE
+        if (app.securityPreferences.isScreenshotProtectionEnabled()) window.setFlags(flag, flag)
+        else window.clearFlags(flag)
+    }
 
     /**
      * Runs [block] once the first frame has been drawn (posted from just before that draw), so

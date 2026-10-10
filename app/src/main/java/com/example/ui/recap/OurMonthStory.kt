@@ -820,7 +820,7 @@ fun OurMonthCard(myId: String, myName: String, partnerName: String) {
                 modifier = Modifier
                     .size(46.dp)
                     .clip(RoundedCornerShape(14.dp))
-                    .background(Brush.linearGradient(listOf(HeartbeatPink, HeartbeatBlue)))
+                    .background(MaterialTheme.colorScheme.primary)
             ) {
                 Icon(Icons.Default.AutoStories, contentDescription = null, tint = Color.White, modifier = Modifier.size(24.dp))
             }
@@ -848,9 +848,9 @@ fun OurMonthCard(myId: String, myName: String, partnerName: String) {
                 )
             }
             if (isLoading) {
-                CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp, color = HeartbeatPink)
+                CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.primary)
             } else {
-                Icon(Icons.Default.PlayCircle, contentDescription = "Watch", tint = HeartbeatPink, modifier = Modifier.size(32.dp))
+                Icon(Icons.Default.PlayCircle, contentDescription = "Watch", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(32.dp))
             }
         }
     }

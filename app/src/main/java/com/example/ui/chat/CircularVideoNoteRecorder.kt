@@ -105,11 +105,10 @@ fun CircularVideoNoteRecorderDialog(
     var recordingProfile by remember { mutableStateOf<CamcorderProfile?>(null) }
     // Bumped for every recording started, so the timer restarts with it
     var recordingSession by remember { mutableIntStateOf(0) }
-    // Whether the camera hands over a mirrored picture (most front cameras do, not all); read from
-    // the first frame, so the viewfinder can always be shown straight, the way it's recorded
-    var previewMirrored by remember { mutableStateOf<Boolean?>(null) }
+    // Normal (non-mirrored) view is default. User can toggle mirror if desired.
+    var isMirrorMode by remember { mutableStateOf(false) }
 
-    /** Centre-crops the camera picture into the square viewfinder, without stretching it. */
+    /** Centre-crops the camera picture into the square viewfinder, with normal/mirror orientation control. */
     fun adjustTextureTransform(tv: TextureView, viewW: Int, viewH: Int) {
         val pW = previewWidth
         val pH = previewHeight
@@ -121,10 +120,14 @@ fun CircularVideoNoteRecorderDialog(
         // The TextureView squeezes the picture into its own shape; scale one side back out
         val scaleX = if (pictureRatio > viewRatio) pictureRatio / viewRatio else 1f
         val scaleY = if (pictureRatio < viewRatio) viewRatio / pictureRatio else 1f
-        // Shown straight, the way it's recorded: a mirrored picture is flipped back. Until the first
-        // frame says otherwise, front cameras are taken to be mirrored.
-        val mirrored = previewMirrored ?: (cameraFacing == Camera.CameraInfo.CAMERA_FACING_FRONT)
-        tv.setTransform(Matrix().apply { setScale(if (mirrored) -scaleX else scaleX, scaleY, viewW / 2f, viewH / 2f) })
+        // Front camera: Android Camera API's setDisplayOrientation mirrors the preview by default.
+        // In Normal view (isMirrorMode == false), flip horizontally (-scaleX) so it displays normal (not mirrored).
+        // In Mirror view (isMirrorMode == true), display as mirror reflection (+scaleX).
+        // Back camera: always normal (+scaleX).
+        val isFront = cameraFacing == Camera.CameraInfo.CAMERA_FACING_FRONT
+        val flipHorizontal = if (isFront) !isMirrorMode else false
+        val sx = if (flipHorizontal) -scaleX else scaleX
+        tv.setTransform(Matrix().apply { setScale(sx, scaleY, viewW / 2f, viewH / 2f) })
     }
 
     fun stopCamera() {
@@ -136,7 +139,6 @@ fun CircularVideoNoteRecorderDialog(
 
     fun startCamera(facing: Int, texture: SurfaceTexture, viewW: Int, viewH: Int) {
         stopCamera()
-        previewMirrored = null
         try {
             val id = getCameraId(facing)
             val info = Camera.CameraInfo().also { Camera.getCameraInfo(id, it) }
@@ -250,11 +252,13 @@ fun CircularVideoNoteRecorderDialog(
 
     fun cancelAndDiscard(showMessage: Boolean = true) {
         isCancelled = true
+        val wasRec = isRecording
         isRecording = false
         finishRecorder()
         outputFileRef?.delete()
         outputFileRef = null
-        if (showMessage) Toast.makeText(context, "Video note discarded", Toast.LENGTH_SHORT).show()
+        stopCamera()
+        if (showMessage && wasRec) Toast.makeText(context, "Video note discarded", Toast.LENGTH_SHORT).show()
         onDismiss()
     }
 
@@ -335,9 +339,7 @@ fun CircularVideoNoteRecorderDialog(
 
     Dialog(
         onDismissRequest = {
-            if (!isRecording || isLocked) {
-                cancelAndDiscard()
-            }
+            cancelAndDiscard(showMessage = false)
         },
         properties = DialogProperties(
             usePlatformDefaultWidth = false,
@@ -393,7 +395,7 @@ fun CircularVideoNoteRecorderDialog(
                     text = when {
                         isLocked -> "Tap check to send • Tap trash to discard"
                         isRecording -> "Swipe up to lock • Slide left to cancel"
-                        else -> "Hold button below to record video note"
+                        else -> "Tap record for hands-free • Hold to record"
                     },
                     color = Color.White.copy(alpha = 0.75f),
                     fontSize = 13.sp
@@ -427,8 +429,6 @@ fun CircularVideoNoteRecorderDialog(
                                     override fun onSurfaceTextureAvailable(surface: SurfaceTexture, width: Int, height: Int) {
                                         surfaceTextureRef = surface
                                         startCamera(cameraFacing, surface, width, height)
-                                        // Auto-start recording as in Telegram
-                                        if (!isCancelled && !beginRecording()) failAndClose()
                                     }
 
                                     override fun onSurfaceTextureSizeChanged(surface: SurfaceTexture, width: Int, height: Int) {
@@ -442,13 +442,6 @@ fun CircularVideoNoteRecorderDialog(
                                     }
 
                                     override fun onSurfaceTextureUpdated(surface: SurfaceTexture) {
-                                        if (previewMirrored != null) return
-                                        // The frame's transform flips handedness when the camera mirrors
-                                        // (its matrix always carries one flip of its own, hence > 0)
-                                        val m = FloatArray(16)
-                                        surface.getTransformMatrix(m)
-                                        previewMirrored = m[0] * m[5] - m[4] * m[1] > 0f
-                                        adjustTextureTransform(this@apply, width, height)
                                     }
                                 }
                             }
@@ -510,12 +503,178 @@ fun CircularVideoNoteRecorderDialog(
                             }
                         }
                     }
+
+                    // Normal / Mirror badge inside circle (for Front camera)
+                    if (cameraFacing == Camera.CameraInfo.CAMERA_FACING_FRONT) {
+                        Surface(
+                            shape = CircleShape,
+                            color = Color.Black.copy(alpha = 0.6f),
+                            border = androidx.compose.foundation.BorderStroke(
+                                1.dp,
+                                if (isMirrorMode) RoseGoldPrimary else Color.White.copy(alpha = 0.35f)
+                            ),
+                            modifier = Modifier
+                                .align(Alignment.BottomCenter)
+                                .padding(bottom = 14.dp)
+                                .clickable {
+                                    isMirrorMode = !isMirrorMode
+                                    textureViewRef?.let { tv -> adjustTextureTransform(tv, tv.width, tv.height) }
+                                    val msg = if (isMirrorMode) "Mirrored view active" else "Normal view active"
+                                    Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                                }
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp)
+                            ) {
+                                Text(
+                                    text = if (isMirrorMode) "🪞 Mirrored" else "✨ Normal",
+                                    color = Color.White,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+                        }
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(28.dp))
 
-                // Telegram Gesture Controls Area
-                if (!isLocked) {
+                // Telegram Gesture & Touch Controls Area
+                if (!isRecording) {
+                    // PREVIEW MODE: [ 🔄 Flip Camera ]   [ 🔴 Record Button ]   [ 🪞 Normal/Mirror ]
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(28.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // 🔄 Camera Flip Button (Front / Back)
+                        IconButton(
+                            onClick = {
+                                flipCamera()
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            },
+                            modifier = Modifier
+                                .size(56.dp)
+                                .background(Color.White.copy(alpha = 0.15f), CircleShape)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.FlipCameraAndroid,
+                                contentDescription = "Switch Camera",
+                                tint = Color.White,
+                                modifier = Modifier.size(26.dp)
+                            )
+                        }
+
+                        // 🔴 Central Record Button (Tap for hands-free, or Hold to record)
+                        Box(
+                            modifier = Modifier
+                                .size(76.dp)
+                                .pointerInput(Unit) {
+                                    awaitEachGesture {
+                                        val down = awaitFirstDown(requireUnconsumed = false)
+                                        val startTime = System.currentTimeMillis()
+                                        dragOffsetX = 0f
+                                        dragOffsetY = 0f
+
+                                        if (!beginRecording()) {
+                                            failAndClose()
+                                            return@awaitEachGesture
+                                        }
+
+                                        var hasTriggeredLock = false
+                                        var hasTriggeredCancel = false
+
+                                        while (true) {
+                                            val event = awaitPointerEvent()
+                                            val change = event.changes.firstOrNull { it.id == down.id }
+                                            if (change == null || !change.pressed) break
+                                            change.consume()
+
+                                            val delta = change.position - down.position
+                                            dragOffsetX = delta.x.coerceAtMost(0f)
+                                            dragOffsetY = delta.y.coerceAtMost(0f)
+
+                                            // Swipe TOP (up) to lock threshold (-45f)
+                                            if (delta.y < -45f && !hasTriggeredLock) {
+                                                hasTriggeredLock = true
+                                                isLocked = true
+                                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                dragOffsetX = 0f
+                                                dragOffsetY = 0f
+                                                break
+                                            }
+
+                                            // Slide LEFT to cancel threshold (-55f)
+                                            if (delta.x < -55f && !hasTriggeredCancel) {
+                                                hasTriggeredCancel = true
+                                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                cancelAndDiscard()
+                                                break
+                                            }
+                                        }
+
+                                        // Finger released
+                                        dragOffsetX = 0f
+                                        dragOffsetY = 0f
+
+                                        if (!hasTriggeredLock && !hasTriggeredCancel) {
+                                            val elapsed = System.currentTimeMillis() - startTime
+                                            if (elapsed >= 1000L) {
+                                                // Hold confirmed: send immediately upon release
+                                                stopAndSend()
+                                            } else {
+                                                // Quick tap: lock into hands-free mode
+                                                isLocked = true
+                                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            }
+                                        }
+                                    }
+                                }
+                                .clip(CircleShape)
+                                .background(
+                                    Brush.radialGradient(
+                                        colors = listOf(
+                                            HeartRed,
+                                            RoseGoldPrimary
+                                        )
+                                    )
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Videocam,
+                                contentDescription = "Record video note",
+                                tint = Color.White,
+                                modifier = Modifier.size(38.dp)
+                            )
+                        }
+
+                        // 🪞 Mirror / Normal Toggle Button (Front Camera)
+                        IconButton(
+                            onClick = {
+                                if (cameraFacing == Camera.CameraInfo.CAMERA_FACING_FRONT) {
+                                    isMirrorMode = !isMirrorMode
+                                    textureViewRef?.let { tv -> adjustTextureTransform(tv, tv.width, tv.height) }
+                                    val msg = if (isMirrorMode) "Mirrored view active" else "Normal view active"
+                                    Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                                } else {
+                                    Toast.makeText(context, "Back camera is always normal view", Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            modifier = Modifier
+                                .size(56.dp)
+                                .background(
+                                    if (isMirrorMode) RoseGoldPrimary.copy(alpha = 0.35f) else Color.White.copy(alpha = 0.15f),
+                                    CircleShape
+                                )
+                        ) {
+                            Text(
+                                text = if (isMirrorMode) "🪞" else "✨",
+                                fontSize = 22.sp
+                            )
+                        }
+                    }
+                } else if (!isLocked) {
                     // HOLDING MODE: Shows Lock indicator above, Slide to Cancel on left, and Hold button
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
@@ -657,7 +816,7 @@ fun CircularVideoNoteRecorderDialog(
 
                                             if (!hasTriggeredLock && !hasTriggeredCancel) {
                                                 val elapsed = System.currentTimeMillis() - startTime
-                                                if (elapsed >= 500L || recordingDurationSec >= 1) {
+                                                if (elapsed >= 1000L || recordingDurationSec >= 1) {
                                                     // Send immediately upon release
                                                     stopAndSend()
                                                 } else {
@@ -693,9 +852,9 @@ fun CircularVideoNoteRecorderDialog(
                         }
                     }
                 } else {
-                    // LOCKED HANDS-FREE CONTROLS: [ 🗑️ Cancel ] [ 🔄 Flip Camera ] [ ✈️ Send ]
+                    // LOCKED HANDS-FREE CONTROLS: [ 🗑️ Cancel ] [ 🔄 Flip Camera ] [ 🪞 Mirror Toggle ] [ ✈️ Send ]
                     Row(
-                        horizontalArrangement = Arrangement.spacedBy(32.dp),
+                        horizontalArrangement = Arrangement.spacedBy(24.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         // 🗑️ Discard / Cancel Button
@@ -731,6 +890,29 @@ fun CircularVideoNoteRecorderDialog(
                             )
                         }
 
+                        // 🪞 Mirror Toggle (Front Camera)
+                        if (cameraFacing == Camera.CameraInfo.CAMERA_FACING_FRONT) {
+                            IconButton(
+                                onClick = {
+                                    isMirrorMode = !isMirrorMode
+                                    textureViewRef?.let { tv -> adjustTextureTransform(tv, tv.width, tv.height) }
+                                    val msg = if (isMirrorMode) "Mirrored view active" else "Normal view active"
+                                    Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                                },
+                                modifier = Modifier
+                                    .size(56.dp)
+                                    .background(
+                                        if (isMirrorMode) RoseGoldPrimary.copy(alpha = 0.35f) else Color.White.copy(alpha = 0.15f),
+                                        CircleShape
+                                    )
+                            ) {
+                                Text(
+                                    text = if (isMirrorMode) "🪞" else "✨",
+                                    fontSize = 22.sp
+                                )
+                            }
+                        }
+
                         // ✈️ Stop & Send Action Button
                         Surface(
                             shape = CircleShape,
@@ -754,7 +936,7 @@ fun CircularVideoNoteRecorderDialog(
 
             // Close button at top right
             IconButton(
-                onClick = { cancelAndDiscard() },
+                onClick = { cancelAndDiscard(showMessage = false) },
                 modifier = Modifier
                     .align(Alignment.TopEnd)
                     .padding(16.dp)

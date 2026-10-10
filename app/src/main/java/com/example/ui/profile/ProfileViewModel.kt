@@ -26,8 +26,6 @@ data class ProfileUiState(
     val isRequirePhoneLockAfterHold: Boolean = false,
     val gallerySize: String = "medium",
     val isHapticEnabled: Boolean = true,
-    val isAutoPlayMedia: Boolean = true,
-    val isHighQualityMedia: Boolean = true,
     val isDoubleTapZoomEnabled: Boolean = true,
     val isCheckAfterReminderEnabled: Boolean = true,
     val isUpdating: Boolean = false,
@@ -132,8 +130,6 @@ class ProfileViewModel(
             isRequirePhoneLockAfterHold = securityPreferences.isRequirePhoneLockAfterHold(),
             gallerySize = securityPreferences.getImageGallerySize(),
             isHapticEnabled = securityPreferences.isHapticFeedbackEnabled(),
-            isAutoPlayMedia = securityPreferences.isAutoPlayMedia(),
-            isHighQualityMedia = securityPreferences.isHighQualityMedia(),
             isDoubleTapZoomEnabled = securityPreferences.isDoubleTapZoomEnabled(),
             isCheckAfterReminderEnabled = securityPreferences.isCheckAfterReminderEnabled(),
             themeMode = securityPreferences.getThemeMode(),
@@ -159,8 +155,6 @@ class ProfileViewModel(
                 isRequirePhoneLockAfterHold = securityPreferences.isRequirePhoneLockAfterHold(),
                 gallerySize = securityPreferences.getImageGallerySize(),
                 isHapticEnabled = securityPreferences.isHapticFeedbackEnabled(),
-                isAutoPlayMedia = securityPreferences.isAutoPlayMedia(),
-                isHighQualityMedia = securityPreferences.isHighQualityMedia(),
                 isDoubleTapZoomEnabled = securityPreferences.isDoubleTapZoomEnabled(),
                 isCheckAfterReminderEnabled = securityPreferences.isCheckAfterReminderEnabled(),
                 themeMode = securityPreferences.getThemeMode(),
@@ -373,16 +367,6 @@ class ProfileViewModel(
     fun setHapticEnabled(enabled: Boolean) {
         securityPreferences.setHapticFeedbackEnabled(enabled)
         _uiState.update { it.copy(isHapticEnabled = enabled) }
-    }
-
-    fun setAutoPlayMedia(enabled: Boolean) {
-        securityPreferences.setAutoPlayMedia(enabled)
-        _uiState.update { it.copy(isAutoPlayMedia = enabled) }
-    }
-
-    fun setHighQualityMedia(enabled: Boolean) {
-        securityPreferences.setHighQualityMedia(enabled)
-        _uiState.update { it.copy(isHighQualityMedia = enabled) }
     }
 
     fun setDoubleTapZoom(enabled: Boolean) {

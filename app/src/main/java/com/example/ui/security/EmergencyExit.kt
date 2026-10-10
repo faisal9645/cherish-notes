@@ -85,11 +85,10 @@ fun EmergencyExitHandle(modifier: Modifier = Modifier) {
     Box(modifier = modifier.fillMaxSize()) {
         Surface(
             shape = handleShape,
-            color = (if (isDark) darkTone(Color(0xFF1E2638)) else Color(0xFF1F2937)).copy(alpha = exitOpacity),
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = exitOpacity),
             border = BorderStroke(
                 1.dp,
-                if (isDark) darkTone(Color(0xFF2A364F)).copy(alpha = (exitOpacity * 0.7f).coerceIn(0.1f, 0.9f))
-                else Color(0xFF111827).copy(alpha = (exitOpacity * 0.5f).coerceIn(0.1f, 0.8f))
+                MaterialTheme.colorScheme.outline.copy(alpha = (exitOpacity * 0.7f).coerceIn(0.1f, 0.9f))
             ),
             modifier = Modifier
                 .align(if (onLeft) Alignment.CenterStart else Alignment.CenterEnd)
@@ -137,7 +136,7 @@ fun EmergencyExitHandle(modifier: Modifier = Modifier) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.ExitToApp,
                     contentDescription = "Emergency Exit to Notes",
-                    tint = HeartRed.copy(alpha = exitOpacity.coerceAtLeast(0.55f)),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = exitOpacity.coerceAtLeast(0.55f)),
                     modifier = Modifier
                         .size(24.dp)
                         .graphicsLayer { if (onLeft) scaleX = -1f }

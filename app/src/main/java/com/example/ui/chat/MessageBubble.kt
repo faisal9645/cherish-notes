@@ -342,8 +342,7 @@ fun MessageBubble(
                             detectTapGestures(
                                 onPress = trackPress,
                                 onLongPress = onBubbleLongPress,
-                                onDoubleTap = { triggerHeartBurst() },
-                                onTap = { openBigVideoNote() }
+                                onDoubleTap = { triggerHeartBurst() }
                             )
                         }
                         .testTag("message_bubble_${message.id}"),
@@ -353,7 +352,6 @@ fun MessageBubble(
                         com.example.ui.components.CircularVideoNoteView(
                             videoUrl = videoUrl,
                             durationSeconds = message.durationSeconds,
-                            onExpandClick = openBigVideoNote,
                             modifier = Modifier.fillMaxSize()
                         )
                     }
@@ -445,6 +443,7 @@ fun MessageBubble(
                     }
                     MessageType.AUDIO -> 260.dp
                     MessageType.VIDEO -> 240.dp
+                    MessageType.DOCUMENT -> 200.dp
                     else -> 60.dp
                 }
                 val bubbleMaxWidth = when (message.getTypedType()) {
@@ -455,6 +454,7 @@ fun MessageBubble(
                     }
                     MessageType.AUDIO -> 310.dp
                     MessageType.VIDEO -> 268.dp
+                    MessageType.DOCUMENT -> 260.dp
                     else -> 295.dp
                 }
 
@@ -664,6 +664,29 @@ fun MessageBubble(
                             )
                         }
                     }
+                    MessageType.DOCUMENT -> {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.InsertDriveFile,
+                                contentDescription = "Document",
+                                modifier = Modifier.size(32.dp),
+                                tint = RoseGoldPrimary
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                text = message.mediaName ?: "Document",
+                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
+                                maxLines = 2,
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
                     MessageType.AUDIO -> {
                         val playButtonGradient = if (isPrivateMode) {
                             null
@@ -813,33 +836,7 @@ fun MessageBubble(
                             }
                         }
                     }
-                    MessageType.DOCUMENT -> {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(vertical = 4.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.InsertDriveFile,
-                                contentDescription = null,
-                                tint = textColor,
-                                modifier = Modifier.size(28.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Column {
-                                Text(
-                                    text = message.mediaName ?: "Document",
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.Medium,
-                                    color = textColor
-                                )
-                                Text(
-                                    text = "${(message.mediaSize / 1024)} KB",
-                                    fontSize = 10.sp,
-                                    color = textColor.copy(alpha = 0.7f)
-                                )
-                            }
-                        }
-                    }
+
                     else -> {}
                 }
 

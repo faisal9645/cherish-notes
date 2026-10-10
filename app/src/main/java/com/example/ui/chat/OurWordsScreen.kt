@@ -43,8 +43,8 @@ import com.example.CherishApplication
 import com.example.R
 import com.example.data.model.Message
 import com.example.data.model.MessageType
-import com.example.ui.home.HeartbeatBlue
-import com.example.ui.home.HeartbeatPink
+import com.example.ui.theme.DayBluePrimary
+import com.example.ui.theme.DayBlueSecondary
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -52,9 +52,13 @@ import kotlin.math.abs
 
 private val OurWordsFont = FontFamily(Font(R.font.great_vibes_regular))
 
+// The app's own blues (royal and sky)
+private val BookBlue = DayBluePrimary
+private val BookSky = DayBlueSecondary
+
 /**
  * "Our words": the starred messages as a little book, a cover and then one message per page, oldest
- * first. Like the gallery's Starred tab, messages from before today only show after Recover All.
+ * first. Like the gallery's Starred tab, messages from before today show only once older chat is shown.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -94,7 +98,7 @@ fun OurWordsScreen(
             TopAppBar(
                 title = {
                     Column {
-                        Text("Our Words", fontFamily = OurWordsFont, fontSize = 30.sp, color = HeartbeatPink)
+                        Text("Our Words", fontFamily = OurWordsFont, fontSize = 30.sp, color = MaterialTheme.colorScheme.primary)
                         if (words.isNotEmpty()) {
                             Text(
                                 if (words.size == 1) "1 favourite message" else "${words.size} favourite messages",
@@ -119,15 +123,15 @@ fun OurWordsScreen(
                 .background(
                     Brush.verticalGradient(
                         listOf(
-                            HeartbeatPink.copy(alpha = if (isDark) 0.06f else 0.05f),
+                            BookSky.copy(alpha = if (isDark) 0.08f else 0.05f),
                             Color.Transparent,
-                            HeartbeatBlue.copy(alpha = if (isDark) 0.08f else 0.05f)
+                            BookBlue.copy(alpha = if (isDark) 0.10f else 0.06f)
                         )
                     )
                 )
         ) {
             if (words.isEmpty()) {
-                OurWordsEmpty(showsOlder = showsOlder, paper = paper)
+                OurWordsEmpty(paper = paper)
             } else {
                 // Page 0 is the cover
                 val pagerState = rememberPagerState(pageCount = { words.size + 1 })
@@ -233,30 +237,35 @@ private class PaperColors(
     val margin: Color,
     val ink: Color,
     val faint: Color,
-    val edge: Color
+    val edge: Color,
+    // Hearts, quote marks and the signature
+    val accent: Color
 )
 
 private val DayPaper = PaperColors(
-    top = Color(0xFFFFFCF7),
-    bottom = Color(0xFFFFF3EA),
+    top = Color(0xFFFFFFFF),
+    bottom = Color(0xFFF1F5FF),
     line = Color(0xFFB9C7E6).copy(alpha = 0.35f),
-    margin = HeartbeatPink.copy(alpha = 0.28f),
-    ink = Color(0xFF2F2A3A),
-    faint = Color(0xFF7A7287),
-    edge = Color(0xFFEFE2D6)
+    margin = BookBlue.copy(alpha = 0.28f),
+    ink = Color(0xFF1E1B4B),
+    faint = Color(0xFF5B6B8F),
+    edge = Color(0xFFDDE6FA),
+    accent = BookBlue
 )
 
 private val NightPaper = PaperColors(
     top = Color(0xFF141C45),
     bottom = Color(0xFF0D1333),
     line = Color.White.copy(alpha = 0.06f),
-    margin = HeartbeatPink.copy(alpha = 0.32f),
-    ink = Color(0xFFF1EDF9),
-    faint = Color(0xFFA9B0D0),
-    edge = Color(0xFF0E1638)
+    margin = Color(0xFF7D98FF).copy(alpha = 0.35f),
+    ink = Color(0xFFF1F4FF),
+    faint = Color(0xFFA9B4D8),
+    edge = Color(0xFF0E1638),
+    // A lighter blue so it reads on the navy page
+    accent = Color(0xFF7D98FF)
 )
 
-/** The paper itself: soft gradient, ruled lines and a pink margin, like a notebook page. */
+/** The paper itself: soft gradient, ruled lines and a blue margin, like a notebook page. */
 @Composable
 private fun PaperSheet(paper: PaperColors, modifier: Modifier = Modifier, content: @Composable BoxScope.() -> Unit) {
     val shape = RoundedCornerShape(22.dp)
@@ -266,7 +275,7 @@ private fun PaperSheet(paper: PaperColors, modifier: Modifier = Modifier, conten
         border = BorderStroke(1.dp, paper.edge),
         modifier = modifier
             .fillMaxSize()
-            .shadow(10.dp, shape, ambientColor = HeartbeatPink.copy(alpha = 0.25f), spotColor = HeartbeatBlue.copy(alpha = 0.25f))
+            .shadow(10.dp, shape, ambientColor = BookSky.copy(alpha = 0.25f), spotColor = BookBlue.copy(alpha = 0.25f))
     ) {
         Box(
             modifier = Modifier
@@ -298,7 +307,7 @@ private fun OurWordsCover(words: List<Message>, paper: PaperColors) {
                 .fillMaxSize()
                 .padding(start = 44.dp, end = 24.dp, top = 24.dp, bottom = 24.dp)
         ) {
-            Text("♥", fontSize = 40.sp, color = HeartbeatPink)
+            Text("♥", fontSize = 40.sp, color = paper.accent)
             Spacer(modifier = Modifier.height(8.dp))
             Text("Our Words", fontFamily = OurWordsFont, fontSize = 52.sp, color = paper.ink, textAlign = TextAlign.Center)
             Spacer(modifier = Modifier.height(10.dp))
@@ -318,7 +327,7 @@ private fun OurWordsCover(words: List<Message>, paper: PaperColors) {
             Box(
                 modifier = Modifier
                     .size(width = 56.dp, height = 3.dp)
-                    .background(Brush.horizontalGradient(listOf(HeartbeatPink, HeartbeatBlue)), CircleShape)
+                    .background(Brush.horizontalGradient(listOf(BookSky, BookBlue)), CircleShape)
             )
         }
     }
@@ -341,7 +350,7 @@ private fun OurWordsPage(message: Message, signedBy: String, paper: PaperColors)
                 .fillMaxSize()
                 .padding(start = 48.dp, end = 26.dp, top = 22.dp, bottom = 22.dp)
         ) {
-            Text("“", fontFamily = FontFamily.Serif, fontSize = 64.sp, color = HeartbeatPink.copy(alpha = 0.8f), lineHeight = 64.sp)
+            Text("“", fontFamily = FontFamily.Serif, fontSize = 64.sp, color = paper.accent.copy(alpha = 0.8f), lineHeight = 64.sp)
             Column(
                 verticalArrangement = Arrangement.Center,
                 modifier = Modifier
@@ -363,7 +372,7 @@ private fun OurWordsPage(message: Message, signedBy: String, paper: PaperColors)
                 "— $signedBy",
                 fontFamily = OurWordsFont,
                 fontSize = 30.sp,
-                color = HeartbeatPink,
+                color = paper.accent,
                 modifier = Modifier.align(Alignment.End)
             )
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
@@ -382,7 +391,7 @@ private fun OurWordsPage(message: Message, signedBy: String, paper: PaperColors)
 }
 
 @Composable
-private fun OurWordsEmpty(showsOlder: Boolean, paper: PaperColors) {
+private fun OurWordsEmpty(paper: PaperColors) {
     Box(modifier = Modifier.fillMaxSize().padding(28.dp), contentAlignment = Alignment.Center) {
         PaperSheet(paper = paper, modifier = Modifier.fillMaxHeight(0.7f)) {
             Column(
@@ -393,7 +402,7 @@ private fun OurWordsEmpty(showsOlder: Boolean, paper: PaperColors) {
                     .padding(start = 44.dp, end = 22.dp)
                     .testTag("our_words_empty")
             ) {
-                Icon(Icons.AutoMirrored.Filled.MenuBook, contentDescription = null, tint = HeartbeatPink, modifier = Modifier.size(44.dp))
+                Icon(Icons.AutoMirrored.Filled.MenuBook, contentDescription = null, tint = paper.accent, modifier = Modifier.size(44.dp))
                 Spacer(modifier = Modifier.height(12.dp))
                 Text("No words saved yet", fontFamily = OurWordsFont, fontSize = 34.sp, color = paper.ink, textAlign = TextAlign.Center)
                 Spacer(modifier = Modifier.height(8.dp))
@@ -403,15 +412,6 @@ private fun OurWordsEmpty(showsOlder: Boolean, paper: PaperColors) {
                     color = paper.faint,
                     textAlign = TextAlign.Center
                 )
-                if (!showsOlder) {
-                    Spacer(modifier = Modifier.height(10.dp))
-                    Text(
-                        "Older starred messages show here after Recover All in settings.",
-                        fontSize = 12.sp,
-                        color = paper.faint,
-                        textAlign = TextAlign.Center
-                    )
-                }
             }
         }
     }

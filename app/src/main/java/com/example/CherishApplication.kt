@@ -58,6 +58,9 @@ class CherishApplication : Application(), coil.ImageLoaderFactory {
 
     val pendingNoteIdFlow = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
 
+    /** When the app was last left (for the app lock); 0 while it's open. */
+    @Volatile private var leftAppAt = 0L
+
     override fun onCreate() {
         super.onCreate()
         instance = this
@@ -107,13 +110,25 @@ class CherishApplication : Application(), coil.ImageLoaderFactory {
         androidx.lifecycle.ProcessLifecycleOwner.get().lifecycle.addObserver(
             androidx.lifecycle.LifecycleEventObserver { _, event ->
                 if (event == androidx.lifecycle.Lifecycle.Event.ON_STOP) {
-                    if (securityPreferences.isDisguiseModeEnabled() &&
-                        !securityPreferences.ignoreNextPause &&
+                    // Leaving for a photo picker, the camera or a full-screen player doesn't count
+                    val leftForReal = !securityPreferences.ignoreNextPause &&
                         !securityPreferences.ignoreChatNavigation &&
                         !securityPreferences.isExternalPickerActive &&
                         !securityPreferences.isMediaViewerActive &&
-                        !securityPreferences.isTheaterModeActive) {
+                        !securityPreferences.isTheaterModeActive
+                    if (securityPreferences.isDisguiseModeEnabled() && leftForReal) {
                         securityPreferences.reDisguise()
+                    }
+                    leftAppAt = if (leftForReal) android.os.SystemClock.elapsedRealtime() else 0L
+                } else if (event == androidx.lifecycle.Lifecycle.Event.ON_START) {
+                    // App lock: asks for the PIN again once away longer than the chosen time
+                    val left = leftAppAt
+                    leftAppAt = 0L
+                    val lockAfterSeconds = securityPreferences.getAutoLockTimeoutSeconds()
+                    if (left > 0L && lockAfterSeconds >= 0 &&
+                        android.os.SystemClock.elapsedRealtime() - left >= lockAfterSeconds * 1000L
+                    ) {
+                        securityPreferences.lockApp()
                     }
                 }
             }

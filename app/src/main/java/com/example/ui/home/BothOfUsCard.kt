@@ -308,7 +308,7 @@ fun BothOfUsCard(
         rememberInfiniteTransition(label = "couple_hearts").animateFloat(
             initialValue = 0f,
             targetValue = 1f,
-            animationSpec = infiniteRepeatable(tween(1_100, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+            animationSpec = infiniteRepeatable(tween(1_700, easing = FastOutSlowInEasing), RepeatMode.Reverse),
             label = "couple_heart_beat"
         )
     } else {
@@ -320,7 +320,7 @@ fun BothOfUsCard(
         rememberInfiniteTransition(label = "couple_background").animateFloat(
             initialValue = 0f,
             targetValue = 1f,
-            animationSpec = infiniteRepeatable(tween(7_000, easing = LinearEasing), RepeatMode.Restart),
+            animationSpec = infiniteRepeatable(tween(12_000, easing = LinearEasing), RepeatMode.Restart),
             label = "couple_background_drift"
         )
     } else {
@@ -330,7 +330,7 @@ fun BothOfUsCard(
         rememberInfiniteTransition(label = "couple_flying_hearts").animateFloat(
             initialValue = 0f,
             targetValue = 1f,
-            animationSpec = infiniteRepeatable(tween(11_000, easing = LinearEasing), RepeatMode.Restart),
+            animationSpec = infiniteRepeatable(tween(18_000, easing = LinearEasing), RepeatMode.Restart),
             label = "couple_flying_hearts_rise"
         )
     } else {
@@ -708,14 +708,14 @@ private fun Modifier.loveBackground(
             val fadeOut = ((1f - t) / 0.3f).coerceAtMost(1f)
             val alpha = (heart.alpha * fadeIn * fadeOut * strength).coerceIn(0f, 1f)
             if (alpha <= 0.01f) return
-            val swing = sin(2f * PI.toFloat() * (t * 1.6f + heart.phase))
+            val swing = sin(2f * PI.toFloat() * (t * 1.0f + heart.phase))
             val baseX = if (mirror) 1f - heart.x else heart.x
             val cx = baseX * w + swing * heart.sway.dp.toPx()
             val cy = h * (1.06f - 1.14f * t)
             val px = heart.sizeDp.dp.toPx() * (0.85f + 0.3f * t)
             withTransform({
                 translate(cx, cy)
-                rotate(swing * 14f, pivot = Offset.Zero)
+                rotate(swing * 9f, pivot = Offset.Zero)
                 scale(px, px, pivot = Offset.Zero)
             }) {
                 drawPath(unitHeart, color, alpha = alpha)
@@ -798,7 +798,7 @@ private fun TwinHearts(pink: Color, blue: Color, beat: State<Float>) {
                 // The edge matches the card behind, so the overlapping hearts read as two
                 val edgeColor = if (cardIsLight) outline else NightCardEdge
                 onDrawBehind {
-                    val s = heartSize * (1f + 0.06f * beat.value)
+                    val s = heartSize * (1f + 0.045f * beat.value)
                     fun heart(at: Offset, color: Color) {
                         withTransform({
                             translate(at.x, at.y)

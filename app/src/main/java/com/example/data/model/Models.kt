@@ -162,6 +162,7 @@ data class Message(
     var replyToSenderName: String? = null,
     var reactions: Map<String, String> = emptyMap(), // userId -> emoji
     var mediaUrls: List<String> = emptyList(),
+    @get:PropertyName("isVideoNote") @set:PropertyName("isVideoNote")
     var isVideoNote: Boolean = false,
     // Text contains a web link; lets the gallery query links instead of scanning every message
     var hasLink: Boolean = false,

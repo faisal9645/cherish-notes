@@ -1,14 +1,7 @@
 package com.example.ui.security
 
-import com.example.ui.theme.darkTone
-
-import android.app.Activity
-import android.view.WindowManager
-import androidx.compose.animation.*
-import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -17,33 +10,34 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.luminance
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.security.SecurityPreferences
-import com.example.ui.theme.DarkAubergine
-import com.example.ui.theme.RoseGoldPrimary
 
+/** One protection: what it does, whether it's on, and the short status shown for it. */
 data class PrivacyCheckItem(
     val id: String,
     val title: String,
     val description: String,
     val isPassed: Boolean,
-    val actionText: String? = null,
-    val category: String = "CORE"
+    val actionText: String,
+    val icon: ImageVector
 )
 
+/**
+ * Privacy & Security Check: an overview of the protections and whether each is on. It only shows
+ * them; they're changed in Settings (Privacy & Stealth Vault), so nothing here duplicates a
+ * setting.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PrivacyAuditScreen(
@@ -53,79 +47,61 @@ fun PrivacyAuditScreen(
     onNavigateToBackup: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    val context = LocalContext.current
-    var isScreenshotProtected by remember { mutableStateOf(securityPreferences.isScreenshotProtectionEnabled()) }
-    var isNotificationHidden by remember { mutableStateOf(securityPreferences.isHideNotificationContent()) }
-    var autoLockSeconds by remember { mutableIntStateOf(securityPreferences.getAutoLockTimeoutSeconds()) }
-    var panicGesture by remember { mutableStateOf(securityPreferences.getPanicGestureType()) }
-    val hasPin = remember { securityPreferences.hasPin() }
-    val isAppLockEnabled = remember { securityPreferences.isAppLockEnabled() }
-    val isBiometricEnabled = remember { securityPreferences.isBiometricEnabled() }
-
-    val checks = remember(isScreenshotProtected, isNotificationHidden, autoLockSeconds, hasPin, isAppLockEnabled, isBiometricEnabled) {
+    val checks = remember {
+        val appLockOn = securityPreferences.isAppLockEnabled() && securityPreferences.hasPin()
+        val lockAfter = when (val seconds = securityPreferences.getAutoLockTimeoutSeconds()) {
+            0 -> "right away"
+            in 1..59 -> "after $seconds sec"
+            in 60..Int.MAX_VALUE -> "after ${seconds / 60} min"
+            else -> "on restart"
+        }
         listOf(
             PrivacyCheckItem(
-                id = "screenshot",
-                title = "Screenshot & Screen Recording Protection",
-                description = "Blocks OS screenshots and screen recorders inside private spaces",
-                isPassed = isScreenshotProtected,
-                actionText = if (isScreenshotProtected) "Protected" else "Enable FLAG_SECURE"
+                id = "disguise",
+                title = "Disguise as Notes",
+                description = "The app opens as a Notes app; the chat needs your secret unlock",
+                isPassed = securityPreferences.isDisguiseModeEnabled(),
+                actionText = if (securityPreferences.isDisguiseModeEnabled()) "On" else "Off",
+                icon = Icons.Filled.EditNote
             ),
             PrivacyCheckItem(
-                id = "recent_apps",
-                title = "Recent-Apps Preview Protection",
-                description = "Redacts and masks chat window in Android multitasking app switcher",
-                isPassed = isScreenshotProtected || securityPreferences.isDisguiseModeEnabled(),
-                actionText = "Active"
+                id = "app_lock",
+                title = "App lock",
+                description = if (securityPreferences.isBiometricEnabled()) "PIN or fingerprint when you come back, $lockAfter"
+                else "PIN when you come back, $lockAfter",
+                isPassed = appLockOn,
+                actionText = if (appLockOn) "On" else "Off",
+                icon = Icons.Filled.Lock
             ),
             PrivacyCheckItem(
                 id = "notification",
-                title = "Notification Privacy & Masking",
-                description = "Masks partner messages as generic 'Notes synchronized' alerts",
-                isPassed = isNotificationHidden,
-                actionText = if (isNotificationHidden) "Masked" else "Mask Content"
+                title = "Notification masking",
+                description = "Message notifications show your masked text instead of the message",
+                isPassed = securityPreferences.isHideNotificationContent(),
+                actionText = if (securityPreferences.isHideNotificationContent()) "On" else "Off",
+                icon = Icons.Filled.NotificationsOff
             ),
             PrivacyCheckItem(
-                id = "autolock",
-                title = "Secret Chat Inactivity Auto-Lock",
-                description = "Automatically secures conversations after inactivity timeout",
-                isPassed = autoLockSeconds in 0..300,
-                actionText = "${autoLockSeconds}s timeout"
+                id = "screenshot",
+                title = "Screenshot blocking",
+                description = "Blocks screenshots and screen recording inside the app",
+                isPassed = securityPreferences.isScreenshotProtectionEnabled(),
+                actionText = if (securityPreferences.isScreenshotProtectionEnabled()) "On" else "Off",
+                icon = Icons.Filled.Shield
             ),
             PrivacyCheckItem(
-                id = "background",
-                title = "Background Privacy & Stealth Disguise",
-                description = "Immediately snaps back to realistic Notes facade when minimized",
-                isPassed = securityPreferences.isDisguiseModeEnabled(),
-                actionText = "Guarded"
-            ),
-            PrivacyCheckItem(
-                id = "backup",
-                title = "Client-Side Encrypted Cloud Backup",
-                description = "AES-256 encrypted before leaving device via couple secret key",
-                isPassed = securityPreferences.getCoupleSecretKey().isNotBlank(),
-                actionText = "Key Armed"
-            ),
-            PrivacyCheckItem(
-                id = "sessions",
-                title = "Pair Device Isolation & Session Guard",
-                description = "Restricts chat decryption strictly to authorized two-person pairing",
-                isPassed = securityPreferences.getApprovedPartnerEmail().isNotBlank(),
-                actionText = "Linked"
-            ),
-            PrivacyCheckItem(
-                id = "auth",
-                title = "PIN / Biometric Multi-Factor Unlock",
-                description = "Hardware biometric and hashed SHA-256 PIN authentication layer",
-                isPassed = hasPin || isBiometricEnabled,
-                actionText = if (hasPin) "Locked" else "Set PIN"
+                id = "recent_apps",
+                title = "Recent-apps cover",
+                description = "The recent-apps screen shows a cover instead of your chat",
+                isPassed = true,
+                actionText = "Always on",
+                icon = Icons.Filled.VisibilityOff
             )
         )
     }
-
     val passedCount = checks.count { it.isPassed }
-    val totalCount = checks.size
-    val isAllPassed = passedCount == totalCount
+    val allOn = passedCount == checks.size
+    val accent = MaterialTheme.colorScheme.primary
 
     Scaffold(
         topBar = {
@@ -151,21 +127,19 @@ fun PrivacyAuditScreen(
         },
         containerColor = MaterialTheme.colorScheme.surface
     ) { paddingValues ->
-        val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
-
         Column(
             modifier = modifier
                 .fillMaxSize()
                 .padding(paddingValues)
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 20.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(18.dp)
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // Hero Status Badge
+            // Summary
             Surface(
                 shape = RoundedCornerShape(24.dp),
-                color = if (isAllPassed) (if (isDark) darkTone(Color(0xFF0F291E)) else Color(0xFFF1F8E9)) else (if (isDark) darkTone(Color(0xFF2E1C0C)) else Color(0xFFFFF3E0)),
-                border = BorderStroke(1.dp, if (isAllPassed) (if (isDark) darkTone(Color(0xFF1B5E20)) else Color(0xFF81C784)) else (if (isDark) darkTone(Color(0xFF7C2D12)) else Color(0xFFFFB74D))),
+                color = accent.copy(alpha = 0.08f),
+                border = BorderStroke(1.dp, accent.copy(alpha = 0.3f)),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(
@@ -174,193 +148,43 @@ fun PrivacyAuditScreen(
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(64.dp)
+                            .size(60.dp)
                             .clip(CircleShape)
-                            .background(if (isAllPassed) Color(0xFF2E7D32) else Color(0xFFEF6C00)),
+                            .background(accent),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
-                            imageVector = if (isAllPassed) Icons.Filled.VerifiedUser else Icons.Filled.Shield,
+                            imageVector = if (allOn) Icons.Filled.VerifiedUser else Icons.Filled.Shield,
                             contentDescription = null,
-                            tint = Color.White,
-                            modifier = Modifier.size(34.dp)
+                            tint = MaterialTheme.colorScheme.onPrimary,
+                            modifier = Modifier.size(32.dp)
                         )
                     }
-
                     Spacer(modifier = Modifier.height(12.dp))
-
                     Text(
-                        text = "Cherish Privacy Status",
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-
-                    Text(
-                        text = "$passedCount / $totalCount Protections Active",
+                        text = "$passedCount of ${checks.size} protections on",
                         fontSize = 20.sp,
                         fontWeight = FontWeight.Bold,
-                        color = if (isAllPassed) (if (isDark) darkTone(Color(0xFF86EFAC)) else Color(0xFF1B5E20)) else (if (isDark) darkTone(Color(0xFFFDBA74)) else Color(0xFFE65100))
+                        color = MaterialTheme.colorScheme.onSurface
                     )
-
                     Spacer(modifier = Modifier.height(4.dp))
-
                     Text(
-                        text = if (isAllPassed) {
-                            "✨ Your sacred two-person space is genuinely invisible & bulletproof."
-                        } else {
-                            "Activate remaining layers below for full cryptographic & visual stealth."
-                        },
+                        text = if (allOn) "Everything is switched on." else "Switch the others on in Settings > Privacy & Stealth Vault.",
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        textAlign = TextAlign.Center
                     )
                 }
             }
-
-            // Quick Inactivity Auto-Lock Settings
-            Card(
-                shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Filled.Timer, contentDescription = null, tint = RoseGoldPrimary, modifier = Modifier.size(20.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Secret Chat Auto-Lock Inactivity", fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                    }
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        "Automatically lock Secret Chat and re-authenticate when phone is idle:",
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    val timeoutOptions = listOf(
-                        0 to "Immediate",
-                        30 to "30 sec",
-                        60 to "1 min",
-                        300 to "5 min",
-                        -1 to "Never"
-                    )
-
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(MaterialTheme.colorScheme.surfaceVariant)
-                            .padding(4.dp),
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        timeoutOptions.forEach { (sec, label) ->
-                            val isSelected = autoLockSeconds == sec
-                            Box(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(if (isSelected) RoseGoldPrimary else Color.Transparent)
-                                    .clickable {
-                                        autoLockSeconds = sec
-                                        securityPreferences.setAutoLockTimeoutSeconds(sec)
-                                    }
-                                    .padding(vertical = 8.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = label,
-                                    fontSize = 11.sp,
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                    color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Panic Gesture Protection Card
-            Card(
-                shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Filled.WarningAmber, contentDescription = null, tint = Color(0xFFD32F2F), modifier = Modifier.size(20.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Panic Protection Gesture", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface)
-                    }
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        "Emergency action if someone walks in:",
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    val gestureOptions = listOf(
-                        "SHAKE" to "Shake Phone",
-                        "DOUBLE_TAP_SHIELD" to "Double-Tap Shield",
-                        "HARDWARE_BACK" to "Back Hold",
-                        "INSTANT_EXIT" to "Instant Exit"
-                    )
-
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(MaterialTheme.colorScheme.surfaceVariant)
-                            .padding(4.dp),
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        gestureOptions.forEach { (type, label) ->
-                            val isSelected = panicGesture == type
-                            Box(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(if (isSelected) RoseGoldPrimary else Color.Transparent)
-                                    .clickable {
-                                        panicGesture = type
-                                        securityPreferences.setPanicGestureType(type)
-                                    }
-                                    .padding(vertical = 8.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = label,
-                                    fontSize = 10.sp,
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                    color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 1
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Checklist of All 8 Protections
-            Text(
-                "8-Point Comprehensive Security Matrix",
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface
-            )
 
             checks.forEach { check ->
                 Surface(
                     shape = RoundedCornerShape(16.dp),
                     color = MaterialTheme.colorScheme.surface,
                     border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-                    shadowElevation = 1.dp,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("privacy_check_${check.id}")
                 ) {
                     Row(
                         modifier = Modifier.padding(14.dp),
@@ -368,79 +192,63 @@ fun PrivacyAuditScreen(
                     ) {
                         Box(
                             modifier = Modifier
-                                .size(32.dp)
+                                .size(36.dp)
                                 .clip(CircleShape)
-                                .background(if (check.isPassed) (if (isDark) darkTone(Color(0xFF1E3A8A)) else Color(0xFFE8F5E9)) else (if (isDark) darkTone(Color(0xFF450A0A)) else Color(0xFFFFEBEE))),
+                                .background(
+                                    if (check.isPassed) accent.copy(alpha = 0.12f)
+                                    else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.10f)
+                                ),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
-                                imageVector = if (check.isPassed) Icons.Filled.Check else Icons.Filled.Close,
+                                imageVector = check.icon,
                                 contentDescription = null,
-                                tint = if (check.isPassed) (if (isDark) darkTone(Color(0xFF93C5FD)) else Color(0xFF2E7D32)) else (if (isDark) darkTone(Color(0xFFFCA5A5)) else Color(0xFFC62828)),
-                                modifier = Modifier.size(18.dp)
+                                tint = if (check.isPassed) accent else MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(19.dp)
                             )
                         }
-
                         Spacer(modifier = Modifier.width(12.dp))
-
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = check.title,
                                 fontWeight = FontWeight.SemiBold,
-                                fontSize = 13.sp,
+                                fontSize = 14.sp,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                             Text(
                                 text = check.description,
-                                fontSize = 11.sp,
+                                fontSize = 12.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
-
                         Spacer(modifier = Modifier.width(8.dp))
-
-                        if (check.id == "screenshot") {
-                            Switch(
-                                checked = isScreenshotProtected,
-                                onCheckedChange = { checked ->
-                                    isScreenshotProtected = checked
-                                    securityPreferences.setScreenshotProtectionEnabled(checked)
-                                    (context as? Activity)?.window?.apply {
-                                        if (checked) setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE)
-                                        else clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
-                                    }
-                                }
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = if (check.isPassed) accent.copy(alpha = 0.12f) else MaterialTheme.colorScheme.surfaceVariant
+                        ) {
+                            Text(
+                                text = check.actionText,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (check.isPassed) accent else MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                             )
-                        } else if (check.id == "notification") {
-                            Switch(
-                                checked = isNotificationHidden,
-                                onCheckedChange = { checked ->
-                                    isNotificationHidden = checked
-                                    securityPreferences.setHideNotificationContent(checked)
-                                }
-                            )
-                        } else {
-                            Surface(
-                                shape = RoundedCornerShape(8.dp),
-                                color = if (check.isPassed) (if (isDark) darkTone(Color(0xFF1E3A8A)) else Color(0xFFE8F5E9)) else (if (isDark) darkTone(Color(0xFF450A0A)) else Color(0xFFFFEBEE))
-                            ) {
-                                Text(
-                                    text = check.actionText ?: if (check.isPassed) "Active" else "Action Needed",
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (check.isPassed) (if (isDark) darkTone(Color(0xFF93C5FD)) else Color(0xFF2E7D32)) else (if (isDark) darkTone(Color(0xFFFCA5A5)) else Color(0xFFE65100)),
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                                )
-                            }
                         }
                     }
                 }
+            }
+
+            OutlinedButton(
+                onClick = onNavigateBack,
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("privacy_audit_open_settings")
+            ) {
+                Text("Change them in Settings")
             }
 
             Spacer(modifier = Modifier.height(24.dp))
         }
     }
 }
-
-
-

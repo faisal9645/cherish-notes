@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Notification icon: the note and pencil in one colour. Made by scripts/make_logo.py. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="48.71"
+    android:viewportHeight="48.71">
+    <group
+        android:translateX="-32"
+        android:translateY="-26.64">
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:fillType="evenOdd"
+            android:pathData="M39,29 H63 A6,6 0 0 1 69,35 V67 A6,6 0 0 1 63,73 H39 A6,6 0 0 1 33,67 V35 A6,6 0 0 1 39,29 Z M40.75,43 H61.25 A1.75,1.75 0 0 1 63,44.75 V44.75 A1.75,1.75 0 0 1 61.25,46.5 H40.75 A1.75,1.75 0 0 1 39,44.75 V44.75 A1.75,1.75 0 0 1 40.75,43 Z M40.75,51 H57.25 A1.75,1.75 0 0 1 59,52.75 V52.75 A1.75,1.75 0 0 1 57.25,54.5 H40.75 A1.75,1.75 0 0 1 39,52.75 V52.75 A1.75,1.75 0 0 1 40.75,51 Z M40.75,59 H50.25 A1.75,1.75 0 0 1 52,60.75 V60.75 A1.75,1.75 0 0 1 50.25,62.5 H40.75 A1.75,1.75 0 0 1 39,60.75 V60.75 A1.75,1.75 0 0 1 40.75,59 Z M55,67 L58.18,58.87 L73.74,43.31 L74.46,42.76 L75.31,42.41 L76.21,42.29 L77.12,42.41 L77.96,42.76 L78.69,43.31 L79.24,44.04 L79.59,44.88 L79.71,45.79 L79.59,46.69 L79.24,47.54 L78.69,48.26 L63.13,63.82 Z" />
+    </group>
+</vector>

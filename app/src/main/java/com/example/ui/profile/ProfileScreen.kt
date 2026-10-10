@@ -649,10 +649,8 @@ fun ProfileScreen(
                             // Live preview of the stealth edge toggle at current opacity!
                             Surface(
                                 shape = RoundedCornerShape(topStart = 10.dp, bottomStart = 10.dp, topEnd = 0.dp, bottomEnd = 0.dp),
-                                color = if (isDark) darkTone(Color(0xFF26272B)).copy(alpha = uiState.sideEmergencyExitOpacity)
-                                        else Color(0xFF1F2937).copy(alpha = uiState.sideEmergencyExitOpacity),
-                                border = BorderStroke(1.dp, if (isDark) Color.White.copy(alpha = (uiState.sideEmergencyExitOpacity * 0.4f).coerceIn(0.05f, 0.9f))
-                                        else Color.Black.copy(alpha = (uiState.sideEmergencyExitOpacity * 0.4f).coerceIn(0.05f, 0.9f))),
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = uiState.sideEmergencyExitOpacity),
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = (uiState.sideEmergencyExitOpacity * 0.7f).coerceIn(0.05f, 0.9f))),
                                 modifier = Modifier
                                     .width(26.dp)
                                     .height(34.dp)
@@ -661,7 +659,7 @@ fun ProfileScreen(
                                     Icon(
                                         imageVector = Icons.Default.ExitToApp,
                                         contentDescription = null,
-                                        tint = Color.White.copy(alpha = uiState.sideEmergencyExitOpacity),
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = uiState.sideEmergencyExitOpacity.coerceAtLeast(0.55f)),
                                         modifier = Modifier.size(13.dp)
                                     )
                                 }
@@ -711,17 +709,71 @@ fun ProfileScreen(
                         )
                     }
                 )
+                // How long the app can be away before it asks for the PIN again
+                if (uiState.isAppLockEnabled) {
+                    val lockPrefs = remember { com.example.security.SecurityPreferences.getInstance(context) }
+                    var lockAfter by remember { mutableIntStateOf(lockPrefs.getAutoLockTimeoutSeconds()) }
+                    Column(modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 10.dp)) {
+                        Text(
+                            text = "Lock again after leaving",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(MaterialTheme.colorScheme.surfaceVariant)
+                                .padding(4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            listOf(0 to "Right away", 30 to "30 sec", 60 to "1 min", 300 to "5 min").forEach { (seconds, label) ->
+                                val isSelected = lockAfter == seconds
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(if (isSelected) primaryAccent else Color.Transparent)
+                                        .clickable {
+                                            lockAfter = seconds
+                                            lockPrefs.setAutoLockTimeoutSeconds(seconds)
+                                        }
+                                        .padding(vertical = 8.dp)
+                                        .testTag("app_lock_after_$seconds"),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = label,
+                                        fontSize = 12.sp,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                        color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
 
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), thickness = 0.6.dp)
 
                 // Biometrics Toggle
                 ListItem(
                     headlineContent = { Text("Fingerprint / Face Unlock", fontSize = 15.sp, fontWeight = FontWeight.SemiBold) },
-                    supportingContent = { Text("Use device biometrics to unlock quickly", fontSize = 13.sp) },
+                    supportingContent = {
+                        // It unlocks the app lock, so it only matters while that's on
+                        Text(
+                            if (uiState.isAppLockEnabled) "Use device biometrics to unlock quickly" else "Turn on the app lock to use it",
+                            fontSize = 13.sp
+                        )
+                    },
                     leadingContent = { Icon(Icons.Default.Fingerprint, contentDescription = null, tint = primaryAccent) },
                     trailingContent = {
                         Switch(
-                            checked = uiState.isBiometricEnabled,
+                            checked = uiState.isBiometricEnabled && uiState.isAppLockEnabled,
+                            enabled = uiState.isAppLockEnabled,
                             onCheckedChange = { viewModel.setBiometric(it) }
                         )
                     }
@@ -1024,32 +1076,6 @@ fun ProfileScreen(
                 }
 
                 Spacer(modifier = Modifier.height(6.dp))
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), thickness = 0.6.dp)
-
-                ListItem(
-                    headlineContent = { Text("Auto-Play Media", fontSize = 15.sp, fontWeight = FontWeight.SemiBold) },
-                    supportingContent = { Text("Play video clips and voice notes inline", fontSize = 13.sp) },
-                    trailingContent = {
-                        Switch(
-                            checked = uiState.isAutoPlayMedia,
-                            onCheckedChange = { viewModel.setAutoPlayMedia(it) }
-                        )
-                    }
-                )
-
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), thickness = 0.6.dp)
-
-                ListItem(
-                    headlineContent = { Text("High-Quality Photo Rendering", fontSize = 15.sp, fontWeight = FontWeight.SemiBold) },
-                    supportingContent = { Text("Preserve full original image resolution", fontSize = 13.sp) },
-                    trailingContent = {
-                        Switch(
-                            checked = uiState.isHighQualityMedia,
-                            onCheckedChange = { viewModel.setHighQualityMedia(it) }
-                        )
-                    }
-                )
-
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), thickness = 0.6.dp)
 
                 ListItem(

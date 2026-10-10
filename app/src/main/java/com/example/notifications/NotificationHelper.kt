@@ -112,7 +112,7 @@ object NotificationHelper {
             clearNotifications(context)
             return
         }
-        val isDiscreet = prefs.isHideNotificationContent() || prefs.isDisguiseModeEnabled() || prefs.isDisguiseActive()
+        val isDiscreet = prefs.isDisguiseActive() && (prefs.isHideNotificationContent() || prefs.isDisguiseModeEnabled())
 
         val intent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
@@ -140,7 +140,7 @@ object NotificationHelper {
 
         // Public version shown on secure lock screens
         val publicNotification = NotificationCompat.Builder(context, CHANNEL_MESSAGES_ID)
-            .setSmallIcon(R.mipmap.ic_launcher)
+            .setSmallIcon(if (!prefs.isDisguiseActive()) R.drawable.ic_cherish_heart else R.drawable.ic_stat_notes)
             .setContentTitle(maskedTitle)
             .setContentText(maskedText)
             .setSubText(maskedTitle)
@@ -151,7 +151,7 @@ object NotificationHelper {
         val isBadgeEnabled = prefs.isBadgeNotificationEnabled()
 
         val notification = NotificationCompat.Builder(context, CHANNEL_MESSAGES_ID)
-            .setSmallIcon(if (isDiscreet) R.mipmap.ic_launcher else R.drawable.ic_cherish_heart)
+            .setSmallIcon(if (!prefs.isDisguiseActive()) R.drawable.ic_cherish_heart else R.drawable.ic_stat_notes)
             .setContentTitle(displayTitle)
             .setContentText(displayText)
             .setSubText(subText)
@@ -236,7 +236,7 @@ object NotificationHelper {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val isDisguised = prefs.isHideNotificationContent() || prefs.isDisguiseModeEnabled()
+        val isDisguised = prefs.isDisguiseActive() && (prefs.isHideNotificationContent() || prefs.isDisguiseModeEnabled())
         val displayTitle = if (isDisguised) prefs.getMaskedNotificationTitle() else "❤️ It's time to check"
         val displayText = if (isDisguised) {
             "Reminder schedule completed"
@@ -245,7 +245,7 @@ object NotificationHelper {
         }
 
         val notification = NotificationCompat.Builder(context, CHANNEL_MESSAGES_ID)
-            .setSmallIcon(if (isDisguised) R.mipmap.ic_launcher else R.drawable.ic_cherish_heart)
+            .setSmallIcon(if (!prefs.isDisguiseActive()) R.drawable.ic_cherish_heart else R.drawable.ic_stat_notes)
             .setContentTitle(displayTitle)
             .setContentText(displayText)
             .setSubText(if (isDisguised) prefs.getMaskedNotificationTitle() else "Cherish")
@@ -273,8 +273,9 @@ object NotificationHelper {
         title: String,
         content: String
     ) {
+        // The Notes app's own reminders: only its reminder switch counts (not the chat's
+        // notifications switch)
         val prefs = SecurityPreferences.getInstance(context)
-        if (!prefs.isNotificationsEnabled()) return
         if (!prefs.isNoteRemindersEnabled()) return
 
         val intent = Intent(context, MainActivity::class.java).apply {
@@ -294,7 +295,7 @@ object NotificationHelper {
         val displayText = if (content.isNotBlank()) content else "You have a scheduled note reminder."
 
         val notification = NotificationCompat.Builder(context, CHANNEL_REMINDERS_ID)
-            .setSmallIcon(R.mipmap.ic_launcher)
+            .setSmallIcon(if (!prefs.isDisguiseActive()) R.drawable.ic_cherish_heart else R.drawable.ic_stat_notes)
             .setContentTitle(displayTitle)
             .setContentText(displayText)
             .setStyle(NotificationCompat.BigTextStyle().bigText(displayText))

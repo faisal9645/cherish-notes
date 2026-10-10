@@ -181,7 +181,7 @@ fun DeviceSessionsScreen(
                             SessionDetailRow("Status", if (detailSession.isCurrent) "Active Now (Primary Device)" else detailSession.ipOrLocation)
                             SessionDetailRow("Operating System", if (detailSession.isCurrent) "Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})" else detailSession.platform)
                             SessionDetailRow("App Version", "Cherish v${com.example.BuildConfig.VERSION_NAME} (${com.example.BuildConfig.VERSION_CODE})")
-                            SessionDetailRow("Security", "End-to-End Encrypted (AES-256-GCM)")
+                            SessionDetailRow("Security", "Encrypted in transit (TLS)")
                             SessionDetailRow("Session Token", "SES-${detailSession.id.hashCode().toString().takeLast(6).uppercase()}-VAULT")
                             SessionDetailRow("Mutual Pairing", if (detailSession.isCurrent) "Primary Verified Session" else "Authorized Mutual Channel")
                         }
@@ -288,7 +288,7 @@ fun DeviceSessionsScreen(
                         Column {
                             Text("Two-Person Exclusive Pairing", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface)
                             Text(
-                                "Cherish only allows authorized mutual sessions. Tap any session below to view full connection and encryption details.",
+                                "Cherish only allows authorized mutual sessions. Tap any session below to view its connection details.",
                                 fontSize = 12.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )

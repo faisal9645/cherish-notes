@@ -252,6 +252,17 @@ fun ChatScreen(
             viewModel.sendMediaFile(uri, MessageType.VIDEO)
         }
     }
+
+    val documentPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri: Uri? ->
+        val prefs = com.example.security.SecurityPreferences.getInstance(context)
+        prefs.isExternalPickerActive = false
+        prefs.ignoreNextPause = false
+        if (uri != null) {
+            viewModel.sendMediaFile(uri, MessageType.DOCUMENT)
+        }
+    }
     val micPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
     ) { isGranted ->
@@ -927,7 +938,6 @@ fun ChatScreen(
                             ) {
                                 Box(
                                     modifier = Modifier
-                                        .padding(end = 4.dp, bottom = 2.dp)
                                         .clickable(
                                             interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
                                             indication = null
@@ -940,12 +950,13 @@ fun ChatScreen(
                                     AvatarView(
                                         photoUrl = partner?.photoUrl,
                                         name = partnerName,
-                                        size = 42.dp,
+                                        size = 46.dp,
                                         isOnline = isPartnerOnline,
                                         showOnlineBadge = !partnerHasCheckAfter
                                     )
                                 }
-                                Spacer(modifier = Modifier.width(10.dp))
+                                // Name and status close beside the photo, centred on it
+                                Spacer(modifier = Modifier.width(8.dp))
                                 Column(
                                     modifier = Modifier.weight(1f, fill = false),
                                     verticalArrangement = Arrangement.Center
@@ -2237,6 +2248,19 @@ fun ChatScreen(
                             videoPickerLauncher.launch(
                                 PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly)
                             )
+                        }
+                    )
+                    
+                    AttachmentOptionItem(
+                        icon = Icons.Outlined.InsertDriveFile,
+                        label = "Document",
+                        color = Color(0xFF00BFA5),
+                        onClick = {
+                            showAttachmentSheet = false
+                            val prefs = com.example.security.SecurityPreferences.getInstance(context)
+                            prefs.isExternalPickerActive = true
+                            prefs.ignoreNextPause = true
+                            documentPickerLauncher.launch(arrayOf("*/*"))
                         }
                     )
                 }

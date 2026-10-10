@@ -175,6 +175,20 @@ def write_vectors():
         f'        android:pathData="{mono}" />\n',
         "Themed app icon (Android 13+): one colour."))
 
+    # Notification (status bar) icon: the same one-colour shapes, filling a 24dp square (the full
+    # app icon shows as a plain white square there)
+    xs = [l, r] + [place(u, v)[0] for u, v in PENCIL_OUTLINE]
+    ys = [t, b] + [place(u, v)[1] for u, v in PENCIL_OUTLINE]
+    side = max(max(xs) - min(xs), max(ys) - min(ys)) + 2
+    tx = side / 2 - (min(xs) + max(xs)) / 2
+    ty = side / 2 - (min(ys) + max(ys)) / 2
+    write("drawable/ic_stat_notes.xml", vector(
+        24, n(side),
+        f'    <group\n        android:translateX="{n(tx)}"\n        android:translateY="{n(ty)}">\n'
+        f'        <path\n            android:fillColor="#FFFFFFFF"\n            android:fillType="evenOdd"\n'
+        f'            android:pathData="{mono}" />\n    </group>\n',
+        "Notification icon: the note and pencil in one colour."))
+
     # Splash: the logo as a rounded square, 148 wide on the 288 canvas, so even its corners stay
     # inside the 192dp circle Android 12+ shows; the glyph scaled from the icon's visible 72
     side, corner = 148.0, 38.0
