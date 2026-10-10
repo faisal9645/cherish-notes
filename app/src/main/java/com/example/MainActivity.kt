@@ -239,6 +239,14 @@ class MainActivity : FragmentActivity() {
             lifecycleScope.launch {
                 app.authRepository.updateBatteryStatus(info.level, info.isCharging)
             }
+            // Morning unlock: resets "Asleep 🌙" status to active when partner or user opens phone in morning
+            val currentStatus = app.authRepository.currentUserState.value?.statusMessage
+            if (currentStatus == "Asleep 🌙") {
+                val hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
+                if (hour in 5..12) {
+                    app.coupleFeaturesRepository.wakeUpFromSleep()
+                }
+            }
         }
     }
 

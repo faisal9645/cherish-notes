@@ -223,6 +223,9 @@ fun MessageComposer(
         }
     }
 
+    // Tiny bounce animation when tapping send
+    val sendBounce = remember { Animatable(1f) }
+
     // Pulsing animations for active recording
     val infiniteTransition = rememberInfiniteTransition(label = "recording_fx")
     val pulseAlpha by infiniteTransition.animateFloat(
@@ -701,42 +704,11 @@ fun MessageComposer(
             Spacer(modifier = Modifier.width(6.dp))
 
             // Right-Side Action Circle: 🎤 Mic button (transitions to ✈️ Send button)
-            Box(contentAlignment = Alignment.BottomCenter) {
-                // Telegram-Style Floating Mode Hint Tooltip
-                androidx.compose.animation.AnimatedVisibility(
-                    visible = showModeSwitchHint && text.isBlank() && !isRecordingVoice,
-                    enter = fadeIn() + slideInVertically { it / 2 } + scaleIn(initialScale = 0.85f),
-                    exit = fadeOut() + slideOutVertically { it / 2 } + scaleOut(targetScale = 0.85f),
-                    modifier = Modifier
-                        .align(Alignment.TopCenter)
-                        .offset(y = (-52).dp)
-                ) {
-                    Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        color = Color(0xFF1E293B).copy(alpha = 0.95f),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.18f)),
-                        shadowElevation = 6.dp
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
-                        ) {
-                            Icon(
-                                imageVector = if (isVideoMode) Icons.Default.Videocam else Icons.Default.Mic,
-                                contentDescription = null,
-                                tint = RoseGoldPrimary,
-                                modifier = Modifier.size(14.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = if (isVideoMode) "Hold for Video • Tap for Voice" else "Hold for Voice • Tap for Video",
-                                color = Color.White,
-                                fontSize = 11.5.sp,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                        }
-                    }
-                }
+            // Fixed 48.dp width prevents the voice/mic icon from jumping left when the wider tooltip appears!
+            Box(
+                modifier = Modifier.width(48.dp),
+                contentAlignment = Alignment.BottomCenter
+            ) {
                 // Lock indicator shown while holding Mic
                 if (isRecordingVoice && !isLockedRecording) {
                     Column(
@@ -763,6 +735,7 @@ fun MessageComposer(
                     }
                 }
 
+                // Send button morph (small): the mic smoothly turns into a send arrow when you type, with a tiny bounce when you tap send
                 AnimatedContent(
                     targetState = when {
                         text.isNotBlank() -> "SEND_TEXT"
@@ -771,7 +744,10 @@ fun MessageComposer(
                         else -> "MIC"
                     },
                     transitionSpec = {
-                        (scaleIn(initialScale = 0.8f) + fadeIn()) togetherWith (scaleOut(targetScale = 0.8f) + fadeOut())
+                        (scaleIn(initialScale = 0.62f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMediumLow)) +
+                         fadeIn(tween(180))) togetherWith
+                        (scaleOut(targetScale = 0.62f, animationSpec = tween(120)) +
+                         fadeOut(tween(120)))
                     },
                     label = "right_action_btn"
                 ) { state ->
@@ -787,6 +763,10 @@ fun MessageComposer(
                             Box(
                                 modifier = Modifier
                                     .size(48.dp)
+                                    .graphicsLayer {
+                                        scaleX = sendBounce.value
+                                        scaleY = sendBounce.value
+                                    }
                                     .then(
                                         if (isPrivateMode) Modifier.clip(CircleShape).background(sendBg!!)
                                         else Modifier
@@ -802,6 +782,10 @@ fun MessageComposer(
                                             }
                                         }
                                     ) {
+                                        scope.launch {
+                                            sendBounce.animateTo(0.78f, tween(65, easing = FastOutSlowInEasing))
+                                            sendBounce.animateTo(1f, spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium))
+                                        }
                                         onSendText()
                                         closeEmojiBoard()
                                     }

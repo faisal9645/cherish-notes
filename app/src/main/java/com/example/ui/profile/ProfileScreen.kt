@@ -1407,20 +1407,44 @@ fun ProfileScreen(
             }
 
             // 6. Security Tools & Vault Section
+            val secPrefs = remember { com.example.security.SecurityPreferences.getInstance(context) }
+            val securityScore = secPrefs.getSecurityAuditScore()
+
             SettingsSection(
                 title = "Security & Tools",
                 icon = Icons.Default.VerifiedUser
             ) {
                 ListItem(
                     headlineContent = { Text("Privacy & Security Audit", fontSize = 15.sp, fontWeight = FontWeight.SemiBold) },
-                    supportingContent = { Text("8-point automated test: auto-lock, stealth disguise & panic", fontSize = 13.sp) },
+                    supportingContent = {
+                        Text(
+                            text = "${securityScore.passedCount}/${securityScore.totalCount} protections active • Tap to audit",
+                            fontSize = 13.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    },
                     leadingContent = {
                         Icon(Icons.Filled.VerifiedUser, contentDescription = null, tint = primaryAccent)
                     },
                     trailingContent = {
-                        Icon(Icons.Default.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = if (securityScore.passedCount >= 6) Color(0xFF10B981).copy(alpha = 0.15f) else Color(0xFFF59E0B).copy(alpha = 0.15f)
+                            ) {
+                                Text(
+                                    text = "${securityScore.passedCount}/${securityScore.totalCount} Active 🛡️",
+                                    color = if (securityScore.passedCount >= 6) Color(0xFF059669) else Color(0xFFD97706),
+                                    fontSize = 11.5.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.5.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Icon(Icons.Default.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
                     },
-                    modifier = Modifier.clickable { onNavigateToPrivacyAudit() }
+                    modifier = Modifier.clickable { onNavigateToPrivacyAudit() }.testTag("privacy_security_audit_item")
                 )
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), thickness = 0.6.dp)
 

@@ -38,7 +38,8 @@ data class ProfileUiState(
     val sideEmergencyExitOpacity: Float = 0.35f,
     val isChatSoundsEnabled: Boolean = true,
     val isNotificationsEnabled: Boolean = true,
-    val isBadgeNotificationEnabled: Boolean = true
+    val isBadgeNotificationEnabled: Boolean = true,
+    val partnerCustomTimeZone: String? = null
 )
 
 data class UpdateCheckState(
@@ -135,7 +136,8 @@ class ProfileViewModel(
             themeMode = securityPreferences.getThemeMode(),
             chatBgTheme = securityPreferences.getChatBgTheme(),
             chatExperienceMode = securityPreferences.getChatExperienceMode(),
-            isNotificationsEnabled = securityPreferences.isNotificationsEnabled()
+            isNotificationsEnabled = securityPreferences.isNotificationsEnabled(),
+            partnerCustomTimeZone = securityPreferences.getPartnerCustomTimeZone()
         )
     )
     val uiState: StateFlow<ProfileUiState> = _uiState.asStateFlow()
@@ -163,9 +165,15 @@ class ProfileViewModel(
                 isSideEmergencyExitEnabled = securityPreferences.isSideEmergencyExitEnabled(),
                 sideEmergencyExitOpacity = securityPreferences.getSideEmergencyExitOpacity(),
                 isNotificationsEnabled = securityPreferences.isNotificationsEnabled(),
-                isBadgeNotificationEnabled = securityPreferences.isBadgeNotificationEnabled()
+                isBadgeNotificationEnabled = securityPreferences.isBadgeNotificationEnabled(),
+                partnerCustomTimeZone = securityPreferences.getPartnerCustomTimeZone()
             )
         }
+    }
+
+    fun setPartnerCustomTimeZone(timeZoneId: String?) {
+        securityPreferences.setPartnerCustomTimeZone(timeZoneId)
+        _uiState.update { it.copy(partnerCustomTimeZone = timeZoneId) }
     }
 
     fun setNotificationsEnabled(context: android.content.Context, enabled: Boolean) {

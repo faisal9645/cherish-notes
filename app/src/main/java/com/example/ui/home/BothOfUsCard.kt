@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.AllInclusive
 import androidx.compose.material.icons.filled.Battery3Bar
 import androidx.compose.material.icons.filled.Battery4Bar
@@ -69,6 +70,8 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.scale
@@ -121,8 +124,46 @@ data class LovePerson(
     val batteryLevel: Int? = null,
     val isCharging: Boolean = false,
     // Only used to tell which of us is which side
-    val email: String? = null
+    val email: String? = null,
+    val timeZone: String? = null
 )
+
+/**
+ * Partner's local time (small): if you're ever in different time zones only, returns
+ * "Her time: 11:40 PM" (or "His time: 11:40 PM") to show under her photo.
+ * If in the same time zone, returns null so nothing is displayed.
+ */
+fun formatPartnerLocalTimeIfDifferent(
+    partnerTimeZoneId: String?,
+    myTimeZoneId: String? = null,
+    now: Long = System.currentTimeMillis(),
+    label: String = "Her time"
+): String? {
+    val cleanPartnerTz = partnerTimeZoneId?.trim()?.ifBlank { null } ?: return null
+    val partnerZone = try {
+        TimeZone.getTimeZone(cleanPartnerTz)
+    } catch (_: Exception) {
+        return null
+    }
+    val myZone = try {
+        if (!myTimeZoneId.isNullOrBlank()) TimeZone.getTimeZone(myTimeZoneId) else TimeZone.getDefault()
+    } catch (_: Exception) {
+        TimeZone.getDefault()
+    }
+
+    val myOffset = myZone.getOffset(now)
+    val partnerOffset = partnerZone.getOffset(now)
+    // ONLY show if you're ever in different time zones!
+    if (myOffset == partnerOffset) {
+        return null
+    }
+
+    val formatter = SimpleDateFormat("h:mm a", Locale.US).apply {
+        timeZone = partnerZone
+    }
+    val timeFormatted = formatter.format(Date(now))
+    return "$label: $timeFormatted"
+}
 
 private const val DAY_MS = 86_400_000L
 
@@ -257,6 +298,28 @@ private fun heartPath(cx: Float, cy: Float, size: Float): Path = Path().apply {
     cubicTo(cx - size * 0.62f, cy - h * 0.02f, cx - size * 0.36f, cy - h * 0.62f, cx, cy - h * 0.2f)
     cubicTo(cx + size * 0.36f, cy - h * 0.62f, cx + size * 0.62f, cy - h * 0.02f, cx, cy + h * 0.38f)
     close()
+}
+
+/** An elegant calligraphic heart shape with graceful curves and flourishes for left / right sides. */
+private fun calligraphicHeartPath(cx: Float, cy: Float, size: Float, isLeft: Boolean): Path = Path().apply {
+    val s = size
+    if (isLeft) {
+        moveTo(cx - 0.08f * s, cy - 0.16f * s)
+        cubicTo(cx - 0.26f * s, cy - 0.44f * s, cx - 0.56f * s, cy - 0.36f * s, cx - 0.52f * s, cy - 0.08f * s)
+        cubicTo(cx - 0.48f * s, cy + 0.18f * s, cx - 0.22f * s, cy + 0.38f * s, cx, cy + 0.52f * s)
+        cubicTo(cx + 0.22f * s, cy + 0.38f * s, cx + 0.48f * s, cy + 0.18f * s, cx + 0.52f * s, cy - 0.08f * s)
+        cubicTo(cx + 0.56f * s, cy - 0.36f * s, cx + 0.26f * s, cy - 0.44f * s, cx + 0.06f * s, cy - 0.22f * s)
+        cubicTo(cx - 0.02f * s, cy - 0.12f * s, cx - 0.04f * s, cy - 0.02f * s, cx, cy + 0.10f * s)
+        cubicTo(cx + 0.04f * s, cy + 0.20f * s, cx + 0.14f * s, cy + 0.26f * s, cx + 0.24f * s, cy + 0.22f * s)
+    } else {
+        moveTo(cx + 0.08f * s, cy - 0.16f * s)
+        cubicTo(cx + 0.26f * s, cy - 0.44f * s, cx + 0.56f * s, cy - 0.36f * s, cx + 0.52f * s, cy - 0.08f * s)
+        cubicTo(cx + 0.48f * s, cy + 0.18f * s, cx + 0.22f * s, cy + 0.38f * s, cx, cy + 0.52f * s)
+        cubicTo(cx - 0.22f * s, cy + 0.38f * s, cx - 0.48f * s, cy + 0.18f * s, cx - 0.52f * s, cy - 0.08f * s)
+        cubicTo(cx - 0.56f * s, cy - 0.36f * s, cx - 0.26f * s, cy - 0.44f * s, cx - 0.06f * s, cy - 0.22f * s)
+        cubicTo(cx + 0.02f * s, cy - 0.12f * s, cx + 0.04f * s, cy - 0.02f * s, cx, cy + 0.10f * s)
+        cubicTo(cx - 0.04f * s, cy + 0.20f * s, cx - 0.14f * s, cy + 0.26f * s, cx - 0.24f * s, cy + 0.22f * s)
+    }
 }
 
 /**
@@ -414,9 +477,18 @@ fun BothOfUsCard(
                 // The two of us close together with the hearts between; details under each
                 BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
                     // The details get columns this wide, centred under the photos
-                    val column = min(maxWidth / 2, 138.dp)
+                    val column = (maxWidth / 2).coerceAtMost(168.dp)
                     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
                         Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxWidth()) {
+                            // Left static heart (based on left color: pink)
+                            StaticSideHeart(
+                                color = pink,
+                                isLeft = true,
+                                modifier = Modifier
+                                    .align(Alignment.CenterStart)
+                                    .padding(start = 6.dp)
+                            )
+
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(AVATAR_GAP)
@@ -425,14 +497,37 @@ fun BothOfUsCard(
                                 RingedAvatar(right, blue) { viewingPhotoUrl = it }
                             }
                             TwinHearts(pink, blue, beat)
+
+                            // Right static heart (based on right color: blue)
+                            StaticSideHeart(
+                                color = blue,
+                                isLeft = false,
+                                modifier = Modifier
+                                    .align(Alignment.CenterEnd)
+                                    .padding(end = 6.dp)
+                            )
                         }
 
                         Spacer(modifier = Modifier.height(10.dp))
 
                         // Under each photo: online / battery, age and days, birthday
                         Row(verticalAlignment = Alignment.Top) {
-                            PersonDetails(left, pink, now, Modifier.width(column)) { editing = left }
-                            PersonDetails(right, blue, now, Modifier.width(column)) { editing = right }
+                            PersonDetails(
+                                person = left,
+                                color = pink,
+                                now = now,
+                                modifier = Modifier.width(column),
+                                isPartner = (left.id == partner.id),
+                                myTimeZone = me.timeZone
+                            ) { editing = left }
+                            PersonDetails(
+                                person = right,
+                                color = blue,
+                                now = now,
+                                modifier = Modifier.width(column),
+                                isPartner = (right.id == partner.id),
+                                myTimeZone = me.timeZone
+                            ) { editing = right }
                         }
                     }
                 }
@@ -673,6 +768,32 @@ private fun Modifier.loveBackground(
         drawPath(bottomCurve, curveBrush, alpha = 0.035f * strength, style = soft)
         drawPath(bottomCurve, curveBrush, alpha = 0.12f * strength, style = fine)
 
+        // Static heart on left side based on left color (pink)
+        val leftStaticPx = 18.dp.toPx()
+        val leftStaticCx = 0.06f * w
+        val leftStaticCy = 0.26f * h
+        withTransform({
+            translate(leftStaticCx, leftStaticCy)
+            rotate(-14f, pivot = Offset.Zero)
+            scale(leftStaticPx, leftStaticPx, pivot = Offset.Zero)
+        }) {
+            drawPath(unitHeart, pink.copy(alpha = 0.22f * strength))
+            drawPath(unitHeart, pink, alpha = 0.9f * strength, style = Stroke(width = 1.4.dp.toPx() / leftStaticPx))
+        }
+
+        // Static heart on right side based on right color (blue)
+        val rightStaticPx = 18.dp.toPx()
+        val rightStaticCx = 0.94f * w
+        val rightStaticCy = 0.26f * h
+        withTransform({
+            translate(rightStaticCx, rightStaticCy)
+            rotate(14f, pivot = Offset.Zero)
+            scale(rightStaticPx, rightStaticPx, pivot = Offset.Zero)
+        }) {
+            drawPath(unitHeart, blue.copy(alpha = 0.22f * strength))
+            drawPath(unitHeart, blue, alpha = 0.9f * strength, style = Stroke(width = 1.4.dp.toPx() / rightStaticPx))
+        }
+
         BgHearts.forEach { heart ->
             val color = sideColor(heart.x)
             val px = heart.sizeDp.dp.toPx()
@@ -704,18 +825,17 @@ private fun Modifier.loveBackground(
         val f = flight.value
         fun flyingHeart(heart: FlyingHeart, color: Color, mirror: Boolean) {
             val t = (f + heart.phase) % 1f
-            val fadeIn = (t / 0.15f).coerceAtMost(1f)
-            val fadeOut = ((1f - t) / 0.3f).coerceAtMost(1f)
-            val alpha = (heart.alpha * fadeIn * fadeOut * strength).coerceIn(0f, 1f)
-            if (alpha <= 0.01f) return
-            val swing = sin(2f * PI.toFloat() * (t * 1.0f + heart.phase))
+            val smoothAlpha = kotlin.math.sin(t * Math.PI.toFloat()).coerceIn(0f, 1f)
+            val alpha = (heart.alpha * smoothAlpha * strength).coerceIn(0f, 1f)
+            if (alpha <= 0.005f) return
+            val swing = kotlin.math.sin(2f * Math.PI.toFloat() * (t + heart.phase))
             val baseX = if (mirror) 1f - heart.x else heart.x
             val cx = baseX * w + swing * heart.sway.dp.toPx()
-            val cy = h * (1.06f - 1.14f * t)
-            val px = heart.sizeDp.dp.toPx() * (0.85f + 0.3f * t)
+            val cy = h * (1.04f - 1.10f * t)
+            val px = heart.sizeDp.dp.toPx() * (0.85f + 0.35f * t)
             withTransform({
                 translate(cx, cy)
-                rotate(swing * 9f, pivot = Offset.Zero)
+                rotate(swing * 8f, pivot = Offset.Zero)
                 scale(px, px, pivot = Offset.Zero)
             }) {
                 drawPath(unitHeart, color, alpha = alpha)
@@ -808,11 +928,63 @@ private fun TwinHearts(pink: Color, blue: Color, beat: State<Float>) {
                             drawPath(unitHeart, color)
                         }
                     }
-                    heart(pinkAt, pink)
                     heart(blueAt, blue)
+                    heart(pinkAt, pink)
                 }
             }
             .testTag("both_of_us_hearts")
+    )
+}
+
+/**
+ * A static drawn heart on the left or right side of the card, styled with that side's signature color.
+ */
+@Composable
+private fun StaticSideHeart(
+    color: Color,
+    isLeft: Boolean,
+    modifier: Modifier = Modifier
+) {
+    val cardIsLight = LocalCardColors.current.isLight
+    Box(
+        modifier = modifier
+            .size(36.dp)
+            .drawWithCache {
+                val unitHeart = calligraphicHeartPath(0f, 0f, 1f, isLeft)
+                val s = 24.dp.toPx()
+                val rotation = if (isLeft) -8f else 8f
+                onDrawBehind {
+                    withTransform({
+                        translate(size.width / 2f, size.height / 2f)
+                        rotate(rotation, pivot = Offset.Zero)
+                        scale(s, s, pivot = Offset.Zero)
+                    }) {
+                        // Soft tinted glow behind static heart
+                        drawCircle(
+                            Brush.radialGradient(
+                                listOf(color.copy(alpha = if (cardIsLight) 0.18f else 0.28f), Color.Transparent),
+                                center = Offset.Zero,
+                                radius = 1.35f
+                            ),
+                            radius = 1.35f,
+                            center = Offset.Zero
+                        )
+                        // Soft tinted calligraphic heart fill
+                        drawPath(unitHeart, color.copy(alpha = if (cardIsLight) 0.16f else 0.24f))
+                        // Clean calligraphic heart ribbon stroke
+                        drawPath(
+                            unitHeart,
+                            color.copy(alpha = 0.95f),
+                            style = Stroke(
+                                width = 1.9.dp.toPx() / s,
+                                cap = StrokeCap.Round,
+                                join = StrokeJoin.Round
+                            )
+                        )
+                    }
+                }
+            }
+            .testTag(if (isLeft) "both_of_us_static_heart_left" else "both_of_us_static_heart_right")
     )
 }
 
@@ -823,15 +995,61 @@ private fun PersonDetails(
     color: Color,
     now: Long,
     modifier: Modifier = Modifier,
+    isPartner: Boolean = false,
+    myTimeZone: String? = null,
     onEditBirthday: () -> Unit
 ) {
     val cc = LocalCardColors.current
+    val partnerTimeText = remember(person.timeZone, myTimeZone, now, isPartner) {
+        if (!isPartner) null
+        else {
+            val label = if (person.isMarked(HIS_MARKERS)) "His time" else "Her time"
+            formatPartnerLocalTimeIfDifferent(
+                partnerTimeZoneId = person.timeZone,
+                myTimeZoneId = myTimeZone,
+                now = now,
+                label = label
+            )
+        }
+    }
+
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = modifier
             .padding(horizontal = 3.dp)
             .testTag("both_of_us_${person.id}")
     ) {
+        // Partner's local time (small): if you're ever in different time zones only, show "Her time: 11:40 PM" under her photo
+        if (partnerTimeText != null) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center,
+                modifier = Modifier
+                    .padding(bottom = 5.dp)
+                    .clip(RoundedCornerShape(50))
+                    .background(color.copy(alpha = if (cc.isLight) 0.08f else 0.18f))
+                    .border(0.7.dp, color.copy(alpha = 0.32f), RoundedCornerShape(50))
+                    .padding(horizontal = 7.dp, vertical = 2.5.dp)
+                    .testTag("partner_local_time")
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.AccessTime,
+                    contentDescription = null,
+                    tint = color,
+                    modifier = Modifier.size(10.5.dp)
+                )
+                Spacer(modifier = Modifier.width(3.5.dp))
+                Text(
+                    text = partnerTimeText,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = cc.ink,
+                    maxLines = 1,
+                    letterSpacing = 0.1.sp
+                )
+            }
+        }
+
         // ● Online | battery
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -839,36 +1057,38 @@ private fun PersonDetails(
                 .clip(RoundedCornerShape(50))
                 .background(cc.pill)
                 .border(1.dp, color.copy(alpha = 0.35f), RoundedCornerShape(50))
-                .padding(horizontal = 8.dp, vertical = 5.dp)
+                .padding(horizontal = 6.dp, vertical = 3.5.dp)
         ) {
             Box(
                 Modifier
-                    .size(7.dp)
+                    .size(6.5.dp)
                     .clip(CircleShape)
                     .background(if (person.isOnline) OnlineGreen else cc.dimInk)
             )
-            Spacer(modifier = Modifier.width(5.dp))
+            Spacer(modifier = Modifier.width(4.5.dp))
+            val statusLabel = when {
+                person.isOnline -> "Online"
+                !person.status.isNullOrBlank() -> person.status
+                else -> "Offline"
+            }
             Text(
-                text = when {
-                    person.isOnline -> "Online"
-                    !person.status.isNullOrBlank() -> person.status
-                    else -> "Offline"
-                },
-                fontSize = 12.sp,
+                text = statusLabel,
+                fontSize = 11.5.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = if (person.isOnline) OnlineGreen else cc.dimInk,
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f, fill = false)
+                softWrap = false,
+                overflow = if (person.isOnline) TextOverflow.Clip else TextOverflow.Ellipsis,
+                modifier = if (person.isOnline) Modifier else Modifier.weight(1f, fill = false)
             )
-            Spacer(modifier = Modifier.width(7.dp))
+            Spacer(modifier = Modifier.width(5.dp))
             Box(
                 Modifier
                     .width(1.dp)
-                    .height(12.dp)
+                    .height(11.dp)
                     .background(cc.hairline)
             )
-            Spacer(modifier = Modifier.width(7.dp))
+            Spacer(modifier = Modifier.width(5.dp))
             CardBattery(level = person.batteryLevel, isCharging = person.isCharging, showPercentage = person.isOnline)
         }
 
@@ -1053,11 +1273,11 @@ private fun CardBattery(level: Int?, isCharging: Boolean, showPercentage: Boolea
             },
             contentDescription = if (level != null) "$level% battery" else "Battery",
             tint = tint,
-            modifier = Modifier.size(14.dp)
+            modifier = Modifier.size(13.dp)
         )
         if (showPercentage && level != null && level in 0..100) {
             Spacer(modifier = Modifier.width(2.dp))
-            Text(text = "$level%", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = tint, maxLines = 1)
+            Text(text = "$level%", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = tint, maxLines = 1, softWrap = false)
         }
     }
 }

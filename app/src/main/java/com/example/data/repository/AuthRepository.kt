@@ -21,6 +21,7 @@ import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
+import java.util.TimeZone
 
 class AuthRepository(private val context: Context) {
     private val securityPrefs = SecurityPreferences.getInstance(context)
@@ -840,6 +841,19 @@ class AuthRepository(private val context: Context) {
         }
     }
 
+    fun updateStatusMessage(statusMessage: String) {
+        val current = _currentUserState.value ?: return
+        val updated = current.copy(statusMessage = statusMessage)
+        _currentUserState.value = updated
+        saveLocalUserSession(updated)
+        try {
+            val uid = getCurrentUserId()
+            if (uid.isNotBlank()) {
+                userDocument(uid)?.update("statusMessage", statusMessage)
+            }
+        } catch (_: Exception) {}
+    }
+
     suspend fun updateMood(mood: String): Result<Unit> {
         val uid = getCurrentUserId()
         val current = _currentUserState.value ?: User(id = uid)
@@ -1007,7 +1021,8 @@ class AuthRepository(private val context: Context) {
                         val updates = mapOf<String, Any>(
                             "isOnline" to true,
                             "online" to true,
-                            "lastSeen" to System.currentTimeMillis()
+                            "lastSeen" to System.currentTimeMillis(),
+                            "timeZone" to TimeZone.getDefault().id
                         )
                         try {
                             userDocument(uid)?.set(
@@ -1028,15 +1043,18 @@ class AuthRepository(private val context: Context) {
     fun setOnline(online: Boolean) {
         val uid = getCurrentUserId()
         if (uid.isBlank()) return
+        val currentTz = TimeZone.getDefault().id
         _currentUserState.value = _currentUserState.value?.copy(
             isOnline = online,
-            lastSeen = System.currentTimeMillis()
+            lastSeen = System.currentTimeMillis(),
+            timeZone = currentTz
         )
         try {
             val updates = mutableMapOf<String, Any>(
                 "isOnline" to online,
                 "online" to online,
-                "lastSeen" to System.currentTimeMillis()
+                "lastSeen" to System.currentTimeMillis(),
+                "timeZone" to currentTz
             )
             if (!online) {
                 updates["typingInChat"] = false
@@ -1404,6 +1422,7 @@ class AuthRepository(private val context: Context) {
             .putLong("checkAfterTimeMillis", user.checkAfterTimeMillis ?: 0L)
             .putString("checkAfterNote", user.checkAfterNote ?: "")
             .putBoolean("checkAfterActive", user.checkAfterActive)
+            .putString("timeZone", user.timeZone ?: TimeZone.getDefault().id)
             .apply()
     }
 
@@ -1420,6 +1439,7 @@ class AuthRepository(private val context: Context) {
             val partnerId = prefs.getString("partnerId", null)?.trim()?.ifBlank { null }
             val partnerEmail = prefs.getString("partnerEmail", null)?.trim()?.ifBlank { null }
             val coupleId = prefs.getString("coupleId", "couple_faisal_shali")?.trim()?.ifBlank { "couple_faisal_shali" } ?: "couple_faisal_shali"
+            val timeZone = prefs.getString("timeZone", null)?.trim()?.ifBlank { null } ?: TimeZone.getDefault().id
             val defaultName = if (uid == "user_shali") "Shali" else "Faisal"
             val defaultPartnerId = if (uid == "user_faisal") "user_shali" else "user_faisal"
             val defaultPartnerEmail = if (uid == "user_faisal") "shalihafais36@gmail.com" else "faisallasiaff@gmail.com"
@@ -1434,7 +1454,8 @@ class AuthRepository(private val context: Context) {
                 coupleId = coupleId,
                 checkAfterTimeMillis = if (targetTime > 0L) targetTime else null,
                 checkAfterNote = note.ifBlank { null },
-                checkAfterActive = active
+                checkAfterActive = active,
+                timeZone = timeZone
             )
             _currentUserState.value = user
             val partnerUid = user.partnerId?.ifBlank { null } ?: defaultPartnerId

@@ -763,6 +763,21 @@ class ChatRepository(
         }
     }
 
+    fun markAudioPlayed(messageId: String) {
+        _messagesFlow.update { list ->
+            list.map {
+                if (it.id == messageId) {
+                    it.copy(isAudioPlayed = true)
+                } else it
+            }
+        }
+        val fs = firestore ?: return
+        try {
+            val ref = fs.collection("conversations").document(getConversationId()).collection("messages").document(messageId)
+            ref.update("isAudioPlayed", true)
+        } catch (_: Exception) {}
+    }
+
     suspend fun toggleReaction(messageId: String, emoji: String) {
         val currentUserId = authRepository.getCurrentUserId()
         val currentMessage = _messagesFlow.value.find { it.id == messageId }

@@ -540,18 +540,36 @@ fun InlineYouTubeCard(
                             fontWeight = FontWeight.Medium
                         )
 
-                        FilledTonalButton(
-                            onClick = { onOpenTheater(videoId) },
-                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-                            modifier = Modifier.height(28.dp),
-                            colors = ButtonDefaults.filledTonalButtonColors(
-                                containerColor = Color.White.copy(alpha = 0.25f),
-                                contentColor = Color.White
-                            )
-                        ) {
-                            Icon(Icons.Default.Fullscreen, contentDescription = null, modifier = Modifier.size(15.dp))
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("Theater (Landscape)", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            FilledTonalButton(
+                                onClick = {
+                                    val cherishApp = context.applicationContext as? com.example.CherishApplication
+                                    cherishApp?.coupleFeaturesRepository?.startWatchParty(videoId, "Shared Video", "")
+                                    onOpenTheater(videoId)
+                                },
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                                modifier = Modifier.height(28.dp).testTag("watch_party_sync_btn"),
+                                colors = ButtonDefaults.filledTonalButtonColors(
+                                    containerColor = Color(0xFFEC4899),
+                                    contentColor = Color.White
+                                )
+                            ) {
+                                Text("Sync 🍿", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
+                            Spacer(modifier = Modifier.width(6.dp))
+                            FilledTonalButton(
+                                onClick = { onOpenTheater(videoId) },
+                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                modifier = Modifier.height(28.dp),
+                                colors = ButtonDefaults.filledTonalButtonColors(
+                                    containerColor = Color.White.copy(alpha = 0.25f),
+                                    contentColor = Color.White
+                                )
+                            ) {
+                                Icon(Icons.Default.Fullscreen, contentDescription = null, modifier = Modifier.size(15.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Theater", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
                         }
                     }
                 }

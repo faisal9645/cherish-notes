@@ -510,6 +510,300 @@ class CoupleFeaturesRepository(
         _bucketListFlow.value = _bucketListFlow.value + item
     }
 
+    // Our Shared Movies (Watched List and Suggested Movies)
+    private val _moviesFlow = MutableStateFlow(
+        listOf(
+            com.example.data.model.MovieItem("m1", "About Time", "Romance / Drama", "⏳", true, 5, "Sep 14", "Both", "Our favorite movie about cherishing ordinary days together"),
+            com.example.data.model.MovieItem("m2", "La La Land", "Romance / Musical", "🌆", true, 5, "Aug 20", "Shali", "City of stars, lovely music and bittersweet dreams"),
+            com.example.data.model.MovieItem("m3", "The Notebook", "Romance / Drama", "💌", true, 5, "Jul 10", "Faisal", "Crying our eyes out on the sofa wrapped in blankets"),
+            com.example.data.model.MovieItem("m4", "Before Sunrise", "Romantic Walk", "🚂", false, 5, null, "Shali", "Suggested for next Friday cozy night"),
+            com.example.data.model.MovieItem("m5", "Pride & Prejudice", "Period Romance", "🌿", false, 5, null, "Shali", "Suggested classic romance night"),
+            com.example.data.model.MovieItem("m6", "Your Name", "Anime / Romance", "✨", false, 5, null, "Faisal", "Suggested date night under the stars"),
+            com.example.data.model.MovieItem("m7", "Crazy Rich Asians", "RomCom", "💍", false, 5, null, "Both", "Suggested fun popcorn date")
+        )
+    )
+    val moviesFlow: StateFlow<List<com.example.data.model.MovieItem>> = _moviesFlow.asStateFlow()
+
+    fun toggleMovieWatched(id: String, rating: Int = 5) {
+        val sdf = java.text.SimpleDateFormat("MMM d", java.util.Locale.getDefault())
+        val dateText = sdf.format(java.util.Date())
+        val myName = authRepository.currentUserState.value?.displayName?.ifBlank { "Me" } ?: "Me"
+        _moviesFlow.value = _moviesFlow.value.map {
+            if (it.id == id) {
+                val nowWatched = !it.isWatched
+                it.copy(
+                    isWatched = nowWatched,
+                    rating = rating,
+                    watchedDate = if (nowWatched) (it.watchedDate ?: dateText) else null,
+                    watchedFirstBy = if (nowWatched && it.watchedFirstBy == null) myName else it.watchedFirstBy
+                )
+            } else it
+        }
+    }
+
+    fun updateMovieWatchedOrder(id: String, watchedFirstBy: String?, watchedSecondBy: String?) {
+        _moviesFlow.value = _moviesFlow.value.map {
+            if (it.id == id) {
+                it.copy(watchedFirstBy = watchedFirstBy, watchedSecondBy = watchedSecondBy)
+            } else it
+        }
+    }
+
+    fun addMovie(title: String, genre: String, emoji: String, isWatched: Boolean, notes: String = "") {
+        val sdf = java.text.SimpleDateFormat("MMM d", java.util.Locale.getDefault())
+        val authorName = authRepository.currentUserState.value?.displayName?.ifBlank { "Me" } ?: "Me"
+        val item = com.example.data.model.MovieItem(
+            id = UUID.randomUUID().toString(),
+            title = title.trim(),
+            genre = genre.trim().ifBlank { "Romance" },
+            emoji = emoji.ifBlank { "🎬" },
+            isWatched = isWatched,
+            rating = 5,
+            watchedDate = if (isWatched) sdf.format(java.util.Date()) else null,
+            suggestedBy = authorName,
+            watchedFirstBy = if (isWatched) authorName else null,
+            notes = notes.trim()
+        )
+        _moviesFlow.value = listOf(item) + _moviesFlow.value
+    }
+
+    fun deleteMovie(id: String) {
+        _moviesFlow.value = _moviesFlow.value.filter { it.id != id }
+    }
+
+    // ---- Our Shared Books: Book suggestions, count, dual page progress & finished order ----
+    private val _booksFlow = MutableStateFlow(
+        listOf(
+            com.example.data.model.BookItem(
+                id = "b1",
+                title = "The Little Prince",
+                author = "Antoine de Saint-Exupéry",
+                totalPages = 140,
+                myCurrentPage = 140,
+                partnerCurrentPage = 140,
+                isCompletedByMe = true,
+                isCompletedByPartner = true,
+                firstFinishedBy = "Faisal",
+                secondFinishedBy = "Shali",
+                suggestedBy = "Shali",
+                genre = "Classic / Romance",
+                emoji = "🌹",
+                notes = "“It is only with the heart that one can see rightly; what is essential is invisible to the eye.”"
+            ),
+            com.example.data.model.BookItem(
+                id = "b2",
+                title = "Normal People",
+                author = "Sally Rooney",
+                totalPages = 273,
+                myCurrentPage = 185,
+                partnerCurrentPage = 210,
+                isCompletedByMe = false,
+                isCompletedByPartner = false,
+                firstFinishedBy = null,
+                secondFinishedBy = null,
+                suggestedBy = "Faisal",
+                genre = "Modern Fiction",
+                emoji = "📖",
+                notes = "Reading along every evening before bed."
+            ),
+            com.example.data.model.BookItem(
+                id = "b3",
+                title = "Atomic Habits",
+                author = "James Clear",
+                totalPages = 320,
+                myCurrentPage = 320,
+                partnerCurrentPage = 280,
+                isCompletedByMe = true,
+                isCompletedByPartner = false,
+                firstFinishedBy = "Faisal",
+                secondFinishedBy = null,
+                suggestedBy = "Faisal",
+                genre = "Growth / Habits",
+                emoji = "⚡",
+                notes = "Building small daily routines together."
+            ),
+            com.example.data.model.BookItem(
+                id = "b4",
+                title = "Before the Coffee Gets Cold",
+                author = "Toshikazu Kawaguchi",
+                totalPages = 213,
+                myCurrentPage = 45,
+                partnerCurrentPage = 70,
+                isCompletedByMe = false,
+                isCompletedByPartner = false,
+                suggestedBy = "Shali",
+                genre = "Heartwarming / Fantasy",
+                emoji = "☕",
+                notes = "A cozy cafe in Tokyo that travels through time."
+            )
+        )
+    )
+    val booksFlow: StateFlow<List<com.example.data.model.BookItem>> = _booksFlow.asStateFlow()
+
+    fun updateBookProgress(id: String, myPage: Int? = null, partnerPage: Int? = null) {
+        val myName = authRepository.currentUserState.value?.displayName?.ifBlank { "Me" } ?: "Me"
+        val partnerName = authRepository.partnerUserState.value?.displayName?.ifBlank { "Partner" } ?: "Partner"
+        _booksFlow.value = _booksFlow.value.map { book ->
+            if (book.id == id) {
+                val newMyPage = myPage ?: book.myCurrentPage
+                val newPartnerPage = partnerPage ?: book.partnerCurrentPage
+                val completedByMe = newMyPage >= book.totalPages
+                val completedByPartner = newPartnerPage >= book.totalPages
+
+                var first = book.firstFinishedBy
+                var second = book.secondFinishedBy
+
+                if (completedByMe && first == null && !book.isCompletedByPartner) {
+                    first = myName
+                } else if (completedByPartner && first == null && !book.isCompletedByMe) {
+                    first = partnerName
+                }
+
+                if (completedByMe && completedByPartner) {
+                    if (first == myName && second == null) second = partnerName
+                    else if (first == partnerName && second == null) second = myName
+                    else if (first == null) {
+                        first = myName
+                        second = partnerName
+                    }
+                }
+
+                book.copy(
+                    myCurrentPage = newMyPage.coerceIn(0, book.totalPages),
+                    partnerCurrentPage = newPartnerPage.coerceIn(0, book.totalPages),
+                    isCompletedByMe = completedByMe,
+                    isCompletedByPartner = completedByPartner,
+                    firstFinishedBy = first,
+                    secondFinishedBy = second
+                )
+            } else book
+        }
+    }
+
+    fun updateBookFinishedOrder(id: String, first: String?, second: String?) {
+        _booksFlow.value = _booksFlow.value.map {
+            if (it.id == id) it.copy(firstFinishedBy = first, secondFinishedBy = second) else it
+        }
+    }
+
+    fun addBook(title: String, author: String, totalPages: Int, genre: String, emoji: String, notes: String = "") {
+        val authorName = authRepository.currentUserState.value?.displayName?.ifBlank { "Me" } ?: "Me"
+        val item = com.example.data.model.BookItem(
+            id = UUID.randomUUID().toString(),
+            title = title.trim(),
+            author = author.trim().ifBlank { "Unknown Author" },
+            totalPages = totalPages.coerceAtLeast(1),
+            myCurrentPage = 0,
+            partnerCurrentPage = 0,
+            suggestedBy = authorName,
+            genre = genre.trim().ifBlank { "Fiction" },
+            emoji = emoji.ifBlank { "📖" },
+            notes = notes.trim()
+        )
+        _booksFlow.value = listOf(item) + _booksFlow.value
+    }
+
+    fun deleteBook(id: String) {
+        _booksFlow.value = _booksFlow.value.filter { it.id != id }
+    }
+
+    // ---- Synced Ambient Listening / Watch Party: shared YouTube videos or music links ----
+    private val _watchPartyFlow = MutableStateFlow<com.example.data.model.WatchPartySession?>(null)
+    val watchPartyFlow: StateFlow<com.example.data.model.WatchPartySession?> = _watchPartyFlow.asStateFlow()
+
+    fun startWatchParty(videoId: String, title: String, mediaUrl: String) {
+        val myId = authRepository.getCurrentUserId()
+        val session = com.example.data.model.WatchPartySession(
+            id = "active",
+            videoId = videoId,
+            mediaUrl = mediaUrl,
+            title = title.ifBlank { "Watch Party" },
+            isPlaying = true,
+            positionSeconds = 0f,
+            updatedAt = System.currentTimeMillis(),
+            updatedBy = myId,
+            startedBy = myId,
+            isActive = true
+        )
+        _watchPartyFlow.value = session
+        val ref = loveCoupleRef() ?: return
+        val map = mapOf(
+            "videoId" to session.videoId,
+            "mediaUrl" to session.mediaUrl,
+            "title" to session.title,
+            "isPlaying" to session.isPlaying,
+            "positionSeconds" to session.positionSeconds,
+            "updatedAt" to session.updatedAt,
+            "updatedBy" to session.updatedBy,
+            "startedBy" to session.startedBy,
+            "isActive" to session.isActive
+        )
+        ref.set(mapOf("watchParty" to map), com.google.firebase.firestore.SetOptions.merge())
+    }
+
+    fun updateWatchPartyPlayback(isPlaying: Boolean, positionSeconds: Float) {
+        val current = _watchPartyFlow.value ?: return
+        val myId = authRepository.getCurrentUserId()
+        val updated = current.copy(
+            isPlaying = isPlaying,
+            positionSeconds = positionSeconds,
+            updatedAt = System.currentTimeMillis(),
+            updatedBy = myId
+        )
+        _watchPartyFlow.value = updated
+        val ref = loveCoupleRef() ?: return
+        val map = mapOf(
+            "isPlaying" to isPlaying,
+            "positionSeconds" to positionSeconds,
+            "updatedAt" to updated.updatedAt,
+            "updatedBy" to myId
+        )
+        ref.set(mapOf("watchParty" to map), com.google.firebase.firestore.SetOptions.merge())
+    }
+
+    fun endWatchParty() {
+        _watchPartyFlow.value = null
+        val ref = loveCoupleRef() ?: return
+        ref.update(com.google.firebase.firestore.FieldPath.of("watchParty", "isActive"), false)
+    }
+
+    // ---- Goodnight Kiss / Sleep Sync: tap and hold glowing sphere until both phones trigger vibration ----
+    private val _sleepSyncFlow = MutableStateFlow<com.example.data.model.SleepSyncEvent?>(null)
+    val sleepSyncFlow: StateFlow<com.example.data.model.SleepSyncEvent?> = _sleepSyncFlow.asStateFlow()
+
+    fun triggerSleepSync() {
+        val myId = authRepository.getCurrentUserId()
+        val myName = authRepository.currentUserState.value?.displayName?.ifBlank { null } ?: "My Love"
+        val now = System.currentTimeMillis()
+        val event = com.example.data.model.SleepSyncEvent(
+            timestamp = now,
+            senderId = myId,
+            senderName = myName,
+            status = "Asleep 🌙",
+            isAsleep = true
+        )
+        _sleepSyncFlow.value = event
+        authRepository.updateStatusMessage("Asleep 🌙")
+        loveCoupleRef()?.set(
+            mapOf(
+                "sleepSync" to mapOf(
+                    "timestamp" to now,
+                    "senderId" to myId,
+                    "senderName" to myName,
+                    "status" to "Asleep 🌙",
+                    "isAsleep" to true
+                )
+            ),
+            com.google.firebase.firestore.SetOptions.merge()
+        )
+    }
+
+    fun wakeUpFromSleep() {
+        _sleepSyncFlow.value = null
+        authRepository.updateStatusMessage("Loving every moment with you ✨")
+        loveCoupleRef()?.update(com.google.firebase.firestore.FieldPath.of("sleepSync", "isAsleep"), false)
+    }
+
     // ---- Lifetime Story: ages from our real birthdays and together date; the vow and the yearly
     // stories kept on the couple's document for both phones ----
     private val _lifetimeProfileFlow = MutableStateFlow(com.example.data.model.LifetimeAgeProfile(0, 0, 0))
@@ -738,6 +1032,40 @@ class CoupleFeaturesRepository(
                 authorId = authorId
             )
         }.sortedByDescending { it.year }
+
+        // Synced Watch Party
+        val wp = doc["watchParty"] as? Map<*, *>
+        if (wp != null && wp["isActive"] == true) {
+            _watchPartyFlow.value = com.example.data.model.WatchPartySession(
+                id = "active",
+                videoId = wp["videoId"] as? String ?: "",
+                mediaUrl = wp["mediaUrl"] as? String ?: "",
+                title = wp["title"] as? String ?: "Watch Party",
+                isPlaying = wp["isPlaying"] as? Boolean ?: false,
+                positionSeconds = (wp["positionSeconds"] as? Number)?.toFloat() ?: 0f,
+                updatedAt = (wp["updatedAt"] as? Number)?.toLong() ?: 0L,
+                updatedBy = wp["updatedBy"] as? String ?: "",
+                startedBy = wp["startedBy"] as? String ?: "",
+                isActive = true
+            )
+        } else if (_watchPartyFlow.value?.isActive == true && wp?.get("isActive") == false) {
+            _watchPartyFlow.value = null
+        }
+
+        // Goodnight Kiss / Sleep Sync
+        val ss = doc["sleepSync"] as? Map<*, *>
+        if (ss != null && ss["isAsleep"] == true) {
+            val ts = (ss["timestamp"] as? Number)?.toLong() ?: 0L
+            if (System.currentTimeMillis() - ts < 14L * 3600 * 1000) {
+                _sleepSyncFlow.value = com.example.data.model.SleepSyncEvent(
+                    timestamp = ts,
+                    senderId = ss["senderId"] as? String ?: "",
+                    senderName = ss["senderName"] as? String ?: "",
+                    status = ss["status"] as? String ?: "Asleep 🌙",
+                    isAsleep = true
+                )
+            }
+        }
     }
 
     init {

@@ -79,7 +79,8 @@ data class User(
     val isCharging: Boolean = false,
     val heartbeatTouchingTimestamp: Long = 0L,
     val heartbeatStreak: Int = 0,
-    val lastHeartbeatSync: Long = 0L
+    val lastHeartbeatSync: Long = 0L,
+    val timeZone: String? = null
 ) {
     /**
      * When this phone received this user's latest live presence update, on this phone's own clock
@@ -169,7 +170,9 @@ data class Message(
     // Small previews for chat bubbles and the gallery, same order as getAllMediaUrls()
     var thumbnailUrls: List<String> = emptyList(),
     // A special message: "goodnight" dims the partner's screen with stars when they see it
-    var effect: String? = null
+    var effect: String? = null,
+    // Voice note listened state: shows a small blue dot if unplayed, cleared once listened
+    var isAudioPlayed: Boolean = false
 ) {
     @com.google.firebase.firestore.Exclude
     fun isCircularVideoNote(): Boolean {
@@ -358,6 +361,45 @@ data class BucketListItem(
     val category: String = "Romantic Dates",
     val isCompleted: Boolean = false,
     val completedDate: String? = null
+)
+
+@IgnoreExtraProperties
+@JsonClass(generateAdapter = true)
+data class MovieItem(
+    val id: String = "",
+    val title: String = "",
+    val genre: String = "Romance",
+    val emoji: String = "🎬",
+    val isWatched: Boolean = false,
+    val rating: Int = 5,
+    val watchedDate: String? = null,
+    val suggestedBy: String = "Us",
+    val notes: String = ""
+)
+
+@IgnoreExtraProperties
+@JsonClass(generateAdapter = true)
+data class WatchPartySession(
+    val id: String = "active",
+    val videoId: String = "",
+    val mediaUrl: String = "",
+    val title: String = "Watch Party",
+    val isPlaying: Boolean = false,
+    val positionSeconds: Float = 0f,
+    val updatedAt: Long = 0L,
+    val updatedBy: String = "",
+    val startedBy: String = "",
+    val isActive: Boolean = false
+)
+
+@IgnoreExtraProperties
+@JsonClass(generateAdapter = true)
+data class SleepSyncEvent(
+    val timestamp: Long = 0L,
+    val senderId: String = "",
+    val senderName: String = "",
+    val status: String = "Asleep 🌙",
+    val isAsleep: Boolean = true
 )
 
 @IgnoreExtraProperties

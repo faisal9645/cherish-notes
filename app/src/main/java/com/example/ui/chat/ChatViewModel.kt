@@ -603,6 +603,7 @@ class ChatViewModel(
     }
 
     fun playAudio(messageId: String, audioUrl: String) {
+        chatRepository.markAudioPlayed(messageId)
         voicePlayerHelper.playAudio(messageId, audioUrl, onCompletion = { playNextVoiceNote(messageId) })
     }
 

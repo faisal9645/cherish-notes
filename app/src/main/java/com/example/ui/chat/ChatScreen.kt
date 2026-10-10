@@ -55,7 +55,9 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.paint
 import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.BlurEffect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -497,8 +499,19 @@ fun ChatScreen(
                         scope.launch {
                             listState.revealMessage(shown.lastIndex - index)
                             highlightedMessageId = replyId
-                            kotlinx.coroutines.delay(1400)
-                            highlightedMessageId = null
+                            try {
+                                val vib = (context.getSystemService(android.content.Context.VIBRATOR_SERVICE) as? android.os.Vibrator)
+                                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                                    vib?.vibrate(android.os.VibrationEffect.createOneShot(35, android.os.VibrationEffect.DEFAULT_AMPLITUDE))
+                                } else {
+                                    @Suppress("DEPRECATION")
+                                    vib?.vibrate(35)
+                                }
+                            } catch (_: Exception) {}
+                            kotlinx.coroutines.delay(2200)
+                            if (highlightedMessageId == replyId) {
+                                highlightedMessageId = null
+                            }
                         }
                     }
                 }
@@ -1029,8 +1042,27 @@ fun ChatScreen(
                                             }
                                         }
                                     }
+                                    val cherApp = context.applicationContext as? com.example.CherishApplication
+                                    val customPartnerTz by (cherApp?.securityPreferences?.partnerCustomTimeZone ?: kotlinx.coroutines.flow.MutableStateFlow(null)).collectAsState()
+                                    val effPartnerTz = partner?.timeZone?.takeIf { it.isNotBlank() } ?: customPartnerTz
+                                    var chatTimeTicker by remember { mutableLongStateOf(System.currentTimeMillis()) }
+                                    LaunchedEffect(effPartnerTz) {
+                                        while (effPartnerTz != null) {
+                                            chatTimeTicker = System.currentTimeMillis()
+                                            kotlinx.coroutines.delay(60_000L - chatTimeTicker % 60_000L)
+                                        }
+                                    }
+                                    val partnerLocalTimeText = remember(effPartnerTz, uiState.currentUser?.timeZone, chatTimeTicker) {
+                                        com.example.ui.home.formatPartnerLocalTimeIfDifferent(
+                                            partnerTimeZoneId = effPartnerTz,
+                                            myTimeZoneId = uiState.currentUser?.timeZone,
+                                            now = chatTimeTicker,
+                                            label = "Her time"
+                                        )
+                                    }
+                                    val fullStatusText = if (partnerLocalTimeText != null) "$statusText · $partnerLocalTimeText" else statusText
                                     Text(
-                                        text = statusText,
+                                        text = fullStatusText,
                                         fontSize = 12.sp,
                                         lineHeight = 14.sp,
                                         maxLines = 1,
@@ -1499,6 +1531,13 @@ fun ChatScreen(
                         }
                     }
 
+                    val lastPartnerReadMessageId = remember(uiState.messages) {
+                        uiState.messages
+                            .filter { it.senderId == currentUserId && (it.getTypedStatus() == com.example.data.model.MessageStatus.READ || it.readTimestamp != null) }
+                            .maxByOrNull { it.timestamp }
+                            ?.id
+                    }
+
                     itemsIndexed(
                         items = reversedMessages,
                         key = { _, msg -> msg.id },
@@ -1527,6 +1566,9 @@ fun ChatScreen(
                             voicePlaybackSpeed = uiState.voicePlaybackSpeed,
                             senderPhotoUrl = if (isFromMe) uiState.currentUser?.photoUrl else uiState.partnerUser?.photoUrl,
                             actions = rowActions,
+                            isLastReadMessage = (message.id == lastPartnerReadMessageId),
+                            partnerPhotoUrl = uiState.partnerUser?.photoUrl,
+                            partnerName = partnerName,
                             // Rows glide aside when messages are added or deleted instead of jumping;
                             // new arrivals get their own landing
                             modifier = Modifier.animateItem(
@@ -2965,7 +3007,10 @@ private fun ChatMessageRow(
     voicePlaybackSpeed: Float,
     senderPhotoUrl: String?,
     actions: ChatRowActions,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    isLastReadMessage: Boolean = false,
+    partnerPhotoUrl: String? = null,
+    partnerName: String = "Partner"
 ) {
     Column(modifier = modifier.fillMaxWidth()) {
         if (isFirstOfDay) {
@@ -3026,16 +3071,32 @@ private fun ChatMessageRow(
                     if (rowTint.alpha > 0f) drawRect(rowTint)
                     val g = glow.value
                     if (g > 0f) {
-                        // Edge to edge, soft at the top and bottom
-                        val wash = glowColor.copy(alpha = (if (isDark) 0.26f else 0.18f) * g)
+                        // Edge to edge, soft at top and bottom with accent highlight strip
+                        val wash = glowColor.copy(alpha = (if (isDark) 0.32f else 0.22f) * g)
                         drawRect(
                             Brush.verticalGradient(
                                 0f to Color.Transparent,
-                                0.22f to wash,
-                                0.78f to wash,
+                                0.16f to wash,
+                                0.84f to wash,
                                 1f to Color.Transparent
                             )
                         )
+                        val barWidth = 4.dp.toPx()
+                        val barX = if (isFromMe) size.width - barWidth else 0f
+                        drawRoundRect(
+                            color = glowColor.copy(alpha = 0.85f * g),
+                            topLeft = Offset(barX, size.height * 0.12f),
+                            size = Size(barWidth, size.height * 0.76f),
+                            cornerRadius = CornerRadius(2.dp.toPx(), 2.dp.toPx())
+                        )
+                    }
+                }
+                .graphicsLayer {
+                    val b = bump.value
+                    if (b > 0f) {
+                        val bumpScale = 1f + 0.035f * b
+                        scaleX = bumpScale
+                        scaleY = bumpScale
                     }
                 }
                 .then(
@@ -3098,7 +3159,10 @@ private fun ChatMessageRow(
                         isHighlighted = isHighlighted,
                         onReplyQuoteClick = actions.jumpToReply,
                         isPrivateMode = isPrivate,
-                        senderPhotoUrl = senderPhotoUrl
+                        senderPhotoUrl = senderPhotoUrl,
+                        isLastReadMessage = isLastReadMessage,
+                        partnerPhotoUrl = partnerPhotoUrl,
+                        partnerName = partnerName
                     )
                 }
             }
@@ -3485,37 +3549,37 @@ private fun RecordingBars(color: Color) {
 
 @Composable
 fun BouncingDots(color: Color = RoseGoldPrimary) {
-    val infiniteTransition = rememberInfiniteTransition(label = "bouncing_dots")
-    val dot1 by infiniteTransition.animateFloat(
+    val infiniteTransition = rememberInfiniteTransition(label = "bouncing_dots_rhythm")
+    // Typing dots with rhythm: modulates between bouncy rapid typing tempo and gentle paused cadence
+    val time by infiniteTransition.animateFloat(
         initialValue = 0f,
-        targetValue = -6f,
+        targetValue = 1f,
         animationSpec = infiniteRepeatable(
-            animation = tween(400, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
+            animation = tween(4400, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
         ),
-        label = "d1"
-    )
-    val dot2 by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = -6f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(400, delayMillis = 150, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "d2"
-    )
-    val dot3 by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = -6f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(400, delayMillis = 300, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "d3"
+        label = "rhythm_time"
     )
 
+    val progress = time % 1f
+    fun computeBounce(dotIdx: Int): Float {
+        val phaseAngle = if (progress < 0.52f) {
+            // Rapid fast bounce when typing quickly (accelerated frequency)
+            (progress / 0.52f) * 6f * 2f * Math.PI.toFloat()
+        } else {
+            // Slow, thoughtful gentle wave when pausing / thinking
+            6f * 2f * Math.PI.toFloat() + ((progress - 0.52f) / 0.48f) * 2f * 2f * Math.PI.toFloat()
+        }
+        val wave = kotlin.math.sin((phaseAngle - dotIdx * 0.72f).toDouble()).toFloat()
+        return if (wave > 0f) -wave * 6.5f else 0f
+    }
+
+    val dot1 = computeBounce(0)
+    val dot2 = computeBounce(1)
+    val dot3 = computeBounce(2)
+
     Row(
-        horizontalArrangement = Arrangement.spacedBy(3.dp),
+        horizontalArrangement = Arrangement.spacedBy(3.5.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(modifier = Modifier.offset(y = dot1.dp).size(6.dp).background(color, CircleShape))

@@ -581,6 +581,15 @@ fun CherishNavGraph(
         )
     }
 
+    val navKeyboardController = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
+    val navFocusManager = androidx.compose.ui.platform.LocalFocusManager.current
+    LaunchedEffect(isDisguiseActive) {
+        if (isDisguiseActive) {
+            navFocusManager.clearFocus(force = true)
+            navKeyboardController?.hide()
+        }
+    }
+
     // Real Notes Disguise screen - instant zero-latency snap on disguise, elegant smooth reveal on unlock
     AnimatedVisibility(
         visible = isDisguiseActive,

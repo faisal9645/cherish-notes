@@ -77,7 +77,10 @@ fun MessageBubble(
     onReplyQuoteClick: ((replyToMessageId: String?) -> Unit)? = null,
     isPrivateMode: Boolean = false,
     senderPhotoUrl: String? = null,
-    onSeekAudio: ((Float) -> Unit)? = null
+    onSeekAudio: ((Float) -> Unit)? = null,
+    isLastReadMessage: Boolean = false,
+    partnerPhotoUrl: String? = null,
+    partnerName: String = "Partner"
 ) {
     val bubbleShape = if (isPrivateMode) {
         if (isFromMe) {
@@ -148,6 +151,17 @@ fun MessageBubble(
         animationSpec = spring(dampingRatio = 0.5f, stiffness = 700f),
         label = "bubble_press"
     )
+
+    // Highlight animation when scrolling from a reply quote to this message
+    val highlightPulse = remember(message.id) { Animatable(0f) }
+    LaunchedEffect(isHighlighted) {
+        if (isHighlighted) {
+            highlightPulse.snapTo(1f)
+            highlightPulse.animateTo(0f, tween(2200, easing = LinearOutSlowInEasing))
+        } else {
+            highlightPulse.snapTo(0f)
+        }
+    }
     val trackPress: suspend androidx.compose.foundation.gestures.PressGestureScope.(androidx.compose.ui.geometry.Offset) -> Unit = {
         val showPress = scope.launch {
             delay(70)
@@ -222,8 +236,8 @@ fun MessageBubble(
             .padding(horizontal = 6.dp, vertical = 2.5.dp),
         contentAlignment = if (isFromMe) Alignment.CenterEnd else Alignment.CenterStart
     ) {
-        // Stationary background reply indicator on the left (revealed when swiping right on partner message)
-        if (onSwipeToReply != null && !isFromMe && isSwipedRight) {
+        // Stationary background reply indicator on the left (revealed when swiping right on ANY message)
+        if (onSwipeToReply != null && isSwipedRight) {
             ReplyIndicator(
                 isReached = isReplyReached,
                 progress = { replyProgress },
@@ -235,8 +249,8 @@ fun MessageBubble(
             )
         }
 
-        // Stationary background reply indicator on the right (revealed when swiping left on user message)
-        if (onSwipeToReply != null && isFromMe && isSwipedLeft) {
+        // Stationary background reply indicator on the right (revealed when swiping left on ANY message)
+        if (onSwipeToReply != null && isSwipedLeft) {
             ReplyIndicator(
                 isReached = isReplyReached,
                 progress = { replyProgress },
@@ -254,17 +268,6 @@ fun MessageBubble(
             modifier = (if (isYouTube) Modifier.fillMaxWidth() else Modifier)
                 .offset { androidx.compose.ui.unit.IntOffset(swipeOffset.value.roundToInt(), 0) }
         ) {
-            // Adjacent reply indicator (revealed to the left when user swipes their own message right)
-            if (onSwipeToReply != null && isFromMe && isSwipedRight) {
-                ReplyIndicator(
-                    isReached = isReplyReached,
-                    progress = { replyProgress },
-                    isDark = isDark,
-                    isPrivateMode = isPrivateMode,
-                    modifier = Modifier.padding(end = 10.dp)
-                )
-            }
-
             Column(
                 horizontalAlignment = if (isFromMe) Alignment.End else Alignment.Start,
                 modifier = (if (isYouTube) Modifier.fillMaxWidth() else Modifier)
@@ -295,13 +298,8 @@ fun MessageBubble(
                                 onHorizontalDrag = { change, dragAmount ->
                                     change.consume()
                                     val current = swipeOffset.value
-                                    
-                                    // Ensure swipe direction matches isFromMe (right for received, left for sent) to avoid wrong UI indicator
-                                    val newTarget = if (isFromMe) {
-                                        (current + dragAmount).coerceIn(-maxDragPx, 0f)
-                                    } else {
-                                        (current + dragAmount).coerceIn(0f, maxDragPx)
-                                    }
+                                    // Swipe in both left and right directions allowed on any message
+                                    val newTarget = (current + dragAmount).coerceIn(-maxDragPx, maxDragPx)
                                     
                                     if (abs(newTarget) >= thresholdPx && !hasTriggeredThresholdHaptic) {
                                         hasTriggeredThresholdHaptic = true
@@ -329,15 +327,23 @@ fun MessageBubble(
                         }
                     }
                 }
+                val videoHighlightScale = if (highlightPulse.value > 0f) {
+                    1f + 0.04f * kotlin.math.sin(highlightPulse.value * Math.PI.toFloat())
+                } else 1f
                 Box(
                     modifier = Modifier
                         .size(240.dp)
                         .graphicsLayer {
-                            scaleX = pressScale
-                            scaleY = pressScale
+                            scaleX = pressScale * videoHighlightScale
+                            scaleY = pressScale * videoHighlightScale
                         }
                         .heartBurst(heartBurst)
                         .clip(CircleShape)
+                        .then(
+                            if (highlightPulse.value > 0.04f) {
+                                Modifier.border(BorderStroke(3.dp, RoseGoldPrimary.copy(alpha = highlightPulse.value)), CircleShape)
+                            } else Modifier
+                        )
                         .pointerInput(message.id) {
                             detectTapGestures(
                                 onPress = trackPress,
@@ -458,11 +464,15 @@ fun MessageBubble(
                     else -> 295.dp
                 }
 
+                val bubbleHighlightScale = if (highlightPulse.value > 0f) {
+                    1f + 0.045f * kotlin.math.sin(highlightPulse.value * Math.PI.toFloat())
+                } else 1f
+
                 Box(
                     modifier = (if (isYouTube) Modifier.fillMaxWidth() else Modifier.widthIn(min = bubbleMinWidth, max = bubbleMaxWidth))
                         .graphicsLayer {
-                            scaleX = pressScale
-                            scaleY = pressScale
+                            scaleX = pressScale * bubbleHighlightScale
+                            scaleY = pressScale * bubbleHighlightScale
                         }
                         .heartBurst(heartBurst)
                         .then(
@@ -477,8 +487,13 @@ fun MessageBubble(
                         )
                         .clip(cardShape)
                         .then(
-                            // (A jumped-to message is shown by the chat row's soft glow, not a border)
-                            if (isPhotoOnly) Modifier
+                            if (highlightPulse.value > 0.04f) {
+                                val strokeColor = if (isPrivateMode) Color(0xFF9CA3AF) else RoseGoldPrimary
+                                Modifier.border(
+                                    BorderStroke(2.2.dp, strokeColor.copy(alpha = highlightPulse.value)),
+                                    cardShape
+                                )
+                            } else if (isPhotoOnly) Modifier
                             else if (isPrivateMode) Modifier.border(
                                 BorderStroke(0.6.dp, if (isDark) darkTone(Color(0xFF38393E)) else Color(0xFFE5E7EB)),
                                 cardShape
@@ -714,29 +729,44 @@ fun MessageBubble(
                                 Spacer(modifier = Modifier.width(8.dp))
                             }
 
-                            IconButton(
-                                onClick = onPlayAudio,
-                                modifier = Modifier
-                                    .size(42.dp)
-                                    .then(
-                                        if (isPrivateMode) {
-                                            Modifier.background(
-                                                (if (isDark) darkTone(Color(0xFFECECEC)) else Color(0xFF1F2937)).copy(alpha = 0.2f),
-                                                CircleShape
-                                            )
-                                        } else if (isFromMe) {
-                                            Modifier.background(Color.White.copy(alpha = 0.25f), CircleShape)
-                                        } else {
-                                            Modifier.background(brush = playButtonGradient!!, shape = CircleShape)
-                                        }
+                            Box(contentAlignment = Alignment.TopEnd) {
+                                IconButton(
+                                    onClick = onPlayAudio,
+                                    modifier = Modifier
+                                        .size(42.dp)
+                                        .then(
+                                            if (isPrivateMode) {
+                                                Modifier.background(
+                                                    (if (isDark) darkTone(Color(0xFFECECEC)) else Color(0xFF1F2937)).copy(alpha = 0.2f),
+                                                    CircleShape
+                                                )
+                                            } else if (isFromMe) {
+                                                Modifier.background(Color.White.copy(alpha = 0.25f), CircleShape)
+                                            } else {
+                                                Modifier.background(brush = playButtonGradient!!, shape = CircleShape)
+                                            }
+                                        )
+                                ) {
+                                    Icon(
+                                        imageVector = if (isPlayingAudio) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                        contentDescription = if (isPlayingAudio) "Pause voice message" else "Play voice message",
+                                        tint = if (isPrivateMode) textColor else Color.White,
+                                        modifier = Modifier.size(24.dp)
                                     )
-                            ) {
-                                Icon(
-                                    imageVector = if (isPlayingAudio) Icons.Default.Pause else Icons.Default.PlayArrow,
-                                    contentDescription = if (isPlayingAudio) "Pause voice message" else "Play voice message",
-                                    tint = if (isPrivateMode) textColor else Color.White,
-                                    modifier = Modifier.size(24.dp)
-                                )
+                                }
+
+                                // Voice note "not heard yet" dot (small): a small blue dot on voice notes she hasn't played yet, which goes away once played
+                                if (!message.isAudioPlayed) {
+                                    Box(
+                                        modifier = Modifier
+                                            .padding(top = 1.dp, end = 1.dp)
+                                            .size(8.dp)
+                                            .clip(CircleShape)
+                                            .background(Color(0xFF2563EB))
+                                            .border(1.2.dp, if (isFromMe) Color.White else MaterialTheme.colorScheme.surface, CircleShape)
+                                            .testTag("voice_note_unplayed_dot")
+                                    )
+                                }
                             }
 
                             Spacer(modifier = Modifier.width(10.dp))
@@ -1126,21 +1156,26 @@ fun MessageBubble(
                     }
                 }
             }
+            // Seen photo (small): a tiny round photo of your partner sits under the last message they've read and glides down as they read more, like Messenger
+            if (isFromMe && isLastReadMessage) {
+                Row(
+                    horizontalArrangement = Arrangement.End,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 2.dp, end = 2.dp)
+                        .testTag("messenger_seen_indicator")
+                ) {
+                    com.example.ui.components.AvatarView(
+                        photoUrl = partnerPhotoUrl,
+                        name = partnerName,
+                        size = 14.5.dp,
+                        showOnlineBadge = false
+                    )
+                }
+            }
         }
-        }
-
-        // Adjacent reply indicator when partner message is swiped left
-        if (onSwipeToReply != null && !isFromMe && isSwipedLeft) {
-            ReplyIndicator(
-                isReached = isReplyReached,
-                progress = { replyProgress },
-                isDark = isDark,
-                isPrivateMode = isPrivateMode,
-                modifier = Modifier.padding(start = 10.dp)
-            )
         }
     }
-}
 }
 
 /** When my message was seen, or how far it got: shown for a moment after tapping its time. */

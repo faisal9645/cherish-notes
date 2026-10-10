@@ -53,6 +53,9 @@ class SecurityPreferences(context: Context) {
     private val _hasRevealedSecretAppInSession = MutableStateFlow(!prefs.getBoolean(KEY_DISGUISE_ENABLED, true))
     val hasRevealedSecretAppInSession: StateFlow<Boolean> = _hasRevealedSecretAppInSession.asStateFlow()
 
+    private val _partnerCustomTimeZone = MutableStateFlow(prefs.getString(KEY_PARTNER_CUSTOM_TIMEZONE, null))
+    val partnerCustomTimeZone: StateFlow<String?> = _partnerCustomTimeZone.asStateFlow()
+
     init {
         val disguiseEnabled = isDisguiseModeEnabled()
         _isDisguiseActive.value = disguiseEnabled
@@ -386,6 +389,47 @@ class SecurityPreferences(context: Context) {
         prefs.edit().putBoolean(KEY_REQUIRE_PHONE_LOCK_AFTER_HOLD, enabled).apply()
     }
 
+    data class SecurityAuditScore(
+        val passedCount: Int,
+        val totalCount: Int = 8,
+        val isDisguiseOn: Boolean,
+        val isAppLockOn: Boolean,
+        val isBiometricOn: Boolean,
+        val isNotificationMaskingOn: Boolean,
+        val isScreenshotBlockingOn: Boolean,
+        val isRecentAppsCoverOn: Boolean,
+        val isKeywordTriggerOn: Boolean,
+        val isPhoneLockHoldOn: Boolean
+    ) {
+        val percentage: Int get() = if (totalCount > 0) (passedCount * 100) / totalCount else 100
+        val summaryText: String get() = "$passedCount/$totalCount Active"
+    }
+
+    fun getSecurityAuditScore(): SecurityAuditScore {
+        val disguise = isDisguiseModeEnabled()
+        val appLock = isAppLockEnabled() && hasPin()
+        val biometric = isBiometricEnabled()
+        val notif = isHideNotificationContent()
+        val screenshot = isScreenshotProtectionEnabled()
+        val recentApps = true
+        val keyword = isKeywordTriggerEnabled()
+        val hold = isRequirePhoneLockAfterHold()
+
+        val passed = listOf(disguise, appLock, biometric, notif, screenshot, recentApps, keyword, hold).count { it }
+        return SecurityAuditScore(
+            passedCount = passed,
+            totalCount = 8,
+            isDisguiseOn = disguise,
+            isAppLockOn = appLock,
+            isBiometricOn = biometric,
+            isNotificationMaskingOn = notif,
+            isScreenshotBlockingOn = screenshot,
+            isRecentAppsCoverOn = recentApps,
+            isKeywordTriggerOn = keyword,
+            isPhoneLockHoldOn = hold
+        )
+    }
+
     // First run initial permissions requested tracking
     fun hasRequestedInitialPermissions(): Boolean = prefs.getBoolean(KEY_INITIAL_PERMS_REQUESTED, false)
 
@@ -546,6 +590,19 @@ class SecurityPreferences(context: Context) {
         prefs.edit().putBoolean(KEY_HAS_SEEN_STEALTH_SHIELD_TIP, seen).apply()
     }
 
+    // --- PARTNER CUSTOM TIME ZONE ---
+    fun getPartnerCustomTimeZone(): String? = prefs.getString(KEY_PARTNER_CUSTOM_TIMEZONE, null)?.takeIf { it.isNotBlank() }
+
+    fun setPartnerCustomTimeZone(timeZoneId: String?) {
+        val clean = timeZoneId?.trim()?.ifBlank { null }
+        if (clean == null) {
+            prefs.edit().remove(KEY_PARTNER_CUSTOM_TIMEZONE).apply()
+        } else {
+            prefs.edit().putString(KEY_PARTNER_CUSTOM_TIMEZONE, clean).apply()
+        }
+        _partnerCustomTimeZone.value = clean
+    }
+
     private fun hashPin(pin: String): String {
         val bytes = MessageDigest.getInstance("SHA-256").digest(pin.toByteArray())
         return bytes.joinToString("") { "%02x".format(it) }
@@ -604,6 +661,7 @@ class SecurityPreferences(context: Context) {
         private const val KEY_SIDE_EMERGENCY_EXIT_ENABLED = "side_emergency_exit_enabled"
         private const val KEY_SIDE_EMERGENCY_EXIT_OPACITY = "side_emergency_exit_opacity"
         private const val KEY_CHAT_SOUNDS_ENABLED = "chat_sounds_enabled"
+        private const val KEY_PARTNER_CUSTOM_TIMEZONE = "partner_custom_timezone"
 
         @Volatile
         private var INSTANCE: SecurityPreferences? = null
