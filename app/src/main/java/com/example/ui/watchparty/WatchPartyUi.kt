@@ -176,7 +176,7 @@ fun WatchPartyInvite(modifier: Modifier = Modifier) {
         val line = when {
             p.startedBy == partnerId -> "$partnerName started “${p.title}”"
             p.isWatchedBy(partnerId) -> "$partnerName is watching “${p.title}”"
-            else -> "Movie Date on: “${p.title}”"
+            else -> "Watch Together on: “${p.title}”"
         }
         val accent = MaterialTheme.colorScheme.primary
         val glow = rememberInfiniteTransition(label = "invite_glow")

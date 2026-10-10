@@ -19,8 +19,8 @@ def main():
         print(f"Error: {APK_PATH} not found. Make sure the release build finished.")
         sys.exit(1)
 
-    version_code = 110
-    version_name = "1.7.38"
+    version_code = 111
+    version_name = "1.7.39"
     
     tag_name = f"v{version_name}-{version_code}"
     release_name = f"Release {version_name} (Build {version_code})"
@@ -35,7 +35,7 @@ def main():
     release_data = {
         "tag_name": tag_name,
         "name": release_name,
-        "body": "Movie Date (Watch Party) player fix: video playback in sync, emoji bar moved above player controls, UI renamed to Movie Date.",
+        "body": "Watch Together: video player playback in sync, emoji bar above player controls, and renamed to Watch Together.",
         "draft": False,
         "prerelease": False
     }

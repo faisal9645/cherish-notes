@@ -585,7 +585,7 @@ fun WatchPartyYouTubePickerModal(
                                 Icon(Icons.Default.TouchApp, contentDescription = null, tint = accent, modifier = Modifier.size(14.dp))
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
-                                    text = "Tap any video to sync & start Movie Date 🍿",
+                                    text = "Tap any video to sync & start Watch Together 🍿",
                                     fontSize = 11.5.sp,
                                     color = Color.White
                                 )
@@ -667,7 +667,7 @@ fun WatchPartyYouTubePickerModal(
                                 if (activeParty?.isActive == true) {
                                     FilledIconButton(
                                         onClick = {
-                                            app.coupleFeaturesRepository.enqueueWatchPartyVideo(activeId, detectedVideoTitle.ifBlank { "Movie Date" })
+                                            app.coupleFeaturesRepository.enqueueWatchPartyVideo(activeId, detectedVideoTitle.ifBlank { "Watch Together" })
                                             onDismiss()
                                             android.widget.Toast.makeText(context, "Added to Up Next queue", android.widget.Toast.LENGTH_SHORT).show()
                                         },
@@ -684,7 +684,7 @@ fun WatchPartyYouTubePickerModal(
 
                                 Button(
                                     onClick = {
-                                        onStart(activeId, detectedVideoTitle.ifBlank { "Movie Date" })
+                                        onStart(activeId, detectedVideoTitle.ifBlank { "Watch Together" })
                                     },
                                     shape = RoundedCornerShape(12.dp),
                                     colors = ButtonDefaults.buttonColors(containerColor = accent),

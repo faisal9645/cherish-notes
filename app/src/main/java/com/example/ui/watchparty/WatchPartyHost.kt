@@ -201,7 +201,7 @@ fun WatchPartyHost(app: CherishApplication, allowed: Boolean) {
     LaunchedEffect(party == null) {
         if (party == null && WatchPartyUi.mode != WatchPartyMode.Hidden) {
             WatchPartyUi.close()
-            if (allowed) Toast.makeText(context, "Movie Date has ended", Toast.LENGTH_SHORT).show()
+            if (allowed) Toast.makeText(context, "Watch Together has ended", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -980,7 +980,7 @@ private fun TheaterHeader(
                 Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Make small", tint = ink)
             }
             Column(modifier = Modifier.weight(1f)) {
-                Text("Movie Date 🍿", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = ink)
+                Text("Watch Together 🍿", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = ink)
                 Text(
                     text = party.title,
                     fontSize = 12.sp,

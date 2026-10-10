@@ -427,7 +427,7 @@ data class WatchPartySession(
     val id: String = "active",
     val videoId: String = "",
     val mediaUrl: String = "",
-    val title: String = "Movie Date",
+    val title: String = "Watch Together",
     val isPlaying: Boolean = false,
     val positionSeconds: Float = 0f,
     val playbackRate: Float = 1.0f,

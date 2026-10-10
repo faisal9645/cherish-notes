@@ -409,9 +409,9 @@ fun HomeScreen(
                 LoveActionButton(
                     emoji = if (partyIsOn) "🎧" else "🍿",
                     label = when {
-                        partyIsOn && iAmWatching -> "Open Movie Date"
-                        partyIsOn -> "Join Movie Date"
-                        else -> "Movie Date"
+                        partyIsOn && iAmWatching -> "Open Watch Together"
+                        partyIsOn -> "Join Watch Together"
+                        else -> "Watch Together"
                     },
                     highlighted = partyIsOn,
                     live = partyIsOn,
