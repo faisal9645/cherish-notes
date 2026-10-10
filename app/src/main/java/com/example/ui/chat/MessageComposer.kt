@@ -30,6 +30,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
@@ -730,7 +731,8 @@ fun MessageComposer(
                 // Send button morph (small): the mic smoothly turns into a send arrow when you type, with a tiny bounce when you tap send
                 AnimatedContent(
                     targetState = when {
-                        text.isNotBlank() -> "SEND_TEXT"
+                        // Private chat is text only: Send, never the voice or video-note button
+                        text.isNotBlank() || isPrivateMode -> "SEND_TEXT"
                         isRecordingVoice && isLockedRecording -> "SEND_VOICE"
                         isVideoMode -> "VIDEO_NOTE"
                         else -> "MIC"
@@ -752,12 +754,16 @@ fun MessageComposer(
                                 if (isDark) darkTone(Color(0xFF111827)) else Color.White
                             } else Color.White
 
+                            // Private chat keeps Send in place, faded until there's text
+                            val nothingToSend = text.isBlank()
+                            val sendAlpha by animateFloatAsState(if (nothingToSend) 0.45f else 1f, label = "send_alpha")
                             Box(
                                 modifier = Modifier
                                     .size(48.dp)
                                     .graphicsLayer {
                                         scaleX = sendBounce.value
                                         scaleY = sendBounce.value
+                                        alpha = sendAlpha
                                     }
                                     .then(
                                         if (isPrivateMode) Modifier.clip(CircleShape).background(sendBg!!)
@@ -774,12 +780,14 @@ fun MessageComposer(
                                             }
                                         }
                                     ) {
-                                        scope.launch {
-                                            sendBounce.animateTo(0.78f, tween(65, easing = FastOutSlowInEasing))
-                                            sendBounce.animateTo(1f, spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium))
+                                        if (!nothingToSend) {
+                                            scope.launch {
+                                                sendBounce.animateTo(0.78f, tween(65, easing = FastOutSlowInEasing))
+                                                sendBounce.animateTo(1f, spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium))
+                                            }
+                                            onSendText()
+                                            closeEmojiBoard()
                                         }
-                                        onSendText()
-                                        closeEmojiBoard()
                                     }
                                     .testTag("composer_send_button"),
                                 contentAlignment = Alignment.Center
@@ -837,7 +845,7 @@ fun MessageComposer(
                             Box(contentAlignment = Alignment.Center) {
                                 Box(
                                     modifier = Modifier
-                                        .size(52.dp)
+                                        .size(48.dp)
                                         .then(
                                             if (isPrivateMode) Modifier.clip(CircleShape).background(videoBg ?: Color.Gray)
                                             else Modifier
@@ -879,7 +887,7 @@ fun MessageComposer(
                                         imageVector = Icons.Default.Videocam,
                                         contentDescription = "Circular Video Note (tap to switch to Mic, hold to record)",
                                         tint = videoTint,
-                                        modifier = Modifier.size(26.dp)
+                                        modifier = Modifier.size(23.dp)
                                     )
                                 }
 
@@ -920,34 +928,23 @@ fun MessageComposer(
                             } else Color.White
 
                             Box(contentAlignment = Alignment.Center) {
-                                // Live Concentric Breathing Rings scaled to real voice amplitude
-                                if (isRecordingVoice && !isLockedRecording) {
-                                    val liveAmp = (recordingAmplitudes.lastOrNull() ?: 0.15f).coerceIn(0.1f, 1f)
-                                    val outerRingDp = (52 + liveAmp * 42f + pulseAlpha * 14f).dp
-                                    val innerRingDp = (52 + liveAmp * 22f + pulseAlpha * 8f).dp
-                                    Box(
-                                        modifier = Modifier
-                                            .size(outerRingDp)
-                                            .clip(CircleShape)
-                                            .background(
-                                                if (isPrivateMode) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.08f)
-                                                else MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
-                                            )
-                                    )
-                                    Box(
-                                        modifier = Modifier
-                                            .size(innerRingDp)
-                                            .clip(CircleShape)
-                                            .background(
-                                                if (isPrivateMode) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.18f)
-                                                else MaterialTheme.colorScheme.primary.copy(alpha = 0.24f)
-                                            )
-                                    )
-                                }
-
+                                // Live concentric breathing rings, scaled to the real voice amplitude:
+                                // drawn around the button, so they stay round and don't move the bar
+                                val ringOuter = if (isPrivateMode) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.08f)
+                                    else MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                                val ringInner = if (isPrivateMode) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.18f)
+                                    else MaterialTheme.colorScheme.primary.copy(alpha = 0.24f)
+                                val showRings = isRecordingVoice && !isLockedRecording
                                 Box(
                                     modifier = Modifier
-                                        .size(52.dp)
+                                        .size(48.dp)
+                                        .drawBehind {
+                                            if (showRings) {
+                                                val liveAmp = (recordingAmplitudes.lastOrNull() ?: 0.15f).coerceIn(0.1f, 1f)
+                                                drawCircle(ringOuter, radius = (24f + liveAmp * 21f + pulseAlpha * 7f).dp.toPx())
+                                                drawCircle(ringInner, radius = (24f + liveAmp * 11f + pulseAlpha * 4f).dp.toPx())
+                                            }
+                                        }
                                         .then(
                                             if (isRecordingVoice && !isPrivateMode) {
                                                 // Pulses but keeps the original pink gradient
@@ -1056,7 +1053,7 @@ fun MessageComposer(
                                         imageVector = Icons.Default.Mic,
                                         contentDescription = "Hold to record voice note",
                                         tint = micTint,
-                                        modifier = Modifier.size(24.dp)
+                                        modifier = Modifier.size(23.dp)
                                     )
                                 }
 

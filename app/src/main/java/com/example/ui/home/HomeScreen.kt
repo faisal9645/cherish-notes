@@ -64,6 +64,7 @@ fun HomeScreen(
     val homeApp = remember { context.applicationContext as com.example.CherishApplication }
     val ourMovies by homeApp.coupleFeaturesRepository.moviesFlow.collectAsState()
     val ourBooks by homeApp.coupleFeaturesRepository.booksFlow.collectAsState()
+    val watchParty by homeApp.coupleFeaturesRepository.watchPartyFlow.collectAsState()
     BackHandler {
         onQuickDisguise()
     }
@@ -103,8 +104,8 @@ fun HomeScreen(
     var showAddLoveNoteDialog by remember { mutableStateOf(false) }
     var showAddMovieDialog by remember { mutableStateOf(false) }
     var showAddBookDialog by remember { mutableStateOf(false) }
-    var showSleepSyncModal by remember { mutableStateOf(false) }
     var showWatchPartyModal by remember { mutableStateOf(false) }
+    var showWatchPartySetup by remember { mutableStateOf(false) }
 
     // The title heart beats a few times when the tab opens, then rests
     val heartBeat = remember { androidx.compose.animation.core.Animatable(1f) }
@@ -332,7 +333,6 @@ fun HomeScreen(
                 if (isExpired) "\u2728 You can check now"
                 else "Quiet until ${CheckAfterHelper.formatTargetTime(partnerCheckAfterTarget)}"
             } else null
-            val activeWatchParty by homeApp.coupleFeaturesRepository.watchPartyFlow.collectAsState()
             val activeSleepSync by homeApp.coupleFeaturesRepository.sleepSyncFlow.collectAsState()
 
             val effectivePartnerTz = partner?.timeZone?.takeIf { it.isNotBlank() } ?: java.util.TimeZone.getDefault().id
@@ -384,25 +384,24 @@ fun HomeScreen(
                 onOpenNotes = onNavigateToNotes
             )
 
-            // Under the card: Goodnight Kiss (Wake up once I'm asleep) and Watch Party (Join while
-            // one is on)
+            // Under the card: Watch Party (Join while one is on), and Wake up if I'm marked asleep
             val iAmAsleep = currentUser?.statusMessage == "Asleep 🌙"
-            val partyIsOn = activeWatchParty?.isActive == true
+            val partyIsOn = watchParty?.isActive == true
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                LoveActionButton(
-                    emoji = if (iAmAsleep) "☀️" else "🌙",
-                    label = if (iAmAsleep) "Wake up" else "Goodnight Kiss",
-                    highlighted = iAmAsleep,
-                    tag = if (iAmAsleep) "wake_up_button" else "goodnight_kiss_sleep_sync_button",
-                    modifier = Modifier.weight(1f),
-                    onClick = {
-                        if (iAmAsleep) homeApp.coupleFeaturesRepository.wakeUpFromSleep() else showSleepSyncModal = true
-                    }
-                )
+                if (iAmAsleep) {
+                    LoveActionButton(
+                        emoji = "☀️",
+                        label = "Wake up",
+                        highlighted = true,
+                        tag = "wake_up_button",
+                        modifier = Modifier.weight(1f),
+                        onClick = { homeApp.coupleFeaturesRepository.wakeUpFromSleep() }
+                    )
+                }
                 LoveActionButton(
                     emoji = if (partyIsOn) "🎧" else "🍿",
                     label = if (partyIsOn) "Join Watch Party" else "Watch Party",
@@ -410,12 +409,8 @@ fun HomeScreen(
                     live = partyIsOn,
                     tag = if (partyIsOn) "join_watch_party_button" else "ambient_watch_party_button",
                     modifier = Modifier.weight(1f),
-                    onClick = {
-                        if (!partyIsOn) {
-                            homeApp.coupleFeaturesRepository.startWatchParty("dQw4w9WgXcQ", "Cozy Ambient Music", "")
-                        }
-                        showWatchPartyModal = true
-                    }
+                    // Starting one means picking a video first; while one is on, this joins it
+                    onClick = { if (partyIsOn) showWatchPartyModal = true else showWatchPartySetup = true }
                 )
             }
 
@@ -837,29 +832,33 @@ fun HomeScreen(
         )
     }
 
-    if (showSleepSyncModal) {
-        GoodnightKissSleepSyncModal(
-            partnerName = partnerName,
-            onDismiss = { showSleepSyncModal = false },
-            onSleepSyncComplete = {
-                homeApp.coupleFeaturesRepository.triggerSleepSync()
-            }
+    if (showWatchPartySetup) {
+        com.example.ui.chat.WatchPartySetupDialog(
+            onStart = { videoId, title ->
+                homeApp.coupleFeaturesRepository.startWatchParty(videoId, title, "")
+                showWatchPartySetup = false
+                showWatchPartyModal = true
+            },
+            onDismiss = { showWatchPartySetup = false }
         )
     }
 
-    if (showWatchPartyModal) {
-        val session = homeApp.coupleFeaturesRepository.watchPartyFlow.value ?: com.example.data.model.WatchPartySession(
-            videoId = "dQw4w9WgXcQ",
-            title = "Ambient Listening",
-            isActive = true
-        )
+    // Shown only while a party is really on; when either of us ends it, it closes here too
+    val liveParty = watchParty?.takeIf { it.isActive }
+    LaunchedEffect(liveParty == null) {
+        if (liveParty == null) {
+            delay(400) // not for a moment's gap while a new party is being saved
+            showWatchPartyModal = false
+        }
+    }
+    if (showWatchPartyModal && liveParty != null) {
         com.example.ui.chat.SyncedWatchPartyModal(
-            session = session,
+            session = liveParty,
             onPlayPause = { isPlaying, pos ->
                 homeApp.coupleFeaturesRepository.updateWatchPartyPlayback(isPlaying, pos)
             },
             onSeek = { pos ->
-                homeApp.coupleFeaturesRepository.updateWatchPartyPlayback(session.isPlaying, pos)
+                homeApp.coupleFeaturesRepository.updateWatchPartyPlayback(liveParty.isPlaying, pos)
             },
             onEndSession = {
                 homeApp.coupleFeaturesRepository.endWatchParty()

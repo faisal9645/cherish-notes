@@ -681,7 +681,7 @@ class CoupleFeaturesRepository(
     }
 
     fun updateWatchPartyPlayback(isPlaying: Boolean, positionSeconds: Float) {
-        val current = _watchPartyFlow.value ?: return
+        val current = _watchPartyFlow.value?.takeIf { it.isActive } ?: return
         val myId = authRepository.getCurrentUserId()
         val updated = current.copy(
             isPlaying = isPlaying,
@@ -703,7 +703,15 @@ class CoupleFeaturesRepository(
     fun endWatchParty() {
         _watchPartyFlow.value = null
         val ref = loveCoupleRef() ?: return
-        ref.update(com.google.firebase.firestore.FieldPath.of("watchParty", "isActive"), false)
+        // A merge, so ending also works when no party was ever saved
+        val map = mapOf(
+            "isActive" to false,
+            "isPlaying" to false,
+            "updatedAt" to System.currentTimeMillis(),
+            "updatedBy" to authRepository.getCurrentUserId()
+        )
+        ref.set(mapOf("watchParty" to map), com.google.firebase.firestore.SetOptions.merge())
+            .addOnFailureListener { Log.w("CoupleFeaturesRepo", "Ending the watch party failed", it) }
     }
 
     // ---- Goodnight Kiss / Sleep Sync: tap and hold glowing sphere until both phones trigger vibration ----
@@ -1024,9 +1032,15 @@ class CoupleFeaturesRepository(
             )
         }.sortedByDescending { it.addedAt }
 
-        // Synced Watch Party
+        // Synced Watch Party: on from Start until either of us ends it
         val wp = doc["watchParty"] as? Map<*, *>
-        if (wp != null && wp["isActive"] == true) {
+        val wpOver = wp != null && (
+            wp["isActive"] != true ||
+                System.currentTimeMillis() - ((wp["updatedAt"] as? Number)?.toLong() ?: 0L) > WATCH_PARTY_IDLE_MS ||
+                // The sample video older versions started by themselves whenever the button was tapped
+                (wp["videoId"] == "dQw4w9WgXcQ" && wp["title"] == "Cozy Ambient Music")
+            )
+        if (wp != null && !wpOver) {
             _watchPartyFlow.value = com.example.data.model.WatchPartySession(
                 id = "active",
                 videoId = wp["videoId"] as? String ?: "",
@@ -1039,7 +1053,7 @@ class CoupleFeaturesRepository(
                 startedBy = wp["startedBy"] as? String ?: "",
                 isActive = true
             )
-        } else if (_watchPartyFlow.value?.isActive == true && wp?.get("isActive") == false) {
+        } else if (wpOver) {
             _watchPartyFlow.value = null
         }
 
@@ -1079,6 +1093,9 @@ class CoupleFeaturesRepository(
 
     private companion object {
         const val DAY_MS = 86_400_000L
+
+        /** A Watch Party nobody has played, paused or moved for this long was forgotten: it's over. */
+        const val WATCH_PARTY_IDLE_MS = 6 * 60 * 60 * 1000L
 
         /** One question a day, the same on both phones: (question, category). */
         val DAILY_QUESTIONS = listOf(

@@ -1529,12 +1529,14 @@ fun ChatScreen(
                     verticalArrangement = Arrangement.spacedBy(4.dp, Alignment.Top)
                 ) {
                     // A new day with nothing shown yet: "Today" and the banner open the chat at the top
-                    if (showEmptyTodayHeader && reversedMessages.isEmpty()) {
+                    // (not in private chat, which stays plain)
+                    if (showEmptyTodayHeader && reversedMessages.isEmpty() &&
+                        uiState.chatExperienceMode != com.example.ui.chat.ChatExperienceMode.PRIVATE
+                    ) {
                         item(key = "empty_today_header", contentType = "today_header") {
-                            val isPrivate = uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE
                             Column(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
-                                DateSeparatorBadge(dateText = "Today", isPrivateMode = isPrivate, isDark = isDark)
-                                StrictlyTwoPersonBanner(isPrivateMode = isPrivate, isDark = isDark)
+                                DateSeparatorBadge(dateText = "Today", isPrivateMode = false, isDark = isDark)
+                                StrictlyTwoPersonBanner(isPrivateMode = false, isDark = isDark)
                             }
                         }
                     }
@@ -1556,6 +1558,7 @@ fun ChatScreen(
                             message = message,
                             isFromMe = isFromMe,
                             isFirstOfDay = isFirstOfDay,
+                            isOldestShown = index == reversedMessages.lastIndex,
                             isFreshArrival = isFreshArrival,
                             isPrivate = uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE,
                             isDark = isDark,
@@ -1635,7 +1638,7 @@ fun ChatScreen(
                     val isPrivate = uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE
                     Column(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
                         DateSeparatorBadge(dateText = "Today", isPrivateMode = isPrivate, isDark = isDark)
-                        StrictlyTwoPersonBanner(isPrivateMode = isPrivate, isDark = isDark)
+                        if (!isPrivate) StrictlyTwoPersonBanner(isPrivateMode = false, isDark = isDark)
                     }
                 }
 
@@ -2998,6 +3001,7 @@ private fun ChatMessageRow(
     message: Message,
     isFromMe: Boolean,
     isFirstOfDay: Boolean,
+    isOldestShown: Boolean,
     isFreshArrival: Boolean,
     isPrivate: Boolean,
     isDark: Boolean,
@@ -3018,11 +3022,13 @@ private fun ChatMessageRow(
     Column(modifier = modifier.fillMaxWidth()) {
         if (isFirstOfDay) {
             val dateSep = formatDateSeparator(message.timestamp)
-            if (dateSep.isNotEmpty()) {
+            val today = isToday(message.timestamp)
+            // Private chat stays plain: no banner, and "Today" only to divide it from older days
+            if (dateSep.isNotEmpty() && !(isPrivate && today && isOldestShown)) {
                 DateSeparatorBadge(dateText = dateSep, isPrivateMode = isPrivate, isDark = isDark)
             }
-            if (isToday(message.timestamp)) {
-                StrictlyTwoPersonBanner(isPrivateMode = isPrivate, isDark = isDark)
+            if (today && !isPrivate) {
+                StrictlyTwoPersonBanner(isPrivateMode = false, isDark = isDark)
             }
         }
 

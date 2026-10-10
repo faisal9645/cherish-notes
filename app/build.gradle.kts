@@ -17,8 +17,8 @@ android {
     applicationId = "com.cherish.notes"
     minSdk = 24
     targetSdk = 35
-    versionCode = 100
-    versionName = "1.7.28"
+    versionCode = 101
+    versionName = "1.7.29"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     resourceConfigurations += listOf("en")

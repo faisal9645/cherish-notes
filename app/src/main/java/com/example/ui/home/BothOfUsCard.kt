@@ -904,7 +904,7 @@ private fun RingedAvatar(person: LovePerson, color: Color, onOpenPhoto: (String)
     }
 }
 
-/** Two hearts beating gently between us: his blue one in front, holding her pink one. */
+/** Two hearts beating gently between us: her pink one in front, resting on his blue one. */
 @Composable
 private fun TwinHearts(pink: Color, blue: Color, beat: State<Float>) {
     val outline = LocalCardColors.current.pill.copy(alpha = 1f)
@@ -915,9 +915,9 @@ private fun TwinHearts(pink: Color, blue: Color, beat: State<Float>) {
             .drawWithCache {
                 val unitHeart = heartPath(0f, 0f, 1f)
                 val heartSize = 28.dp.toPx()
-                // His (blue) heart in front and a little higher; hers (pink) lower, tucked behind it
-                val pinkAt = Offset(size.width / 2f - 6.dp.toPx(), size.height / 2f + 5.dp.toPx())
-                val blueAt = Offset(size.width / 2f + 6.dp.toPx(), size.height / 2f - 1.dp.toPx())
+                // Her (pink) heart in front and a little higher; his (blue) lower, behind it
+                val pinkAt = Offset(size.width / 2f - 6.dp.toPx(), size.height / 2f - 1.dp.toPx())
+                val blueAt = Offset(size.width / 2f + 6.dp.toPx(), size.height / 2f + 5.dp.toPx())
                 val edge = Stroke(width = 3.dp.toPx() / heartSize)
                 // The edge matches the card behind, so the overlapping hearts read as two
                 val edgeColor = if (cardIsLight) outline else NightCardEdge
@@ -932,8 +932,8 @@ private fun TwinHearts(pink: Color, blue: Color, beat: State<Float>) {
                             drawPath(unitHeart, color)
                         }
                     }
-                    heart(pinkAt, pink)
-                    heart(blueAt, blue, grow = 1.06f)
+                    heart(blueAt, blue)
+                    heart(pinkAt, pink, grow = 1.06f)
                 }
             }
             .testTag("both_of_us_hearts")
@@ -1061,15 +1061,15 @@ private fun PersonDetails(
                 .clip(RoundedCornerShape(50))
                 .background(cc.pill)
                 .border(1.dp, color.copy(alpha = 0.35f), RoundedCornerShape(50))
-                .padding(horizontal = 6.dp, vertical = 3.5.dp)
+                .padding(horizontal = 5.dp, vertical = 3.5.dp)
         ) {
             Box(
                 Modifier
-                    .size(6.5.dp)
+                    .size(6.dp)
                     .clip(CircleShape)
                     .background(if (person.isOnline) OnlineGreen else cc.dimInk)
             )
-            Spacer(modifier = Modifier.width(4.5.dp))
+            Spacer(modifier = Modifier.width(3.5.dp))
             val statusLabel = when {
                 person.isOnline -> "Online"
                 !person.status.isNullOrBlank() -> person.status
@@ -1077,7 +1077,7 @@ private fun PersonDetails(
             }
             Text(
                 text = statusLabel,
-                fontSize = 11.5.sp,
+                fontSize = 11.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = if (person.isOnline) OnlineGreen else cc.dimInk,
                 maxLines = 1,
@@ -1085,14 +1085,14 @@ private fun PersonDetails(
                 overflow = if (person.isOnline) TextOverflow.Clip else TextOverflow.Ellipsis,
                 modifier = if (person.isOnline) Modifier else Modifier.weight(1f, fill = false)
             )
-            Spacer(modifier = Modifier.width(5.dp))
+            Spacer(modifier = Modifier.width(4.dp))
             Box(
                 Modifier
                     .width(1.dp)
-                    .height(11.dp)
+                    .height(10.dp)
                     .background(cc.hairline)
             )
-            Spacer(modifier = Modifier.width(5.dp))
+            Spacer(modifier = Modifier.width(4.dp))
             CardBattery(level = person.batteryLevel, isCharging = person.isCharging, showPercentage = person.isOnline)
         }
 
@@ -1277,11 +1277,11 @@ private fun CardBattery(level: Int?, isCharging: Boolean, showPercentage: Boolea
             },
             contentDescription = if (level != null) "$level% battery" else "Battery",
             tint = tint,
-            modifier = Modifier.size(13.dp)
+            modifier = Modifier.size(11.5.dp)
         )
         if (showPercentage && level != null && level in 0..100) {
-            Spacer(modifier = Modifier.width(2.dp))
-            Text(text = "$level%", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = tint, maxLines = 1, softWrap = false)
+            Spacer(modifier = Modifier.width(1.dp))
+            Text(text = "$level%", fontSize = 10.5.sp, fontWeight = FontWeight.SemiBold, color = tint, maxLines = 1, softWrap = false)
         }
     }
 }

@@ -1,6 +1,7 @@
 package com.example.ui.chat
 
 import android.app.Activity
+import android.content.ClipboardManager
 import android.content.Context
 import android.content.pm.ActivityInfo
 import androidx.activity.compose.BackHandler
@@ -9,8 +10,10 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -19,6 +22,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -27,8 +31,98 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import coil.compose.AsyncImage
 import com.example.data.model.WatchPartySession
 import kotlinx.coroutines.delay
+
+/**
+ * Starts a Watch Party: paste a YouTube link (or its id), check the video by its thumbnail, add a
+ * title if you like, then Start. Nothing plays until Start is tapped.
+ */
+@Composable
+fun WatchPartySetupDialog(
+    onStart: (videoId: String, title: String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val context = LocalContext.current
+    var link by remember { mutableStateOf("") }
+    var title by remember { mutableStateOf("") }
+    val videoId = remember(link) { youTubeIdOf(link) }
+    val notAVideo = link.isNotBlank() && videoId == null
+    val accent = MaterialTheme.colorScheme.primary
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Start a Watch Party 🍿", fontWeight = FontWeight.Bold) },
+        text = {
+            Column(
+                modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Text(
+                    text = "Paste a YouTube link. It plays on both phones, in sync.",
+                    fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                OutlinedTextField(
+                    value = link,
+                    onValueChange = { link = it.take(300) },
+                    label = { Text("YouTube link") },
+                    singleLine = true,
+                    isError = notAVideo,
+                    supportingText = if (notAVideo) {
+                        { Text("That isn't a YouTube video link") }
+                    } else null,
+                    trailingIcon = {
+                        IconButton(onClick = {
+                            val clip = (context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager)
+                                ?.primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0)
+                                ?.coerceToText(context)?.toString()
+                            if (!clip.isNullOrBlank()) link = clip.trim().take(300)
+                        }) {
+                            Icon(Icons.Default.ContentPaste, contentDescription = "Paste", tint = accent)
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth().testTag("watch_party_link")
+                )
+                if (videoId != null) {
+                    AsyncImage(
+                        model = YouTubeHelper.getThumbnailUrl(videoId),
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .aspectRatio(16f / 9f)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                    )
+                }
+                OutlinedTextField(
+                    value = title,
+                    onValueChange = { title = it.take(60) },
+                    label = { Text("Title (optional)") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = { videoId?.let { onStart(it, title.trim()) } },
+                enabled = videoId != null,
+                colors = ButtonDefaults.buttonColors(containerColor = accent),
+                modifier = Modifier.testTag("watch_party_start")
+            ) { Text("Start") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+    )
+}
+
+/** The video id in a YouTube link, or the id itself if that's what was pasted. */
+private fun youTubeIdOf(text: String): String? {
+    val t = text.trim()
+    return YouTubeHelper.extractVideoId(t) ?: t.takeIf { Regex("[A-Za-z0-9_-]{11}").matches(it) }
+}
 
 /**
  * Synced Ambient Listening / Watch Party Modal
