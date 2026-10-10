@@ -3,6 +3,7 @@ package com.example.ui.chat
 import android.annotation.SuppressLint
 import android.content.ClipboardManager
 import android.content.Context
+import android.content.Intent
 import android.graphics.Bitmap
 import android.net.Uri
 import android.view.ViewGroup
@@ -133,15 +134,30 @@ fun WatchPartyYouTubePickerModal(
     fun navigateOrSearch(input: String) {
         val trimmed = input.trim()
         if (trimmed.isBlank()) return
+        searchQuery = trimmed
         val vid = extractYouTubeVideoId(trimmed)
         val targetUrl = when {
-            vid != null -> "https://m.youtube.com/watch?v=$vid"
+            vid != null -> {
+                detectedVideoId = vid
+                "https://m.youtube.com/watch?v=$vid"
+            }
             trimmed.startsWith("http://", ignoreCase = true) || trimmed.startsWith("https://", ignoreCase = true) -> trimmed
             else -> "https://m.youtube.com/results?search_query=" + URLEncoder.encode(trimmed, "UTF-8")
         }
-        searchQuery = trimmed
+        isLoading = true
         webViewRef?.loadUrl(targetUrl)
         keyboardController?.hide()
+    }
+
+    fun pasteFromClipboard() {
+        try {
+            val clip = (context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager)
+                ?.primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0)
+                ?.coerceToText(context)?.toString()?.trim()
+            if (!clip.isNullOrBlank()) {
+                navigateOrSearch(clip)
+            }
+        } catch (_: Exception) {}
     }
 
     BackHandler {
@@ -212,14 +228,14 @@ fun WatchPartyYouTubePickerModal(
                                 }
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
-                                    text = "Browse YouTube 🍿",
+                                    text = "Watch Together 🍿",
                                     fontSize = 15.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = ink
                                 )
                             }
                             Text(
-                                text = "Select any video to watch together in sync",
+                                text = "Select or search any video to watch in sync",
                                 fontSize = 11.sp,
                                 color = ink.copy(alpha = 0.65f),
                                 maxLines = 1,
@@ -285,7 +301,93 @@ fun WatchPartyYouTubePickerModal(
                     }
                 }
 
-                // 2. Search & URL Bar (Removed, using YouTube's built-in search)
+                // 2. Search & URL Bar
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 4.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 10.dp, vertical = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Search,
+                            contentDescription = "Search",
+                            tint = accent,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        androidx.compose.foundation.text.BasicTextField(
+                            value = searchQuery,
+                            onValueChange = { searchQuery = it },
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(vertical = 8.dp),
+                            singleLine = true,
+                            textStyle = androidx.compose.ui.text.TextStyle(
+                                color = ink,
+                                fontSize = 13.5.sp,
+                                fontWeight = FontWeight.Normal
+                            ),
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                            keyboardActions = KeyboardActions(onSearch = { navigateOrSearch(searchQuery) }),
+                            decorationBox = { innerTextField ->
+                                if (searchQuery.isBlank()) {
+                                    Text(
+                                        text = "Search or paste YouTube link...",
+                                        color = ink.copy(alpha = 0.45f),
+                                        fontSize = 13.sp
+                                    )
+                                }
+                                innerTextField()
+                            }
+                        )
+                        if (searchQuery.isNotBlank()) {
+                            IconButton(
+                                onClick = { searchQuery = "" },
+                                modifier = Modifier.size(28.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.Clear,
+                                    contentDescription = "Clear",
+                                    tint = ink.copy(alpha = 0.5f),
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        }
+                        IconButton(
+                            onClick = { pasteFromClipboard() },
+                            modifier = Modifier.size(28.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.ContentPaste,
+                                contentDescription = "Paste",
+                                tint = accent,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(4.dp))
+                        FilledTonalButton(
+                            onClick = { navigateOrSearch(searchQuery) },
+                            enabled = searchQuery.isNotBlank(),
+                            shape = RoundedCornerShape(8.dp),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
+                            modifier = Modifier.height(30.dp)
+                        ) {
+                            Text(
+                                text = "Go",
+                                fontSize = 11.5.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
 
                 // 3. Quick Category Chips
                 Row(
@@ -443,7 +545,10 @@ fun WatchPartyYouTubePickerModal(
                                 settings.apply {
                                     javaScriptEnabled = true
                                     domStorageEnabled = true
+                                    databaseEnabled = true
                                     mediaPlaybackRequiresUserGesture = false
+                                    allowFileAccess = true
+                                    allowContentAccess = true
                                     loadsImagesAutomatically = true
                                     mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
                                     useWideViewPort = true
@@ -451,7 +556,7 @@ fun WatchPartyYouTubePickerModal(
                                     javaScriptCanOpenWindowsAutomatically = true
                                     setSupportMultipleWindows(false)
                                     cacheMode = WebSettings.LOAD_DEFAULT
-                                    userAgentString = "Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36"
+                                    userAgentString = "Mozilla/5.0 (Linux; Android 14; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36"
                                 }
 
                                 val cookieManager = CookieManager.getInstance()
@@ -476,7 +581,7 @@ fun WatchPartyYouTubePickerModal(
                                 webChromeClient = object : WebChromeClient() {
                                     override fun onProgressChanged(view: WebView?, newProgress: Int) {
                                         pageProgress = newProgress
-                                        isLoading = newProgress < 100
+                                        isLoading = newProgress < 85
                                     }
 
                                     override fun onReceivedTitle(view: WebView?, title: String?) {
@@ -494,28 +599,74 @@ fun WatchPartyYouTubePickerModal(
                                 }
 
                                 webViewClient = object : WebViewClient() {
+                                    override fun onReceivedError(view: WebView?, errorCode: Int, description: String?, failingUrl: String?) {
+                                        super.onReceivedError(view, errorCode, description, failingUrl)
+                                        isLoading = false
+                                    }
+
+                                    override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: WebResourceError?) {
+                                        super.onReceivedError(view, request, error)
+                                        if (request?.isForMainFrame == true) {
+                                            isLoading = false
+                                        }
+                                    }
+
                                     override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
                                         val url = request?.url?.toString() ?: return false
                                         // Keep standard navigation inside the WebView
-                                        if (url.contains("youtube.com") ||
-                                            url.contains("youtu.be") ||
-                                            url.contains("google.com") ||
-                                            url.contains("accounts.google.com")
-                                        ) {
-                                            return false
+                                        if (url.startsWith("http://") || url.startsWith("https://")) {
+                                            if (url.contains("youtube.com") ||
+                                                url.contains("youtu.be") ||
+                                                url.contains("google.com") ||
+                                                url.contains("accounts.google.com")
+                                            ) {
+                                                return false
+                                            }
                                         }
-                                        // Intercept external intent schemes to prevent app ejection
-                                        if (url.startsWith("intent://") || url.startsWith("vnd.youtube:")) {
+                                        // Intercept external intent schemes to prevent app ejection and net::ERR_UNKNOWN_URL_SCHEME crashes
+                                        if (url.startsWith("intent://") || url.startsWith("vnd.youtube:") || url.startsWith("android-app:")) {
                                             val vid = extractYouTubeVideoId(url)
                                             if (vid != null) {
+                                                detectedVideoId = vid
                                                 view?.loadUrl("https://m.youtube.com/watch?v=$vid")
                                                 return true
                                             }
+                                            try {
+                                                val parsed = Intent.parseUri(url, Intent.URI_INTENT_SCHEME)
+                                                val fallback = parsed.getStringExtra("browser_fallback_url")
+                                                if (!fallback.isNullOrBlank()) {
+                                                    view?.loadUrl(fallback)
+                                                    return true
+                                                }
+                                                val dataUri = parsed.dataString
+                                                if (!dataUri.isNullOrBlank() && (dataUri.startsWith("http://") || dataUri.startsWith("https://"))) {
+                                                    view?.loadUrl(dataUri)
+                                                    return true
+                                                }
+                                            } catch (_: Exception) {}
+
+                                            if (url.startsWith("intent://")) {
+                                                val stripped = url.removePrefix("intent://").substringBefore("#Intent")
+                                                if (stripped.isNotBlank()) {
+                                                    val target = if (stripped.startsWith("http://") || stripped.startsWith("https://")) stripped else "https://$stripped"
+                                                    view?.loadUrl(target)
+                                                    return true
+                                                }
+                                            }
+                                            // Always return true to consume unknown schemes without failing WebView
+                                            return true
                                         }
+
+                                        // Consume any other custom non-web scheme
+                                        if (!url.startsWith("http://") && !url.startsWith("https://")) {
+                                            return true
+                                        }
+
                                         return false
                                     }
 
                                     override fun onPageFinished(view: WebView?, url: String?) {
+                                        isLoading = false
                                         canGoBack = view?.canGoBack() == true
                                         canGoForward = view?.canGoForward() == true
                                         val id = extractYouTubeVideoId(url)
@@ -568,8 +719,42 @@ fun WatchPartyYouTubePickerModal(
                         update = {}
                     )
 
+                    // Loading overlay so the screen is never blank while YouTube loads
+                    if (isLoading) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(Color.Black.copy(alpha = 0.7f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center
+                            ) {
+                                CircularProgressIndicator(
+                                    color = accent,
+                                    strokeWidth = 3.dp,
+                                    modifier = Modifier.size(38.dp)
+                                )
+                                Spacer(modifier = Modifier.height(14.dp))
+                                Text(
+                                    text = "Connecting to YouTube 🍿",
+                                    color = Color.White,
+                                    fontSize = 13.5.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = "Pick a video or paste a link to watch together",
+                                    color = Color.White.copy(alpha = 0.65f),
+                                    fontSize = 11.5.sp
+                                )
+                            }
+                        }
+                    }
+
                     // Subtle hint pill when user hasn't clicked a video yet
-                    if (detectedVideoId == null) {
+                    if (detectedVideoId == null && !isLoading) {
                         Surface(
                             shape = CircleShape,
                             color = Color.Black.copy(alpha = 0.75f),

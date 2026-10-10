@@ -59,16 +59,32 @@ object NotificationHelper {
     }
 
     /**
-     * Check if user is actively inside the chat screen so we don't disturb them
-     * with redundant notifications while they are already viewing messages live.
+     * Check if user is actively inside the Cherish app so notifications never show
+     * while the user is using the app.
      */
     fun isAppOpenOnScreen(context: Context): Boolean {
-        return try {
+        if (com.example.CherishApplication.isAppInForeground) return true
+        try {
+            if (androidx.lifecycle.ProcessLifecycleOwner.get().lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED)) {
+                return true
+            }
+        } catch (_: Exception) {}
+        try {
             val app = context.applicationContext as? com.example.CherishApplication
-            app?.authRepository?.isAppOpenOnScreen() ?: false
-        } catch (_: Exception) {
-            false
-        }
+            if (app?.authRepository?.isAppOpenOnScreen() == true) return true
+        } catch (_: Exception) {}
+        try {
+            val am = context.getSystemService(Context.ACTIVITY_SERVICE) as? android.app.ActivityManager
+            val processes = am?.runningAppProcesses.orEmpty()
+            for (proc in processes) {
+                if (proc.importance == android.app.ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND &&
+                    proc.processName == context.packageName
+                ) {
+                    return true
+                }
+            }
+        } catch (_: Exception) {}
+        return false
     }
 
     fun isUserActivelyViewingChat(context: Context): Boolean {
@@ -138,9 +154,9 @@ object NotificationHelper {
         }
         val subText = if (isDiscreet) maskedTitle else "Cherish"
 
-        // Public version shown on secure lock screens
+        // Public version shown on secure lock screens (discreet note icon, never heart)
         val publicNotification = NotificationCompat.Builder(context, CHANNEL_MESSAGES_ID)
-            .setSmallIcon(if (!prefs.isDisguiseActive()) R.drawable.ic_cherish_heart else R.drawable.ic_stat_notes)
+            .setSmallIcon(R.drawable.ic_stat_notes)
             .setContentTitle(maskedTitle)
             .setContentText(maskedText)
             .setSubText(maskedTitle)
@@ -151,7 +167,7 @@ object NotificationHelper {
         val isBadgeEnabled = prefs.isBadgeNotificationEnabled()
 
         val notification = NotificationCompat.Builder(context, CHANNEL_MESSAGES_ID)
-            .setSmallIcon(if (!prefs.isDisguiseActive()) R.drawable.ic_cherish_heart else R.drawable.ic_stat_notes)
+            .setSmallIcon(R.drawable.ic_stat_notes)
             .setContentTitle(displayTitle)
             .setContentText(displayText)
             .setSubText(subText)
@@ -221,6 +237,7 @@ object NotificationHelper {
      * Subtle reminder notification when partner's Check-After countdown finishes
      */
     fun showCheckAfterReminderNotification(context: Context, partnerName: String = "Your partner") {
+        if (isAppOpenOnScreen(context)) return
         val prefs = SecurityPreferences.getInstance(context)
         if (!prefs.isNotificationsEnabled()) return
         if (!prefs.isCheckAfterReminderEnabled()) return
@@ -237,15 +254,15 @@ object NotificationHelper {
         )
 
         val isDisguised = prefs.isDisguiseActive() && (prefs.isHideNotificationContent() || prefs.isDisguiseModeEnabled())
-        val displayTitle = if (isDisguised) prefs.getMaskedNotificationTitle() else "❤️ It's time to check"
+        val displayTitle = if (isDisguised) prefs.getMaskedNotificationTitle() else "It's time to check"
         val displayText = if (isDisguised) {
             "Reminder schedule completed"
         } else {
-            "$partnerName's check-after time has arrived 💕"
+            "$partnerName's check-after time has arrived"
         }
 
         val notification = NotificationCompat.Builder(context, CHANNEL_MESSAGES_ID)
-            .setSmallIcon(if (!prefs.isDisguiseActive()) R.drawable.ic_cherish_heart else R.drawable.ic_stat_notes)
+            .setSmallIcon(R.drawable.ic_stat_notes)
             .setContentTitle(displayTitle)
             .setContentText(displayText)
             .setSubText(if (isDisguised) prefs.getMaskedNotificationTitle() else "Cherish")
@@ -295,7 +312,7 @@ object NotificationHelper {
         val displayText = if (content.isNotBlank()) content else "You have a scheduled note reminder."
 
         val notification = NotificationCompat.Builder(context, CHANNEL_REMINDERS_ID)
-            .setSmallIcon(if (!prefs.isDisguiseActive()) R.drawable.ic_cherish_heart else R.drawable.ic_stat_notes)
+            .setSmallIcon(R.drawable.ic_stat_notes)
             .setContentTitle(displayTitle)
             .setContentText(displayText)
             .setStyle(NotificationCompat.BigTextStyle().bigText(displayText))

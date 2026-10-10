@@ -46,6 +46,11 @@ class CherishFirebaseMessagingService : FirebaseMessagingService() {
         val conversationId = remoteMessage.data["conversationId"]
         val messageId = remoteMessage.data["messageId"] ?: remoteMessage.data["id"] ?: remoteMessage.messageId
 
+        // If user is inside the Cherish app on screen, never show system notification
+        if (NotificationHelper.isAppOpenOnScreen(applicationContext)) {
+            return
+        }
+
         NotificationHelper.showMessageNotification(
             context = applicationContext,
             senderName = senderName,

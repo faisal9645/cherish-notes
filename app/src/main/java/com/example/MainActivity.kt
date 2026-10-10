@@ -387,6 +387,8 @@ class MainActivity : FragmentActivity() {
 
     override fun onResume() {
         super.onResume()
+        // Clear any notifications from status bar since user is actively inside the Cherish app
+        com.example.notifications.NotificationHelper.clearNotifications(this)
         hideKeyboardOnFocus = true
         applyScreenshotProtection()
         PrivacyShield.lower()

@@ -672,6 +672,7 @@ class ChatViewModel(
                 onProgress = ::reportUploadProgress
             ).getOrNull()
             if (url == null || !isDeliverable(url)) return@runUpload FailedUpload("video note", retry)
+            com.example.util.VideoThumbnailHelper.cacheLocalVideo(com.example.CherishApplication.instance, videoFile, url)
             soundEffectsPlayer.playSound(ChatSoundEffectsPlayer.SoundType.SENT)
             chatRepository.sendMessage(
                 text = "Video note ($durationSeconds s)",

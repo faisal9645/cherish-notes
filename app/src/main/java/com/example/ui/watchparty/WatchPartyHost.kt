@@ -539,7 +539,12 @@ private fun KeepInSync(party: WatchPartySession, player: WatchPartyPlayer, repo:
             if (player.playbackRate != p.playbackRate) player.setPlaybackRate(p.playbackRate)
             
             if (shouldPlay) {
-                if (!over && player.state != YtState.PLAYING && player.state != YtState.BUFFERING && player.state != YtState.AD) player.play()
+                if (!over && player.state != YtState.PLAYING && player.state != YtState.AD) {
+                    player.play()
+                }
+                if (player.state == YtState.PLAYING && p.bufferingBy == myId) {
+                    repo.markWatchPartyWaiting(isBuffering = false, isAd = false)
+                }
             } else if (player.state != YtState.AD && (seek || player.state == YtState.PLAYING || player.state == YtState.BUFFERING)) {
                 // A seek starts a video that hasn't played yet, so it's paused again right after (but don't pause an ad)
                 player.pause()
@@ -558,6 +563,17 @@ private fun KeepInSync(party: WatchPartySession, player: WatchPartyPlayer, repo:
             }
         }
     }
+
+    // Immediately clear buffering status when player reaches PLAYING state
+    LaunchedEffect(player.state) {
+        if (player.state == YtState.PLAYING) {
+            val p = latest
+            if (p.bufferingBy == myId || p.adBy == myId) {
+                repo.markWatchPartyWaiting(isBuffering = false, isAd = false)
+            }
+        }
+    }
+
     val action = player.lastVideoAction
     LaunchedEffect(action) {
         action ?: return@LaunchedEffect
@@ -567,8 +583,11 @@ private fun KeepInSync(party: WatchPartySession, player: WatchPartyPlayer, repo:
         when (action.state) {
             // Loading or an ad here is only said (my partner's phone shows it); the party itself
             // goes on, and this phone catches up once it plays. Pausing it for both left it paused.
-            YtState.BUFFERING, YtState.AD ->
-                repo.markWatchPartyWaiting(isBuffering = action.state == YtState.BUFFERING, isAd = action.state == YtState.AD)
+            YtState.BUFFERING, YtState.AD -> {
+                if (p.isPlaying && player.state == YtState.BUFFERING) {
+                    repo.markWatchPartyWaiting(isBuffering = true, isAd = action.state == YtState.AD)
+                }
+            }
             YtState.ENDED ->
                 if (p.queue.isNotEmpty()) {
                     repo.dequeueWatchPartyVideo(p.videoId)

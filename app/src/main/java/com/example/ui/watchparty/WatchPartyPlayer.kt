@@ -199,10 +199,10 @@ internal fun WatchPartyVideo(
         val from = (if (player.currentTime > 0f) player.currentTime else startAt).toInt().coerceAtLeast(0)
         view.loadUrl("https://m.youtube.com/watch?v=$videoId&t=${from}s")
     }
-    // The embed can also fail without a word (it never comes up): the same way out
-    LaunchedEffect(videoId) {
-        delay(6_000)
-        if (page != null && !player.isReady && !player.onWatchPage && player.errorCode == 0) {
+    // Fall back to YouTube mobile watch page if the embed is blocked or doesn't start playing within 4.5 seconds
+    LaunchedEffect(videoId, autoplay) {
+        delay(4_500)
+        if (page != null && !player.onWatchPage && autoplay && player.state != YtState.PLAYING) {
             player.switchToWatchPage()
         }
     }
@@ -266,7 +266,7 @@ internal fun WatchPartyVideo(
                     }
                 }
                 if (page != null) {
-                    loadDataWithBaseURL("https://www.youtube-nocookie.com", page, "text/html", "UTF-8", null)
+                    loadDataWithBaseURL("https://www.youtube.com", page, "text/html", "UTF-8", null)
                 } else {
                     player.errorCode = 2
                 }
@@ -297,7 +297,11 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 var player = null, isReady = false;
 window.__party = {
   ready: false,
-  play: function () { if (player && player.playVideo) player.playVideo(); },
+  play: function () {
+    if (player && player.playVideo) {
+      try { player.playVideo(); } catch (e) {}
+    }
+  },
   pause: function () { if (player && player.pauseVideo) player.pauseVideo(); },
   seek: function (t) { if (player && player.seekTo) player.seekTo(t, true); },
   rate: function (r) { if (player && player.setPlaybackRate) player.setPlaybackRate(r); },
@@ -312,13 +316,16 @@ function onYouTubeIframeAPIReady() {
     playerVars: {
       autoplay: ${if (autoplay) 1 else 0}, start: $startSeconds, playsinline: 1, controls: 0,
       disablekb: 1, fs: 0, rel: 0, modestbranding: 1, iv_load_policy: 3, enablejsapi: 1,
-      origin: 'https://www.youtube-nocookie.com'
+      origin: 'https://www.youtube.com'
     },
     events: {
       onReady: function () {
         isReady = true;
         window.__party.ready = true;
         try { Party.onReady(player.getDuration() || 0); } catch (e) {}
+        if (${if (autoplay) "true" else "false"}) {
+          try { player.playVideo(); } catch (e) {}
+        }
         setInterval(tick, 500);
       },
       onStateChange: function (e) {
@@ -387,6 +394,7 @@ private fun watchPageScript(videoId: String, autoplay: Boolean): String = """
     if (ad() || !ours()) return 4;
     if (el.ended) return 0;
     if (el.paused) return 2;
+    if (!el.paused && (el.currentTime > 0 || el.readyState >= 3)) return 1;
     if (el.readyState < 3) return 3;
     return 1;
   }
@@ -394,8 +402,13 @@ private fun watchPageScript(videoId: String, autoplay: Boolean): String = """
     var el = v();
     if (el) {
       try {
+        el.muted = false;
         var p = el.play();
-        if (p && p.catch) p.catch(function(e) {});
+        if (p && p.catch) {
+          p.catch(function(e) {
+            try { el.muted = true; el.play(); } catch(err) {}
+          });
+        }
       } catch(e) {}
     }
     var selectors = [
@@ -483,6 +496,13 @@ private fun watchPageScript(videoId: String, autoplay: Boolean): String = """
     checkReady();
     away = ours() ? 0 : away + 1;
     if (away > 4) location.replace('https://m.youtube.com/watch?v=' + VID);
+
+    if (${if (autoplay) "true" else "false"}) {
+      var cur = v();
+      if (cur && cur.paused && ours() && !ad()) {
+        tryTriggerPlay();
+      }
+    }
 
     if (el) {
       try { Party.onTime(el.currentTime || 0, stateOf(el)); } catch (e) {}

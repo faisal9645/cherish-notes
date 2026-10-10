@@ -236,12 +236,22 @@ fun CircularVideoNoteRecorderDialog(
             // A recorder stopped within its first moments has nothing to save
             val elapsed = System.currentTimeMillis() - recordingStartTime
             if (elapsed < 900) delay(900 - elapsed)
-            val durationSec = ((System.currentTimeMillis() - recordingStartTime + 500) / 1000).toInt().coerceIn(1, 60)
+            val fallbackDurationSec = ((System.currentTimeMillis() - recordingStartTime + 500) / 1000).toInt().coerceIn(1, 60)
             val saved = finishRecorder()
             stopCamera()
             val file = outputFileRef
             if (saved && file != null && file.length() > 1024) {
-                onSendVideoNote(file, durationSec)
+                val exactDurationSec = try {
+                    val mmr = android.media.MediaMetadataRetriever()
+                    mmr.setDataSource(file.absolutePath)
+                    val durStr = mmr.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_DURATION)
+                    mmr.release()
+                    val ms = durStr?.toLongOrNull() ?: 0L
+                    if (ms > 0) ((ms + 500) / 1000).toInt().coerceIn(1, 60) else fallbackDurationSec
+                } catch (_: Exception) {
+                    fallbackDurationSec
+                }
+                onSendVideoNote(file, exactDurationSec)
             } else {
                 file?.delete()
                 Toast.makeText(context, "Couldn't save the video note, please try again", Toast.LENGTH_SHORT).show()

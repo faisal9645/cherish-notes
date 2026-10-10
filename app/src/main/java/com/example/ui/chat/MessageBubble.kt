@@ -333,49 +333,74 @@ fun MessageBubble(
                 val videoHighlightScale = if (highlightPulse.value > 0f) {
                     1f + 0.04f * kotlin.math.sin(highlightPulse.value * Math.PI.toFloat())
                 } else 1f
-                Box(
-                    modifier = Modifier
-                        .size(240.dp)
-                        .graphicsLayer {
-                            scaleX = pressScale * videoHighlightScale
-                            scaleY = pressScale * videoHighlightScale
-                        }
-                        .heartBurst(heartBurst)
-                        .clip(CircleShape)
-                        .then(
-                            if (highlightPulse.value > 0.04f) {
-                                Modifier.border(BorderStroke(3.dp, RoseGoldPrimary.copy(alpha = highlightPulse.value)), CircleShape)
-                            } else Modifier
-                        )
-                        .pointerInput(message.id) {
-                            detectTapGestures(
-                                onPress = trackPress,
-                                onLongPress = onBubbleLongPress,
-                                onDoubleTap = { triggerHeartBurst() }
+
+                Column(
+                    horizontalAlignment = if (isFromMe) Alignment.End else Alignment.Start,
+                    modifier = Modifier.wrapContentSize()
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(240.dp)
+                            .graphicsLayer {
+                                scaleX = pressScale * videoHighlightScale
+                                scaleY = pressScale * videoHighlightScale
+                            }
+                            .heartBurst(heartBurst)
+                            .clip(CircleShape)
+                            .then(
+                                if (highlightPulse.value > 0.04f) {
+                                    Modifier.border(BorderStroke(3.dp, RoseGoldPrimary.copy(alpha = highlightPulse.value)), CircleShape)
+                                } else Modifier
+                            )
+                            .pointerInput(message.id) {
+                                detectTapGestures(
+                                    onPress = trackPress,
+                                    onLongPress = onBubbleLongPress,
+                                    onDoubleTap = { triggerHeartBurst() }
+                                )
+                            }
+                            .testTag("message_bubble_${message.id}"),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (videoUrl.isNotBlank()) {
+                            com.example.ui.components.CircularVideoNoteView(
+                                videoUrl = videoUrl,
+                                durationSeconds = message.durationSeconds,
+                                onExpandClick = openBigVideoNote,
+                                modifier = Modifier.fillMaxSize()
                             )
                         }
-                        .testTag("message_bubble_${message.id}"),
-                    contentAlignment = Alignment.Center
-                ) {
-                    if (videoUrl.isNotBlank()) {
-                        com.example.ui.components.CircularVideoNoteView(
-                            videoUrl = videoUrl,
-                            durationSeconds = message.durationSeconds,
-                            modifier = Modifier.fillMaxSize()
-                        )
+
+                        // Bursting Heart Dopamine Pop Animation on Double-Tap
+                        if (showBurstHeart) {
+                            Box(
+                                modifier = Modifier.matchParentSize(),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "💖",
+                                    fontSize = 44.sp,
+                                    modifier = Modifier.graphicsLayer {
+                                        scaleX = heartScale.value
+                                        scaleY = heartScale.value
+                                        alpha = heartAlpha.value
+                                    }
+                                )
+                            }
+                        }
                     }
 
-                    // Telegram-Style Overlay Status Chip (Timestamp & ticks on bottom-right of circle)
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    // Telegram-Style Status Chip (Timestamp & ticks outside circle, NEVER cut off for both users!)
                     Surface(
-                        shape = CircleShape,
+                        shape = RoundedCornerShape(12.dp),
                         color = Color.Black.copy(alpha = 0.65f),
-                        modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .padding(bottom = 10.dp, end = 10.dp)
+                        modifier = Modifier.padding(horizontal = 4.dp)
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.5.dp)
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
                         ) {
                             if (message.isPinned) {
                                 Icon(
@@ -410,24 +435,6 @@ fun MessageBubble(
                                     }
                                 }
                             }
-                        }
-                    }
-
-                    // Bursting Heart Dopamine Pop Animation on Double-Tap
-                    if (showBurstHeart) {
-                        Box(
-                            modifier = Modifier.matchParentSize(),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = "💖",
-                                fontSize = 44.sp,
-                                modifier = Modifier.graphicsLayer {
-                                    scaleX = heartScale.value
-                                    scaleY = heartScale.value
-                                    alpha = heartAlpha.value
-                                }
-                            )
                         }
                     }
                 }

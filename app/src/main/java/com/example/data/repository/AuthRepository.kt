@@ -242,7 +242,7 @@ class AuthRepository(private val context: Context) {
     private var partnerListener: ListenerRegistration? = null
     private var currentUserListener: ListenerRegistration? = null
     private var coupleListener: ListenerRegistration? = null
-    private var isAppInForeground: Boolean = false
+    @Volatile private var isAppInForeground: Boolean = false
     private var isActivelyInChatTab: Boolean = false
     private var heartbeatJob: kotlinx.coroutines.Job? = null
 
@@ -303,7 +303,7 @@ class AuthRepository(private val context: Context) {
     }
 
     /** The app is open on screen (the chat, any tab, or Notes). */
-    fun isAppOpenOnScreen(): Boolean = isAppInForeground
+    fun isAppOpenOnScreen(): Boolean = com.example.CherishApplication.isAppInForeground || isAppInForeground
 
     fun isUserActivelyInChat(): Boolean {
         val isDisguised = securityPrefs.isDisguiseActive.value

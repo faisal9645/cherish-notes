@@ -1,13 +1,12 @@
 package com.example.ui.components
 
 import android.graphics.Bitmap
+import android.graphics.SurfaceTexture
 import android.media.MediaPlayer
 import android.net.Uri
 import android.util.Log
-import android.widget.VideoView
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
+import android.view.Surface
+import android.view.TextureView
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -22,6 +21,7 @@ import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.OpenInFull
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -29,6 +29,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.asImageBitmap
@@ -40,12 +41,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
-import coil.compose.AsyncImage
-import coil.request.ImageRequest
 import com.example.ui.theme.RoseGoldPrimary
 import com.example.util.VideoThumbnailHelper
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
+import java.io.File
 
 /** Only one video note plays at a time: starting one stops (and releases) the others. */
 private object VideoNotePlayback {
@@ -71,27 +71,28 @@ fun CircularVideoNoteView(
 ) {
     val isRound = shape == CircleShape
     val context = LocalContext.current
-    // The video player is only created once playback is asked for; until then the note shows its
-    // first frame, so a chat full of video notes doesn't start a decoder for each one
     var playerRequested by remember { mutableStateOf(autoPlay) }
     var isPlaying by remember { mutableStateOf(autoPlay) }
     var shouldPlayWhenReady by remember { mutableStateOf(autoPlay) }
     var isMuted by remember { mutableStateOf(false) }
     var progress by remember { mutableFloatStateOf(0f) }
-    var videoViewRef by remember { mutableStateOf<VideoView?>(null) }
     var mediaPlayerRef by remember { mutableStateOf<MediaPlayer?>(null) }
     var isVideoReady by remember { mutableStateOf(false) }
+    var isLoading by remember { mutableStateOf(false) }
     var thumbnailBitmap by remember { mutableStateOf<Bitmap?>(null) }
-    var thumbnailFailed by remember { mutableStateOf(false) }
     var videoWidth by remember { mutableIntStateOf(0) }
     var videoHeight by remember { mutableIntStateOf(0) }
     val playbackKey = remember { Any() }
 
     fun releasePlayer() {
+        try {
+            mediaPlayerRef?.pause()
+        } catch (_: Exception) {}
         playerRequested = false
         isPlaying = false
         shouldPlayWhenReady = false
         isVideoReady = false
+        isLoading = false
         progress = 0f
     }
 
@@ -114,20 +115,13 @@ fun CircularVideoNoteView(
         }
     }
 
-    val parsedUri = remember(videoUrl) {
-        when {
-            videoUrl.startsWith("content://") -> Uri.parse(videoUrl)
-            videoUrl.startsWith("file://") -> Uri.parse(videoUrl)
-            videoUrl.startsWith("/") -> Uri.fromFile(java.io.File(videoUrl))
-            else -> Uri.parse(videoUrl)
-        }
-    }
-
+    // Extract thumbnail and ensure local caching for smooth instant playback
     LaunchedEffect(videoUrl) {
         if (videoUrl.isNotBlank()) {
             val bitmap = VideoThumbnailHelper.getThumbnail(context, videoUrl)
-            thumbnailBitmap = bitmap
-            thumbnailFailed = bitmap == null
+            if (bitmap != null) {
+                thumbnailBitmap = bitmap
+            }
         }
     }
 
@@ -136,15 +130,15 @@ fun CircularVideoNoteView(
         if (!playerRequested) {
             startPlayback()
         } else {
-            videoViewRef?.let { vv ->
+            mediaPlayerRef?.let { mp ->
                 try {
-                    if (vv.isPlaying) {
-                        vv.pause()
+                    if (mp.isPlaying) {
+                        mp.pause()
                         isPlaying = false
                         shouldPlayWhenReady = false
                     } else {
                         VideoNotePlayback.activeKey = playbackKey
-                        vv.start()
+                        mp.start()
                         isPlaying = true
                         shouldPlayWhenReady = true
                     }
@@ -161,14 +155,16 @@ fun CircularVideoNoteView(
     }
 
     // Progress tracker
-    LaunchedEffect(isPlaying) {
+    LaunchedEffect(isPlaying, isVideoReady) {
         while (isActive && isPlaying) {
-            videoViewRef?.let { vv ->
+            mediaPlayerRef?.let { mp ->
                 try {
-                    val cur = vv.currentPosition
-                    val dur = vv.duration
-                    if (dur > 0) {
-                        progress = (cur.toFloat() / dur.toFloat()).coerceIn(0f, 1f)
+                    if (mp.isPlaying) {
+                        val cur = mp.currentPosition
+                        val dur = mp.duration
+                        if (dur > 0) {
+                            progress = (cur.toFloat() / dur.toFloat()).coerceIn(0f, 1f)
+                        }
                     }
                 } catch (_: Exception) {}
             }
@@ -176,16 +172,6 @@ fun CircularVideoNoteView(
         }
     }
 
-    DisposableEffect(videoUrl) {
-        onDispose {
-            try {
-                videoViewRef?.stopPlayback()
-            } catch (_: Exception) {}
-        }
-    }
-
-    // The VideoView keeps the video's own shape inside the square; one uniform scale then fills the
-    // circle (centre crop). Scaling only one side would stretch the picture.
     val cropScale = remember(videoWidth, videoHeight, cropToFill) {
         if (!cropToFill) {
             1f
@@ -201,7 +187,7 @@ fun CircularVideoNoteView(
         modifier = modifier
             .then(if (isRound) Modifier.defaultMinSize(minWidth = 220.dp, minHeight = 220.dp) else Modifier)
             .clip(shape)
-            .background(Color.Black)
+            .background(Color(0xFF1E1A26))
             .then(if (isRound) Modifier.border(3.5.dp, RoseGoldPrimary.copy(alpha = 0.65f), CircleShape) else Modifier)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
@@ -215,69 +201,116 @@ fun CircularVideoNoteView(
             },
         contentAlignment = Alignment.Center
     ) {
-        // Video View surface with center-crop, only while playback is wanted
-        if (playerRequested) AndroidView(
-            factory = { ctx ->
-                VideoView(ctx).apply {
-                    setVideoURI(parsedUri)
-                    setOnPreparedListener { mp ->
-                        mediaPlayerRef = mp
-                        mp.isLooping = true
-                        try {
-                            mp.setVideoScalingMode(MediaPlayer.VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING)
-                        } catch (_: Exception) {}
-                        videoWidth = mp.videoWidth
-                        videoHeight = mp.videoHeight
-                        isVideoReady = true
-                        if (isMuted) {
-                            mp.setVolume(0f, 0f)
-                        } else {
-                            mp.setVolume(1f, 1f)
-                        }
-                        if (shouldPlayWhenReady || isPlaying) {
+        // TextureView surface with center-crop: works properly with Compose clip(CircleShape)
+        if (playerRequested) {
+            AndroidView(
+                factory = { ctx ->
+                    val textureView = TextureView(ctx)
+                    var activeSurface: Surface? = null
+
+                    textureView.surfaceTextureListener = object : TextureView.SurfaceTextureListener {
+                        override fun onSurfaceTextureAvailable(st: SurfaceTexture, width: Int, height: Int) {
                             try {
-                                mp.start()
-                                isPlaying = true
+                                activeSurface?.release()
+                                val surface = Surface(st)
+                                activeSurface = surface
+                                mediaPlayerRef?.release()
+
+                                val mp = MediaPlayer().apply {
+                                    setSurface(surface)
+                                    isLooping = true
+                                    val cacheFile = VideoThumbnailHelper.getVideoCacheFile(ctx, videoUrl)
+                                    if (cacheFile.exists() && cacheFile.length() > 1024) {
+                                        setDataSource(cacheFile.absolutePath)
+                                    } else if (videoUrl.startsWith("content://")) {
+                                        setDataSource(ctx, Uri.parse(videoUrl))
+                                    } else if (videoUrl.startsWith("file://") || videoUrl.startsWith("/")) {
+                                        val f = File(videoUrl.removePrefix("file://"))
+                                        if (f.exists()) setDataSource(f.absolutePath) else setDataSource(ctx, Uri.parse(videoUrl))
+                                    } else {
+                                        setDataSource(videoUrl)
+                                    }
+
+                                    if (isMuted) setVolume(0f, 0f) else setVolume(1f, 1f)
+                                    setOnPreparedListener { preparedMp ->
+                                        mediaPlayerRef = preparedMp
+                                        videoWidth = preparedMp.videoWidth
+                                        videoHeight = preparedMp.videoHeight
+                                        isVideoReady = true
+                                        isLoading = false
+                                        if (shouldPlayWhenReady || isPlaying) {
+                                            try {
+                                                preparedMp.start()
+                                                isPlaying = true
+                                            } catch (e: Exception) {
+                                                Log.w("CircularVideoNoteView", "Error starting MediaPlayer", e)
+                                            }
+                                        }
+                                    }
+                                    setOnErrorListener { _, what, extra ->
+                                        Log.w("CircularVideoNoteView", "MediaPlayer error: what=$what, extra=$extra")
+                                        isVideoReady = false
+                                        isPlaying = false
+                                        isLoading = false
+                                        true
+                                    }
+                                    setOnCompletionListener {
+                                        progress = 0f
+                                    }
+                                    isLoading = true
+                                    prepareAsync()
+                                }
+                                mediaPlayerRef = mp
                             } catch (e: Exception) {
-                                Log.e("CircularVideoNoteView", "Error auto-starting video", e)
+                                Log.w("CircularVideoNoteView", "Failed setting up TextureView MediaPlayer", e)
+                                isLoading = false
                             }
                         }
-                    }
-                    setOnErrorListener { _, what, extra ->
-                        Log.w("CircularVideoNoteView", "VideoView error: what=$what, extra=$extra")
-                        isVideoReady = false
-                        isPlaying = false
-                        true
-                    }
-                    setOnCompletionListener {
-                        progress = 0f
-                    }
-                    videoViewRef = this
-                }
-            },
-            update = { vv ->
-                videoViewRef = vv
-            },
-            onRelease = { vv ->
-                try {
-                    vv.stopPlayback()
-                } catch (_: Exception) {}
-                if (videoViewRef === vv) {
-                    videoViewRef = null
-                    mediaPlayerRef = null
-                }
-            },
-            modifier = Modifier
-                .fillMaxSize()
-                .graphicsLayer {
-                    scaleX = cropScale
-                    scaleY = cropScale
-                }
-                .clip(shape)
-        )
 
-        // Thumbnail Poster Frame: shown until the video is actually playing. Coil only fetches the
-        // video when the first-frame helper couldn't, so it isn't downloaded twice.
+                        override fun onSurfaceTextureSizeChanged(st: SurfaceTexture, width: Int, height: Int) {}
+
+                        override fun onSurfaceTextureDestroyed(st: SurfaceTexture): Boolean {
+                            try {
+                                mediaPlayerRef?.stop()
+                                mediaPlayerRef?.release()
+                            } catch (_: Exception) {}
+                            mediaPlayerRef = null
+                            activeSurface?.release()
+                            activeSurface = null
+                            isVideoReady = false
+                            return true
+                        }
+
+                        override fun onSurfaceTextureUpdated(st: SurfaceTexture) {}
+                    }
+                    textureView
+                },
+                update = {
+                    mediaPlayerRef?.let { mp ->
+                        if (isMuted) mp.setVolume(0f, 0f) else mp.setVolume(1f, 1f)
+                    }
+                },
+                onRelease = { tv ->
+                    try {
+                        tv.surfaceTextureListener = null
+                        mediaPlayerRef?.stop()
+                        mediaPlayerRef?.release()
+                    } catch (_: Exception) {}
+                    mediaPlayerRef = null
+                    isVideoReady = false
+                    isLoading = false
+                },
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        scaleX = cropScale
+                        scaleY = cropScale
+                    }
+                    .clip(shape)
+            )
+        }
+
+        // Thumbnail Poster Frame: shown until video is actively ready and playing
         if (!isPlaying || !isVideoReady) {
             val bmp = thumbnailBitmap
             if (bmp != null) {
@@ -289,18 +322,27 @@ fun CircularVideoNoteView(
                         .fillMaxSize()
                         .clip(shape)
                 )
-            } else if (thumbnailFailed) {
-                AsyncImage(
-                    model = ImageRequest.Builder(context)
-                        .data(parsedUri)
-                        .crossfade(true)
-                        .build(),
-                    contentDescription = "Video note thumbnail",
-                    contentScale = if (cropToFill) ContentScale.Crop else ContentScale.Fit,
+            } else {
+                Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .clip(shape)
-                )
+                        .background(
+                            Brush.radialGradient(
+                                colors = listOf(
+                                    Color(0xFF2E2638),
+                                    Color(0xFF14101A)
+                                )
+                            )
+                        )
+                        .clip(shape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator(
+                        color = RoseGoldPrimary,
+                        strokeWidth = 2.5.dp,
+                        modifier = Modifier.size(28.dp)
+                    )
+                }
             }
         }
 
@@ -326,10 +368,10 @@ fun CircularVideoNoteView(
             }
         }
 
-        // Center Play / Pause Button
+        // Center Play / Pause / Loading Button
         Surface(
             shape = CircleShape,
-            color = Color.Black.copy(alpha = if (isPlaying) 0.35f else 0.65f),
+            color = Color.Black.copy(alpha = if (isPlaying && isVideoReady) 0.35f else 0.65f),
             modifier = Modifier
                 .size(56.dp)
                 .clickable {
@@ -337,16 +379,24 @@ fun CircularVideoNoteView(
                 }
         ) {
             Box(contentAlignment = Alignment.Center) {
-                Icon(
-                    imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                    contentDescription = if (isPlaying) "Pause video note" else "Play video note",
-                    tint = Color.White,
-                    modifier = Modifier.size(34.dp)
-                )
+                if (isLoading) {
+                    CircularProgressIndicator(
+                        color = RoseGoldPrimary,
+                        strokeWidth = 2.5.dp,
+                        modifier = Modifier.size(28.dp)
+                    )
+                } else {
+                    Icon(
+                        imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                        contentDescription = if (isPlaying) "Pause video note" else "Play video note",
+                        tint = Color.White,
+                        modifier = Modifier.size(34.dp)
+                    )
+                }
             }
         }
 
-        // Top-left "Make Big" / Expand icon button (visible in chat to make video big)
+        // Top-left "Make Big" / Expand icon button
         if (onExpandClick != null) {
             Box(
                 modifier = Modifier
@@ -386,7 +436,9 @@ fun CircularVideoNoteView(
                     .clickable {
                         isMuted = !isMuted
                         mediaPlayerRef?.let { mp ->
-                            if (isMuted) mp.setVolume(0f, 0f) else mp.setVolume(1f, 1f)
+                            try {
+                                if (isMuted) mp.setVolume(0f, 0f) else mp.setVolume(1f, 1f)
+                            } catch (_: Exception) {}
                         }
                     }
             ) {
@@ -401,14 +453,14 @@ fun CircularVideoNoteView(
             }
         }
 
-        // Bottom duration pill
+        // Bottom duration pill (safely inset so it is never clipped by the circular border)
         if (durationSeconds > 0) {
             Surface(
                 shape = CircleShape,
                 color = Color.Black.copy(alpha = 0.65f),
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(bottom = 10.dp)
+                    .padding(bottom = 14.dp)
             ) {
                 Text(
                     text = String.format(java.util.Locale.US, "%d:%02d", durationSeconds / 60, durationSeconds % 60),

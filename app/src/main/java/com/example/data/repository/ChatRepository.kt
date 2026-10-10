@@ -519,7 +519,7 @@ class ChatRepository(
                             val msg = change.document.toMessageOrNull() ?: continue
                             val currentUserId = authRepository.getCurrentUserId()
                             if (msg.senderId != currentUserId && msg.status != MessageStatus.READ.name) {
-                                if (!authRepository.isUserActivelyInChat()) {
+                                if (!com.example.notifications.NotificationHelper.isAppOpenOnScreen(context)) {
                                     val previewText = when (msg.getTypedType()) {
                                         MessageType.TEXT -> msg.text
                                         MessageType.IMAGE -> "Photo"
