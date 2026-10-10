@@ -845,6 +845,14 @@ fun HomeScreen(
 
     // Shown only while a party is really on; when either of us ends it, it closes here too
     val liveParty = watchParty?.takeIf { it.isActive }
+    var lastObservedPartyStart by remember { mutableLongStateOf(0L) }
+    LaunchedEffect(liveParty?.updatedAt) {
+        val party = liveParty ?: return@LaunchedEffect
+        if (party.isActive && party.updatedAt != lastObservedPartyStart) {
+            lastObservedPartyStart = party.updatedAt
+            showWatchPartyModal = true
+        }
+    }
     LaunchedEffect(liveParty == null) {
         if (liveParty == null) {
             delay(400) // not for a moment's gap while a new party is being saved

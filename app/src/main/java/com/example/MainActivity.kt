@@ -81,6 +81,7 @@ class MainActivity : FragmentActivity() {
         // SecurityPreferences init already sets the default state based on isDisguiseModeEnabled().
         // Do not force re-disguise here, as it overrides the in-memory state during Activity recreation.
         handleNotificationIntent(intent)
+        handleShareIntent(intent)
 
         // The recents screen must never show the secret chat: its card goes blank while the chat
         // is open, and shows the Notes screen like any notes app otherwise
@@ -173,6 +174,7 @@ class MainActivity : FragmentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         handleNotificationIntent(intent)
+        handleShareIntent(intent)
     }
 
     private fun handleNotificationIntent(intent: android.content.Intent?) {
@@ -190,6 +192,28 @@ class MainActivity : FragmentActivity() {
             // Only reveal in-memory for this session - do NOT persist to SharedPreferences.
             // On next cold launch or minimize, the disguise re-activates correctly.
             app.securityPreferences.revealSecretApp()
+        }
+    }
+
+    private fun handleShareIntent(intent: android.content.Intent?) {
+        if (intent == null) return
+        if (intent.action == android.content.Intent.ACTION_SEND && intent.type == "text/plain") {
+            val sharedText = intent.getStringExtra(android.content.Intent.EXTRA_TEXT)
+            if (sharedText != null && (sharedText.contains("youtube.com") || sharedText.contains("youtu.be"))) {
+                // Extract link if there's other text around it
+                val urlRegex = "(?i)\\b((?:https?://|www\\d{0,3}[.]|[a-z0-9.\\-]+[.][a-z]{2,4}/)(?:[^\\s()<>]+|\\((?:[^\\s()<>]+|(?:\\([^\\s()<>]+\\)))*\\))+(?:\\((?:[^\\s()<>]+|(?:\\([^\\s()<>]+\\)))*\\)|[^\\s`!()\\[\\]{};:'\".,<>?«»“”‘’]))".toRegex()
+                val match = urlRegex.find(sharedText)
+                val textToSend = match?.value ?: sharedText
+
+                lifecycleScope.launch {
+                    try {
+                        app.chatRepository.sendMessage(textToSend.trim())
+                        android.widget.Toast.makeText(this@MainActivity, "Saved link to Notes", android.widget.Toast.LENGTH_SHORT).show()
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                }
+            }
         }
     }
 

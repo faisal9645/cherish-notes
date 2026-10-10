@@ -915,10 +915,11 @@ private fun TwinHearts(pink: Color, blue: Color, beat: State<Float>) {
             .drawWithCache {
                 val unitHeart = heartPath(0f, 0f, 1f)
                 val heartSize = 28.dp.toPx()
-                // His (blue) heart bigger and a little higher; hers (pink) smaller, in front of it and
-                // low inside it, as if he keeps her in his heart
-                val blueAt = Offset(size.width / 2f, size.height / 2f - 1.dp.toPx())
-                val pinkAt = Offset(size.width / 2f, size.height / 2f + 2.dp.toPx())
+                // His (blue) heart bigger and a little higher; hers (pink) smaller, in front of it, low
+                // and to the left inside it, as if he keeps her in his heart (any further left and
+                // she'd spill over its edge)
+                val blueAt = Offset(size.width / 2f + 1.dp.toPx(), size.height / 2f - 1.dp.toPx())
+                val pinkAt = Offset(size.width / 2f - 2.5.dp.toPx(), size.height / 2f + 0.5.dp.toPx())
                 val edge = Stroke(width = 3.dp.toPx() / heartSize)
                 // The edge matches the card behind, so the overlapping hearts read as two
                 val edgeColor = if (cardIsLight) outline else NightCardEdge
@@ -934,7 +935,7 @@ private fun TwinHearts(pink: Color, blue: Color, beat: State<Float>) {
                         }
                     }
                     heart(blueAt, blue, grow = 1.3f)
-                    heart(pinkAt, pink, grow = 0.72f)
+                    heart(pinkAt, pink, grow = 0.62f)
                 }
             }
             .testTag("both_of_us_hearts")
