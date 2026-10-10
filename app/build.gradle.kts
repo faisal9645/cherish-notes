@@ -53,11 +53,8 @@ android {
   buildTypes {
     release {
       isCrunchPngs = true
-      // R8: strips unused code/resources for a smaller APK and faster startup; reflection-based
-      // classes (Firestore models, backup JSON) are kept by proguard-rules.pro
-      isMinifyEnabled = true
-      isShrinkResources = true
-      proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+      // No R8: release builds keep all code and resources as they are
+      isMinifyEnabled = false
       val hasReleaseConfig = signingConfigs.findByName("release") != null
       signingConfig = if (hasReleaseConfig) signingConfigs.getByName("release") else signingConfigs.getByName("debugConfig")
     }
