@@ -904,7 +904,7 @@ private fun RingedAvatar(person: LovePerson, color: Color, onOpenPhoto: (String)
     }
 }
 
-/** Two hearts beating gently between us: her pink one in front, resting on his blue one. */
+/** Two hearts beating gently between us: her pink one held low inside his blue one. */
 @Composable
 private fun TwinHearts(pink: Color, blue: Color, beat: State<Float>) {
     val outline = LocalCardColors.current.pill.copy(alpha = 1f)
@@ -915,9 +915,10 @@ private fun TwinHearts(pink: Color, blue: Color, beat: State<Float>) {
             .drawWithCache {
                 val unitHeart = heartPath(0f, 0f, 1f)
                 val heartSize = 28.dp.toPx()
-                // Her (pink) heart in front and a little higher; his (blue) lower, behind it
-                val pinkAt = Offset(size.width / 2f - 6.dp.toPx(), size.height / 2f - 1.dp.toPx())
-                val blueAt = Offset(size.width / 2f + 6.dp.toPx(), size.height / 2f + 5.dp.toPx())
+                // His (blue) heart bigger and a little higher; hers (pink) smaller, in front of it and
+                // low inside it, as if he keeps her in his heart
+                val blueAt = Offset(size.width / 2f, size.height / 2f - 1.dp.toPx())
+                val pinkAt = Offset(size.width / 2f, size.height / 2f + 2.dp.toPx())
                 val edge = Stroke(width = 3.dp.toPx() / heartSize)
                 // The edge matches the card behind, so the overlapping hearts read as two
                 val edgeColor = if (cardIsLight) outline else NightCardEdge
@@ -932,8 +933,8 @@ private fun TwinHearts(pink: Color, blue: Color, beat: State<Float>) {
                             drawPath(unitHeart, color)
                         }
                     }
-                    heart(blueAt, blue)
-                    heart(pinkAt, pink, grow = 1.06f)
+                    heart(blueAt, blue, grow = 1.3f)
+                    heart(pinkAt, pink, grow = 0.72f)
                 }
             }
             .testTag("both_of_us_hearts")
