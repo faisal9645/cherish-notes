@@ -19,8 +19,8 @@ def main():
         print(f"Error: {APK_PATH} not found. Make sure the release build finished.")
         sys.exit(1)
 
-    version_code = 106
-    version_name = "1.7.34"
+    version_code = 110
+    version_name = "1.7.38"
     
     tag_name = f"v{version_name}-{version_code}"
     release_name = f"Release {version_name} (Build {version_code})"
@@ -35,7 +35,7 @@ def main():
     release_data = {
         "tag_name": tag_name,
         "name": release_name,
-        "body": "OTA Update with watch party sync fix.",
+        "body": "Movie Date (Watch Party) player fix: video playback in sync, emoji bar moved above player controls, UI renamed to Movie Date.",
         "draft": False,
         "prerelease": False
     }
@@ -43,15 +43,21 @@ def main():
     print(f"Creating release {tag_name}...")
     req = urllib.request.Request(f"https://api.github.com/repos/{REPO}/releases", data=json.dumps(release_data).encode('utf-8'), headers=headers, method='POST')
     
-    try:
-        with urllib.request.urlopen(req) as response:
-            resp_data = json.loads(response.read().decode('utf-8'))
-            upload_url = resp_data['upload_url'].replace("{?name,label}", "")
-            print(f"Release created successfully! ID: {resp_data['id']}")
-    except urllib.error.HTTPError as e:
-        print(f"Failed to create release: {e.code} {e.reason}")
-        print(e.read().decode('utf-8'))
-        sys.exit(1)
+    upload_url = None
+    import time
+    for attempt in range(5):
+        try:
+            with urllib.request.urlopen(req, timeout=30) as response:
+                resp_data = json.loads(response.read().decode('utf-8'))
+                upload_url = resp_data['upload_url'].replace("{?name,label}", "")
+                print(f"Release created successfully! ID: {resp_data['id']}")
+                break
+        except Exception as e:
+            print(f"Attempt {attempt + 1} failed to create release: {e}")
+            if attempt < 4:
+                time.sleep(2)
+            else:
+                sys.exit(1)
 
     print("Uploading APK asset...")
     
@@ -67,13 +73,17 @@ def main():
     asset_name = f"cherish-notes-{tag_name}.apk"
     upload_req = urllib.request.Request(f"{upload_url}?name={asset_name}", data=apk_data, headers=upload_headers, method='POST')
     
-    try:
-        with urllib.request.urlopen(upload_req) as response:
-            print("APK uploaded successfully!")
-    except urllib.error.HTTPError as e:
-        print(f"Failed to upload APK: {e.code} {e.reason}")
-        print(e.read().decode('utf-8'))
-        sys.exit(1)
+    for attempt in range(5):
+        try:
+            with urllib.request.urlopen(upload_req, timeout=60) as response:
+                print("APK uploaded successfully!")
+                break
+        except Exception as e:
+            print(f"Attempt {attempt + 1} failed to upload APK: {e}")
+            if attempt < 4:
+                time.sleep(3)
+            else:
+                sys.exit(1)
 
 if __name__ == "__main__":
     main()

@@ -41,7 +41,9 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.zIndex
 import coil.compose.AsyncImage
+import com.example.ui.security.EmergencyExitHandle
 import java.net.URLEncoder
 
 /**
@@ -162,11 +164,12 @@ fun WatchPartyYouTubePickerModal(
             modifier = Modifier.fillMaxSize(),
             color = MaterialTheme.colorScheme.background
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .systemBarsPadding()
-            ) {
+            Box(modifier = Modifier.fillMaxSize()) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .systemBarsPadding()
+                ) {
                 // 1. Top Header Bar
                 Row(
                     modifier = Modifier
@@ -282,104 +285,7 @@ fun WatchPartyYouTubePickerModal(
                     }
                 }
 
-                // 2. Search & URL Bar
-                Surface(
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                    shape = RoundedCornerShape(14.dp),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 4.dp)
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 8.dp, vertical = 2.dp)
-                    ) {
-                        Icon(
-                            Icons.Default.Search,
-                            contentDescription = "Search",
-                            tint = accent,
-                            modifier = Modifier.size(20.dp)
-                        )
-
-                        Spacer(modifier = Modifier.width(8.dp))
-
-                        TextField(
-                            value = searchQuery,
-                            onValueChange = { searchQuery = it.take(200) },
-                            placeholder = {
-                                Text(
-                                    "Search songs, artists, or paste link...",
-                                    fontSize = 13.sp,
-                                    color = ink.copy(alpha = 0.5f)
-                                )
-                            },
-                            singleLine = true,
-                            colors = TextFieldDefaults.colors(
-                                focusedContainerColor = Color.Transparent,
-                                unfocusedContainerColor = Color.Transparent,
-                                disabledContainerColor = Color.Transparent,
-                                focusedIndicatorColor = Color.Transparent,
-                                unfocusedIndicatorColor = Color.Transparent
-                            ),
-                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                            keyboardActions = KeyboardActions(onSearch = { navigateOrSearch(searchQuery) }),
-                            modifier = Modifier
-                                .weight(1f)
-                                .testTag("youtube_search_input")
-                        )
-
-                        if (searchQuery.isNotBlank()) {
-                            IconButton(
-                                onClick = { searchQuery = "" },
-                                modifier = Modifier.size(28.dp)
-                            ) {
-                                Icon(
-                                    Icons.Default.Close,
-                                    contentDescription = "Clear",
-                                    tint = ink.copy(alpha = 0.5f),
-                                    modifier = Modifier.size(16.dp)
-                                )
-                            }
-                        }
-
-                        IconButton(
-                            onClick = {
-                                val clip = (context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager)
-                                    ?.primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0)
-                                    ?.coerceToText(context)?.toString()?.trim()
-                                if (!clip.isNullOrBlank()) {
-                                    navigateOrSearch(clip)
-                                }
-                            },
-                            modifier = Modifier.size(28.dp)
-                        ) {
-                            Icon(
-                                Icons.Default.ContentPaste,
-                                contentDescription = "Paste",
-                                tint = accent,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.width(4.dp))
-
-                        FilledIconButton(
-                            onClick = { navigateOrSearch(searchQuery) },
-                            shape = CircleShape,
-                            colors = IconButtonDefaults.filledIconButtonColors(containerColor = accent),
-                            modifier = Modifier.size(32.dp)
-                        ) {
-                            Icon(
-                                Icons.AutoMirrored.Filled.ArrowForward,
-                                contentDescription = "Go",
-                                tint = MaterialTheme.colorScheme.onPrimary,
-                                modifier = Modifier.size(16.dp)
-                            )
-                        }
-                    }
-                }
+                // 2. Search & URL Bar (Removed, using YouTube's built-in search)
 
                 // 3. Quick Category Chips
                 Row(
@@ -679,7 +585,7 @@ fun WatchPartyYouTubePickerModal(
                                 Icon(Icons.Default.TouchApp, contentDescription = null, tint = accent, modifier = Modifier.size(14.dp))
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
-                                    text = "Tap any video to sync & start Watch Party 🍿",
+                                    text = "Tap any video to sync & start Movie Date 🍿",
                                     fontSize = 11.5.sp,
                                     color = Color.White
                                 )
@@ -761,7 +667,7 @@ fun WatchPartyYouTubePickerModal(
                                 if (activeParty?.isActive == true) {
                                     FilledIconButton(
                                         onClick = {
-                                            app.coupleFeaturesRepository.enqueueWatchPartyVideo(activeId, detectedVideoTitle.ifBlank { "Watch Party" })
+                                            app.coupleFeaturesRepository.enqueueWatchPartyVideo(activeId, detectedVideoTitle.ifBlank { "Movie Date" })
                                             onDismiss()
                                             android.widget.Toast.makeText(context, "Added to Up Next queue", android.widget.Toast.LENGTH_SHORT).show()
                                         },
@@ -778,7 +684,7 @@ fun WatchPartyYouTubePickerModal(
 
                                 Button(
                                     onClick = {
-                                        onStart(activeId, detectedVideoTitle.ifBlank { "Watch Party" })
+                                        onStart(activeId, detectedVideoTitle.ifBlank { "Movie Date" })
                                     },
                                     shape = RoundedCornerShape(12.dp),
                                     colors = ButtonDefaults.buttonColors(containerColor = accent),
@@ -797,9 +703,11 @@ fun WatchPartyYouTubePickerModal(
                         }
                     }
                 }
+                EmergencyExitHandle(modifier = Modifier.zIndex(999f))
             }
         }
     }
+}
 }
 }
 

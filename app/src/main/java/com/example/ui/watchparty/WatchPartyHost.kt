@@ -58,6 +58,8 @@ import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Replay10
+import androidx.compose.material.icons.filled.Fullscreen
+import androidx.compose.material.icons.filled.FullscreenExit
 import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
@@ -176,13 +178,21 @@ fun WatchPartyHost(app: CherishApplication, allowed: Boolean) {
     val showPlayer = shown && (mode == WatchPartyMode.Theater || docked || floating)
     SideEffect { WatchPartyUi.playerVisible = showPlayer }
 
-    var confirmEnd by remember { mutableStateOf(false) }
+    LaunchedEffect(mode) {
+        if (mode != WatchPartyMode.Theater) {
+            var ctx = context
+            while (ctx is android.content.ContextWrapper && ctx !is android.app.Activity) {
+                ctx = ctx.baseContext
+            }
+            (ctx as? android.app.Activity)?.requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        }
+    }
+
     var pickVideo by remember { mutableStateOf(false) }
 
     // Behind Notes or the lock nothing of it shows; it comes back small, not full screen
     LaunchedEffect(allowed) {
         if (!allowed) {
-            confirmEnd = false
             pickVideo = false
             if (WatchPartyUi.mode == WatchPartyMode.Theater) WatchPartyUi.minimize()
         }
@@ -191,7 +201,7 @@ fun WatchPartyHost(app: CherishApplication, allowed: Boolean) {
     LaunchedEffect(party == null) {
         if (party == null && WatchPartyUi.mode != WatchPartyMode.Hidden) {
             WatchPartyUi.close()
-            if (allowed) Toast.makeText(context, "The watch party has ended", Toast.LENGTH_SHORT).show()
+            if (allowed) Toast.makeText(context, "Movie Date has ended", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -441,7 +451,10 @@ fun WatchPartyHost(app: CherishApplication, allowed: Boolean) {
                         WatchPartyUi.openChat()
                     },
                     onLeave = { leave() },
-                    onEndForBoth = { confirmEnd = true },
+                    onEndForBoth = {
+                        WatchPartyUi.close()
+                        repo.endWatchParty()
+                    },
                     onPickVideo = { pickVideo = true },
                     onReact = { react(it) },
                     onTogglePlay = { togglePlay() },
@@ -470,23 +483,7 @@ fun WatchPartyHost(app: CherishApplication, allowed: Boolean) {
             }
         }
 
-        if (confirmEnd && allowed) {
-            AlertDialog(
-                onDismissRequest = { confirmEnd = false },
-                title = { Text("End the watch party?") },
-                text = { Text("It stops on both phones.") },
-                confirmButton = {
-                    TextButton(onClick = {
-                        confirmEnd = false
-                        WatchPartyUi.close()
-                        repo.endWatchParty()
-                    }) { Text("End for both", color = MaterialTheme.colorScheme.error) }
-                },
-                dismissButton = {
-                    TextButton(onClick = { confirmEnd = false }) { Text("Keep watching") }
-                }
-            )
-        }
+
         if (pickVideo && allowed) {
             WatchPartySetupDialog(
                 onStart = { videoId, title ->
@@ -920,6 +917,7 @@ private fun Theater(
                             ) {
                                 header()
                                 ReactionBar(onReact = onReact, onSendVoice = onSendVoice, buttonSize = 42.dp)
+                                Spacer(modifier = Modifier.height(8.dp))
                                 PlaybackDeck(party, player, onTogglePlay, onSeek, onSpeedChange)
                                 TheaterActions(onChatWhileWatching, onEndForBoth)
                             }
@@ -938,7 +936,6 @@ private fun Theater(
                         onSlot = onVideoSlot
                     )
                     Spacer(modifier = Modifier.height(18.dp))
-                    ReactionBar(onReact = onReact, onSendVoice = onSendVoice, buttonSize = 54.dp)
                     Text(
                         text = "Double-tap the video to send a heartbeat 💓",
                         fontSize = 12.sp,
@@ -949,8 +946,11 @@ private fun Theater(
                             .padding(top = 10.dp)
                     )
                     Spacer(modifier = Modifier.weight(1f))
+                    ReactionBar(onReact = onReact, onSendVoice = onSendVoice, buttonSize = 54.dp)
+                    Spacer(modifier = Modifier.height(12.dp))
                     PlaybackDeck(party, player, onTogglePlay, onSeek, onSpeedChange)
                     TheaterActions(onChatWhileWatching, onEndForBoth)
+                    Spacer(modifier = Modifier.height(16.dp))
                 }
             }
         }
@@ -980,7 +980,7 @@ private fun TheaterHeader(
                 Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Make small", tint = ink)
             }
             Column(modifier = Modifier.weight(1f)) {
-                Text("Watch Party 🍿", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = ink)
+                Text("Movie Date 🍿", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = ink)
                 Text(
                     text = party.title,
                     fontSize = 12.sp,
@@ -991,6 +991,25 @@ private fun TheaterHeader(
             }
             IconButton(onClick = onWhisperClick, modifier = Modifier.testTag("watch_party_whisper")) {
                 Icon(Icons.AutoMirrored.Filled.Message, contentDescription = "Whisper", tint = ink)
+            }
+            val ctx = androidx.compose.ui.platform.LocalContext.current
+            val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+            val isLandscape = configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+            IconButton(
+                onClick = {
+                    var act = ctx
+                    while (act is android.content.ContextWrapper && act !is android.app.Activity) {
+                        act = act.baseContext
+                    }
+                    (act as? android.app.Activity)?.requestedOrientation = if (isLandscape) {
+                        android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+                    } else {
+                        android.content.pm.ActivityInfo.SCREEN_ORIENTATION_USER_LANDSCAPE
+                    }
+                },
+                modifier = Modifier.testTag("watch_party_fullscreen")
+            ) {
+                Icon(if (isLandscape) Icons.Default.FullscreenExit else Icons.Default.Fullscreen, contentDescription = "Toggle Fullscreen", tint = ink)
             }
             IconButton(onClick = onPickVideo, modifier = Modifier.testTag("watch_party_pick")) {
                 Icon(Icons.Default.VideoLibrary, contentDescription = "Pick another video", tint = accent)
@@ -1269,6 +1288,7 @@ private fun DockBar(
             .offset { IntOffset(bounds.left.roundToInt(), bounds.top.roundToInt()) }
             .size(with(density) { bounds.width.toDp() }, with(density) { bounds.height.toDp() })
             .testTag("watch_party_dock")
+            .clickable { onExpand() }
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -1381,6 +1401,7 @@ private fun FloatingMini(
                 }
             }
             .testTag("watch_party_floating")
+            .clickable { onExpand() }
     ) {
         Column {
             VideoSlot(

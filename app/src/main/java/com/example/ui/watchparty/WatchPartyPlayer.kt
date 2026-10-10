@@ -105,7 +105,7 @@ internal class WatchPartyPlayer {
     /** Both pages (the embed, YouTube's own) answer the same commands as `__party`. */
     private fun command(js: String, echoMs: Long) {
         commandsUntil = maxOf(commandsUntil, SystemClock.uptimeMillis() + echoMs)
-        webView?.evaluateJavascript("try{if(window.__party&&__party.ready){$js;}}catch(e){}", null)
+        webView?.evaluateJavascript("try{if(window.__party){$js;}}catch(e){}", null)
     }
 
     fun onError(code: Int) {
@@ -201,7 +201,7 @@ internal fun WatchPartyVideo(
     }
     // The embed can also fail without a word (it never comes up): the same way out
     LaunchedEffect(videoId) {
-        delay(15_000)
+        delay(6_000)
         if (page != null && !player.isReady && !player.onWatchPage && player.errorCode == 0) {
             player.switchToWatchPage()
         }
@@ -212,41 +212,61 @@ internal fun WatchPartyVideo(
             WebView(ctx).apply {
                 player.webView = this
                 setBackgroundColor(android.graphics.Color.BLACK)
+                setLayerType(android.view.View.LAYER_TYPE_HARDWARE, null)
                 // The screen stays on while watching
                 keepScreenOn = true
-                settings.javaScriptEnabled = true
-                settings.domStorageEnabled = true
-                settings.mediaPlaybackRequiresUserGesture = false
-                settings.userAgentString = DESKTOP_CHROME_UA
-                CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
+                settings.apply {
+                    javaScriptEnabled = true
+                    domStorageEnabled = true
+                    databaseEnabled = true
+                    mediaPlaybackRequiresUserGesture = false
+                    allowFileAccess = true
+                    allowContentAccess = true
+                    loadsImagesAutomatically = true
+                    mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+                    useWideViewPort = true
+                    loadWithOverviewMode = true
+                    cacheMode = android.webkit.WebSettings.LOAD_DEFAULT
+                    userAgentString = DESKTOP_CHROME_UA
+                }
+                val cookieManager = CookieManager.getInstance()
+                cookieManager.setAcceptCookie(true)
+                cookieManager.setAcceptThirdPartyCookies(this, true)
                 addJavascriptInterface(PlayerBridge(player), "Party")
                 webChromeClient = object : WebChromeClient() {
+                    override fun onPermissionRequest(request: android.webkit.PermissionRequest?) {
+                        try {
+                            request?.grant(request.resources)
+                        } catch (_: Exception) {}
+                    }
+
                     // No grey play-button poster before the video shows
                     override fun getDefaultVideoPoster(): Bitmap =
                         Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888)
                 }
                 webViewClient = object : WebViewClient() {
-                    // Stays on the player: links in it (the YouTube logo, end screens) don't take it
-                    // away. YouTube's own page may pass through its consent and sign-in pages, but
-                    // never on to another video.
                     override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
-                        if (request?.isForMainFrame != true) return false
-                        if (!player.onWatchPage) return true
-                        val url = request.url
-                        val host = url.host.orEmpty()
-                        val youTubeOrGoogle = host.endsWith("youtube.com") || host.endsWith("google.com")
-                        val anotherVideo = url.path == "/watch" && url.getQueryParameter("v") != videoId
-                        return !youTubeOrGoogle || anotherVideo
+                        val uri = request?.url ?: return false
+                        val url = uri.toString()
+                        val host = uri.host.orEmpty()
+                        val isYouTubeOrGoogle = host.endsWith("youtube.com") || host.endsWith("google.com") || host.endsWith("youtube-nocookie.com")
+                        if (url.contains("/embed/") || isYouTubeOrGoogle) {
+                            if (player.onWatchPage && uri.path == "/watch" && uri.getQueryParameter("v") != null && uri.getQueryParameter("v") != videoId) {
+                                return true
+                            }
+                            return false
+                        }
+                        return true
                     }
 
                     override fun onPageFinished(view: WebView?, url: String?) {
                         if (player.onWatchPage && view != null && url.orEmpty().contains("youtube.com/watch")) {
-                            view.evaluateJavascript(watchPageScript(videoId), null)
+                            view.evaluateJavascript(watchPageScript(videoId, autoplay), null)
                         }
                     }
                 }
                 if (page != null) {
-                    loadDataWithBaseURL("https://www.youtube.com", page, "text/html", "UTF-8", null)
+                    loadDataWithBaseURL("https://www.youtube-nocookie.com", page, "text/html", "UTF-8", null)
                 } else {
                     player.errorCode = 2
                 }
@@ -277,11 +297,11 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 var player = null, isReady = false;
 window.__party = {
   ready: false,
-  play: function () { player.playVideo(); },
-  pause: function () { player.pauseVideo(); },
-  seek: function (t) { player.seekTo(t, true); },
-  rate: function (r) { if (player.setPlaybackRate) player.setPlaybackRate(r); },
-  volume: function (v) { if (player.setVolume) player.setVolume(v); }
+  play: function () { if (player && player.playVideo) player.playVideo(); },
+  pause: function () { if (player && player.pauseVideo) player.pauseVideo(); },
+  seek: function (t) { if (player && player.seekTo) player.seekTo(t, true); },
+  rate: function (r) { if (player && player.setPlaybackRate) player.setPlaybackRate(r); },
+  volume: function (v) { if (player && player.setVolume) player.setVolume(v); }
 };
 var tag = document.createElement('script');
 tag.src = 'https://www.youtube.com/iframe_api';
@@ -292,7 +312,7 @@ function onYouTubeIframeAPIReady() {
     playerVars: {
       autoplay: ${if (autoplay) 1 else 0}, start: $startSeconds, playsinline: 1, controls: 0,
       disablekb: 1, fs: 0, rel: 0, modestbranding: 1, iv_load_policy: 3, enablejsapi: 1,
-      origin: 'https://www.youtube.com'
+      origin: 'https://www.youtube-nocookie.com'
     },
     events: {
       onReady: function () {
@@ -318,6 +338,7 @@ function onYouTubeIframeAPIReady() {
   });
 }
 function tick() {
+  if (!player || !player.getPlayerState) return;
   var state = player.getPlayerState();
   try {
     var data = player.getVideoData();
@@ -333,26 +354,31 @@ function tick() {
 
 /**
  * Runs on YouTube's own mobile page: shows only the video, full size, and answers the same
- * `__party` commands as the embed, reporting back to [PlayerBridge] as "Party" (an ad, or another
- * video, reports as 4). Gives up with -1 if nothing plays there within 25 seconds.
+ * `__party` commands as the embed, reporting back to [PlayerBridge] as "Party".
  */
-private fun watchPageScript(videoId: String): String = """
+private fun watchPageScript(videoId: String, autoplay: Boolean): String = """
 (function () {
   if (window.__partyInstalled) return;
   window.__partyInstalled = true;
   var VID = '$videoId';
   var css = document.createElement('style');
   css.textContent =
-    'html, body { background: #000 !important; overflow: hidden !important; }' +
-    '#player-container-id, .player-container, ytm-player, #player, .html5-video-player, #movie_player {' +
-    ' position: fixed !important; top: 0 !important; left: 0 !important; width: 100vw !important;' +
-    ' height: 100vh !important; max-height: none !important; margin: 0 !important; transform: none !important;' +
-    ' z-index: 2147483646 !important; background: #000 !important; }' +
-    'video { width: 100vw !important; height: 100vh !important; top: 0 !important; left: 0 !important;' +
-    ' object-fit: contain !important; }' +
+    'html, body { margin: 0 !important; padding: 0 !important; width: 100% !important; height: 100% !important; background: #000 !important; overflow: hidden !important; }' +
+    '#player-container-id, .player-container, ytm-player, #movie_player, .html5-video-player {' +
+    ' position: fixed !important; top: 0 !important; left: 0 !important; width: 100% !important; height: 100% !important;' +
+    ' max-height: none !important; margin: 0 !important; transform: none !important; z-index: 10 !important; background: transparent !important; }' +
+    'video {' +
+    ' position: fixed !important; top: 0 !important; left: 0 !important; width: 100% !important; height: 100% !important;' +
+    ' object-fit: contain !important; z-index: 100 !important; background: #000 !important; }' +
     'ytm-mobile-topbar-renderer, header, ytm-pivot-bar-renderer, ytm-companion-slot,' +
-    ' .mobile-topbar-header { display: none !important; }';
+    ' .mobile-topbar-header, ytm-item-section-renderer, ytm-watch-metadata, .ytm-watch-metadata,' +
+    ' ytm-engagement-panel-section-list-renderer, ytm-comment-section-renderer, .eom-button-row { display: none !important; }';
   (document.head || document.documentElement).appendChild(css);
+
+  try {
+    var consentBtn = document.querySelector('form[action*="consent"] button, button[aria-label*="Agree"], button[aria-label*="Accept"]');
+    if (consentBtn) consentBtn.click();
+  } catch(e) {}
   function v() { return document.querySelector('video'); }
   function ad() { return !!document.querySelector('.ad-showing, .ad-interrupting'); }
   function ours() { return location.href.indexOf(VID) !== -1; }
@@ -364,38 +390,112 @@ private fun watchPageScript(videoId: String): String = """
     if (el.readyState < 3) return 3;
     return 1;
   }
+  function tryTriggerPlay() {
+    var el = v();
+    if (el) {
+      try {
+        var p = el.play();
+        if (p && p.catch) p.catch(function(e) {});
+      } catch(e) {}
+    }
+    var selectors = [
+      '.ytp-large-play-button',
+      '.player-control-play-pause-icon',
+      'button[aria-label*="Play"]',
+      '.ytp-play-button',
+      '#player-control-overlay'
+    ];
+    for (var i = 0; i < selectors.length; i++) {
+      var btn = document.querySelector(selectors[i]);
+      if (btn) {
+        try { btn.click(); } catch(e) {}
+      }
+    }
+    var player = document.getElementById('movie_player');
+    if (player && typeof player.playVideo === 'function') {
+      try { player.playVideo(); } catch(e) {}
+    }
+  }
   window.__party = {
-    ready: false,
-    play: function () { var el = v(); if (el) { var p = el.play(); if (p && p.catch) p.catch(function () {}); } },
-    pause: function () { var el = v(); if (el) el.pause(); },
-    seek: function (t) { var el = v(); if (el) el.currentTime = t; },
-    rate: function (r) { var el = v(); if (el) el.playbackRate = r; },
-    volume: function (x) { var el = v(); if (el) el.volume = Math.max(0, Math.min(1, x / 100)); }
+    ready: true,
+    play: function () {
+      tryTriggerPlay();
+    },
+    pause: function () {
+      var el = v();
+      if (el) { try { el.pause(); } catch(e) {} }
+      var player = document.getElementById('movie_player');
+      if (player && typeof player.pauseVideo === 'function') {
+        try { player.pauseVideo(); } catch(e) {}
+      }
+    },
+    seek: function (t) {
+      var el = v();
+      if (el) { try { el.currentTime = t; } catch(e) {} }
+      var player = document.getElementById('movie_player');
+      if (player && typeof player.seekTo === 'function') {
+        try { player.seekTo(t, true); } catch(e) {}
+      }
+    },
+    rate: function (r) {
+      var el = v();
+      if (el) { try { el.playbackRate = r; } catch(e) {} }
+      var player = document.getElementById('movie_player');
+      if (player && typeof player.setPlaybackRate === 'function') {
+        try { player.setPlaybackRate(r); } catch(e) {}
+      }
+    },
+    volume: function (x) {
+      var el = v();
+      if (el) { try { el.volume = Math.max(0, Math.min(1, x / 100)); } catch(e) {} }
+    }
   };
   function report() {
     var el = v();
     try { Party.onState(stateOf(el), el ? el.currentTime : 0, el && isFinite(el.duration) ? el.duration : 0); } catch (e) {}
   }
   var watched = null, away = 0;
+  var reportedReady = false;
+
+  function checkReady() {
+    var el = v();
+    var player = document.getElementById('movie_player');
+    if ((el || player) && !reportedReady && ours()) {
+      reportedReady = true;
+      window.__party.ready = true;
+      var dur = (el && isFinite(el.duration) && el.duration > 0) ? el.duration :
+                (player && typeof player.getDuration === 'function' ? player.getDuration() : 0);
+      try { Party.onReady(dur); } catch (e) {}
+      if (${if (autoplay) "true" else "false"}) {
+        tryTriggerPlay();
+      }
+    }
+  }
+
   setInterval(function () {
     var el = v();
     if (el && el !== watched) {
       watched = el;
-      ['playing', 'pause', 'waiting', 'ended', 'seeked', 'durationchange'].forEach(function (n) {
+      ['playing', 'pause', 'waiting', 'ended', 'seeked', 'durationchange', 'loadedmetadata'].forEach(function (n) {
         el.addEventListener(n, report);
       });
     }
-    // Another video started by itself (YouTube's autoplay): back to ours
+    checkReady();
     away = ours() ? 0 : away + 1;
     if (away > 4) location.replace('https://m.youtube.com/watch?v=' + VID);
-    if (el && !window.__party.ready && el.readyState >= 1 && !ad() && ours()) {
-      window.__party.ready = true;
-      try { Party.onReady(isFinite(el.duration) ? el.duration : 0); } catch (e) {}
+
+    if (el) {
+      try { Party.onTime(el.currentTime || 0, stateOf(el)); } catch (e) {}
     }
-    if (el) { try { Party.onTime(el.currentTime || 0, stateOf(el)); } catch (e) {} }
-  }, 500);
+  }, 400);
+
   setTimeout(function () {
-    if (!window.__party.ready) { try { Party.onError(-1); } catch (e) {} }
+    if (!reportedReady) {
+      checkReady();
+      if (!reportedReady) {
+        try { Party.onError(-1); } catch (e) {}
+      }
+    }
   }, 25000);
 })();
 """
