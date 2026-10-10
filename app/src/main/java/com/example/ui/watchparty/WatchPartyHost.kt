@@ -12,13 +12,16 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -36,20 +39,24 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
-import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
+import androidx.compose.material.icons.automirrored.filled.Message
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Forward10
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.OpenInFull
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Replay10
 import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material3.AlertDialog
@@ -65,6 +72,7 @@ import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
@@ -117,8 +125,11 @@ import com.example.notifications.ThinkingOfYou
 import com.example.ui.chat.WatchPartySetupDialog
 import com.example.ui.chat.YouTubeHelper
 import com.example.ui.components.AvatarView
+import com.example.ui.security.EmergencyExitHandle
 import com.example.ui.theme.OnlineGreen
+import com.example.data.model.Message
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -206,7 +217,7 @@ fun WatchPartyHost(app: CherishApplication, allowed: Boolean) {
     val partnerWatching = party?.isWatchedBy(partnerId, now) == true
 
     val player = remember(party?.videoId) { WatchPartyPlayer() }
-    if (showPlayer && party != null) KeepInSync(party, player, repo)
+    if (showPlayer && party != null) KeepInSync(party, player, repo, myId)
 
     // Reactions, heartbeats and what my partner did, over the video
     val bursts = remember { mutableStateListOf<Burst>() }
@@ -246,6 +257,21 @@ fun WatchPartyHost(app: CherishApplication, allowed: Boolean) {
             delay(150)
         }
     }
+    // Play voice snippets from the partner
+    LaunchedEffect(party?.voiceSnippetId) {
+        val p = party ?: return@LaunchedEffect
+        if (!showPlayer || p.voiceSnippetId.isEmpty() || p.voiceSnippetBy == myId) return@LaunchedEffect
+        
+        // Lower video volume
+        player.setVolume(20)
+        
+        val playerHelper = app.voicePlayerHelper
+        playerHelper.playAudio(p.voiceSnippetId, p.voiceSnippetData) {
+            // Restore video volume when done
+            player.setVolume(100)
+        }
+    }
+
     // A line when my partner joins or leaves, plays, pauses, skips, or picks another video
     var seenWatching by remember { mutableStateOf<Boolean?>(null) }
     LaunchedEffect(partnerWatching, showPlayer) {
@@ -320,6 +346,15 @@ fun WatchPartyHost(app: CherishApplication, allowed: Boolean) {
     }?.translate(-hostOrigin)
     val videoRect = remember { Animatable(Rect.Zero, Rect.VectorConverter) }
     var placed by remember { mutableStateOf(false) }
+    var controlsVisible by remember { mutableStateOf(true) }
+    
+    LaunchedEffect(controlsVisible, party?.isPlaying) {
+        if (controlsVisible && party?.isPlaying == true) {
+            delay(3500)
+            controlsVisible = false
+        }
+    }
+
     LaunchedEffect(target, showPlayer) {
         if (!showPlayer) {
             placed = false
@@ -347,12 +382,21 @@ fun WatchPartyHost(app: CherishApplication, allowed: Boolean) {
     ) {
         if (shown && party != null) {
             val dockBounds = WatchPartyUi.chatDockBounds
+            val myBuffering = party.bufferingBy == myId
+            val partnerBuffering = party.bufferingBy.isNotEmpty() && party.bufferingBy != myId
+            val myAd = party.adBy == myId
+            val partnerAd = party.adBy.isNotEmpty() && party.adBy != myId
+
             if (docked && dockBounds != null) {
                 DockBar(
                     bounds = dockBounds.translate(-hostOrigin),
                     party = party,
                     partnerName = partnerName,
                     partnerWatching = partnerWatching,
+                    myBuffering = myBuffering,
+                    partnerBuffering = partnerBuffering,
+                    myAd = myAd,
+                    partnerAd = partnerAd,
                     onVideoSlot = { dockSlot = it },
                     onTogglePlay = { togglePlay() },
                     onReact = { react(it) },
@@ -364,6 +408,11 @@ fun WatchPartyHost(app: CherishApplication, allowed: Boolean) {
                 FloatingMini(
                     hostSize = hostSize,
                     party = party,
+                    myBuffering = myBuffering,
+                    partnerBuffering = partnerBuffering,
+                    myAd = myAd,
+                    partnerAd = partnerAd,
+                    partnerName = partnerName,
                     onVideoSlot = { floatSlot = it },
                     onTogglePlay = { togglePlay() },
                     onExpand = { WatchPartyUi.openTheater() },
@@ -381,6 +430,10 @@ fun WatchPartyHost(app: CherishApplication, allowed: Boolean) {
                     partnerName = partnerName,
                     partnerWatching = partnerWatching,
                     partnerPhoto = partnerUser?.photoUrl,
+                    myBuffering = myBuffering,
+                    partnerBuffering = partnerBuffering,
+                    myAd = myAd,
+                    partnerAd = partnerAd,
                     onVideoSlot = { theaterSlot = it },
                     onMinimize = { WatchPartyUi.minimize() },
                     onChatWhileWatching = {
@@ -392,7 +445,11 @@ fun WatchPartyHost(app: CherishApplication, allowed: Boolean) {
                     onPickVideo = { pickVideo = true },
                     onReact = { react(it) },
                     onTogglePlay = { togglePlay() },
-                    onSeek = { seek(it) }
+                    onSeek = { seek(it) },
+                    onSpeedChange = { repo.updateWatchPartySpeed(it) },
+                    onSendVoice = { repo.sendWatchPartyVoiceSnippet(it) },
+                    onSendWhisper = { repo.sendWatchPartyWhisper(it) },
+                    controlsVisible = controlsVisible
                 )
             }
             if (showPlayer && placed) {
@@ -405,6 +462,8 @@ fun WatchPartyHost(app: CherishApplication, allowed: Boolean) {
                     heartNote = heartNote,
                     chip = chip,
                     partnerName = partnerName,
+                    partnerTyping = partnerUser?.typingInChat == true,
+                    onSingleTap = { controlsVisible = !controlsVisible },
                     onDoubleTap = { heartbeat() },
                     onPickAnother = { pickVideo = true }
                 )
@@ -457,7 +516,7 @@ private fun rememberSteadyParty(live: WatchPartySession?): WatchPartySession? {
  * itself (play, pause) or its end goes to the party once it settles.
  */
 @Composable
-private fun KeepInSync(party: WatchPartySession, player: WatchPartyPlayer, repo: CoupleFeaturesRepository) {
+private fun KeepInSync(party: WatchPartySession, player: WatchPartyPlayer, repo: CoupleFeaturesRepository, myId: String) {
     val latest by rememberUpdatedState(party)
     LaunchedEffect(player.isReady, party.videoId, party.isPlaying, party.positionSeconds, party.updatedAt) {
         if (!player.isReady) return@LaunchedEffect
@@ -469,19 +528,31 @@ private fun KeepInSync(party: WatchPartySession, player: WatchPartyPlayer, repo:
             if (end > 1f) target = target.coerceAtMost(end - 0.3f)
             val over = end > 1f && player.state == YtState.ENDED && target >= end - 1f
             val off = abs(player.currentTime - target)
-            // Right away when anything changed; later only if it drifted while playing
-            val seek = !over && (if (pass == 0) off > 1f else (off > 2.5f && player.state == YtState.PLAYING))
+            // Right away when anything changed; later only if it drifted
+            val seek = !over && (if (pass == 0 || player.state != YtState.PLAYING) off > 0.8f else off > 1.5f)
+            val now = com.example.data.repository.ServerTime.now()
+            val shouldPlay = p.isPlaying && p.playScheduledAt <= now
             if (seek) player.seekTo(target)
-            if (p.isPlaying) {
-                if (!over && player.state != YtState.PLAYING && player.state != YtState.BUFFERING) player.play()
-            } else if (seek || player.state == YtState.PLAYING || player.state == YtState.BUFFERING) {
-                // A seek starts a video that hasn't played yet, so it's paused again right after
+            if (player.playbackRate != p.playbackRate) player.setPlaybackRate(p.playbackRate)
+            
+            if (shouldPlay) {
+                if (!over && player.state != YtState.PLAYING && player.state != YtState.BUFFERING && player.state != YtState.AD) player.play()
+            } else if (player.state != YtState.AD && (seek || player.state == YtState.PLAYING || player.state == YtState.BUFFERING)) {
+                // A seek starts a video that hasn't played yet, so it's paused again right after (but don't pause an ad)
                 player.pause()
             }
             pass++
             // Paused, it's checked twice more while it settles, then left alone
-            if (!p.isPlaying && pass >= 3) break
-            delay(if (p.isPlaying) 4_000 else 1_200)
+            if (!shouldPlay && pass >= 3) {
+                if (p.isPlaying && p.playScheduledAt > now) {
+                    val waitTime = p.playScheduledAt - now
+                    if (waitTime > 0) delay(waitTime)
+                } else {
+                    break
+                }
+            } else {
+                delay(if (shouldPlay) 4_000 else 1_200)
+            }
         }
     }
     val action = player.lastVideoAction
@@ -490,7 +561,15 @@ private fun KeepInSync(party: WatchPartySession, player: WatchPartyPlayer, repo:
         delay(450) // a double tap toggles twice, and then nothing changed
         if (player.state != action.state) return@LaunchedEffect
         val playing = action.state == YtState.PLAYING
-        if (playing != latest.isPlaying) repo.updateWatchPartyPlayback(playing, player.currentTime)
+        val buffering = action.state == YtState.BUFFERING
+        val isAd = action.state == YtState.AD
+        val wasBuffering = latest.bufferingBy == myId
+        val wasAd = latest.adBy == myId
+        if (player.state == YtState.ENDED && latest.queue.isNotEmpty()) {
+            repo.dequeueWatchPartyVideo(latest.videoId)
+        } else if (playing != latest.isPlaying || buffering != wasBuffering || isAd != wasAd) {
+            repo.updateWatchPartyPlayback(playing, player.currentTime, isBuffering = buffering, isAd = isAd)
+        }
     }
 }
 
@@ -505,10 +584,14 @@ private fun VideoLayer(
     heartNote: HeartNote?,
     chip: EventChip?,
     partnerName: String,
+    partnerTyping: Boolean,
+    onSingleTap: (() -> Unit)? = null,
     onDoubleTap: () -> Unit,
     onPickAnother: () -> Unit
 ) {
     val context = LocalContext.current
+    val app = context.applicationContext as com.example.CherishApplication
+    val myId = app.authRepository.getCurrentUserId()
     val density = LocalDensity.current
     val currentOnDoubleTap by rememberUpdatedState(onDoubleTap)
     val doubleTap = remember { { currentOnDoubleTap() } }
@@ -518,7 +601,7 @@ private fun VideoLayer(
             .size(with(density) { rect.width.toDp() }, with(density) { rect.height.toDp() })
             .clip(RoundedCornerShape(if (compact) 10.dp else 14.dp))
             .background(Color.Black)
-            .observeDoubleTap(doubleTap)
+            .observeTaps(onSingleTap = onSingleTap, onDoubleTap = doubleTap)
             .testTag("watch_party_video")
     ) {
         key(party.videoId) {
@@ -539,6 +622,42 @@ private fun VideoLayer(
                 modifier = Modifier
                     .align(Alignment.Center)
                     .size(if (compact) 20.dp else 32.dp)
+            )
+        }
+
+        var countdownText by remember { mutableStateOf<String?>(null) }
+        LaunchedEffect(party.playScheduledAt) {
+            while (true) {
+                val rem = party.playScheduledAt - com.example.data.repository.ServerTime.now()
+                if (rem > 0 && party.isPlaying) {
+                    val sec = (rem / 1000).toInt()
+                    countdownText = if (sec > 0) "$sec" else "Go!"
+                    delay(50)
+                } else {
+                    if (countdownText == "Go!") delay(500)
+                    countdownText = null
+                    break
+                }
+            }
+        }
+        
+        AnimatedVisibility(
+            visible = countdownText != null,
+            enter = fadeIn(tween(150)) + scaleIn(initialScale = 1.5f),
+            exit = fadeOut(tween(300)) + scaleOut(targetScale = 2f),
+            modifier = Modifier.align(Alignment.Center)
+        ) {
+            Text(
+                text = countdownText.orEmpty(),
+                color = Color.White,
+                fontSize = if (compact) 48.sp else 72.sp,
+                fontWeight = FontWeight.Bold,
+                style = androidx.compose.ui.text.TextStyle(
+                    shadow = androidx.compose.ui.graphics.Shadow(
+                        color = Color.Black.copy(alpha = 0.5f),
+                        blurRadius = 8f
+                    )
+                )
             )
         }
 
@@ -571,6 +690,49 @@ private fun VideoLayer(
                     else -> "💓 Heartbeat sent"
                 },
                 compact = compact
+            )
+        }
+        var activeWhisper by remember { mutableStateOf<String?>(null) }
+        LaunchedEffect(party.whisperId) {
+            if (party.whisperId.isNotEmpty() && party.whisperBy != myId) {
+                activeWhisper = party.whisperText
+                delay(5000)
+                activeWhisper = null
+            }
+        }
+        
+        AnimatedVisibility(
+            visible = activeWhisper != null,
+            enter = fadeIn(tween(300)) + slideInVertically { it / 2 },
+            exit = fadeOut(tween(300)),
+            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = if (compact) 16.dp else 32.dp)
+        ) {
+            Text(
+                text = activeWhisper.orEmpty(),
+                color = Color.White,
+                fontSize = if (compact) 14.sp else 18.sp,
+                fontWeight = FontWeight.Medium,
+                textAlign = TextAlign.Center,
+                modifier = Modifier
+                    .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(8.dp))
+                    .padding(horizontal = 12.dp, vertical = 6.dp)
+            )
+        }
+
+        AnimatedVisibility(
+            visible = partnerTyping,
+            enter = fadeIn(tween(300)),
+            exit = fadeOut(tween(300)),
+            modifier = Modifier.align(Alignment.BottomStart).padding(start = 16.dp, bottom = if (compact) 16.dp else 32.dp)
+        ) {
+            Text(
+                text = "$partnerName is typing...",
+                color = Color.White.copy(alpha = 0.8f),
+                fontSize = if (compact) 12.sp else 14.sp,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier
+                    .background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
+                    .padding(horizontal = 10.dp, vertical = 4.dp)
             )
         }
 
@@ -651,6 +813,10 @@ private fun Theater(
     partnerName: String,
     partnerWatching: Boolean,
     partnerPhoto: String?,
+    myBuffering: Boolean,
+    partnerBuffering: Boolean,
+    myAd: Boolean,
+    partnerAd: Boolean,
     onVideoSlot: (Rect) -> Unit,
     onMinimize: () -> Unit,
     onChatWhileWatching: () -> Unit,
@@ -659,9 +825,39 @@ private fun Theater(
     onPickVideo: () -> Unit,
     onReact: (String) -> Unit,
     onTogglePlay: () -> Unit,
-    onSeek: (Float) -> Unit
+    onSeek: (Float) -> Unit,
+    onSpeedChange: (Float) -> Unit,
+    onSendVoice: (String) -> Unit,
+    onSendWhisper: (String) -> Unit,
+    controlsVisible: Boolean
 ) {
     val ink = MaterialTheme.colorScheme.onBackground
+    var showWhisperDialog by remember { mutableStateOf(false) }
+
+    if (showWhisperDialog) {
+        var text by remember { mutableStateOf("") }
+        AlertDialog(
+            onDismissRequest = { showWhisperDialog = false },
+            title = { Text("Send a whisper") },
+            text = { 
+                OutlinedTextField(
+                    value = text, 
+                    onValueChange = { text = it }, 
+                    placeholder = { Text("A short message...") }
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { 
+                    if (text.isNotBlank()) onSendWhisper(text)
+                    showWhisperDialog = false 
+                }) { Text("Send") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showWhisperDialog = false }) { Text("Cancel") }
+            }
+        )
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -672,26 +868,40 @@ private fun Theater(
     ) {
         BoxWithConstraints(modifier = Modifier.fillMaxSize().systemBarsPadding()) {
             val header = @Composable {
-                TheaterHeader(party, partnerName, partnerWatching, partnerPhoto, onMinimize, onPickVideo, onLeave)
+                TheaterHeader(party, partnerName, partnerWatching, partnerPhoto, myBuffering, partnerBuffering, myAd, partnerAd, onMinimize, { showWhisperDialog = true }, onPickVideo, onLeave)
             }
             if (maxWidth > maxHeight) {
-                Row(modifier = Modifier.fillMaxSize().padding(8.dp)) {
+                Box(modifier = Modifier.fillMaxSize()) {
                     VideoSlot(
-                        modifier = Modifier.fillMaxHeight().aspectRatio(16f / 9f, matchHeightConstraintsFirst = true),
-                        corner = 14.dp,
+                        modifier = Modifier.fillMaxSize(),
+                        corner = 0.dp,
                         onSlot = onVideoSlot
                     )
-                    Column(
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxHeight()
-                            .verticalScroll(rememberScrollState())
-                            .padding(start = 8.dp)
+                    androidx.compose.animation.AnimatedVisibility(
+                        visible = controlsVisible,
+                        enter = androidx.compose.animation.fadeIn(),
+                        exit = androidx.compose.animation.fadeOut(),
+                        modifier = Modifier.fillMaxSize()
                     ) {
-                        header()
-                        ReactionBar(onReact = onReact, buttonSize = 42.dp)
-                        PlaybackDeck(party, player, onTogglePlay, onSeek)
-                        TheaterActions(onChatWhileWatching, onEndForBoth)
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(Color.Black.copy(alpha = 0.4f))
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .align(Alignment.CenterEnd)
+                                    .fillMaxHeight()
+                                    .widthIn(max = 340.dp)
+                                    .verticalScroll(rememberScrollState())
+                                    .padding(8.dp)
+                            ) {
+                                header()
+                                ReactionBar(onReact = onReact, onSendVoice = onSendVoice, buttonSize = 42.dp)
+                                PlaybackDeck(party, player, onTogglePlay, onSeek, onSpeedChange)
+                                TheaterActions(onChatWhileWatching, onEndForBoth)
+                            }
+                        }
                     }
                 }
             } else {
@@ -706,7 +916,7 @@ private fun Theater(
                         onSlot = onVideoSlot
                     )
                     Spacer(modifier = Modifier.height(18.dp))
-                    ReactionBar(onReact = onReact, buttonSize = 54.dp)
+                    ReactionBar(onReact = onReact, onSendVoice = onSendVoice, buttonSize = 54.dp)
                     Text(
                         text = "Double-tap the video to send a heartbeat 💓",
                         fontSize = 12.sp,
@@ -717,7 +927,7 @@ private fun Theater(
                             .padding(top = 10.dp)
                     )
                     Spacer(modifier = Modifier.weight(1f))
-                    PlaybackDeck(party, player, onTogglePlay, onSeek)
+                    PlaybackDeck(party, player, onTogglePlay, onSeek, onSpeedChange)
                     TheaterActions(onChatWhileWatching, onEndForBoth)
                 }
             }
@@ -731,7 +941,12 @@ private fun TheaterHeader(
     partnerName: String,
     partnerWatching: Boolean,
     partnerPhoto: String?,
+    myBuffering: Boolean,
+    partnerBuffering: Boolean,
+    myAd: Boolean,
+    partnerAd: Boolean,
     onMinimize: () -> Unit,
+    onWhisperClick: () -> Unit,
     onPickVideo: () -> Unit,
     onLeave: () -> Unit
 ) {
@@ -752,6 +967,9 @@ private fun TheaterHeader(
                     overflow = TextOverflow.Ellipsis
                 )
             }
+            IconButton(onClick = onWhisperClick, modifier = Modifier.testTag("watch_party_whisper")) {
+                Icon(Icons.AutoMirrored.Filled.Message, contentDescription = "Whisper", tint = ink)
+            }
             IconButton(onClick = onPickVideo, modifier = Modifier.testTag("watch_party_pick")) {
                 Icon(Icons.Default.VideoLibrary, contentDescription = "Pick another video", tint = accent)
             }
@@ -766,10 +984,17 @@ private fun TheaterHeader(
         ) {
             Surface(
                 shape = RoundedCornerShape(50),
-                color = if (party.isPlaying) accent else MaterialTheme.colorScheme.outline
+                color = if (party.isPlaying && !myBuffering && !partnerBuffering && !myAd && !partnerAd) accent else MaterialTheme.colorScheme.outline
             ) {
                 Text(
-                    text = if (party.isPlaying) "▶ Playing in sync" else "⏸ Paused",
+                    text = when {
+                        partnerAd -> "⏳ $partnerName is watching an ad…"
+                        myAd -> "⏳ Ad playing…"
+                        partnerBuffering -> "⏳ Waiting for $partnerName…"
+                        myBuffering -> "⏳ Buffering…"
+                        party.isPlaying -> "▶ Playing in sync"
+                        else -> "⏸ Paused"
+                    },
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color.White,
@@ -790,7 +1015,7 @@ private fun TheaterHeader(
 }
 
 @Composable
-private fun ReactionBar(onReact: (String) -> Unit, buttonSize: Dp) {
+private fun ReactionBar(onReact: (String) -> Unit, onSendVoice: (String) -> Unit, buttonSize: Dp) {
     Row(
         horizontalArrangement = Arrangement.SpaceEvenly,
         modifier = Modifier
@@ -798,6 +1023,58 @@ private fun ReactionBar(onReact: (String) -> Unit, buttonSize: Dp) {
             .padding(horizontal = 12.dp, vertical = 4.dp)
     ) {
         ReactionEmojis.forEach { emoji -> ReactionButton(emoji, buttonSize) { onReact(emoji) } }
+        VoiceSnippetButton(buttonSize, onSendVoice)
+    }
+}
+
+@Composable
+private fun VoiceSnippetButton(size: Dp, onSendVoice: (String) -> Unit) {
+    val context = LocalContext.current
+    val helper = (context.applicationContext as com.example.CherishApplication).voiceRecorderHelper
+    val isRecording by helper.isRecording.collectAsState()
+    
+    val scope = rememberCoroutineScope()
+    val bounce = remember { Animatable(1f) }
+    
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = Modifier
+            .size(size)
+            .graphicsLayer {
+                scaleX = bounce.value
+                scaleY = bounce.value
+            }
+            .clip(CircleShape)
+            .background(if (isRecording) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant)
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onPress = {
+                        if (androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.RECORD_AUDIO) == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                            scope.launch { bounce.animateTo(1.2f) }
+                            helper.startRecording()
+                            try { awaitRelease() } finally {
+                                scope.launch { bounce.animateTo(1f) }
+                                val (file, duration) = helper.stopRecording()
+                                if (file != null && duration > 0) {
+                                    val bytes = file.readBytes()
+                                    val base64 = android.util.Base64.encodeToString(bytes, android.util.Base64.DEFAULT)
+                                    onSendVoice("data:audio/m4a;base64,$base64")
+                                    file.delete()
+                                }
+                            }
+                        } else {
+                            android.widget.Toast.makeText(context, "Microphone permission needed", android.widget.Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                )
+            }
+    ) {
+        Icon(
+            Icons.Default.Mic, 
+            contentDescription = "Hold to talk", 
+            tint = if (isRecording) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(size * 0.5f)
+        )
     }
 }
 
@@ -834,7 +1111,8 @@ private fun PlaybackDeck(
     party: WatchPartySession,
     player: WatchPartyPlayer,
     onTogglePlay: () -> Unit,
-    onSeek: (Float) -> Unit
+    onSeek: (Float) -> Unit,
+    onSpeedChange: (Float) -> Unit
 ) {
     val accent = MaterialTheme.colorScheme.primary
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
@@ -894,6 +1172,21 @@ private fun PlaybackDeck(
             IconButton(onClick = { onSeek(position + 10f) }) {
                 Icon(Icons.Default.Forward10, contentDescription = "Forward 10 seconds", tint = muted)
             }
+            Spacer(modifier = Modifier.width(16.dp))
+            var speedMenu by remember { mutableStateOf(false) }
+            Box {
+                TextButton(onClick = { speedMenu = true }) {
+                    Text("${party.playbackRate}x", color = muted, fontWeight = FontWeight.Bold)
+                }
+                androidx.compose.material3.DropdownMenu(expanded = speedMenu, onDismissRequest = { speedMenu = false }) {
+                    listOf(0.5f, 1.0f, 1.25f, 1.5f, 2.0f).forEach { rate ->
+                        androidx.compose.material3.DropdownMenuItem(
+                            text = { Text("${rate}x") },
+                            onClick = { onSpeedChange(rate); speedMenu = false }
+                        )
+                    }
+                }
+            }
         }
     }
 }
@@ -932,6 +1225,10 @@ private fun DockBar(
     party: WatchPartySession,
     partnerName: String,
     partnerWatching: Boolean,
+    myBuffering: Boolean,
+    partnerBuffering: Boolean,
+    myAd: Boolean,
+    partnerAd: Boolean,
     onVideoSlot: (Rect) -> Unit,
     onTogglePlay: () -> Unit,
     onReact: (String) -> Unit,
@@ -976,8 +1273,14 @@ private fun DockBar(
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
-                    text = (if (party.isPlaying) "▶ Playing together" else "⏸ Paused") +
-                        (if (partnerWatching) " · 👀 $partnerName" else ""),
+                    text = (when {
+                        partnerAd -> "⏳ $partnerName is watching an ad…"
+                        myAd -> "⏳ Ad playing…"
+                        partnerBuffering -> "⏳ Waiting for $partnerName…"
+                        myBuffering -> "⏳ Buffering…"
+                        party.isPlaying -> "▶ Playing together"
+                        else -> "⏸ Paused"
+                    }) + (if (partnerWatching) " · 👀 $partnerName" else ""),
                     fontSize = 11.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
@@ -1010,6 +1313,11 @@ private fun DockBar(
 private fun FloatingMini(
     hostSize: IntSize,
     party: WatchPartySession,
+    myBuffering: Boolean,
+    partnerBuffering: Boolean,
+    myAd: Boolean,
+    partnerAd: Boolean,
+    partnerName: String,
     onVideoSlot: (Rect) -> Unit,
     onTogglePlay: () -> Unit,
     onExpand: () -> Unit,
@@ -1075,7 +1383,13 @@ private fun FloatingMini(
                     onClick = onTogglePlay
                 )
                 Text(
-                    text = party.title,
+                    text = when {
+                        partnerAd -> "$partnerName is watching an ad…"
+                        myAd -> "Ad playing…"
+                        partnerBuffering -> "Waiting for $partnerName…"
+                        myBuffering -> "Buffering…"
+                        else -> party.title
+                    },
                     fontSize = 11.sp,
                     color = ink,
                     maxLines = 1,
@@ -1165,9 +1479,11 @@ private fun FloatingEmoji(b: Burst, w: Float, h: Float, compact: Boolean, onDone
 }
 
 /** Sees double taps without taking the taps from the video under it (YouTube still gets them). */
-private fun Modifier.observeDoubleTap(onDoubleTap: () -> Unit): Modifier = pointerInput(Unit) {
+private fun Modifier.observeTaps(onSingleTap: (() -> Unit)? = null, onDoubleTap: () -> Unit): Modifier = pointerInput(Unit) {
     var lastTapAt = 0L
     var lastTapPosition = Offset.Zero
+    var singleTapJob: Job? = null
+    val scope = CoroutineScope(Dispatchers.Main)
     awaitEachGesture {
         val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
         var up: PointerInputChange? = null
@@ -1184,11 +1500,19 @@ private fun Modifier.observeDoubleTap(onDoubleTap: () -> Unit): Modifier = point
         val tap = up ?: return@awaitEachGesture
         if (tap.uptimeMillis - down.uptimeMillis > 350) return@awaitEachGesture
         if (tap.uptimeMillis - lastTapAt < 320 && (tap.position - lastTapPosition).getDistance() < 64.dp.toPx()) {
+            singleTapJob?.cancel()
             lastTapAt = 0L
             onDoubleTap()
         } else {
             lastTapAt = tap.uptimeMillis
             lastTapPosition = tap.position
+            if (onSingleTap != null) {
+                singleTapJob?.cancel()
+                singleTapJob = scope.launch {
+                    delay(320)
+                    onSingleTap()
+                }
+            }
         }
     }
 }

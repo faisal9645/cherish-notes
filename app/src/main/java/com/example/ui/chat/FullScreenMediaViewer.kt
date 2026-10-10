@@ -1001,11 +1001,25 @@ class MediaTileAnchor {
 fun Modifier.mediaTileAnchor(anchor: MediaTileAnchor): Modifier = onPlaced { anchor.coordinates = it }
 
 /** A tappable photo that the viewer grows out of when it opens. */
-fun Modifier.openableMedia(onClick: () -> Unit): Modifier = composed {
+fun Modifier.openableMedia(
+    onLongClick: (() -> Unit)? = null,
+    onDoubleClick: (() -> Unit)? = null,
+    onClick: () -> Unit
+): Modifier = composed {
     val anchor = remember { MediaTileAnchor() }
-    mediaTileAnchor(anchor).clickable {
-        anchor.open()
-        onClick()
+    mediaTileAnchor(anchor).pointerInput(Unit) {
+        detectTapGestures(
+            onTap = {
+                anchor.open()
+                onClick()
+            },
+            onLongPress = {
+                onLongClick?.invoke()
+            },
+            onDoubleTap = {
+                onDoubleClick?.invoke()
+            }
+        )
     }
 }
 

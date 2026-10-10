@@ -19,8 +19,8 @@ def main():
         print(f"Error: {APK_PATH} not found. Make sure the release build finished.")
         sys.exit(1)
 
-    version_code = 103
-    version_name = "1.7.31"
+    version_code = 106
+    version_name = "1.7.34"
     
     tag_name = f"v{version_name}-{version_code}"
     release_name = f"Release {version_name} (Build {version_code})"

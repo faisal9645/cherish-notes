@@ -101,6 +101,11 @@ fun WatchPartyYouTubePickerModal(
     val ink = MaterialTheme.colorScheme.onBackground
 
     var webViewRef by remember { mutableStateOf<WebView?>(null) }
+    val app = context.applicationContext as com.example.CherishApplication
+    val watchLaterList by app.coupleFeaturesRepository.listenToWatchLater().collectAsState(initial = emptyList())
+    val activeParty by app.coupleFeaturesRepository.watchPartyFlow.collectAsState()
+    var showWatchLater by remember { mutableStateOf(false) }
+    
     var searchQuery by remember { mutableStateOf("") }
     var isLoading by remember { mutableStateOf(true) }
     var pageProgress by remember { mutableIntStateOf(0) }
@@ -428,6 +433,23 @@ fun WatchPartyYouTubePickerModal(
                             )
                         }
                     }
+
+                    if (watchLaterList.isNotEmpty()) {
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = accent.copy(alpha = 0.18f),
+                            border = BorderStroke(1.dp, accent.copy(alpha = 0.5f)),
+                            modifier = Modifier.clickable { showWatchLater = !showWatchLater }
+                        ) {
+                            Text(
+                                text = if (showWatchLater) "Hide Watch Later" else "⏳ Watch Later (${watchLaterList.size})",
+                                fontSize = 11.5.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = accent,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                            )
+                        }
+                    }
                 }
 
                 // 4. Loading Progress Bar
@@ -442,12 +464,63 @@ fun WatchPartyYouTubePickerModal(
                     )
                 }
 
-                // 5. Embedded YouTube Mobile Browser
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f)
-                        .background(Color.Black)
+                // 5. Embedded YouTube Mobile Browser or Watch Later List
+                if (showWatchLater) {
+                    androidx.compose.foundation.lazy.LazyColumn(
+                        modifier = Modifier.fillMaxWidth().weight(1f).background(MaterialTheme.colorScheme.background)
+                    ) {
+                        items(watchLaterList.size) { i ->
+                            val v = watchLaterList[i]
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { 
+                                        onStart(v.videoId, v.title)
+                                        showWatchLater = false
+                                    }
+                                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                AsyncImage(
+                                    model = YouTubeHelper.getThumbnailUrl(v.videoId),
+                                    contentDescription = null,
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier
+                                        .width(90.dp)
+                                        .aspectRatio(16f / 9f)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(Color.Black)
+                                )
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = v.title.ifBlank { "Saved Video" },
+                                        color = ink,
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        maxLines = 2,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        text = "Saved from chat",
+                                        color = ink.copy(alpha = 0.6f),
+                                        fontSize = 12.sp
+                                    )
+                                }
+                                IconButton(onClick = { app.coupleFeaturesRepository.removeWatchLaterVideo(v.id) }) {
+                                    Icon(Icons.Default.Delete, contentDescription = "Remove", tint = MaterialTheme.colorScheme.error)
+                                }
+                            }
+                            HorizontalDivider(color = ink.copy(alpha = 0.05f))
+                        }
+                    }
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
+                            .background(Color.Black)
                 ) {
                     AndroidView(
                         modifier = Modifier.fillMaxSize(),
@@ -617,7 +690,7 @@ fun WatchPartyYouTubePickerModal(
 
                 // 6. Floating Synced Watch Party Dock (Appears when a video is active)
                 AnimatedVisibility(
-                    visible = detectedVideoId != null,
+                    visible = detectedVideoId != null && !showWatchLater,
                     enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
                     exit = slideOutVertically(targetOffsetY = { it }) + fadeOut()
                 ) {
@@ -683,23 +756,43 @@ fun WatchPartyYouTubePickerModal(
 
                             Spacer(modifier = Modifier.width(10.dp))
 
-                            // Start Sync Button
-                            Button(
-                                onClick = {
-                                    onStart(activeId, detectedVideoTitle.ifBlank { "Watch Party" })
-                                },
-                                shape = RoundedCornerShape(12.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = accent),
-                                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
-                                modifier = Modifier.testTag("watch_party_start")
-                            ) {
-                                Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(
-                                    text = "Start",
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 13.sp
-                                )
+                            // Up Next & Start Buttons
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                if (activeParty?.isActive == true) {
+                                    FilledIconButton(
+                                        onClick = {
+                                            app.coupleFeaturesRepository.enqueueWatchPartyVideo(activeId, detectedVideoTitle.ifBlank { "Watch Party" })
+                                            onDismiss()
+                                            android.widget.Toast.makeText(context, "Added to Up Next queue", android.widget.Toast.LENGTH_SHORT).show()
+                                        },
+                                        shape = RoundedCornerShape(12.dp),
+                                        colors = IconButtonDefaults.filledIconButtonColors(
+                                            containerColor = accent.copy(alpha = 0.15f),
+                                            contentColor = accent
+                                        ),
+                                        modifier = Modifier.size(42.dp)
+                                    ) {
+                                        Icon(Icons.Default.QueuePlayNext, contentDescription = "Add to Up Next")
+                                    }
+                                }
+
+                                Button(
+                                    onClick = {
+                                        onStart(activeId, detectedVideoTitle.ifBlank { "Watch Party" })
+                                    },
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = accent),
+                                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
+                                    modifier = Modifier.testTag("watch_party_start").height(42.dp)
+                                ) {
+                                    Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = "Start",
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 13.sp
+                                    )
+                                }
                             }
                         }
                     }
@@ -707,6 +800,7 @@ fun WatchPartyYouTubePickerModal(
             }
         }
     }
+}
 }
 
 /**

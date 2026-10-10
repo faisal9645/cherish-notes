@@ -26,8 +26,8 @@ import java.util.Locale
 /** A YouTube video id: 11 letters, digits, - or _. Anything else never reaches the page. */
 private val VideoIdPattern = Regex("[A-Za-z0-9_-]{11}")
 
-private const val MOBILE_CHROME_UA =
-    "Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36"
+private const val DESKTOP_CHROME_UA =
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
 
 /** YouTube's player states. */
 internal object YtState {
@@ -36,6 +36,7 @@ internal object YtState {
     const val PLAYING = 1
     const val PAUSED = 2
     const val BUFFERING = 3
+    const val AD = 4
 }
 
 /** A play, pause or the end that came from the video itself (a tap on it), not from the party. */
@@ -52,6 +53,8 @@ internal class WatchPartyPlayer {
     var state by mutableIntStateOf(YtState.UNSTARTED)
     var currentTime by mutableFloatStateOf(0f)
     var duration by mutableFloatStateOf(0f)
+    var playbackRate by mutableFloatStateOf(1f)
+        internal set
 
     /** YouTube's error: 2 bad id, 5 can't play here, 100 gone or private, 101 / 150 not allowed outside YouTube. */
     var errorCode by mutableIntStateOf(0)
@@ -68,6 +71,16 @@ internal class WatchPartyPlayer {
     fun seekTo(seconds: Float) {
         currentTime = seconds
         command("player.seekTo(" + String.format(Locale.US, "%.2f", seconds) + ", true)", SEEK_ECHO_MS)
+    }
+
+    fun setPlaybackRate(rate: Float) {
+        if (playbackRate == rate) return
+        playbackRate = rate
+        command("if(player.setPlaybackRate) player.setPlaybackRate($rate)", COMMAND_ECHO_MS)
+    }
+
+    fun setVolume(volume: Int) {
+        command("if(player.setVolume) player.setVolume($volume)", 0L)
     }
 
     private fun command(js: String, echoMs: Long) {
@@ -87,7 +100,7 @@ internal class WatchPartyPlayer {
     private companion object {
         const val COMMAND_ECHO_MS = 1500L
         const val SEEK_ECHO_MS = 3000L
-        val TAP_STATES = setOf(YtState.ENDED, YtState.PLAYING, YtState.PAUSED)
+        val TAP_STATES = setOf(YtState.ENDED, YtState.PLAYING, YtState.PAUSED, YtState.BUFFERING, YtState.AD)
     }
 }
 
@@ -154,7 +167,7 @@ internal fun WatchPartyVideo(
                 settings.javaScriptEnabled = true
                 settings.domStorageEnabled = true
                 settings.mediaPlaybackRequiresUserGesture = false
-                settings.userAgentString = MOBILE_CHROME_UA
+                settings.userAgentString = DESKTOP_CHROME_UA
                 CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
                 addJavascriptInterface(PlayerBridge(player), "Party")
                 webChromeClient = object : WebChromeClient() {
@@ -215,7 +228,14 @@ function onYouTubeIframeAPIReady() {
         setInterval(tick, 500);
       },
       onStateChange: function (e) {
-        try { Party.onState(e.data, player.getCurrentTime() || 0, player.getDuration() || 0); } catch (err) {}
+        var state = e.data;
+        try {
+          var data = player.getVideoData();
+          var url = player.getVideoUrl ? player.getVideoUrl() : "";
+          if (data && data.video_id && data.video_id !== '$videoId') state = 4;
+          else if (url && url.indexOf('$videoId') === -1) state = 4;
+        } catch(err) {}
+        try { Party.onState(state, player.getCurrentTime() || 0, player.getDuration() || 0); } catch (err) {}
       },
       onError: function (e) {
         try { Party.onError(e.data); } catch (err) {}
@@ -224,7 +244,14 @@ function onYouTubeIframeAPIReady() {
   });
 }
 function tick() {
-  try { Party.onTime(player.getCurrentTime() || 0, player.getPlayerState()); } catch (e) {}
+  var state = player.getPlayerState();
+  try {
+    var data = player.getVideoData();
+    var url = player.getVideoUrl ? player.getVideoUrl() : "";
+    if (data && data.video_id && data.video_id !== '$videoId') state = 4;
+    else if (url && url.indexOf('$videoId') === -1) state = 4;
+  } catch(err) {}
+  try { Party.onTime(player.getCurrentTime() || 0, state); } catch (e) {}
 }
 </script>
 </body></html>

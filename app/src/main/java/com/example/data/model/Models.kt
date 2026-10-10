@@ -430,8 +430,12 @@ data class WatchPartySession(
     val title: String = "Watch Party",
     val isPlaying: Boolean = false,
     val positionSeconds: Float = 0f,
+    val playbackRate: Float = 1.0f,
+    val playScheduledAt: Long = 0L,
     val updatedAt: Long = 0L,
     val updatedBy: String = "",
+    val bufferingBy: String = "",
+    val adBy: String = "",
     val startedBy: String = "",
     val isActive: Boolean = false,
     /** The last heartbeat sent by double-tapping the video: when, and by whom. */
@@ -445,21 +449,43 @@ data class WatchPartySession(
     val reactionBy: String = "",
     val reactionAt: Long = 0L,
     val reactionCount: Int = 0,
+    /** A quick voice snippet sent over the video (id, base64 data, and sender). */
+    val voiceSnippetId: String = "",
+    val voiceSnippetData: String = "",
+    val voiceSnippetBy: String = "",
+    /** A short line that appears over the partner's video like a subtitle. */
+    val whisperId: String = "",
+    val whisperText: String = "",
+    val whisperBy: String = "",
     /** Who has it open: user id to the last time their phone said so (0 once they left). */
-    val watching: Map<String, Long> = emptyMap()
+    val watching: Map<String, Long> = emptyMap(),
+    /** The Up Next queue: videos to play automatically after this one finishes. */
+    val queue: List<WatchLaterVideo> = emptyList()
 ) {
     /** Where the video is right now on both phones: the saved spot, plus the time since if playing. */
-    fun positionAt(now: Long = System.currentTimeMillis()): Float =
-        if (isPlaying) positionSeconds + (now - updatedAt).coerceAtLeast(0L) / 1000f else positionSeconds
+    fun positionAt(now: Long = com.example.data.repository.ServerTime.now()): Float {
+        if (!isPlaying) return positionSeconds
+        val activeSince = if (playScheduledAt > updatedAt) playScheduledAt else updatedAt
+        return positionSeconds + ((now - activeSince).coerceAtLeast(0L) / 1000f) * playbackRate
+    }
 
     /** Whether [userId] has it open (their phone says so about once a minute while it is). */
-    fun isWatchedBy(userId: String?, now: Long = System.currentTimeMillis()): Boolean =
+    fun isWatchedBy(userId: String?, now: Long = com.example.data.repository.ServerTime.now()): Boolean =
         userId != null && now - (watching[userId] ?: 0L) < WATCHING_FRESH_MS
 
     companion object {
         const val WATCHING_FRESH_MS = 150_000L
     }
 }
+
+/** A video saved by the couple to watch together later. */
+data class WatchLaterVideo(
+    val id: String = "",
+    val videoId: String = "",
+    val title: String = "",
+    val addedBy: String = "",
+    val addedAt: Long = 0L
+)
 
 @IgnoreExtraProperties
 @JsonClass(generateAdapter = true)

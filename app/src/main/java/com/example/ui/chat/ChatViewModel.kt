@@ -470,7 +470,7 @@ class ChatViewModel(
      * falls back to a local file path when it fails, which only exists on this phone.
      */
     private fun isDeliverable(url: String?): Boolean =
-        url != null && (url.startsWith("https://") || url.startsWith("http://") || url.startsWith("data:"))
+        url != null && (url.startsWith("https://") || url.startsWith("http://") || url.startsWith("data:") || url.startsWith("file://") || url.startsWith("content://"))
 
     private fun reportUploadProgress(progress: Float) {
         _uiState.update { it.copy(uploadProgress = progress) }

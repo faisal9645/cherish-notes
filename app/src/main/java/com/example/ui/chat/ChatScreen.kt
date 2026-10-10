@@ -497,8 +497,8 @@ fun ChatScreen(
                     val index = shown.indexOfFirst { it.id == replyId }
                     if (index >= 0) {
                         scope.launch {
-                            listState.revealMessage(shown.lastIndex - index)
                             highlightedMessageId = replyId
+                            listState.revealMessage(shown.lastIndex - index)
                             try {
                                 val vib = (context.getSystemService(android.content.Context.VIBRATOR_SERVICE) as? android.os.Vibrator)
                                 if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
@@ -508,7 +508,7 @@ fun ChatScreen(
                                     vib?.vibrate(35)
                                 }
                             } catch (_: Exception) {}
-                            kotlinx.coroutines.delay(2200)
+                            kotlinx.coroutines.delay(800)
                             if (highlightedMessageId == replyId) {
                                 highlightedMessageId = null
                             }
@@ -792,9 +792,9 @@ fun ChatScreen(
             val reversedMessages = displayedMessages.reversed()
             val targetIndex = reversedMessages.indexOfFirst { it.id == targetId }
             if (targetIndex >= 0) {
-                listState.revealMessage(targetIndex)
                 highlightedMessageId = targetId
-                kotlinx.coroutines.delay(2500)
+                listState.revealMessage(targetIndex)
+                kotlinx.coroutines.delay(800)
                 highlightedMessageId = null
                 viewModel.clearTargetScrollMessageId()
             }
@@ -1409,9 +1409,9 @@ fun ChatScreen(
                             val index = displayedMessages.indexOfFirst { it.id == pinned.id }
                             if (index >= 0) {
                                 scope.launch {
-                                    listState.revealMessage(displayedMessages.lastIndex - index)
                                     highlightedMessageId = pinned.id
-                                    delay(1400)
+                                    listState.revealMessage(displayedMessages.lastIndex - index)
+                                    delay(800)
                                     highlightedMessageId = null
                                 }
                             }
@@ -1776,9 +1776,9 @@ fun ChatScreen(
                         if (target != null) {
                             view.chatHaptic(ChatHaptic.Tick)
                             scope.launch {
-                                listState.revealMessage(index)
                                 highlightedMessageId = target.id
-                                delay(2200)
+                                listState.revealMessage(index)
+                                delay(800)
                                 if (highlightedMessageId == target.id) highlightedMessageId = null
                             }
                         }

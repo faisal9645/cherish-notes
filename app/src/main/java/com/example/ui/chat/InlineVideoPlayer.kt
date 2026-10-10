@@ -62,7 +62,7 @@ object YouTubeHelper {
     }
 
     fun getEmbedUrl(videoId: String): String {
-        return "https://www.youtube-nocookie.com/embed/$videoId?autoplay=1&enablejsapi=1&fs=1&rel=0&playsinline=1&modestbranding=1"
+        return "https://www.youtube.com/embed/$videoId?origin=https://www.youtube.com&autoplay=1&enablejsapi=1&fs=1&rel=0&playsinline=1&modestbranding=1"
     }
 
     fun getEmbedHtml(videoId: String): String {
@@ -99,7 +99,7 @@ object YouTubeHelper {
                 <div class="player-container">
                     <iframe 
                         id="ytplayer"
-                        src="https://www.youtube-nocookie.com/embed/$videoId?autoplay=1&enablejsapi=1&fs=1&rel=0&playsinline=1&modestbranding=1"
+                        src="https://www.youtube.com/embed/$videoId?origin=https://www.youtube.com&autoplay=1&enablejsapi=1&fs=1&rel=0&playsinline=1&modestbranding=1"
                         allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                         allowfullscreen>
                     </iframe>
@@ -195,8 +195,8 @@ fun YouTubeWebView(
                         setSupportMultipleWindows(false)
                         cacheMode = WebSettings.LOAD_DEFAULT
 
-                        // Standard modern mobile Chrome user-agent for smooth YouTube playback
-                        userAgentString = "Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36"
+                        // Standard modern desktop Chrome user-agent to bypass mobile embedded restrictions
+                        userAgentString = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
                     }
 
                     // Enable cookie persistence for YouTube & Google login inside the app
@@ -444,6 +444,16 @@ fun InlineYouTubeCard(
                         contentDescription = "Theater Mode (Landscape Full Screen)",
                         modifier = Modifier.testTag("youtube_theater"),
                         onClick = { onOpenTheater(videoId) }
+                    )
+                    CardHeaderButton(
+                        icon = Icons.Default.BookmarkBorder,
+                        contentDescription = "Save to Watch Later",
+                        modifier = Modifier.testTag("youtube_watch_later"),
+                        onClick = {
+                            val app = context.applicationContext as com.example.CherishApplication
+                            app.coupleFeaturesRepository.addWatchLaterVideo(videoId, "Saved from chat")
+                            android.widget.Toast.makeText(context, "Saved to Watch Later list", android.widget.Toast.LENGTH_SHORT).show()
+                        }
                     )
                     if (isPlayingInline) {
                         CardHeaderButton(

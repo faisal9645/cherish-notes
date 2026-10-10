@@ -105,8 +105,8 @@ fun CircularVideoNoteRecorderDialog(
     var recordingProfile by remember { mutableStateOf<CamcorderProfile?>(null) }
     // Bumped for every recording started, so the timer restarts with it
     var recordingSession by remember { mutableIntStateOf(0) }
-    // Normal (non-mirrored) view is default. User can toggle mirror if desired.
-    var isMirrorMode by remember { mutableStateOf(false) }
+    // Normal (non-mirrored) view was default, user requested mirror mode initially. User can toggle mirror if desired.
+    var isMirrorMode by remember { mutableStateOf(true) }
 
     /** Centre-crops the camera picture into the square viewfinder, with normal/mirror orientation control. */
     fun adjustTextureTransform(tv: TextureView, viewW: Int, viewH: Int) {

@@ -156,10 +156,13 @@ fun MessageBubble(
     val highlightPulse = remember(message.id) { Animatable(0f) }
     LaunchedEffect(isHighlighted) {
         if (isHighlighted) {
-            highlightPulse.snapTo(1f)
-            highlightPulse.animateTo(0f, tween(2200, easing = LinearOutSlowInEasing))
+            highlightPulse.animateTo(1f, tween(200))
         } else {
-            highlightPulse.snapTo(0f)
+            if (highlightPulse.value > 0f) {
+                highlightPulse.animateTo(0f, tween(1800, easing = LinearOutSlowInEasing))
+            } else {
+                highlightPulse.snapTo(0f)
+            }
         }
     }
     val trackPress: suspend androidx.compose.foundation.gestures.PressGestureScope.(androidx.compose.ui.geometry.Offset) -> Unit = {
