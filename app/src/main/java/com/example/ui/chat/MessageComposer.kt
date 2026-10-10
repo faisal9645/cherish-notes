@@ -734,14 +734,13 @@ fun MessageComposer(
                         // Private chat is text only: Send, never the voice or video-note button
                         text.isNotBlank() || isPrivateMode -> "SEND_TEXT"
                         isRecordingVoice && isLockedRecording -> "SEND_VOICE"
-                        isVideoMode -> "VIDEO_NOTE"
-                        else -> "MIC"
+                        else -> "MEDIA_RECORD"
                     },
                     transitionSpec = {
                         (scaleIn(initialScale = 0.62f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMediumLow)) +
                          fadeIn(tween(180))) togetherWith
                         (scaleOut(targetScale = 0.62f, animationSpec = tween(120)) +
-                         fadeOut(tween(120)))
+                         fadeOut(tween(120))) using SizeTransform(clip = false)
                     },
                     label = "right_action_btn"
                 ) { state ->
@@ -834,92 +833,16 @@ fun MessageComposer(
                                 )
                             }
                         }
-                        "VIDEO_NOTE" -> {
-                            val videoBg = if (isPrivateMode) {
-                                if (isDark) darkTone(Color(0xFF2E2F33)) else Color(0xFFE5E7EB)
-                            } else null
-                            val videoTint = if (isPrivateMode) {
-                                if (isDark) darkTone(Color(0xFFD1D5DB)) else Color(0xFF374151)
-                            } else Color.White
-
-                            Box(contentAlignment = Alignment.Center) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(48.dp)
-                                        .then(
-                                            if (isPrivateMode) Modifier.clip(CircleShape).background(videoBg ?: Color.Gray)
-                                            else Modifier
-                                                .appGradientShadow(CircleShape)
-                                                .clip(CircleShape)
-                                                .background(appHorizontalGradient())
-                                        )
-                                        .pointerInput(Unit) {
-                                            awaitEachGesture {
-                                                val down = awaitFirstDown(requireUnconsumed = false)
-                                                down.consume()
-                                                var liftedEarly = false
-                                                withTimeoutOrNull(220L) {
-                                                    while (true) {
-                                                        val ev = awaitPointerEvent()
-                                                        val ch = ev.changes.firstOrNull { it.id == down.id }
-                                                        if (ch == null || !ch.pressed) {
-                                                            liftedEarly = true
-                                                            break
-                                                        }
-                                                    }
-                                                }
-
-                                                if (liftedEarly) {
-                                                    try { haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove) } catch (_: Exception) {}
-                                                    isVideoMode = false
-                                                    return@awaitEachGesture
-                                                }
-
-                                                // Confirmed hold: record circular video note
-                                                try { haptic.performHapticFeedback(HapticFeedbackType.LongPress) } catch (_: Exception) {}
-                                                onRecordVideoNote()
-                                            }
-                                        }
-                                        .testTag("composer_video_note_action_button"),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Videocam,
-                                        contentDescription = "Circular Video Note (tap to switch to Mic, hold to record)",
-                                        tint = videoTint,
-                                        modifier = Modifier.size(23.dp)
-                                    )
-                                }
-
-                                // Secondary mode badge: Mic (tap switches to audio note)
-                                Box(
-                                    modifier = Modifier
-                                        .align(Alignment.BottomEnd)
-                                        .offset(x = 1.dp, y = 1.dp)
-                                        .size(18.dp)
-                                        .clip(CircleShape)
-                                        .background(Color(0xFF0F172A))
-                                        .border(1.2.dp, RoseGoldPrimary, CircleShape),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Mic,
-                                        contentDescription = null,
-                                        tint = Color.White,
-                                        modifier = Modifier.size(10.dp)
-                                    )
-                                }
-                            }
-                        }
-                        "MIC" -> {
-                            val micBg = if (isPrivateMode) {
+                        "MEDIA_RECORD" -> {
+                            val recordBg = if (isPrivateMode) {
                                 if (isRecordingVoice) {
                                     if (isDark) darkTone(Color(0xFFE5E7EB)) else Color(0xFF374151)
                                 } else {
                                     if (isDark) darkTone(Color(0xFF2E2F33)) else Color(0xFFE5E7EB)
                                 }
                             } else if (isRecordingVoice) Color(0xFFE11D48) else null
-                            val micTint = if (isPrivateMode) {
+
+                            val recordTint = if (isPrivateMode) {
                                 if (isRecordingVoice) {
                                     if (isDark) darkTone(Color(0xFF111827)) else Color.White
                                 } else {
@@ -957,7 +880,7 @@ fun MessageComposer(
                                                     .clip(CircleShape)
                                                     .background(appHorizontalGradient())
                                             } else if (isPrivateMode) {
-                                                Modifier.clip(CircleShape).background(micBg ?: Color.Gray)
+                                                Modifier.clip(CircleShape).background(recordBg ?: Color.Gray)
                                             } else {
                                                 Modifier
                                                     .appGradientShadow(CircleShape)
@@ -965,16 +888,15 @@ fun MessageComposer(
                                                     .background(appHorizontalGradient())
                                             }
                                         )
-                                        .pointerInput(Unit) {
+                                        .pointerInput(isVideoMode) {
                                             awaitEachGesture {
                                                 val down = awaitFirstDown(requireUnconsumed = false)
                                                 down.consume()
                                                 dragOffsetX = 0f
                                                 dragOffsetY = 0f
 
-                                                // Issue 14: Wait up to 220ms before starting recording.
+                                                // Wait up to 220ms before starting recording.
                                                 // If the finger lifts in that time it's a tap, not a hold.
-                                                // This prevents false starts and the cancel/restart flicker.
                                                 var liftedEarly = false
                                                 withTimeoutOrNull(220L) {
                                                     while (true) {
@@ -989,11 +911,18 @@ fun MessageComposer(
 
                                                 if (liftedEarly) {
                                                     try { haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove) } catch (_: Exception) {}
-                                                    isVideoMode = true
+                                                    isVideoMode = !isVideoMode
                                                     return@awaitEachGesture
                                                 }
 
-                                                // Confirmed hold — start recording
+                                                // Confirmed hold
+                                                if (isVideoMode) {
+                                                    try { haptic.performHapticFeedback(HapticFeedbackType.LongPress) } catch (_: Exception) {}
+                                                    onRecordVideoNote()
+                                                    return@awaitEachGesture
+                                                }
+
+                                                // Confirmed hold for voice note
                                                 val startTime = System.currentTimeMillis()
                                                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                                 onStartVoiceRecord()
@@ -1046,18 +975,29 @@ fun MessageComposer(
                                                 }
                                             }
                                         }
-                                        .testTag("composer_voice_button"),
+                                        .testTag(if (isVideoMode) "composer_video_note_action_button" else "composer_voice_button"),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Mic,
-                                        contentDescription = "Hold to record voice note",
-                                        tint = micTint,
-                                        modifier = Modifier.size(23.dp)
-                                    )
+                                    AnimatedContent(
+                                        targetState = isVideoMode,
+                                        transitionSpec = {
+                                            (scaleIn(initialScale = 0.4f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMediumLow)) +
+                                             fadeIn(tween(140))) togetherWith
+                                            (scaleOut(targetScale = 0.4f, animationSpec = tween(90)) +
+                                             fadeOut(tween(90))) using SizeTransform(clip = false)
+                                        },
+                                        label = "composer_media_icon"
+                                    ) { inVideo ->
+                                        Icon(
+                                            imageVector = if (inVideo) Icons.Default.Videocam else Icons.Default.Mic,
+                                            contentDescription = if (inVideo) "Circular Video Note (tap to switch to Mic, hold to record)" else "Hold to record voice note (tap to switch to Video)",
+                                            tint = recordTint,
+                                            modifier = Modifier.size(23.dp)
+                                        )
+                                    }
                                 }
 
-                                // Secondary mode badge: Videocam (tap switches to video note)
+                                // Secondary mode badge: Videocam / Mic (tap/shows the alternate mode)
                                 if (!isRecordingVoice) {
                                     Box(
                                         modifier = Modifier
@@ -1069,12 +1009,23 @@ fun MessageComposer(
                                             .border(1.2.dp, RoseGoldPrimary, CircleShape),
                                         contentAlignment = Alignment.Center
                                     ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Videocam,
-                                            contentDescription = null,
-                                            tint = Color.White,
-                                            modifier = Modifier.size(10.dp)
-                                        )
+                                        AnimatedContent(
+                                            targetState = isVideoMode,
+                                            transitionSpec = {
+                                                (scaleIn(initialScale = 0.4f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMediumLow)) +
+                                                 fadeIn(tween(140))) togetherWith
+                                                (scaleOut(targetScale = 0.4f, animationSpec = tween(90)) +
+                                                 fadeOut(tween(90))) using SizeTransform(clip = false)
+                                            },
+                                            label = "composer_media_badge_icon"
+                                        ) { inVideo ->
+                                            Icon(
+                                                imageVector = if (inVideo) Icons.Default.Mic else Icons.Default.Videocam,
+                                                contentDescription = null,
+                                                tint = Color.White,
+                                                modifier = Modifier.size(10.dp)
+                                            )
+                                        }
                                     }
                                 }
                             }

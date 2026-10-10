@@ -70,7 +70,7 @@ def create_github_release(token: str, repo: str, version_code: int, version_name
     payload = {
         "tag_name": tag,
         "name": f"v{version_name} (build {version_code})",
-        "body": f"Notes v{version_name} (Build {version_code}):\n• Small visual refresh\n• Bug fixes and improvements",
+        "body": f"Notes v{version_name} (Build {version_code}):\n• YouTube layout & synchronized watch party fixes\n• Both of us crossing hearts connecting profile rings\n• Performance and sync improvements",
         "draft": False,
         "prerelease": False,
     }

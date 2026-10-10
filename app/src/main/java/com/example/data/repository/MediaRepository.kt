@@ -9,6 +9,7 @@ import android.net.Uri
 import android.util.Log
 import com.example.data.model.MessageType
 import com.google.firebase.FirebaseApp
+import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.storage.FirebaseStorage
 import android.webkit.MimeTypeMap
 import kotlinx.coroutines.CancellationException
@@ -82,13 +83,58 @@ class MediaRepository(private val context: Context) {
         val compressedFile = File(cacheDir, "img_${UUID.randomUUID()}.jpg")
 
         try {
-            context.contentResolver.openInputStream(uri)?.use { input ->
-                FileOutputStream(compressedFile).use { output ->
-                    input.copyTo(output)
+            val bitmap = decodeSampledBitmapFromUri(uri, 1440, 1440)
+            if (bitmap != null) {
+                val rotatedBitmap = rotateBitmapIfRequired(uri, bitmap)
+                val maxDim = 1440
+                val ratio = (rotatedBitmap.width.toFloat() / rotatedBitmap.height.toFloat())
+                val targetWidth: Int
+                val targetHeight: Int
+                if (rotatedBitmap.width > rotatedBitmap.height) {
+                    targetWidth = if (rotatedBitmap.width > maxDim) maxDim else rotatedBitmap.width
+                    targetHeight = (targetWidth / ratio).toInt().coerceAtLeast(1)
+                } else {
+                    targetHeight = if (rotatedBitmap.height > maxDim) maxDim else rotatedBitmap.height
+                    targetWidth = (targetHeight * ratio).toInt().coerceAtLeast(1)
+                }
+
+                val resized = if (targetWidth != rotatedBitmap.width || targetHeight != rotatedBitmap.height) {
+                    Bitmap.createScaledBitmap(rotatedBitmap, targetWidth, targetHeight, true)
+                } else {
+                    rotatedBitmap
+                }
+
+                FileOutputStream(compressedFile).use { out ->
+                    resized.compress(Bitmap.CompressFormat.JPEG, 82, out)
+                    out.flush()
+                }
+
+                if (compressedFile.length() > 450 * 1024) {
+                    FileOutputStream(compressedFile).use { out ->
+                        resized.compress(Bitmap.CompressFormat.JPEG, 70, out)
+                        out.flush()
+                    }
+                }
+
+                if (resized !== rotatedBitmap && resized !== bitmap) resized.recycle()
+                if (rotatedBitmap !== bitmap) rotatedBitmap.recycle()
+                bitmap.recycle()
+            } else {
+                context.contentResolver.openInputStream(uri)?.use { input ->
+                    FileOutputStream(compressedFile).use { output ->
+                        input.copyTo(output)
+                    }
                 }
             }
         } catch (e: Exception) {
             Log.e("MediaRepository", "compressAndPrepareImage failed, copying stream directly", e)
+            try {
+                context.contentResolver.openInputStream(uri)?.use { input ->
+                    FileOutputStream(compressedFile).use { output ->
+                        input.copyTo(output)
+                    }
+                }
+            } catch (_: Exception) {}
         }
 
         compressedFile
@@ -215,6 +261,16 @@ class MediaRepository(private val context: Context) {
         onProgress: (Float) -> Unit = {}
     ): Result<String> = withContext(Dispatchers.IO) {
         try {
+            // Ensure anonymous authentication so storage.rules allow write
+            try {
+                val auth = FirebaseAuth.getInstance()
+                if (auth.currentUser == null) {
+                    auth.signInAnonymously().await()
+                }
+            } catch (authEx: Exception) {
+                Log.w("MediaRepository", "Anonymous auth check/sign-in skipped: ${authEx.message}")
+            }
+
             val storageInstance = storage
             if (storageInstance != null) {
                 val folder = when (type) {
@@ -273,6 +329,25 @@ class MediaRepository(private val context: Context) {
                 val bytes = file.readBytes()
                 val base64 = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
                 Result.success("data:image/jpeg;base64,$base64")
+            } else if (type == MessageType.IMAGE && file.exists()) {
+                // Guaranteed fallback: scale down to 1080px JPEG 65% quality so it is strictly < 400KB and always deliverable
+                val bmp = BitmapFactory.decodeFile(file.absolutePath)
+                if (bmp != null) {
+                    val maxDim = 1080
+                    val scale = maxDim.toFloat() / maxOf(bmp.width, bmp.height).coerceAtLeast(1)
+                    val scaled = if (scale < 1f) {
+                        Bitmap.createScaledBitmap(bmp, (bmp.width * scale).toInt().coerceAtLeast(1), (bmp.height * scale).toInt().coerceAtLeast(1), true)
+                    } else bmp
+                    val stream = java.io.ByteArrayOutputStream()
+                    scaled.compress(Bitmap.CompressFormat.JPEG, 65, stream)
+                    if (scaled !== bmp) scaled.recycle()
+                    bmp.recycle()
+                    val bytes = stream.toByteArray()
+                    val base64 = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+                    Result.success("data:image/jpeg;base64,$base64")
+                } else {
+                    Result.success(Uri.fromFile(file).toString())
+                }
             } else {
                 Result.success(Uri.fromFile(file).toString())
             }

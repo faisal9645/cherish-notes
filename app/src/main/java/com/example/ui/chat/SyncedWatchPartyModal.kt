@@ -94,14 +94,31 @@ private class CherishBrowserBridge(
 }
 
 /**
- * JavaScript Bridge for synchronizing video playback (play, pause, seek, completion).
+ * JavaScript Bridge for synchronizing video playback (play, pause, seek, duration, completion).
  */
 private class CherishSyncBridge(
-    private val onState: (Int) -> Unit
+    private val onState: (Int, Float) -> Unit,
+    private val onTime: ((Float) -> Unit)? = null,
+    private val onDuration: ((Float) -> Unit)? = null
 ) {
     @JavascriptInterface
+    fun onStateChange(state: Int, time: Float) {
+        onState(state, time)
+    }
+
+    @JavascriptInterface
     fun onStateChange(state: Int) {
-        onState(state)
+        onState(state, 0f)
+    }
+
+    @JavascriptInterface
+    fun onProgress(time: Float) {
+        onTime?.invoke(time)
+    }
+
+    @JavascriptInterface
+    fun onDuration(duration: Float) {
+        onDuration?.invoke(duration)
     }
 }
 
@@ -750,7 +767,13 @@ fun WatchPartySetupDialog(
 /**
  * Generates embed HTML with the YouTube IFrame API and bidirectional postMessage bridge.
  */
-private fun getSyncedEmbedHtml(videoId: String): String {
+private fun getSyncedEmbedHtml(
+    videoId: String,
+    isPlaying: Boolean,
+    positionSeconds: Float
+): String {
+    val autoplayVal = if (isPlaying) 1 else 0
+    val startSec = positionSeconds.coerceAtLeast(0f).toInt()
     return """
         <!DOCTYPE html>
         <html>
@@ -764,59 +787,145 @@ private fun getSyncedEmbedHtml(videoId: String): String {
                     overflow: hidden;
                     background-color: #000000;
                 }
-                .player-container {
-                    position: relative;
-                    width: 100%;
-                    height: 100%;
-                    background-color: #000000;
-                }
-                iframe {
+                #player-container {
                     position: absolute;
                     top: 0;
                     left: 0;
                     width: 100%;
                     height: 100%;
-                    border: 0;
+                    background-color: #000000;
+                }
+                iframe, #player {
+                    width: 100% !important;
+                    height: 100% !important;
+                    border: 0 !important;
                 }
             </style>
         </head>
         <body>
-            <div class="player-container">
-                <iframe 
-                    id="ytplayer"
-                    src="https://www.youtube-nocookie.com/embed/$videoId?autoplay=1&enablejsapi=1&fs=1&rel=0&playsinline=1&modestbranding=1"
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                    allowfullscreen>
-                </iframe>
+            <div id="player-container">
+                <div id="player"></div>
             </div>
             <script>
-                function postYtCommand(func, args) {
-                    var p = document.getElementById('ytplayer');
-                    if (p && p.contentWindow) {
-                        p.contentWindow.postMessage(JSON.stringify({
-                            event: 'command',
-                            func: func,
-                            args: args || []
-                        }), '*');
+                var tag = document.createElement('script');
+                tag.src = "https://www.youtube.com/iframe_api";
+                var firstScriptTag = document.getElementsByTagName('script')[0];
+                firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+
+                var player = null;
+                var isReady = false;
+                var suppressCallbacks = false;
+                var pendingCommands = [];
+
+                function onYouTubeIframeAPIReady() {
+                    player = new YT.Player('player', {
+                        width: '100%',
+                        height: '100%',
+                        videoId: '$videoId',
+                        playerVars: {
+                            'autoplay': $autoplayVal,
+                            'start': $startSec,
+                            'playsinline': 1,
+                            'rel': 0,
+                            'modestbranding': 1,
+                            'controls': 1,
+                            'fs': 1,
+                            'enablejsapi': 1,
+                            'origin': 'https://www.youtube.com'
+                        },
+                        events: {
+                            'onReady': onPlayerReady,
+                            'onStateChange': onPlayerStateChange
+                        }
+                    });
+                }
+
+                function onPlayerReady(event) {
+                    isReady = true;
+                    while (pendingCommands.length > 0) {
+                        var cmd = pendingCommands.shift();
+                        try { cmd(); } catch(e) {}
                     }
-                }
-                function playVideo() {
-                    postYtCommand('playVideo');
-                }
-                function pauseVideo() {
-                    postYtCommand('pauseVideo');
-                }
-                function seekTo(seconds) {
-                    postYtCommand('seekTo', [seconds, true]);
-                }
-                window.addEventListener('message', function(event) {
+                    if ($autoplayVal === 1) {
+                        try { player.playVideo(); } catch(e) {}
+                    }
+                    if ($startSec > 0) {
+                        try { player.seekTo($startSec, true); } catch(e) {}
+                    }
                     try {
-                        var data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
-                        if (data && data.event === 'onStateChange' && window.CherishSyncBridge) {
-                            window.CherishSyncBridge.onStateChange(data.info);
+                        var dur = player.getDuration();
+                        if (dur > 0 && window.CherishSyncBridge && window.CherishSyncBridge.onDuration) {
+                            window.CherishSyncBridge.onDuration(dur);
                         }
                     } catch(e) {}
-                });
+                    setInterval(function() {
+                        try {
+                            if (player && typeof player.getCurrentTime === 'function' && player.getPlayerState() === 1) {
+                                var curr = player.getCurrentTime();
+                                if (window.CherishSyncBridge && window.CherishSyncBridge.onProgress) {
+                                    window.CherishSyncBridge.onProgress(curr);
+                                }
+                            }
+                        } catch(e) {}
+                    }, 1000);
+                }
+
+                function onPlayerStateChange(event) {
+                    try {
+                        var state = event.data;
+                        var curr = 0;
+                        if (player && typeof player.getCurrentTime === 'function') {
+                            curr = player.getCurrentTime();
+                        }
+                        if (player && typeof player.getDuration === 'function') {
+                            var dur = player.getDuration();
+                            if (dur > 0 && window.CherishSyncBridge && window.CherishSyncBridge.onDuration) {
+                                window.CherishSyncBridge.onDuration(dur);
+                            }
+                        }
+                        if (window.CherishSyncBridge && !suppressCallbacks) {
+                            window.CherishSyncBridge.onStateChange(state, curr);
+                        }
+                    } catch(e) {}
+                }
+
+                function playVideo() {
+                    if (isReady && player && typeof player.playVideo === 'function') {
+                        suppressCallbacks = true;
+                        player.playVideo();
+                        setTimeout(function() { suppressCallbacks = false; }, 800);
+                    } else {
+                        pendingCommands.push(function() {
+                            suppressCallbacks = true;
+                            player.playVideo();
+                            setTimeout(function() { suppressCallbacks = false; }, 800);
+                        });
+                    }
+                }
+
+                function pauseVideo() {
+                    if (isReady && player && typeof player.pauseVideo === 'function') {
+                        suppressCallbacks = true;
+                        player.pauseVideo();
+                        setTimeout(function() { suppressCallbacks = false; }, 800);
+                    } else {
+                        pendingCommands.push(function() {
+                            suppressCallbacks = true;
+                            player.pauseVideo();
+                            setTimeout(function() { suppressCallbacks = false; }, 800);
+                        });
+                    }
+                }
+
+                function seekTo(seconds) {
+                    if (isReady && player && typeof player.seekTo === 'function') {
+                        player.seekTo(seconds, true);
+                    } else {
+                        pendingCommands.push(function() {
+                            player.seekTo(seconds, true);
+                        });
+                    }
+                }
             </script>
         </body>
         </html>
@@ -833,13 +942,15 @@ fun SyncedYouTubePlayer(
     isPlaying: Boolean,
     positionSeconds: Float,
     onPlayPauseToggle: (Boolean, Float) -> Unit,
+    onCurrentTimeUpdate: ((Float) -> Unit)? = null,
+    onDurationUpdate: ((Float) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
     val mainHandler = remember { android.os.Handler(android.os.Looper.getMainLooper()) }
     var webViewRef by remember { mutableStateOf<WebView?>(null) }
     var hasError by remember { mutableStateOf(false) }
-    val embedHtml = remember(videoId) { getSyncedEmbedHtml(videoId) }
+    val embedHtml = remember(videoId) { getSyncedEmbedHtml(videoId, isPlaying, positionSeconds) }
 
     // Synchronize play/pause
     LaunchedEffect(isPlaying) {
@@ -905,18 +1016,30 @@ fun SyncedYouTubePlayer(
                     cookieManager.setAcceptThirdPartyCookies(this, true)
 
                     addJavascriptInterface(
-                        CherishSyncBridge { state ->
-                            mainHandler.post {
-                                // 1: playing, 2: paused, 0: ended
-                                if (state == 1 && !isPlaying) {
-                                    onPlayPauseToggle(true, positionSeconds)
-                                } else if (state == 2 && isPlaying) {
-                                    onPlayPauseToggle(false, positionSeconds)
-                                } else if (state == 0 && isPlaying) {
-                                    onPlayPauseToggle(false, positionSeconds)
+                        CherishSyncBridge(
+                            onState = { state, time ->
+                                mainHandler.post {
+                                    // 1: playing, 2: paused, 0: ended
+                                    if (state == 1 && !isPlaying) {
+                                        onPlayPauseToggle(true, if (time > 0f) time else positionSeconds)
+                                    } else if (state == 2 && isPlaying) {
+                                        onPlayPauseToggle(false, if (time > 0f) time else positionSeconds)
+                                    } else if (state == 0 && isPlaying) {
+                                        onPlayPauseToggle(false, if (time > 0f) time else positionSeconds)
+                                    }
+                                }
+                            },
+                            onTime = { time ->
+                                mainHandler.post {
+                                    onCurrentTimeUpdate?.invoke(time)
+                                }
+                            },
+                            onDuration = { duration ->
+                                mainHandler.post {
+                                    onDurationUpdate?.invoke(duration)
                                 }
                             }
-                        },
+                        ),
                         "CherishSyncBridge"
                     )
 
@@ -953,7 +1076,7 @@ fun SyncedYouTubePlayer(
                     }
 
                     loadDataWithBaseURL(
-                        "https://www.youtube-nocookie.com",
+                        "https://www.youtube.com",
                         embedHtml,
                         "text/html",
                         "UTF-8",
@@ -1025,10 +1148,11 @@ fun SyncedWatchPartyModal(
     val app = context.applicationContext as? com.example.CherishApplication
 
     var currentProgress by remember(session.videoId, session.positionSeconds) { mutableFloatStateOf(session.positionSeconds) }
+    var videoDuration by remember(session.videoId) { mutableFloatStateOf(0f) }
     var isSeeking by remember { mutableStateOf(false) }
     var showBrowsePicker by remember { mutableStateOf(false) }
 
-    // Progress tick while playing
+    // Progress tick while playing (local smoothing fallback)
     LaunchedEffect(session.isPlaying, isSeeking) {
         if (session.isPlaying && !isSeeking) {
             while (true) {
@@ -1158,15 +1282,27 @@ fun SyncedWatchPartyModal(
                     }
                 }
 
-                // Video / Ambient Player Area
-                Box(
+                // Video / Ambient Player Area: Responsive 16:9 cinema layout
+                BoxWithConstraints(
                     modifier = Modifier
                         .fillMaxWidth()
                         .weight(1f)
-                        .background(Color.Black),
+                        .background(Color.Black)
+                        .padding(horizontal = 8.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     if (session.videoId.isNotBlank()) {
+                        val isWideRatio = (maxWidth / maxHeight) > (16f / 9f)
+                        val playerModifier = if (isWideRatio) {
+                            Modifier
+                                .fillMaxHeight()
+                                .aspectRatio(16f / 9f)
+                        } else {
+                            Modifier
+                                .fillMaxWidth()
+                                .aspectRatio(16f / 9f)
+                        }
+
                         key(session.videoId) {
                             SyncedYouTubePlayer(
                                 videoId = session.videoId,
@@ -1175,7 +1311,18 @@ fun SyncedWatchPartyModal(
                                 onPlayPauseToggle = { newState, pos ->
                                     onPlayPause(newState, pos)
                                 },
-                                modifier = Modifier.fillMaxSize()
+                                onCurrentTimeUpdate = { time ->
+                                    if (!isSeeking) {
+                                        currentProgress = time
+                                    }
+                                },
+                                onDurationUpdate = { dur ->
+                                    if (dur > 0f) {
+                                        videoDuration = dur
+                                    }
+                                },
+                                modifier = playerModifier
+                                    .clip(RoundedCornerShape(12.dp))
                             )
                         }
                     } else {
@@ -1216,10 +1363,16 @@ fun SyncedWatchPartyModal(
                             .fillMaxWidth()
                             .padding(horizontal = 20.dp, vertical = 16.dp)
                     ) {
-                        // Synced Progress Slider
-                        val minutes = (currentProgress / 60).toInt()
-                        val seconds = (currentProgress % 60).toInt()
-                        val timeStr = String.format("%02d:%02d", minutes, seconds)
+                        // Synced Progress Slider & Time Labels
+                        val curMin = (currentProgress / 60).toInt()
+                        val curSec = (currentProgress % 60).toInt()
+                        val timeStr = if (videoDuration > 0f) {
+                            val totalMin = (videoDuration / 60).toInt()
+                            val totalSec = (videoDuration % 60).toInt()
+                            String.format("%02d:%02d / %02d:%02d", curMin, curSec, totalMin, totalSec)
+                        } else {
+                            String.format("%02d:%02d", curMin, curSec)
+                        }
 
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -1249,8 +1402,9 @@ fun SyncedWatchPartyModal(
                             }
                         }
 
+                        val maxRange = maxOf(videoDuration, currentProgress + 60f, 60f)
                         Slider(
-                            value = currentProgress,
+                            value = currentProgress.coerceIn(0f, maxRange),
                             onValueChange = {
                                 isSeeking = true
                                 currentProgress = it
@@ -1259,7 +1413,7 @@ fun SyncedWatchPartyModal(
                                 isSeeking = false
                                 onSeek(currentProgress)
                             },
-                            valueRange = 0f..600f,
+                            valueRange = 0f..maxRange,
                             colors = SliderDefaults.colors(
                                 thumbColor = accent,
                                 activeTrackColor = accent,

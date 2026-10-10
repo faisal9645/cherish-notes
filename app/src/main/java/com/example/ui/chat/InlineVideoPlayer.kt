@@ -545,7 +545,6 @@ fun InlineYouTubeCard(
                                 onClick = {
                                     val cherishApp = context.applicationContext as? com.example.CherishApplication
                                     cherishApp?.coupleFeaturesRepository?.startWatchParty(videoId, "Shared Video", "")
-                                    onOpenTheater(videoId)
                                 },
                                 contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
                                 modifier = Modifier.height(28.dp).testTag("watch_party_sync_btn"),

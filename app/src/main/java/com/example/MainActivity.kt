@@ -2,12 +2,16 @@ package com.example
 
 import android.content.Context
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.util.Log
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
+import android.widget.Toast
+import com.example.data.model.MessageType
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -197,20 +201,150 @@ class MainActivity : FragmentActivity() {
 
     private fun handleShareIntent(intent: android.content.Intent?) {
         if (intent == null) return
-        if (intent.action == android.content.Intent.ACTION_SEND && intent.type == "text/plain") {
-            val sharedText = intent.getStringExtra(android.content.Intent.EXTRA_TEXT)
-            if (sharedText != null && (sharedText.contains("youtube.com") || sharedText.contains("youtu.be"))) {
-                // Extract link if there's other text around it
-                val urlRegex = "(?i)\\b((?:https?://|www\\d{0,3}[.]|[a-z0-9.\\-]+[.][a-z]{2,4}/)(?:[^\\s()<>]+|\\((?:[^\\s()<>]+|(?:\\([^\\s()<>]+\\)))*\\))+(?:\\((?:[^\\s()<>]+|(?:\\([^\\s()<>]+\\)))*\\)|[^\\s`!()\\[\\]{};:'\".,<>?«»“”‘’]))".toRegex()
-                val match = urlRegex.find(sharedText)
-                val textToSend = match?.value ?: sharedText
+        val action = intent.action
+        val type = intent.type
 
-                lifecycleScope.launch {
-                    try {
-                        app.chatRepository.sendMessage(textToSend.trim())
-                        android.widget.Toast.makeText(this@MainActivity, "Saved link to Notes", android.widget.Toast.LENGTH_SHORT).show()
-                    } catch (e: Exception) {
-                        e.printStackTrace()
+        when (action) {
+            android.content.Intent.ACTION_SEND -> {
+                if (type != null && type.startsWith("image/")) {
+                    val imageUri = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        intent.getParcelableExtra(android.content.Intent.EXTRA_STREAM, Uri::class.java)
+                    } else {
+                        @Suppress("DEPRECATION")
+                        intent.getParcelableExtra(android.content.Intent.EXTRA_STREAM)
+                    }
+                    if (imageUri != null) {
+                        lifecycleScope.launch {
+                            try {
+                                val coupleId = app.chatRepository.getConversationId()
+                                val preparedFile = app.mediaRepository.compressAndPrepareImage(imageUri)
+                                val uploadedUrl = app.mediaRepository.uploadFile(preparedFile, MessageType.IMAGE, coupleId).getOrNull()
+                                if (uploadedUrl != null) {
+                                    app.chatRepository.sendMessage(
+                                        text = intent.getStringExtra(android.content.Intent.EXTRA_TEXT) ?: "Sent a photo",
+                                        type = MessageType.IMAGE,
+                                        mediaUrl = uploadedUrl,
+                                        mediaName = preparedFile.name,
+                                        mediaSize = preparedFile.length()
+                                    )
+                                    Toast.makeText(this@MainActivity, "Photo shared to chat ✨", Toast.LENGTH_SHORT).show()
+                                }
+                            } catch (e: Exception) {
+                                Log.e("MainActivity", "Failed to share image", e)
+                            }
+                        }
+                    }
+                } else if (type != null && type.startsWith("video/")) {
+                    val videoUri = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        intent.getParcelableExtra(android.content.Intent.EXTRA_STREAM, Uri::class.java)
+                    } else {
+                        @Suppress("DEPRECATION")
+                        intent.getParcelableExtra(android.content.Intent.EXTRA_STREAM)
+                    }
+                    if (videoUri != null) {
+                        lifecycleScope.launch {
+                            try {
+                                val coupleId = app.chatRepository.getConversationId()
+                                val preparedFile = app.mediaRepository.copyToCache(videoUri)
+                                val uploadedUrl = app.mediaRepository.uploadFile(preparedFile, MessageType.VIDEO, coupleId).getOrNull()
+                                if (uploadedUrl != null) {
+                                    app.chatRepository.sendMessage(
+                                        text = intent.getStringExtra(android.content.Intent.EXTRA_TEXT) ?: "Sent a video",
+                                        type = MessageType.VIDEO,
+                                        mediaUrl = uploadedUrl,
+                                        mediaName = preparedFile.name,
+                                        mediaSize = preparedFile.length()
+                                    )
+                                    Toast.makeText(this@MainActivity, "Video shared to chat ✨", Toast.LENGTH_SHORT).show()
+                                }
+                            } catch (e: Exception) {
+                                Log.e("MainActivity", "Failed to share video", e)
+                            }
+                        }
+                    }
+                } else if (type != null && type.startsWith("text/")) {
+                    val sharedText = intent.getStringExtra(android.content.Intent.EXTRA_TEXT)
+                        ?: intent.getStringExtra(android.content.Intent.EXTRA_SUBJECT)
+                    if (!sharedText.isNullOrBlank()) {
+                        val textToSend = if (sharedText.contains("youtube.com") || sharedText.contains("youtu.be")) {
+                            val urlRegex = "(?i)\\b((?:https?://|www\\d{0,3}[.]|[a-z0-9.\\-]+[.][a-z]{2,4}/)(?:[^\\s()<>]+|\\((?:[^\\s()<>]+|(?:\\([^\\s()<>]+\\)))*\\))+(?:\\((?:[^\\s()<>]+|(?:\\([^\\s()<>]+\\)))*\\)|[^\\s`!()\\[\\]{};:'\".,<>?«»“”‘’]))".toRegex()
+                            val match = urlRegex.find(sharedText)
+                            match?.value ?: sharedText
+                        } else {
+                            sharedText
+                        }
+
+                        lifecycleScope.launch {
+                            try {
+                                app.chatRepository.sendMessage(textToSend.trim())
+                                Toast.makeText(this@MainActivity, "Shared to Notes chat ✨", Toast.LENGTH_SHORT).show()
+                            } catch (e: Exception) {
+                                e.printStackTrace()
+                            }
+                        }
+                    }
+                } else {
+                    val fileUri = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        intent.getParcelableExtra(android.content.Intent.EXTRA_STREAM, Uri::class.java)
+                    } else {
+                        @Suppress("DEPRECATION")
+                        intent.getParcelableExtra(android.content.Intent.EXTRA_STREAM)
+                    }
+                    if (fileUri != null) {
+                        lifecycleScope.launch {
+                            try {
+                                val coupleId = app.chatRepository.getConversationId()
+                                val preparedFile = app.mediaRepository.copyToCache(fileUri)
+                                val uploadedUrl = app.mediaRepository.uploadFile(preparedFile, MessageType.DOCUMENT, coupleId).getOrNull()
+                                if (uploadedUrl != null) {
+                                    app.chatRepository.sendMessage(
+                                        text = intent.getStringExtra(android.content.Intent.EXTRA_TEXT) ?: "Sent a file",
+                                        type = MessageType.DOCUMENT,
+                                        mediaUrl = uploadedUrl,
+                                        mediaName = preparedFile.name,
+                                        mediaSize = preparedFile.length()
+                                    )
+                                    Toast.makeText(this@MainActivity, "File shared to chat ✨", Toast.LENGTH_SHORT).show()
+                                }
+                            } catch (e: Exception) {
+                                Log.e("MainActivity", "Failed to share file", e)
+                            }
+                        }
+                    }
+                }
+            }
+            android.content.Intent.ACTION_SEND_MULTIPLE -> {
+                val imageUris = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    intent.getParcelableArrayListExtra(android.content.Intent.EXTRA_STREAM, Uri::class.java)
+                } else {
+                    @Suppress("DEPRECATION")
+                    intent.getParcelableArrayListExtra(android.content.Intent.EXTRA_STREAM)
+                }
+                if (!imageUris.isNullOrEmpty()) {
+                    lifecycleScope.launch {
+                        try {
+                            val coupleId = app.chatRepository.getConversationId()
+                            var sentCount = 0
+                            for (uri in imageUris) {
+                                val preparedFile = app.mediaRepository.compressAndPrepareImage(uri)
+                                val uploadedUrl = app.mediaRepository.uploadFile(preparedFile, MessageType.IMAGE, coupleId).getOrNull()
+                                if (uploadedUrl != null) {
+                                    app.chatRepository.sendMessage(
+                                        text = "Sent a photo",
+                                        type = MessageType.IMAGE,
+                                        mediaUrl = uploadedUrl,
+                                        mediaName = preparedFile.name,
+                                        mediaSize = preparedFile.length()
+                                    )
+                                    sentCount++
+                                }
+                            }
+                            if (sentCount > 0) {
+                                Toast.makeText(this@MainActivity, "$sentCount photos shared to chat ✨", Toast.LENGTH_SHORT).show()
+                            }
+                        } catch (e: Exception) {
+                            Log.e("MainActivity", "Failed to share multiple images", e)
+                        }
                     }
                 }
             }

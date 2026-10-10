@@ -904,38 +904,43 @@ private fun RingedAvatar(person: LovePerson, color: Color, onOpenPhoto: (String)
     }
 }
 
-/** Two hearts beating gently between us: her pink one held low inside his blue one. */
+/** Two hearts beating gently between us: her pink heart on the left and his blue heart on the right, crossing each other and connecting both ring profiles. */
 @Composable
 private fun TwinHearts(pink: Color, blue: Color, beat: State<Float>) {
     val outline = LocalCardColors.current.pill.copy(alpha = 1f)
     val cardIsLight = LocalCardColors.current.isLight
     Box(
         modifier = Modifier
-            .size(width = 60.dp, height = 46.dp)
+            .size(width = 68.dp, height = 48.dp)
             .drawWithCache {
                 val unitHeart = heartPath(0f, 0f, 1f)
-                val heartSize = 28.dp.toPx()
-                // His (blue) heart bigger and a little higher; hers (pink) smaller, in front of it, low
-                // and to the left inside it, as if he keeps her in his heart (any further left and
-                // she'd spill over its edge)
-                val blueAt = Offset(size.width / 2f + 1.dp.toPx(), size.height / 2f - 1.dp.toPx())
-                val pinkAt = Offset(size.width / 2f - 2.5.dp.toPx(), size.height / 2f + 0.5.dp.toPx())
-                val edge = Stroke(width = 3.dp.toPx() / heartSize)
-                // The edge matches the card behind, so the overlapping hearts read as two
+                val heartSize = 25.dp.toPx()
+                // Man's heart (blue) shifted a little right; girl's heart (pink) shifted a little left
+                // Both hearts cross in the center and connect both profile rings.
+                // Girl's heart is exactly 90% of man's heart size.
+                val manGrow = 1.14f
+                val girlGrow = manGrow * 0.90f
+                val blueAt = Offset(size.width / 2f + 7.5.dp.toPx(), size.height / 2f - 1.dp.toPx())
+                val pinkAt = Offset(size.width / 2f - 7.5.dp.toPx(), size.height / 2f + 0.5.dp.toPx())
+                val edge = Stroke(width = 2.8.dp.toPx() / heartSize)
+                // The edge matches the card behind, so the overlapping hearts read as two crossing hearts
                 val edgeColor = if (cardIsLight) outline else NightCardEdge
                 onDrawBehind {
                     val s = heartSize * (1f + 0.045f * beat.value)
-                    fun heart(at: Offset, color: Color, grow: Float = 1f) {
+                    fun drawHeart(at: Offset, color: Color, rotation: Float, grow: Float) {
                         withTransform({
                             translate(at.x, at.y)
+                            rotate(rotation, pivot = Offset.Zero)
                             scale(s * grow, s * grow, pivot = Offset.Zero)
                         }) {
                             drawPath(unitHeart, edgeColor, style = edge)
                             drawPath(unitHeart, color)
                         }
                     }
-                    heart(blueAt, blue, grow = 1.3f)
-                    heart(pinkAt, pink, grow = 0.62f)
+                    // Man's heart shifted little right, tilted towards his ring profile
+                    drawHeart(blueAt, blue, rotation = 12f, grow = manGrow)
+                    // Girl's heart shifted little left (90% size of man's heart), crossing in front and connecting her ring profile
+                    drawHeart(pinkAt, pink, rotation = -12f, grow = girlGrow)
                 }
             }
             .testTag("both_of_us_hearts")
