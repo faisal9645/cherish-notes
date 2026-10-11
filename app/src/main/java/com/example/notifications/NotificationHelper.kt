@@ -22,7 +22,7 @@ object NotificationHelper {
     private const val CHANNEL_MESSAGES_NAME = "Notes & Reminders"
     const val CHANNEL_REMINDERS_ID = "notes_reminders_channel"
     private const val CHANNEL_REMINDERS_NAME = "Note Reminders"
-    private const val NOTIFICATION_ID_MESSAGE = 1001
+    const val NOTIFICATION_ID_MESSAGE = 1001
 
     private val pendingUnreadCount = AtomicInteger(0)
     private val notifiedMessageIds = java.util.Collections.synchronizedSet(LinkedHashSet<String>())
@@ -124,15 +124,30 @@ object NotificationHelper {
 
         val count = pendingUnreadCount.incrementAndGet()
         val prefs = SecurityPreferences.getInstance(context)
-        if (!prefs.isNotificationsEnabled()) {
-            clearNotifications(context)
+        val isNotifBarEnabled = prefs.isNotificationsEnabled()
+        val isBadgeEnabled = prefs.isBadgeNotificationEnabled()
+
+        // If both notification bar and app badge are disabled, do not alert
+        if (!isNotifBarEnabled && !isBadgeEnabled) {
             return
         }
+
+        // Update launcher icon badge independently if badge notifications are enabled
+        if (isBadgeEnabled) {
+            updateLauncherBadge(context, if (count > 0) 1 else 0)
+        } else {
+            updateLauncherBadge(context, 0)
+        }
+
+        // If notification bar is turned off, do not post status bar notification
+        if (!isNotifBarEnabled) {
+            return
+        }
+
         val isDiscreet = prefs.isDisguiseActive() && (prefs.isHideNotificationContent() || prefs.isDisguiseModeEnabled())
 
         val intent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
-            // Do not open chat automatically
         }
 
         val pendingIntent = PendingIntent.getActivity(
@@ -160,11 +175,9 @@ object NotificationHelper {
             .setContentTitle(maskedTitle)
             .setContentText(maskedText)
             .setSubText(maskedTitle)
-            .setBadgeIconType(NotificationCompat.BADGE_ICON_SMALL)
-            .setNumber(1)
+            .setBadgeIconType(if (isBadgeEnabled) NotificationCompat.BADGE_ICON_SMALL else NotificationCompat.BADGE_ICON_NONE)
+            .setNumber(if (isBadgeEnabled) 1 else 0)
             .build()
-
-        val isBadgeEnabled = prefs.isBadgeNotificationEnabled()
 
         val notification = NotificationCompat.Builder(context, CHANNEL_MESSAGES_ID)
             .setSmallIcon(R.drawable.ic_stat_notes)
@@ -194,13 +207,74 @@ object NotificationHelper {
         } catch (_: SecurityException) {
             // Handled if POST_NOTIFICATIONS runtime permission not yet prompted
         }
+    }
 
-        // Update launcher icon badge to 1 for OEM launchers (only if badge enabled)
-        if (isBadgeEnabled) {
-            updateLauncherBadge(context, if (count > 0) 1 else 0)
-        } else {
-            updateLauncherBadge(context, 0)
+    /**
+     * Send a test notification immediately so user can verify Notification Bar and App Badge settings.
+     */
+    fun sendTestNotification(context: Context) {
+        val prefs = SecurityPreferences.getInstance(context)
+        val isNotifBar = prefs.isNotificationsEnabled()
+        val isBadge = prefs.isBadgeNotificationEnabled()
+
+        if (isBadge) {
+            updateLauncherBadge(context, 1)
         }
+
+        if (isNotifBar) {
+            val isDiscreet = prefs.isHideNotificationContent() || prefs.isDisguiseModeEnabled()
+            val maskedTitle = prefs.getMaskedNotificationTitle()
+            val maskedText = prefs.getMaskedNotificationText()
+
+            val displayTitle = if (isDiscreet) maskedTitle else "Cherish"
+            val displayText = if (isDiscreet) maskedText else "Notification test: love is in the air ✨"
+
+            val intent = Intent(context, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+                putExtra("from_notification", true)
+            }
+            val pendingIntent = PendingIntent.getActivity(
+                context,
+                888,
+                intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+
+            val notification = NotificationCompat.Builder(context, CHANNEL_MESSAGES_ID)
+                .setSmallIcon(R.drawable.ic_stat_notes)
+                .setContentTitle(displayTitle)
+                .setContentText(displayText)
+                .setSubText(if (isDiscreet) maskedTitle else "Cherish")
+                .setAutoCancel(true)
+                .setContentIntent(pendingIntent)
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setCategory(NotificationCompat.CATEGORY_MESSAGE)
+                .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+                .apply {
+                    if (isBadge) {
+                        setBadgeIconType(NotificationCompat.BADGE_ICON_SMALL)
+                        setNumber(1)
+                    } else {
+                        setBadgeIconType(NotificationCompat.BADGE_ICON_NONE)
+                        setNumber(0)
+                    }
+                }
+                .build()
+
+            try {
+                NotificationManagerCompat.from(context).notify(NOTIFICATION_ID_MESSAGE, notification)
+            } catch (_: SecurityException) {}
+        }
+    }
+
+    /**
+     * Cancels status bar notifications without resetting the unread launcher badge.
+     */
+    fun cancelStatusBarNotifications(context: Context) {
+        try {
+            NotificationManagerCompat.from(context).cancel(NOTIFICATION_ID_MESSAGE)
+            NotificationManagerCompat.from(context).cancel(NOTIFICATION_ID_CHECK_AFTER)
+        } catch (_: Exception) {}
     }
 
     /**

@@ -138,8 +138,9 @@ class ChatRepository(
 
     fun getConversationId(): String {
         val user = authRepository.currentUserState.value
-        val coupleId = user?.coupleId?.trim()?.ifBlank { null } ?: ""
-        return coupleId
+        val coupleId = user?.coupleId?.trim()?.ifBlank { null }
+        if (!coupleId.isNullOrBlank()) return coupleId
+        return authRepository.getSavedCoupleId()
     }
 
     fun stopGlobalMessagesListener() {

@@ -7,6 +7,7 @@ import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.keyframes
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -368,13 +369,24 @@ fun BothOfUsCard(
     val cardColors = if (MaterialTheme.colorScheme.surface.luminance() < 0.5f) NightCard else DayCard
     val blue = cardColors.blueInk
 
-    // The two hearts beat gently, only while the tab is on screen (read while drawing only)
-    val still = remember { mutableFloatStateOf(0f) }
+    // The center hearts beat realistically, expanding and shrinking like a living heartbeat
+    val still = remember { mutableFloatStateOf(1f) }
     val beat: State<Float> = if (isVisible) {
         rememberInfiniteTransition(label = "couple_hearts").animateFloat(
-            initialValue = 0f,
+            initialValue = 1f,
             targetValue = 1f,
-            animationSpec = infiniteRepeatable(tween(1_700, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+            animationSpec = infiniteRepeatable(
+                animation = keyframes {
+                    durationMillis = 1200
+                    1.0f at 0 using FastOutSlowInEasing // resting size
+                    1.20f at 160 using FastOutSlowInEasing // 1st beat: expands
+                    1.06f at 300 using FastOutSlowInEasing // slight contraction
+                    1.25f at 450 using FastOutSlowInEasing // 2nd beat: expands further
+                    1.0f at 720 using FastOutSlowInEasing // shrinks back smoothly to baseline
+                    1.0f at 1200 // pause before next heartbeat cycle
+                },
+                repeatMode = RepeatMode.Restart
+            ),
             label = "couple_heart_beat"
         )
     } else {
@@ -926,7 +938,29 @@ private fun TwinHearts(pink: Color, blue: Color, beat: State<Float>) {
                 // The edge matches the card behind, so the overlapping hearts read as two crossing hearts
                 val edgeColor = if (cardIsLight) outline else NightCardEdge
                 onDrawBehind {
-                    val s = heartSize * (1f + 0.045f * beat.value)
+                    // Beating scale expands and shrinks like a true living heartbeat
+                    val scaleFactor = beat.value
+                    val s = heartSize * scaleFactor
+
+                    // Soft ambient radiant heartbeat glow when pulsing/expanding
+                    if (scaleFactor > 1.05f) {
+                        val pulseAlpha = ((scaleFactor - 1.0f) * 1.6f).coerceIn(0f, 0.40f)
+                        val glowSize = s * 1.35f
+                        drawCircle(
+                            brush = Brush.radialGradient(
+                                colors = listOf(
+                                    pink.copy(alpha = pulseAlpha),
+                                    blue.copy(alpha = pulseAlpha * 0.55f),
+                                    Color.Transparent
+                                ),
+                                center = Offset(size.width / 2f, size.height / 2f),
+                                radius = glowSize
+                            ),
+                            radius = glowSize,
+                            center = Offset(size.width / 2f, size.height / 2f)
+                        )
+                    }
+
                     fun drawHeart(at: Offset, color: Color, rotation: Float, grow: Float) {
                         withTransform({
                             translate(at.x, at.y)

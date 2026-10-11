@@ -6,7 +6,6 @@ plugins {
   alias(libs.plugins.google.devtools.ksp)
   alias(libs.plugins.secrets)
   alias(libs.plugins.google.services)
-  alias(libs.plugins.baselineprofile)
 }
 
 android {
@@ -34,11 +33,8 @@ android {
         keyPassword = System.getenv("KEY_PASSWORD")
       }
     }
-    val debugKeyFile = file("${rootDir}/debug.keystore").let {
-      if (it.exists()) it else file("${System.getProperty("user.home")}/.android/debug.keystore")
-    }
     create("debugConfig") {
-      storeFile = debugKeyFile
+      storeFile = file("${rootDir}/debug.keystore")
       storePassword = "android"
       keyAlias = "androiddebugkey"
       keyPassword = "android"
@@ -86,14 +82,6 @@ secrets {
 }
 
 googleServices { missingGoogleServicesStrategy = MissingGoogleServicesStrategy.WARN }
-
-// Release builds bundle a Baseline Profile (src/main/baseline-prof.txt, plus a recorded one in
-// src/release/generated/baselineProfiles once generated), so startup and chat code runs precompiled
-// instead of interpreted after every install or OTA update.
-// Record one with an Android 13+ device/emulator connected: ./gradlew :app:generateBaselineProfile
-baselineProfile {
-  automaticGenerationDuringBuild = false
-}
 
 // Some unused dependencies are commented out below instead of being removed.
 // This makes it easy to add them back in the future if needed.
@@ -158,5 +146,4 @@ dependencies {
   debugImplementation(libs.androidx.compose.ui.tooling)
   "ksp"(libs.androidx.room.compiler)
   "ksp"(libs.moshi.kotlin.codegen)
-  "baselineProfile"(project(":baselineprofile"))
 }

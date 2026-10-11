@@ -7,16 +7,12 @@
  * - heartbeatPartner: a "thinking of you" heartbeat (a vibration, only if delivered right away).
  */
 const { onDocumentCreated, onDocumentUpdated } = require("firebase-functions/v2/firestore");
-const { setGlobalOptions } = require("firebase-functions/v2");
 const logger = require("firebase-functions/logger");
 const { initializeApp } = require("firebase-admin/app");
 const { getFirestore, FieldValue } = require("firebase-admin/firestore");
 const { getMessaging } = require("firebase-admin/messaging");
 
 initializeApp();
-
-// Ensure functions run in the same region as the Firestore database (africa-south1)
-setGlobalOptions({ region: "africa-south1" });
 
 /** Tokens FCM no longer accepts (app uninstalled, data cleared): removed from the profile. */
 const DEAD_TOKEN_ERRORS = new Set([

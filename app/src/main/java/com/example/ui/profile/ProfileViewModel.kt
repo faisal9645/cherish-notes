@@ -179,8 +179,8 @@ class ProfileViewModel(
     fun setNotificationsEnabled(context: android.content.Context, enabled: Boolean) {
         securityPreferences.setNotificationsEnabled(enabled)
         if (!enabled) {
-            com.example.notifications.NotificationHelper.clearNotifications(context)
-            com.example.notifications.NotificationHelper.updateLauncherBadge(context, 0)
+            // Cancel status bar notification alerts only, leave launcher badge intact if badge setting is on
+            com.example.notifications.NotificationHelper.cancelStatusBarNotifications(context)
         }
         _uiState.update { it.copy(isNotificationsEnabled = enabled) }
     }
@@ -191,6 +191,10 @@ class ProfileViewModel(
             com.example.notifications.NotificationHelper.updateLauncherBadge(context, 0)
         }
         _uiState.update { it.copy(isBadgeNotificationEnabled = enabled) }
+    }
+
+    fun sendTestNotification(context: android.content.Context) {
+        com.example.notifications.NotificationHelper.sendTestNotification(context)
     }
 
     fun setSideEmergencyExitEnabled(enabled: Boolean) {

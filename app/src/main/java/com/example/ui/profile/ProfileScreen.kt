@@ -807,21 +807,26 @@ fun ProfileScreen(
                     }
                 )
 
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), thickness = 0.6.dp)
-
-                // Push Notifications On / Off
+            }
+ 
+            // 4. Notification Settings Section (Separated Notification Bar & App Badge)
+            SettingsSection(
+                title = "Notification Settings",
+                icon = Icons.Default.Notifications
+            ) {
+                // --- SUBSECTION 1: NOTIFICATION BAR & SYSTEM ALERTS ---
                 ListItem(
-                    headlineContent = { Text("Push Notifications", fontSize = 15.sp, fontWeight = FontWeight.SemiBold) },
+                    headlineContent = { Text("Notification Bar Alerts", fontSize = 15.sp, fontWeight = FontWeight.SemiBold) },
                     supportingContent = {
                         Text(
-                            if (uiState.isNotificationsEnabled) "Receive notifications for new love messages & reminders"
-                            else "All incoming notifications are muted",
+                            if (uiState.isNotificationsEnabled) "Show message alerts, drop-down banners, and lock screen previews"
+                            else "Status bar and heads-up notifications are silenced",
                             fontSize = 13.sp
                         )
                     },
                     leadingContent = {
                         Icon(
-                            if (uiState.isNotificationsEnabled) Icons.Default.Notifications else Icons.Default.NotificationsOff,
+                            if (uiState.isNotificationsEnabled) Icons.Default.NotificationsActive else Icons.Default.NotificationsOff,
                             contentDescription = null,
                             tint = if (uiState.isNotificationsEnabled) primaryAccent else MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -829,120 +834,154 @@ fun ProfileScreen(
                     trailingContent = {
                         Switch(
                             checked = uiState.isNotificationsEnabled,
-                            onCheckedChange = { viewModel.setNotificationsEnabled(context, it) }
+                            onCheckedChange = { viewModel.setNotificationsEnabled(context, it) },
+                            modifier = Modifier.testTag("notification_bar_switch")
                         )
                     }
                 )
 
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), thickness = 0.6.dp)
+                if (uiState.isNotificationsEnabled) {
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f), thickness = 0.5.dp)
 
-                // Notification Content Privacy (Mask private notification)
-                ListItem(
-                    headlineContent = { Text("Hide Notification Content", fontSize = 15.sp, fontWeight = FontWeight.SemiBold) },
-                    supportingContent = { Text("Mask private messages on banner and lock screen", fontSize = 13.sp) },
-                    leadingContent = { Icon(Icons.Default.NotificationsOff, contentDescription = null, tint = primaryAccent) },
-                    trailingContent = {
-                        Switch(
-                            checked = uiState.isHideNotificationContent,
-                            onCheckedChange = { viewModel.setHideNotificationContent(it) },
-                            enabled = uiState.isNotificationsEnabled
-                        )
-                    }
-                )
-
-                // What a masked notification says
-                val maskPrefs = remember { com.example.security.SecurityPreferences.getInstance(context) }
-                var maskedTitle by remember { mutableStateOf(maskPrefs.getMaskedNotificationTitle()) }
-                var maskedText by remember { mutableStateOf(maskPrefs.getMaskedNotificationText()) }
-                var showMaskedEditor by remember { mutableStateOf(false) }
-                ListItem(
-                    headlineContent = { Text("Masked Notification Text", fontSize = 15.sp, fontWeight = FontWeight.SemiBold) },
-                    supportingContent = { Text("$maskedTitle \u00B7 $maskedText", fontSize = 13.sp, maxLines = 1) },
-                    leadingContent = { Icon(Icons.Default.Edit, contentDescription = null, tint = primaryAccent) },
-                    modifier = Modifier
-                        .clickable { showMaskedEditor = true }
-                        .testTag("masked_notification_text")
-                )
-                if (showMaskedEditor) {
-                    var titleInput by remember { mutableStateOf(maskedTitle) }
-                    var textInput by remember { mutableStateOf(maskedText) }
-                    AlertDialog(
-                        onDismissRequest = { showMaskedEditor = false },
-                        title = { Text("Masked notification") },
-                        text = {
-                            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                                Text(
-                                    "What hidden or disguised message notifications say.",
-                                    fontSize = 13.sp,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                OutlinedTextField(
-                                    value = titleInput,
-                                    onValueChange = { titleInput = it.take(40) },
-                                    label = { Text("Title (e.g. Notes)") },
-                                    singleLine = true,
-                                    modifier = Modifier.fillMaxWidth()
-                                )
-                                OutlinedTextField(
-                                    value = textInput,
-                                    onValueChange = { textInput = it.take(80) },
-                                    label = { Text("Text (e.g. Shopping list updated)") },
-                                    singleLine = true,
-                                    modifier = Modifier.fillMaxWidth()
-                                )
-                                // Preview
-                                Surface(
-                                    shape = RoundedCornerShape(12.dp),
-                                    color = MaterialTheme.colorScheme.surfaceVariant,
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Column(modifier = Modifier.padding(10.dp)) {
-                                        Text(
-                                            titleInput.ifBlank { com.example.security.SecurityPreferences.DEFAULT_MASKED_TITLE },
-                                            fontWeight = FontWeight.SemiBold,
-                                            fontSize = 13.sp
-                                        )
-                                        Text(
-                                            textInput.ifBlank { com.example.security.SecurityPreferences.DEFAULT_MASKED_TEXT },
-                                            fontSize = 12.sp,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
-                                }
-                            }
-                        },
-                        confirmButton = {
-                            TextButton(onClick = {
-                                maskPrefs.setMaskedNotificationText(titleInput, textInput)
-                                maskedTitle = maskPrefs.getMaskedNotificationTitle()
-                                maskedText = maskPrefs.getMaskedNotificationText()
-                                showMaskedEditor = false
-                            }) { Text("Save") }
-                        },
-                        dismissButton = {
-                            TextButton(onClick = {
-                                maskPrefs.setMaskedNotificationText("", "")
-                                maskedTitle = maskPrefs.getMaskedNotificationTitle()
-                                maskedText = maskPrefs.getMaskedNotificationText()
-                                showMaskedEditor = false
-                            }) { Text("Reset") }
+                    // Notification Content Privacy (Mask private notification)
+                    ListItem(
+                        headlineContent = { Text("Hide Notification Content", fontSize = 14.sp, fontWeight = FontWeight.Medium) },
+                        supportingContent = { Text("Disguise private messages on notification bar and lock screen", fontSize = 12.sp) },
+                        leadingContent = { Icon(Icons.Default.Security, contentDescription = null, tint = primaryAccent, modifier = Modifier.size(20.dp)) },
+                        trailingContent = {
+                            Switch(
+                                checked = uiState.isHideNotificationContent,
+                                onCheckedChange = { viewModel.setHideNotificationContent(it) }
+                            )
                         }
                     )
+
+                    // What a masked notification says
+                    val maskPrefs = remember { com.example.security.SecurityPreferences.getInstance(context) }
+                    var maskedTitle by remember { mutableStateOf(maskPrefs.getMaskedNotificationTitle()) }
+                    var maskedText by remember { mutableStateOf(maskPrefs.getMaskedNotificationText()) }
+                    var showMaskedEditor by remember { mutableStateOf(false) }
+                    ListItem(
+                        headlineContent = { Text("Custom Disguise Text", fontSize = 14.sp, fontWeight = FontWeight.Medium) },
+                        supportingContent = { Text("$maskedTitle \u00B7 $maskedText", fontSize = 12.sp, maxLines = 1) },
+                        leadingContent = { Icon(Icons.Default.Edit, contentDescription = null, tint = primaryAccent, modifier = Modifier.size(20.dp)) },
+                        modifier = Modifier
+                            .clickable { showMaskedEditor = true }
+                            .testTag("masked_notification_text")
+                    )
+                    if (showMaskedEditor) {
+                        var titleInput by remember { mutableStateOf(maskedTitle) }
+                        var textInput by remember { mutableStateOf(maskedText) }
+                        AlertDialog(
+                            onDismissRequest = { showMaskedEditor = false },
+                            title = { Text("Disguised Notification") },
+                            text = {
+                                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                    Text(
+                                        "What hidden or disguised message notifications say on the status bar.",
+                                        fontSize = 13.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    OutlinedTextField(
+                                        value = titleInput,
+                                        onValueChange = { titleInput = it.take(40) },
+                                        label = { Text("Title (e.g. Notes)") },
+                                        singleLine = true,
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+                                    OutlinedTextField(
+                                        value = textInput,
+                                        onValueChange = { textInput = it.take(80) },
+                                        label = { Text("Text (e.g. Checklist item updated)") },
+                                        singleLine = true,
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+                                    // Preview
+                                    Surface(
+                                        shape = RoundedCornerShape(12.dp),
+                                        color = MaterialTheme.colorScheme.surfaceVariant,
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Column(modifier = Modifier.padding(10.dp)) {
+                                            Text(
+                                                titleInput.ifBlank { com.example.security.SecurityPreferences.DEFAULT_MASKED_TITLE },
+                                                fontWeight = FontWeight.SemiBold,
+                                                fontSize = 13.sp
+                                            )
+                                            Text(
+                                                textInput.ifBlank { com.example.security.SecurityPreferences.DEFAULT_MASKED_TEXT },
+                                                fontSize = 12.sp,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                    }
+                                }
+                            },
+                            confirmButton = {
+                                TextButton(onClick = {
+                                    maskPrefs.setMaskedNotificationText(titleInput, textInput)
+                                    maskedTitle = maskPrefs.getMaskedNotificationTitle()
+                                    maskedText = maskPrefs.getMaskedNotificationText()
+                                    showMaskedEditor = false
+                                }) { Text("Save") }
+                            },
+                            dismissButton = {
+                                TextButton(onClick = {
+                                    maskPrefs.setMaskedNotificationText("", "")
+                                    maskedTitle = maskPrefs.getMaskedNotificationTitle()
+                                    maskedText = maskPrefs.getMaskedNotificationText()
+                                    showMaskedEditor = false
+                                }) { Text("Reset") }
+                            }
+                        )
+                    }
                 }
 
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), thickness = 0.6.dp)
 
-                // App Icon Badge Notification
+                // --- SUBSECTION 2: APP ICON BADGE (INDEPENDENT SETTING) ---
                 ListItem(
                     headlineContent = { Text("App Icon Badge", fontSize = 15.sp, fontWeight = FontWeight.SemiBold) },
-                    supportingContent = { Text("Show unread indicator dot or count on launcher app icon", fontSize = 13.sp) },
-                    leadingContent = { Icon(Icons.Default.MarkChatUnread, contentDescription = null, tint = primaryAccent) },
+                    supportingContent = {
+                        Text(
+                            if (uiState.isBadgeNotificationEnabled) "Display unread indicator dot or count badge directly on home screen app icon"
+                            else "App icon badge is hidden",
+                            fontSize = 13.sp
+                        )
+                    },
+                    leadingContent = {
+                        Icon(
+                            Icons.Default.MarkChatUnread,
+                            contentDescription = null,
+                            tint = if (uiState.isBadgeNotificationEnabled) primaryAccent else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    },
                     trailingContent = {
                         Switch(
                             checked = uiState.isBadgeNotificationEnabled,
                             onCheckedChange = { viewModel.setBadgeNotificationEnabled(context, it) },
-                            enabled = uiState.isNotificationsEnabled
+                            modifier = Modifier.testTag("app_badge_switch")
                         )
+                    }
+                )
+
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), thickness = 0.6.dp)
+
+                // --- SUBSECTION 3: TEST & SYSTEM ACTIONS ---
+                ListItem(
+                    headlineContent = { Text("Send Test Notification", fontSize = 15.sp, fontWeight = FontWeight.SemiBold) },
+                    supportingContent = { Text("Preview your Notification Bar & App Badge behavior right now", fontSize = 13.sp) },
+                    leadingContent = { Icon(Icons.Default.Send, contentDescription = null, tint = primaryAccent) },
+                    trailingContent = {
+                        FilledTonalButton(
+                            onClick = {
+                                viewModel.sendTestNotification(context)
+                                Toast.makeText(context, "Test notification dispatched ✨ Check status bar & badge", Toast.LENGTH_SHORT).show()
+                            },
+                            modifier = Modifier.testTag("test_notification_button")
+                        ) {
+                            Text("Test", fontSize = 13.sp)
+                        }
                     }
                 )
             }

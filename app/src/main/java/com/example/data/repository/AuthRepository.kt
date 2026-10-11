@@ -1505,6 +1505,17 @@ class AuthRepository(private val context: Context) {
     }
 
 
+    fun getSavedCoupleId(): String {
+        val current = _currentUserState.value?.coupleId?.trim()?.ifBlank { null }
+        if (!current.isNullOrBlank()) return current
+        val sessionPrefs = context.getSharedPreferences("cherish_user_session", Context.MODE_PRIVATE)
+        val sessionCoupleId = sessionPrefs.getString("coupleId", null)?.trim()?.ifBlank { null }
+        if (!sessionCoupleId.isNullOrBlank()) return sessionCoupleId
+        val secretKey = securityPrefs.getCoupleSecretKey().trim().ifBlank { null }
+        if (!secretKey.isNullOrBlank()) return secretKey
+        return "couple_default"
+    }
+
     private fun clearLocalUserSession() {
         context.getSharedPreferences("cherish_user_session", Context.MODE_PRIVATE)
             .edit()
