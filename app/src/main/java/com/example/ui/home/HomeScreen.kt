@@ -429,6 +429,13 @@ fun HomeScreen(
                 )
             }
 
+            // Instant Tactile Love Nudges (directly below Watch Together button)
+            LoveNudgesBar(
+                onSendNudge = { name, emoji, msg ->
+                    viewModel.sendLoveNudge(name, emoji, msg)
+                }
+            )
+
             // 2. Secret Chat Quick Preview Card
             Card(
                 modifier = Modifier
@@ -717,14 +724,7 @@ fun HomeScreen(
                 }
             }
 
-            // 4. Instant Tactile Love Nudges
-            LoveNudgesBar(
-                onSendNudge = { name, emoji, msg ->
-                    viewModel.sendLoveNudge(name, emoji, msg)
-                }
-            )
-
-            // 5. Daily Us — Question of the Day
+            // 4. Daily Us — Question of the Day
             DailyQuestionCard(
                 dailyQuestion = uiState.dailyQuestion,
                 partnerName = partnerName,

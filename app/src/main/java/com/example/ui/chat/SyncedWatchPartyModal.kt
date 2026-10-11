@@ -539,7 +539,7 @@ fun WatchPartyYouTubePickerModal(
                                 colors = ButtonDefaults.buttonColors(containerColor = accent),
                                 contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
                             ) {
-                                Text("Start Now ▶", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                Text("Watch Together 🍿 ▶", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                             }
                         }
                     }
@@ -684,6 +684,18 @@ fun WatchPartyYouTubePickerModal(
                                 }
 
                                 webViewClient = object : WebViewClient() {
+                                    override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
+                                        super.onPageStarted(view, url, favicon)
+                                        val id = extractYouTubeVideoId(url)
+                                        if (id != null) {
+                                            detectedVideoId = id
+                                            val t = view?.title ?: ""
+                                            if (t.isNotBlank()) {
+                                                detectedVideoTitle = t.replace(" - YouTube", "").trim()
+                                            }
+                                        }
+                                    }
+
                                     override fun onReceivedError(view: WebView?, errorCode: Int, description: String?, failingUrl: String?) {
                                         super.onReceivedError(view, errorCode, description, failingUrl)
                                         isLoading = false
@@ -698,6 +710,10 @@ fun WatchPartyYouTubePickerModal(
 
                                     override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
                                         val url = request?.url?.toString() ?: return false
+                                        val vid = extractYouTubeVideoId(url)
+                                        if (vid != null) {
+                                            detectedVideoId = vid
+                                        }
                                         // Keep standard navigation inside the WebView
                                         if (url.startsWith("http://") || url.startsWith("https://")) {
                                             if (url.contains("youtube.com") ||
@@ -972,7 +988,7 @@ fun WatchPartyYouTubePickerModal(
                                     Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
                                     Spacer(modifier = Modifier.width(4.dp))
                                     Text(
-                                        text = "Start",
+                                        text = "Watch Together 🍿",
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 13.sp
                                     )
