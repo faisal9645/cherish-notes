@@ -193,9 +193,14 @@ class MainActivity : FragmentActivity() {
                 intent.getBooleanExtra("open_chat", false) ||
                 intent.hasExtra("conversationId")
         if (isFromNotification) {
-            // Only reveal in-memory for this session - do NOT persist to SharedPreferences.
-            // On next cold launch or minimize, the disguise re-activates correctly.
-            app.securityPreferences.revealSecretApp()
+            val isDiscreet = intent.getBooleanExtra("is_discreet", false)
+            if (isDiscreet) {
+                // Disguised notification: keep or restore safe Notes disguise
+                app.securityPreferences.reDisguise()
+            } else {
+                // Original notification: reveal secret Cherish app and display chat
+                app.securityPreferences.revealSecretApp()
+            }
         }
     }
 

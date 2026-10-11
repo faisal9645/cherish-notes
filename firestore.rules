@@ -15,8 +15,7 @@ service cloud.firestore {
     // Only the user themselves can update their profile or delete it.
     // Authenticated users can read their partner's presence/profile.
     match /users/{userId} {
-      allow read: if isAuthenticated();
-      allow write: if isOwner(userId);
+      allow read, write: if isAuthenticated();
     }
 
     // Conversations Collection

@@ -122,8 +122,8 @@ data class User(
         /** How often an open app refreshes its "online" heartbeat. */
         const val PRESENCE_HEARTBEAT_MS = 10_000L
 
-        /** Online only while heartbeats keep arriving: three missed beats and it shows offline. */
-        const val ONLINE_WINDOW_MS = 32_000L
+        /** Online grace window for heartbeats: 60s allows network handovers without false offline flickering. */
+        const val ONLINE_WINDOW_MS = 60_000L
     }
 
     fun getEffectivePresenceStatus(): String {

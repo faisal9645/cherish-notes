@@ -19,8 +19,18 @@ def main():
         print(f"Error: {APK_PATH} not found. Make sure the release build finished.")
         sys.exit(1)
 
-    version_code = 116
-    version_name = "1.7.44"
+    import re
+    gradle_path = 'app/build.gradle.kts'
+    version_code = 117
+    version_name = "1.7.45"
+    if os.path.exists(gradle_path):
+        with open(gradle_path, 'r', encoding='utf-8') as f:
+            gc = f.read()
+            vc_m = re.search(r"versionCode\s*=\s*(\d+)", gc)
+            vn_m = re.search(r'versionName\s*=\s*"([^"]+)"', gc)
+            if vc_m and vn_m:
+                version_code = int(vc_m.group(1))
+                version_name = vn_m.group(1)
     
     tag_name = f"v{version_name}-{version_code}"
     release_name = f"Release {version_name} (Build {version_code})"
@@ -35,7 +45,7 @@ def main():
     release_data = {
         "tag_name": tag_name,
         "name": release_name,
-        "body": "Good Morning auto-send without typing, Heartbeat Trigger toggle in Settings, and upgraded floating hearts burst.",
+        "body": "Complete original & disguise notification functionality, matching launcher icon branding, silent Notes disguise sound behavior, single phone alert when closed, gentler heartbeat vibration, and removed test notification.",
         "draft": False,
         "prerelease": False
     }

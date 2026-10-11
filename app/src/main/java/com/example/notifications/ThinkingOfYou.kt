@@ -83,14 +83,14 @@ object ThinkingOfYou {
             } ?: return
             if (!vibrator.hasVibrator()) return
 
-            // thump-thump ... thump-thump
-            val timings = longArrayOf(0, 55, 120, 85, 560, 55, 120, 85)
+            // Gentle, intimate heartbeat: thump-thump ... thump-thump (reduced slightly from jarring 255)
+            val timings = longArrayOf(0, 42, 120, 65, 560, 42, 120, 65)
             val attributes = AudioAttributes.Builder()
                 .setUsage(AudioAttributes.USAGE_NOTIFICATION)
                 .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
                 .build()
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                val amplitudes = intArrayOf(0, 140, 0, 255, 0, 140, 0, 255)
+                val amplitudes = intArrayOf(0, 95, 0, 175, 0, 95, 0, 175)
                 val effect = if (vibrator.hasAmplitudeControl()) {
                     VibrationEffect.createWaveform(timings, amplitudes, -1)
                 } else {

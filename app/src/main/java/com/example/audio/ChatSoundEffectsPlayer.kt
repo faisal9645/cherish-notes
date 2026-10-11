@@ -137,6 +137,8 @@ class ChatSoundEffectsPlayer private constructor(
 
     fun playSound(type: SoundType) {
         if (!securityPreferences.isChatSoundsEnabled()) return
+        // Never play sounds while user is inside the Notes disguise
+        if (securityPreferences.isDisguiseActive.value || securityPreferences.isDisguiseActive()) return
         // Settings > sound volume (0 = silent)
         val volume = securityPreferences.getAppSoundVolume() / 100f
         if (volume <= 0f) return

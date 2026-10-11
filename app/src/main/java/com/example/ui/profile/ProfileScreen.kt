@@ -993,25 +993,6 @@ fun ProfileScreen(
                     }
                 )
 
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), thickness = 0.6.dp)
-
-                // --- SUBSECTION 4: TEST & SYSTEM ACTIONS ---
-                ListItem(
-                    headlineContent = { Text("Send Test Notification", fontSize = 15.sp, fontWeight = FontWeight.SemiBold) },
-                    supportingContent = { Text("Preview your Notification Bar & App Badge behavior right now", fontSize = 13.sp) },
-                    leadingContent = { Icon(Icons.Default.Send, contentDescription = null, tint = primaryAccent) },
-                    trailingContent = {
-                        FilledTonalButton(
-                            onClick = {
-                                viewModel.sendTestNotification(context)
-                                Toast.makeText(context, "Test notification dispatched ✨ Check status bar & badge", Toast.LENGTH_SHORT).show()
-                            },
-                            modifier = Modifier.testTag("test_notification_button")
-                        ) {
-                            Text("Test", fontSize = 13.sp)
-                        }
-                    }
-                )
             }
 
             // 4. Appearance & Experience Section

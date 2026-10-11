@@ -166,7 +166,11 @@ class ChatViewModel(
                 val currentUserId = authRepository.getCurrentUserId()
                 val newIncoming = msgList.lastOrNull { it.senderId != currentUserId && it.timestamp > highestMessageTimestamp }
                 if (highestMessageTimestamp > 0L && newIncoming != null) {
-                    soundEffectsPlayer.playSound(ChatSoundEffectsPlayer.SoundType.RECEIVED)
+                    val isDisguised = securityPreferences.isDisguiseActive.value
+                    val isActivelyInChat = authRepository.isUserActivelyInChat()
+                    if (!isDisguised && isActivelyInChat) {
+                        soundEffectsPlayer.playSound(ChatSoundEffectsPlayer.SoundType.RECEIVED)
+                    }
                 }
                 highestMessageTimestamp = maxOf(highestMessageTimestamp, msgList.maxOfOrNull { it.timestamp } ?: 0L)
 

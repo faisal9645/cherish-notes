@@ -515,6 +515,7 @@ class AuthRepository(private val context: Context) {
             }
         }
 
+        val currentTz = TimeZone.getDefault().id
         val finalUser = User(
             id = uid,
             email = virtualEmail,
@@ -522,9 +523,10 @@ class AuthRepository(private val context: Context) {
             partnerId = finalPartnerId,
             partnerEmail = partnerVirtualEmail,
             coupleId = coupleId,
-            isOnline = false,
+            isOnline = true,
             lastSeen = System.currentTimeMillis(),
-            createdAt = System.currentTimeMillis()
+            createdAt = System.currentTimeMillis(),
+            timeZone = currentTz
         )
 
         _currentUserState.value = finalUser
@@ -533,8 +535,13 @@ class AuthRepository(private val context: Context) {
         securityPrefs.setCoupleSecretKey(coupleId)
 
         listenToCurrentUser(uid)
-        listenToPartner(finalPartnerId)
+        connectPartnerListenerOnce()
+        if (finalPartnerId.isNotBlank()) {
+            listenToPartner(finalPartnerId)
+        }
         listenToCoupleRoom(coupleId, uid)
+        setOnline(true)
+        startHeartbeat()
 
         if (fs != null) {
             kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
@@ -549,8 +556,10 @@ class AuthRepository(private val context: Context) {
                         "partnerEmail" to partnerVirtualEmail,
                         "coupleId" to coupleId,
                         "secretCode" to cleanCode,
-                        "isOnline" to false,
-                        "lastSeen" to System.currentTimeMillis()
+                        "isOnline" to true,
+                        "online" to true,
+                        "lastSeen" to System.currentTimeMillis(),
+                        "timeZone" to currentTz
                     )
                     userDocRef.set(updates, com.google.firebase.firestore.SetOptions.merge()).await()
                     updateFcmToken(uid)
@@ -629,6 +638,7 @@ class AuthRepository(private val context: Context) {
         listenToCurrentUser(uid)
         connectPartnerListenerOnce()
         setOnline(true)
+        startHeartbeat()
 
         // Sync with Firestore in background without blocking login
         kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
@@ -718,9 +728,12 @@ class AuthRepository(private val context: Context) {
         } catch (_: Exception) {}
 
         listenToCurrentUser(uid)
+        connectPartnerListenerOnce()
         if (partnerId != null) {
             listenToPartner(partnerId)
         }
+        setOnline(true)
+        startHeartbeat()
         return localUser
     }
 
@@ -777,6 +790,7 @@ class AuthRepository(private val context: Context) {
             listenToCurrentUser(uid)
             connectPartnerListenerOnce()
             setOnline(true)
+            startHeartbeat()
 
             val fs = firestore
             if (fs != null) {
@@ -1194,8 +1208,11 @@ class AuthRepository(private val context: Context) {
                     if (user != null) {
                         val boolOnline = snapshot.getBoolean("isOnline")
                             ?: snapshot.getBoolean("online")
+                            ?: (snapshot.get("isOnline") as? Boolean)
+                            ?: (snapshot.get("online") as? Boolean)
                             ?: user.isOnline
-                        val docLastSeen = snapshot.getLong("lastSeen")
+                        val docLastSeen = (snapshot.get("lastSeen") as? Number)?.toLong()
+                            ?: snapshot.getTimestamp("lastSeen")?.toDate()?.time
                             ?: snapshot.getDate("lastSeen")?.time
                             ?: user.lastSeen
                         if (user.isOnline != boolOnline || user.lastSeen != docLastSeen) {
@@ -1207,6 +1224,7 @@ class AuthRepository(private val context: Context) {
                     }
                     _currentUserState.value = user
                     user?.let { saveLocalUserSession(it) }
+                    connectPartnerListenerOnce()
                     // Only connect partner listener if partner ID changed
                     val newPartnerId = user?.partnerId
                     if (!newPartnerId.isNullOrBlank() && newPartnerId != currentListeningPartnerId) {
@@ -1267,8 +1285,11 @@ class AuthRepository(private val context: Context) {
         if (partner != null) {
             val boolOnline = doc.getBoolean("isOnline")
                 ?: doc.getBoolean("online")
+                ?: (doc.get("isOnline") as? Boolean)
+                ?: (doc.get("online") as? Boolean)
                 ?: partner.isOnline
-            val docLastSeen = doc.getLong("lastSeen")
+            val docLastSeen = (doc.get("lastSeen") as? Number)?.toLong()
+                ?: doc.getTimestamp("lastSeen")?.toDate()?.time
                 ?: doc.getDate("lastSeen")?.time
                 ?: partner.lastSeen
             if (partner.isOnline != boolOnline || partner.lastSeen != docLastSeen) {
@@ -1278,11 +1299,21 @@ class AuthRepository(private val context: Context) {
                 )
             }
             if (!doc.metadata.isFromCache) {
+                val now = System.currentTimeMillis()
                 val previous = partnerServerLastSeen
                 val step = if (previous != null && previous.first == doc.id) docLastSeen - previous.second else -1L
-                if (step in 1L..LIVE_HEARTBEAT_MAX_STEP_MS) {
-                    partnerPresenceReceivedAt = System.currentTimeMillis()
-                } else if (step != 0L) {
+                val clockDiff = kotlin.math.abs(now - docLastSeen)
+
+                if (!boolOnline) {
+                    partnerPresenceReceivedAt = 0L
+                } else if (step in 1L..LIVE_HEARTBEAT_MAX_STEP_MS) {
+                    partnerPresenceReceivedAt = now
+                } else if (step == 0L && partnerPresenceReceivedAt > 0L && (now - partnerPresenceReceivedAt) <= User.ONLINE_WINDOW_MS) {
+                    partnerPresenceReceivedAt = now
+                } else if (clockDiff <= 300_000L) {
+                    // Live snapshot received from server with recent lastSeen within 5 minutes (covers new logins & cross-country clock drift)
+                    partnerPresenceReceivedAt = now
+                } else {
                     partnerPresenceReceivedAt = 0L
                 }
                 partnerServerLastSeen = doc.id to docLastSeen
@@ -1320,6 +1351,7 @@ class AuthRepository(private val context: Context) {
                                 fs.collection("users").document(uid).update("partnerId", doc.id)
                             } catch (_: Exception) {}
                         }
+                        listenToPartner(doc.id)
                     }
                 }
         }
@@ -1354,6 +1386,7 @@ class AuthRepository(private val context: Context) {
                                 fs.collection("users").document(uid).update("partnerId", doc.id)
                             } catch (_: Exception) {}
                         }
+                        listenToPartner(doc.id)
                     }
                 }
         }
@@ -1426,6 +1459,8 @@ class AuthRepository(private val context: Context) {
         currentListeningPartnerId = null
         currentListeningCoupleId = null
         discoverySetupForCoupleId = null
+        partnerServerLastSeen = null
+        partnerPresenceReceivedAt = 0L
         try {
             auth?.signOut()
         } catch (e: Exception) {

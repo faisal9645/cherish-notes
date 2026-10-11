@@ -197,10 +197,6 @@ class ProfileViewModel(
         _uiState.update { it.copy(isBadgeNotificationEnabled = enabled) }
     }
 
-    fun sendTestNotification(context: android.content.Context) {
-        com.example.notifications.NotificationHelper.sendTestNotification(context)
-    }
-
     fun setHeartbeatTriggerEnabled(enabled: Boolean) {
         securityPreferences.setHeartbeatTriggerEnabled(enabled)
         _uiState.update { it.copy(isHeartbeatTriggerEnabled = enabled) }

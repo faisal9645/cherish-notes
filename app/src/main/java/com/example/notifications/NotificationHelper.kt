@@ -5,9 +5,13 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.drawable.BitmapDrawable
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
+import androidx.core.content.ContextCompat
 import com.example.MainActivity
 import com.example.R
 import com.example.security.SecurityPreferences
@@ -26,6 +30,25 @@ object NotificationHelper {
 
     private val pendingUnreadCount = AtomicInteger(0)
     private val notifiedMessageIds = java.util.Collections.synchronizedSet(LinkedHashSet<String>())
+
+    fun getAppIconBitmap(context: Context): Bitmap? {
+        return try {
+            val drawable = ContextCompat.getDrawable(context, R.mipmap.ic_launcher) ?: return null
+            if (drawable is BitmapDrawable) {
+                drawable.bitmap
+            } else {
+                val width = drawable.intrinsicWidth.takeIf { it > 0 } ?: 144
+                val height = drawable.intrinsicHeight.takeIf { it > 0 } ?: 144
+                val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+                val canvas = Canvas(bitmap)
+                drawable.setBounds(0, 0, canvas.width, canvas.height)
+                drawable.draw(canvas)
+                bitmap
+            }
+        } catch (_: Exception) {
+            null
+        }
+    }
 
     fun createNotificationChannels(context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -144,10 +167,15 @@ object NotificationHelper {
             return
         }
 
-        val isDiscreet = prefs.isDisguiseActive() && (prefs.isHideNotificationContent() || prefs.isDisguiseModeEnabled())
+        val isDiscreet = prefs.isHideNotificationContent() && prefs.isDisguiseModeEnabled()
 
         val intent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            putExtra("from_notification", true)
+            putExtra("is_discreet", isDiscreet)
+            if (!conversationId.isNullOrBlank()) {
+                putExtra("conversationId", conversationId)
+            }
         }
 
         val pendingIntent = PendingIntent.getActivity(
@@ -169,18 +197,28 @@ object NotificationHelper {
         }
         val subText = if (isDiscreet) maskedTitle else "Cherish"
 
-        // Public version shown on secure lock screens (discreet note icon, never heart)
+        val appIcon = getAppIconBitmap(context)
+
+        // Public version shown on secure lock screens (discreet note icon, matching app logo)
         val publicNotification = NotificationCompat.Builder(context, CHANNEL_MESSAGES_ID)
             .setSmallIcon(R.drawable.ic_stat_notes)
-            .setContentTitle(maskedTitle)
-            .setContentText(maskedText)
-            .setSubText(maskedTitle)
+            .apply {
+                if (appIcon != null) setLargeIcon(appIcon)
+            }
+            .setColor(0xFF2563FF.toInt())
+            .setContentTitle(if (isDiscreet) maskedTitle else displayTitle)
+            .setContentText(if (isDiscreet) maskedText else displayText)
+            .setSubText(subText)
             .setBadgeIconType(if (isBadgeEnabled) NotificationCompat.BADGE_ICON_SMALL else NotificationCompat.BADGE_ICON_NONE)
             .setNumber(if (isBadgeEnabled) 1 else 0)
             .build()
 
         val notification = NotificationCompat.Builder(context, CHANNEL_MESSAGES_ID)
             .setSmallIcon(R.drawable.ic_stat_notes)
+            .apply {
+                if (appIcon != null) setLargeIcon(appIcon)
+            }
+            .setColor(0xFF2563FF.toInt())
             .setContentTitle(displayTitle)
             .setContentText(displayText)
             .setSubText(subText)
@@ -209,63 +247,7 @@ object NotificationHelper {
         }
     }
 
-    /**
-     * Send a test notification immediately so user can verify Notification Bar and App Badge settings.
-     */
-    fun sendTestNotification(context: Context) {
-        val prefs = SecurityPreferences.getInstance(context)
-        val isNotifBar = prefs.isNotificationsEnabled()
-        val isBadge = prefs.isBadgeNotificationEnabled()
 
-        if (isBadge) {
-            updateLauncherBadge(context, 1)
-        }
-
-        if (isNotifBar) {
-            val isDiscreet = prefs.isHideNotificationContent() || prefs.isDisguiseModeEnabled()
-            val maskedTitle = prefs.getMaskedNotificationTitle()
-            val maskedText = prefs.getMaskedNotificationText()
-
-            val displayTitle = if (isDiscreet) maskedTitle else "Cherish"
-            val displayText = if (isDiscreet) maskedText else "Notification test: love is in the air ✨"
-
-            val intent = Intent(context, MainActivity::class.java).apply {
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
-                putExtra("from_notification", true)
-            }
-            val pendingIntent = PendingIntent.getActivity(
-                context,
-                888,
-                intent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            )
-
-            val notification = NotificationCompat.Builder(context, CHANNEL_MESSAGES_ID)
-                .setSmallIcon(R.drawable.ic_stat_notes)
-                .setContentTitle(displayTitle)
-                .setContentText(displayText)
-                .setSubText(if (isDiscreet) maskedTitle else "Cherish")
-                .setAutoCancel(true)
-                .setContentIntent(pendingIntent)
-                .setPriority(NotificationCompat.PRIORITY_HIGH)
-                .setCategory(NotificationCompat.CATEGORY_MESSAGE)
-                .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-                .apply {
-                    if (isBadge) {
-                        setBadgeIconType(NotificationCompat.BADGE_ICON_SMALL)
-                        setNumber(1)
-                    } else {
-                        setBadgeIconType(NotificationCompat.BADGE_ICON_NONE)
-                        setNumber(0)
-                    }
-                }
-                .build()
-
-            try {
-                NotificationManagerCompat.from(context).notify(NOTIFICATION_ID_MESSAGE, notification)
-            } catch (_: SecurityException) {}
-        }
-    }
 
     /**
      * Cancels status bar notifications without resetting the unread launcher badge.
@@ -316,8 +298,12 @@ object NotificationHelper {
         if (!prefs.isNotificationsEnabled()) return
         if (!prefs.isCheckAfterReminderEnabled()) return
 
+        val isDisguised = prefs.isHideNotificationContent() && prefs.isDisguiseModeEnabled()
+
         val intent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            putExtra("from_notification", true)
+            putExtra("is_discreet", isDisguised)
         }
 
         val pendingIntent = PendingIntent.getActivity(
@@ -327,7 +313,6 @@ object NotificationHelper {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val isDisguised = prefs.isDisguiseActive() && (prefs.isHideNotificationContent() || prefs.isDisguiseModeEnabled())
         val displayTitle = if (isDisguised) prefs.getMaskedNotificationTitle() else "It's time to check"
         val displayText = if (isDisguised) {
             "Reminder schedule completed"
@@ -335,8 +320,13 @@ object NotificationHelper {
             "$partnerName's check-after time has arrived"
         }
 
+        val appIcon = getAppIconBitmap(context)
         val notification = NotificationCompat.Builder(context, CHANNEL_MESSAGES_ID)
             .setSmallIcon(R.drawable.ic_stat_notes)
+            .apply {
+                if (appIcon != null) setLargeIcon(appIcon)
+            }
+            .setColor(0xFF2563FF.toInt())
             .setContentTitle(displayTitle)
             .setContentText(displayText)
             .setSubText(if (isDisguised) prefs.getMaskedNotificationTitle() else "Cherish")
@@ -385,8 +375,13 @@ object NotificationHelper {
         val displayTitle = title.ifBlank { "Note Reminder" }
         val displayText = if (content.isNotBlank()) content else "You have a scheduled note reminder."
 
+        val reminderAppIcon = getAppIconBitmap(context)
         val notification = NotificationCompat.Builder(context, CHANNEL_REMINDERS_ID)
             .setSmallIcon(R.drawable.ic_stat_notes)
+            .apply {
+                if (reminderAppIcon != null) setLargeIcon(reminderAppIcon)
+            }
+            .setColor(0xFF2563FF.toInt())
             .setContentTitle(displayTitle)
             .setContentText(displayText)
             .setStyle(NotificationCompat.BigTextStyle().bigText(displayText))

@@ -52,15 +52,15 @@ class HeartbeatHapticHelper(private val context: Context) {
             if (!vib.hasVibrator()) return
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                // Timings: 0ms delay, 45ms (lub), 80ms rest, 70ms (dub)
-                // Amplitudes: 0, 160 (lub), 0, 255 (dub)
-                val timings = longArrayOf(0, 45, 80, 70)
-                val amplitudes = intArrayOf(0, 160, 0, 255)
+                // Timings: 0ms delay, 38ms (lub), 80ms rest, 55ms (dub)
+                // Amplitudes: 0, 110 (lub), 0, 180 (dub)
+                val timings = longArrayOf(0, 38, 80, 55)
+                val amplitudes = intArrayOf(0, 110, 0, 180)
                 val effect = VibrationEffect.createWaveform(timings, amplitudes, -1)
                 vib.vibrate(effect)
             } else {
                 @Suppress("DEPRECATION")
-                vib.vibrate(longArrayOf(0, 45, 80, 70), -1)
+                vib.vibrate(longArrayOf(0, 38, 80, 55), -1)
             }
         } catch (_: Exception) {}
     }
