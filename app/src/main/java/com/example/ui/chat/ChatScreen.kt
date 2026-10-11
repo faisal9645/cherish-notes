@@ -369,9 +369,31 @@ fun ChatScreen(
         newestSeen[0] = newest
         // First load, or the newest was deleted (an older one is now last): keep the position
         if (previous == null || newest.timestamp <= previous.timestamp) return@LaunchedEffect
-        val isNearBottom = listState.firstVisibleItemIndex <= 1
+        val isNearBottom = listState.firstVisibleItemIndex <= 2
         if (isNearBottom || newest.senderId == uiState.currentUser?.id) {
-            listState.animateScrollToItem(0)
+            listState.animateScrollToItem(0, scrollOffset = 0)
+            // Follow up after typing indicator / keyboard collapse completes so item 0 is 100% visible
+            delay(190)
+            if (listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset != 0) {
+                listState.animateScrollToItem(0, scrollOffset = 0)
+            }
+        }
+    }
+
+    // When partner starts typing or recording, ensure their last message scrolls into full view above the indicator
+    LaunchedEffect(uiState.isPartnerTyping, uiState.isPartnerRecordingAudio) {
+        if (uiState.isPartnerTyping || uiState.isPartnerRecordingAudio) {
+            val isNearBottom = listState.firstVisibleItemIndex <= 1
+            if (isNearBottom) {
+                listState.animateScrollToItem(0, scrollOffset = 0)
+            }
+        }
+    }
+
+    // When bottom overlays appear (upload status, reply preview), keep the newest message clear of them
+    LaunchedEffect(bottomOverlayHeightPx) {
+        if (bottomOverlayHeightPx > 0 && listState.firstVisibleItemIndex <= 1) {
+            listState.animateScrollToItem(0, scrollOffset = 0)
         }
     }
 
@@ -1536,7 +1558,7 @@ fun ChatScreen(
                             detectTapGestures(onDoubleTap = { onQuickDisguise() })
                         },
                     reverseLayout = true,
-                    contentPadding = PaddingValues(vertical = 8.dp),
+                    contentPadding = PaddingValues(top = 10.dp, bottom = 14.dp),
                     // A short chat (e.g. a new day) starts at the top, under the header, instead of
                     // sitting at the bottom by the message box
                     verticalArrangement = Arrangement.spacedBy(4.dp, Alignment.Top)
