@@ -114,18 +114,23 @@ class ChatRepository(
         _messagesFlow.value = emptyList()
         CoroutineScope(Dispatchers.IO).launch {
             authRepository.currentUserState
-                .map { it?.coupleId?.trim()?.ifBlank { null } ?: "couple_faisal_shali" }
+                .map { it?.coupleId?.trim()?.ifBlank { null } }
                 .distinctUntilChanged()
                 .collectLatest { convId ->
                     // Listener state is only touched on the main thread, like the listener callbacks
                     withContext(Dispatchers.Main) {
                         clearOlderPages()
                         todayMessages = emptyList()
+                        localBackupMessages = emptyList()
                         _isQueryExhaustedFlow.value = false
                         _isLoadingMoreFlow.value = false
-                        _hasPreviousChatsAvailableFlow.value = true
+                        _hasPreviousChatsAvailableFlow.value = convId != null
                         resetGalleryCache()
-                        startGlobalMessagesListener(convId)
+                        if (convId != null) {
+                            startGlobalMessagesListener(convId)
+                        } else {
+                            stopGlobalMessagesListener()
+                        }
                     }
                 }
         }
@@ -133,8 +138,19 @@ class ChatRepository(
 
     fun getConversationId(): String {
         val user = authRepository.currentUserState.value
-        val coupleId = user?.coupleId?.trim()?.ifBlank { null } ?: "couple_faisal_shali"
+        val coupleId = user?.coupleId?.trim()?.ifBlank { null } ?: ""
         return coupleId
+    }
+
+    fun stopGlobalMessagesListener() {
+        globalTodayListener?.remove()
+        globalTodayListener = null
+        currentActiveConversationId = null
+        clearOlderPages()
+        todayMessages = emptyList()
+        localBackupMessages = emptyList()
+        _messagesFlow.value = emptyList()
+        resetGalleryCache()
     }
 
     fun loadMoreMessages() {
@@ -484,6 +500,10 @@ class ChatRepository(
     }
 
     private fun startGlobalMessagesListener(conversationId: String, forceRestart: Boolean = false) {
+        if (conversationId.isBlank()) {
+            stopGlobalMessagesListener()
+            return
+        }
         if (!forceRestart && currentActiveConversationId == conversationId && globalTodayListener != null) return
         globalTodayListener?.remove()
         clearOlderPages()

@@ -610,6 +610,13 @@ fun MessageBubble(
                                             onImageClick(clickedUrl)
                                         }
                                     },
+                                    onLongClick = {
+                                        onBubbleLongPress(androidx.compose.ui.geometry.Offset.Zero)
+                                    },
+                                    onDoubleClick = {
+                                        triggerHeartBurst()
+                                    },
+                                    onPress = trackPress,
                                     modifier = Modifier.fillMaxWidth(),
                                     previewUrls = remember(message) { mediaList.map(message::thumbnailFor) }
                                 )

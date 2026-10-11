@@ -435,8 +435,6 @@ class AuthRepository(private val context: Context) {
             auth?.signInAnonymously()?.await()
         } catch (_: Exception) {}
 
-        // Only the existing couple gets in: the secret code must match it, and the two names must
-        // be its two members. Nothing new is created from the login screen.
         val fs = firestore ?: return Result.failure(Exception(CONNECTION_PROBLEM))
         val coupleDocRef = fs.collection("couples").document(coupleId)
         val coupleSnap = try {
@@ -445,41 +443,75 @@ class AuthRepository(private val context: Context) {
             Log.w("AuthRepository", "Couple check failed: ${e.message}")
             return Result.failure(Exception(CONNECTION_PROBLEM))
         }
-        if (!coupleSnap.exists()) return Result.failure(Exception(WRONG_LOGIN_DETAILS))
-        fun memberId(name: String?) = name?.trim()?.lowercase()?.filter { it.isLetterOrDigit() || it == '_' }
-            ?.takeIf { it.isNotBlank() }?.let { "user_$it" }
-        // By id once someone has joined, otherwise by the name given when the couple was set up
-        val members = setOfNotNull(
-            coupleSnap.getString("partner1Id") ?: memberId(coupleSnap.getString("partner1Name")),
-            coupleSnap.getString("partner2Id") ?: memberId(coupleSnap.getString("partner2Name"))
-        )
-        if (uid == fallbackPartnerId || uid !in members || fallbackPartnerId !in members) {
-            return Result.failure(Exception(WRONG_LOGIN_DETAILS))
-        }
 
-        run {
+        val currentAuthUid = auth?.currentUser?.uid
+
+        if (!coupleSnap.exists()) {
+            // Automatic registration for new secret codes: creates a new isolated couple space
+            val newCoupleData = mutableMapOf<String, Any?>(
+                "id" to coupleId,
+                "secretCode" to cleanCode,
+                "partner1Id" to uid,
+                "partner1Name" to displayName,
+                "partner2Name" to partnerDisplayName,
+                "createdAt" to System.currentTimeMillis(),
+                "updatedAt" to System.currentTimeMillis()
+            )
+            if (currentAuthUid != null) {
+                newCoupleData["memberUids"] = listOf(currentAuthUid)
+            }
             try {
-                run {
-                    val p1Id = coupleSnap.getString("partner1Id")
-                    val p2Id = coupleSnap.getString("partner2Id")
-                    if (p1Id != null && p1Id != uid) {
-                        finalPartnerId = p1Id
-                        coupleDocRef.update(
-                            mapOf(
-                                "partner2Id" to uid,
-                                "partner2Name" to displayName,
-                                "updatedAt" to System.currentTimeMillis()
-                            )
-                        ).await()
-                        try {
+                coupleDocRef.set(newCoupleData).await()
+            } catch (e: Exception) {
+                Log.w("AuthRepository", "Failed to create couple space: ${e.message}")
+                return Result.failure(Exception("Failed to create couple space: ${e.localizedMessage}"))
+            }
+            finalPartnerId = fallbackPartnerId
+        } else {
+            // Existing couple space: link or reconnect
+            val p1Id = coupleSnap.getString("partner1Id")
+            val p2Id = coupleSnap.getString("partner2Id")
+
+            when {
+                // Partner 1 logging back in
+                p1Id == uid -> {
+                    finalPartnerId = p2Id ?: fallbackPartnerId
+                }
+                // Partner 2 logging back in
+                p2Id == uid -> {
+                    finalPartnerId = p1Id ?: fallbackPartnerId
+                }
+                // Partner 2 entering the secret code for the first time
+                p2Id == null && p1Id != uid -> {
+                    finalPartnerId = p1Id ?: fallbackPartnerId
+                    val updates = mutableMapOf<String, Any>(
+                        "partner2Id" to uid,
+                        "partner2Name" to displayName,
+                        "updatedAt" to System.currentTimeMillis()
+                    )
+                    try {
+                        coupleDocRef.update(updates).await()
+                        if (p1Id != null) {
                             fs.collection("users").document(p1Id).update(mapOf("partnerId" to uid))
-                        } catch (_: Exception) {}
-                    } else if (p2Id != null && p2Id != uid) {
-                        finalPartnerId = p2Id
+                        }
+                    } catch (e: Exception) {
+                        Log.w("AuthRepository", "Couple linking: ${e.message}")
                     }
                 }
-            } catch (e: Exception) {
-                Log.w("AuthRepository", "Couple linking: ${e.message}")
+                // Both slots already taken by other user IDs
+                else -> {
+                    return Result.failure(Exception("This Couple Secret Code is already in use by two registered partners."))
+                }
+            }
+
+            // Ensure current auth UID is in memberUids so security rules allow synchronicity & couple documents
+            if (currentAuthUid != null) {
+                val memberUids = (coupleSnap.get("memberUids") as? List<*>)?.filterIsInstance<String>().orEmpty()
+                if (currentAuthUid !in memberUids) {
+                    try {
+                        coupleDocRef.update("memberUids", com.google.firebase.firestore.FieldValue.arrayUnion(currentAuthUid))
+                    } catch (_: Exception) {}
+                }
             }
         }
 
@@ -536,18 +568,12 @@ class AuthRepository(private val context: Context) {
         val cleanPartner = partnerStr.trim().lowercase().substringBefore("@").replace(".", "_").replace("+", "_").replace(" ", "_").filter { it.isLetterOrDigit() || it == '_' }
         val cleanKey = keyStr.trim().lowercase().replace(" ", "_").replace("-", "_")
 
-        // 1. Faisal & Shali automatic detection
-        val allContext = "$cleanUser $cleanPartner $cleanKey"
-        if (allContext.contains("faisal") && allContext.contains("shali")) {
-            return "couple_faisal_shali"
-        }
-
-        // 2. Custom couple key
+        // 1. Custom couple key
         if (cleanKey.isNotBlank() && cleanKey != "cherish" && cleanKey != "cherish_forever_2026" && cleanKey != "cherish_love" && cleanKey != "couple_default") {
             return if (cleanKey.startsWith("couple_")) cleanKey else "couple_$cleanKey"
         }
 
-        // 3. Deterministic sorted pairing
+        // 2. Deterministic sorted pairing
         if (cleanPartner.isNotBlank()) {
             val sorted = listOf(cleanUser, cleanPartner).sorted()
             return "couple_${sorted[0]}_${sorted[1]}"
@@ -571,20 +597,12 @@ class AuthRepository(private val context: Context) {
         val uid = "user_$cleanUser"
         val partnerId = if (cleanPartner.isNotBlank()) {
             "user_$cleanPartner"
-        } else if (cleanUser.contains("faisal")) {
-            "user_shali"
-        } else if (cleanUser.contains("shali")) {
-            "user_faisal"
         } else null
 
         val displayName = cleanUser.replaceFirstChar { it.uppercase() }
         val virtualEmail = "$cleanUser@cherish.app"
         val partnerVirtualEmail = if (cleanPartner.isNotBlank()) {
             if (partnerUsername.contains("@")) partnerUsername.trim().lowercase() else "$cleanPartner@cherish.app"
-        } else if (cleanUser.contains("faisal")) {
-            "shalihafais36@gmail.com"
-        } else if (cleanUser.contains("shali")) {
-            "faisallasiaff@gmail.com"
         } else null
 
         val finalUser = User(
@@ -730,18 +748,10 @@ class AuthRepository(private val context: Context) {
             val uid = firebaseUser.uid
             val partnerId = if (cleanPartner.isNotBlank()) {
                 "user_$cleanPartner"
-            } else if (cleanUser.contains("faisal")) {
-                "user_shali"
-            } else if (cleanUser.contains("shali")) {
-                "user_faisal"
             } else null
 
             val partnerVirtualEmail = if (cleanPartner.isNotBlank()) {
                 if (partnerUsernameOrEmail.contains("@")) partnerUsernameOrEmail.trim().lowercase() else "$cleanPartner@gmail.com"
-            } else if (cleanUser.contains("faisal")) {
-                "shalihafais36@gmail.com"
-            } else if (cleanUser.contains("shali")) {
-                "faisallasiaff@gmail.com"
             } else null
 
             val finalUser = User(
@@ -1286,7 +1296,7 @@ class AuthRepository(private val context: Context) {
     private fun findAndListenToPartner(partnerEmail: String?, coupleId: String?, uid: String) {
         val fs = firestore ?: return
 
-        // 1. Prioritize discovery via Couple ID (e.g. couple_faisal_shali)
+        // 1. Prioritize discovery via Couple ID (e.g. couple_secret123)
         if (!coupleId.isNullOrBlank() && coupleId != "couple_default") {
             partnerCoupleQueryListener?.remove()
             partnerCoupleQueryListener = fs.collection("users")
@@ -1447,7 +1457,8 @@ class AuthRepository(private val context: Context) {
     private fun loadLocalUserSession() {
         val prefs = context.getSharedPreferences("cherish_user_session", Context.MODE_PRIVATE)
         val rawUid = prefs.getString("uid", null)?.trim()?.ifBlank { null }
-        if (rawUid != null) {
+        val rawCoupleId = prefs.getString("coupleId", null)?.trim()?.ifBlank { null }
+        if (rawUid != null && rawCoupleId != null) {
             val uid = rawUid
             val targetTime = prefs.getLong("checkAfterTimeMillis", 0L)
             val note = prefs.getString("checkAfterNote", "") ?: ""
@@ -1456,19 +1467,17 @@ class AuthRepository(private val context: Context) {
             val status = prefs.getString("statusMessage", "Loving every moment with you ✨")?.trim()?.ifBlank { "Loving every moment with you ✨" } ?: "Loving every moment with you ✨"
             val partnerId = prefs.getString("partnerId", null)?.trim()?.ifBlank { null }
             val partnerEmail = prefs.getString("partnerEmail", null)?.trim()?.ifBlank { null }
-            val coupleId = prefs.getString("coupleId", "couple_faisal_shali")?.trim()?.ifBlank { "couple_faisal_shali" } ?: "couple_faisal_shali"
+            val coupleId = rawCoupleId
             val timeZone = prefs.getString("timeZone", null)?.trim()?.ifBlank { null } ?: TimeZone.getDefault().id
-            val defaultName = if (uid == "user_shali") "Shali" else "Faisal"
-            val defaultPartnerId = if (uid == "user_faisal") "user_shali" else "user_faisal"
-            val defaultPartnerEmail = if (uid == "user_faisal") "shalihafais36@gmail.com" else "faisallasiaff@gmail.com"
+            val defaultName = uid.removePrefix("user_").replaceFirstChar { it.uppercase() }
             val user = User(
                 id = uid,
                 email = prefs.getString("email", "") ?: "",
                 displayName = prefs.getString("displayName", defaultName)?.ifBlank { defaultName } ?: defaultName,
                 photoUrl = photo,
                 statusMessage = status,
-                partnerId = partnerId ?: defaultPartnerId,
-                partnerEmail = partnerEmail ?: defaultPartnerEmail,
+                partnerId = partnerId,
+                partnerEmail = partnerEmail,
                 coupleId = coupleId,
                 checkAfterTimeMillis = if (targetTime > 0L) targetTime else null,
                 checkAfterNote = note.ifBlank { null },
@@ -1476,24 +1485,23 @@ class AuthRepository(private val context: Context) {
                 timeZone = timeZone
             )
             _currentUserState.value = user
-            val partnerUid = user.partnerId?.ifBlank { null } ?: defaultPartnerId
-            val partnerName = if (partnerUid == "user_shali") "Shali" else "Faisal"
-            val partnerEmailAddr = if (partnerUid == "user_shali") "shalihafais36@gmail.com" else "faisallasiaff@gmail.com"
-            if (_partnerUserState.value == null) {
-                _partnerUserState.value = User(
-                    id = partnerUid,
-                    email = partnerEmailAddr,
-                    displayName = partnerName,
-                    partnerId = user.id,
-                    partnerEmail = user.email,
-                    coupleId = coupleId,
-                    isOnline = true,
-                    statusMessage = if (partnerUid == "user_shali") "Always with you 💕" else "Forever yours ❤️"
-                )
+            if (!partnerId.isNullOrBlank()) {
+                val partnerName = partnerId.removePrefix("user_").replaceFirstChar { it.uppercase() }
+                if (_partnerUserState.value == null) {
+                    _partnerUserState.value = User(
+                        id = partnerId,
+                        email = partnerEmail ?: "",
+                        displayName = partnerName,
+                        partnerId = user.id,
+                        partnerEmail = user.email,
+                        coupleId = coupleId,
+                        isOnline = false,
+                        statusMessage = "Always with you 💕"
+                    )
+                }
             }
         }
-        // No saved login: stay logged out, so the login screen (and only the right details) opens
-        // the app. There used to be an automatic login as a default user here.
+        // No saved login: stay logged out, so the login screen opens the app.
     }
 
 

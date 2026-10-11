@@ -25,8 +25,12 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -90,9 +94,34 @@ class SynchronicityRepository(
     private val olderMonthDays = HashMap<String, Set<String>>()
     private val confirmedMembers = HashSet<String>()
 
+    init {
+        scope.launch {
+            authRepository.currentUserState
+                .map { it?.coupleId?.trim()?.ifBlank { null } }
+                .distinctUntilChanged()
+                .collectLatest { coupleId ->
+                    withContext(Dispatchers.Main) {
+                        if (coupleId.isNullOrBlank()) {
+                            stop()
+                        }
+                    }
+                }
+        }
+    }
+
+    fun stop() {
+        monthListener?.remove()
+        monthListener = null
+        listenKey = null
+        streakJob?.cancel()
+        streakJob = null
+        _monthMoments.value = emptyList()
+        _status.value = SyncStatus.NO_COUPLE
+    }
+
     private fun coupleId(): String? {
         if (!authRepository.isUserLoggedIn()) return null
-        return authRepository.currentUserState.value?.coupleId?.trim()?.ifBlank { null } ?: DEFAULT_COUPLE_ID
+        return authRepository.currentUserState.value?.coupleId?.trim()?.ifBlank { null }
     }
 
     private fun moments(coupleId: String): CollectionReference? =
@@ -105,6 +134,7 @@ class SynchronicityRepository(
     fun start() {
         val coupleId = coupleId()
         if (coupleId == null) {
+            stop()
             _status.value = SyncStatus.NO_COUPLE
             return
         }
@@ -450,7 +480,6 @@ class SynchronicityRepository(
     companion object {
         private const val TAG = "SynchronicityRepo"
         const val COLLECTION = "synchronicity"
-        private const val DEFAULT_COUPLE_ID = "couple_faisal_shali"
         private const val SERVER_WAIT_MS = 6_000L
         private const val MAX_STREAK_DAYS = 3_660
         private const val DAY_START_MS = 6L * 60 * 60 * 1000

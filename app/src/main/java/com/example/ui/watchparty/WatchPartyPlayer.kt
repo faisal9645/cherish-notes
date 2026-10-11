@@ -199,10 +199,10 @@ internal fun WatchPartyVideo(
         val from = (if (player.currentTime > 0f) player.currentTime else startAt).toInt().coerceAtLeast(0)
         view.loadUrl("https://m.youtube.com/watch?v=$videoId&t=${from}s")
     }
-    // Fall back to YouTube mobile watch page if the embed is blocked or doesn't start playing within 4.5 seconds
+    // Fall back to YouTube mobile watch page if the embed is blocked or doesn't start playing within 15 seconds
     LaunchedEffect(videoId, autoplay) {
-        delay(4_500)
-        if (page != null && !player.onWatchPage && autoplay && player.state != YtState.PLAYING) {
+        delay(15_000)
+        if (page != null && !player.onWatchPage && autoplay && player.state != YtState.PLAYING && player.errorCode != 0) {
             player.switchToWatchPage()
         }
     }
@@ -299,7 +299,11 @@ window.__party = {
   ready: false,
   play: function () {
     if (player && player.playVideo) {
-      try { player.playVideo(); } catch (e) {}
+      try {
+        player.playVideo();
+      } catch (e) {
+        try { player.mute(); player.playVideo(); player.unMute(); } catch (err) {}
+      }
     }
   },
   pause: function () { if (player && player.pauseVideo) player.pauseVideo(); },
@@ -324,7 +328,11 @@ function onYouTubeIframeAPIReady() {
         window.__party.ready = true;
         try { Party.onReady(player.getDuration() || 0); } catch (e) {}
         if (${if (autoplay) "true" else "false"}) {
-          try { player.playVideo(); } catch (e) {}
+          try {
+            player.playVideo();
+          } catch (e) {
+            try { player.mute(); player.playVideo(); player.unMute(); } catch (err) {}
+          }
         }
         setInterval(tick, 500);
       },

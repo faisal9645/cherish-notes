@@ -1004,20 +1004,33 @@ fun Modifier.mediaTileAnchor(anchor: MediaTileAnchor): Modifier = onPlaced { anc
 fun Modifier.openableMedia(
     onLongClick: (() -> Unit)? = null,
     onDoubleClick: (() -> Unit)? = null,
+    onPress: (suspend androidx.compose.foundation.gestures.PressGestureScope.(androidx.compose.ui.geometry.Offset) -> Unit)? = null,
     onClick: () -> Unit
 ): Modifier = composed {
     val anchor = remember { MediaTileAnchor() }
+    val currentOnClick by rememberUpdatedState(onClick)
+    val currentOnLongClick by rememberUpdatedState(onLongClick)
+    val currentOnDoubleClick by rememberUpdatedState(onDoubleClick)
+    val currentOnPress by rememberUpdatedState(onPress)
     mediaTileAnchor(anchor).pointerInput(Unit) {
         detectTapGestures(
+            onPress = { offset ->
+                val press = currentOnPress
+                if (press != null) {
+                    press.invoke(this, offset)
+                } else {
+                    tryAwaitRelease()
+                }
+            },
             onTap = {
                 anchor.open()
-                onClick()
+                currentOnClick()
             },
             onLongPress = {
-                onLongClick?.invoke()
+                currentOnLongClick?.invoke()
             },
             onDoubleTap = {
-                onDoubleClick?.invoke()
+                currentOnDoubleClick?.invoke()
             }
         )
     }

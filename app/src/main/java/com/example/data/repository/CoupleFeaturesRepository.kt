@@ -10,16 +10,20 @@ import com.example.data.model.SharedNote
 import com.google.firebase.FirebaseApp
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.withContext
 import java.util.UUID
 
 class CoupleFeaturesRepository(
@@ -49,7 +53,34 @@ class CoupleFeaturesRepository(
 
     /** The couple's id (their Firestore and Storage folder). */
     fun getCoupleId(): String {
-        return authRepository.currentUserState.value?.coupleId?.trim()?.ifBlank { null } ?: "couple_faisal_shali"
+        return authRepository.currentUserState.value?.coupleId?.trim()?.ifBlank { null } ?: ""
+    }
+
+    init {
+        CoroutineScope(Dispatchers.IO).launch {
+            authRepository.currentUserState
+                .map { it?.coupleId?.trim()?.ifBlank { null } }
+                .distinctUntilChanged()
+                .collectLatest { coupleId ->
+                    withContext(Dispatchers.Main) {
+                        if (coupleId.isNullOrBlank()) {
+                            stopListeners()
+                        } else {
+                            ensureLoveUsListener()
+                        }
+                    }
+                }
+        }
+    }
+
+    fun stopListeners() {
+        coupleDocListener?.remove()
+        coupleDocListener = null
+        loveListeningCoupleId = null
+        coupleDocData = emptyMap()
+        _memoriesFlow.value = emptyList()
+        _datesFlow.value = emptyList()
+        _notesFlow.value = emptyList()
     }
 
     private fun notifyAutoBackup() {
@@ -61,6 +92,11 @@ class CoupleFeaturesRepository(
     // Memories
     fun listenToMemories(): Flow<List<Memory>> = callbackFlow {
         val coupleId = getCoupleId()
+        if (coupleId.isBlank()) {
+            trySend(emptyList())
+            awaitClose { }
+            return@callbackFlow
+        }
         val fs = firestore
         if (fs != null) {
             val reg = fs.collection("couples")
@@ -131,6 +167,11 @@ class CoupleFeaturesRepository(
     // Important Dates
     fun listenToImportantDates(): Flow<List<ImportantDate>> = callbackFlow {
         val coupleId = getCoupleId()
+        if (coupleId.isBlank()) {
+            trySend(emptyList())
+            awaitClose { }
+            return@callbackFlow
+        }
         val fs = firestore
         if (fs != null) {
             val reg = fs.collection("couples")
@@ -202,6 +243,11 @@ class CoupleFeaturesRepository(
     // Shared Notes
     fun listenToSharedNotes(): Flow<List<SharedNote>> = callbackFlow {
         val coupleId = getCoupleId()
+        if (coupleId.isBlank()) {
+            trySend(emptyList())
+            awaitClose { }
+            return@callbackFlow
+        }
         val fs = firestore
         if (fs != null) {
             val reg = fs.collection("couples")
@@ -1106,7 +1152,11 @@ class CoupleFeaturesRepository(
 
     /** Listens to the couple's document once a couple is known (again if it changes). */
     fun ensureLoveUsListener() {
-        val coupleId = authRepository.currentUserState.value?.coupleId?.trim()?.ifBlank { null } ?: return
+        val coupleId = authRepository.currentUserState.value?.coupleId?.trim()?.ifBlank { null }
+        if (coupleId.isNullOrBlank()) {
+            stopListeners()
+            return
+        }
         if (loveListeningCoupleId == coupleId) return
         val fs = firestore ?: return
         coupleDocListener?.remove()

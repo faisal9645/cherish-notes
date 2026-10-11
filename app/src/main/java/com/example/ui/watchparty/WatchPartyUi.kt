@@ -188,7 +188,10 @@ fun WatchPartyInvite(modifier: Modifier = Modifier) {
         )
         // The whole pill opens it full screen, not only its button
         Surface(
-            onClick = { WatchPartyUi.openTheater() },
+            onClick = {
+                app.coupleFeaturesRepository.markWatchingParty(true)
+                WatchPartyUi.openTheater()
+            },
             shape = RoundedCornerShape(50),
             color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f),
             border = BorderStroke(1.5.dp, accent.copy(alpha = pulse)),
@@ -214,7 +217,10 @@ fun WatchPartyInvite(modifier: Modifier = Modifier) {
                 )
                 Spacer(modifier = Modifier.width(6.dp))
                 Button(
-                    onClick = { WatchPartyUi.openTheater() },
+                    onClick = {
+                        app.coupleFeaturesRepository.markWatchingParty(true)
+                        WatchPartyUi.openTheater()
+                    },
                     shape = RoundedCornerShape(50),
                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
                     modifier = Modifier

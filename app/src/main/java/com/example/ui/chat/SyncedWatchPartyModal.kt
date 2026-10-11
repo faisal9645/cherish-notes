@@ -136,11 +136,13 @@ fun WatchPartyYouTubePickerModal(
         if (trimmed.isBlank()) return
         searchQuery = trimmed
         val vid = extractYouTubeVideoId(trimmed)
+        if (vid != null) {
+            detectedVideoId = vid
+            detectedVideoTitle = "Shared Video"
+            onStart(vid, "Shared Video")
+            return
+        }
         val targetUrl = when {
-            vid != null -> {
-                detectedVideoId = vid
-                "https://m.youtube.com/watch?v=$vid"
-            }
             trimmed.startsWith("http://", ignoreCase = true) || trimmed.startsWith("https://", ignoreCase = true) -> trimmed
             else -> "https://m.youtube.com/results?search_query=" + URLEncoder.encode(trimmed, "UTF-8")
         }
@@ -460,6 +462,89 @@ fun WatchPartyYouTubePickerModal(
                     }
                 }
 
+                // 3b. Curated Cozy Couple Starter Picks (1-Tap to Watch Together)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState())
+                        .padding(horizontal = 12.dp, vertical = 3.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    val couplePicks = listOf(
+                        Triple("jfKfPfyJRdk", "Cozy Lofi Rain 🌧️", "Chill beats"),
+                        Triple("1ZYbU8JGBdQ", "Sunset Waves 🌅", "Ocean guitar"),
+                        Triple("L_LUpnjgPso", "Warm Fireplace 🪵", "Cozy jazz"),
+                        Triple("S_6qQjC-V0s", "Acoustic Love 🎸", "Romantic guitar"),
+                        Triple("tNq4K1E6W7E", "Studio Ghibli 🎹", "Piano relax"),
+                        Triple("hY7m5jjJ9mM", "Cute Animals 🐱", "Funny pets")
+                    )
+                    couplePicks.forEach { (vid, label, _) ->
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = accent.copy(alpha = 0.12f),
+                            border = BorderStroke(1.dp, accent.copy(alpha = 0.35f)),
+                            modifier = Modifier.clickable { onStart(vid, label) }
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(Icons.Default.PlayArrow, contentDescription = null, tint = accent, modifier = Modifier.size(12.dp))
+                                Spacer(modifier = Modifier.width(3.dp))
+                                Text(
+                                    text = label,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = accent
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // 3c. Top Ready-to-Sync Banner (When any video link/ID is active)
+                if (detectedVideoId != null && !showWatchLater) {
+                    val activeId = detectedVideoId ?: ""
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = accent.copy(alpha = 0.16f),
+                        border = BorderStroke(1.dp, accent.copy(alpha = 0.5f)),
+                        shadowElevation = 2.dp,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 4.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Default.PlayCircle, contentDescription = null, tint = accent, modifier = Modifier.size(26.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = detectedVideoTitle.ifBlank { "Video Selected" },
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 13.sp,
+                                    color = ink,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text("Ready to sync & play together", fontSize = 11.sp, color = ink.copy(alpha = 0.65f))
+                            }
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Button(
+                                onClick = { onStart(activeId, detectedVideoTitle.ifBlank { "Watch Together" }) },
+                                shape = RoundedCornerShape(10.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = accent),
+                                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
+                            ) {
+                                Text("Start Now ▶", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                }
+
                 // 4. Loading Progress Bar
                 if (isLoading && pageProgress in 1..99) {
                     LinearProgressIndicator(
@@ -692,8 +777,16 @@ fun WatchPartyYouTubePickerModal(
                                                         }
                                                     }
                                                 }
-                                                setInterval(notify, 500);
+                                                setInterval(notify, 400);
                                                 window.addEventListener('popstate', notify);
+                                                document.addEventListener('click', function(e) {
+                                                    var a = e.target.closest('a');
+                                                    if (a && a.href && (a.href.indexOf('watch?v=') !== -1 || a.href.indexOf('/shorts/') !== -1)) {
+                                                        if (window.CherishBrowserBridge) {
+                                                            window.CherishBrowserBridge.onUrlChange(a.href, a.innerText || document.title || '');
+                                                        }
+                                                    }
+                                                }, true);
                                             })();
                                         """.trimIndent()
                                         view?.evaluateJavascript(jsObserver, null)

@@ -24,6 +24,8 @@ import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.foundation.gestures.PressGestureScope
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -50,6 +52,7 @@ fun AdaptiveMediaGrid(
     onImageClick: (index: Int, url: String) -> Unit,
     onLongClick: (() -> Unit)? = null,
     onDoubleClick: (() -> Unit)? = null,
+    onPress: (suspend PressGestureScope.(Offset) -> Unit)? = null,
     modifier: Modifier = Modifier,
     previewUrls: List<String> = emptyList()
 ) {
@@ -103,7 +106,7 @@ fun AdaptiveMediaGrid(
                         // Square until the photo says otherwise
                         .aspectRatio((if (ratio > 0f) ratio else 1f).coerceIn(MIN_PHOTO_RATIO, MAX_PHOTO_RATIO))
                         .clip(RoundedCornerShape(cornerRadius))
-                        .openableMedia(onClick = { onImageClick(0, urls[0]) }, onLongClick = onLongClick, onDoubleClick = onDoubleClick)
+                        .openableMedia(onClick = { onImageClick(0, urls[0]) }, onLongClick = onLongClick, onDoubleClick = onDoubleClick, onPress = onPress)
                 )
             }
 
@@ -122,7 +125,7 @@ fun AdaptiveMediaGrid(
                             .weight(1f)
                             .fillMaxHeight()
                             .clip(RoundedCornerShape(12.dp))
-                            .openableMedia(onClick = { onImageClick(0, urls[0]) }, onLongClick = onLongClick, onDoubleClick = onDoubleClick)
+                            .openableMedia(onClick = { onImageClick(0, urls[0]) }, onLongClick = onLongClick, onDoubleClick = onDoubleClick, onPress = onPress)
                     )
                     MediaTile(
                         url = shown(1),
@@ -131,7 +134,7 @@ fun AdaptiveMediaGrid(
                             .weight(1f)
                             .fillMaxHeight()
                             .clip(RoundedCornerShape(12.dp))
-                            .openableMedia(onClick = { onImageClick(1, urls[1]) }, onLongClick = onLongClick, onDoubleClick = onDoubleClick)
+                            .openableMedia(onClick = { onImageClick(1, urls[1]) }, onLongClick = onLongClick, onDoubleClick = onDoubleClick, onPress = onPress)
                     )
                 }
             }
@@ -150,7 +153,7 @@ fun AdaptiveMediaGrid(
                         modifier = Modifier
                             .weight(1.2f)
                             .fillMaxHeight()
-                            .openableMedia(onClick = { onImageClick(0, urls[0]) }, onLongClick = onLongClick, onDoubleClick = onDoubleClick)
+                            .openableMedia(onClick = { onImageClick(0, urls[0]) }, onLongClick = onLongClick, onDoubleClick = onDoubleClick, onPress = onPress)
                     )
                     Column(
                         modifier = Modifier
@@ -164,7 +167,7 @@ fun AdaptiveMediaGrid(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .weight(1f)
-                                .openableMedia(onClick = { onImageClick(1, urls[1]) }, onLongClick = onLongClick, onDoubleClick = onDoubleClick)
+                                .openableMedia(onClick = { onImageClick(1, urls[1]) }, onLongClick = onLongClick, onDoubleClick = onDoubleClick, onPress = onPress)
                         )
                         MediaTile(
                             url = shown(2),
@@ -172,7 +175,7 @@ fun AdaptiveMediaGrid(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .weight(1f)
-                                .openableMedia(onClick = { onImageClick(2, urls[2]) }, onLongClick = onLongClick, onDoubleClick = onDoubleClick)
+                                .openableMedia(onClick = { onImageClick(2, urls[2]) }, onLongClick = onLongClick, onDoubleClick = onDoubleClick, onPress = onPress)
                         )
                     }
                 }
@@ -197,14 +200,14 @@ fun AdaptiveMediaGrid(
                             modifier = Modifier
                                 .weight(1f)
                                 .fillMaxHeight()
-                                .openableMedia(onClick = { onImageClick(0, urls[0]) }, onLongClick = onLongClick, onDoubleClick = onDoubleClick)
+                                .openableMedia(onClick = { onImageClick(0, urls[0]) }, onLongClick = onLongClick, onDoubleClick = onDoubleClick, onPress = onPress)
                         )
                         MediaTile(
                             url = shown(1),
                             modifier = Modifier
                                 .weight(1f)
                                 .fillMaxHeight()
-                                .openableMedia(onClick = { onImageClick(1, urls[1]) }, onLongClick = onLongClick, onDoubleClick = onDoubleClick)
+                                .openableMedia(onClick = { onImageClick(1, urls[1]) }, onLongClick = onLongClick, onDoubleClick = onDoubleClick, onPress = onPress)
                         )
                     }
                     Row(
@@ -218,14 +221,14 @@ fun AdaptiveMediaGrid(
                             modifier = Modifier
                                 .weight(1f)
                                 .fillMaxHeight()
-                                .openableMedia(onClick = { onImageClick(2, urls[2]) }, onLongClick = onLongClick, onDoubleClick = onDoubleClick)
+                                .openableMedia(onClick = { onImageClick(2, urls[2]) }, onLongClick = onLongClick, onDoubleClick = onDoubleClick, onPress = onPress)
                         )
                         MediaTile(
                             url = shown(3),
                             modifier = Modifier
                                 .weight(1f)
                                 .fillMaxHeight()
-                                .openableMedia(onClick = { onImageClick(3, urls[3]) }, onLongClick = onLongClick, onDoubleClick = onDoubleClick)
+                                .openableMedia(onClick = { onImageClick(3, urls[3]) }, onLongClick = onLongClick, onDoubleClick = onDoubleClick, onPress = onPress)
                         )
                     }
                 }
@@ -251,14 +254,14 @@ fun AdaptiveMediaGrid(
                             modifier = Modifier
                                 .weight(1f)
                                 .fillMaxHeight()
-                                .openableMedia(onClick = { onImageClick(0, urls[0]) }, onLongClick = onLongClick, onDoubleClick = onDoubleClick)
+                                .openableMedia(onClick = { onImageClick(0, urls[0]) }, onLongClick = onLongClick, onDoubleClick = onDoubleClick, onPress = onPress)
                         )
                         MediaTile(
                             url = shown(1),
                             modifier = Modifier
                                 .weight(1f)
                                 .fillMaxHeight()
-                                .openableMedia(onClick = { onImageClick(1, urls[1]) }, onLongClick = onLongClick, onDoubleClick = onDoubleClick)
+                                .openableMedia(onClick = { onImageClick(1, urls[1]) }, onLongClick = onLongClick, onDoubleClick = onDoubleClick, onPress = onPress)
                         )
                     }
                     Row(
@@ -272,13 +275,13 @@ fun AdaptiveMediaGrid(
                             modifier = Modifier
                                 .weight(1f)
                                 .fillMaxHeight()
-                                .openableMedia(onClick = { onImageClick(2, urls[2]) }, onLongClick = onLongClick, onDoubleClick = onDoubleClick)
+                                .openableMedia(onClick = { onImageClick(2, urls[2]) }, onLongClick = onLongClick, onDoubleClick = onDoubleClick, onPress = onPress)
                         )
                         Box(
                             modifier = Modifier
                                 .weight(1f)
                                 .fillMaxHeight()
-                                .openableMedia(onClick = { onImageClick(3, urls[3]) }, onLongClick = onLongClick, onDoubleClick = onDoubleClick),
+                                .openableMedia(onClick = { onImageClick(3, urls[3]) }, onLongClick = onLongClick, onDoubleClick = onDoubleClick, onPress = onPress),
                             contentAlignment = Alignment.Center
                         ) {
                             MediaTile(

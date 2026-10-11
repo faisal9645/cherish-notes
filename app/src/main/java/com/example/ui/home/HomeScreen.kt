@@ -419,7 +419,12 @@ fun HomeScreen(
                     modifier = Modifier.weight(1f),
                     // Starting one means picking a video first; while one is on, this joins it
                     onClick = {
-                        if (partyIsOn) com.example.ui.watchparty.WatchPartyUi.openTheater() else showWatchPartySetup = true
+                        if (partyIsOn) {
+                            homeApp.coupleFeaturesRepository.markWatchingParty(true)
+                            com.example.ui.watchparty.WatchPartyUi.openTheater()
+                        } else {
+                            showWatchPartySetup = true
+                        }
                     }
                 )
             }

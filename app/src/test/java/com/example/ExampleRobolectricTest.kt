@@ -91,4 +91,23 @@ class ExampleRobolectricTest {
     org.junit.Assert.assertNull(dao.getNoteById("test_del_1"))
     org.junit.Assert.assertNull(dao.getNoteById("test_del_2"))
   }
+
+  @Test
+  fun `test computeCoupleId generates isolated couple space and no hardcoded fallbacks`() {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    val authRepo = com.example.data.repository.AuthRepository(context)
+
+    // Entering a new secret code produces an isolated couple ID
+    val coupleId = authRepo.computeCoupleId("user1", "user2", "secret_love_99")
+    assertEquals("couple_secret_love_99", coupleId)
+
+    // Custom code without couple_ prefix gets prefixed
+    val customCode = authRepo.computeCoupleId("john", "jane", "ourspace2026")
+    assertEquals("couple_ourspace2026", customCode)
+
+    // Logged-out state has no coupleId
+    authRepo.logout()
+    org.junit.Assert.assertNull(authRepo.currentUserState.value)
+  }
 }
+

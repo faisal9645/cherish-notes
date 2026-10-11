@@ -76,6 +76,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
@@ -179,12 +180,18 @@ fun WatchPartyHost(app: CherishApplication, allowed: Boolean) {
     SideEffect { WatchPartyUi.playerVisible = showPlayer }
 
     LaunchedEffect(mode) {
+        app.securityPreferences.isTheaterModeActive = (mode == WatchPartyMode.Theater)
         if (mode != WatchPartyMode.Theater) {
             var ctx = context
             while (ctx is android.content.ContextWrapper && ctx !is android.app.Activity) {
                 ctx = ctx.baseContext
             }
             (ctx as? android.app.Activity)?.requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        }
+    }
+    DisposableEffect(Unit) {
+        onDispose {
+            app.securityPreferences.isTheaterModeActive = false
         }
     }
 
@@ -515,7 +522,7 @@ private fun rememberSteadyParty(live: WatchPartySession?): WatchPartySession? {
 @Composable
 private fun KeepInSync(party: WatchPartySession, player: WatchPartyPlayer, repo: CoupleFeaturesRepository, myId: String) {
     val latest by rememberUpdatedState(party)
-    LaunchedEffect(player.isReady, party.videoId, party.isPlaying, party.positionSeconds, party.updatedAt) {
+    LaunchedEffect(player.isReady, party.videoId, party.isPlaying, party.positionSeconds, party.updatedAt, party.playScheduledAt) {
         if (!player.isReady) return@LaunchedEffect
         var pass = 0
         while (true) {
@@ -534,7 +541,7 @@ private fun KeepInSync(party: WatchPartySession, player: WatchPartyPlayer, repo:
                 else -> false
             }
             val now = com.example.data.repository.ServerTime.now()
-            val shouldPlay = p.isPlaying && p.playScheduledAt <= now
+            val shouldPlay = p.isPlaying && (p.playScheduledAt == 0L || p.playScheduledAt <= now)
             if (seek) player.seekTo(target)
             if (player.playbackRate != p.playbackRate) player.setPlaybackRate(p.playbackRate)
             
@@ -545,21 +552,18 @@ private fun KeepInSync(party: WatchPartySession, player: WatchPartyPlayer, repo:
                 if (player.state == YtState.PLAYING && p.bufferingBy == myId) {
                     repo.markWatchPartyWaiting(isBuffering = false, isAd = false)
                 }
-            } else if (player.state != YtState.AD && (seek || player.state == YtState.PLAYING || player.state == YtState.BUFFERING)) {
-                // A seek starts a video that hasn't played yet, so it's paused again right after (but don't pause an ad)
+            } else if (!p.isPlaying && player.state != YtState.AD && (player.state == YtState.PLAYING || player.state == YtState.BUFFERING)) {
                 player.pause()
             }
             pass++
-            // Paused, it's checked twice more while it settles, then left alone
-            if (!shouldPlay && pass >= 3) {
-                if (p.isPlaying && p.playScheduledAt > now) {
-                    val waitTime = p.playScheduledAt - now
-                    if (waitTime > 0) delay(waitTime)
-                } else {
-                    break
-                }
+
+            if (p.isPlaying && p.playScheduledAt > now) {
+                val waitTime = (p.playScheduledAt - now).coerceAtLeast(100L)
+                delay(waitTime)
+            } else if (shouldPlay) {
+                delay(3_000)
             } else {
-                delay(if (shouldPlay) 4_000 else 1_200)
+                delay(1_500)
             }
         }
     }
@@ -595,10 +599,7 @@ private fun KeepInSync(party: WatchPartySession, player: WatchPartyPlayer, repo:
                     repo.updateWatchPartyPlayback(false, player.currentTime)
                 }
             else -> {
-                val playing = action.state == YtState.PLAYING
-                if (playing != p.isPlaying) {
-                    repo.updateWatchPartyPlayback(playing, player.currentTime)
-                } else if (p.bufferingBy == myId || p.adBy == myId) {
+                if (p.bufferingBy == myId || p.adBy == myId) {
                     repo.markWatchPartyWaiting(isBuffering = false, isAd = false)
                 }
             }
