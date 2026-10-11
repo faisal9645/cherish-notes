@@ -15,6 +15,11 @@ class BootReceiver : BroadcastReceiver() {
             val app = context.applicationContext as? CherishApplication ?: return
             NoteReminderScheduler.rescheduleAllUpcomingReminders(context, app.notesRepository)
             ScheduledMessageScheduler.rescheduleAll(context)
+            if (action == Intent.ACTION_MY_PACKAGE_REPLACED) {
+                com.example.update.OtaUpdateManager.getInstance(context).cleanupDownloadedInstallers(forceAll = true)
+            } else {
+                com.example.update.OtaUpdateManager.getInstance(context).cleanupDownloadedInstallers(forceAll = false)
+            }
         }
     }
 }

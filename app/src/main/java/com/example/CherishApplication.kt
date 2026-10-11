@@ -117,6 +117,7 @@ class CherishApplication : Application(), coil.ImageLoaderFactory {
         )
 
         com.example.notifications.NoteReminderScheduler.rescheduleAllUpcomingReminders(this, notesRepository)
+        com.example.update.OtaUpdateManager.getInstance(this).cleanupDownloadedInstallers()
 
         androidx.lifecycle.ProcessLifecycleOwner.get().lifecycle.addObserver(
             androidx.lifecycle.LifecycleEventObserver { _, event ->

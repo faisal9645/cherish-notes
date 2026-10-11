@@ -54,6 +54,10 @@ class OtaUpdateManager private constructor(private val appContext: Context) {
     @Volatile
     private var awaitingReturn = false
 
+    init {
+        cleanupDownloadedInstallers(forceAll = false)
+    }
+
     suspend fun checkForUpdates(silent: Boolean = false): UpdateInfo? = withContext(Dispatchers.IO) {
         if (!silent) _updateState.value = UpdateState.Checking
         try {
@@ -129,6 +133,7 @@ class OtaUpdateManager private constructor(private val appContext: Context) {
             if (info.hasUpdate) {
                 _updateState.value = UpdateState.UpdateAvailable(info)
             } else {
+                cleanupDownloadedInstallers(forceAll = false)
                 if (!silent) _updateState.value = UpdateState.UpToDate
             }
 
@@ -266,13 +271,79 @@ class OtaUpdateManager private constructor(private val appContext: Context) {
             awaitingReturn = false
             com.example.security.SecurityPreferences.getInstance(activity).isExternalPickerActive = false
         }
+        cleanupDownloadedInstallers(forceAll = false)
         val path = prefs.getString(KEY_PENDING_APK, null) ?: return
         val since = prefs.getLong(KEY_PENDING_SINCE, 0L)
         prefs.edit().remove(KEY_PENDING_APK).remove(KEY_PENDING_SINCE).apply()
         if (System.currentTimeMillis() - since > PENDING_INSTALL_WINDOW_MS) return
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !activity.packageManager.canRequestPackageInstalls()) return
         val apk = File(path)
-        if (apk.exists() && isNewerThanInstalled(activity, apk)) installApk(activity, apk)
+        if (apk.exists()) {
+            if (isNewerThanInstalled(activity, apk)) {
+                installApk(activity, apk)
+            } else {
+                apk.delete()
+            }
+        }
+    }
+
+    /**
+     * Automatically removes downloaded installer APKs and temporary files once the app has
+     * updated or when obsolete, keeping device storage lean and clean.
+     */
+    fun cleanupDownloadedInstallers(forceAll: Boolean = false) {
+        try {
+            val updateDirs = listOfNotNull(
+                File(appContext.cacheDir, "updates"),
+                appContext.externalCacheDir?.let { File(it, "updates") }
+            )
+
+            for (dir in updateDirs) {
+                if (!dir.exists()) continue
+                val files = dir.listFiles() ?: continue
+                for (file in files) {
+                    if (forceAll) {
+                        file.delete()
+                    } else {
+                        val shouldDelete = try {
+                            val archive = appContext.packageManager.getPackageArchiveInfo(file.absolutePath, 0)
+                            if (archive != null) {
+                                val archiveCode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                                    archive.longVersionCode
+                                } else {
+                                    @Suppress("DEPRECATION")
+                                    archive.versionCode.toLong()
+                                }
+                                archiveCode <= BuildConfig.VERSION_CODE
+                            } else {
+                                // Incomplete or corrupt file older than 30 minutes
+                                System.currentTimeMillis() - file.lastModified() > 30 * 60 * 1000L
+                            }
+                        } catch (_: Exception) {
+                            true
+                        }
+                        if (shouldDelete) {
+                            file.delete()
+                        }
+                    }
+                }
+            }
+
+            val pendingPath = prefs.getString(KEY_PENDING_APK, null)
+            if (!pendingPath.isNullOrBlank()) {
+                val pendingFile = File(pendingPath)
+                if (pendingFile.exists()) {
+                    if (forceAll || !isNewerThanInstalled(appContext, pendingFile)) {
+                        pendingFile.delete()
+                        prefs.edit().remove(KEY_PENDING_APK).remove(KEY_PENDING_SINCE).apply()
+                    }
+                } else {
+                    prefs.edit().remove(KEY_PENDING_APK).remove(KEY_PENDING_SINCE).apply()
+                }
+            }
+        } catch (e: Exception) {
+            android.util.Log.w("OtaUpdateManager", "Failed to cleanup downloaded installers", e)
+        }
     }
 
     private fun rememberPendingInstall(apkFile: File) {
