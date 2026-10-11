@@ -50,7 +50,9 @@ object ThinkingOfYou {
         prefs.edit().putString(KEY_LAST_SIGNAL, signalId).apply()
 
         if (sentAt <= 0L || kotlin.math.abs(System.currentTimeMillis() - sentAt) > FRESH_WINDOW_MS) return false
-        if (!SecurityPreferences.getInstance(context).isNotificationsEnabled()) return false
+        val secPrefs = SecurityPreferences.getInstance(context)
+        if (!secPrefs.isHeartbeatTriggerEnabled()) return false
+        if (!secPrefs.isNotificationsEnabled()) return false
         if (!NotificationManagerCompat.from(context).areNotificationsEnabled()) return false
         if (!isPhoneInUse(context)) return false
 

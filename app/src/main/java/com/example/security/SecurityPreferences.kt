@@ -476,6 +476,9 @@ class SecurityPreferences(context: Context) {
     fun isHeartbeatOnLongPress(): Boolean = prefs.getBoolean(KEY_HAPTIC_HEARTBEAT_LONG_PRESS, true)
     fun setHeartbeatOnLongPress(enabled: Boolean) = prefs.edit().putBoolean(KEY_HAPTIC_HEARTBEAT_LONG_PRESS, enabled).apply()
 
+    fun isHeartbeatTriggerEnabled(): Boolean = prefs.getBoolean(KEY_HEARTBEAT_TRIGGER_ENABLED, true)
+    fun setHeartbeatTriggerEnabled(enabled: Boolean) = prefs.edit().putBoolean(KEY_HEARTBEAT_TRIGGER_ENABLED, enabled).apply()
+
     /** How loud the app's own sounds play, 0 to 100 (100 = full). */
     fun getAppSoundVolume(): Int = prefs.getInt(KEY_APP_SOUND_VOLUME, 100)
     fun setAppSoundVolume(volume: Int) = prefs.edit().putInt(KEY_APP_SOUND_VOLUME, volume.coerceIn(0, 100)).apply()
@@ -629,6 +632,7 @@ class SecurityPreferences(context: Context) {
         private const val KEY_HAPTIC_SEND = "haptic_on_send"
         private const val KEY_HAPTIC_RECEIVE = "haptic_on_receive"
         private const val KEY_HAPTIC_HEARTBEAT_LONG_PRESS = "haptic_heartbeat_long_press"
+        private const val KEY_HEARTBEAT_TRIGGER_ENABLED = "heartbeat_trigger_enabled"
         private const val KEY_APP_SOUND_VOLUME = "app_sound_volume"
         private const val KEY_MASKED_NOTIFICATION_TITLE = "masked_notification_title"
         private const val KEY_MASKED_NOTIFICATION_TEXT = "masked_notification_text"

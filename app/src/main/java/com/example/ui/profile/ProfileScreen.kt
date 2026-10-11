@@ -967,7 +967,35 @@ fun ProfileScreen(
 
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), thickness = 0.6.dp)
 
-                // --- SUBSECTION 3: TEST & SYSTEM ACTIONS ---
+                // --- SUBSECTION 3: HEARTBEAT TRIGGER ("THINKING OF YOU") ---
+                ListItem(
+                    headlineContent = { Text("Heartbeat Trigger (\"Thinking of You\")", fontSize = 15.sp, fontWeight = FontWeight.SemiBold) },
+                    supportingContent = {
+                        Text(
+                            if (uiState.isHeartbeatTriggerEnabled) "Receive real-time tactile heartbeat pulses (thump-thump) when your partner sends a heartbeat"
+                            else "Heartbeat triggers and remote pulse alerts are turned off",
+                            fontSize = 13.sp
+                        )
+                    },
+                    leadingContent = {
+                        Icon(
+                            Icons.Filled.Favorite,
+                            contentDescription = null,
+                            tint = if (uiState.isHeartbeatTriggerEnabled) HeartRed else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    },
+                    trailingContent = {
+                        Switch(
+                            checked = uiState.isHeartbeatTriggerEnabled,
+                            onCheckedChange = { viewModel.setHeartbeatTriggerEnabled(it) },
+                            modifier = Modifier.testTag("heartbeat_trigger_switch")
+                        )
+                    }
+                )
+
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), thickness = 0.6.dp)
+
+                // --- SUBSECTION 4: TEST & SYSTEM ACTIONS ---
                 ListItem(
                     headlineContent = { Text("Send Test Notification", fontSize = 15.sp, fontWeight = FontWeight.SemiBold) },
                     supportingContent = { Text("Preview your Notification Bar & App Badge behavior right now", fontSize = 13.sp) },

@@ -39,6 +39,7 @@ data class ProfileUiState(
     val isChatSoundsEnabled: Boolean = true,
     val isNotificationsEnabled: Boolean = true,
     val isBadgeNotificationEnabled: Boolean = true,
+    val isHeartbeatTriggerEnabled: Boolean = true,
     val partnerCustomTimeZone: String? = null
 )
 
@@ -137,6 +138,8 @@ class ProfileViewModel(
             chatBgTheme = securityPreferences.getChatBgTheme(),
             chatExperienceMode = securityPreferences.getChatExperienceMode(),
             isNotificationsEnabled = securityPreferences.isNotificationsEnabled(),
+            isBadgeNotificationEnabled = securityPreferences.isBadgeNotificationEnabled(),
+            isHeartbeatTriggerEnabled = securityPreferences.isHeartbeatTriggerEnabled(),
             partnerCustomTimeZone = securityPreferences.getPartnerCustomTimeZone()
         )
     )
@@ -166,6 +169,7 @@ class ProfileViewModel(
                 sideEmergencyExitOpacity = securityPreferences.getSideEmergencyExitOpacity(),
                 isNotificationsEnabled = securityPreferences.isNotificationsEnabled(),
                 isBadgeNotificationEnabled = securityPreferences.isBadgeNotificationEnabled(),
+                isHeartbeatTriggerEnabled = securityPreferences.isHeartbeatTriggerEnabled(),
                 partnerCustomTimeZone = securityPreferences.getPartnerCustomTimeZone()
             )
         }
@@ -195,6 +199,11 @@ class ProfileViewModel(
 
     fun sendTestNotification(context: android.content.Context) {
         com.example.notifications.NotificationHelper.sendTestNotification(context)
+    }
+
+    fun setHeartbeatTriggerEnabled(enabled: Boolean) {
+        securityPreferences.setHeartbeatTriggerEnabled(enabled)
+        _uiState.update { it.copy(isHeartbeatTriggerEnabled = enabled) }
     }
 
     fun setSideEmergencyExitEnabled(enabled: Boolean) {

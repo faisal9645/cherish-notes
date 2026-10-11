@@ -93,7 +93,7 @@ async function pushTo(db, receiverId, data, android) {
   }
 }
 
-exports.notifyPartner = onDocumentCreated(
+exports.notifyPartnerOnMessage = onDocumentCreated(
   "conversations/{conversationId}/messages/{messageId}",
   async (event) => {
     const message = event.data && event.data.data();
@@ -129,7 +129,7 @@ exports.notifyPartner = onDocumentCreated(
   }
 );
 
-exports.heartbeatPartner = onDocumentUpdated("couples/{coupleId}", async (event) => {
+exports.heartbeatPartnerOnUpdate = onDocumentUpdated("couples/{coupleId}", async (event) => {
   const before = (event.data && event.data.before.data()) || {};
   const after = (event.data && event.data.after.data()) || {};
   const signal = after.signal;
