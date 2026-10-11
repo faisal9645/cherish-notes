@@ -87,26 +87,8 @@ object NotificationHelper {
      */
     fun isAppOpenOnScreen(context: Context): Boolean {
         if (com.example.CherishApplication.isAppInForeground) return true
-        try {
-            if (androidx.lifecycle.ProcessLifecycleOwner.get().lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED)) {
-                return true
-            }
-        } catch (_: Exception) {}
-        try {
-            val app = context.applicationContext as? com.example.CherishApplication
-            if (app?.authRepository?.isAppOpenOnScreen() == true) return true
-        } catch (_: Exception) {}
-        try {
-            val am = context.getSystemService(Context.ACTIVITY_SERVICE) as? android.app.ActivityManager
-            val processes = am?.runningAppProcesses.orEmpty()
-            for (proc in processes) {
-                if (proc.importance == android.app.ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND &&
-                    proc.processName == context.packageName
-                ) {
-                    return true
-                }
-            }
-        } catch (_: Exception) {}
+        val app = context.applicationContext as? com.example.CherishApplication
+        if (app?.authRepository?.isAppOpenOnScreen() == true) return true
         return false
     }
 
@@ -122,8 +104,7 @@ object NotificationHelper {
     /**
      * Show a stealth disguised notification that others will never suspect,
      * consolidated into a single notification without duplicates.
-     * Alerts ONLY ONCE while unread messages accumulate, updates the icon badge,
-     * and shows disguised Notes reminder on the lockscreen.
+     * Respects user disguise, notification bar, and badge preferences.
      */
     fun showMessageNotification(
         context: Context,
@@ -140,8 +121,17 @@ object NotificationHelper {
 
         // Deduplicate message ID so FCM and Firestore listeners don't double count
         if (!messageId.isNullOrBlank()) {
-            if (!notifiedMessageIds.add(messageId)) {
-                return
+            synchronized(notifiedMessageIds) {
+                if (!notifiedMessageIds.add(messageId)) {
+                    return
+                }
+                if (notifiedMessageIds.size > 200) {
+                    val it = notifiedMessageIds.iterator()
+                    if (it.hasNext()) {
+                        it.next()
+                        it.remove()
+                    }
+                }
             }
         }
 
@@ -157,7 +147,7 @@ object NotificationHelper {
 
         // Update launcher icon badge independently if badge notifications are enabled
         if (isBadgeEnabled) {
-            updateLauncherBadge(context, if (count > 0) 1 else 0)
+            updateLauncherBadge(context, if (count > 0) count else 0)
         } else {
             updateLauncherBadge(context, 0)
         }
@@ -210,6 +200,90 @@ object NotificationHelper {
             .setContentText(if (isDiscreet) maskedText else displayText)
             .setSubText(subText)
             .setBadgeIconType(if (isBadgeEnabled) NotificationCompat.BADGE_ICON_SMALL else NotificationCompat.BADGE_ICON_NONE)
+            .setNumber(if (isBadgeEnabled) count else 0)
+            .build()
+
+        val notification = NotificationCompat.Builder(context, CHANNEL_MESSAGES_ID)
+            .setSmallIcon(R.drawable.ic_stat_notes)
+            .apply {
+                if (appIcon != null) setLargeIcon(appIcon)
+            }
+            .setColor(0xFF2563FF.toInt())
+            .setContentTitle(displayTitle)
+            .setContentText(displayText)
+            .setSubText(subText)
+            .apply {
+                if (isBadgeEnabled) {
+                    setBadgeIconType(NotificationCompat.BADGE_ICON_SMALL)
+                    setNumber(count)
+                } else {
+                    setBadgeIconType(NotificationCompat.BADGE_ICON_NONE)
+                    setNumber(0)
+                }
+            }
+            .setAutoCancel(true)
+            .setContentIntent(pendingIntent)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setDefaults(NotificationCompat.DEFAULT_ALL)
+            .setCategory(NotificationCompat.CATEGORY_MESSAGE)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setPublicVersion(publicNotification)
+            .build()
+
+        try {
+            NotificationManagerCompat.from(context).notify(NOTIFICATION_ID_MESSAGE, notification)
+        } catch (_: SecurityException) {
+            // Handled if POST_NOTIFICATIONS runtime permission not yet prompted
+        }
+    }
+
+    const val NOTIFICATION_ID_HEARTBEAT = 1003
+
+    /**
+     * Show a heartbeat notification when the app is closed/in background,
+     * respecting disguise settings (disguised notes reminder or sweet heartbeat).
+     */
+    fun showHeartbeatNotification(context: Context) {
+        if (isAppOpenOnScreen(context)) return
+        val prefs = SecurityPreferences.getInstance(context)
+        if (!prefs.isNotificationsEnabled()) return
+        if (!prefs.isHeartbeatTriggerEnabled()) return
+
+        val isDiscreet = prefs.isHideNotificationContent() && prefs.isDisguiseModeEnabled()
+
+        val intent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            putExtra("from_notification", true)
+            putExtra("is_discreet", isDiscreet)
+            putExtra("open_chat", true)
+        }
+
+        val pendingIntent = PendingIntent.getActivity(
+            context,
+            2,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val maskedTitle = prefs.getMaskedNotificationTitle()
+        val maskedText = prefs.getMaskedNotificationText()
+        val displayTitle = if (isDiscreet) maskedTitle else "Thinking of you"
+        val displayText = if (isDiscreet) maskedText else "Sent a heartbeat \uD83D\uDC93"
+        val subText = if (isDiscreet) maskedTitle else "Cherish"
+
+        val isBadgeEnabled = prefs.isBadgeNotificationEnabled()
+        val appIcon = getAppIconBitmap(context)
+
+        val publicNotification = NotificationCompat.Builder(context, CHANNEL_MESSAGES_ID)
+            .setSmallIcon(R.drawable.ic_stat_notes)
+            .apply {
+                if (appIcon != null) setLargeIcon(appIcon)
+            }
+            .setColor(0xFF2563FF.toInt())
+            .setContentTitle(displayTitle)
+            .setContentText(displayText)
+            .setSubText(subText)
+            .setBadgeIconType(if (isBadgeEnabled) NotificationCompat.BADGE_ICON_SMALL else NotificationCompat.BADGE_ICON_NONE)
             .setNumber(if (isBadgeEnabled) 1 else 0)
             .build()
 
@@ -234,20 +308,15 @@ object NotificationHelper {
             .setAutoCancel(true)
             .setContentIntent(pendingIntent)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setCategory(NotificationCompat.CATEGORY_MESSAGE)
-            .setOnlyAlertOnce(true) // Crucial: alerts only one time while unread messages accumulate
+            .setCategory(NotificationCompat.CATEGORY_SOCIAL)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setPublicVersion(publicNotification)
             .build()
 
         try {
-            NotificationManagerCompat.from(context).notify(NOTIFICATION_ID_MESSAGE, notification)
-        } catch (_: SecurityException) {
-            // Handled if POST_NOTIFICATIONS runtime permission not yet prompted
-        }
+            NotificationManagerCompat.from(context).notify(NOTIFICATION_ID_HEARTBEAT, notification)
+        } catch (_: SecurityException) {}
     }
-
-
 
     /**
      * Cancels status bar notifications without resetting the unread launcher badge.
@@ -256,6 +325,7 @@ object NotificationHelper {
         try {
             NotificationManagerCompat.from(context).cancel(NOTIFICATION_ID_MESSAGE)
             NotificationManagerCompat.from(context).cancel(NOTIFICATION_ID_CHECK_AFTER)
+            NotificationManagerCompat.from(context).cancel(NOTIFICATION_ID_HEARTBEAT)
         } catch (_: Exception) {}
     }
 
@@ -268,20 +338,52 @@ object NotificationHelper {
         try {
             NotificationManagerCompat.from(context).cancel(NOTIFICATION_ID_MESSAGE)
             NotificationManagerCompat.from(context).cancel(NOTIFICATION_ID_CHECK_AFTER)
+            NotificationManagerCompat.from(context).cancel(NOTIFICATION_ID_HEARTBEAT)
         } catch (_: Exception) {}
         updateLauncherBadge(context, 0)
     }
 
     /**
-     * Broadcasts unread count badge (1 when unread, 0 when cleared) to Samsung, Sony, HTC and compatible OEM launchers
+     * Broadcasts unread count badge to Samsung, Sony, HTC and compatible OEM launchers
      */
     fun updateLauncherBadge(context: Context, count: Int) {
+        val badgeCount = if (count > 0) count else 0
         try {
-            val badgeCount = if (count > 0) 1 else 0
             val intent = Intent("android.intent.action.BADGE_COUNT_UPDATE").apply {
                 putExtra("badge_count", badgeCount)
                 putExtra("badge_count_package_name", context.packageName)
                 putExtra("badge_count_class_name", "com.example.MainActivity")
+            }
+            context.sendBroadcast(intent)
+        } catch (_: Exception) {}
+
+        // Sony Xperia launcher
+        try {
+            val intent = Intent("com.sonyericsson.home.action.UPDATE_BADGE").apply {
+                putExtra("com.sonyericsson.home.intent.extra.badge.PACKAGE_NAME", context.packageName)
+                putExtra("com.sonyericsson.home.intent.extra.badge.ACTIVITY_NAME", "com.example.MainActivity")
+                putExtra("com.sonyericsson.home.intent.extra.badge.SHOW_MESSAGE", badgeCount > 0)
+                putExtra("com.sonyericsson.home.intent.extra.badge.MESSAGE", badgeCount.toString())
+            }
+            context.sendBroadcast(intent)
+        } catch (_: Exception) {}
+
+        // Samsung Native badge ContentProvider
+        try {
+            val uri = android.net.Uri.parse("content://com.sec.badge/apps")
+            val cv = android.content.ContentValues().apply {
+                put("package", context.packageName)
+                put("class", "com.example.MainActivity")
+                put("badgecount", badgeCount)
+            }
+            context.contentResolver.insert(uri, cv)
+        } catch (_: Exception) {}
+
+        // HTC launcher
+        try {
+            val intent = Intent("com.htc.launcher.action.UPDATE_SHORTCUT").apply {
+                putExtra("packagename", context.packageName)
+                putExtra("count", badgeCount)
             }
             context.sendBroadcast(intent)
         } catch (_: Exception) {}

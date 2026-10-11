@@ -150,11 +150,13 @@ class CherishApplication : Application(), coil.ImageLoaderFactory {
             private val resumedCount = java.util.concurrent.atomic.AtomicInteger(0)
 
             override fun onActivityResumed(activity: android.app.Activity) {
-                isAppInForeground = resumedCount.incrementAndGet() > 0
+                val count = resumedCount.incrementAndGet()
+                isAppInForeground = count > 0
             }
 
             override fun onActivityPaused(activity: android.app.Activity) {
-                isAppInForeground = resumedCount.decrementAndGet() > 0
+                val count = resumedCount.updateAndGet { c -> if (c > 0) c - 1 else 0 }
+                isAppInForeground = count > 0
             }
 
             override fun onActivityStarted(activity: android.app.Activity) {}

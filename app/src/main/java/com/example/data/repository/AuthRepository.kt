@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import com.example.data.model.SpaceRequest
 import com.example.data.model.User
+import com.example.notifications.NotificationHelper
 import com.example.security.SecurityPreferences
 import com.google.firebase.FirebaseApp
 import com.google.firebase.auth.FirebaseAuth
@@ -1419,23 +1420,26 @@ class AuthRepository(private val context: Context) {
     /** Stores this phone's push token on the logged-in profile (when the token changes). */
     fun saveFcmToken(token: String) {
         val uid = getCurrentUserId()
-        if (uid.isBlank()) return
-        userDocument(uid)?.set(mapOf("fcmToken" to token), com.google.firebase.firestore.SetOptions.merge())
+        if (uid.isBlank() || token.isBlank()) return
+        try {
+            userDocument(uid)?.set(mapOf("fcmToken" to token), com.google.firebase.firestore.SetOptions.merge())
+            Log.i("AuthRepository", "FCM token saved successfully for user $uid")
+        } catch (e: Exception) {
+            Log.w("AuthRepository", "Failed saving FCM token: ${e.message}")
+        }
     }
 
-    private fun updateFcmToken(uid: String) {
+    fun updateFcmToken(uid: String) {
+        if (uid.isBlank()) return
         try {
-            val availability = com.google.android.gms.common.GoogleApiAvailability.getInstance()
-                .isGooglePlayServicesAvailable(context)
-            if (availability != com.google.android.gms.common.ConnectionResult.SUCCESS) {
-                Log.d("AuthRepository", "Play Services not available for FCM ($availability)")
-                return
-            }
-
             val messaging = FirebaseMessaging.getInstance()
+            messaging.isAutoInitEnabled = true
             messaging.token
                 .addOnSuccessListener { token ->
-                    userDocument(uid)?.set(mapOf("fcmToken" to token), com.google.firebase.firestore.SetOptions.merge())
+                    if (!token.isNullOrBlank()) {
+                        userDocument(uid)?.set(mapOf("fcmToken" to token), com.google.firebase.firestore.SetOptions.merge())
+                        Log.i("AuthRepository", "FCM token updated successfully for user $uid")
+                    }
                 }
                 .addOnFailureListener { e ->
                     Log.w("AuthRepository", "FCM token registration failed gracefully: ${e.message}")
@@ -1446,6 +1450,7 @@ class AuthRepository(private val context: Context) {
     }
 
     fun logout() {
+        val oldUid = getCurrentUserId()
         heartbeatJob?.cancel()
         isAppInForeground = false
         setOnline(false)
@@ -1461,6 +1466,17 @@ class AuthRepository(private val context: Context) {
         discoverySetupForCoupleId = null
         partnerServerLastSeen = null
         partnerPresenceReceivedAt = 0L
+
+        // Clear FCM push token from Firestore and delete locally so next login starts clean
+        if (oldUid.isNotBlank()) {
+            try {
+                userDocument(oldUid)?.update("fcmToken", com.google.firebase.firestore.FieldValue.delete())
+            } catch (_: Exception) {}
+        }
+        try {
+            FirebaseMessaging.getInstance().deleteToken()
+        } catch (_: Exception) {}
+
         try {
             auth?.signOut()
         } catch (e: Exception) {
@@ -1469,6 +1485,10 @@ class AuthRepository(private val context: Context) {
         _currentUserState.value = null
         _partnerUserState.value = null
         clearLocalUserSession()
+
+        // Dismiss any existing notifications and clear launcher badge
+        NotificationHelper.clearNotifications(context)
+        NotificationHelper.updateLauncherBadge(context, 0)
     }
 
     private fun saveLocalUserSession(user: User) {

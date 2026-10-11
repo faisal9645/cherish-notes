@@ -153,8 +153,8 @@ exports.heartbeatPartnerOnUpdate = onDocumentUpdated("couples/{coupleId}", async
     },
     {
       priority: "high",
-      // Now or never: a phone that's off or offline doesn't get it later
-      ttl: 0,
+      // Fresh delivery: 60s allows FCM to wake closed app / sleeping radio
+      ttl: 60 * 1000,
     }
   );
 });

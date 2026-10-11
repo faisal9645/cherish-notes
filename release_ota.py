@@ -45,7 +45,7 @@ def main():
     release_data = {
         "tag_name": tag_name,
         "name": release_name,
-        "body": "Resilient update system for all existing and new mobile users with web redirect fallback, instant Love Nudges placement below watch together, automatic installer cleanup, and seamless OTA delivery.",
+        "body": "Reliable background delivery for heartbeats, messages and launcher badges when the app is closed; full mobile login and logout token lifecycle; respecting user disguise & notification preferences.",
         "draft": False,
         "prerelease": False,
         "make_latest": "true"

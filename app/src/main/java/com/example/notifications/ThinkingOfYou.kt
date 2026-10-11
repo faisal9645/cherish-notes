@@ -49,24 +49,39 @@ object ThinkingOfYou {
         if (prefs.getString(KEY_LAST_SIGNAL, null) == signalId) return false
         prefs.edit().putString(KEY_LAST_SIGNAL, signalId).apply()
 
-        if (sentAt <= 0L || kotlin.math.abs(System.currentTimeMillis() - sentAt) > FRESH_WINDOW_MS) return false
+        val now = System.currentTimeMillis()
+        val effectiveSentAt = if (sentAt <= 0L) now else sentAt
+        if (kotlin.math.abs(now - effectiveSentAt) > FRESH_WINDOW_MS) return false
+
         val secPrefs = SecurityPreferences.getInstance(context)
         if (!secPrefs.isHeartbeatTriggerEnabled()) return false
         if (!secPrefs.isNotificationsEnabled()) return false
         if (!NotificationManagerCompat.from(context).areNotificationsEnabled()) return false
-        if (!isPhoneInUse(context)) return false
 
-        playHeartbeat(context)
+        // Acquire a brief partial wake lock so the heartbeat vibration pattern completes
+        // even if the phone screen is off or app is closed in background
+        val powerManager = context.getSystemService(Context.POWER_SERVICE) as? PowerManager
+        val wakeLock = powerManager?.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "Cherish::HeartbeatWakeLock")
+        try {
+            wakeLock?.acquire(2000L)
+            playHeartbeat(context)
+        } finally {
+            if (wakeLock?.isHeld == true) {
+                try { wakeLock.release() } catch (_: Exception) {}
+            }
+        }
+
         _received.tryEmit(System.currentTimeMillis())
-        return true
-    }
 
-    /** Screen on and unlocked: someone is actually using the phone. */
-    private fun isPhoneInUse(context: Context): Boolean {
-        val power = context.getSystemService(Context.POWER_SERVICE) as? PowerManager ?: return false
-        if (!power.isInteractive) return false
-        val keyguard = context.getSystemService(Context.KEYGUARD_SERVICE) as? KeyguardManager
-        return keyguard?.isKeyguardLocked != true
+        // When the app is closed or in the background, alert according to user disguise & badge preferences
+        if (!NotificationHelper.isAppOpenOnScreen(context)) {
+            if (secPrefs.isBadgeNotificationEnabled()) {
+                NotificationHelper.updateLauncherBadge(context, 1)
+            }
+            NotificationHelper.showHeartbeatNotification(context)
+        }
+
+        return true
     }
 
     /**

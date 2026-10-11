@@ -27,19 +27,25 @@ class CherishFirebaseMessagingService : FirebaseMessagingService() {
         if (!app.authRepository.isUserLoggedIn()) return
         if (remoteMessage.data["senderId"] == app.authRepository.getCurrentUserId()) return
 
-        // "Thinking of you": a heartbeat, no notification (and only while the phone is in use)
+        // "Thinking of you": a heartbeat pulse and notification based on settings
         if (remoteMessage.data["type"] == "heartbeat") {
             ThinkingOfYou.onSignal(
                 applicationContext,
                 remoteMessage.data["signalId"].orEmpty(),
-                remoteMessage.data["sentAt"]?.toLongOrNull() ?: 0L
+                remoteMessage.data["sentAt"]?.toLongOrNull() ?: System.currentTimeMillis()
             )
             return
         }
 
-        val senderName = remoteMessage.data["senderName"]
+        val rawSenderName = remoteMessage.data["senderName"]
             ?: remoteMessage.notification?.title
-            ?: "Your Partner"
+            ?: ""
+        val partnerName = app.authRepository.partnerUserState.value?.displayName
+        val senderName = when {
+            rawSenderName.isNotBlank() && !rawSenderName.startsWith("user_") -> rawSenderName
+            !partnerName.isNullOrBlank() -> partnerName
+            else -> "Your Partner"
+        }
         val messageText = remoteMessage.data["messageText"]
             ?: remoteMessage.notification?.body
             ?: "Sent a message"
