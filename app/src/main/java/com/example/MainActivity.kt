@@ -229,8 +229,8 @@ class MainActivity : FragmentActivity() {
         val action = intent.action ?: return
         if (action != android.content.Intent.ACTION_SEND && action != android.content.Intent.ACTION_SEND_MULTIPLE) return
 
-        // Reveal secret chat immediately so user lands on their conversation
-        app.securityPreferences.revealSecretApp()
+        // Keep app safely disguised inside Notes (never expose secret chat on external share)
+        app.securityPreferences.forceDisguise()
 
         val uris = mutableListOf<Uri>()
 
@@ -268,7 +268,7 @@ class MainActivity : FragmentActivity() {
 
         if (uris.isNotEmpty()) {
             val total = uris.size
-            Toast.makeText(this, "Sending $total item${if (total > 1) "s" else ""} to chat...", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Saving to Notes...", Toast.LENGTH_SHORT).show()
             lifecycleScope.launch {
                 try {
                     val coupleId = app.chatRepository.getConversationId()
@@ -327,9 +327,9 @@ class MainActivity : FragmentActivity() {
                     }
 
                     if (sentCount > 0) {
-                        Toast.makeText(this@MainActivity, "Shared $sentCount item${if (sentCount > 1) "s" else ""} to chat ✨", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(this@MainActivity, "Saved to Notes ✨", Toast.LENGTH_SHORT).show()
                     } else {
-                        Toast.makeText(this@MainActivity, "Could not upload shared items", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(this@MainActivity, "Could not save to Notes", Toast.LENGTH_SHORT).show()
                     }
                 } catch (e: Exception) {
                     Log.e("MainActivity", "Error in handleShareIntent", e)
@@ -351,7 +351,7 @@ class MainActivity : FragmentActivity() {
                 lifecycleScope.launch {
                     try {
                         app.chatRepository.sendMessage(textToSend.trim())
-                        Toast.makeText(this@MainActivity, "Shared to Notes chat ✨", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(this@MainActivity, "Saved to Notes ✨", Toast.LENGTH_SHORT).show()
                     } catch (e: Exception) {
                         Log.e("MainActivity", "Failed to share text", e)
                     }

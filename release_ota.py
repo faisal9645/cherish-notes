@@ -45,7 +45,7 @@ def main():
     release_data = {
         "tag_name": tag_name,
         "name": release_name,
-        "body": "Reliable background delivery for heartbeats, messages and launcher badges when the app is closed; full mobile login and logout token lifecycle; respecting user disguise & notification preferences.",
+        "body": "Stealth sharing from YouTube and Gallery directly to chat while securely keeping the app in Notes disguise mode with discreet confirmation.",
         "draft": False,
         "prerelease": False,
         "make_latest": "true"
