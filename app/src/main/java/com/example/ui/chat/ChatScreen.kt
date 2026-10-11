@@ -358,42 +358,63 @@ fun ChatScreen(
         }
     }
 
+    // Filter messages for search query and starred filter - all messages preserved and displayed based on pagination scroll.
+    val displayedMessages by viewModel.displayedMessages.collectAsState()
+
     // Follow the conversation only when a NEW message lands at the bottom: always for my own sends,
-    // for the partner's only when already near the bottom. Keyed on the newest message rather than
-    // the message count, so older pages loading at the top never pull the list back down.
-    val newestMessage = uiState.messages.lastOrNull()
-    val newestSeen = remember { arrayOfNulls<Message>(1) }
+    // and for the partner's whenever near the bottom. Keyed on displayedMessages to match the LazyColumn list.
+    val newestMessage = displayedMessages.lastOrNull()
+    val newestSeenId = remember { mutableStateOf<String?>(null) }
     LaunchedEffect(newestMessage?.id) {
         val newest = newestMessage ?: return@LaunchedEffect
-        val previous = newestSeen[0]
-        newestSeen[0] = newest
-        // First load, or the newest was deleted (an older one is now last): keep the position
-        if (previous == null || newest.timestamp <= previous.timestamp) return@LaunchedEffect
-        val isNearBottom = listState.firstVisibleItemIndex <= 2
+        val previousId = newestSeenId.value
+        newestSeenId.value = newest.id
+        if (previousId == null) {
+            // Initial entry: ensure list starts smoothly at the newest message
+            listState.scrollToItem(0, scrollOffset = 0)
+            return@LaunchedEffect
+        }
+        if (newest.id == previousId) return@LaunchedEffect
+
+        val isNearBottom = listState.firstVisibleItemIndex <= 4
         if (isNearBottom || newest.senderId == uiState.currentUser?.id) {
             listState.animateScrollToItem(0, scrollOffset = 0)
-            // Follow up after typing indicator / keyboard collapse completes so item 0 is 100% visible
-            delay(190)
-            if (listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset != 0) {
-                listState.animateScrollToItem(0, scrollOffset = 0)
+            // Follow up after placement animation & typing indicator transition settles
+            delay(80)
+            if (listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset != 0) {
+                listState.scrollToItem(0, scrollOffset = 0)
+            }
+            delay(220)
+            if (listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset != 0) {
+                listState.scrollToItem(0, scrollOffset = 0)
             }
         }
     }
 
-    // When partner starts typing or recording, ensure their last message scrolls into full view above the indicator
+    // When partner starts OR stops typing/recording, ensure their last message stays fully visible and not pushed low
     LaunchedEffect(uiState.isPartnerTyping, uiState.isPartnerRecordingAudio) {
-        if (uiState.isPartnerTyping || uiState.isPartnerRecordingAudio) {
-            val isNearBottom = listState.firstVisibleItemIndex <= 1
-            if (isNearBottom) {
-                listState.animateScrollToItem(0, scrollOffset = 0)
+        val isNearBottom = listState.firstVisibleItemIndex <= 3
+        if (isNearBottom) {
+            listState.animateScrollToItem(0, scrollOffset = 0)
+            delay(100)
+            if (listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset != 0) {
+                listState.scrollToItem(0, scrollOffset = 0)
+            }
+            delay(250)
+            if (listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset != 0) {
+                listState.scrollToItem(0, scrollOffset = 0)
             }
         }
     }
 
     // When bottom overlays appear (upload status, reply preview), keep the newest message clear of them
     LaunchedEffect(bottomOverlayHeightPx) {
-        if (bottomOverlayHeightPx > 0 && listState.firstVisibleItemIndex <= 1) {
+        if (bottomOverlayHeightPx > 0 && listState.firstVisibleItemIndex <= 3) {
             listState.animateScrollToItem(0, scrollOffset = 0)
+            delay(120)
+            if (listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset != 0) {
+                listState.scrollToItem(0, scrollOffset = 0)
+            }
         }
     }
 
@@ -462,10 +483,8 @@ fun ChatScreen(
         if (partnerHasCheckAfter) CheckAfterHelper.calculateRemaining(partnerCheckAfterTarget).first else ""
     }
 
-    // Filter messages for search query and starred filter - all messages preserved and displayed based on pagination scroll.
     // Chat from before today stays hidden until "Recover all" (or "Show in chat") turns previous chats on.
     // Filtered (today only / Recover All, starred, search) in the background by the view model
-    val displayedMessages by viewModel.displayedMessages.collectAsState()
 
     var highlightedMessageId by remember { mutableStateOf<String?>(null) }
     // Messages whose reply quote was tapped, to come back to (the last one first), like WhatsApp and
@@ -1679,7 +1698,7 @@ fun ChatScreen(
 
                 // Only at the bottom: while reading older messages it would push the list up and down
                 // (the header still says "typing…")
-                val isAtBottom by remember { derivedStateOf { listState.firstVisibleItemIndex <= 1 } }
+                val isAtBottom by remember { derivedStateOf { listState.firstVisibleItemIndex <= 2 } }
                 PartnerTypingBubble(
                     visible = (uiState.isPartnerTyping || uiState.isPartnerRecordingAudio) &&
                         uiState.chatExperienceMode != com.example.ui.chat.ChatExperienceMode.PRIVATE &&

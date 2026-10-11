@@ -1,8 +1,8 @@
 {
-  "versionCode": 122,
-  "versionName": "1.7.50",
-  "tagName": "v1.7.50-122",
-  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.7.50-122/cherish-notes-v1.7.50-122.apk",
-  "assetSize": 21324313,
-  "releaseNotes": "Watch Together instant video selector with zero blank screen: rich curated couple picks, direct YouTube link detection, search, and synchronized video playback."
+  "versionCode": 123,
+  "versionName": "1.7.51",
+  "tagName": "v1.7.51-123",
+  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.7.51-123/cherish-notes-v1.7.51-123.apk",
+  "assetSize": 21324309,
+  "releaseNotes": "Fixed chat auto-scroll when receiving partner's messages and during typing bar animations, ensuring latest messages are never hidden or positioned low."
 }
