@@ -45,7 +45,7 @@ def main():
     release_data = {
         "tag_name": tag_name,
         "name": release_name,
-        "body": "Stealth sharing from YouTube and Gallery directly to chat while securely keeping the app in Notes disguise mode with discreet confirmation.",
+        "body": "Watch Together instant video selector with zero blank screen: rich curated couple picks, direct YouTube link detection, search, and synchronized video playback.",
         "draft": False,
         "prerelease": False,
         "make_latest": "true"
