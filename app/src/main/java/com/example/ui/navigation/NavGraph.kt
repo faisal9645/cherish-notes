@@ -193,8 +193,8 @@ fun CherishNavGraph(
     val context = LocalContext.current
     val updateState by profileViewModel.updateState.collectAsState()
 
-    LaunchedEffect(isDisguiseActive, hasRevealedSecretApp) {
-        if (!isDisguiseActive && hasRevealedSecretApp) {
+    LaunchedEffect(isDisguiseActive) {
+        if (!isDisguiseActive) {
             // A few seconds in, so the chat opens and loads first
             kotlinx.coroutines.delay(UPDATE_CHECK_DELAY_MS)
             profileViewModel.silentCheckForUpdates(context)
@@ -636,7 +636,7 @@ fun CherishNavGraph(
         )
     }
     // In-App OTA Updates Dialog: ONLY show inside Cherish app, NEVER inside Notes app
-    if (updateState.showDialog && !isDisguiseActive && hasRevealedSecretApp) {
+    if (updateState.showDialog && !isDisguiseActive) {
         // Takes focus without a touch; tells the privacy cover it isn't the user leaving
         SideEffect { PrivacyShield.noteInAppWindow() }
         AlertDialog(

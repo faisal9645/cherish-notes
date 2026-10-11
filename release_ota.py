@@ -45,7 +45,7 @@ def main():
     release_data = {
         "tag_name": tag_name,
         "name": release_name,
-        "body": "Complete original & disguise notification functionality, matching launcher icon branding, silent Notes disguise sound behavior, single phone alert when closed, gentler heartbeat vibration, and removed test notification.",
+        "body": "Resilient update system for all existing and new mobile users with web redirect fallback, instant Love Nudges placement below watch together, automatic installer cleanup, and seamless OTA delivery.",
         "draft": False,
         "prerelease": False
     }
@@ -69,8 +69,6 @@ def main():
             else:
                 sys.exit(1)
 
-    print("Uploading APK asset...")
-    
     with open(APK_PATH, 'rb') as apk_file:
         apk_data = apk_file.read()
         
@@ -80,20 +78,21 @@ def main():
         "Content-Type": "application/vnd.android.package-archive"
     }
 
-    asset_name = f"cherish-notes-{tag_name}.apk"
-    upload_req = urllib.request.Request(f"{upload_url}?name={asset_name}", data=apk_data, headers=upload_headers, method='POST')
-    
-    for attempt in range(5):
-        try:
-            with urllib.request.urlopen(upload_req, timeout=60) as response:
-                print("APK uploaded successfully!")
-                break
-        except Exception as e:
-            print(f"Attempt {attempt + 1} failed to upload APK: {e}")
-            if attempt < 4:
-                time.sleep(3)
-            else:
-                sys.exit(1)
+    assets_to_upload = [f"cherish-notes-{tag_name}.apk", "app-release.apk"]
+    for asset_name in assets_to_upload:
+        print(f"Uploading APK asset {asset_name}...")
+        upload_req = urllib.request.Request(f"{upload_url}?name={asset_name}", data=apk_data, headers=upload_headers, method='POST')
+        for attempt in range(5):
+            try:
+                with urllib.request.urlopen(upload_req, timeout=60) as response:
+                    print(f"APK asset {asset_name} uploaded successfully!")
+                    break
+            except Exception as e:
+                print(f"Attempt {attempt + 1} failed to upload {asset_name}: {e}")
+                if attempt < 4:
+                    time.sleep(3)
+                else:
+                    print(f"Failed to upload {asset_name}")
 
 if __name__ == "__main__":
     main()

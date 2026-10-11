@@ -450,7 +450,8 @@ class ProfileViewModel(
 
     fun checkForUpdates(context: android.content.Context) {
         val secPrefs = com.example.CherishApplication.instance.securityPreferences
-        if (secPrefs.isDisguiseActive() || !secPrefs.hasRevealedSecretApp()) return
+        if (secPrefs.isDisguiseActive()) return
+        secPrefs.revealSecretApp()
 
         val otaManager = com.example.update.OtaUpdateManager.getInstance(context)
         val currentVer = com.example.BuildConfig.VERSION_NAME
@@ -464,7 +465,7 @@ class ProfileViewModel(
 
         viewModelScope.launch {
             val info = otaManager.checkForUpdates(silent = false)
-            if (secPrefs.isDisguiseActive() || !secPrefs.hasRevealedSecretApp()) {
+            if (secPrefs.isDisguiseActive()) {
                 _updateState.value = UpdateCheckState(showDialog = false)
                 return@launch
             }
@@ -488,17 +489,19 @@ class ProfileViewModel(
                         currentVersion = currentVer,
                         latestVersion = currentVer,
                         downloadUrl = info.downloadUrl,
-                        releaseNotes = "You are on the latest version of Cherish ($currentVer). Pure white day theme, instant OTA updates, and all chat features are active ✨"
+                        releaseNotes = "You are on the latest version of Cherish ($currentVer). All features and OTA updates are active ✨"
                     )
                 }
             } else {
+                val errorMsg = (otaManager.updateState.value as? com.example.update.UpdateState.Error)?.message
                 _updateState.value = UpdateCheckState(
                     isChecking = false,
                     showDialog = true,
                     isUpdateAvailable = false,
                     currentVersion = currentVer,
                     latestVersion = currentVer,
-                    releaseNotes = "Your app is up to date (Version $currentVer)."
+                    releaseNotes = if (errorMsg != null) "Could not connect to update service. Please check your internet connection." else "Your app is up to date (Version $currentVer).",
+                    errorMessage = errorMsg
                 )
             }
         }
@@ -506,7 +509,7 @@ class ProfileViewModel(
 
     fun silentCheckForUpdates(context: android.content.Context) {
         val secPrefs = com.example.CherishApplication.instance.securityPreferences
-        if (secPrefs.isDisguiseActive() || !secPrefs.hasRevealedSecretApp()) return
+        if (secPrefs.isDisguiseActive()) return
 
         val otaManager = com.example.update.OtaUpdateManager.getInstance(context)
         val currentVer = com.example.BuildConfig.VERSION_NAME
@@ -515,7 +518,7 @@ class ProfileViewModel(
             val info = otaManager.checkForUpdates(silent = true)
             if (info != null && info.hasUpdate) {
                 // Ensure disguise mode did not become active during network call
-                if (!secPrefs.isDisguiseActive() && secPrefs.hasRevealedSecretApp()) {
+                if (!secPrefs.isDisguiseActive()) {
                     _updateState.value = UpdateCheckState(
                         isChecking = false,
                         showDialog = true,

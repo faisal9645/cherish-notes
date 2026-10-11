@@ -61,6 +61,33 @@ class OtaUpdateManager private constructor(private val appContext: Context) {
     suspend fun checkForUpdates(silent: Boolean = false): UpdateInfo? = withContext(Dispatchers.IO) {
         if (!silent) _updateState.value = UpdateState.Checking
         try {
+            var info = fetchFromApi()
+            if (info == null) {
+                android.util.Log.d("OtaUpdateManager", "API release check returned null, falling back to web release...")
+                info = fetchFromWebRedirect()
+            }
+
+            if (info != null) {
+                _latestUpdateInfo.value = info
+                if (info.hasUpdate) {
+                    _updateState.value = UpdateState.UpdateAvailable(info)
+                } else {
+                    cleanupDownloadedInstallers(forceAll = false)
+                    if (!silent) _updateState.value = UpdateState.UpToDate
+                }
+                return@withContext info
+            } else {
+                if (!silent) _updateState.value = UpdateState.Error("Could not reach update server. Please check your internet connection.")
+                return@withContext null
+            }
+        } catch (e: Exception) {
+            if (!silent) _updateState.value = UpdateState.Error(e.message ?: "Failed to check for updates")
+            return@withContext null
+        }
+    }
+
+    private fun fetchFromApi(): UpdateInfo? {
+        return try {
             val url = URL(GITHUB_API_LATEST_RELEASE)
             val conn = (url.openConnection() as HttpURLConnection).apply {
                 requestMethod = "GET"
@@ -71,8 +98,8 @@ class OtaUpdateManager private constructor(private val appContext: Context) {
             }
 
             if (conn.responseCode != 200) {
-                if (!silent) _updateState.value = UpdateState.Error("Could not reach update server (${conn.responseCode})")
-                return@withContext null
+                android.util.Log.w("OtaUpdateManager", "GitHub API returned HTTP ${conn.responseCode}")
+                return null
             }
 
             val responseText = conn.inputStream.bufferedReader().use { it.readText() }
@@ -111,6 +138,10 @@ class OtaUpdateManager private constructor(private val appContext: Context) {
                 }
             }
 
+            if (apkDownloadUrl.isBlank() && tagName.isNotBlank()) {
+                apkDownloadUrl = "https://github.com/faisal9645/cherish-notes/releases/download/$tagName/cherish-notes-$tagName.apk"
+            }
+
             val currentCode = BuildConfig.VERSION_CODE
             val isNewer = if (remoteVersionCode > 0) {
                 remoteVersionCode > currentCode
@@ -118,7 +149,7 @@ class OtaUpdateManager private constructor(private val appContext: Context) {
                 isSemanticVersionNewer(remoteVersionName, BuildConfig.VERSION_NAME)
             }
 
-            val info = UpdateInfo(
+            UpdateInfo(
                 hasUpdate = isNewer && apkDownloadUrl.isNotBlank(),
                 latestVersionName = remoteVersionName.ifBlank { releaseName },
                 latestVersionCode = remoteVersionCode,
@@ -127,20 +158,66 @@ class OtaUpdateManager private constructor(private val appContext: Context) {
                 assetSize = apkSize,
                 releaseDate = publishedAt
             )
+        } catch (e: Exception) {
+            android.util.Log.w("OtaUpdateManager", "fetchFromApi failed: ${e.message}")
+            null
+        }
+    }
 
-            _latestUpdateInfo.value = info
-
-            if (info.hasUpdate) {
-                _updateState.value = UpdateState.UpdateAvailable(info)
-            } else {
-                cleanupDownloadedInstallers(forceAll = false)
-                if (!silent) _updateState.value = UpdateState.UpToDate
+    private fun fetchFromWebRedirect(): UpdateInfo? {
+        return try {
+            var targetUrl = GITHUB_WEB_LATEST_RELEASE
+            var resolvedTag = ""
+            for (redirectHop in 0 until 5) {
+                val conn = (URL(targetUrl).openConnection() as HttpURLConnection).apply {
+                    instanceFollowRedirects = false
+                    requestMethod = "GET"
+                    setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36")
+                    connectTimeout = 10000
+                    readTimeout = 10000
+                }
+                val code = conn.responseCode
+                val location = conn.getHeaderField("Location")
+                if (code in arrayOf(301, 302, 303, 307, 308) && !location.isNullOrBlank()) {
+                    targetUrl = location
+                    if (location.contains("/releases/tag/")) {
+                        resolvedTag = location.substringAfterLast("/releases/tag/").substringBefore("/").substringBefore("?").trim()
+                        break
+                    }
+                } else {
+                    if (targetUrl.contains("/releases/tag/")) {
+                        resolvedTag = targetUrl.substringAfterLast("/releases/tag/").substringBefore("/").substringBefore("?").trim()
+                    }
+                    break
+                }
             }
 
-            return@withContext info
+            if (resolvedTag.isBlank()) return null
+
+            val remoteVersionCode = parseVersionCode(resolvedTag)
+            val remoteVersionName = parseVersionName(resolvedTag)
+
+            val currentCode = BuildConfig.VERSION_CODE
+            val isNewer = if (remoteVersionCode > 0) {
+                remoteVersionCode > currentCode
+            } else {
+                isSemanticVersionNewer(remoteVersionName, BuildConfig.VERSION_NAME)
+            }
+
+            val apkDownloadUrl = "https://github.com/faisal9645/cherish-notes/releases/download/$resolvedTag/cherish-notes-$resolvedTag.apk"
+
+            UpdateInfo(
+                hasUpdate = isNewer,
+                latestVersionName = remoteVersionName.ifBlank { resolvedTag },
+                latestVersionCode = remoteVersionCode,
+                releaseNotes = "New Cherish update available with instant OTA delivery and performance improvements.",
+                downloadUrl = apkDownloadUrl,
+                assetSize = 0L,
+                releaseDate = ""
+            )
         } catch (e: Exception) {
-            if (!silent) _updateState.value = UpdateState.Error(e.message ?: "Failed to check for updates")
-            return@withContext null
+            android.util.Log.w("OtaUpdateManager", "Web fallback check failed: ${e.message}")
+            null
         }
     }
 
@@ -155,10 +232,15 @@ class OtaUpdateManager private constructor(private val appContext: Context) {
             val apkFile = File(updatesDir, "cherish_update_${info.latestVersionCode}.apk")
 
             // Already downloaded, e.g. before the app restarted to get install permission
-            if (info.assetSize > 0 && apkFile.length() == info.assetSize) {
-                _updateState.value = UpdateState.ReadyToInstall(apkFile)
-                withContext(Dispatchers.Main) { installApk(context, apkFile) }
-                return@withContext
+            if (apkFile.exists()) {
+                val archive = appContext.packageManager.getPackageArchiveInfo(apkFile.absolutePath, 0)
+                if (archive != null && archive.packageName == appContext.packageName) {
+                    if (info.assetSize <= 0L || apkFile.length() == info.assetSize) {
+                        _updateState.value = UpdateState.ReadyToInstall(apkFile)
+                        withContext(Dispatchers.Main) { installApk(context, apkFile) }
+                        return@withContext
+                    }
+                }
             }
 
             val url = URL(info.downloadUrl)
@@ -185,6 +267,39 @@ class OtaUpdateManager private constructor(private val appContext: Context) {
                 redirectCount++
             }
 
+            // If 404 on cherish-notes-{tag}.apk, fallback to app-release.apk
+            if (responseCode == 404 && info.downloadUrl.contains("cherish-notes-")) {
+                val altUrl = info.downloadUrl.substringBeforeLast("/") + "/app-release.apk"
+                val altConn = (URL(altUrl).openConnection() as HttpURLConnection).apply {
+                    instanceFollowRedirects = true
+                    setRequestProperty("User-Agent", "CherishApp/${BuildConfig.VERSION_NAME}")
+                    connectTimeout = 15000
+                    readTimeout = 30000
+                }
+                var altRedirect = altConn
+                var altCode = altRedirect.responseCode
+                var altCount = 0
+                while (altCode in arrayOf(HttpURLConnection.HTTP_MOVED_PERM, HttpURLConnection.HTTP_MOVED_TEMP, 307, 308) && altCount < 5) {
+                    val altLoc = altRedirect.getHeaderField("Location") ?: break
+                    altRedirect = (URL(altLoc).openConnection() as HttpURLConnection).apply {
+                        setRequestProperty("User-Agent", "CherishApp/${BuildConfig.VERSION_NAME}")
+                        connectTimeout = 15000
+                        readTimeout = 30000
+                    }
+                    altCode = altRedirect.responseCode
+                    altCount++
+                }
+                if (altCode in 200..299) {
+                    redirectConn = altRedirect
+                    responseCode = altCode
+                }
+            }
+
+            if (responseCode !in 200..299) {
+                _updateState.value = UpdateState.Error("Server returned code $responseCode")
+                return@withContext
+            }
+
             val totalBytes = redirectConn.contentLengthLong.let { if (it <= 0) info.assetSize else it }
             var downloadedBytes = 0L
 
@@ -206,6 +321,14 @@ class OtaUpdateManager private constructor(private val appContext: Context) {
                         }
                     }
                 }
+            }
+
+            // Verify package archive integrity
+            val archive = appContext.packageManager.getPackageArchiveInfo(apkFile.absolutePath, 0)
+            if (archive == null || archive.packageName != appContext.packageName) {
+                apkFile.delete()
+                _updateState.value = UpdateState.Error("Downloaded update is incomplete. Please try again.")
+                return@withContext
             }
 
             _updateState.value = UpdateState.ReadyToInstall(apkFile)
@@ -392,6 +515,7 @@ class OtaUpdateManager private constructor(private val appContext: Context) {
 
     companion object {
         private const val GITHUB_API_LATEST_RELEASE = "https://api.github.com/repos/faisal9645/cherish-notes/releases/latest"
+        private const val GITHUB_WEB_LATEST_RELEASE = "https://github.com/faisal9645/cherish-notes/releases/latest"
         private const val PREFS_NAME = "cherish_ota"
         private const val KEY_PENDING_APK = "pending_install_apk"
         private const val KEY_PENDING_SINCE = "pending_install_since"
