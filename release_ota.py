@@ -47,8 +47,24 @@ def main():
         "name": release_name,
         "body": "Resilient update system for all existing and new mobile users with web redirect fallback, instant Love Nudges placement below watch together, automatic installer cleanup, and seamless OTA delivery.",
         "draft": False,
-        "prerelease": False
+        "prerelease": False,
+        "make_latest": "true"
     }
+
+    # Generate version.json for high-speed rate-limit-free updates
+    with open(APK_PATH, 'rb') as af:
+        apk_len = len(af.read())
+    version_json_data = {
+        "versionCode": version_code,
+        "versionName": version_name,
+        "tagName": tag_name,
+        "downloadUrl": f"https://github.com/{REPO}/releases/download/{tag_name}/cherish-notes-{tag_name}.apk",
+        "assetSize": apk_len,
+        "releaseNotes": release_data["body"]
+    }
+    with open("version.json", "w", encoding="utf-8") as vf:
+        json.dump(version_json_data, vf, indent=2)
+    print(f"Generated version.json for build {version_code} ({version_name})")
 
     print(f"Creating release {tag_name}...")
     req = urllib.request.Request(f"https://api.github.com/repos/{REPO}/releases", data=json.dumps(release_data).encode('utf-8'), headers=headers, method='POST')

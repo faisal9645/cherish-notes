@@ -487,7 +487,7 @@ class ProfileViewModel(
                         showDialog = true,
                         isUpdateAvailable = false,
                         currentVersion = currentVer,
-                        latestVersion = currentVer,
+                        latestVersion = info.latestVersionName.ifBlank { currentVer },
                         downloadUrl = info.downloadUrl,
                         releaseNotes = "You are on the latest version of Cherish ($currentVer). All features and OTA updates are active ✨"
                     )

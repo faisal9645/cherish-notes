@@ -61,9 +61,16 @@ class OtaUpdateManager private constructor(private val appContext: Context) {
     suspend fun checkForUpdates(silent: Boolean = false): UpdateInfo? = withContext(Dispatchers.IO) {
         if (!silent) _updateState.value = UpdateState.Checking
         try {
-            var info = fetchFromApi()
+            // Tier 1: Static version.json via raw.githubusercontent.com (zero API rate limits on mobile carriers)
+            var info = fetchFromVersionJson()
+
+            // Tier 2: GitHub Releases API
             if (info == null) {
-                android.util.Log.d("OtaUpdateManager", "API release check returned null, falling back to web release...")
+                info = fetchFromApi()
+            }
+
+            // Tier 3: GitHub Web Releases 302 redirect fallback
+            if (info == null) {
                 info = fetchFromWebRedirect()
             }
 
@@ -83,6 +90,54 @@ class OtaUpdateManager private constructor(private val appContext: Context) {
         } catch (e: Exception) {
             if (!silent) _updateState.value = UpdateState.Error(e.message ?: "Failed to check for updates")
             return@withContext null
+        }
+    }
+
+    private fun fetchFromVersionJson(): UpdateInfo? {
+        return try {
+            val url = URL("$RAW_VERSION_JSON_URL?t=${System.currentTimeMillis()}")
+            val conn = (url.openConnection() as HttpURLConnection).apply {
+                requestMethod = "GET"
+                setRequestProperty("User-Agent", "CherishApp/${BuildConfig.VERSION_NAME}")
+                setRequestProperty("Cache-Control", "no-cache")
+                setRequestProperty("Pragma", "no-cache")
+                connectTimeout = 8000
+                readTimeout = 8000
+            }
+
+            if (conn.responseCode != 200) return null
+
+            val text = conn.inputStream.bufferedReader().use { it.readText() }
+            val json = JSONObject(text)
+
+            val remoteVersionCode = json.optInt("versionCode", -1)
+            val remoteVersionName = json.optString("versionName", "")
+            val downloadUrl = json.optString("downloadUrl", "")
+            val releaseNotes = json.optString("releaseNotes", "Performance improvements and bug fixes.")
+            val assetSize = json.optLong("assetSize", 0L)
+            val releaseDate = json.optString("releaseDate", "")
+
+            val currentCode = BuildConfig.VERSION_CODE
+            val isNewer = if (remoteVersionCode > 0) {
+                remoteVersionCode > currentCode
+            } else {
+                isSemanticVersionNewer(remoteVersionName, BuildConfig.VERSION_NAME)
+            }
+
+            if (downloadUrl.isBlank()) return null
+
+            UpdateInfo(
+                hasUpdate = isNewer,
+                latestVersionName = remoteVersionName.ifBlank { "v$remoteVersionName" },
+                latestVersionCode = remoteVersionCode,
+                releaseNotes = releaseNotes,
+                downloadUrl = downloadUrl,
+                assetSize = assetSize,
+                releaseDate = releaseDate
+            )
+        } catch (e: Exception) {
+            android.util.Log.w("OtaUpdateManager", "fetchFromVersionJson failed: ${e.message}")
+            null
         }
     }
 
@@ -514,6 +569,7 @@ class OtaUpdateManager private constructor(private val appContext: Context) {
     }
 
     companion object {
+        private const val RAW_VERSION_JSON_URL = "https://raw.githubusercontent.com/faisal9645/cherish-notes/main/version.json"
         private const val GITHUB_API_LATEST_RELEASE = "https://api.github.com/repos/faisal9645/cherish-notes/releases/latest"
         private const val GITHUB_WEB_LATEST_RELEASE = "https://github.com/faisal9645/cherish-notes/releases/latest"
         private const val PREFS_NAME = "cherish_ota"
