@@ -71,6 +71,7 @@ import kotlin.random.Random
 
 /** Message effect: a goodnight that dims the partner's screen with stars when they see it. */
 const val EFFECT_GOODNIGHT = "goodnight"
+const val EFFECT_GOODMORNING = "goodmorning"
 
 /** A mood older than this fades from the partner's header (and its hug nudge with it). */
 const val MOOD_FRESH_MS = 12L * 60 * 60 * 1000
@@ -153,6 +154,18 @@ private fun calendarDayKey(now: Long = System.currentTimeMillis()): String =
 /** One key per night: 10 PM and 1 AM belong to the same night (the day turns at 6 AM). */
 private fun nightKey(now: Long = System.currentTimeMillis()): String =
     SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date(now - 6 * HOUR_MS))
+
+/** When today started (midnight 00:00). */
+fun todayStartMillis(now: Long = System.currentTimeMillis()): Long {
+    val cal = Calendar.getInstance().apply {
+        timeInMillis = now
+        set(Calendar.HOUR_OF_DAY, 0)
+        set(Calendar.MINUTE, 0)
+        set(Calendar.SECOND, 0)
+        set(Calendar.MILLISECOND, 0)
+    }
+    return cal.timeInMillis
+}
 
 /** When tonight started (10 PM), for "did I already say goodnight tonight". */
 fun tonightStartMillis(now: Long = System.currentTimeMillis()): Long {

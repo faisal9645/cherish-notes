@@ -720,6 +720,17 @@ class ChatViewModel(
         }
     }
 
+    /** The good morning message; sends automatically when the sunrise banner appears. */
+    fun sendGoodMorning(partnerName: String = "") {
+        viewModelScope.launch {
+            val nameSuffix = if (partnerName.isNotBlank() && partnerName != "Partner" && partnerName != "love") " $partnerName" else ", my love"
+            chatRepository.sendMessage(
+                text = "Good morning$nameSuffix \u2600\uFE0F\uD83D\uDC9B Wishing you a beautiful day!",
+                effect = EFFECT_GOODMORNING
+            )
+        }
+    }
+
     fun sendHug() {
         viewModelScope.launch {
             chatRepository.sendMessage(text = "Sending you the biggest hug \uD83E\uDD17\uD83D\uDC9B")

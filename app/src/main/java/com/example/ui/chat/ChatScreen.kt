@@ -596,7 +596,7 @@ fun ChatScreen(
             if (isGoodMorningDue(context)) {
                 markGoodMorningShown(context)
                 showGoodMorning = true
-                delay(4_500)
+                delay(5_500)
                 showGoodMorning = false
                 delay(400)
             }
@@ -2049,6 +2049,16 @@ fun ChatScreen(
     }
     } // Box: wallpaper + Scaffold
 
+    val sentGoodMorningToday = remember(uiState.messages, currentUserId) {
+        val todayStart = todayStartMillis()
+        uiState.messages.any {
+            it.senderId == currentUserId &&
+            it.timestamp >= todayStart &&
+            (it.effect == EFFECT_GOODMORNING || it.text.contains("good morning", ignoreCase = true)) &&
+            !it.isDeleted
+        }
+    }
+
     androidx.compose.animation.AnimatedVisibility(
         visible = showGoodMorning,
         enter = fadeIn(tween(350)),
@@ -2057,6 +2067,8 @@ fun ChatScreen(
         GoodMorningGreeting(
             myName = myUser?.displayName?.ifBlank { null } ?: "love",
             partnerName = partnerName,
+            onSendGoodMorning = { viewModel.sendGoodMorning(partnerName) },
+            alreadySentToday = sentGoodMorningToday,
             onDismiss = { showGoodMorning = false }
         )
     }
@@ -2805,14 +2817,27 @@ private fun markGoodMorningShown(context: android.content.Context) {
     greetingPrefs(context).edit().putString("good_morning_shown", todayKey()).apply()
 }
 
-/** A sunrise card over the chat: the sun rises, "Good morning, <name>", the date, a line for two. */
+/** A sunrise card over the chat: the sun rises, sends a good morning message automatically without typing, and shows a loving greeting. */
 @Composable
-private fun GoodMorningGreeting(myName: String, partnerName: String, onDismiss: () -> Unit) {
+private fun GoodMorningGreeting(
+    myName: String,
+    partnerName: String,
+    onSendGoodMorning: () -> Unit,
+    alreadySentToday: Boolean = false,
+    onDismiss: () -> Unit
+) {
+    var sent by remember { mutableStateOf(alreadySentToday) }
     val rise = remember { Animatable(0f) }
     val cardIn = remember { Animatable(0.86f) }
     LaunchedEffect(Unit) {
         launch { cardIn.animateTo(1f, spring(dampingRatio = 0.62f, stiffness = 380f)) }
         rise.animateTo(1f, tween(1400, easing = FastOutSlowInEasing))
+        // Automatically send the good morning message without needing to type!
+        if (!sent) {
+            delay(700)
+            sent = true
+            onSendGoodMorning()
+        }
     }
     val glow = rememberInfiniteTransition(label = "sun_glow")
     val glowScale by glow.animateFloat(
@@ -2827,26 +2852,27 @@ private fun GoodMorningGreeting(myName: String, partnerName: String, onDismiss: 
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.3f))
+            .background(Color.Black.copy(alpha = 0.35f))
             .pointerInput(Unit) { detectTapGestures { onDismiss() } }
             .testTag("good_morning_greeting"),
         contentAlignment = Alignment.Center
     ) {
         Box(
             modifier = Modifier
-                .padding(horizontal = 32.dp)
+                .padding(horizontal = 30.dp)
                 .fillMaxWidth()
                 .graphicsLayer {
                     scaleX = cardIn.value
                     scaleY = cardIn.value
                 }
-                .shadow(18.dp, RoundedCornerShape(28.dp))
+                .shadow(20.dp, RoundedCornerShape(28.dp))
                 .clip(RoundedCornerShape(28.dp))
                 .background(
                     Brush.verticalGradient(
                         listOf(Color(0xFFFFE6B8), Color(0xFFFFC2A1), Color(0xFFFF9EB5))
                     )
-                ),
+                )
+                .pointerInput(Unit) { detectTapGestures { } },
             contentAlignment = Alignment.Center
         ) {
             Column(
@@ -2888,13 +2914,48 @@ private fun GoodMorningGreeting(myName: String, partnerName: String, onDismiss: 
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(text = date, fontSize = 13.sp, color = Color(0xFF7A4A4E))
-                Spacer(modifier = Modifier.height(14.dp))
+                Spacer(modifier = Modifier.height(12.dp))
                 Text(
-                    text = "A new day with $partnerName \uD83D\uDC9B",
+                    text = if (sent) "Good morning sent to $partnerName \u2600\uFE0F\uD83D\uDC9B" else "A new day with $partnerName \uD83D\uDC9B",
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Medium,
                     color = Color(0xFF5E3438),
                     textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                Surface(
+                    shape = RoundedCornerShape(50),
+                    color = if (sent) Color(0xFFFFF3C4).copy(alpha = 0.9f) else Color(0xFFFFF3C4),
+                    border = BorderStroke(1.dp, Color(0xFFE6A756).copy(alpha = 0.45f)),
+                    shadowElevation = 3.dp,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(50))
+                        .clickable {
+                            if (!sent) {
+                                sent = true
+                                onSendGoodMorning()
+                            } else {
+                                onDismiss()
+                            }
+                        }
+                        .testTag("good_morning_auto_sent")
+                ) {
+                    Text(
+                        text = if (sent) "Sent automatically \u2728" else "Sending good morning \u2600\uFE0F",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color(0xFF5A3015),
+                        modifier = Modifier.padding(horizontal = 22.dp, vertical = 9.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "Tap to close",
+                    fontSize = 12.sp,
+                    color = Color(0xFF8A5A5E).copy(alpha = 0.8f),
+                    modifier = Modifier
+                        .clickable { onDismiss() }
+                        .padding(4.dp)
                 )
             }
         }

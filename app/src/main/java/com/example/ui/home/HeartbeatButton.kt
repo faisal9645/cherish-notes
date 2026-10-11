@@ -94,7 +94,7 @@ fun HeartbeatButton(
                         if (onSendThinkingOfYou()) {
                             scope.launch {
                                 sent.snapTo(0f)
-                                sent.animateTo(1f, tween(1_100, easing = FastOutSlowInEasing))
+                                sent.animateTo(1f, tween(1_600, easing = FastOutSlowInEasing))
                                 sent.snapTo(0f)
                             }
                         }
@@ -109,19 +109,83 @@ fun HeartbeatButton(
                 modifier = Modifier.size(34.dp)
             )
         }
-        // A small heart floats up: the heartbeat was sent
-        Icon(
-            imageVector = Icons.Filled.Favorite,
-            contentDescription = null,
-            tint = HeartbeatBlue,
-            modifier = Modifier
-                .size(16.dp)
-                .graphicsLayer {
-                    val t = sent.value
-                    alpha = if (t <= 0f || t >= 1f) 0f else 1f - t
-                    translationY = -t * 70.dp.toPx()
-                    translationX = kotlin.math.sin(t * 9f) * 5.dp.toPx()
-                }
-        )
+
+        // Expanding romantic pulse ring when heartbeat is sent
+        if (sent.value > 0f) {
+            Box(
+                modifier = Modifier
+                    .size(72.dp)
+                    .graphicsLayer {
+                        val t = sent.value
+                        scaleX = 1f + t * 0.8f
+                        scaleY = 1f + t * 0.8f
+                        alpha = ((1f - t) * 0.8f).coerceIn(0f, 1f)
+                    }
+                    .border(2.5.dp, HeartbeatPink, CircleShape)
+            )
+        }
+
+        // A vibrant bouquet of glowing hearts floats upward with sway & scale
+        FloatingHeartSpecs.forEach { spec ->
+            Icon(
+                imageVector = Icons.Filled.Favorite,
+                contentDescription = null,
+                tint = spec.color,
+                modifier = Modifier
+                    .size(spec.size)
+                    .graphicsLayer {
+                        val t = sent.value
+                        if (t <= spec.delay || t >= 1f) {
+                            alpha = 0f
+                        } else {
+                            val progress = ((t - spec.delay) / (1f - spec.delay)).coerceIn(0f, 1f)
+                            // Quick pop-in, then smooth float, then graceful fade out
+                            alpha = when {
+                                progress < 0.18f -> (progress / 0.18f)
+                                progress > 0.65f -> ((1f - progress) / 0.35f).coerceIn(0f, 1f)
+                                else -> 1f
+                            }
+                            // Scale: pops out lively and gently settles
+                            val scale = when {
+                                progress < 0.22f -> 0.35f + (progress / 0.22f) * 0.85f
+                                progress > 0.75f -> 1.2f - ((progress - 0.75f) / 0.25f) * 0.4f
+                                else -> 1.2f
+                            }
+                            scaleX = scale
+                            scaleY = scale
+
+                            // Soaring upward rise
+                            translationY = -progress * spec.targetY.dp.toPx()
+
+                            // Romantic floating sway
+                            val sway = kotlin.math.sin(progress * spec.swayFreq) * 10.dp.toPx()
+                            translationX = (progress * spec.targetX.dp.toPx()) + sway
+                        }
+                    }
+            )
+        }
     }
 }
+
+private data class HeartSpec(
+    val size: androidx.compose.ui.unit.Dp,
+    val color: Color,
+    val targetY: Float,
+    val targetX: Float,
+    val swayFreq: Float,
+    val delay: Float
+)
+
+private val FloatingHeartSpecs = listOf(
+    // Prominent hero heart in the center
+    HeartSpec(size = 32.dp, color = HeartbeatPink, targetY = 160f, targetX = 0f, swayFreq = 6f, delay = 0f),
+    // Flanking large & medium hearts
+    HeartSpec(size = 26.dp, color = Color(0xFFFF2D55), targetY = 175f, targetX = -28f, swayFreq = 8f, delay = 0.05f),
+    HeartSpec(size = 26.dp, color = Color(0xFFFF3366), targetY = 180f, targetX = 28f, swayFreq = 7f, delay = 0.07f),
+    // Drifting accent hearts
+    HeartSpec(size = 20.dp, color = Color(0xFFFF6584), targetY = 190f, targetX = -48f, swayFreq = 9f, delay = 0.12f),
+    HeartSpec(size = 20.dp, color = Color(0xFFFF4F9A), targetY = 195f, targetX = 46f, swayFreq = 9f, delay = 0.15f),
+    // High-flying sparkling mini hearts
+    HeartSpec(size = 16.dp, color = Color(0xFFFF7597), targetY = 210f, targetX = -18f, swayFreq = 11f, delay = 0.20f),
+    HeartSpec(size = 16.dp, color = Color(0xFFFF2D55), targetY = 215f, targetX = 20f, swayFreq = 10f, delay = 0.22f)
+)
