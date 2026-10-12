@@ -320,7 +320,7 @@ fun WatchPartyHost(app: CherishApplication, allowed: Boolean) {
         )
     }
 
-    fun positionNow(p: WatchPartySession) = if (player.isReady) player.currentTime else p.positionAt()
+    fun positionNow(p: WatchPartySession) = if (player.isReady && player.currentTime > 0.5f) player.currentTime else p.positionAt()
     fun togglePlay() {
         val p = party ?: return
         val newPlaying = !p.isPlaying
@@ -491,7 +491,13 @@ fun WatchPartyHost(app: CherishApplication, allowed: Boolean) {
                     chip = chip,
                     partnerName = partnerName,
                     partnerTyping = partnerUser?.typingInChat == true,
-                    onSingleTap = { controlsVisible = !controlsVisible },
+                    onSingleTap = {
+                        if (mode == WatchPartyMode.Theater) {
+                            controlsVisible = !controlsVisible
+                        } else {
+                            togglePlay()
+                        }
+                    },
                     onDoubleTap = { heartbeat() },
                     onPickAnother = { pickVideo = true }
                 )

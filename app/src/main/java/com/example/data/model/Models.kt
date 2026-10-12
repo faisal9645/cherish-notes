@@ -48,6 +48,7 @@ enum class PartnerActivityStatus(val displayName: String, val emoji: String) {
     TALK_LATER("Talk later", "❤️")
 }
 
+@androidx.compose.runtime.Immutable
 @IgnoreExtraProperties
 data class User(
     val id: String = "",
@@ -219,6 +220,7 @@ data class Message(
     }
 }
 
+@androidx.compose.runtime.Immutable
 @IgnoreExtraProperties
 data class Conversation(
     val id: String = "",
@@ -233,6 +235,7 @@ data class Conversation(
     val lastHeartbeatSyncTimestamp: Long = 0L
 )
 
+@androidx.compose.runtime.Immutable
 @IgnoreExtraProperties
 @JsonClass(generateAdapter = true)
 data class Memory(

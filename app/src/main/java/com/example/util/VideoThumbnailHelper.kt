@@ -15,7 +15,26 @@ import java.net.URL
 import kotlin.math.abs
 
 object VideoThumbnailHelper {
-    private val memoryCache = object : LruCache<String, Bitmap>(50) {}
+    private val maxCacheBytes = ((Runtime.getRuntime().maxMemory() / 16)
+        .coerceIn(4 * 1024 * 1024L, 24 * 1024 * 1024L)).toInt()
+
+    private val memoryCache = object : LruCache<String, Bitmap>(maxCacheBytes) {
+        override fun sizeOf(key: String, value: Bitmap): Int {
+            return value.byteCount.coerceAtLeast(1)
+        }
+    }
+
+    fun trimMemory(level: Int) {
+        if (level >= android.content.ComponentCallbacks2.TRIM_MEMORY_MODERATE) {
+            memoryCache.evictAll()
+        } else if (level >= android.content.ComponentCallbacks2.TRIM_MEMORY_BACKGROUND) {
+            memoryCache.trimToSize(memoryCache.maxSize() / 2)
+        }
+    }
+
+    fun clearMemoryCache() {
+        memoryCache.evictAll()
+    }
 
     fun getVideoCacheFile(context: Context, url: String): File {
         val safeKey = abs(url.hashCode()).toString(16)
@@ -102,10 +121,33 @@ object VideoThumbnailHelper {
 
                 // Camera startup frame (at time 0) is pitch black.
                 // Seek to 500ms (500_000 us) to get the properly exposed face / scene.
-                val bitmap = retriever.getFrameAtTime(500_000L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+                val rawBitmap = retriever.getFrameAtTime(500_000L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
                     ?: retriever.getFrameAtTime(300_000L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
                     ?: retriever.frameAtTime
                     ?: retriever.getFrameAtTime(0L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+
+                val bitmap = if (rawBitmap != null) {
+                    val maxDim = 480
+                    if (rawBitmap.width > maxDim || rawBitmap.height > maxDim) {
+                        val ratio = rawBitmap.width.toFloat() / rawBitmap.height.toFloat()
+                        val targetWidth: Int
+                        val targetHeight: Int
+                        if (ratio > 1f) {
+                            targetWidth = maxDim
+                            targetHeight = (maxDim / ratio).toInt().coerceAtLeast(1)
+                        } else {
+                            targetHeight = maxDim
+                            targetWidth = (maxDim * ratio).toInt().coerceAtLeast(1)
+                        }
+                        val scaled = Bitmap.createScaledBitmap(rawBitmap, targetWidth, targetHeight, true)
+                        if (scaled !== rawBitmap) {
+                            rawBitmap.recycle()
+                        }
+                        scaled
+                    } else {
+                        rawBitmap
+                    }
+                } else null
 
                 if (bitmap != null) {
                     memoryCache.put(videoPathOrUrl, bitmap)

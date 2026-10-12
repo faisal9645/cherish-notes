@@ -28,6 +28,8 @@ import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
+import okio.buffer
+import okio.source
 
 class ChatRepository(
     private val context: Context,
@@ -501,7 +503,9 @@ class ChatRepository(
             if (!backupFile.exists()) return emptyList()
             val moshi = com.squareup.moshi.Moshi.Builder().add(com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory()).build()
             val adapter = moshi.adapter(com.example.backup.FullAppBackupPayload::class.java)
-            adapter.fromJson(backupFile.readText())?.messages.orEmpty()
+            backupFile.source().buffer().use { source ->
+                adapter.fromJson(source)?.messages.orEmpty()
+            }
         } catch (e: Exception) {
             Log.e("ChatRepository", "Failed to load local backup for recoverAllMessages", e)
             emptyList()
@@ -678,20 +682,38 @@ class ChatRepository(
             firestoreMessages
         } else {
             val limit = if (previousMessageLimit > 0) previousMessageLimit.toInt() else OLDER_PAGE_SIZE.toInt()
-            val localBackupSubset = sortedLocalBackupDescending
-                .take(limit)
+            val localBackupSubset = sortedLocalBackupDescending.take(limit)
             firestoreMessages + localBackupSubset
         }
-        val firestoreIds = combinedMessages.map { it.id }.toSet()
-        val maxFirestoreTimestamp = combinedMessages.maxOfOrNull { it.timestamp } ?: 0L
 
-        val pendingOptimistic = _messagesFlow.value.filter {
-            it.timestamp > maxFirestoreTimestamp && it.id !in firestoreIds
+        if (combinedMessages.isEmpty()) {
+            _messagesFlow.value = emptyList()
+            return
         }
 
-        _messagesFlow.value = (combinedMessages + pendingOptimistic)
-            .sortedBy { it.timestamp }
-            .distinctBy { it.id }
+        val existingIds = HashSet<String>(combinedMessages.size)
+        var maxFirestoreTimestamp = 0L
+        for (m in combinedMessages) {
+            existingIds.add(m.id)
+            if (m.timestamp > maxFirestoreTimestamp) {
+                maxFirestoreTimestamp = m.timestamp
+            }
+        }
+
+        val currentMessages = _messagesFlow.value
+        val pendingOptimistic = if (currentMessages.isNotEmpty()) {
+            currentMessages.filter { it.timestamp > maxFirestoreTimestamp && it.id !in existingIds }
+        } else emptyList()
+
+        val map = LinkedHashMap<String, Message>(combinedMessages.size + pendingOptimistic.size)
+        for (m in combinedMessages) {
+            map[m.id] = m
+        }
+        for (m in pendingOptimistic) {
+            map[m.id] = m
+        }
+
+        _messagesFlow.value = map.values.sortedBy { it.timestamp }
     }
 
     /**

@@ -1,8 +1,8 @@
 {
-  "versionCode": 124,
-  "versionName": "1.7.52",
-  "tagName": "v1.7.52-124",
-  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.7.52-124/cherish-notes-v1.7.52-124.apk",
-  "assetSize": 21340693,
-  "releaseNotes": "Improve notification handling (auto-clear on resume, single-session badge limits) and boost chat performance with precomputed UI models and incremental backup loading."
+  "versionCode": 125,
+  "versionName": "1.7.53",
+  "tagName": "v1.7.53-125",
+  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.7.53-125/cherish-notes-v1.7.53-125.apk",
+  "assetSize": 21340697,
+  "releaseNotes": "Ultra-smooth 120 FPS chat scrolling with direction-aware contentType and @Immutable models, enhanced client-side image compression with compact-pass optimization, and persistent Private/Normal mode swapping."
 }

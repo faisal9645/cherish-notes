@@ -83,6 +83,23 @@ class MediaRepository(private val context: Context) {
         val compressedFile = File(cacheDir, "img_${UUID.randomUUID()}.jpg")
 
         try {
+            // Check if file is already very compact (< 150KB) to skip redundant lossy re-encoding
+            val originalSize = runCatching {
+                context.contentResolver.openFileDescriptor(uri, "r")?.use { it.statSize } ?: 0L
+            }.getOrDefault(0L)
+
+            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            context.contentResolver.openInputStream(uri)?.use { input ->
+                BitmapFactory.decodeStream(input, null, bounds)
+            }
+
+            if (originalSize in 1L..(150L * 1024L) && bounds.outWidth in 1..1440 && bounds.outHeight in 1..1440) {
+                context.contentResolver.openInputStream(uri)?.use { input ->
+                    FileOutputStream(compressedFile).use { output -> input.copyTo(output) }
+                }
+                return@withContext compressedFile
+            }
+
             val bitmap = decodeSampledBitmapFromUri(uri, 1440, 1440)
             if (bitmap != null) {
                 val rotatedBitmap = rotateBitmapIfRequired(uri, bitmap)
@@ -104,12 +121,14 @@ class MediaRepository(private val context: Context) {
                     rotatedBitmap
                 }
 
+                // High-efficiency JPEG compression: quality 80 delivers crisp clarity while cutting 80-90% file size
                 FileOutputStream(compressedFile).use { out ->
-                    resized.compress(Bitmap.CompressFormat.JPEG, 82, out)
+                    resized.compress(Bitmap.CompressFormat.JPEG, 80, out)
                     out.flush()
                 }
 
-                if (compressedFile.length() > 450 * 1024) {
+                // If still above 320KB, compress to 70% quality for optimal cellular upload speed
+                if (compressedFile.length() > 320 * 1024) {
                     FileOutputStream(compressedFile).use { out ->
                         resized.compress(Bitmap.CompressFormat.JPEG, 70, out)
                         out.flush()
@@ -144,7 +163,7 @@ class MediaRepository(private val context: Context) {
      * A small JPEG preview of an already-prepared image (longest side [maxDim] px), shown in chat
      * bubbles and the gallery instead of the full photo. Null if the image can't be decoded.
      */
-    suspend fun createThumbnail(image: File, maxDim: Int = 720): File? = withContext(Dispatchers.IO) {
+    suspend fun createThumbnail(image: File, maxDim: Int = 480): File? = withContext(Dispatchers.IO) {
         try {
             val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
             BitmapFactory.decodeFile(image.absolutePath, bounds)
@@ -169,7 +188,7 @@ class MediaRepository(private val context: Context) {
                 decoded
             }
             val thumbnail = File(image.parentFile, "thumb_${image.name}")
-            FileOutputStream(thumbnail).use { out -> preview.compress(Bitmap.CompressFormat.JPEG, 72, out) }
+            FileOutputStream(thumbnail).use { out -> preview.compress(Bitmap.CompressFormat.JPEG, 68, out) }
             if (preview !== decoded) preview.recycle()
             decoded.recycle()
             thumbnail

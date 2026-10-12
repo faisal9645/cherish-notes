@@ -28,6 +28,7 @@ import kotlinx.coroutines.launch
 import java.io.File
 
 /** A photo, video or voice message that didn't send; shown above the message box with Retry. */
+@androidx.compose.runtime.Immutable
 data class FailedUpload(val label: String, val retry: () -> Unit)
 
 /** Precomputed message row UI model with stable properties for LazyColumn optimization */
@@ -36,9 +37,11 @@ data class ChatUiRowItem(
     val message: Message,
     val isFirstOfDay: Boolean,
     val isOldestShown: Boolean,
-    val dateSeparatorText: String
+    val dateSeparatorText: String,
+    val formattedTime: String = ""
 )
 
+@androidx.compose.runtime.Immutable
 data class ChatUiState(
     val messages: List<Message> = emptyList(),
     val currentUser: User? = null,
@@ -176,12 +179,14 @@ class ChatViewModel(
                 val isFirstOfDay = prevMsg == null || !com.example.util.ChatTimeFormatter.isSameDay(prevMsg.timestamp, msg.timestamp)
                 val isOldestShown = (i == 0)
                 val dateSep = if (isFirstOfDay) com.example.util.ChatTimeFormatter.formatDateSeparator(msg.timestamp) else ""
+                val formattedTime = com.example.util.ChatTimeFormatter.formatMessageTime(msg.timestamp)
                 items.add(
                     ChatUiRowItem(
                         message = msg,
                         isFirstOfDay = isFirstOfDay,
                         isOldestShown = isOldestShown,
-                        dateSeparatorText = dateSep
+                        dateSeparatorText = dateSep,
+                        formattedTime = formattedTime
                     )
                 )
             }
@@ -289,6 +294,12 @@ class ChatViewModel(
         }
 
         viewModelScope.launch {
+            securityPreferences.chatExperienceModeFlow.collect { mode ->
+                _uiState.update { it.copy(chatExperienceMode = mode) }
+            }
+        }
+
+        viewModelScope.launch {
             securityPreferences.isDisguiseActive.collect { isDisguised ->
                 if (isDisguised) {
                     _uiState.update {
@@ -375,6 +386,20 @@ class ChatViewModel(
             _uiState.update { it.copy(chatExperienceMode = securityPreferences.getChatExperienceMode()) }
         }
         authRepository.setInChatTab(inChat)
+    }
+
+    fun setChatExperienceMode(mode: ChatExperienceMode) {
+        securityPreferences.setChatExperienceMode(mode)
+        _uiState.update { it.copy(chatExperienceMode = mode) }
+    }
+
+    fun toggleChatExperienceMode() {
+        val nextMode = if (_uiState.value.chatExperienceMode == ChatExperienceMode.PRIVATE) {
+            ChatExperienceMode.NORMAL
+        } else {
+            ChatExperienceMode.PRIVATE
+        }
+        setChatExperienceMode(nextMode)
     }
 
     fun setShowPreviousChats(enabled: Boolean) {

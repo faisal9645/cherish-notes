@@ -31,7 +31,8 @@ data class SyncUiState(
     val monthByPattern: Map<String, Int> = emptyMap(),
     /** This month's moments, newest first. */
     val monthMoments: List<SyncMoment> = emptyList(),
-    val myId: String = ""
+    val myId: String = "",
+    val isPrivateMode: Boolean = false
 )
 
 class SynchronicityViewModel(
@@ -64,13 +65,15 @@ class SynchronicityViewModel(
     val uiState: StateFlow<SyncUiState> = combine(
         counts,
         authRepository.syncPatterns,
-        authRepository.currentUserState
-    ) { state, custom, user ->
+        authRepository.currentUserState,
+        securityPreferences.chatExperienceModeFlow
+    ) { state, custom, user, mode ->
         val ours = custom.filter { it !in SyncPatterns.defaults }
         state.copy(
             patterns = SyncPatterns.defaults + ours,
             customPatterns = ours,
-            myId = user?.id.orEmpty()
+            myId = user?.id.orEmpty(),
+            isPrivateMode = (mode == ChatExperienceMode.PRIVATE)
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SyncUiState())
 

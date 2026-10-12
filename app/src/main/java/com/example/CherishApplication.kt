@@ -12,6 +12,10 @@ import com.example.data.repository.MediaRepository
 import com.example.notifications.NotificationHelper
 import com.example.security.SecurityPreferences
 import com.google.firebase.FirebaseApp
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 class CherishApplication : Application(), coil.ImageLoaderFactory {
 
@@ -119,6 +123,12 @@ class CherishApplication : Application(), coil.ImageLoaderFactory {
         com.example.notifications.NoteReminderScheduler.rescheduleAllUpcomingReminders(this, notesRepository)
         com.example.update.OtaUpdateManager.getInstance(this).cleanupDownloadedInstallers()
 
+        // Background cache maintenance: clean stale temporary uploads, installers, and enforce LRU limits
+        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+            kotlinx.coroutines.delay(15_000L) // Wait 15s after startup before performing maintenance
+            com.example.util.StorageOptimizer.pruneStaleCaches(this@CherishApplication)
+        }
+
         androidx.lifecycle.ProcessLifecycleOwner.get().lifecycle.addObserver(
             androidx.lifecycle.LifecycleEventObserver { _, event ->
                 if (event == androidx.lifecycle.Lifecycle.Event.ON_STOP) {
@@ -166,6 +176,32 @@ class CherishApplication : Application(), coil.ImageLoaderFactory {
             override fun onActivitySaveInstanceState(activity: android.app.Activity, outState: android.os.Bundle) {}
             override fun onActivityDestroyed(activity: android.app.Activity) {}
         })
+    }
+
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        try {
+            // Trim Coil image memory cache
+            val imageLoader = coil.Coil.imageLoader(this)
+            if (level >= android.content.ComponentCallbacks2.TRIM_MEMORY_MODERATE) {
+                imageLoader.memoryCache?.clear()
+            } else if (level >= android.content.ComponentCallbacks2.TRIM_MEMORY_BACKGROUND) {
+                imageLoader.memoryCache?.trimMemory(level)
+            }
+            // Trim video thumbnail cache
+            com.example.util.VideoThumbnailHelper.trimMemory(level)
+            // Trim time formatter cache
+            com.example.util.ChatTimeFormatter.clearCache()
+        } catch (_: Exception) {}
+    }
+
+    override fun onLowMemory() {
+        super.onLowMemory()
+        try {
+            coil.Coil.imageLoader(this).memoryCache?.clear()
+            com.example.util.VideoThumbnailHelper.clearMemoryCache()
+            com.example.util.ChatTimeFormatter.clearCache()
+        } catch (_: Exception) {}
     }
 
     companion object {

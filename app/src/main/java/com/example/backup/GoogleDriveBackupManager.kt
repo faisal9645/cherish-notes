@@ -25,6 +25,9 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.*
+import okio.buffer
+import okio.sink
+import okio.source
 
 /** Quiet time after the last change before the automatic backup runs. */
 private const val BACKUP_QUIET_PERIOD_MS = 5_000L
@@ -210,11 +213,19 @@ class GoogleDriveBackupManager(
             )
 
             val adapter = moshi.adapter(FullAppBackupPayload::class.java)
-            val jsonPayload = adapter.toJson(payload)
-
-            // Save encrypted backup payload locally for offline sync
             val backupFile = File(context.filesDir, "gdrive_appdata_cherish_vault_backup.json")
-            backupFile.writeText(jsonPayload)
+            val tempFile = File(context.filesDir, "gdrive_appdata_cherish_vault_backup.json.tmp")
+
+            // Stream serialization directly to disk to prevent massive in-memory String allocation during heavy storage
+            tempFile.sink().buffer().use { sink ->
+                adapter.toJson(sink, payload)
+                sink.flush()
+            }
+
+            if (tempFile.exists()) {
+                if (backupFile.exists()) backupFile.delete()
+                tempFile.renameTo(backupFile)
+            }
 
             val size = backupFile.length()
 
@@ -256,9 +267,11 @@ class GoogleDriveBackupManager(
 
             val backupFile = File(context.filesDir, "gdrive_appdata_cherish_vault_backup.json")
             if (backupFile.exists()) {
-                val json = backupFile.readText()
                 val adapter = moshi.adapter(FullAppBackupPayload::class.java)
-                val payload = adapter.fromJson(json)
+                // Stream parse from disk instead of reading entire file into memory as a giant String
+                val payload = backupFile.source().buffer().use { source ->
+                    adapter.fromJson(source)
+                }
 
                 if (payload != null) {
                     // Restore chat messages

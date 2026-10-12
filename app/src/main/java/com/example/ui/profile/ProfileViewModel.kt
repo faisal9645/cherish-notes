@@ -11,6 +11,7 @@ import com.example.security.SecurityPreferences
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
+@androidx.compose.runtime.Immutable
 data class ProfileUiState(
     val currentUser: User? = null,
     val partnerUser: User? = null,
@@ -252,6 +253,12 @@ class ProfileViewModel(
         viewModelScope.launch {
             securityPreferences.isChatSoundsEnabled.collect { sounds ->
                 _uiState.update { it.copy(isChatSoundsEnabled = sounds) }
+            }
+        }
+
+        viewModelScope.launch {
+            securityPreferences.chatExperienceModeFlow.collect { mode ->
+                _uiState.update { it.copy(chatExperienceMode = mode) }
             }
         }
     }

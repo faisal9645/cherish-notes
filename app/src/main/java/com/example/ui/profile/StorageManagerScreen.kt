@@ -322,24 +322,24 @@ private fun computeActualStorage(context: Context): StorageBreakdown {
     val cacheDir = context.cacheDir
     val filesDir = context.filesDir
 
-    val compressedMediaSize = getDirSize(File(cacheDir, "compressed_media"))
-    val cameraSnapsSize = getDirSize(File(cacheDir, "camera_snaps"))
-    val avatarSnapsSize = getDirSize(File(cacheDir, "avatar_snaps"))
-    val avatarFilesSize = getDirSize(File(filesDir, "avatars"))
-    val photosDirSize = getDirSize(File(filesDir, "photos"))
-    val extPicturesSize = getDirSize(File(context.getExternalFilesDir(null), "Pictures"))
+    val compressedMediaSize = com.example.util.StorageOptimizer.getDirSize(File(cacheDir, "compressed_media"))
+    val cameraSnapsSize = com.example.util.StorageOptimizer.getDirSize(File(cacheDir, "camera_snaps"))
+    val avatarSnapsSize = com.example.util.StorageOptimizer.getDirSize(File(cacheDir, "avatar_snaps"))
+    val avatarFilesSize = com.example.util.StorageOptimizer.getDirSize(File(filesDir, "avatars"))
+    val photosDirSize = com.example.util.StorageOptimizer.getDirSize(File(filesDir, "photos"))
+    val extPicturesSize = com.example.util.StorageOptimizer.getDirSize(File(context.getExternalFilesDir(null), "Pictures"))
     val totalPhotos = compressedMediaSize + cameraSnapsSize + avatarSnapsSize + avatarFilesSize + photosDirSize + extPicturesSize
 
-    val voiceNotesSize = getDirSize(File(cacheDir, "voice_notes"))
-    val voiceCacheSize = getDirSize(File(cacheDir, "voice_cache"))
+    val voiceNotesSize = com.example.util.StorageOptimizer.getDirSize(File(cacheDir, "voice_notes"))
+    val voiceCacheSize = com.example.util.StorageOptimizer.getDirSize(File(cacheDir, "voice_cache"))
     val totalVoice = voiceNotesSize + voiceCacheSize
 
-    val videosCacheSize = getDirSize(File(cacheDir, "videos"))
-    val videosFilesSize = getDirSize(File(filesDir, "videos"))
-    val extMoviesSize = getDirSize(File(context.getExternalFilesDir(null), "Movies"))
+    val videosCacheSize = com.example.util.StorageOptimizer.getDirSize(File(cacheDir, "videos")) + com.example.util.StorageOptimizer.getDirSize(File(cacheDir, "video_notes"))
+    val videosFilesSize = com.example.util.StorageOptimizer.getDirSize(File(filesDir, "videos"))
+    val extMoviesSize = com.example.util.StorageOptimizer.getDirSize(File(context.getExternalFilesDir(null), "Movies"))
     val totalVideos = videosCacheSize + videosFilesSize + extMoviesSize
 
-    val totalAppCache = getDirSize(cacheDir)
+    val totalAppCache = com.example.util.StorageOptimizer.getDirSize(cacheDir)
     val generalCache = (totalAppCache - compressedMediaSize - cameraSnapsSize - avatarSnapsSize - voiceNotesSize - voiceCacheSize - videosCacheSize).coerceAtLeast(0L)
 
     return StorageBreakdown(
@@ -350,47 +350,16 @@ private fun computeActualStorage(context: Context): StorageBreakdown {
     )
 }
 
-private suspend fun performSafeCacheClean(context: Context): Long = withContext(Dispatchers.IO) {
-    val cacheDir = context.cacheDir
-    val beforeSize = getDirSize(cacheDir)
-
-    deleteDirContents(File(cacheDir, "compressed_media"))
-    deleteDirContents(File(cacheDir, "camera_snaps"))
-    deleteDirContents(File(cacheDir, "avatar_snaps"))
-    deleteDirContents(File(cacheDir, "updates"))
-    deleteDirContents(File(cacheDir, "image_cache"))
-    deleteDirContents(File(cacheDir, "image_manager_disk_cache"))
-
-    cacheDir.listFiles()?.forEach { file ->
-        if (file.name != "voice_notes" && (file.name.contains("cache", ignoreCase = true) || file.name.endsWith(".tmp"))) {
-            if (file.isDirectory) deleteDirContents(file) else file.delete()
-        }
-    }
-
-    val afterSize = getDirSize(cacheDir)
-    (beforeSize - afterSize).coerceAtLeast(0L)
-}
-
-private fun deleteDirContents(dir: File?): Boolean {
-    if (dir == null || !dir.exists() || !dir.isDirectory) return false
-    var allDeleted = true
-    dir.listFiles()?.forEach { child ->
-        if (child.isDirectory) {
-            allDeleted = deleteDirContents(child) && child.delete() && allDeleted
-        } else {
-            allDeleted = child.delete() && allDeleted
-        }
-    }
-    return allDeleted
+private suspend fun performSafeCacheClean(context: Context): Long {
+    return com.example.util.StorageOptimizer.performSafeCacheClean(context)
 }
 
 private fun getDirSize(dir: File?): Long {
-    if (dir == null || !dir.exists()) return 0L
-    var size = 0L
-    dir.listFiles()?.forEach { file ->
-        size += if (file.isDirectory) getDirSize(file) else file.length()
-    }
-    return size
+    return com.example.util.StorageOptimizer.getDirSize(dir)
+}
+
+private fun deleteDirContents(dir: File?): Boolean {
+    return com.example.util.StorageOptimizer.deleteDirContents(dir)
 }
 
 private fun formatSize(bytes: Long): String {

@@ -41,6 +41,15 @@ object ChatTimeFormatter {
                 cal1.get(Calendar.DAY_OF_YEAR) == cal2.get(Calendar.DAY_OF_YEAR)
     }
 
+    // Caches to eliminate repetitive Calendar & SimpleDateFormat object allocations during LazyColumn scrolling
+    private val timeFormatCache = android.util.LruCache<Long, String>(256)
+    private val dateSeparatorCache = android.util.LruCache<Long, String>(64)
+
+    fun clearCache() {
+        synchronized(timeFormatCache) { timeFormatCache.evictAll() }
+        synchronized(dateSeparatorCache) { dateSeparatorCache.evictAll() }
+    }
+
     /**
      * Formats a message timestamp into standard 12-hour time with accurate AM/PM.
      * Always uses the REAL, unshifted timestamp so message time displays the correct local time!
@@ -49,6 +58,12 @@ object ChatTimeFormatter {
     fun formatMessageTime(rawTimestamp: Long): String {
         if (rawTimestamp <= 0L) return ""
         val timestamp = normalizeTimestamp(rawTimestamp)
+        // Group by minute bucket: identical minutes produce the exact same formatted string
+        val minuteKey = timestamp / 60_000L
+        synchronized(timeFormatCache) {
+            timeFormatCache.get(minuteKey)?.let { return it }
+        }
+
         val cal = Calendar.getInstance(TimeZone.getDefault(), Locale.getDefault()).apply {
             timeInMillis = timestamp
         }
@@ -58,7 +73,11 @@ object ChatTimeFormatter {
         val minute = String.format(Locale.US, "%02d", cal.get(Calendar.MINUTE))
         val amPm = if (cal.get(Calendar.AM_PM) == Calendar.AM) "AM" else "PM"
 
-        return "$hour:$minute $amPm"
+        val formatted = "$hour:$minute $amPm"
+        synchronized(timeFormatCache) {
+            timeFormatCache.put(minuteKey, formatted)
+        }
+        return formatted
     }
 
     /**
@@ -122,6 +141,11 @@ object ChatTimeFormatter {
         if (isYesterday(rawTimestamp)) return "Yesterday"
 
         val logicalTimestamp = getLogicalDayTimestamp(rawTimestamp)
+        val dayKey = logicalTimestamp / 86_400_000L
+        synchronized(dateSeparatorCache) {
+            dateSeparatorCache.get(dayKey)?.let { return it }
+        }
+
         val calMsg = Calendar.getInstance(TimeZone.getDefault(), Locale.getDefault()).apply {
             timeInMillis = logicalTimestamp
         }
@@ -129,6 +153,10 @@ object ChatTimeFormatter {
         val msgYear = calMsg.get(Calendar.YEAR)
 
         val pattern = if (msgYear == currentYear) "EEEE, MMMM d" else "EEEE, MMMM d, yyyy"
-        return SimpleDateFormat(pattern, Locale.US).format(Date(logicalTimestamp))
+        val formatted = SimpleDateFormat(pattern, Locale.US).format(Date(logicalTimestamp))
+        synchronized(dateSeparatorCache) {
+            dateSeparatorCache.put(dayKey, formatted)
+        }
+        return formatted
     }
 }

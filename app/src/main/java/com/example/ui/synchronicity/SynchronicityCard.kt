@@ -170,7 +170,7 @@ fun SynchronicityCard(
     var showAddPattern by remember { mutableStateOf(false) }
     var removePattern by remember { mutableStateOf<String?>(null) }
     var editing by remember { mutableStateOf<SyncMoment?>(null) }
-    val privateMode = remember { viewModel.isPrivateMode() }
+    val privateMode = state.isPrivateMode
     val accent = MaterialTheme.colorScheme.primary
     val accentSoft = MaterialTheme.colorScheme.secondary
 

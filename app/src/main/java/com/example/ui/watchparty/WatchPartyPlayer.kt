@@ -185,6 +185,8 @@ private class PlayerBridge(private val player: WatchPartyPlayer) {
     fun onState(state: Int, time: Double, duration: Double) {
         main.post {
             if (duration > 0) player.duration = duration.toFloat()
+            player.isReady = true
+            player.errorCode = 0
             player.onState(state, time.toFloat())
         }
     }
@@ -192,6 +194,7 @@ private class PlayerBridge(private val player: WatchPartyPlayer) {
     @JavascriptInterface
     fun onTime(time: Double, state: Int) {
         main.post {
+            player.isReady = true
             player.currentTime = time.toFloat()
             if (state != player.state) player.onState(state, time.toFloat())
         }
@@ -244,13 +247,6 @@ internal fun WatchPartyVideo(
         val from = (if (player.currentTime > 0f) player.currentTime else startAt).toInt().coerceAtLeast(0)
         view.loadUrl("https://m.youtube.com/watch?v=$videoId&t=${from}s")
     }
-    // Fall back to YouTube mobile watch page if the embed is blocked, doesn't become ready, or fails to play within 6 seconds
-    LaunchedEffect(videoId, autoplay) {
-        delay(6_000)
-        if (page != null && !player.onWatchPage && (!player.isReady || (autoplay && player.state != YtState.PLAYING && player.state != YtState.BUFFERING))) {
-            player.switchToWatchPage()
-        }
-    }
     AndroidView(
         modifier = modifier,
         factory = { ctx ->
@@ -291,11 +287,20 @@ internal fun WatchPartyVideo(
                 }
                 webViewClient = object : WebViewClient() {
                     override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
+                        if (request != null && !request.isForMainFrame) {
+                            return false // Allow all sub-frames, video chunks, and XHR requests
+                        }
                         val uri = request?.url ?: return false
                         val url = uri.toString()
                         val host = uri.host.orEmpty()
-                        val isYouTubeOrGoogle = host.endsWith("youtube.com") || host.endsWith("google.com") || host.endsWith("youtube-nocookie.com")
-                        if (url.contains("/embed/") || isYouTubeOrGoogle) {
+                        val isAllowed = url.contains("/embed/") ||
+                            host.contains("youtube") ||
+                            host.contains("googlevideo.com") ||
+                            host.contains("ytimg.com") ||
+                            host.contains("google.com") ||
+                            host.contains("gstatic.com") ||
+                            host.contains("doubleclick.net")
+                        if (isAllowed) {
                             if (player.onWatchPage && uri.path == "/watch" && uri.getQueryParameter("v") != null && uri.getQueryParameter("v") != videoId) {
                                 return true
                             }
@@ -311,7 +316,7 @@ internal fun WatchPartyVideo(
                     }
                 }
                 if (page != null) {
-                    loadDataWithBaseURL("https://www.youtube.com", page, "text/html", "UTF-8", null)
+                    loadDataWithBaseURL("https://www.youtube-nocookie.com", page, "text/html", "UTF-8", null)
                 } else {
                     player.errorCode = 2
                 }
@@ -340,57 +345,129 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 <div id="player"></div>
 <script>
 var player = null, isReady = false;
+var pendingCommand = ${if (autoplay) "'play'" else "null"};
+
 window.__party = {
   ready: false,
   play: function () {
-    if (player && player.playVideo) {
+    pendingCommand = 'play';
+    if (player && typeof player.playVideo === 'function') {
       try {
         player.playVideo();
       } catch (e) {
         try { player.mute(); player.playVideo(); player.unMute(); } catch (err) {}
       }
     }
+    var iframe = document.querySelector('iframe');
+    if (iframe && iframe.contentWindow) {
+      try { iframe.contentWindow.postMessage('{"event":"command","func":"playVideo","args":""}', '*'); } catch (e) {}
+    }
+    setTimeout(function() {
+      if (player && typeof player.getPlayerState === 'function') {
+        var s = player.getPlayerState();
+        if (s !== 1 && s !== 3) {
+          try { player.mute(); player.playVideo(); player.unMute(); } catch(e) {}
+        }
+      }
+    }, 250);
   },
-  pause: function () { if (player && player.pauseVideo) player.pauseVideo(); },
-  seek: function (t) { if (player && player.seekTo) player.seekTo(t, true); },
-  rate: function (r) { if (player && player.setPlaybackRate) player.setPlaybackRate(r); },
-  volume: function (v) { if (player && player.setVolume) player.setVolume(v); },
+  pause: function () {
+    pendingCommand = 'pause';
+    if (player && typeof player.pauseVideo === 'function') {
+      try { player.pauseVideo(); } catch (e) {}
+    }
+    var iframe = document.querySelector('iframe');
+    if (iframe && iframe.contentWindow) {
+      try { iframe.contentWindow.postMessage('{"event":"command","func":"pauseVideo","args":""}', '*'); } catch (e) {}
+    }
+  },
+  seek: function (t) {
+    if (player && typeof player.seekTo === 'function') {
+      try { player.seekTo(t, true); } catch (e) {}
+    }
+    var iframe = document.querySelector('iframe');
+    if (iframe && iframe.contentWindow) {
+      try { iframe.contentWindow.postMessage('{"event":"command","func":"seekTo","args":[' + t + ', true]}', '*'); } catch (e) {}
+    }
+  },
+  rate: function (r) {
+    if (player && typeof player.setPlaybackRate === 'function') {
+      try { player.setPlaybackRate(r); } catch (e) {}
+    }
+    var iframe = document.querySelector('iframe');
+    if (iframe && iframe.contentWindow) {
+      try { iframe.contentWindow.postMessage('{"event":"command","func":"setPlaybackRate","args":[' + r + ']}', '*'); } catch (e) {}
+    }
+  },
+  volume: function (v) {
+    if (player && typeof player.setVolume === 'function') {
+      try { player.setVolume(v); } catch (e) {}
+    }
+  },
   setQuality: function (q) {
     if (player) {
       try {
-        if (player.setPlaybackQuality) player.setPlaybackQuality(q);
-        if (player.setPlaybackQualityRange) player.setPlaybackQualityRange(q, q);
+        if (typeof player.setPlaybackQuality === 'function') player.setPlaybackQuality(q);
+        if (typeof player.setPlaybackQualityRange === 'function') player.setPlaybackQualityRange(q, q);
       } catch (e) {}
     }
   }
 };
-var tag = document.createElement('script');
-tag.src = 'https://www.youtube.com/iframe_api';
-document.head.appendChild(tag);
+
+window.addEventListener('message', function (e) {
+  try {
+    var data = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
+    if (data && data.event === 'onReady') {
+      isReady = true;
+      window.__party.ready = true;
+      try { Party.onReady(0); } catch (err) {}
+    } else if (data && data.event === 'onStateChange') {
+      try { Party.onState(data.info, 0, 0); } catch (err) {}
+    } else if (data && data.event === 'infoDelivery' && data.info) {
+      var curTime = data.info.currentTime !== undefined ? data.info.currentTime : 0;
+      var pState = data.info.playerState !== undefined ? data.info.playerState : -1;
+      var dur = data.info.duration !== undefined ? data.info.duration : 0;
+      if (dur > 0 && !isReady) {
+        isReady = true;
+        window.__party.ready = true;
+        try { Party.onReady(dur); } catch (err) {}
+      }
+      if (pState !== -1) {
+        try { Party.onTime(curTime, pState); } catch (err) {}
+      }
+    }
+  } catch (err) {}
+});
+
 function onYouTubeIframeAPIReady() {
   player = new YT.Player('player', {
     width: '100%', height: '100%', videoId: '$videoId',
+    host: 'https://www.youtube-nocookie.com',
     playerVars: {
       autoplay: ${if (autoplay) 1 else 0}, start: $startSeconds, playsinline: 1, controls: 0,
       disablekb: 1, fs: 0, rel: 0, modestbranding: 1, iv_load_policy: 3, enablejsapi: 1,
-      origin: 'https://www.youtube.com'
+      origin: 'https://www.youtube-nocookie.com'
     },
     events: {
       onReady: function () {
         isReady = true;
         window.__party.ready = true;
-        try { Party.onReady(player.getDuration() || 0); } catch (e) {}
+        var dur = player.getDuration ? player.getDuration() : 0;
+        try { Party.onReady(dur || 0); } catch (e) {}
         try {
           var qLevels = player.getAvailableQualityLevels ? player.getAvailableQualityLevels() : [];
           var curQ = player.getPlaybackQuality ? player.getPlaybackQuality() : 'auto';
           Party.onQuality(curQ, JSON.stringify(qLevels));
         } catch (qe) {}
-        if (${if (autoplay) "true" else "false"}) {
+        
+        if (pendingCommand === 'play' || (pendingCommand === null && ${if (autoplay) "true" else "false"})) {
           try {
             player.playVideo();
           } catch (e) {
             try { player.mute(); player.playVideo(); player.unMute(); } catch (err) {}
           }
+        } else if (pendingCommand === 'pause') {
+          try { player.pauseVideo(); } catch (e) {}
         }
         setInterval(tick, 500);
       },
@@ -403,12 +480,10 @@ function onYouTubeIframeAPIReady() {
       onStateChange: function (e) {
         var state = e.data;
         try {
-          var data = player.getVideoData();
-          var url = player.getVideoUrl ? player.getVideoUrl() : "";
-          if (data && data.video_id && data.video_id !== '$videoId') state = 4;
-          else if (url && url.indexOf('$videoId') === -1) state = 4;
-        } catch(err) {}
-        try { Party.onState(state, player.getCurrentTime() || 0, player.getDuration() || 0); } catch (err) {}
+          var curTime = player.getCurrentTime ? player.getCurrentTime() : 0;
+          var dur = player.getDuration ? player.getDuration() : 0;
+          Party.onState(state, curTime, dur);
+        } catch (err) {}
       },
       onError: function (e) {
         try { Party.onError(e.data); } catch (err) {}
@@ -416,16 +491,22 @@ function onYouTubeIframeAPIReady() {
     }
   });
 }
+
+var tag = document.createElement('script');
+tag.src = 'https://www.youtube-nocookie.com/iframe_api';
+document.head.appendChild(tag);
+
+if (window.YT && window.YT.Player) {
+  onYouTubeIframeAPIReady();
+}
+
 function tick() {
   if (!player || !player.getPlayerState) return;
   var state = player.getPlayerState();
   try {
-    var data = player.getVideoData();
-    var url = player.getVideoUrl ? player.getVideoUrl() : "";
-    if (data && data.video_id && data.video_id !== '$videoId') state = 4;
-    else if (url && url.indexOf('$videoId') === -1) state = 4;
-  } catch(err) {}
-  try { Party.onTime(player.getCurrentTime() || 0, state); } catch (e) {}
+    var curTime = player.getCurrentTime ? player.getCurrentTime() : 0;
+    Party.onTime(curTime, state);
+  } catch (e) {}
 }
 </script>
 </body></html>
@@ -584,13 +665,6 @@ private fun watchPageScript(videoId: String, autoplay: Boolean): String = """
     checkReady();
     away = ours() ? 0 : away + 1;
     if (away > 4) location.replace('https://m.youtube.com/watch?v=' + VID);
-
-    if (${if (autoplay) "true" else "false"}) {
-      var cur = v();
-      if (cur && cur.paused && ours() && !ad()) {
-        tryTriggerPlay();
-      }
-    }
 
     if (el) {
       try { Party.onTime(el.currentTime || 0, stateOf(el)); } catch (e) {}

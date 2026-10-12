@@ -97,9 +97,6 @@ class SecurityPreferences(context: Context) {
         if (ignoreNextPause || isTheaterModeActive || isMediaViewerActive || isExternalPickerActive) return
         _hasRevealedSecretAppInSession.value = false
         _isDisguiseActive.value = true
-        // Ensure that when the app is backgrounded in Private Mode, 
-        // it does not restore to the private chat screen upon reopening.
-        setChatExperienceMode(com.example.ui.chat.ChatExperienceMode.NORMAL)
     }
 
     /**
@@ -115,7 +112,6 @@ class SecurityPreferences(context: Context) {
         ignoreNextPause = false
         _hasRevealedSecretAppInSession.value = false
         _isDisguiseActive.value = true
-        setChatExperienceMode(com.example.ui.chat.ChatExperienceMode.NORMAL)
     }
 
     private val _isSecretHistoryRevealed = MutableStateFlow(true)
@@ -572,6 +568,9 @@ class SecurityPreferences(context: Context) {
 
     fun getGalleryDensity(): Float = prefs.getFloat(KEY_GALLERY_DENSITY, 0.5f)
 
+    private val _chatExperienceMode = MutableStateFlow(getChatExperienceMode())
+    val chatExperienceModeFlow: StateFlow<com.example.ui.chat.ChatExperienceMode> = _chatExperienceMode.asStateFlow()
+
     fun getChatExperienceMode(): com.example.ui.chat.ChatExperienceMode {
         val key = prefs.getString(KEY_CHAT_EXPERIENCE_MODE, com.example.ui.chat.ChatExperienceMode.NORMAL.key) 
                   ?: com.example.ui.chat.ChatExperienceMode.NORMAL.key
@@ -580,6 +579,7 @@ class SecurityPreferences(context: Context) {
 
     fun setChatExperienceMode(mode: com.example.ui.chat.ChatExperienceMode) {
         prefs.edit().putString(KEY_CHAT_EXPERIENCE_MODE, mode.key).apply()
+        _chatExperienceMode.value = mode
     }
 
     fun setGalleryDensity(density: Float) {

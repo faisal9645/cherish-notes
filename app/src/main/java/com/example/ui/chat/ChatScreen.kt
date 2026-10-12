@@ -1229,6 +1229,20 @@ fun ChatScreen(
                             }
                         }
 
+                        IconButton(
+                            onClick = { viewModel.toggleChatExperienceMode() },
+                            modifier = Modifier
+                                .size(40.dp)
+                                .testTag("chat_swap_mode_button")
+                        ) {
+                            Icon(
+                                imageVector = if (isPrivate) Icons.Filled.Lock else Icons.Outlined.Lock,
+                                contentDescription = if (isPrivate) "Switch to Normal Mode" else "Switch to Private Mode",
+                                tint = if (isPrivate) MaterialTheme.colorScheme.primary else iconTint,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
+
                         Box {
                             IconButton(
                                 onClick = { showChatMenu = true },
@@ -1646,7 +1660,11 @@ fun ChatScreen(
                     items(
                         items = reversedChatRowItems,
                         key = { it.message.id },
-                        contentType = { it.message.getTypedType().name }
+                        contentType = { item ->
+                            val dir = if (item.message.senderId == currentUserId) "OUT" else "IN"
+                            val type = if (item.message.isCircularVideoNote()) "VIDEO_NOTE" else item.message.getTypedType().name
+                            "$dir:$type"
+                        }
                     ) { item ->
                         val message = item.message
                         val isFromMe = message.senderId == currentUserId
@@ -3264,16 +3282,12 @@ private fun ChatMessageRow(
             }
         }
         val glowColor = if (isPrivate) (if (isDark) darkTone(Color(0xFF6B7280)) else Color(0xFF9CA3AF)) else RoseGoldPrimary
-        val rowTint by animateColorAsState(
-            targetValue = if (isSelected) selectionAccent.copy(alpha = if (isDark) 0.22f else 0.14f) else Color.Transparent,
-            animationSpec = tween(160),
-            label = "row_tint"
-        )
-        val bubbleStartPadding by animateDpAsState(
-            targetValue = if (isSelectionMode) 6.dp else 16.dp,
-            animationSpec = spring(dampingRatio = 0.85f, stiffness = Spring.StiffnessMediumLow),
-            label = "row_start_padding"
-        )
+        val rowTint = if (isSelectionMode && isSelected) {
+            selectionAccent.copy(alpha = if (isDark) 0.22f else 0.14f)
+        } else {
+            Color.Transparent
+        }
+        val bubbleStartPadding = if (isSelectionMode) 6.dp else 16.dp
         // Where the message sits on screen, for the long-press focus view
         val anchor = remember(message.id) { arrayOf(Rect.Zero) }
         Box(

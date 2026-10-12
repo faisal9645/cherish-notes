@@ -66,7 +66,7 @@ fun SynchronicityScreen(
 ) {
     val state by viewModel.uiState.collectAsState()
     LaunchedEffect(Unit) { viewModel.onScreenVisible() }
-    val privateMode = remember { viewModel.isPrivateMode() }
+    val privateMode = state.isPrivateMode
     val currentMonth = state.today.take(7).ifBlank { SynchronicityRepository.currentMonth() }
 
     var month by rememberSaveable { mutableStateOf(SynchronicityRepository.currentMonth()) }
