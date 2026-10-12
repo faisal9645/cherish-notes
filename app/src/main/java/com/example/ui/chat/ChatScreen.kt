@@ -1042,7 +1042,6 @@ fun ChatScreen(
                                 verticalAlignment = Alignment.CenterVertically,
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(8.dp))
-                                    .clickable { viewModel.toggleChatExperienceMode() }
                                     .padding(horizontal = 6.dp, vertical = 4.dp)
                             ) {
                                 Text(
@@ -1114,20 +1113,6 @@ fun ChatScreen(
                         val isPrivate = uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE
                         val iconTint = if (isPrivate) (if (isDark) Color(0xFFECECEC) else Color(0xFF0D0D0D)) else MaterialTheme.colorScheme.onSurface
                         if (isPrivate) {
-                            // ChatGPT Top Action: New Chat icon
-                            IconButton(
-                                onClick = { viewModel.toggleChatExperienceMode() },
-                                modifier = Modifier
-                                    .size(40.dp)
-                                    .testTag("chat_swap_mode_button")
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Outlined.Edit,
-                                    contentDescription = "New chat",
-                                    tint = iconTint,
-                                    modifier = Modifier.size(22.dp)
-                                )
-                            }
                             IconButton(
                                 onClick = { showChatMenu = true },
                                 modifier = Modifier.size(40.dp)
@@ -1162,20 +1147,6 @@ fun ChatScreen(
                                     contentDescription = "Check After Timer",
                                     tint = if (partnerHasCheckAfter || iHaveCheckAfter) MaterialTheme.colorScheme.primary else iconTint,
                                     modifier = Modifier.size(23.dp)
-                                )
-                            }
-
-                            IconButton(
-                                onClick = { viewModel.toggleChatExperienceMode() },
-                                modifier = Modifier
-                                    .size(40.dp)
-                                    .testTag("chat_swap_mode_button")
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Outlined.Lock,
-                                    contentDescription = "Switch to Private Mode",
-                                    tint = iconTint,
-                                    modifier = Modifier.size(22.dp)
                                 )
                             }
 
@@ -1223,6 +1194,14 @@ fun ChatScreen(
                                         },
                                         leadingIcon = { Icon(Icons.AutoMirrored.Filled.MenuBook, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface) },
                                         modifier = Modifier.testTag("chat_menu_our_words")
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("Settings") },
+                                        onClick = {
+                                            showChatMenu = false
+                                            onNavigateToProfile()
+                                        },
+                                        leadingIcon = { Icon(Icons.Outlined.Settings, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface) }
                                     )
                                     DropdownMenuItem(
                                         text = { Text("Clear Chat") },
