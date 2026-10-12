@@ -1,8 +1,9 @@
 {
-  "versionCode": 128,
-  "versionName": "1.7.56",
-  "tagName": "v1.7.56-128",
-  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.7.56-128/cherish-notes-v1.7.56-128.apk",
-  "assetSize": 21373465,
-  "releaseNotes": "Remove lock icon from chat top bar, access Chat Experience mode directly inside Settings, and streamline automated git push authentication."
+  "versionCode": 129,
+  "versionName": "1.7.57",
+  "tagName": "v1.7.57-129",
+  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.7.57-129/app_update_129.apk",
+  "assetSize": 21373577,
+  "releaseNotes": "Notes v1.7.57 (Build 129):\n• Cleaner, simpler layout\n• Voice typing and read aloud\n• Settings open with a swipe\n• Bug fixes and improvements",
+  "releaseDate": "2026-10-12T14:13:19Z"
 }

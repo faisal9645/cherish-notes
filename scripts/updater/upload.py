@@ -70,7 +70,7 @@ def create_github_release(token: str, repo: str, version_code: int, version_name
     payload = {
         "tag_name": tag,
         "name": f"v{version_name} (build {version_code})",
-        "body": f"Notes v{version_name} (Build {version_code}):\n• Cleaner, simpler layout\n• Voice typing and read aloud\n• Settings open with a swipe\n• Bug fixes and improvements",
+        "body": release_notes(version_name, version_code),
         "draft": False,
         "prerelease": False,
     }
@@ -165,6 +165,31 @@ def upload_apk_to_release(token: str, repo: str, release: dict, apk_path: str, v
     return download_url
 
 
+def release_notes(version_name: str, version_code: int) -> str:
+    """Public text (the release page and the in-app update dialog): a plain notes app only."""
+    return (f"Notes v{version_name} (Build {version_code}):\n• Cleaner, simpler layout\n"
+            "• Voice typing and read aloud\n• Settings open with a swipe\n• Bug fixes and improvements")
+
+
+def write_version_json(project_root: str, version_code: int, version_name: str, download_url: str, apk_path: str):
+    """Installed apps read version.json from main first (OtaUpdateManager.RAW_VERSION_JSON_URL) and
+    only fall back to the releases API without it, so it must name this release and be pushed."""
+    import datetime
+    data = {
+        "versionCode": version_code,
+        "versionName": version_name,
+        "tagName": f"v{version_name}-{version_code}",
+        "downloadUrl": download_url,
+        "assetSize": os.path.getsize(apk_path),
+        "releaseNotes": release_notes(version_name, version_code),
+        "releaseDate": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+    }
+    with open(os.path.join(project_root, "version.json"), "w", encoding="utf-8", newline="\n") as f:
+        json.dump(data, f, indent=2, ensure_ascii=False)
+        f.write("\n")
+    print("version.json updated: commit and push it to main, or phones won't see this update", flush=True)
+
+
 def update_firestore(project_root: str, version_code: int, version_name: str, download_url: str):
     key_path = os.path.join(project_root, "firebase_admin_key.json")
     if not os.path.exists(key_path):
@@ -220,6 +245,7 @@ def main():
 
     release      = create_github_release(token, GITHUB_REPO, version_code, version_name)
     download_url = upload_apk_to_release(token, GITHUB_REPO, release, apk_path, version_code)
+    write_version_json(project_root, version_code, version_name, download_url, apk_path)
     update_firestore(project_root, version_code, version_name, download_url)
 
     print("\nOTA update pushed successfully via GitHub Releases!")
