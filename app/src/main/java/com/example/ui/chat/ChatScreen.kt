@@ -928,6 +928,8 @@ fun ChatScreen(
             modifier = Modifier.fillMaxSize()
         )
     }
+    // The swipe below is set up once, so it reads the chat mode through this
+    val latestChatMode = rememberUpdatedState(uiState.chatExperienceMode)
     Scaffold(
         modifier = Modifier
             .pointerInput(Unit) {
@@ -963,14 +965,16 @@ fun ChatScreen(
                         }
 
                         if (directionLocked && isHorizontal) {
-                            // Swiping right smoothly glides to Love & Us tab
+                            val private = latestChatMode.value == com.example.ui.chat.ChatExperienceMode.PRIVATE
+                            // Swiping right glides to Love & Us; in private chat it opens Settings from
+                            // the left instead, like ChatGPT's side menu
                             if (accX > 70f) {
                                 change.consume()
-                                onNavigateToHome()
+                                if (private) onNavigateToProfile() else onNavigateToHome()
                                 break
                             }
-                            // Swiping left smoothly glides to Settings / Profile tab
-                            if (accX < -70f) {
+                            // Swiping left glides to Settings / Profile (not in private chat)
+                            if (accX < -70f && !private) {
                                 change.consume()
                                 onNavigateToProfile()
                                 break
@@ -1037,27 +1041,7 @@ fun ChatScreen(
                         val isPrivate = uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE
                         
                         if (isPrivate) {
-                            // ChatGPT screen style: Model selector pill
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .padding(horizontal = 6.dp, vertical = 4.dp)
-                            ) {
-                                Text(
-                                    text = "ChatGPT",
-                                    fontSize = 17.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = if (isDark) Color(0xFFECECEC) else Color(0xFF0D0D0D)
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Icon(
-                                    imageVector = Icons.Default.KeyboardArrowDown,
-                                    contentDescription = null,
-                                    tint = if (isDark) Color(0xFF9CA3AF) else Color(0xFF6B7280),
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            }
+                            // Like the ChatGPT app: no title, only the round buttons
                         } else {
                             ChatPartnerHeaderContent(
                                 presenceFlow = viewModel.partnerPresence,
@@ -1075,30 +1059,38 @@ fun ChatScreen(
                     }
                 },
                 navigationIcon = {
-                    IconButton(
-                        onClick = {
-                            if (uiState.isSearching) {
-                                viewModel.setSearching(false)
-                            } else {
-                                onNavigateToHome()
-                            }
-                        },
-                        modifier = Modifier
-                            .size(40.dp)
-                            .testTag("chat_back_button")
-                    ) {
-                        Icon(
-                            imageVector = if (uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE)
-                                Icons.Default.Menu
-                            else
-                                Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back",
-                            tint = if (uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE)
-                                (if (isDark) Color(0xFFECECEC) else Color(0xFF0D0D0D))
-                            else
-                                MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.size(24.dp)
-                        )
+                    if (uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE && !uiState.isSearching) {
+                        // ChatGPT's round menu button: opens Settings, as sliding right does
+                        PrivateRoundButton(
+                            isDark = isDark,
+                            onClick = onNavigateToProfile,
+                            modifier = Modifier
+                                .padding(start = 8.dp)
+                                .size(44.dp)
+                                .testTag("chat_back_button")
+                        ) {
+                            TwoLineMenuIcon(tint = if (isDark) Color(0xFFECECEC) else Color(0xFF0D0D0D))
+                        }
+                    } else {
+                        IconButton(
+                            onClick = {
+                                if (uiState.isSearching) {
+                                    viewModel.setSearching(false)
+                                } else {
+                                    onNavigateToHome()
+                                }
+                            },
+                            modifier = Modifier
+                                .size(40.dp)
+                                .testTag("chat_back_button")
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "Back",
+                                tint = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
                     }
                 },
                 actions = {
@@ -1113,11 +1105,68 @@ fun ChatScreen(
                         val isPrivate = uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE
                         val iconTint = if (isPrivate) (if (isDark) Color(0xFFECECEC) else Color(0xFF0D0D0D)) else MaterialTheme.colorScheme.onSurface
                         if (isPrivate) {
-                            IconButton(
-                                onClick = { showChatMenu = true },
-                                modifier = Modifier.size(40.dp)
-                            ) {
-                                Icon(Icons.Default.MoreVert, contentDescription = "More options", tint = iconTint, modifier = Modifier.size(22.dp))
+                            // ChatGPT's pill: new chat (clears the screen, kept safe) and more. No
+                            // Settings here: sliding right (or the round menu button) opens them.
+                            Box(modifier = Modifier.padding(end = 8.dp)) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(50))
+                                        .background(if (isDark) PrivateChromeDark else PrivateChromeLight)
+                                        .padding(horizontal = 2.dp)
+                                ) {
+                                    IconButton(
+                                        onClick = { showClearChatDialog = true },
+                                        modifier = Modifier
+                                            .size(44.dp)
+                                            .testTag("chat_new_chat_button")
+                                    ) {
+                                        Icon(Icons.Outlined.Edit, contentDescription = "New chat", tint = iconTint, modifier = Modifier.size(21.dp))
+                                    }
+                                    IconButton(
+                                        onClick = { showChatMenu = true },
+                                        modifier = Modifier.size(44.dp)
+                                    ) {
+                                        Icon(Icons.Default.MoreVert, contentDescription = "More options", tint = iconTint, modifier = Modifier.size(22.dp))
+                                    }
+                                }
+                                DropdownMenu(
+                                    expanded = showChatMenu,
+                                    onDismissRequest = { showChatMenu = false }
+                                ) {
+                                    DropdownMenuItem(
+                                        text = { Text("Search") },
+                                        onClick = {
+                                            showChatMenu = false
+                                            viewModel.setSearching(true)
+                                        },
+                                        leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface) }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("Starred messages") },
+                                        onClick = {
+                                            showChatMenu = false
+                                            viewModel.toggleFilterStarred()
+                                        },
+                                        leadingIcon = { Icon(Icons.Outlined.Star, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface) }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("Our Words") },
+                                        onClick = {
+                                            showChatMenu = false
+                                            onNavigateToOurWords()
+                                        },
+                                        leadingIcon = { Icon(Icons.AutoMirrored.Filled.MenuBook, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface) }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("Normal mode") },
+                                        onClick = {
+                                            showChatMenu = false
+                                            viewModel.toggleChatExperienceMode()
+                                        },
+                                        leadingIcon = { Icon(Icons.Outlined.FavoriteBorder, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface) }
+                                    )
+                                }
                             }
                         } else {
                             IconButton(
@@ -1196,14 +1245,6 @@ fun ChatScreen(
                                         modifier = Modifier.testTag("chat_menu_our_words")
                                     )
                                     DropdownMenuItem(
-                                        text = { Text("Settings") },
-                                        onClick = {
-                                            showChatMenu = false
-                                            onNavigateToProfile()
-                                        },
-                                        leadingIcon = { Icon(Icons.Outlined.Settings, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface) }
-                                    )
-                                    DropdownMenuItem(
                                         text = { Text("Clear Chat") },
                                         onClick = {
                                             showChatMenu = false
@@ -1227,7 +1268,7 @@ fun ChatScreen(
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = if (uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE) {
-                        if (isDark) Color(0xFF212121) else Color(0xFFFFFFFF)
+                        if (isDark) Color.Black else Color.White
                     } else if (showWallpaper) {
                         MaterialTheme.colorScheme.surface.copy(alpha = if (android.os.Build.VERSION.SDK_INT >= 31) 0.72f else 0.92f)
                     } else {
@@ -1236,14 +1277,10 @@ fun ChatScreen(
                 ),
                 windowInsets = WindowInsets.statusBars
             )
-            HorizontalDivider(
-                thickness = 0.5.dp,
-                color = if (uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE) {
-                    if (isDark) Color(0xFF2F2F2F) else Color(0xFFE5E5E5)
-                } else {
-                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)
-                }
-            )
+            // No line under the bar in private chat (ChatGPT has none)
+            if (uiState.chatExperienceMode != com.example.ui.chat.ChatExperienceMode.PRIVATE) {
+                HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+            }
             }
             }
             }
@@ -1251,7 +1288,7 @@ fun ChatScreen(
         bottomBar = {
             val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
             val barBg = if (uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE) {
-                if (isDark) Color(0xFF212121) else Color(0xFFFFFFFF)
+                if (isDark) Color.Black else Color.White
             } else if (isDark) TrueDarkSurface else Color.White
             // Not a Surface, which clips its content: the voice-lock hint floats above the mic button
             Box(
@@ -1336,7 +1373,7 @@ fun ChatScreen(
             }
     },
         containerColor = if (showWallpaper) Color.Transparent else if (uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE) {
-            if (isDark) Color(0xFF212121) else Color(0xFFFFFFFF)
+            if (isDark) Color.Black else Color.White
         } else MaterialTheme.colorScheme.background
     ) { paddingValues ->
         Column(
@@ -1583,29 +1620,13 @@ fun ChatScreen(
                                         .padding(top = 80.dp, bottom = 40.dp, start = 24.dp, end = 24.dp),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                        Box(
-                                            modifier = Modifier
-                                                .size(60.dp)
-                                                .clip(CircleShape)
-                                                .background(if (isDark) Color(0xFF2F2F2F) else Color(0xFFF4F4F4)),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Outlined.AutoAwesome,
-                                                contentDescription = null,
-                                                tint = if (isDark) Color.White else Color(0xFF0D0D0D),
-                                                modifier = Modifier.size(30.dp)
-                                            )
-                                        }
-                                        Spacer(modifier = Modifier.height(16.dp))
-                                        Text(
-                                            text = "What can I help with today?",
-                                            fontSize = 20.sp,
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = if (isDark) Color(0xFFECECEC) else Color(0xFF0D0D0D)
-                                        )
-                                    }
+                                    // Just the words, like a new ChatGPT chat
+                                    Text(
+                                        text = "What can I help with?",
+                                        fontSize = 24.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = if (isDark) Color(0xFFECECEC) else Color(0xFF0D0D0D)
+                                    )
                                 }
                             }
                         } else if (showEmptyTodayHeader) {
@@ -4432,7 +4453,7 @@ private fun ChatBottomComposerBar(
         myName = myUser?.displayName ?: "Me",
         placeholder = when {
             uiState.isStealthCurtainActive -> "Add a note..."
-            uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE -> "Message ChatGPT..."
+            uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE -> "Ask anything"
             else -> "Message $partnerName... ❤️"
         },
         isPrivateMode = (uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE),
@@ -4448,3 +4469,45 @@ private fun ChatBottomComposerBar(
 
 
 
+
+/** The round buttons and pill at the top of private chat (ChatGPT's dark grey). */
+private val PrivateChromeDark = Color(0xFF242424)
+private val PrivateChromeLight = Color(0xFFF0F0F0)
+
+@Composable
+private fun PrivateRoundButton(
+    isDark: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit
+) {
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = modifier
+            .clip(CircleShape)
+            .background(if (isDark) PrivateChromeDark else PrivateChromeLight)
+            .clickable(onClick = onClick)
+    ) { content() }
+}
+
+/** ChatGPT's menu mark: two lines, the lower one shorter. */
+@Composable
+private fun TwoLineMenuIcon(tint: Color) {
+    androidx.compose.foundation.Canvas(modifier = Modifier.size(20.dp)) {
+        val stroke = 2.2.dp.toPx()
+        drawLine(
+            color = tint,
+            start = androidx.compose.ui.geometry.Offset(size.width * 0.12f, size.height * 0.36f),
+            end = androidx.compose.ui.geometry.Offset(size.width * 0.88f, size.height * 0.36f),
+            strokeWidth = stroke,
+            cap = androidx.compose.ui.graphics.StrokeCap.Round
+        )
+        drawLine(
+            color = tint,
+            start = androidx.compose.ui.geometry.Offset(size.width * 0.12f, size.height * 0.66f),
+            end = androidx.compose.ui.geometry.Offset(size.width * 0.58f, size.height * 0.66f),
+            strokeWidth = stroke,
+            cap = androidx.compose.ui.graphics.StrokeCap.Round
+        )
+    }
+}

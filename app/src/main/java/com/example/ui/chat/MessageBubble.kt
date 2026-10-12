@@ -3,7 +3,10 @@ package com.example.ui.chat
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.content.Intent
 import android.widget.Toast
+import androidx.compose.material.icons.automirrored.outlined.VolumeUp
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
@@ -87,9 +90,11 @@ fun MessageBubble(
     partnerPhotoUrl: String? = null,
     partnerName: String = "Partner"
 ) {
+    // Private chat looks like the ChatGPT app: mine in a rounded blue bubble, my partner's as plain
+    // text with a row of small actions under it
     val bubbleShape = if (isPrivateMode) {
         if (isFromMe) {
-            RoundedCornerShape(20.dp)
+            RoundedCornerShape(22.dp)
         } else {
             RoundedCornerShape(4.dp)
         }
@@ -105,7 +110,7 @@ fun MessageBubble(
 
     val bubbleBg = if (isPrivateMode) {
         if (isFromMe) {
-            if (isDark) Color(0xFF2F2F2F) else Color(0xFFF4F4F4)
+            if (isDark) PrivateBubbleDark else PrivateBubbleLight
         } else {
             Color.Transparent
         }
@@ -118,7 +123,7 @@ fun MessageBubble(
     }
 
     val textColor = if (isPrivateMode) {
-        if (isDark) Color(0xFFECECEC) else Color(0xFF0D0D0D)
+        if (isDark) (if (isFromMe) Color.White else Color(0xFFECECEC)) else Color(0xFF0D0D0D)
     } else {
         if (isFromMe) {
             Color.White
@@ -509,12 +514,7 @@ fun MessageBubble(
                                     cardShape
                                 )
                             } else if (isPhotoOnly) Modifier
-                            else if (isPrivateMode) {
-                                if (isFromMe) Modifier.border(
-                                    BorderStroke(0.6.dp, if (isDark) Color(0xFF383838) else Color(0xFFE5E5E5)),
-                                    cardShape
-                                ) else Modifier
-                            }
+                            else if (isPrivateMode) Modifier
                             else if (!isFromMe) Modifier.border(
                                 BorderStroke(0.5.dp, if (isDark) darkSurface(Color(0xFF2A364F), Color(0xFF262626)) else Color(0xFFE2E8F0)),
                                 cardShape
@@ -565,35 +565,6 @@ fun MessageBubble(
                         else PaddingValues(horizontal = 12.dp, vertical = 7.dp)
                     )
             ) {
-                // ChatGPT AI Assistant Header
-                if (isPrivateMode && !isFromMe) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(bottom = 6.dp)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(24.dp)
-                                .clip(CircleShape)
-                                .background(Color(0xFF10A37F)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Outlined.AutoAwesome,
-                                contentDescription = null,
-                                tint = Color.White,
-                                modifier = Modifier.size(13.dp)
-                            )
-                        }
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "ChatGPT",
-                            fontSize = 13.5.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = if (isDark) Color(0xFFECECEC) else Color(0xFF0D0D0D)
-                        )
-                    }
-                }
                 // Reply Quote Preview
                 if (!message.replyToText.isNullOrEmpty()) {
                     Surface(
@@ -1013,7 +984,8 @@ fun MessageBubble(
                 }
 
                 // Bubble Footer for non-audio, non-image, non-video messages: the time on every message
-                if (message.getTypedType() != MessageType.AUDIO && message.getTypedType() != MessageType.IMAGE && message.getTypedType() != MessageType.VIDEO) {
+                // (none in private chat, which shows no times, like ChatGPT)
+                if (!isPrivateMode && message.getTypedType() != MessageType.AUDIO && message.getTypedType() != MessageType.IMAGE && message.getTypedType() != MessageType.VIDEO) {
                     // Tapping the time of my message shows when it was seen (or delivered/sent)
                     var showStatusDetail by remember(message.id) { mutableStateOf(false) }
                     LaunchedEffect(showStatusDetail) {
@@ -1121,45 +1093,17 @@ fun MessageBubble(
                         }
                     }
 
-                    // ChatGPT Assistant Action Icons Row (Copy, Thumbs Up, Thumbs Down, Read Aloud)
-                    if (isPrivateMode && !isFromMe) {
-                        Row(
-                            modifier = Modifier.padding(top = 8.dp, bottom = 2.dp),
-                            horizontalArrangement = Arrangement.spacedBy(14.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                imageVector = Icons.Outlined.ContentCopy,
-                                contentDescription = "Copy",
-                                tint = if (isDark) Color(0xFF9CA3AF) else Color(0xFF6B7280),
-                                modifier = Modifier
-                                    .size(16.dp)
-                                    .clickable {
-                                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
-                                        clipboard?.setPrimaryClip(ClipData.newPlainText("ChatGPT", message.text))
-                                        Toast.makeText(context, "Copied to clipboard", Toast.LENGTH_SHORT).show()
-                                    }
-                            )
-                            Icon(
-                                imageVector = Icons.Outlined.ThumbUp,
-                                contentDescription = "Good response",
-                                tint = if (isDark) Color(0xFF9CA3AF) else Color(0xFF6B7280),
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Icon(
-                                imageVector = Icons.Outlined.ThumbDown,
-                                contentDescription = "Bad response",
-                                tint = if (isDark) Color(0xFF9CA3AF) else Color(0xFF6B7280),
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Icon(
-                                imageVector = Icons.Outlined.VolumeUp,
-                                contentDescription = "Read aloud",
-                                tint = if (isDark) Color(0xFF9CA3AF) else Color(0xFF6B7280),
-                                modifier = Modifier.size(16.dp)
-                            )
-                        }
-                    }
+                }
+
+                // Under my partner's message in private chat, like ChatGPT's answers: copy, 👍, 👎,
+                // read aloud, share, and more (the message menu)
+                if (isPrivateMode && !isFromMe) {
+                    PrivateMessageActions(
+                        message = message,
+                        isDark = isDark,
+                        onReact = onReactionClick,
+                        onMore = onLongClick
+                    )
                 }
             }
 
@@ -1372,5 +1316,63 @@ private fun ReplyIndicator(
             tint = iconTint,
             modifier = Modifier.size(20.dp)
         )
+    }
+}
+
+/** My bubble in private chat, dark and light: ChatGPT's deep blue. */
+internal val PrivateBubbleDark = Color(0xFF0B1F78)
+internal val PrivateBubbleLight = Color(0xFFDCE6FF)
+
+/** The small icons under my partner's message in private chat: copy, 👍, 👎, read aloud, share, more. */
+@Composable
+private fun PrivateMessageActions(
+    message: Message,
+    isDark: Boolean,
+    onReact: (String) -> Unit,
+    onMore: () -> Unit
+) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val tint = if (isDark) Color(0xFFB4B4B4) else Color(0xFF5D5D5D)
+    val text = message.text
+    // Only I can react to my partner's message, so these are mine
+    val reacted = message.reactions.values
+    Row(
+        modifier = Modifier.padding(top = 8.dp, bottom = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        if (text.isNotBlank()) {
+            PrivateAction(Icons.Outlined.ContentCopy, "Copy", tint) {
+                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+                clipboard?.setPrimaryClip(ClipData.newPlainText("Message", text))
+                Toast.makeText(context, "Copied", Toast.LENGTH_SHORT).show()
+            }
+        }
+        PrivateAction(if ("👍" in reacted) Icons.Filled.ThumbUp else Icons.Outlined.ThumbUp, "Like", tint) { onReact("👍") }
+        PrivateAction(if ("👎" in reacted) Icons.Filled.ThumbDown else Icons.Outlined.ThumbDown, "Dislike", tint) { onReact("👎") }
+        if (text.isNotBlank()) {
+            PrivateAction(Icons.AutoMirrored.Outlined.VolumeUp, "Read aloud", tint) { ReadAloud.toggle(context, text) }
+            PrivateAction(Icons.Outlined.Share, "Share", tint) {
+                val send = Intent(Intent.ACTION_SEND).apply {
+                    type = "text/plain"
+                    putExtra(Intent.EXTRA_TEXT, text)
+                }
+                context.startActivity(Intent.createChooser(send, null))
+            }
+        }
+        PrivateAction(Icons.Default.MoreVert, "More", tint, onClick = onMore)
+    }
+}
+
+@Composable
+private fun PrivateAction(icon: ImageVector, label: String, tint: Color, onClick: () -> Unit) {
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = Modifier
+            .size(34.dp)
+            .clip(CircleShape)
+            .clickable(onClick = onClick)
+    ) {
+        Icon(icon, contentDescription = label, tint = tint, modifier = Modifier.size(19.dp))
     }
 }

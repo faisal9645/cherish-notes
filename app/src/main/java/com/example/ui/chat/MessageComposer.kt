@@ -2,8 +2,13 @@ package com.example.ui.chat
 
 import com.example.ui.theme.darkTone
 
+import android.content.ActivityNotFoundException
+import android.content.Intent
+import android.speech.RecognizerIntent
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
@@ -213,6 +218,22 @@ fun MessageComposer(
     // Tiny bounce animation when tapping send
     val sendBounce = remember { Animatable(1f) }
 
+    // Private chat's mic: the phone's voice typing, its words added to the message box
+    val voiceTyping = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        val spoken = result.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()
+        if (!spoken.isNullOrBlank()) onTextChanged(if (text.isBlank()) spoken else text.trimEnd() + " " + spoken)
+    }
+    fun startVoiceTyping() {
+        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+        }
+        try {
+            voiceTyping.launch(intent)
+        } catch (_: ActivityNotFoundException) {
+            Toast.makeText(context, "Voice typing isn't available on this phone", Toast.LENGTH_SHORT).show()
+        }
+    }
+
     // Pulsing animations, only while a voice note is being recorded (running all the time, they'd
     // rebuild the whole message box every frame for as long as the chat is open)
     val pulseAlpha: Float
@@ -240,17 +261,17 @@ fun MessageComposer(
 
     val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
     val barBg = if (isPrivateMode) {
-        if (isDark) Color(0xFF212121) else Color(0xFFFFFFFF)
+        if (isDark) Color.Black else Color.White
     } else {
         MaterialTheme.colorScheme.surface
     }
     val pillBg = if (isPrivateMode) {
-        if (isDark) Color(0xFF2F2F2F) else Color(0xFFF4F4F4)
+        if (isDark) Color(0xFF2A2A2A) else Color(0xFFF2F2F2)
     } else {
         if (isDark) darkSurface(Color(0xFF1E2638)) else Color.White
     }
     val pillBorder = if (isPrivateMode) {
-        if (isDark) Color(0xFF383838) else Color(0xFFE5E5E5)
+        if (isDark) Color(0xFF353535) else Color(0xFFE3E3E3)
     } else {
         if (isDark) darkSurface(Color(0xFF2A364F), Color(0xFF262626)) else Color(0xFFE2E8F0)
     }
@@ -598,35 +619,27 @@ fun MessageComposer(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .heightIn(min = if (isPrivateMode) 48.dp else 44.dp)
-                        .clip(RoundedCornerShape(if (isPrivateMode) 24.dp else 26.dp))
+                        .heightIn(min = if (isPrivateMode) 54.dp else 44.dp)
+                        .clip(RoundedCornerShape(if (isPrivateMode) 28.dp else 26.dp))
                         .background(pillBg)
-                        .border(BorderStroke(1.dp, pillBorder), RoundedCornerShape(if (isPrivateMode) 24.dp else 26.dp))
-                        .padding(start = if (isPrivateMode) 8.dp else 4.dp, end = if (isPrivateMode) 8.dp else 4.dp),
+                        .border(BorderStroke(1.dp, pillBorder), RoundedCornerShape(if (isPrivateMode) 28.dp else 26.dp))
+                        .padding(start = if (isPrivateMode) 6.dp else 4.dp, end = if (isPrivateMode) 7.dp else 4.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     if (isPrivateMode) {
-                        // ChatGPT (+) Attachment Action Pill inside left of input
+                        // ChatGPT's plain "+" at the start
                         IconButton(
                             onClick = onPickAttachment,
                             modifier = Modifier
-                                .size(34.dp)
+                                .size(40.dp)
                                 .testTag("composer_attach_button")
                         ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(28.dp)
-                                    .clip(CircleShape)
-                                    .background(if (isDark) Color(0xFF383838) else Color(0xFFE5E5EA)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Add,
-                                    contentDescription = "Attach file or photo",
-                                    tint = if (isDark) Color(0xFFECECEC) else Color(0xFF2C2C2E),
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            }
+                            Icon(
+                                imageVector = Icons.Default.Add,
+                                contentDescription = "Attach file or photo",
+                                tint = if (isDark) Color(0xFFECECEC) else Color(0xFF0D0D0D),
+                                modifier = Modifier.size(26.dp)
+                            )
                         }
                     } else {
                         // Far Left: 🙂 Emoji button
@@ -693,6 +706,64 @@ fun MessageComposer(
                         )
                     }
 
+                    if (isPrivateMode) {
+                        // ChatGPT's mic (voice typing) and its round blue button: send, or voice typing
+                        // while there's nothing to send
+                        val canSend = text.isNotBlank()
+                        IconButton(
+                            onClick = { startVoiceTyping() },
+                            modifier = Modifier
+                                .size(40.dp)
+                                .testTag("composer_voice_typing")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.Mic,
+                                contentDescription = "Voice typing",
+                                tint = if (isDark) Color(0xFFECECEC) else Color(0xFF0D0D0D),
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier
+                                .size(38.dp)
+                                .graphicsLayer {
+                                    scaleX = sendBounce.value
+                                    scaleY = sendBounce.value
+                                }
+                                .clip(CircleShape)
+                                .background(PrivateSendBlue)
+                                .bounceClick(
+                                    onLongClick = onScheduleText?.takeIf { canSend }?.let { schedule ->
+                                        {
+                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            schedule()
+                                        }
+                                    }
+                                ) {
+                                    if (canSend) {
+                                        scope.launch {
+                                            sendBounce.animateTo(0.78f, tween(65, easing = FastOutSlowInEasing))
+                                            sendBounce.animateTo(1f, spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium))
+                                        }
+                                        onSendText()
+                                        closeEmojiBoard()
+                                    } else {
+                                        startVoiceTyping()
+                                    }
+                                }
+                                .testTag("composer_send_button")
+                        ) {
+                            Icon(
+                                imageVector = if (canSend) Icons.Default.ArrowUpward else Icons.Default.GraphicEq,
+                                contentDescription = if (canSend) "Send" else "Voice typing",
+                                tint = Color.White,
+                                modifier = Modifier.size(21.dp)
+                            )
+                        }
+                    }
+
                     if (!isPrivateMode) {
                         // Right inside pill: 📎 Attachment button
                         IconButton(
@@ -729,7 +800,9 @@ fun MessageComposer(
             }
         }
 
-            Spacer(modifier = Modifier.width(if (isPrivateMode) 8.dp else 6.dp))
+            // (private chat keeps its mic and send button inside the pill, like ChatGPT)
+            if (!isPrivateMode) {
+            Spacer(modifier = Modifier.width(6.dp))
 
             // Right-Side Action Circle: 🎤 Mic button (transitions to ✈️ Send button)
             // Fixed width so the mic / send button never shifts
@@ -1076,20 +1149,7 @@ fun MessageComposer(
                     }
                 }
             }
-        }
-
-        if (isPrivateMode) {
-            Text(
-                text = "ChatGPT can make mistakes. Check important info.",
-                style = MaterialTheme.typography.bodySmall.copy(
-                    fontSize = 11.sp,
-                    color = if (isDark) Color(0xFF8E8E93) else Color(0xFF6E6E73),
-                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                ),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 2.dp, bottom = 6.dp, start = 16.dp, end = 16.dp)
-            )
+            }
         }
 
         // 22. WhatsApp/Telegram-Style Tabbed Emoji Panel, in the keyboard's place
@@ -1314,3 +1374,6 @@ fun Modifier.bounceClick(
             )
         }
 }
+
+/** Private chat's round send button: ChatGPT's blue. */
+private val PrivateSendBlue = Color(0xFF2F6BEA)
