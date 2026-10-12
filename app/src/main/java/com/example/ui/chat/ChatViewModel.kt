@@ -30,6 +30,15 @@ import java.io.File
 /** A photo, video or voice message that didn't send; shown above the message box with Retry. */
 data class FailedUpload(val label: String, val retry: () -> Unit)
 
+/** Precomputed message row UI model with stable properties for LazyColumn optimization */
+@androidx.compose.runtime.Immutable
+data class ChatUiRowItem(
+    val message: Message,
+    val isFirstOfDay: Boolean,
+    val isOldestShown: Boolean,
+    val dateSeparatorText: String
+)
+
 data class ChatUiState(
     val messages: List<Message> = emptyList(),
     val currentUser: User? = null,
@@ -147,6 +156,39 @@ class ChatViewModel(
         .mapLatest { filterMessages(it) }
         .flowOn(kotlinx.coroutines.Dispatchers.Default)
         .stateIn(viewModelScope, SharingStarted.Eagerly, filterMessages(_uiState.value.messageFilter()))
+
+    /**
+     * Precomputed row items for the reversed LazyColumn, calculated completely off the main thread.
+     * Keeps date separators and oldest-item flags stable so adding new messages does NOT recompose
+     * older message rows, keeping chat scrolling and rendering silky-smooth during long sessions.
+     */
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    val reversedChatRowItems: StateFlow<List<ChatUiRowItem>> = _uiState
+        .map { it.messageFilter() }
+        .distinctUntilChanged()
+        .mapLatest { filter ->
+            val list = filterMessages(filter)
+            val size = list.size
+            val items = ArrayList<ChatUiRowItem>(size)
+            for (i in list.indices) {
+                val msg = list[i]
+                val prevMsg = if (i > 0) list[i - 1] else null
+                val isFirstOfDay = prevMsg == null || !com.example.util.ChatTimeFormatter.isSameDay(prevMsg.timestamp, msg.timestamp)
+                val isOldestShown = (i == 0)
+                val dateSep = if (isFirstOfDay) com.example.util.ChatTimeFormatter.formatDateSeparator(msg.timestamp) else ""
+                items.add(
+                    ChatUiRowItem(
+                        message = msg,
+                        isFirstOfDay = isFirstOfDay,
+                        isOldestShown = isOldestShown,
+                        dateSeparatorText = dateSep
+                    )
+                )
+            }
+            items.asReversed()
+        }
+        .flowOn(kotlinx.coroutines.Dispatchers.Default)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     // Preserved scroll position when navigating between tabs (Chat, Love & Us, Settings)
     var savedScrollIndex: Int = 0
@@ -360,17 +402,26 @@ class ChatViewModel(
         get() = chatRepository.isQueryExhausted
 
     private var typingIdleJob: Job? = null
+    private var isCurrentlyTyping = false
+    private var lastPaceUpdateRealtime = 0L
+    private var lastWrittenPace = 0
 
-    /** Called on every keystroke; the repository only writes when the value changes. */
+    /** Called on keystrokes; throttled so typing does not flood Firestore or re-trigger listeners. */
     fun onTypingChanged(isTyping: Boolean) {
         typingIdleJob?.cancel()
-        authRepository.setTyping(isTyping)
+        if (isTyping != isCurrentlyTyping) {
+            isCurrentlyTyping = isTyping
+            authRepository.setTyping(isTyping)
+        }
         updateTypingPace(isTyping)
         if (isTyping) {
             // Stop showing "typing…" to the partner once the keyboard has been idle a while
             typingIdleJob = viewModelScope.launch {
                 kotlinx.coroutines.delay(TYPING_IDLE_TIMEOUT_MS)
+                isCurrentlyTyping = false
                 authRepository.setTyping(false)
+                authRepository.setTypingPace(0)
+                lastWrittenPace = 0
             }
         }
     }
@@ -382,31 +433,41 @@ class ChatViewModel(
 
     /**
      * My typing pace for the partner's dots: fast (2) from about 3 keys a second, slow (1) below
-     * that (with a little gap between, so it doesn't flicker), paused (0) after 2.5 s without a key.
-     * Only changes are written.
+     * that, paused (0) after 2.5 s without a key. Throttled to at most once per 3.5s to keep Firestore writes light.
      */
     private fun updateTypingPace(isTyping: Boolean) {
         typingPauseJob?.cancel()
         if (!isTyping) {
             keystrokeTimes.clear()
             typingPace = 0
-            authRepository.setTypingPace(0)
+            if (lastWrittenPace != 0) {
+                lastWrittenPace = 0
+                authRepository.setTypingPace(0)
+            }
             return
         }
         val now = android.os.SystemClock.elapsedRealtime()
         keystrokeTimes.addLast(now)
         while (keystrokeTimes.isNotEmpty() && now - keystrokeTimes.first() > 3_000L) keystrokeTimes.removeFirst()
-        typingPace = when {
+        val calculatedPace = when {
             keystrokeTimes.size >= 9 -> 2
             keystrokeTimes.size <= 5 -> 1
             else -> typingPace.coerceAtLeast(1)
         }
-        authRepository.setTypingPace(typingPace)
+        typingPace = calculatedPace
+        if (calculatedPace != lastWrittenPace && (now - lastPaceUpdateRealtime > 3_500L)) {
+            lastPaceUpdateRealtime = now
+            lastWrittenPace = calculatedPace
+            authRepository.setTypingPace(calculatedPace)
+        }
         typingPauseJob = viewModelScope.launch {
             kotlinx.coroutines.delay(2_500L)
             typingPace = 0
             keystrokeTimes.clear()
-            authRepository.setTypingPace(0)
+            if (lastWrittenPace != 0) {
+                lastWrittenPace = 0
+                authRepository.setTypingPace(0)
+            }
         }
     }
 

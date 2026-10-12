@@ -67,6 +67,7 @@ class ChatRepository(
     private var todayMessages: List<Message> = emptyList()
     private var previousMessages: List<Message> = emptyList()
     private var localBackupMessages: List<Message> = emptyList()
+    private var sortedLocalBackupDescending: List<Message> = emptyList()
 
     private val _isQueryExhaustedFlow = MutableStateFlow(false)
     val isQueryExhaustedFlow: StateFlow<Boolean> = _isQueryExhaustedFlow.asStateFlow()
@@ -150,11 +151,19 @@ class ChatRepository(
         clearOlderPages()
         todayMessages = emptyList()
         localBackupMessages = emptyList()
+        sortedLocalBackupDescending = emptyList()
         _messagesFlow.value = emptyList()
         resetGalleryCache()
     }
 
     fun loadMoreMessages() {
+        val hasMoreBackup = sortedLocalBackupDescending.isNotEmpty() && previousMessageLimit < sortedLocalBackupDescending.size
+        if (_isQueryExhaustedFlow.value && hasMoreBackup) {
+            previousMessageLimit += OLDER_PAGE_SIZE
+            mergeAndEmitMessages()
+            _isQueryExhaustedFlow.value = previousMessageLimit >= sortedLocalBackupDescending.size
+            return
+        }
         loadOlderPage(OLDER_PAGE_SIZE)
     }
 
@@ -201,10 +210,17 @@ class ChatRepository(
 
     /** Loads the next page of messages from before today, below the oldest one already loaded. */
     private fun loadOlderPage(pageSize: Long) {
-        if (pageSize <= 0L || _isQueryExhaustedFlow.value || _isLoadingMoreFlow.value) return
+        val hasMoreBackup = sortedLocalBackupDescending.isNotEmpty() && previousMessageLimit < sortedLocalBackupDescending.size
+        if (pageSize <= 0L || (_isQueryExhaustedFlow.value && !hasMoreBackup) || _isLoadingMoreFlow.value) return
         val fs = firestore
         if (fs == null) {
-            _isQueryExhaustedFlow.value = true
+            if (hasMoreBackup) {
+                previousMessageLimit += pageSize
+                mergeAndEmitMessages()
+                _isQueryExhaustedFlow.value = previousMessageLimit >= sortedLocalBackupDescending.size
+            } else {
+                _isQueryExhaustedFlow.value = true
+            }
             return
         }
         val conversationId = currentActiveConversationId ?: getConversationId()
@@ -240,8 +256,9 @@ class ChatRepository(
                     } else {
                         olderPageOldestTimestamps.add(oldest)
                     }
-                    _isQueryExhaustedFlow.value = docs.size < pageSize
-                    if (pageIndex == 0) _hasPreviousChatsAvailableFlow.value = docs.isNotEmpty()
+                    val moreBackup = sortedLocalBackupDescending.isNotEmpty() && previousMessageLimit < sortedLocalBackupDescending.size
+                    _isQueryExhaustedFlow.value = (docs.size < pageSize) && !moreBackup
+                    if (pageIndex == 0) _hasPreviousChatsAvailableFlow.value = docs.isNotEmpty() || sortedLocalBackupDescending.isNotEmpty()
                     _isLoadingMoreFlow.value = false
                 }
                 olderPages[pageIndex] = docs.mapNotNull { it.toMessageOrNull() }
@@ -458,8 +475,18 @@ class ChatRepository(
         repoScope.launch {
             val backupMessages = readLocalBackupMessages().filter { it.id !in deletedMessageIds }
             if (backupMessages.isNotEmpty()) {
+                val startOfToday = getStartOfToday()
+                val sortedDescending = backupMessages
+                    .filter { it.timestamp < startOfToday }
+                    .sortedByDescending { it.timestamp }
                 withContext(Dispatchers.Main) {
                     localBackupMessages = backupMessages
+                    sortedLocalBackupDescending = sortedDescending
+                    if (previousMessageLimit < OLDER_PAGE_SIZE) {
+                        previousMessageLimit = OLDER_PAGE_SIZE
+                    }
+                    _hasPreviousChatsAvailableFlow.value = true
+                    _isQueryExhaustedFlow.value = false
                     mergeAndEmitMessages()
                 }
                 publishGalleryItems(backupMessages)
@@ -493,6 +520,7 @@ class ChatRepository(
     fun resetPreviousChats() {
         clearOlderPages()
         localBackupMessages = emptyList()
+        sortedLocalBackupDescending = emptyList()
         resetGalleryCache()
         _isQueryExhaustedFlow.value = false
         _isLoadingMoreFlow.value = false
@@ -646,13 +674,14 @@ class ChatRepository(
     private fun mergeAndEmitMessages() {
         val firestoreMessages = previousMessages + todayMessages
         
-        val localBackupSubset = localBackupMessages
-            .filter { it.timestamp < getStartOfToday() }
-            .sortedByDescending { it.timestamp }
-            .take(previousMessageLimit.toInt())
-            .toList()
-
-        val combinedMessages = firestoreMessages + localBackupSubset
+        val combinedMessages = if (sortedLocalBackupDescending.isEmpty()) {
+            firestoreMessages
+        } else {
+            val limit = if (previousMessageLimit > 0) previousMessageLimit.toInt() else OLDER_PAGE_SIZE.toInt()
+            val localBackupSubset = sortedLocalBackupDescending
+                .take(limit)
+            firestoreMessages + localBackupSubset
+        }
         val firestoreIds = combinedMessages.map { it.id }.toSet()
         val maxFirestoreTimestamp = combinedMessages.maxOfOrNull { it.timestamp } ?: 0L
 
@@ -908,6 +937,7 @@ class ChatRepository(
         todayMessages = todayMessages.filterNot { it.id in ids }
         previousMessages = previousMessages.filterNot { it.id in ids }
         localBackupMessages = localBackupMessages.filterNot { it.id in ids }
+        sortedLocalBackupDescending = sortedLocalBackupDescending.filterNot { it.id in ids }
 
         val fs = firestore
         if (fs != null) {

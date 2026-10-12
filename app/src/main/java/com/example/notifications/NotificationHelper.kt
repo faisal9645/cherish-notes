@@ -101,10 +101,13 @@ object NotificationHelper {
         }
     }
 
+    private val isNotificationAlertTriggered = java.util.concurrent.atomic.AtomicBoolean(false)
+
     /**
      * Show a stealth disguised notification that others will never suspect,
      * consolidated into a single notification without duplicates.
      * Respects user disguise, notification bar, and badge preferences.
+     * Capped to always show badge count 1 and trigger 1 time only until the app is opened.
      */
     fun showMessageNotification(
         context: Context,
@@ -135,7 +138,7 @@ object NotificationHelper {
             }
         }
 
-        val count = pendingUnreadCount.incrementAndGet()
+        pendingUnreadCount.incrementAndGet()
         val prefs = SecurityPreferences.getInstance(context)
         val isNotifBarEnabled = prefs.isNotificationsEnabled()
         val isBadgeEnabled = prefs.isBadgeNotificationEnabled()
@@ -145,11 +148,18 @@ object NotificationHelper {
             return
         }
 
-        // Update launcher icon badge independently if badge notifications are enabled
+        // Launcher icon badge always shows 1 only, even with multiple messages, until the app is opened
         if (isBadgeEnabled) {
-            updateLauncherBadge(context, if (count > 0) count else 0)
+            updateLauncherBadge(context, 1)
         } else {
             updateLauncherBadge(context, 0)
+        }
+
+        // Notification triggers 1 time only until the app is opened
+        val alreadyTriggered = isNotificationAlertTriggered.getAndSet(true)
+        if (alreadyTriggered) {
+            // Already triggered once while closed; keep badge at 1 and avoid re-alerting until opened
+            return
         }
 
         // If notification bar is turned off, do not post status bar notification
@@ -200,7 +210,8 @@ object NotificationHelper {
             .setContentText(if (isDiscreet) maskedText else displayText)
             .setSubText(subText)
             .setBadgeIconType(if (isBadgeEnabled) NotificationCompat.BADGE_ICON_SMALL else NotificationCompat.BADGE_ICON_NONE)
-            .setNumber(if (isBadgeEnabled) count else 0)
+            .setNumber(if (isBadgeEnabled) 1 else 0)
+            .setOnlyAlertOnce(true)
             .build()
 
         val notification = NotificationCompat.Builder(context, CHANNEL_MESSAGES_ID)
@@ -215,7 +226,7 @@ object NotificationHelper {
             .apply {
                 if (isBadgeEnabled) {
                     setBadgeIconType(NotificationCompat.BADGE_ICON_SMALL)
-                    setNumber(count)
+                    setNumber(1)
                 } else {
                     setBadgeIconType(NotificationCompat.BADGE_ICON_NONE)
                     setNumber(0)
@@ -228,6 +239,7 @@ object NotificationHelper {
             .setCategory(NotificationCompat.CATEGORY_MESSAGE)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setPublicVersion(publicNotification)
+            .setOnlyAlertOnce(true)
             .build()
 
         try {
@@ -330,9 +342,10 @@ object NotificationHelper {
     }
 
     /**
-     * Clears notifications and resets the counter and badge when the user views the chat
+     * Clears notifications and resets the counter and badge when the user views the app
      */
     fun clearNotifications(context: Context) {
+        isNotificationAlertTriggered.set(false)
         pendingUnreadCount.set(0)
         notifiedMessageIds.clear()
         try {

@@ -82,6 +82,36 @@ internal class WatchPartyPlayer {
     /** Until when state changes are our own commands coming back, not a tap on the video. */
     private var commandsUntil = 0L
 
+    var currentQuality by mutableStateOf("auto")
+    var availableQualities by mutableStateOf<List<String>>(
+        listOf("auto", "hd1080", "hd720", "large", "medium", "small", "tiny")
+    )
+
+    val qualityDisplayLabel: String
+        get() = when (currentQuality.lowercase(Locale.US)) {
+            "hd1080", "1080p" -> "1080p"
+            "hd720", "720p" -> "720p"
+            "large", "480p" -> "480p"
+            "medium", "360p" -> "360p"
+            "small", "240p" -> "240p"
+            "tiny", "144p" -> "144p"
+            else -> "Auto"
+        }
+
+    fun setPlaybackQuality(quality: String) {
+        currentQuality = quality
+        command("__party.setQuality('$quality')", COMMAND_ECHO_MS)
+    }
+
+    fun onQualityUpdate(quality: String, levels: List<String>) {
+        if (quality.isNotBlank()) {
+            currentQuality = quality
+        }
+        if (levels.isNotEmpty()) {
+            availableQualities = levels
+        }
+    }
+
     fun play() = command("__party.play()", COMMAND_ECHO_MS)
 
     fun pause() = command("__party.pause()", COMMAND_ECHO_MS)
@@ -171,6 +201,21 @@ private class PlayerBridge(private val player: WatchPartyPlayer) {
     fun onError(code: Int) {
         main.post { player.onError(code) }
     }
+
+    @JavascriptInterface
+    fun onQuality(quality: String, listJson: String) {
+        main.post {
+            val levels = try {
+                if (listJson.startsWith("[")) {
+                    val array = org.json.JSONArray(listJson)
+                    (0 until array.length()).map { array.getString(it) }
+                } else emptyList()
+            } catch (_: Exception) {
+                emptyList()
+            }
+            player.onQualityUpdate(quality, levels)
+        }
+    }
 }
 
 /**
@@ -199,10 +244,10 @@ internal fun WatchPartyVideo(
         val from = (if (player.currentTime > 0f) player.currentTime else startAt).toInt().coerceAtLeast(0)
         view.loadUrl("https://m.youtube.com/watch?v=$videoId&t=${from}s")
     }
-    // Fall back to YouTube mobile watch page if the embed is blocked or doesn't start playing within 15 seconds
+    // Fall back to YouTube mobile watch page if the embed is blocked, doesn't become ready, or fails to play within 6 seconds
     LaunchedEffect(videoId, autoplay) {
-        delay(15_000)
-        if (page != null && !player.onWatchPage && autoplay && player.state != YtState.PLAYING && player.errorCode != 0) {
+        delay(6_000)
+        if (page != null && !player.onWatchPage && (!player.isReady || (autoplay && player.state != YtState.PLAYING && player.state != YtState.BUFFERING))) {
             player.switchToWatchPage()
         }
     }
@@ -309,7 +354,15 @@ window.__party = {
   pause: function () { if (player && player.pauseVideo) player.pauseVideo(); },
   seek: function (t) { if (player && player.seekTo) player.seekTo(t, true); },
   rate: function (r) { if (player && player.setPlaybackRate) player.setPlaybackRate(r); },
-  volume: function (v) { if (player && player.setVolume) player.setVolume(v); }
+  volume: function (v) { if (player && player.setVolume) player.setVolume(v); },
+  setQuality: function (q) {
+    if (player) {
+      try {
+        if (player.setPlaybackQuality) player.setPlaybackQuality(q);
+        if (player.setPlaybackQualityRange) player.setPlaybackQualityRange(q, q);
+      } catch (e) {}
+    }
+  }
 };
 var tag = document.createElement('script');
 tag.src = 'https://www.youtube.com/iframe_api';
@@ -327,6 +380,11 @@ function onYouTubeIframeAPIReady() {
         isReady = true;
         window.__party.ready = true;
         try { Party.onReady(player.getDuration() || 0); } catch (e) {}
+        try {
+          var qLevels = player.getAvailableQualityLevels ? player.getAvailableQualityLevels() : [];
+          var curQ = player.getPlaybackQuality ? player.getPlaybackQuality() : 'auto';
+          Party.onQuality(curQ, JSON.stringify(qLevels));
+        } catch (qe) {}
         if (${if (autoplay) "true" else "false"}) {
           try {
             player.playVideo();
@@ -335,6 +393,12 @@ function onYouTubeIframeAPIReady() {
           }
         }
         setInterval(tick, 500);
+      },
+      onPlaybackQualityChange: function (e) {
+        try {
+          var qLevels = player.getAvailableQualityLevels ? player.getAvailableQualityLevels() : [];
+          Party.onQuality(e.data || 'auto', JSON.stringify(qLevels));
+        } catch (qe) {}
       },
       onStateChange: function (e) {
         var state = e.data;
@@ -469,6 +533,15 @@ private fun watchPageScript(videoId: String, autoplay: Boolean): String = """
     volume: function (x) {
       var el = v();
       if (el) { try { el.volume = Math.max(0, Math.min(1, x / 100)); } catch(e) {} }
+    },
+    setQuality: function (q) {
+      var player = document.getElementById('movie_player');
+      if (player) {
+        try {
+          if (typeof player.setPlaybackQuality === 'function') player.setPlaybackQuality(q);
+          if (typeof player.setPlaybackQualityRange === 'function') player.setPlaybackQualityRange(q, q);
+        } catch(e) {}
+      }
     }
   };
   function report() {
@@ -487,6 +560,13 @@ private fun watchPageScript(videoId: String, autoplay: Boolean): String = """
       var dur = (el && isFinite(el.duration) && el.duration > 0) ? el.duration :
                 (player && typeof player.getDuration === 'function' ? player.getDuration() : 0);
       try { Party.onReady(dur); } catch (e) {}
+      if (player && typeof player.getPlaybackQuality === 'function') {
+        try {
+          var curQ = player.getPlaybackQuality() || 'auto';
+          var qLevels = typeof player.getAvailableQualityLevels === 'function' ? player.getAvailableQualityLevels() : [];
+          Party.onQuality(curQ, JSON.stringify(qLevels));
+        } catch(e) {}
+      }
       if (${if (autoplay) "true" else "false"}) {
         tryTriggerPlay();
       }

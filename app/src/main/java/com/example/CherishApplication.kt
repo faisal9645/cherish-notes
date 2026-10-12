@@ -152,6 +152,7 @@ class CherishApplication : Application(), coil.ImageLoaderFactory {
             override fun onActivityResumed(activity: android.app.Activity) {
                 val count = resumedCount.incrementAndGet()
                 isAppInForeground = count > 0
+                com.example.notifications.NotificationHelper.clearNotifications(activity)
             }
 
             override fun onActivityPaused(activity: android.app.Activity) {

@@ -101,6 +101,11 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+@Stable
+class ComposerState(initialText: String = "") {
+    var text by mutableStateOf(initialText)
+}
+
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 fun ChatScreen(
@@ -131,7 +136,8 @@ fun ChatScreen(
     }
     val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
 
-    var composerText by remember { mutableStateOf("") }
+    val composerState = remember { ComposerState() }
+    var textToSchedule by remember { mutableStateOf("") }
     var editingMessage by remember { mutableStateOf<Message?>(null) }
     var editDialogText by remember { mutableStateOf("") }
     var showDeleteConfirmDialog by remember { mutableStateOf<Message?>(null) }
@@ -360,58 +366,87 @@ fun ChatScreen(
 
     // Filter messages for search query and starred filter - all messages preserved and displayed based on pagination scroll.
     val displayedMessages by viewModel.displayedMessages.collectAsState()
+    val reversedChatRowItems by viewModel.reversedChatRowItems.collectAsState()
 
-    // Follow the conversation only when a NEW message lands at the bottom: always for my own sends,
-    // and for the partner's whenever near the bottom. Keyed on displayedMessages to match the LazyColumn list.
-    val newestMessage = displayedMessages.lastOrNull()
-    val newestSeenId = remember { mutableStateOf<String?>(null) }
-    LaunchedEffect(newestMessage?.id) {
-        val newest = newestMessage ?: return@LaunchedEffect
-        val previousId = newestSeenId.value
-        newestSeenId.value = newest.id
+    val density = LocalDensity.current
+    val isImeVisible = WindowInsets.isImeVisible
+    val imeBottom = WindowInsets.ime.getBottom(density)
+
+    // Keyboard open / close scrolling:
+    // When keyboard opens (user starts typing message in bottom bar) or closes,
+    // ensure the chat list smoothly scrolls and stays anchored to the latest message in all states.
+    LaunchedEffect(isImeVisible) {
+        if (reversedChatRowItems.isNotEmpty()) {
+            listState.scrollToItem(0, scrollOffset = 0)
+            delay(50)
+            listState.scrollToItem(0, scrollOffset = 0)
+            delay(120)
+            listState.scrollToItem(0, scrollOffset = 0)
+            delay(240)
+            listState.scrollToItem(0, scrollOffset = 0)
+            delay(380)
+            if (listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset != 0) {
+                listState.scrollToItem(0, scrollOffset = 0)
+            }
+        }
+    }
+
+    // Follow the conversation when a new message lands:
+    // Guarantees that opposite user (partner) or current user chat messages
+    // trigger immediate scrolling to the last message across all states (keyboard open/closed, typing).
+    val latestRowItemId = reversedChatRowItems.firstOrNull()?.message?.id
+    val latestRawMessageId = uiState.messages.lastOrNull { !it.isDeleted }?.id
+    val lastScrolledMessageId = remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(latestRowItemId, latestRawMessageId) {
+        val currentId = latestRowItemId ?: latestRawMessageId ?: return@LaunchedEffect
+        val previousId = lastScrolledMessageId.value
+        lastScrolledMessageId.value = currentId
         if (previousId == null) {
             // Initial entry: ensure list starts smoothly at the newest message
             listState.scrollToItem(0, scrollOffset = 0)
             return@LaunchedEffect
         }
-        if (newest.id == previousId) return@LaunchedEffect
+        if (currentId == previousId) return@LaunchedEffect
 
-        val isNearBottom = listState.firstVisibleItemIndex <= 4
-        if (isNearBottom || newest.senderId == uiState.currentUser?.id) {
-            listState.animateScrollToItem(0, scrollOffset = 0)
-            // Follow up after placement animation & typing indicator transition settles
-            delay(80)
-            if (listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset != 0) {
-                listState.scrollToItem(0, scrollOffset = 0)
-            }
-            delay(220)
-            if (listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset != 0) {
-                listState.scrollToItem(0, scrollOffset = 0)
-            }
+        // When a new message arrives (either opposite partner or me), scroll to bottom (index 0)
+        // Multiple checkpoints ensure animations and layout resizing (typing bubble disappearing, keyboard)
+        // leave the latest message cleanly visible directly above the message box.
+        listState.scrollToItem(0, scrollOffset = 0)
+        delay(40)
+        listState.scrollToItem(0, scrollOffset = 0)
+        delay(120)
+        listState.scrollToItem(0, scrollOffset = 0)
+        delay(260)
+        if (listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset != 0) {
+            listState.scrollToItem(0, scrollOffset = 0)
         }
     }
 
     // When partner starts OR stops typing/recording, ensure their last message stays fully visible and not pushed low
     LaunchedEffect(uiState.isPartnerTyping, uiState.isPartnerRecordingAudio) {
-        val isNearBottom = listState.firstVisibleItemIndex <= 3
-        if (isNearBottom) {
-            listState.animateScrollToItem(0, scrollOffset = 0)
-            delay(100)
-            if (listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset != 0) {
-                listState.scrollToItem(0, scrollOffset = 0)
-            }
-            delay(250)
+        if (reversedChatRowItems.isNotEmpty()) {
+            delay(40)
+            listState.scrollToItem(0, scrollOffset = 0)
+            delay(140)
+            listState.scrollToItem(0, scrollOffset = 0)
+            delay(280)
             if (listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset != 0) {
                 listState.scrollToItem(0, scrollOffset = 0)
             }
         }
     }
 
+    // When user types in bottom bar, ensure chat remains anchored to the newest message
+    LaunchedEffect(composerState.text) {
+        if (composerState.text.isNotEmpty() && (listState.firstVisibleItemIndex <= 4 || isImeVisible)) {
+            listState.scrollToItem(0, scrollOffset = 0)
+        }
+    }
+
     // When bottom overlays appear (upload status, reply preview), keep the newest message clear of them
     LaunchedEffect(bottomOverlayHeightPx) {
-        if (bottomOverlayHeightPx > 0 && listState.firstVisibleItemIndex <= 3) {
-            listState.animateScrollToItem(0, scrollOffset = 0)
-            delay(120)
+        if (bottomOverlayHeightPx > 0 && (listState.firstVisibleItemIndex <= 6 || isImeVisible) && reversedChatRowItems.isNotEmpty()) {
+            delay(50)
             if (listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset != 0) {
                 listState.scrollToItem(0, scrollOffset = 0)
             }
@@ -793,7 +828,6 @@ fun ChatScreen(
     }
 
     // Android back button & gesture: handle in-app dialogs first, else return to Home tab
-    val isImeVisible = androidx.compose.foundation.layout.WindowInsets.isImeVisible
     BackHandler(enabled = true) {
         if (isImeVisible) {
             keyboardController?.hide()
@@ -836,9 +870,9 @@ fun ChatScreen(
     LaunchedEffect(uiState.targetScrollMessageId, displayedMessages.size) {
         val targetId = uiState.targetScrollMessageId
         if (targetId != null && displayedMessages.isNotEmpty()) {
-            val reversedMessages = displayedMessages.reversed()
-            val targetIndex = reversedMessages.indexOfFirst { it.id == targetId }
-            if (targetIndex >= 0) {
+            val normalIndex = displayedMessages.indexOfFirst { it.id == targetId }
+            if (normalIndex >= 0) {
+                val targetIndex = displayedMessages.lastIndex - normalIndex
                 highlightedMessageId = targetId
                 listState.revealMessage(targetIndex)
                 kotlinx.coroutines.delay(800)
@@ -1296,40 +1330,23 @@ fun ChatScreen(
                         .navigationBarsPadding()
                         .imePadding()
                 ) {
-                MessageComposer(
-                    text = composerText,
-                    onTextChanged = {
-                        composerText = it
-                        viewModel.onTypingChanged(it.isNotBlank())
-                    },
-                    onSendText = {
-                        if (composerText.isNotBlank()) view.chatHaptic(ChatHaptic.Send)
-                        unreadJumpDone = true
-                        viewModel.sendTextMessage(composerText)
-                        composerText = ""
-                        viewModel.onTypingChanged(false)
-                    },
-                    replyingTo = uiState.replyingToMessage,
+                ChatBottomComposerBar(
+                    composerState = composerState,
+                    viewModel = viewModel,
+                    uiState = uiState,
                     isRecordingVoice = isRecordingVoice,
                     recordingDurationSec = recordingDurationSec,
                     recordingAmplitudes = recordingAmplitudes,
-                    onStartVoiceRecord = {
-                        val hasMic = ContextCompat.checkSelfPermission(
-                            context,
-                            Manifest.permission.RECORD_AUDIO
-                        ) == PackageManager.PERMISSION_GRANTED
-                        if (hasMic) {
-                            viewModel.startVoiceRecording()
-                        } else {
-                            com.example.security.SecurityPreferences.getInstance(context).ignoreNextPause = true
-                            micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                    partnerName = partnerName,
+                    myUser = myUser,
+                    onScheduleText = {
+                        if (composerState.text.isNotBlank()) {
+                            textToSchedule = composerState.text
+                            showScheduleSheet = true
                         }
                     },
-                    onStopAndSendVoiceRecord = { viewModel.stopAndSendVoiceRecording() },
-                    onCancelVoiceRecord = { viewModel.cancelVoiceRecording() },
-                    onTakePhoto = triggerCameraSnap,
+                    triggerCameraSnap = triggerCameraSnap,
                     onPickAttachment = { showAttachmentSheet = true },
-                    onScheduleText = { if (composerText.isNotBlank()) showScheduleSheet = true },
                     onRecordVideoNote = {
                         val missing = listOf(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO).filter {
                             ContextCompat.checkSelfPermission(context, it) != PackageManager.PERMISSION_GRANTED
@@ -1343,14 +1360,35 @@ fun ChatScreen(
                             videoNotePermissionLauncher.launch(missing.toTypedArray())
                         }
                     },
-                    myPhotoUrl = myUser?.photoUrl,
-                    myName = myUser?.displayName ?: "Me",
-                    placeholder = when {
-                        uiState.isStealthCurtainActive -> "Add a note..."
-                        uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE -> "Type a message..."
-                        else -> "Message $partnerName... ❤️"
+                    onMicPermissionRequired = {
+                        val hasMic = ContextCompat.checkSelfPermission(
+                            context,
+                            Manifest.permission.RECORD_AUDIO
+                        ) == PackageManager.PERMISSION_GRANTED
+                        if (hasMic) {
+                            viewModel.startVoiceRecording()
+                        } else {
+                            com.example.security.SecurityPreferences.getInstance(context).ignoreNextPause = true
+                            micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                        }
                     },
-                    isPrivateMode = (uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE)
+                    onSendHaptic = { view.chatHaptic(ChatHaptic.Send) },
+                    onUnreadJumpDone = { unreadJumpDone = true },
+                    onInputFocused = {
+                        if (reversedChatRowItems.isNotEmpty()) {
+                            scope.launch {
+                                listState.scrollToItem(0, scrollOffset = 0)
+                                delay(60)
+                                listState.scrollToItem(0, scrollOffset = 0)
+                                delay(180)
+                                listState.scrollToItem(0, scrollOffset = 0)
+                                delay(320)
+                                if (listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset != 0) {
+                                    listState.scrollToItem(0, scrollOffset = 0)
+                                }
+                            }
+                        }
+                    }
                 )
 
             }
@@ -1536,8 +1574,6 @@ fun ChatScreen(
                         onRestore = onQuickDisguise
                     )
             } else {
-                val reversedMessages = remember(displayedMessages) { displayedMessages.reversed() }
-                
                 val hasTodayMessages = remember(displayedMessages) { displayedMessages.any { isToday(it.timestamp) } }
                 // An empty day still opens with "Today" and the 2-person banner instead of a blank screen
                 val showEmptyTodayHeader = !hasTodayMessages && uiState.searchQuery.isBlank() && !uiState.filterStarredOnly
@@ -1568,11 +1604,23 @@ fun ChatScreen(
 
                 // The typing bubble sits under the list, so as it grows the newest messages move up
                 Column(modifier = Modifier.fillMaxSize()) {
+                var lastLazyColumnHeight by remember { mutableIntStateOf(0) }
                 LazyColumn(
                     state = listState,
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxWidth()
+                        .onSizeChanged { newSize ->
+                            val prevHeight = lastLazyColumnHeight
+                            lastLazyColumnHeight = newSize.height
+                            if (prevHeight > 0 && prevHeight != newSize.height && reversedChatRowItems.isNotEmpty()) {
+                                if (listState.firstVisibleItemIndex <= 3 || isImeVisible) {
+                                    scope.launch {
+                                        listState.scrollToItem(0, scrollOffset = 0)
+                                    }
+                                }
+                            }
+                        }
                         .pointerInput(Unit) {
                             detectTapGestures(onDoubleTap = { onQuickDisguise() })
                         },
@@ -1584,7 +1632,7 @@ fun ChatScreen(
                 ) {
                     // A new day with nothing shown yet: "Today" and the banner open the chat at the top
                     // (not in private chat, which stays plain)
-                    if (showEmptyTodayHeader && reversedMessages.isEmpty() &&
+                    if (showEmptyTodayHeader && reversedChatRowItems.isEmpty() &&
                         uiState.chatExperienceMode != com.example.ui.chat.ChatExperienceMode.PRIVATE
                     ) {
                         item(key = "empty_today_header", contentType = "today_header") {
@@ -1595,24 +1643,25 @@ fun ChatScreen(
                         }
                     }
 
-
-                    itemsIndexed(
-                        items = reversedMessages,
-                        key = { _, msg -> msg.id },
-                        contentType = { _, _ -> "message" }
-                    ) { index, message ->
+                    items(
+                        items = reversedChatRowItems,
+                        key = { it.message.id },
+                        contentType = { it.message.getTypedType().name }
+                    ) { item ->
+                        val message = item.message
                         val isFromMe = message.senderId == currentUserId
-                        val isFirstOfDay = index == reversedMessages.lastIndex || !isSameDay(reversedMessages[index + 1].timestamp, message.timestamp)
                         // A message that arrives while the chat is open lands with a spring
                         val isFreshArrival = remember(message.id) {
-                            index <= 1 && initialSnapshotTaken[0] &&
+                            initialSnapshotTaken[0] &&
+                                message.timestamp >= chatOpenedAt - 2_000L &&
                                 message.id !in initialMessageIds && landedMessageIds.add(message.id)
                         }
                         ChatMessageRow(
                             message = message,
                             isFromMe = isFromMe,
-                            isFirstOfDay = isFirstOfDay,
-                            isOldestShown = index == reversedMessages.lastIndex,
+                            isFirstOfDay = item.isFirstOfDay,
+                            dateSeparatorText = item.dateSeparatorText,
+                            isOldestShown = item.isOldestShown,
                             isFreshArrival = isFreshArrival,
                             isPrivate = uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE,
                             isDark = isDark,
@@ -1627,18 +1676,7 @@ fun ChatScreen(
                             actions = rowActions,
                             isLastReadMessage = (message.id == lastPartnerReadMessageId),
                             partnerPhotoUrl = uiState.partnerUser?.photoUrl,
-                            partnerName = partnerName,
-                            // Rows glide aside when messages are added or deleted instead of jumping;
-                            // new arrivals get their own landing
-                            modifier = Modifier.animateItem(
-                                fadeInSpec = null,
-                                placementSpec = spring(
-                                    dampingRatio = 0.86f,
-                                    stiffness = Spring.StiffnessMediumLow,
-                                    visibilityThreshold = IntOffset.VisibilityThreshold
-                                ),
-                                fadeOutSpec = tween(180)
-                            )
+                            partnerName = partnerName
                         )
                     }
 
@@ -1648,7 +1686,6 @@ fun ChatScreen(
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .animateItem()
                                     .padding(vertical = 14.dp),
                                 contentAlignment = Alignment.Center
                             ) {
@@ -1688,7 +1725,7 @@ fun ChatScreen(
 
                 // No message yet today but older ones are shown (Recover all): "Today" and the banner
                 // follow them, where the first message will land (once it does, its row shows them)
-                if (showEmptyTodayHeader && reversedMessages.isNotEmpty()) {
+                if (showEmptyTodayHeader && reversedChatRowItems.isNotEmpty()) {
                     val isPrivate = uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE
                     Column(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
                         DateSeparatorBadge(dateText = "Today", isPrivateMode = isPrivate, isDark = isDark)
@@ -1735,23 +1772,20 @@ fun ChatScreen(
                     showDateChip = false
                 }
             }
-            val topVisibleDate by remember(reversedMessages) {
+            val topVisibleDate by remember(reversedChatRowItems) {
                 derivedStateOf {
                     val layoutInfo = listState.layoutInfo
                     val topItem = layoutInfo.visibleItemsInfo.lastOrNull() ?: return@derivedStateOf null
                     val topIndex = topItem.index
-                    val message = reversedMessages.getOrNull(topIndex)
-                    if (message != null) {
-                        // The top message opens its day and its separator ("Yesterday"…) is on screen:
-                        // the date would show twice. (Offsets run from the bottom: the list is reversed.)
-                        val opensDay = topIndex == reversedMessages.lastIndex ||
-                            !isSameDay(reversedMessages[topIndex + 1].timestamp, message.timestamp)
+                    val rowItem = reversedChatRowItems.getOrNull(topIndex)
+                    if (rowItem != null) {
+                        val opensDay = rowItem.isFirstOfDay
                         if (opensDay && topItem.offset + topItem.size <= layoutInfo.viewportEndOffset) {
                             return@derivedStateOf null
                         }
                     }
-                    (message ?: reversedMessages.lastOrNull())
-                        ?.let { formatDateSeparator(it.timestamp) }
+                    val msg = rowItem?.message ?: reversedChatRowItems.lastOrNull()?.message
+                    msg?.let { formatDateSeparator(it.timestamp) }
                         ?.takeIf { it.isNotEmpty() }
                 }
             }
@@ -1775,12 +1809,12 @@ fun ChatScreen(
 
             // Jump-to-unread pill: "N new messages" while the first of them is off screen; a tap
             // goes straight there. Gone once it has been on screen.
-            val unreadJumpCount = remember(reversedMessages, unreadOnOpen) {
-                if (unreadOnOpen.isEmpty()) 0 else reversedMessages.count { it.id in unreadOnOpen }
+            val unreadJumpCount = remember(reversedChatRowItems, unreadOnOpen) {
+                if (unreadOnOpen.isEmpty()) 0 else reversedChatRowItems.count { it.message.id in unreadOnOpen }
             }
             // The oldest of them (the list runs bottom-up, so the highest index)
-            val unreadJumpIndex = remember(reversedMessages, unreadOnOpen) {
-                if (unreadOnOpen.isEmpty()) -1 else reversedMessages.indexOfLast { it.id in unreadOnOpen }
+            val unreadJumpIndex = remember(reversedChatRowItems, unreadOnOpen) {
+                if (unreadOnOpen.isEmpty()) -1 else reversedChatRowItems.indexOfLast { it.message.id in unreadOnOpen }
             }
             // 1 = above the screen, -1 = below it, 0 = on screen, null = not known yet
             val unreadJumpWhere by remember(unreadJumpIndex) {
@@ -1819,7 +1853,7 @@ fun ChatScreen(
                     onClick = {
                         val index = unreadJumpIndex
                         unreadJumpDone = true
-                        val target = reversedMessages.getOrNull(index)
+                        val target = reversedChatRowItems.getOrNull(index)?.message
                         if (target != null) {
                             view.chatHaptic(ChatHaptic.Tick)
                             scope.launch {
@@ -1916,7 +1950,7 @@ fun ChatScreen(
                             while (backIndex < 0 && replyReturns.isNotEmpty()) {
                                 val id = replyReturns.removeAt(replyReturns.lastIndex)
                                 back = id
-                                backIndex = reversedMessages.indexOfFirst { it.id == id }
+                                backIndex = reversedChatRowItems.indexOfFirst { it.message.id == id }
                             }
                             val returnTo = back.takeIf { backIndex >= 0 }
                             val returnIndex = backIndex
@@ -2303,10 +2337,11 @@ fun ChatScreen(
     // Send later: pick when (long-press on send)
     if (showScheduleSheet) {
         ScheduleMessageDialog(
-            text = composerText,
+            text = textToSchedule,
             onSchedule = { sendAt ->
-                viewModel.scheduleMessage(composerText, sendAt)
-                composerText = ""
+                viewModel.scheduleMessage(textToSchedule, sendAt)
+                composerState.text = ""
+                textToSchedule = ""
                 viewModel.onTypingChanged(false)
                 showScheduleSheet = false
                 Toast.makeText(context, "Scheduled for " + formatScheduleTime(sendAt), Toast.LENGTH_SHORT).show()
@@ -3168,6 +3203,7 @@ private fun ChatMessageRow(
     message: Message,
     isFromMe: Boolean,
     isFirstOfDay: Boolean,
+    dateSeparatorText: String = "",
     isOldestShown: Boolean,
     isFreshArrival: Boolean,
     isPrivate: Boolean,
@@ -3188,7 +3224,7 @@ private fun ChatMessageRow(
 ) {
     Column(modifier = modifier.fillMaxWidth()) {
         if (isFirstOfDay) {
-            val dateSep = formatDateSeparator(message.timestamp)
+            val dateSep = if (dateSeparatorText.isNotEmpty()) dateSeparatorText else formatDateSeparator(message.timestamp)
             val today = isToday(message.timestamp)
             // Private chat stays plain: no banner, and "Today" only to divide it from older days
             if (dateSep.isNotEmpty() && !(isPrivate && today && isOldestShown)) {
@@ -4130,6 +4166,68 @@ private fun AttachmentOptionItem(
         )
     }
 }
+
+@Composable
+private fun ChatBottomComposerBar(
+    composerState: ComposerState,
+    viewModel: ChatViewModel,
+    uiState: ChatUiState,
+    isRecordingVoice: Boolean,
+    recordingDurationSec: Int,
+    recordingAmplitudes: List<Float>,
+    partnerName: String,
+    myUser: com.example.data.model.User?,
+    onScheduleText: () -> Unit,
+    triggerCameraSnap: () -> Unit,
+    onPickAttachment: () -> Unit,
+    onRecordVideoNote: () -> Unit,
+    onMicPermissionRequired: () -> Unit,
+    onSendHaptic: () -> Unit,
+    onUnreadJumpDone: () -> Unit,
+    onInputFocused: () -> Unit = {},
+    modifier: Modifier = Modifier
+) {
+    MessageComposer(
+        text = composerState.text,
+        onTextChanged = {
+            composerState.text = it
+            viewModel.onTypingChanged(it.isNotBlank())
+        },
+        onSendText = {
+            val textToSend = composerState.text
+            if (textToSend.isNotBlank()) {
+                onSendHaptic()
+                onUnreadJumpDone()
+                onInputFocused()
+                viewModel.sendTextMessage(textToSend)
+                composerState.text = ""
+                viewModel.onTypingChanged(false)
+            }
+        },
+        replyingTo = uiState.replyingToMessage,
+        isRecordingVoice = isRecordingVoice,
+        recordingDurationSec = recordingDurationSec,
+        recordingAmplitudes = recordingAmplitudes,
+        onStartVoiceRecord = onMicPermissionRequired,
+        onStopAndSendVoiceRecord = { viewModel.stopAndSendVoiceRecording() },
+        onCancelVoiceRecord = { viewModel.cancelVoiceRecording() },
+        onTakePhoto = triggerCameraSnap,
+        onPickAttachment = onPickAttachment,
+        onScheduleText = onScheduleText,
+        onRecordVideoNote = onRecordVideoNote,
+        myPhotoUrl = myUser?.photoUrl,
+        myName = myUser?.displayName ?: "Me",
+        placeholder = when {
+            uiState.isStealthCurtainActive -> "Add a note..."
+            uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE -> "Type a message..."
+            else -> "Message $partnerName... ❤️"
+        },
+        isPrivateMode = (uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE),
+        onInputFocused = onInputFocused,
+        modifier = modifier
+    )
+}
+
 
 
 

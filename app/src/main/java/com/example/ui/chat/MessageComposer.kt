@@ -35,6 +35,7 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
@@ -96,6 +97,7 @@ fun MessageComposer(
     placeholder: String = "Message your love...",
     isPrivateMode: Boolean = false,
     onEmergencyExit: (() -> Unit)? = null,
+    onInputFocused: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -146,6 +148,7 @@ fun MessageComposer(
     }
 
     fun openEmojiBoard() {
+        onInputFocused()
         val keyboardNow = keyboardInsets.getBottom(density)
         if (keyboardNow > 0) keyboardHeightPx = keyboardNow
         showEmojiPanel = true
@@ -158,6 +161,7 @@ fun MessageComposer(
     }
 
     fun switchToKeyboard() {
+        onInputFocused()
         focusRequester.requestFocus()
         keyboardController?.show()
         giveWayToKeyboard()
@@ -654,6 +658,11 @@ fun MessageComposer(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .focusRequester(focusRequester)
+                                .onFocusChanged { focusState ->
+                                    if (focusState.isFocused) {
+                                        onInputFocused()
+                                    }
+                                }
                                 .testTag("composer_text_input")
                         )
                     }

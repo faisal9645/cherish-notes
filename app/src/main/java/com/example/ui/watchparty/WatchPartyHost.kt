@@ -61,6 +61,8 @@ import androidx.compose.material.icons.filled.Replay10
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.FullscreenExit
 import androidx.compose.material.icons.filled.VideoLibrary
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.HighQuality
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledIconButton
@@ -321,7 +323,13 @@ fun WatchPartyHost(app: CherishApplication, allowed: Boolean) {
     fun positionNow(p: WatchPartySession) = if (player.isReady) player.currentTime else p.positionAt()
     fun togglePlay() {
         val p = party ?: return
-        repo.updateWatchPartyPlayback(!p.isPlaying, positionNow(p))
+        val newPlaying = !p.isPlaying
+        if (newPlaying) {
+            player.play()
+        } else {
+            player.pause()
+        }
+        repo.updateWatchPartyPlayback(newPlaying, positionNow(p))
     }
     fun seek(to: Float) {
         val p = party ?: return
@@ -1244,6 +1252,70 @@ private fun PlaybackDeck(
                         androidx.compose.material3.DropdownMenuItem(
                             text = { Text("${rate}x") },
                             onClick = { onSpeedChange(rate); speedMenu = false }
+                        )
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.width(8.dp))
+            var qualityMenu by remember { mutableStateOf(false) }
+            val qualityList = listOf(
+                "auto" to "Auto",
+                "hd1080" to "1080p HD",
+                "hd720" to "720p HD",
+                "large" to "480p",
+                "medium" to "360p",
+                "small" to "240p",
+                "tiny" to "144p"
+            )
+            Box {
+                TextButton(
+                    onClick = { qualityMenu = true },
+                    modifier = Modifier.testTag("watch_party_quality_btn")
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.HighQuality,
+                        contentDescription = "Quality",
+                        modifier = Modifier.size(16.dp),
+                        tint = muted
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        player.qualityDisplayLabel,
+                        color = muted,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 12.sp
+                    )
+                }
+                androidx.compose.material3.DropdownMenu(
+                    expanded = qualityMenu,
+                    onDismissRequest = { qualityMenu = false }
+                ) {
+                    qualityList.forEach { (code, label) ->
+                        androidx.compose.material3.DropdownMenuItem(
+                            text = {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    val isSelected = player.currentQuality.equals(code, ignoreCase = true) ||
+                                        (code == "auto" && player.currentQuality.isBlank())
+                                    if (isSelected) {
+                                        Icon(
+                                            Icons.Default.Check,
+                                            contentDescription = null,
+                                            tint = accent,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                    }
+                                    Text(
+                                        text = label,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                        color = if (isSelected) accent else MaterialTheme.colorScheme.onSurface
+                                    )
+                                }
+                            },
+                            onClick = {
+                                player.setPlaybackQuality(code)
+                                qualityMenu = false
+                            }
                         )
                     }
                 }
