@@ -1,5 +1,9 @@
 package com.example.ui.chat
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.widget.Toast
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
@@ -13,6 +17,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -84,9 +89,9 @@ fun MessageBubble(
 ) {
     val bubbleShape = if (isPrivateMode) {
         if (isFromMe) {
-            RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 16.dp, bottomEnd = 4.dp)
+            RoundedCornerShape(20.dp)
         } else {
-            RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 4.dp, bottomEnd = 16.dp)
+            RoundedCornerShape(4.dp)
         }
     } else {
         if (isFromMe) {
@@ -100,9 +105,9 @@ fun MessageBubble(
 
     val bubbleBg = if (isPrivateMode) {
         if (isFromMe) {
-            if (isDark) darkTone(Color(0xFF2E2F33)) else Color(0xFFE5E7EB)
+            if (isDark) Color(0xFF2F2F2F) else Color(0xFFF4F4F4)
         } else {
-            if (isDark) darkTone(Color(0xFF1E1F22)) else Color(0xFFF3F4F6)
+            Color.Transparent
         }
     } else {
         if (isFromMe) {
@@ -113,7 +118,7 @@ fun MessageBubble(
     }
 
     val textColor = if (isPrivateMode) {
-        if (isDark) darkTone(Color(0xFFECECEC)) else Color(0xFF111827)
+        if (isDark) Color(0xFFECECEC) else Color(0xFF0D0D0D)
     } else {
         if (isFromMe) {
             Color.White
@@ -123,7 +128,7 @@ fun MessageBubble(
     }
 
     val timeColor = if (isPrivateMode) {
-        textColor.copy(alpha = 0.65f)
+        textColor.copy(alpha = 0.5f)
     } else {
         if (isFromMe) Color.White.copy(alpha = 0.85f)
         else darkTone(DayBlueSecondary)
@@ -471,7 +476,7 @@ fun MessageBubble(
                     MessageType.AUDIO -> 310.dp
                     MessageType.VIDEO -> 268.dp
                     MessageType.DOCUMENT -> 260.dp
-                    else -> 295.dp
+                    else -> if (isPrivateMode && !isFromMe) 340.dp else 295.dp
                 }
 
                 val bubbleHighlightScale = if (highlightPulse.value > 0f) {
@@ -489,7 +494,7 @@ fun MessageBubble(
                             if (isPhotoOnly) {
                                 Modifier.shadow(1.dp, cardShape)
                             } else if (isPrivateMode) {
-                                Modifier.shadow(0.5.dp, cardShape)
+                                Modifier
                             } else {
                                 if (isFromMe) Modifier.appGradientShadow(cardShape)
                                 else Modifier.shadow(0.8.dp, cardShape)
@@ -504,10 +509,12 @@ fun MessageBubble(
                                     cardShape
                                 )
                             } else if (isPhotoOnly) Modifier
-                            else if (isPrivateMode) Modifier.border(
-                                BorderStroke(0.6.dp, if (isDark) darkTone(Color(0xFF38393E)) else Color(0xFFE5E7EB)),
-                                cardShape
-                            )
+                            else if (isPrivateMode) {
+                                if (isFromMe) Modifier.border(
+                                    BorderStroke(0.6.dp, if (isDark) Color(0xFF383838) else Color(0xFFE5E5E5)),
+                                    cardShape
+                                ) else Modifier
+                            }
                             else if (!isFromMe) Modifier.border(
                                 BorderStroke(0.5.dp, if (isDark) darkSurface(Color(0xFF2A364F), Color(0xFF262626)) else Color(0xFFE2E8F0)),
                                 cardShape
@@ -537,7 +544,9 @@ fun MessageBubble(
                                 onPress = trackPress,
                                 onLongPress = onBubbleLongPress,
                                 onDoubleTap = {
-                                    triggerHeartBurst()
+                                    if (!isPrivateMode) {
+                                        triggerHeartBurst()
+                                    }
                                 }
                             )
                         }
@@ -552,9 +561,39 @@ fun MessageBubble(
                             if (isGenericPhotoText && message.replyToText.isNullOrEmpty()) PaddingValues(0.dp)
                             else PaddingValues(horizontal = 4.dp, vertical = 4.dp)
                         }
-                        else PaddingValues(horizontal = 10.dp, vertical = 6.dp)
+                        else if (isPrivateMode && !isFromMe) PaddingValues(start = 2.dp, end = 2.dp, top = 2.dp, bottom = 4.dp)
+                        else PaddingValues(horizontal = 12.dp, vertical = 7.dp)
                     )
             ) {
+                // ChatGPT AI Assistant Header
+                if (isPrivateMode && !isFromMe) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(bottom = 6.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(24.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFF10A37F)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.AutoAwesome,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(13.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "ChatGPT",
+                            fontSize = 13.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isDark) Color(0xFFECECEC) else Color(0xFF0D0D0D)
+                        )
+                    }
+                }
                 // Reply Quote Preview
                 if (!message.replyToText.isNullOrEmpty()) {
                     Surface(
@@ -1040,13 +1079,16 @@ fun MessageBubble(
 
                         if (isFromMe) {
                             Spacer(modifier = Modifier.width(4.dp))
+                            val tickTint = if (isPrivateMode) {
+                                if (isDark) Color(0xFF9CA3AF) else Color(0xFF6B7280)
+                            } else Color.White
                             MessageStatusTicks(message.getTypedStatus()) { status ->
                                 when (status) {
                                     MessageStatus.SENDING -> {
                                         Icon(
                                             imageVector = Icons.Default.AccessTime,
                                             contentDescription = "Sending",
-                                            tint = Color.White.copy(alpha = 0.6f),
+                                            tint = tickTint.copy(alpha = 0.6f),
                                             modifier = Modifier.size(11.dp)
                                         )
                                     }
@@ -1054,7 +1096,7 @@ fun MessageBubble(
                                         Icon(
                                             imageVector = Icons.Default.Check,
                                             contentDescription = "Sent",
-                                            tint = Color.White.copy(alpha = 0.8f),
+                                            tint = tickTint.copy(alpha = 0.8f),
                                             modifier = Modifier.size(12.dp)
                                         )
                                     }
@@ -1062,7 +1104,7 @@ fun MessageBubble(
                                         Icon(
                                             imageVector = Icons.Default.DoneAll,
                                             contentDescription = "Delivered",
-                                            tint = Color.White.copy(alpha = 0.9f),
+                                            tint = tickTint.copy(alpha = 0.9f),
                                             modifier = Modifier.size(13.dp)
                                         )
                                     }
@@ -1070,12 +1112,52 @@ fun MessageBubble(
                                         Icon(
                                             imageVector = Icons.Default.DoneAll,
                                             contentDescription = "Read",
-                                            tint = Color.White,
+                                            tint = tickTint,
                                             modifier = Modifier.size(13.dp)
                                         )
                                     }
                                 }
                             }
+                        }
+                    }
+
+                    // ChatGPT Assistant Action Icons Row (Copy, Thumbs Up, Thumbs Down, Read Aloud)
+                    if (isPrivateMode && !isFromMe) {
+                        Row(
+                            modifier = Modifier.padding(top = 8.dp, bottom = 2.dp),
+                            horizontalArrangement = Arrangement.spacedBy(14.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.ContentCopy,
+                                contentDescription = "Copy",
+                                tint = if (isDark) Color(0xFF9CA3AF) else Color(0xFF6B7280),
+                                modifier = Modifier
+                                    .size(16.dp)
+                                    .clickable {
+                                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+                                        clipboard?.setPrimaryClip(ClipData.newPlainText("ChatGPT", message.text))
+                                        Toast.makeText(context, "Copied to clipboard", Toast.LENGTH_SHORT).show()
+                                    }
+                            )
+                            Icon(
+                                imageVector = Icons.Outlined.ThumbUp,
+                                contentDescription = "Good response",
+                                tint = if (isDark) Color(0xFF9CA3AF) else Color(0xFF6B7280),
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Icon(
+                                imageVector = Icons.Outlined.ThumbDown,
+                                contentDescription = "Bad response",
+                                tint = if (isDark) Color(0xFF9CA3AF) else Color(0xFF6B7280),
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Icon(
+                                imageVector = Icons.Outlined.VolumeUp,
+                                contentDescription = "Read aloud",
+                                tint = if (isDark) Color(0xFF9CA3AF) else Color(0xFF6B7280),
+                                modifier = Modifier.size(16.dp)
+                            )
                         }
                     }
                 }
@@ -1118,7 +1200,7 @@ fun MessageBubble(
             }
         }
         AnimatedVisibility(
-            visible = message.reactions.isNotEmpty(),
+            visible = !isPrivateMode && message.reactions.isNotEmpty(),
             enter = scaleIn(spring(dampingRatio = 0.45f, stiffness = 500f), initialScale = 0.3f) + fadeIn(tween(120)),
             exit = scaleOut(tween(150), targetScale = 0.5f) + fadeOut(tween(150))
         ) {
@@ -1176,7 +1258,7 @@ fun MessageBubble(
             // Seen photo (small): a tiny round photo of your partner sits under the last message they've read and glides down as they read more, like Messenger
             // It leaves the message she'd read before and slides down into place under this one
             androidx.compose.animation.AnimatedVisibility(
-                visible = isFromMe && isLastReadMessage,
+                visible = !isPrivateMode && isFromMe && isLastReadMessage,
                 enter = androidx.compose.animation.expandVertically(tween(280)) +
                     slideInVertically(tween(320)) { -it } + fadeIn(tween(260)),
                 exit = androidx.compose.animation.shrinkVertically(tween(240)) + fadeOut(tween(180))

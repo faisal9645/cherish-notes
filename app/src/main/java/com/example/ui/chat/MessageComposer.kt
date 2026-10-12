@@ -239,14 +239,18 @@ fun MessageComposer(
     }
 
     val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
-    val barBg = MaterialTheme.colorScheme.surface
+    val barBg = if (isPrivateMode) {
+        if (isDark) Color(0xFF212121) else Color(0xFFFFFFFF)
+    } else {
+        MaterialTheme.colorScheme.surface
+    }
     val pillBg = if (isPrivateMode) {
-        if (isDark) darkTone(Color(0xFF212124)) else Color(0xFFF3F4F6)
+        if (isDark) Color(0xFF2F2F2F) else Color(0xFFF4F4F4)
     } else {
         if (isDark) darkSurface(Color(0xFF1E2638)) else Color.White
     }
     val pillBorder = if (isPrivateMode) {
-        if (isDark) darkTone(Color(0xFF2E2F33)) else Color(0xFFE5E7EB)
+        if (isDark) Color(0xFF383838) else Color(0xFFE5E5E5)
     } else {
         if (isDark) darkSurface(Color(0xFF2A364F), Color(0xFF262626)) else Color(0xFFE2E8F0)
     }
@@ -373,7 +377,7 @@ fun MessageComposer(
                 .widthIn(max = 600.dp)
                 .fillMaxWidth()
                 .align(Alignment.CenterHorizontally)
-                .padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 8.dp),
+                .padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = if (isPrivateMode) 4.dp else 8.dp),
             verticalAlignment = Alignment.Bottom
         ) {
             Column(
@@ -590,19 +594,41 @@ fun MessageComposer(
                     }
                 }
             } else {
-                // WhatsApp-Style Text Input Pill:
-                // [ 🙂 | Message your love... | 📎 | 📷 ]
+                // ChatGPT / Messaging Text Input Pill:
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .heightIn(min = 44.dp)
-                        .clip(RoundedCornerShape(26.dp))
+                        .heightIn(min = if (isPrivateMode) 48.dp else 44.dp)
+                        .clip(RoundedCornerShape(if (isPrivateMode) 24.dp else 26.dp))
                         .background(pillBg)
-                        .border(BorderStroke(1.dp, pillBorder), RoundedCornerShape(26.dp))
-                        .padding(start = if (isPrivateMode) 14.dp else 4.dp, end = if (isPrivateMode) 10.dp else 4.dp),
+                        .border(BorderStroke(1.dp, pillBorder), RoundedCornerShape(if (isPrivateMode) 24.dp else 26.dp))
+                        .padding(start = if (isPrivateMode) 8.dp else 4.dp, end = if (isPrivateMode) 8.dp else 4.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    if (!isPrivateMode) {
+                    if (isPrivateMode) {
+                        // ChatGPT (+) Attachment Action Pill inside left of input
+                        IconButton(
+                            onClick = onPickAttachment,
+                            modifier = Modifier
+                                .size(34.dp)
+                                .testTag("composer_attach_button")
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(28.dp)
+                                    .clip(CircleShape)
+                                    .background(if (isDark) Color(0xFF383838) else Color(0xFFE5E5EA)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Add,
+                                    contentDescription = "Attach file or photo",
+                                    tint = if (isDark) Color(0xFFECECEC) else Color(0xFF2C2C2E),
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        }
+                    } else {
                         // Far Left: 🙂 Emoji button
                         IconButton(
                             onClick = { if (showEmojiPanel) switchToKeyboard() else openEmojiBoard() },
@@ -623,18 +649,18 @@ fun MessageComposer(
                     Box(
                         modifier = Modifier
                             .weight(1f)
-                            .padding(horizontal = 4.dp, vertical = 6.dp),
+                            .padding(horizontal = 6.dp, vertical = 6.dp),
                         contentAlignment = Alignment.CenterStart
                     ) {
                         if (text.isEmpty()) {
                             Text(
                                 text = placeholder,
                                 color = if (isPrivateMode) {
-                                    if (isDark) darkTone(Color(0xFF9CA3AF)) else Color(0xFF6B7280)
+                                    if (isDark) Color(0xFF8E8E93) else Color(0xFF8E8E93)
                                 } else {
                                     Color(0xFF64748B)
                                 },
-                                fontSize = 13.sp,
+                                fontSize = if (isPrivateMode) 15.sp else 13.sp,
                                 maxLines = 1,
                                 overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                             )
@@ -646,14 +672,14 @@ fun MessageComposer(
                                 // The app's typeface, like the messages
                                 fontFamily = LocalTextStyle.current.fontFamily,
                                 color = if (isPrivateMode) {
-                                    if (isDark) darkTone(Color(0xFFECECEC)) else Color(0xFF111827)
+                                    if (isDark) Color(0xFFECECEC) else Color(0xFF0D0D0D)
                                 } else {
                                     if (isDark) Color.White else Color(0xFF0F172A)
                                 },
-                                fontSize = 14.sp,
-                                lineHeight = 18.sp
+                                fontSize = if (isPrivateMode) 15.sp else 14.sp,
+                                lineHeight = if (isPrivateMode) 20.sp else 18.sp
                             ),
-                            cursorBrush = SolidColor(if (isPrivateMode) (if (isDark) darkTone(Color(0xFFD1D5DB)) else Color(0xFF374151)) else DayBluePrimary),
+                            cursorBrush = SolidColor(if (isPrivateMode) (if (isDark) Color(0xFFECECEC) else Color(0xFF0D0D0D)) else DayBluePrimary),
                             maxLines = 5,
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -703,12 +729,12 @@ fun MessageComposer(
             }
         }
 
-            Spacer(modifier = Modifier.width(6.dp))
+            Spacer(modifier = Modifier.width(if (isPrivateMode) 8.dp else 6.dp))
 
             // Right-Side Action Circle: 🎤 Mic button (transitions to ✈️ Send button)
-            // Fixed 48.dp width so the mic / send button never shifts
+            // Fixed width so the mic / send button never shifts
             Box(
-                modifier = Modifier.width(48.dp),
+                modifier = Modifier.width(if (isPrivateMode) 40.dp else 48.dp),
                 contentAlignment = Alignment.BottomCenter
             ) {
                 // Lock indicator shown while holding Mic
@@ -755,19 +781,27 @@ fun MessageComposer(
                 ) { state ->
                     when (state) {
                         "SEND_TEXT" -> {
+                            val nothingToSend = text.isBlank()
                             val sendBg = if (isPrivateMode) {
-                                if (isDark) darkTone(Color(0xFFECECEC)) else Color(0xFF1F2937)
+                                if (nothingToSend) {
+                                    if (isDark) Color(0xFF2F2F2F) else Color(0xFFE5E5EA)
+                                } else {
+                                    if (isDark) Color.White else Color(0xFF000000)
+                                }
                             } else null
                             val sendTint = if (isPrivateMode) {
-                                if (isDark) darkTone(Color(0xFF111827)) else Color.White
+                                if (nothingToSend) {
+                                    if (isDark) Color(0xFF6E6E73) else Color(0xFF8E8E93)
+                                } else {
+                                    if (isDark) Color(0xFF111827) else Color.White
+                                }
                             } else Color.White
 
                             // Private chat keeps Send in place, faded until there's text
-                            val nothingToSend = text.isBlank()
-                            val sendAlpha by animateFloatAsState(if (nothingToSend) 0.45f else 1f, label = "send_alpha")
+                            val sendAlpha by animateFloatAsState(if (isPrivateMode) 1f else (if (nothingToSend) 0.45f else 1f), label = "send_alpha")
                             Box(
                                 modifier = Modifier
-                                    .size(48.dp)
+                                    .size(if (isPrivateMode) 40.dp else 48.dp)
                                     .graphicsLayer {
                                         scaleX = sendBounce.value
                                         scaleY = sendBounce.value
@@ -804,7 +838,7 @@ fun MessageComposer(
                                     imageVector = if (isPrivateMode) Icons.Default.ArrowUpward else Icons.Default.Send,
                                     contentDescription = "Send",
                                     tint = sendTint,
-                                    modifier = Modifier.size(22.dp)
+                                    modifier = Modifier.size(if (isPrivateMode) 20.dp else 22.dp)
                                 )
                             }
                         }
@@ -1044,6 +1078,20 @@ fun MessageComposer(
             }
         }
 
+        if (isPrivateMode) {
+            Text(
+                text = "ChatGPT can make mistakes. Check important info.",
+                style = MaterialTheme.typography.bodySmall.copy(
+                    fontSize = 11.sp,
+                    color = if (isDark) Color(0xFF8E8E93) else Color(0xFF6E6E73),
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                ),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 2.dp, bottom = 6.dp, start = 16.dp, end = 16.dp)
+            )
+        }
+
         // 22. WhatsApp/Telegram-Style Tabbed Emoji Panel, in the keyboard's place
         if (isEmojiBoardShown && !isRecordingVoice) {
             val boardHeightPx = if (keyboardHeightPx > 0) keyboardHeightPx else with(density) { 280.dp.roundToPx() }
@@ -1166,16 +1214,16 @@ fun ReplyPreviewCard(
     modifier: Modifier = Modifier
 ) {
     val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
-    val accent = if (isPrivateMode) (if (isDark) darkTone(Color(0xFF9CA3AF)) else Color(0xFF6B7280)) else MaterialTheme.colorScheme.primary
+    val accent = if (isPrivateMode) Color(0xFF10A37F) else MaterialTheme.colorScheme.primary
     val cardColor = when {
-        isPrivateMode -> if (isDark) darkTone(Color(0xFF26272B)) else Color(0xFFF3F4F6)
+        isPrivateMode -> if (isDark) Color(0xFF2F2F2F) else Color(0xFFF4F4F4)
         isDark -> darkSurface(Color(0xFF263049), Color(0xFF181818))
         else -> androidx.compose.ui.graphics.lerp(Color.White, accent, 0.07f)
     }
     Surface(
         shape = RoundedCornerShape(14.dp),
         color = cardColor,
-        border = BorderStroke(1.dp, accent.copy(alpha = if (isDark) 0.35f else 0.22f)),
+        border = BorderStroke(1.dp, if (isPrivateMode) (if (isDark) Color(0xFF383838) else Color(0xFFE5E5E5)) else accent.copy(alpha = if (isDark) 0.35f else 0.22f)),
         shadowElevation = 6.dp,
         modifier = modifier
     ) {
@@ -1202,10 +1250,10 @@ fun ReplyPreviewCard(
                 horizontalAlignment = Alignment.Start
             ) {
                 Text(
-                    text = "Replying to ${reply.senderName ?: "Partner"}",
+                    text = "Replying to ${if (isPrivateMode) (reply.senderName ?: "ChatGPT") else (reply.senderName ?: "Partner")}",
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
-                    color = if (isPrivateMode) (if (isDark) darkTone(Color(0xFFECECEC)) else Color(0xFF111827)) else accent,
+                    color = if (isPrivateMode) (if (isDark) Color(0xFFECECEC) else Color(0xFF0D0D0D)) else accent,
                     maxLines = 1,
                     overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                 )

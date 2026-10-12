@@ -1037,7 +1037,28 @@ fun ChatScreen(
                         val isPrivate = uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE
                         
                         if (isPrivate) {
-                            // ChatGPT screen style: Hide title and lock icon completely
+                            // ChatGPT screen style: Model selector pill
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .clickable { viewModel.toggleChatExperienceMode() }
+                                    .padding(horizontal = 6.dp, vertical = 4.dp)
+                            ) {
+                                Text(
+                                    text = "ChatGPT",
+                                    fontSize = 17.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = if (isDark) Color(0xFFECECEC) else Color(0xFF0D0D0D)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Icon(
+                                    imageVector = Icons.Default.KeyboardArrowDown,
+                                    contentDescription = null,
+                                    tint = if (isDark) Color(0xFF9CA3AF) else Color(0xFF6B7280),
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
                         } else {
                             ChatPartnerHeaderContent(
                                 presenceFlow = viewModel.partnerPresence,
@@ -1068,10 +1089,13 @@ fun ChatScreen(
                             .testTag("chat_back_button")
                     ) {
                         Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            imageVector = if (uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE)
+                                Icons.Default.Menu
+                            else
+                                Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Back",
                             tint = if (uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE)
-                                MaterialTheme.colorScheme.onSurface
+                                (if (isDark) Color(0xFFECECEC) else Color(0xFF0D0D0D))
                             else
                                 MaterialTheme.colorScheme.onSurface,
                             modifier = Modifier.size(24.dp)
@@ -1088,8 +1112,29 @@ fun ChatScreen(
                         }
                     } else {
                         val isPrivate = uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE
-                        val iconTint = if (isPrivate) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface
-                        if (!isPrivate) {
+                        val iconTint = if (isPrivate) (if (isDark) Color(0xFFECECEC) else Color(0xFF0D0D0D)) else MaterialTheme.colorScheme.onSurface
+                        if (isPrivate) {
+                            // ChatGPT Top Action: New Chat icon
+                            IconButton(
+                                onClick = { viewModel.toggleChatExperienceMode() },
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .testTag("chat_swap_mode_button")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.Edit,
+                                    contentDescription = "New chat",
+                                    tint = iconTint,
+                                    modifier = Modifier.size(22.dp)
+                                )
+                            }
+                            IconButton(
+                                onClick = { showChatMenu = true },
+                                modifier = Modifier.size(40.dp)
+                            ) {
+                                Icon(Icons.Default.MoreVert, contentDescription = "More options", tint = iconTint, modifier = Modifier.size(22.dp))
+                            }
+                        } else {
                             IconButton(
                                 onClick = { viewModel.setSearching(true) },
                                 modifier = Modifier
@@ -1119,91 +1164,92 @@ fun ChatScreen(
                                     modifier = Modifier.size(23.dp)
                                 )
                             }
-                        }
 
-                        IconButton(
-                            onClick = { viewModel.toggleChatExperienceMode() },
-                            modifier = Modifier
-                                .size(40.dp)
-                                .testTag("chat_swap_mode_button")
-                        ) {
-                            Icon(
-                                imageVector = if (isPrivate) Icons.Filled.Lock else Icons.Outlined.Lock,
-                                contentDescription = if (isPrivate) "Switch to Normal Mode" else "Switch to Private Mode",
-                                tint = if (isPrivate) MaterialTheme.colorScheme.primary else iconTint,
-                                modifier = Modifier.size(22.dp)
-                            )
-                        }
-
-                        Box {
                             IconButton(
-                                onClick = { showChatMenu = true },
-                                modifier = Modifier.size(40.dp)
+                                onClick = { viewModel.toggleChatExperienceMode() },
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .testTag("chat_swap_mode_button")
                             ) {
-                                Icon(Icons.Default.MoreVert, contentDescription = "More options", tint = iconTint, modifier = Modifier.size(23.dp))
+                                Icon(
+                                    imageVector = Icons.Outlined.Lock,
+                                    contentDescription = "Switch to Private Mode",
+                                    tint = iconTint,
+                                    modifier = Modifier.size(22.dp)
+                                )
                             }
-                            DropdownMenu(
-                                expanded = showChatMenu,
-                                onDismissRequest = { showChatMenu = false }
-                            ) {
-                                DropdownMenuItem(
-                                    text = {
-                                        val myMood = myUser?.mood?.takeIf {
-                                            it.isNotBlank() && (myUser?.moodAt ?: 0L).let { at -> at == 0L || System.currentTimeMillis() - at < MOOD_FRESH_MS }
-                                        }
-                                        Text(
-                                            text = if (myMood != null) "Mood: $myMood" else "Set Mood Status",
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
-                                    },
-                                    onClick = {
-                                        showChatMenu = false
-                                        showMoodPicker = true
-                                    },
-                                    leadingIcon = { Icon(Icons.Outlined.Mood, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface) }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("Starred Messages") },
-                                    onClick = {
-                                        showChatMenu = false
-                                        viewModel.toggleFilterStarred()
-                                    },
-                                    leadingIcon = { Icon(Icons.Outlined.Star, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface) }
-                                )
-                                // The starred messages as a little book
-                                DropdownMenuItem(
-                                    text = { Text("Our Words") },
-                                    onClick = {
-                                        showChatMenu = false
-                                        onNavigateToOurWords()
-                                    },
-                                    leadingIcon = { Icon(Icons.AutoMirrored.Filled.MenuBook, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface) },
-                                    modifier = Modifier.testTag("chat_menu_our_words")
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("Clear Chat") },
-                                    onClick = {
-                                        showChatMenu = false
-                                        showClearChatDialog = true
-                                    },
-                                    leadingIcon = { Icon(Icons.Outlined.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface) }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("Logout") },
-                                    onClick = {
-                                        showChatMenu = false
-                                        viewModel.logout()
-                                        onLoggedOut()
-                                    },
-                                    leadingIcon = { Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface) }
-                                )
+
+                            Box {
+                                IconButton(
+                                    onClick = { showChatMenu = true },
+                                    modifier = Modifier.size(40.dp)
+                                ) {
+                                    Icon(Icons.Default.MoreVert, contentDescription = "More options", tint = iconTint, modifier = Modifier.size(23.dp))
+                                }
+                                DropdownMenu(
+                                    expanded = showChatMenu,
+                                    onDismissRequest = { showChatMenu = false }
+                                ) {
+                                    DropdownMenuItem(
+                                        text = {
+                                            val myMood = myUser?.mood?.takeIf {
+                                                it.isNotBlank() && (myUser?.moodAt ?: 0L).let { at -> at == 0L || System.currentTimeMillis() - at < MOOD_FRESH_MS }
+                                            }
+                                            Text(
+                                                text = if (myMood != null) "Mood: $myMood" else "Set Mood Status",
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        },
+                                        onClick = {
+                                            showChatMenu = false
+                                            showMoodPicker = true
+                                        },
+                                        leadingIcon = { Icon(Icons.Outlined.Mood, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface) }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("Starred Messages") },
+                                        onClick = {
+                                            showChatMenu = false
+                                            viewModel.toggleFilterStarred()
+                                        },
+                                        leadingIcon = { Icon(Icons.Outlined.Star, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface) }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("Our Words") },
+                                        onClick = {
+                                            showChatMenu = false
+                                            onNavigateToOurWords()
+                                        },
+                                        leadingIcon = { Icon(Icons.AutoMirrored.Filled.MenuBook, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface) },
+                                        modifier = Modifier.testTag("chat_menu_our_words")
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("Clear Chat") },
+                                        onClick = {
+                                            showChatMenu = false
+                                            showClearChatDialog = true
+                                        },
+                                        leadingIcon = { Icon(Icons.Outlined.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface) }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("Logout") },
+                                        onClick = {
+                                            showChatMenu = false
+                                            viewModel.logout()
+                                            onLoggedOut()
+                                        },
+                                        leadingIcon = { Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface) }
+                                    )
+                                }
                             }
                         }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = if (showWallpaper) {
+                    containerColor = if (uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE) {
+                        if (isDark) Color(0xFF212121) else Color(0xFFFFFFFF)
+                    } else if (showWallpaper) {
                         MaterialTheme.colorScheme.surface.copy(alpha = if (android.os.Build.VERSION.SDK_INT >= 31) 0.72f else 0.92f)
                     } else {
                         MaterialTheme.colorScheme.surface
@@ -1211,14 +1257,23 @@ fun ChatScreen(
                 ),
                 windowInsets = WindowInsets.statusBars
             )
-            HorizontalDivider(thickness = 1.dp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+            HorizontalDivider(
+                thickness = 0.5.dp,
+                color = if (uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE) {
+                    if (isDark) Color(0xFF2F2F2F) else Color(0xFFE5E5E5)
+                } else {
+                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)
+                }
+            )
             }
             }
             }
         },
         bottomBar = {
             val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
-            val barBg = if (isDark) TrueDarkSurface else Color.White
+            val barBg = if (uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE) {
+                if (isDark) Color(0xFF212121) else Color(0xFFFFFFFF)
+            } else if (isDark) TrueDarkSurface else Color.White
             // Not a Surface, which clips its content: the voice-lock hint floats above the mic button
             Box(
                 modifier = Modifier
@@ -1301,7 +1356,9 @@ fun ChatScreen(
                 }
             }
     },
-        containerColor = if (showWallpaper) Color.Transparent else MaterialTheme.colorScheme.background
+        containerColor = if (showWallpaper) Color.Transparent else if (uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE) {
+            if (isDark) Color(0xFF212121) else Color(0xFFFFFFFF)
+        } else MaterialTheme.colorScheme.background
     ) { paddingValues ->
         Column(
             modifier = Modifier
@@ -1538,13 +1595,46 @@ fun ChatScreen(
                 ) {
                     // A new day with nothing shown yet: "Today" and the banner open the chat at the top
                     // (not in private chat, which stays plain)
-                    if (showEmptyTodayHeader && reversedChatRowItems.isEmpty() &&
-                        uiState.chatExperienceMode != com.example.ui.chat.ChatExperienceMode.PRIVATE
-                    ) {
-                        item(key = "empty_today_header", contentType = "today_header") {
-                            Column(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
-                                DateSeparatorBadge(dateText = "Today", isPrivateMode = false, isDark = isDark)
-                                StrictlyTwoPersonBanner(isPrivateMode = false, isDark = isDark)
+                    if (reversedChatRowItems.isEmpty()) {
+                        if (uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE) {
+                            item(key = "chatgpt_empty_state", contentType = "empty_state") {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(top = 80.dp, bottom = 40.dp, start = 24.dp, end = 24.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(60.dp)
+                                                .clip(CircleShape)
+                                                .background(if (isDark) Color(0xFF2F2F2F) else Color(0xFFF4F4F4)),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Outlined.AutoAwesome,
+                                                contentDescription = null,
+                                                tint = if (isDark) Color.White else Color(0xFF0D0D0D),
+                                                modifier = Modifier.size(30.dp)
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.height(16.dp))
+                                        Text(
+                                            text = "What can I help with today?",
+                                            fontSize = 20.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = if (isDark) Color(0xFFECECEC) else Color(0xFF0D0D0D)
+                                        )
+                                    }
+                                }
+                            }
+                        } else if (showEmptyTodayHeader) {
+                            item(key = "empty_today_header", contentType = "today_header") {
+                                Column(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
+                                    DateSeparatorBadge(dateText = "Today", isPrivateMode = false, isDark = isDark)
+                                    StrictlyTwoPersonBanner(isPrivateMode = false, isDark = isDark)
+                                }
                             }
                         }
                     }
@@ -3750,16 +3840,61 @@ private fun ChatPartnerTypingBubbleWrapper(
     isDark: Boolean
 ) {
     val presence by presenceFlow.collectAsState()
-    PartnerTypingBubble(
-        visible = (presence.isTyping || presence.isRecordingAudio) &&
-            chatExperienceMode != com.example.ui.chat.ChatExperienceMode.PRIVATE &&
-            !isSearching && isAtBottom,
-        isRecording = presence.isRecordingAudio,
-        partnerPhotoUrl = presence.photoUrl ?: partnerPhotoUrl,
-        partnerName = presence.displayName.ifBlank { fallbackPartnerName },
-        isDark = isDark,
-        typingPace = presence.typingPace
-    )
+    if (chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE) {
+        val showTyping = (presence.isTyping || presence.isRecordingAudio) && !isSearching && isAtBottom
+        AnimatedVisibility(
+            visible = showTyping,
+            enter = fadeIn(tween(140)) + expandVertically(spring(dampingRatio = 0.8f, stiffness = 500f)),
+            exit = fadeOut(tween(140)) + shrinkVertically(tween(160))
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .padding(start = 20.dp, top = 4.dp, bottom = 8.dp)
+                    .testTag("chatgpt_typing_indicator")
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(24.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFF10A37F)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.AutoAwesome,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(13.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.width(10.dp))
+                val infiniteTransition = rememberInfiniteTransition(label = "pulse_chatgpt")
+                val dotAlpha by infiniteTransition.animateFloat(
+                    initialValue = 0.25f,
+                    targetValue = 1f,
+                    animationSpec = infiniteRepeatable(tween(550), RepeatMode.Reverse),
+                    label = "dot_alpha"
+                )
+                Box(
+                    modifier = Modifier
+                        .size(10.dp)
+                        .clip(CircleShape)
+                        .background(if (isDark) Color(0xFFECECEC).copy(alpha = dotAlpha) else Color(0xFF0D0D0D).copy(alpha = dotAlpha))
+                )
+            }
+        }
+    } else {
+        PartnerTypingBubble(
+            visible = (presence.isTyping || presence.isRecordingAudio) &&
+                chatExperienceMode != com.example.ui.chat.ChatExperienceMode.PRIVATE &&
+                !isSearching && isAtBottom,
+            isRecording = presence.isRecordingAudio,
+            partnerPhotoUrl = presence.photoUrl ?: partnerPhotoUrl,
+            partnerName = presence.displayName.ifBlank { fallbackPartnerName },
+            isDark = isDark,
+            typingPace = presence.typingPace
+        )
+    }
 }
 
 /**
@@ -4318,7 +4453,7 @@ private fun ChatBottomComposerBar(
         myName = myUser?.displayName ?: "Me",
         placeholder = when {
             uiState.isStealthCurtainActive -> "Add a note..."
-            uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE -> "Type a message..."
+            uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE -> "Message ChatGPT..."
             else -> "Message $partnerName... ❤️"
         },
         isPrivateMode = (uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE),
