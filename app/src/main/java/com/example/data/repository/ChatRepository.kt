@@ -29,6 +29,7 @@ import kotlinx.coroutines.withContext
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import okio.buffer
+import okio.sink
 import okio.source
 
 class ChatRepository(
@@ -113,8 +114,56 @@ class ChatRepository(
         return cal.timeInMillis
     }
 
+    private val chatCacheFile by lazy {
+        java.io.File(context.filesDir, "cherish_recent_chat_cache.json")
+    }
+
+    private fun loadRecentCachedMessages(): List<Message> {
+        return try {
+            if (!chatCacheFile.exists()) return emptyList()
+            val moshi = com.squareup.moshi.Moshi.Builder()
+                .add(com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory())
+                .build()
+            val listType = com.squareup.moshi.Types.newParameterizedType(List::class.java, Message::class.java)
+            val adapter = moshi.adapter<List<Message>>(listType)
+            chatCacheFile.source().buffer().use { source ->
+                adapter.fromJson(source).orEmpty()
+            }
+        } catch (e: Exception) {
+            Log.w("ChatRepository", "Failed to load recent cached messages", e)
+            emptyList()
+        }
+    }
+
+    private fun saveRecentCachedMessages(messages: List<Message>) {
+        if (messages.isEmpty()) return
+        repoScope.launch {
+            try {
+                // Keep the most recent 200 messages for instantaneous cold start
+                val recent = if (messages.size > 200) messages.takeLast(200) else messages
+                val moshi = com.squareup.moshi.Moshi.Builder()
+                    .add(com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory())
+                    .build()
+                val listType = com.squareup.moshi.Types.newParameterizedType(List::class.java, Message::class.java)
+                val adapter = moshi.adapter<List<Message>>(listType)
+                val tempFile = java.io.File(context.filesDir, "cherish_recent_chat_cache.tmp")
+                tempFile.sink().buffer().use { sink ->
+                    adapter.toJson(sink, recent)
+                }
+                if (tempFile.exists()) {
+                    tempFile.renameTo(chatCacheFile)
+                }
+            } catch (e: Exception) {
+                Log.w("ChatRepository", "Failed to save recent cached messages", e)
+            }
+        }
+    }
+
     init {
-        _messagesFlow.value = emptyList()
+        // Instant cold start: load recent messages from the phone's local cache immediately
+        val initialCached = loadRecentCachedMessages()
+        _messagesFlow.value = initialCached
+
         CoroutineScope(Dispatchers.IO).launch {
             authRepository.currentUserState
                 .map { it?.coupleId?.trim()?.ifBlank { null } }
@@ -713,7 +762,9 @@ class ChatRepository(
             map[m.id] = m
         }
 
-        _messagesFlow.value = map.values.sortedBy { it.timestamp }
+        val sortedList = map.values.sortedBy { it.timestamp }
+        _messagesFlow.value = sortedList
+        saveRecentCachedMessages(sortedList)
     }
 
     /**

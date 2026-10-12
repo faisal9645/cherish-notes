@@ -370,8 +370,11 @@ fun BothOfUsCard(
     val blue = cardColors.blueInk
 
     // The center hearts beat realistically, expanding and shrinking like a living heartbeat
+    // Pauses completely when card is off-screen or the app is hidden/backgrounded
+    val isForeground = com.example.ui.components.rememberAppIsResumed()
+    val isCardActive = isVisible && isForeground
     val still = remember { mutableFloatStateOf(1f) }
-    val beat: State<Float> = if (isVisible) {
+    val beat: State<Float> = if (isCardActive) {
         rememberInfiniteTransition(label = "couple_hearts").animateFloat(
             initialValue = 1f,
             targetValue = 1f,
@@ -394,7 +397,7 @@ fun BothOfUsCard(
     }
 
     // The background hearts float very slowly (one gentle clock, read only while drawing)
-    val drift: State<Float> = if (isVisible) {
+    val drift: State<Float> = if (isCardActive) {
         rememberInfiniteTransition(label = "couple_background").animateFloat(
             initialValue = 0f,
             targetValue = 1f,
@@ -404,7 +407,7 @@ fun BothOfUsCard(
     } else {
         still
     }
-    val flight: State<Float> = if (isVisible) {
+    val flight: State<Float> = if (isCardActive) {
         rememberInfiniteTransition(label = "couple_flying_hearts").animateFloat(
             initialValue = 0f,
             targetValue = 1f,

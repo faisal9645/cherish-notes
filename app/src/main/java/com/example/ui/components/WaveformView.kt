@@ -51,8 +51,9 @@ fun WaveformView(
     var isDragging by remember { mutableStateOf(false) }
 
     // Live continuous animation only active during recording or playback to conserve CPU and battery;
-    // a slower sway while a voice note plays (on either side of the chat)
-    val wavePhase = if (isRecording || isPlaying) {
+    // pause completely when the app is hidden or screen is paused
+    val isForeground = rememberAppIsResumed()
+    val wavePhase = if ((isRecording || isPlaying) && isForeground) {
         val transition = rememberInfiniteTransition(label = "waveform_motion")
         val phase by transition.animateFloat(
             initialValue = 0f,
@@ -68,7 +69,7 @@ fun WaveformView(
         0f
     }
 
-    val playheadPulse = if (isPlaying) {
+    val playheadPulse = if (isPlaying && isForeground) {
         val transition = rememberInfiniteTransition(label = "waveform_pulse")
         val pulse by transition.animateFloat(
             initialValue = 0.88f,

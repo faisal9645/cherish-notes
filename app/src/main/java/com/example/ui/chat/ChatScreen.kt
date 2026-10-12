@@ -95,6 +95,9 @@ import androidx.compose.ui.zIndex
 import com.example.ui.theme.*
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.StateFlow
 import androidx.core.content.FileProvider
 import java.io.File
 import java.text.SimpleDateFormat
@@ -209,10 +212,15 @@ fun ChatScreen(
     }
 
     // Automatically open Heartbeat Touch dialog when partner starts heartbeat touching
-    LaunchedEffect(uiState.isPartnerHeartTouching) {
-        if (uiState.isPartnerHeartTouching && !showHeartbeatTouch) {
-            showHeartbeatTouch = true
-        }
+    LaunchedEffect(Unit) {
+        viewModel.partnerPresence
+            .map { it.isHeartTouching }
+            .distinctUntilChanged()
+            .collect { touching ->
+                if (touching && !showHeartbeatTouch) {
+                    showHeartbeatTouch = true
+                }
+            }
     }
 
     val currentPlayingIdState = viewModel.voicePlayerHelper.currentlyPlayingId.collectAsState()
@@ -423,17 +431,24 @@ fun ChatScreen(
     }
 
     // When partner starts OR stops typing/recording, ensure their last message stays fully visible and not pushed low
-    LaunchedEffect(uiState.isPartnerTyping, uiState.isPartnerRecordingAudio) {
-        if (reversedChatRowItems.isNotEmpty()) {
-            delay(40)
-            listState.scrollToItem(0, scrollOffset = 0)
-            delay(140)
-            listState.scrollToItem(0, scrollOffset = 0)
-            delay(280)
-            if (listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset != 0) {
-                listState.scrollToItem(0, scrollOffset = 0)
+    LaunchedEffect(Unit) {
+        viewModel.partnerPresence
+            .map { it.isTyping to it.isRecordingAudio }
+            .distinctUntilChanged()
+            .collect { (typing, recording) ->
+                if (typing || recording) {
+                    if (reversedChatRowItems.isNotEmpty()) {
+                        delay(40)
+                        listState.scrollToItem(0, scrollOffset = 0)
+                        delay(140)
+                        listState.scrollToItem(0, scrollOffset = 0)
+                        delay(280)
+                        if (listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset != 0) {
+                            listState.scrollToItem(0, scrollOffset = 0)
+                        }
+                    }
+                }
             }
-        }
     }
 
     // When user types in bottom bar, ensure chat remains anchored to the newest message
@@ -1024,141 +1039,18 @@ fun ChatScreen(
                         if (isPrivate) {
                             // ChatGPT screen style: Hide title and lock icon completely
                         } else {
-                            val isPartnerOnline = uiState.isPartnerOnline
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier
-                                    .padding(start = 2.dp, end = 6.dp, top = 2.dp, bottom = 2.dp)
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .clickable(
-                                            interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
-                                            indication = null
-                                        ) {
-                                            val app = context.applicationContext as? com.example.CherishApplication
-                                            app?.securityPreferences?.isMediaViewerActive = true
-                                            showFullProfilePicViewer = true
-                                        }
-                                ) {
-                                    AvatarView(
-                                        photoUrl = partner?.photoUrl,
-                                        name = partnerName,
-                                        size = 46.dp,
-                                        isOnline = isPartnerOnline,
-                                        showOnlineBadge = !partnerHasCheckAfter
-                                    )
-                                }
-                                // Name and status close beside the photo, centred on it
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Column(
-                                    modifier = Modifier.weight(1f, fill = false),
-                                    verticalArrangement = Arrangement.Center
-                                ) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                    ) {
-                                        Text(
-                                            text = partnerName,
-                                            fontSize = 16.5.sp,
-                                            lineHeight = 19.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis,
-                                            color = if (isDark) Color.White else Color(0xFF0F172A)
-                                        )
-
-                                        // Partner Mood Pill
-                                        val partnerMood = partner?.mood?.takeIf {
-                                            val moodAt = partner?.moodAt ?: 0L
-                                            moodAt == 0L || System.currentTimeMillis() - moodAt < MOOD_FRESH_MS
-                                        }
-                                        if (!partnerMood.isNullOrBlank()) {
-                                            Surface(
-                                                shape = RoundedCornerShape(10.dp),
-                                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.75f),
-                                                modifier = Modifier
-                                                    .weight(1f, fill = false)
-                                                    .clickable { showMoodPicker = true }
-                                            ) {
-                                                EmojiText(
-                                                    text = partnerMood,
-                                                    fontSize = 10.sp,
-                                                    fontWeight = FontWeight.Medium,
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                    maxLines = 1,
-                                                    overflow = TextOverflow.Ellipsis,
-                                                    emojiScale = 1.2f,
-                                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                                )
-                                            }
-                                        }
-                                    }
-                                    val statusText = when {
-                                        partnerHasCheckAfter -> {
-                                            if (headerRemaining.startsWith("✨")) "✨ Reconnecting now"
-                                            else "🌙 Quiet time (${CheckAfterHelper.formatTargetTime(partnerCheckAfterTarget)})"
-                                        }
-                                        uiState.isPartnerRecordingAudio -> "recording audio..."
-                                        uiState.isPartnerTyping -> "typing..."
-                                        isPartnerOnline -> "Online"
-                                        else -> {
-                                            // The exact time, which stays right while the screen sits open
-                                            // (a "2m ago" would freeze until something else changed)
-                                            val lastSeen = partner?.lastSeen ?: 0L
-                                            if (lastSeen > 0L) {
-                                                val time = SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date(lastSeen))
-                                                when {
-                                                    android.text.format.DateUtils.isToday(lastSeen) -> "last seen today at $time"
-                                                    android.text.format.DateUtils.isToday(lastSeen + android.text.format.DateUtils.DAY_IN_MILLIS) ->
-                                                        "last seen yesterday at $time"
-                                                    else -> {
-                                                        val sdf = SimpleDateFormat("MMM d, h:mm a", Locale.getDefault())
-                                                        "last seen ${sdf.format(Date(lastSeen))}"
-                                                    }
-                                                }
-                                            } else {
-                                                "offline"
-                                            }
-                                        }
-                                    }
-                                    val cherApp = context.applicationContext as? com.example.CherishApplication
-                                    val customPartnerTz by (cherApp?.securityPreferences?.partnerCustomTimeZone ?: kotlinx.coroutines.flow.MutableStateFlow(null)).collectAsState()
-                                    val effPartnerTz = partner?.timeZone?.takeIf { it.isNotBlank() } ?: customPartnerTz
-                                    var chatTimeTicker by remember { mutableLongStateOf(System.currentTimeMillis()) }
-                                    LaunchedEffect(effPartnerTz) {
-                                        while (effPartnerTz != null) {
-                                            chatTimeTicker = System.currentTimeMillis()
-                                            kotlinx.coroutines.delay(60_000L - chatTimeTicker % 60_000L)
-                                        }
-                                    }
-                                    val partnerLocalTimeText = remember(effPartnerTz, uiState.currentUser?.timeZone, chatTimeTicker) {
-                                        com.example.ui.home.formatPartnerLocalTimeIfDifferent(
-                                            partnerTimeZoneId = effPartnerTz,
-                                            myTimeZoneId = uiState.currentUser?.timeZone,
-                                            now = chatTimeTicker,
-                                            label = "Her time"
-                                        )
-                                    }
-                                    val fullStatusText = if (partnerLocalTimeText != null) "$statusText · $partnerLocalTimeText" else statusText
-                                    Text(
-                                        text = fullStatusText,
-                                        fontSize = 12.sp,
-                                        lineHeight = 14.sp,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                        color = if (partnerHasCheckAfter) {
-                                            Color(0xFF3B82F6)
-                                        } else if (uiState.isPartnerRecordingAudio || uiState.isPartnerTyping || isPartnerOnline) {
-                                            OnlineGreen
-                                        } else {
-                                            MaterialTheme.colorScheme.onSurfaceVariant
-                                        },
-                                        fontWeight = FontWeight.Normal
-                                    )
-                                }
-                            }
+                            ChatPartnerHeaderContent(
+                                presenceFlow = viewModel.partnerPresence,
+                                fallbackPartnerName = partnerName,
+                                myTimeZone = uiState.currentUser?.timeZone,
+                                isDark = isDark,
+                                onAvatarClick = {
+                                    val app = context.applicationContext as? com.example.CherishApplication
+                                    app?.securityPreferences?.isMediaViewerActive = true
+                                    showFullProfilePicViewer = true
+                                },
+                                onMoodClick = { showMoodPicker = true }
+                            )
                         }
                     }
                 },
@@ -1754,15 +1646,14 @@ fun ChatScreen(
                 // Only at the bottom: while reading older messages it would push the list up and down
                 // (the header still says "typing…")
                 val isAtBottom by remember { derivedStateOf { listState.firstVisibleItemIndex <= 2 } }
-                PartnerTypingBubble(
-                    visible = (uiState.isPartnerTyping || uiState.isPartnerRecordingAudio) &&
-                        uiState.chatExperienceMode != com.example.ui.chat.ChatExperienceMode.PRIVATE &&
-                        !uiState.isSearching && isAtBottom,
-                    isRecording = uiState.isPartnerRecordingAudio,
+                ChatPartnerTypingBubbleWrapper(
+                    presenceFlow = viewModel.partnerPresence,
+                    chatExperienceMode = uiState.chatExperienceMode,
+                    isSearching = uiState.isSearching,
+                    isAtBottom = isAtBottom,
                     partnerPhotoUrl = partner?.photoUrl,
-                    partnerName = partnerName,
-                    isDark = isDark,
-                    typingPace = partner?.typingPace ?: 1
+                    fallbackPartnerName = partnerName,
+                    isDark = isDark
                 )
 
                 // Room for what floats above the message box (upload status, reply preview), so it
@@ -2911,13 +2802,19 @@ private fun GoodMorningGreeting(
             onSendGoodMorning()
         }
     }
-    val glow = rememberInfiniteTransition(label = "sun_glow")
-    val glowScale by glow.animateFloat(
-        initialValue = 0.9f,
-        targetValue = 1.12f,
-        animationSpec = infiniteRepeatable(tween(1600, easing = FastOutSlowInEasing), RepeatMode.Reverse),
-        label = "sun_glow_scale"
-    )
+    val isAppForeground = com.example.ui.components.rememberAppIsResumed()
+    val glowScale: Float = if (isAppForeground) {
+        val glow = rememberInfiniteTransition(label = "sun_glow")
+        val scale by glow.animateFloat(
+            initialValue = 0.9f,
+            targetValue = 1.12f,
+            animationSpec = infiniteRepeatable(tween(1600, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+            label = "sun_glow_scale"
+        )
+        scale
+    } else {
+        1.0f
+    }
     val date = remember {
         java.text.SimpleDateFormat("EEEE, MMMM d", java.util.Locale.getDefault()).format(java.util.Date())
     }
@@ -3683,6 +3580,188 @@ fun StealthDisguiseNotesView(
     }
 }
 
+@Composable
+private fun ChatPartnerHeaderContent(
+    presenceFlow: StateFlow<PartnerPresenceState>,
+    fallbackPartnerName: String,
+    myTimeZone: String?,
+    isDark: Boolean,
+    onAvatarClick: () -> Unit,
+    onMoodClick: () -> Unit
+) {
+    val presence by presenceFlow.collectAsState()
+    val isPartnerOnline = presence.isOnline
+    val partnerHasCheckAfter = presence.checkAfterActive
+    val partnerCheckAfterTarget = presence.checkAfterTimeMillis ?: 0L
+
+    var headerTicker by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(partnerCheckAfterTarget, partnerHasCheckAfter) {
+        if (partnerHasCheckAfter) {
+            while (true) {
+                headerTicker = System.currentTimeMillis()
+                kotlinx.coroutines.delay(10_000L)
+            }
+        }
+    }
+    val headerRemaining = remember(headerTicker, partnerCheckAfterTarget) {
+        if (partnerHasCheckAfter) CheckAfterHelper.calculateRemaining(partnerCheckAfterTarget).first else ""
+    }
+
+    val partnerName = presence.displayName.ifBlank { fallbackPartnerName }
+
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.padding(start = 2.dp, end = 6.dp, top = 2.dp, bottom = 2.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .clickable(
+                    interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                    indication = null
+                ) { onAvatarClick() }
+        ) {
+            AvatarView(
+                photoUrl = presence.photoUrl,
+                name = partnerName,
+                size = 46.dp,
+                isOnline = isPartnerOnline,
+                showOnlineBadge = !partnerHasCheckAfter
+            )
+        }
+        Spacer(modifier = Modifier.width(8.dp))
+        Column(
+            modifier = Modifier.weight(1f, fill = false),
+            verticalArrangement = Arrangement.Center
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Text(
+                    text = partnerName,
+                    fontSize = 16.5.sp,
+                    lineHeight = 19.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    color = if (isDark) Color.White else Color(0xFF0F172A)
+                )
+
+                val partnerMood = presence.mood?.takeIf {
+                    val moodAt = presence.moodAt
+                    moodAt == 0L || System.currentTimeMillis() - moodAt < MOOD_FRESH_MS
+                }
+                if (!partnerMood.isNullOrBlank()) {
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.75f),
+                        modifier = Modifier
+                            .weight(1f, fill = false)
+                            .clickable { onMoodClick() }
+                    ) {
+                        EmojiText(
+                            text = partnerMood,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            emojiScale = 1.2f,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        )
+                    }
+                }
+            }
+            val statusText = when {
+                partnerHasCheckAfter -> {
+                    if (headerRemaining.startsWith("✨")) "✨ Reconnecting now"
+                    else "🌙 Quiet time (${CheckAfterHelper.formatTargetTime(partnerCheckAfterTarget)})"
+                }
+                presence.isRecordingAudio -> "recording audio..."
+                presence.isTyping -> "typing..."
+                isPartnerOnline -> {
+                    if (presence.batteryLevel != null) {
+                        val chargingStr = if (presence.isCharging) " ⚡" else ""
+                        "Online · ${presence.batteryLevel}%$chargingStr"
+                    } else "Online"
+                }
+                else -> {
+                    val lastSeen = presence.lastSeen
+                    if (lastSeen > 0L) {
+                        val time = SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date(lastSeen))
+                        when {
+                            android.text.format.DateUtils.isToday(lastSeen) -> "last seen today at $time"
+                            android.text.format.DateUtils.isToday(lastSeen + android.text.format.DateUtils.DAY_IN_MILLIS) ->
+                                "last seen yesterday at $time"
+                            else -> {
+                                val sdf = SimpleDateFormat("MMM d, h:mm a", Locale.getDefault())
+                                "last seen ${sdf.format(Date(lastSeen))}"
+                            }
+                        }
+                    } else {
+                        "offline"
+                    }
+                }
+            }
+            val effPartnerTz = presence.timeZone?.takeIf { it.isNotBlank() }
+            var chatTimeTicker by remember { mutableLongStateOf(System.currentTimeMillis()) }
+            LaunchedEffect(effPartnerTz) {
+                while (effPartnerTz != null) {
+                    chatTimeTicker = System.currentTimeMillis()
+                    kotlinx.coroutines.delay(60_000L - chatTimeTicker % 60_000L)
+                }
+            }
+            val partnerLocalTimeText = remember(effPartnerTz, myTimeZone, chatTimeTicker) {
+                com.example.ui.home.formatPartnerLocalTimeIfDifferent(
+                    partnerTimeZoneId = effPartnerTz,
+                    myTimeZoneId = myTimeZone,
+                    now = chatTimeTicker,
+                    label = "Her time"
+                )
+            }
+            val fullStatusText = if (partnerLocalTimeText != null) "$statusText · $partnerLocalTimeText" else statusText
+            Text(
+                text = fullStatusText,
+                fontSize = 12.sp,
+                lineHeight = 14.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                color = if (partnerHasCheckAfter) {
+                    Color(0xFF3B82F6)
+                } else if (presence.isRecordingAudio || presence.isTyping || isPartnerOnline) {
+                    OnlineGreen
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+                fontWeight = FontWeight.Normal
+            )
+        }
+    }
+}
+
+@Composable
+private fun ChatPartnerTypingBubbleWrapper(
+    presenceFlow: StateFlow<PartnerPresenceState>,
+    chatExperienceMode: com.example.ui.chat.ChatExperienceMode,
+    isSearching: Boolean,
+    isAtBottom: Boolean,
+    partnerPhotoUrl: String?,
+    fallbackPartnerName: String,
+    isDark: Boolean
+) {
+    val presence by presenceFlow.collectAsState()
+    PartnerTypingBubble(
+        visible = (presence.isTyping || presence.isRecordingAudio) &&
+            chatExperienceMode != com.example.ui.chat.ChatExperienceMode.PRIVATE &&
+            !isSearching && isAtBottom,
+        isRecording = presence.isRecordingAudio,
+        partnerPhotoUrl = presence.photoUrl ?: partnerPhotoUrl,
+        partnerName = presence.displayName.ifBlank { fallbackPartnerName },
+        isDark = isDark,
+        typingPace = presence.typingPace
+    )
+}
+
 /**
  * Partner typing / recording indicator under the newest message. It springs in from the bottom-left
  * and, because it sits below the list, pushes the newest messages up as it grows.
@@ -3741,7 +3820,8 @@ private fun PartnerTypingBubble(
 
 @Composable
 private fun RecordingBars(color: Color) {
-    val transition = rememberInfiniteTransition(label = "recording_bars")
+    val isAppForeground = com.example.ui.components.rememberAppIsResumed()
+    val transition = if (isAppForeground) rememberInfiniteTransition(label = "recording_bars") else null
     Row(
         horizontalArrangement = Arrangement.spacedBy(3.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -3753,16 +3833,21 @@ private fun RecordingBars(color: Color) {
             modifier = Modifier.size(14.dp)
         )
         repeat(4) { bar ->
-            val level by transition.animateFloat(
-                initialValue = 0.3f,
-                targetValue = 1f,
-                animationSpec = infiniteRepeatable(
-                    animation = tween(380, easing = FastOutSlowInEasing),
-                    repeatMode = RepeatMode.Reverse,
-                    initialStartOffset = StartOffset(bar * 90)
-                ),
-                label = "recording_bar_$bar"
-            )
+            val level: Float = if (transition != null) {
+                val anim by transition.animateFloat(
+                    initialValue = 0.3f,
+                    targetValue = 1f,
+                    animationSpec = infiniteRepeatable(
+                        animation = tween(380, easing = FastOutSlowInEasing),
+                        repeatMode = RepeatMode.Reverse,
+                        initialStartOffset = StartOffset(bar * 90)
+                    ),
+                    label = "recording_bar_$bar"
+                )
+                anim
+            } else {
+                0.5f
+            }
             Box(
                 modifier = Modifier
                     .width(3.dp)

@@ -25,6 +25,27 @@ import com.example.ui.theme.OnlineGreen
 import com.example.ui.theme.RoseGoldPrimary
 import com.example.ui.theme.appHorizontalGradient
 
+object AvatarCache {
+    private val cache = android.util.LruCache<String, androidx.compose.ui.graphics.ImageBitmap>(64)
+
+    fun getOrDecode(dataUrl: String): androidx.compose.ui.graphics.ImageBitmap? {
+        if (!dataUrl.startsWith("data:image/")) return null
+        cache.get(dataUrl)?.let { return it }
+        return try {
+            val base64 = dataUrl.substringAfter("base64,")
+            val bytes = android.util.Base64.decode(base64, android.util.Base64.DEFAULT)
+            val bitmap = android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+            val imageBitmap = bitmap?.asImageBitmap()
+            if (imageBitmap != null) {
+                cache.put(dataUrl, imageBitmap)
+            }
+            imageBitmap
+        } catch (_: Exception) {
+            null
+        }
+    }
+}
+
 @Composable
 fun AvatarView(
     photoUrl: String?,
@@ -36,6 +57,14 @@ fun AvatarView(
     // The blue ring; off where the photo sits in a ring of its own (e.g. the couple card)
     showRing: Boolean = true
 ) {
+    val decodedBitmap = androidx.compose.runtime.remember(photoUrl) {
+        if (photoUrl?.startsWith("data:image/") == true) {
+            AvatarCache.getOrDecode(photoUrl)
+        } else {
+            null
+        }
+    }
+
     Box(
         modifier = modifier.size(size),
         contentAlignment = Alignment.Center
@@ -60,12 +89,9 @@ fun AvatarView(
         ) {
             if (!photoUrl.isNullOrEmpty()) {
                 if (photoUrl.startsWith("data:image/")) {
-                    val base64 = photoUrl.substringAfter("base64,")
-                    val bytes = android.util.Base64.decode(base64, android.util.Base64.DEFAULT)
-                    val bitmap = android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-                    if (bitmap != null) {
+                    if (decodedBitmap != null) {
                         androidx.compose.foundation.Image(
-                            bitmap = bitmap.asImageBitmap(),
+                            bitmap = decodedBitmap,
                             contentDescription = "$name's avatar",
                             contentScale = ContentScale.Crop,
                             modifier = Modifier.fillMaxSize()

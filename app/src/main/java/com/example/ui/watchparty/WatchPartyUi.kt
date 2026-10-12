@@ -179,13 +179,19 @@ fun WatchPartyInvite(modifier: Modifier = Modifier) {
             else -> "Watch Together on: “${p.title}”"
         }
         val accent = MaterialTheme.colorScheme.primary
-        val glow = rememberInfiniteTransition(label = "invite_glow")
-        val pulse by glow.animateFloat(
-            initialValue = 0.3f,
-            targetValue = 0.95f,
-            animationSpec = infiniteRepeatable(tween(1300, easing = FastOutSlowInEasing), RepeatMode.Reverse),
-            label = "invite_pulse"
-        )
+        val isAppForeground = com.example.ui.components.rememberAppIsResumed()
+        val pulse: Float = if (isAppForeground) {
+            val glow = rememberInfiniteTransition(label = "invite_glow")
+            val pAnim by glow.animateFloat(
+                initialValue = 0.3f,
+                targetValue = 0.95f,
+                animationSpec = infiniteRepeatable(tween(1300, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+                label = "invite_pulse"
+            )
+            pAnim
+        } else {
+            0.5f
+        }
         // The whole pill opens it full screen, not only its button
         Surface(
             onClick = {

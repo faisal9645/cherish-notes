@@ -42,16 +42,22 @@ fun LifetimeJourneyScreen(
     var entryToEdit by remember { mutableStateOf<YearlyJourneyEntry?>(null) }
     var showEditProfileDialog by remember { mutableStateOf(false) }
 
-    val infiniteTransition = rememberInfiniteTransition(label = "pulse")
-    val pulseScale by infiniteTransition.animateFloat(
-        initialValue = 1f,
-        targetValue = 1.12f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(900, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "pulse"
-    )
+    val isAppForeground = com.example.ui.components.rememberAppIsResumed()
+    val pulseScale: Float = if (isAppForeground) {
+        val infiniteTransition = rememberInfiniteTransition(label = "pulse")
+        val p by infiniteTransition.animateFloat(
+            initialValue = 1f,
+            targetValue = 1.12f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(900, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "pulse"
+        )
+        p
+    } else {
+        1.0f
+    }
 
     Scaffold(
         topBar = {

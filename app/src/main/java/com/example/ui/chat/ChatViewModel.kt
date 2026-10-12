@@ -86,7 +86,25 @@ data class ChatUiState(
 )
 
 /** How many pages "Show in chat" loads at most looking for an older message (60 messages each). */
-private const val MAX_PAGES_TO_FIND_MESSAGE = 40
+@androidx.compose.runtime.Immutable
+data class PartnerPresenceState(
+    val isOnline: Boolean = false,
+    val isTyping: Boolean = false,
+    val isRecordingAudio: Boolean = false,
+    val isHeartTouching: Boolean = false,
+    val batteryLevel: Int? = null,
+    val isCharging: Boolean = false,
+    val lastSeen: Long = 0L,
+    val photoUrl: String? = null,
+    val displayName: String = "",
+    val mood: String? = null,
+    val moodAt: Long = 0L,
+    val timeZone: String? = null,
+    val typingPace: Int = 1,
+    val checkAfterActive: Boolean = false,
+    val checkAfterTimeMillis: Long? = null,
+    val checkAfterCreatedAt: Long? = null
+)
 
 class ChatViewModel(
     private val authRepository: AuthRepository,
@@ -97,6 +115,9 @@ class ChatViewModel(
     val securityPreferences: SecurityPreferences = CherishApplication.instance.securityPreferences,
     val soundEffectsPlayer: ChatSoundEffectsPlayer = ChatSoundEffectsPlayer.getInstance(CherishApplication.instance)
 ) : ViewModel() {
+
+    private val _partnerPresence = MutableStateFlow(PartnerPresenceState())
+    val partnerPresence: StateFlow<PartnerPresenceState> = _partnerPresence.asStateFlow()
 
     private val _uiState = MutableStateFlow(
         ChatUiState(
@@ -239,14 +260,30 @@ class ChatViewModel(
         viewModelScope.launch {
             authRepository.partnerUserState.collect { partner ->
                 val partnerTouching = partner?.heartbeatTouchingTimestamp?.let { it > 0L && (System.currentTimeMillis() - it < 4500L) } ?: false
-                _uiState.update {
-                    it.copy(
-                        partnerUser = partner,
-                        isPartnerOnline = partner?.isEffectivelyOnline() ?: false,
-                        isPartnerTyping = partner?.isEffectivelyTyping() ?: false,
-                        isPartnerRecordingAudio = partner?.isEffectivelyRecording() ?: false,
-                        isPartnerHeartTouching = partnerTouching
-                    )
+                _partnerPresence.value = PartnerPresenceState(
+                    isOnline = partner?.isEffectivelyOnline() ?: false,
+                    isTyping = partner?.isEffectivelyTyping() ?: false,
+                    isRecordingAudio = partner?.isEffectivelyRecording() ?: false,
+                    isHeartTouching = partnerTouching,
+                    batteryLevel = partner?.batteryLevel,
+                    isCharging = partner?.isCharging ?: false,
+                    lastSeen = partner?.lastSeen ?: 0L,
+                    photoUrl = partner?.photoUrl,
+                    displayName = partner?.displayName.orEmpty(),
+                    mood = partner?.mood,
+                    moodAt = partner?.moodAt ?: 0L,
+                    timeZone = partner?.timeZone,
+                    typingPace = partner?.typingPace ?: 1,
+                    checkAfterActive = partner?.hasActiveCheckAfter() ?: false,
+                    checkAfterTimeMillis = partner?.checkAfterTimeMillis,
+                    checkAfterCreatedAt = partner?.checkAfterCreatedAt
+                )
+                // Only update partnerUser in _uiState if basic identity changed to prevent screen re-evaluation
+                if (_uiState.value.partnerUser?.id != partner?.id ||
+                    _uiState.value.partnerUser?.photoUrl != partner?.photoUrl ||
+                    _uiState.value.partnerUser?.displayName != partner?.displayName
+                ) {
+                    _uiState.update { it.copy(partnerUser = partner) }
                 }
             }
         }
@@ -350,30 +387,34 @@ class ChatViewModel(
             }
         }
 
-        // Ticker to evaluate effective online/typing/heartbeat status without unnecessary CPU load
+        // Ticker to evaluate effective online/typing/heartbeat status without refreshing the whole chat screen
         viewModelScope.launch {
             while (true) {
-                val delayMs = if (_uiState.value.isPartnerHeartTouching || (_uiState.value.partnerUser?.heartbeatTouchingTimestamp ?: 0L) > 0L) 500L else 2000L
+                val delayMs = if (_partnerPresence.value.isHeartTouching) 500L else 2000L
                 kotlinx.coroutines.delay(delayMs)
-                _uiState.update { state ->
-                    val partner = state.partnerUser
-                    val partnerTouching = partner?.heartbeatTouchingTimestamp?.let { it > 0L && (System.currentTimeMillis() - it < 4500L) } ?: false
-                    val newOnline = partner?.isEffectivelyOnline() ?: false
-                    val newTyping = partner?.isEffectivelyTyping() ?: false
-                    val newRecording = partner?.isEffectivelyRecording() ?: false
+                val partner = authRepository.partnerUserState.value
+                val partnerTouching = partner?.heartbeatTouchingTimestamp?.let { it > 0L && (System.currentTimeMillis() - it < 4500L) } ?: false
+                val newOnline = partner?.isEffectivelyOnline() ?: false
+                val newTyping = partner?.isEffectivelyTyping() ?: false
+                val newRecording = partner?.isEffectivelyRecording() ?: false
 
-                    if (state.isPartnerOnline == newOnline &&
-                        state.isPartnerTyping == newTyping &&
-                        state.isPartnerRecordingAudio == newRecording &&
-                        state.isPartnerHeartTouching == partnerTouching
+                _partnerPresence.update { current ->
+                    if (current.isOnline == newOnline &&
+                        current.isTyping == newTyping &&
+                        current.isRecordingAudio == newRecording &&
+                        current.isHeartTouching == partnerTouching &&
+                        current.batteryLevel == partner?.batteryLevel &&
+                        current.isCharging == (partner?.isCharging ?: false)
                     ) {
-                        state // No change: return identical instance to prevent recomposition cascades
+                        current
                     } else {
-                        state.copy(
-                            isPartnerOnline = newOnline,
-                            isPartnerTyping = newTyping,
-                            isPartnerRecordingAudio = newRecording,
-                            isPartnerHeartTouching = partnerTouching
+                        current.copy(
+                            isOnline = newOnline,
+                            isTyping = newTyping,
+                            isRecordingAudio = newRecording,
+                            isHeartTouching = partnerTouching,
+                            batteryLevel = partner?.batteryLevel,
+                            isCharging = partner?.isCharging ?: false
                         )
                     }
                 }
@@ -593,6 +634,10 @@ class ChatViewModel(
             if (url == null || !isDeliverable(url)) {
                 thumbnail?.cancel()
                 return@runUpload FailedUpload(label, retry)
+            }
+
+            if (type == MessageType.VIDEO) {
+                com.example.util.VideoThumbnailHelper.cacheLocalVideo(com.example.CherishApplication.instance, preparedFile, url)
             }
 
             val thumbnailUrl = thumbnail?.await().orEmpty()
@@ -1168,5 +1213,6 @@ class ChatViewModel(
 
     private companion object {
         const val TYPING_IDLE_TIMEOUT_MS = 5_000L
+        const val MAX_PAGES_TO_FIND_MESSAGE = 20
     }
 }

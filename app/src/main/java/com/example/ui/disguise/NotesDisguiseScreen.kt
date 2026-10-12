@@ -68,6 +68,9 @@ import com.example.data.local.notes.NoteEntity
 import com.example.security.SecurityPreferences
 import com.example.ui.theme.*
 import kotlinx.coroutines.launch
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.Brush
+import com.example.R
 
 @OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
@@ -128,9 +131,41 @@ fun NotesDisguiseScreen(
 
     val categories = listOf("All", "📌 Pinned", "Lists", "Personal", "Work", "Ideas")
 
-    // Handle Back press in Selection Mode
-    BackHandler(enabled = uiState.isSelectionMode) {
-        viewModel.clearSelection()
+    val appLauncherIcon = remember(context) {
+        runCatching {
+            val drawable = context.packageManager.getApplicationIcon(context.applicationInfo)
+            val width = drawable.intrinsicWidth.takeIf { it > 0 } ?: 108
+            val height = drawable.intrinsicHeight.takeIf { it > 0 } ?: 108
+            val bitmap = android.graphics.Bitmap.createBitmap(
+                width,
+                height,
+                android.graphics.Bitmap.Config.ARGB_8888
+            )
+            val canvas = android.graphics.Canvas(bitmap)
+            drawable.setBounds(0, 0, canvas.width, canvas.height)
+            drawable.draw(canvas)
+            bitmap.asImageBitmap()
+        }.getOrNull()
+    }
+
+    // Handle Back press or gesture in Notes Disguise: dismiss dialogs/menus/selection/search first, else close app cleanly
+    BackHandler(enabled = true) {
+        if (showEditorDialog) {
+            showEditorDialog = false
+            selectedNoteForEdit = null
+        } else if (uiState.isSelectionMode) {
+            viewModel.clearSelection()
+        } else if (showBatchDeleteDialog) {
+            showBatchDeleteDialog = false
+        } else if (showSortMenu) {
+            showSortMenu = false
+        } else if (showNotesSettingsDialog) {
+            showNotesSettingsDialog = false
+        } else if (uiState.searchQuery.isNotBlank()) {
+            viewModel.setSearchQuery("")
+        } else {
+            (context as? android.app.Activity)?.finish()
+        }
     }
 
     // Secret unlock transition state
@@ -352,19 +387,36 @@ fun NotesDisguiseScreen(
                                     .clip(RoundedCornerShape(12.dp))
                                     .testTag("notes_header")
                             ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(38.dp)
-                                        .clip(CircleShape)
-                                        .background(notesHorizontalGradient),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Filled.EditNote,
+                                if (appLauncherIcon != null) {
+                                    Image(
+                                        bitmap = appLauncherIcon,
                                         contentDescription = "Notes",
-                                        tint = Color.White,
-                                        modifier = Modifier.size(24.dp)
+                                        modifier = Modifier
+                                            .size(38.dp)
+                                            .clip(RoundedCornerShape(9.dp))
                                     )
+                                } else {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(38.dp)
+                                            .clip(RoundedCornerShape(9.dp))
+                                            .background(
+                                                Brush.linearGradient(
+                                                    listOf(
+                                                        Color(0xFF1FC8FF),
+                                                        Color(0xFF2563FF),
+                                                        Color(0xFF3B1FF5)
+                                                    )
+                                                )
+                                            ),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Image(
+                                            painter = painterResource(id = R.drawable.ic_launcher_foreground),
+                                            contentDescription = "Notes",
+                                            modifier = Modifier.fillMaxSize()
+                                        )
+                                    }
                                 }
                                 Spacer(modifier = Modifier.width(10.dp))
                                 Text(

@@ -1,8 +1,8 @@
 {
-  "versionCode": 125,
-  "versionName": "1.7.53",
-  "tagName": "v1.7.53-125",
-  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.7.53-125/cherish-notes-v1.7.53-125.apk",
-  "assetSize": 21340697,
-  "releaseNotes": "Ultra-smooth 120 FPS chat scrolling with direction-aware contentType and @Immutable models, enhanced client-side image compression with compact-pass optimization, and persistent Private/Normal mode swapping."
+  "versionCode": 127,
+  "versionName": "1.7.55",
+  "tagName": "v1.7.55-127",
+  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.7.55-127/cherish-notes-v1.7.55-127.apk",
+  "assetSize": 21357081,
+  "releaseNotes": "Fix Notes disguise top-left icon to match original app launcher icon, enable Android back button & gesture to close app cleanly from Notes disguise, fix received video notes & shared videos blank screen and playback errors with automatic HTTP redirect resolution and reliable local caching."
 }

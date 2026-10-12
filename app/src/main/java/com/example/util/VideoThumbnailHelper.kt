@@ -56,32 +56,97 @@ object VideoThumbnailHelper {
 
     suspend fun getCachedFile(context: Context, videoPathOrUrl: String): File? = withContext(Dispatchers.IO) {
         if (videoPathOrUrl.isBlank()) return@withContext null
+
+        // 1. Base64 data URI
+        if (videoPathOrUrl.startsWith("data:video")) {
+            val target = getVideoCacheFile(context, videoPathOrUrl)
+            if (target.exists() && target.length() > 1024) return@withContext target
+            return@withContext try {
+                val base64Data = videoPathOrUrl.substringAfter("base64,")
+                val bytes = android.util.Base64.decode(base64Data, android.util.Base64.DEFAULT)
+                target.writeBytes(bytes)
+                if (target.exists() && target.length() > 1024) target else null
+            } catch (e: Exception) {
+                Log.w("VideoThumbnailHelper", "Failed decoding base64 video", e)
+                null
+            }
+        }
+
+        // 2. Local content URI
+        if (videoPathOrUrl.startsWith("content://")) {
+            val target = getVideoCacheFile(context, videoPathOrUrl)
+            if (target.exists() && target.length() > 1024) return@withContext target
+            return@withContext try {
+                context.contentResolver.openInputStream(Uri.parse(videoPathOrUrl))?.use { input ->
+                    FileOutputStream(target).use { output ->
+                        input.copyTo(output)
+                    }
+                }
+                if (target.exists() && target.length() > 1024) target else null
+            } catch (e: Exception) {
+                Log.w("VideoThumbnailHelper", "Failed copying content video", e)
+                null
+            }
+        }
+
+        // 3. Local file path
         if (!videoPathOrUrl.startsWith("http://") && !videoPathOrUrl.startsWith("https://")) {
             val f = if (videoPathOrUrl.startsWith("file://")) File(videoPathOrUrl.removePrefix("file://")) else File(videoPathOrUrl)
             return@withContext if (f.exists() && f.length() > 1024) f else null
         }
+
+        // 4. Remote HTTP/HTTPS URL (follow redirects up to 6 times)
         val target = getVideoCacheFile(context, videoPathOrUrl)
         if (target.exists() && target.length() > 1024) {
             return@withContext target
         }
         val temp = File(target.parentFile, "${target.name}.tmp")
+        var currentUrl = videoPathOrUrl
+        var redirects = 0
+        val maxRedirects = 6
         try {
-            val conn = URL(videoPathOrUrl).openConnection() as HttpURLConnection
-            conn.connectTimeout = 12_000
-            conn.readTimeout = 20_000
-            conn.instanceFollowRedirects = true
-            conn.connect()
-            if (conn.responseCode in 200..299) {
-                conn.inputStream.use { input ->
-                    FileOutputStream(temp).use { output ->
-                        input.copyTo(output)
-                    }
+            while (redirects < maxRedirects) {
+                val urlObj = URL(currentUrl)
+                val conn = (urlObj.openConnection() as HttpURLConnection).apply {
+                    connectTimeout = 15_000
+                    readTimeout = 30_000
+                    instanceFollowRedirects = true
+                    setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android; Mobile)")
+                    setRequestProperty("Accept", "*/*")
                 }
-                if (temp.exists() && temp.length() > 1024) {
-                    if (target.exists()) target.delete()
-                    if (temp.renameTo(target)) {
-                        return@withContext target
+                val code = conn.responseCode
+                if (code in 300..399) {
+                    val location = conn.getHeaderField("Location")
+                    conn.disconnect()
+                    if (!location.isNullOrBlank()) {
+                        currentUrl = if (location.startsWith("http://") || location.startsWith("https://")) {
+                            location
+                        } else {
+                            URL(urlObj, location).toString()
+                        }
+                        redirects++
+                        continue
+                    } else {
+                        break
                     }
+                } else if (code in 200..299) {
+                    conn.inputStream.use { input ->
+                        FileOutputStream(temp).use { output ->
+                            input.copyTo(output)
+                        }
+                    }
+                    conn.disconnect()
+                    if (temp.exists() && temp.length() > 1024) {
+                        if (target.exists()) target.delete()
+                        if (temp.renameTo(target)) {
+                            return@withContext target
+                        }
+                    }
+                    break
+                } else {
+                    Log.w("VideoThumbnailHelper", "HTTP error $code while downloading video: $currentUrl")
+                    conn.disconnect()
+                    break
                 }
             }
         } catch (e: Exception) {
@@ -100,13 +165,7 @@ object VideoThumbnailHelper {
         return withContext(Dispatchers.IO) {
             var retriever: MediaMetadataRetriever? = null
             try {
-                val localFile = if (videoPathOrUrl.startsWith("http://") || videoPathOrUrl.startsWith("https://")) {
-                    val cached = getVideoCacheFile(context, videoPathOrUrl)
-                    if (cached.exists() && cached.length() > 1024) cached else getCachedFile(context, videoPathOrUrl)
-                } else {
-                    val f = if (videoPathOrUrl.startsWith("file://")) File(videoPathOrUrl.removePrefix("file://")) else File(videoPathOrUrl)
-                    if (f.exists() && f.length() > 1024) f else null
-                }
+                val localFile = getCachedFile(context, videoPathOrUrl)
 
                 retriever = MediaMetadataRetriever()
                 if (localFile != null && localFile.exists()) {

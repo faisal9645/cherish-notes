@@ -45,6 +45,9 @@ import com.example.ui.theme.RoseGoldPrimary
 import com.example.util.VideoThumbnailHelper
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.launch
 import java.io.File
 
 /** Only one video note plays at a time: starting one stops (and releases) the others. */
@@ -82,6 +85,8 @@ fun CircularVideoNoteView(
     var thumbnailBitmap by remember { mutableStateOf<Bitmap?>(null) }
     var videoWidth by remember { mutableIntStateOf(0) }
     var videoHeight by remember { mutableIntStateOf(0) }
+    var localVideoFile by remember { mutableStateOf<File?>(null) }
+    val scope = rememberCoroutineScope()
     val playbackKey = remember { Any() }
 
     fun releasePlayer() {
@@ -118,9 +123,28 @@ fun CircularVideoNoteView(
     // Extract thumbnail and ensure local caching for smooth instant playback
     LaunchedEffect(videoUrl) {
         if (videoUrl.isNotBlank()) {
+            val initialCached = withContext(Dispatchers.IO) {
+                val c = VideoThumbnailHelper.getVideoCacheFile(context, videoUrl)
+                if (c.exists() && c.length() > 1024) c
+                else if (videoUrl.startsWith("file://") || (!videoUrl.startsWith("http") && !videoUrl.startsWith("content:") && !videoUrl.startsWith("data:"))) {
+                    val f = File(videoUrl.removePrefix("file://"))
+                    if (f.exists() && f.length() > 1024) f else null
+                } else null
+            }
+            if (initialCached != null) {
+                localVideoFile = initialCached
+            }
+
             val bitmap = VideoThumbnailHelper.getThumbnail(context, videoUrl)
             if (bitmap != null) {
                 thumbnailBitmap = bitmap
+            }
+
+            val file = withContext(Dispatchers.IO) {
+                VideoThumbnailHelper.getCachedFile(context, videoUrl)
+            }
+            if (file != null && file.exists()) {
+                localVideoFile = file
             }
         }
     }
@@ -193,11 +217,7 @@ fun CircularVideoNoteView(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null
             ) {
-                if (onExpandClick != null) {
-                    onExpandClick()
-                } else {
-                    togglePlayPause()
-                }
+                togglePlayPause()
             },
         contentAlignment = Alignment.Center
     ) {
@@ -208,6 +228,46 @@ fun CircularVideoNoteView(
                     val textureView = TextureView(ctx)
                     var activeSurface: Surface? = null
 
+                    fun setupAndPlay(mp: MediaPlayer, f: File) {
+                        try {
+                            mp.reset()
+                            activeSurface?.let { mp.setSurface(it) }
+                            mp.isLooping = true
+                            mp.setDataSource(f.absolutePath)
+                            if (isMuted) mp.setVolume(0f, 0f) else mp.setVolume(1f, 1f)
+                            mp.setOnPreparedListener { preparedMp ->
+                                mediaPlayerRef = preparedMp
+                                videoWidth = preparedMp.videoWidth
+                                videoHeight = preparedMp.videoHeight
+                                isVideoReady = true
+                                isLoading = false
+                                if (shouldPlayWhenReady || isPlaying) {
+                                    try {
+                                        preparedMp.start()
+                                        isPlaying = true
+                                    } catch (e: Exception) {
+                                        Log.w("CircularVideoNoteView", "Error starting MediaPlayer", e)
+                                    }
+                                }
+                            }
+                            mp.setOnErrorListener { _, what, extra ->
+                                Log.w("CircularVideoNoteView", "MediaPlayer error: what=$what, extra=$extra")
+                                isVideoReady = false
+                                isPlaying = false
+                                isLoading = false
+                                true
+                            }
+                            mp.setOnCompletionListener {
+                                progress = 0f
+                            }
+                            isLoading = true
+                            mp.prepareAsync()
+                        } catch (e: Exception) {
+                            Log.w("CircularVideoNoteView", "Setup MediaPlayer error", e)
+                            isLoading = false
+                        }
+                    }
+
                     textureView.surfaceTextureListener = object : TextureView.SurfaceTextureListener {
                         override fun onSurfaceTextureAvailable(st: SurfaceTexture, width: Int, height: Int) {
                             try {
@@ -216,51 +276,26 @@ fun CircularVideoNoteView(
                                 activeSurface = surface
                                 mediaPlayerRef?.release()
 
-                                val mp = MediaPlayer().apply {
-                                    setSurface(surface)
-                                    isLooping = true
-                                    val cacheFile = VideoThumbnailHelper.getVideoCacheFile(ctx, videoUrl)
-                                    if (cacheFile.exists() && cacheFile.length() > 1024) {
-                                        setDataSource(cacheFile.absolutePath)
-                                    } else if (videoUrl.startsWith("content://")) {
-                                        setDataSource(ctx, Uri.parse(videoUrl))
-                                    } else if (videoUrl.startsWith("file://") || videoUrl.startsWith("/")) {
-                                        val f = File(videoUrl.removePrefix("file://"))
-                                        if (f.exists()) setDataSource(f.absolutePath) else setDataSource(ctx, Uri.parse(videoUrl))
-                                    } else {
-                                        setDataSource(videoUrl)
-                                    }
+                                val mp = MediaPlayer()
+                                mediaPlayerRef = mp
 
-                                    if (isMuted) setVolume(0f, 0f) else setVolume(1f, 1f)
-                                    setOnPreparedListener { preparedMp ->
-                                        mediaPlayerRef = preparedMp
-                                        videoWidth = preparedMp.videoWidth
-                                        videoHeight = preparedMp.videoHeight
-                                        isVideoReady = true
-                                        isLoading = false
-                                        if (shouldPlayWhenReady || isPlaying) {
-                                            try {
-                                                preparedMp.start()
-                                                isPlaying = true
-                                            } catch (e: Exception) {
-                                                Log.w("CircularVideoNoteView", "Error starting MediaPlayer", e)
+                                val readyFile = localVideoFile
+                                if (readyFile != null && readyFile.exists() && readyFile.length() > 1024) {
+                                    setupAndPlay(mp, readyFile)
+                                } else {
+                                    isLoading = true
+                                    scope.launch(Dispatchers.IO) {
+                                        val f = VideoThumbnailHelper.getCachedFile(ctx, videoUrl)
+                                        withContext(Dispatchers.Main) {
+                                            if (f != null && f.exists() && activeSurface != null) {
+                                                localVideoFile = f
+                                                setupAndPlay(mp, f)
+                                            } else {
+                                                isLoading = false
                                             }
                                         }
                                     }
-                                    setOnErrorListener { _, what, extra ->
-                                        Log.w("CircularVideoNoteView", "MediaPlayer error: what=$what, extra=$extra")
-                                        isVideoReady = false
-                                        isPlaying = false
-                                        isLoading = false
-                                        true
-                                    }
-                                    setOnCompletionListener {
-                                        progress = 0f
-                                    }
-                                    isLoading = true
-                                    prepareAsync()
                                 }
-                                mediaPlayerRef = mp
                             } catch (e: Exception) {
                                 Log.w("CircularVideoNoteView", "Failed setting up TextureView MediaPlayer", e)
                                 isLoading = false

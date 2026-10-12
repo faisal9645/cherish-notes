@@ -76,8 +76,17 @@ class CoupleFeaturesRepository(
     fun stopListeners() {
         coupleDocListener?.remove()
         coupleDocListener = null
+        watchPartyListener?.remove()
+        watchPartyListener = null
+        entertainmentListener?.remove()
+        entertainmentListener = null
+        dailyUsListener?.remove()
+        dailyUsListener = null
         loveListeningCoupleId = null
         coupleDocData = emptyMap()
+        watchPartyDocData = emptyMap()
+        entertainmentDocData = emptyMap()
+        dailyUsDocData = emptyMap()
         _memoriesFlow.value = emptyList()
         _datesFlow.value = emptyList()
         _notesFlow.value = emptyList()
@@ -452,14 +461,14 @@ class CoupleFeaturesRepository(
     fun submitMyDailyAnswer(answer: String) {
         val text = answer.trim().ifBlank { return }
         val uid = authRepository.getCurrentUserId().ifBlank { return }
-        val ref = loveCoupleRef() ?: return
+        val ref = dailyUsDocRef() ?: return
         val fs = firestore ?: return
         _dailyQuestionFlow.value = _dailyQuestionFlow.value.copy(myAnswer = text, isMyAnswerSubmitted = true)
         val today = dayKey()
         val yesterday = dayKey(System.currentTimeMillis() - DAY_MS)
         fs.runTransaction { tx ->
             val snap = tx.get(ref)
-            val daily = snap.get("dailyUs") as? Map<*, *>
+            val daily = (snap.get("dailyUs") as? Map<*, *>) ?: (coupleDocData["dailyUs"] as? Map<*, *>)
             val sameDay = daily?.get("date") == today
             val answers = mutableMapOf<String, Any?>()
             val likes = mutableMapOf<String, Any?>()
@@ -468,23 +477,18 @@ class CoupleFeaturesRepository(
                 (daily?.get("likes") as? Map<*, *>)?.forEach { (k, v) -> if (k is String) likes[k] = v }
             }
             answers[uid] = text
-            tx.set(
-                ref,
-                mapOf("dailyUs" to mapOf("date" to today, "answers" to answers, "likes" to likes)),
-                com.google.firebase.firestore.SetOptions.mergeFields("dailyUs")
+            val updates = mutableMapOf<String, Any>(
+                "dailyUs" to mapOf("date" to today, "answers" to answers, "likes" to likes)
             )
+            val streak = (snap.get("dailyStreak") as? Map<*, *>) ?: (coupleDocData["dailyStreak"] as? Map<*, *>)
             if (answers.size >= 2) {
-                val streak = snap.get("dailyStreak") as? Map<*, *>
                 val lastDate = streak?.get("lastDate") as? String
                 if (lastDate != today) {
                     val count = (streak?.get("count") as? Number)?.toInt() ?: 0
-                    tx.set(
-                        ref,
-                        mapOf("dailyStreak" to mapOf("count" to if (lastDate == yesterday) count + 1 else 1, "lastDate" to today)),
-                        com.google.firebase.firestore.SetOptions.mergeFields("dailyStreak")
-                    )
+                    updates["dailyStreak"] = mapOf("count" to if (lastDate == yesterday) count + 1 else 1, "lastDate" to today)
                 }
             }
+            tx.set(ref, updates, com.google.firebase.firestore.SetOptions.merge())
             null
         }.addOnFailureListener { Log.w("CoupleFeaturesRepo", "Saving the daily answer failed", it) }
     }
@@ -492,13 +496,20 @@ class CoupleFeaturesRepository(
     /** Loves (or un-loves) the partner's answer today. */
     fun toggleLikeDailyAnswer() {
         val uid = authRepository.getCurrentUserId().ifBlank { return }
-        val ref = loveCoupleRef() ?: return
+        val ref = dailyUsDocRef() ?: return
         val current = _dailyQuestionFlow.value
         if (!current.isPartnerAnswerSubmitted) return
         val liked = !current.isLikedByPartner
         _dailyQuestionFlow.value = current.copy(isLikedByPartner = liked)
         ref.update(com.google.firebase.firestore.FieldPath.of("dailyUs", "likes", uid), liked)
-            .addOnFailureListener { Log.w("CoupleFeaturesRepo", "Saving the like failed", it) }
+            .addOnFailureListener {
+                ref.set(
+                    mapOf("dailyUs" to mapOf("likes" to mapOf(uid to liked))),
+                    com.google.firebase.firestore.SetOptions.merge()
+                ).addOnFailureListener {
+                    loveCoupleRef()?.update(com.google.firebase.firestore.FieldPath.of("dailyUs", "likes", uid), liked)
+                }
+            }
     }
 
     // Love Jar (Reasons Why I Love You)
@@ -558,14 +569,14 @@ class CoupleFeaturesRepository(
         _bucketListFlow.value = _bucketListFlow.value + item
     }
 
-    // ---- Our movies, kept on the couple's record: suggested by one of us, then watched by each of
+    // ---- Our movies, kept on the couple's separate entertainment record: suggested by one of us, then watched by each of
     // us (per person, so both phones agree on who watched it first and second) ----
     private val _moviesFlow = MutableStateFlow<List<com.example.data.model.MovieItem>>(emptyList())
     val moviesFlow: StateFlow<List<com.example.data.model.MovieItem>> = _moviesFlow.asStateFlow()
 
     /** Adds a movie; [watchedTogether] marks it watched by both of us already. */
     fun addMovie(title: String, genre: String, emoji: String, watchedTogether: Boolean, notes: String = "") {
-        val ref = loveCoupleRef() ?: return
+        val ref = entertainmentDocRef() ?: return
         val myId = authRepository.getCurrentUserId().ifBlank { null } ?: return
         val now = System.currentTimeMillis()
         val watched = if (watchedTogether) listOfNotNull(myId, partnerIdOrNull()).associateWith { now } else emptyMap()
@@ -600,7 +611,7 @@ class CoupleFeaturesRepository(
 
     /** I watched it (or take that back). The order between us comes from these times. */
     fun toggleMovieWatched(id: String) {
-        val ref = loveCoupleRef() ?: return
+        val ref = entertainmentDocRef() ?: return
         val myId = authRepository.getCurrentUserId().ifBlank { null } ?: return
         val movie = _moviesFlow.value.firstOrNull { it.id == id } ?: return
         val watchedNow = myId !in movie.watchedAt
@@ -609,25 +620,34 @@ class CoupleFeaturesRepository(
             if (it.id != id) it
             else it.copy(watchedAt = if (watchedNow) it.watchedAt + (myId to now) else it.watchedAt - myId)
         }
-        ref.update(
-            com.google.firebase.firestore.FieldPath.of("movies", id, "watchedAt", myId),
-            if (watchedNow) now else com.google.firebase.firestore.FieldValue.delete()
-        ).addOnFailureListener { Log.w("CoupleFeaturesRepo", "Saving the watched mark failed", it) }
+        val path = com.google.firebase.firestore.FieldPath.of("movies", id, "watchedAt", myId)
+        val value = if (watchedNow) now else com.google.firebase.firestore.FieldValue.delete()
+        ref.update(path, value).addOnFailureListener {
+            ref.set(
+                mapOf("movies" to mapOf(id to mapOf("watchedAt" to mapOf(myId to value)))),
+                com.google.firebase.firestore.SetOptions.merge()
+            ).addOnFailureListener {
+                loveCoupleRef()?.update(path, value)
+            }
+        }
     }
 
     fun deleteMovie(id: String) {
         _moviesFlow.value = _moviesFlow.value.filterNot { it.id == id }
-        loveCoupleRef()?.update(com.google.firebase.firestore.FieldPath.of("movies", id), com.google.firebase.firestore.FieldValue.delete())
-            ?.addOnFailureListener { Log.w("CoupleFeaturesRepo", "Deleting the movie failed", it) }
+        val path = com.google.firebase.firestore.FieldPath.of("movies", id)
+        entertainmentDocRef()?.update(path, com.google.firebase.firestore.FieldValue.delete())
+            ?.addOnFailureListener {
+                loveCoupleRef()?.update(path, com.google.firebase.firestore.FieldValue.delete())
+            }
     }
 
-    // ---- Our books, kept on the couple's record: each of us has our own page and finish time, so
+    // ---- Our books, kept on the couple's separate entertainment record: each of us has our own page and finish time, so
     // it shows who's reading what right now and who finished first ----
     private val _booksFlow = MutableStateFlow<List<com.example.data.model.BookItem>>(emptyList())
     val booksFlow: StateFlow<List<com.example.data.model.BookItem>> = _booksFlow.asStateFlow()
 
     fun addBook(title: String, author: String, totalPages: Int, genre: String, emoji: String, notes: String = "") {
-        val ref = loveCoupleRef() ?: return
+        val ref = entertainmentDocRef() ?: return
         val myId = authRepository.getCurrentUserId().ifBlank { null } ?: return
         val item = com.example.data.model.BookItem(
             id = UUID.randomUUID().toString(),
@@ -662,7 +682,7 @@ class CoupleFeaturesRepository(
 
     /** The page I'm on; the last page means I finished it (the first time is kept for the order). */
     fun updateMyBookPage(id: String, page: Int) {
-        val ref = loveCoupleRef() ?: return
+        val ref = entertainmentDocRef() ?: return
         val myId = authRepository.getCurrentUserId().ifBlank { null } ?: return
         val book = _booksFlow.value.firstOrNull { it.id == id } ?: return
         val clean = page.coerceIn(0, book.totalPages)
@@ -679,17 +699,29 @@ class CoupleFeaturesRepository(
                 finishedAt = if (finishedAt != null) it.finishedAt + (myId to finishedAt) else it.finishedAt - myId
             )
         }
-        ref.update(
-            com.google.firebase.firestore.FieldPath.of("books", id, "pages", myId), clean,
-            com.google.firebase.firestore.FieldPath.of("books", id, "finishedAt", myId),
-            finishedAt ?: com.google.firebase.firestore.FieldValue.delete()
-        ).addOnFailureListener { Log.w("CoupleFeaturesRepo", "Saving the page failed", it) }
+        val p1 = com.google.firebase.firestore.FieldPath.of("books", id, "pages", myId)
+        val p2 = com.google.firebase.firestore.FieldPath.of("books", id, "finishedAt", myId)
+        val v2 = finishedAt ?: com.google.firebase.firestore.FieldValue.delete()
+        ref.update(p1, clean, p2, v2).addOnFailureListener {
+            ref.set(
+                mapOf("books" to mapOf(id to mapOf(
+                    "pages" to mapOf(myId to clean),
+                    "finishedAt" to mapOf(myId to v2)
+                ))),
+                com.google.firebase.firestore.SetOptions.merge()
+            ).addOnFailureListener {
+                loveCoupleRef()?.update(p1, clean, p2, v2)
+            }
+        }
     }
 
     fun deleteBook(id: String) {
         _booksFlow.value = _booksFlow.value.filterNot { it.id == id }
-        loveCoupleRef()?.update(com.google.firebase.firestore.FieldPath.of("books", id), com.google.firebase.firestore.FieldValue.delete())
-            ?.addOnFailureListener { Log.w("CoupleFeaturesRepo", "Deleting the book failed", it) }
+        val path = com.google.firebase.firestore.FieldPath.of("books", id)
+        entertainmentDocRef()?.update(path, com.google.firebase.firestore.FieldValue.delete())
+            ?.addOnFailureListener {
+                loveCoupleRef()?.update(path, com.google.firebase.firestore.FieldValue.delete())
+            }
     }
 
     // ---- Synced Ambient Listening / Watch Party: shared YouTube videos or music links ----
@@ -722,7 +754,7 @@ class CoupleFeaturesRepository(
             watching = watching
         )
         _watchPartyFlow.value = session
-        val ref = loveCoupleRef() ?: return
+        val ref = watchPartyDocRef() ?: return
         val map = mapOf(
             "videoId" to session.videoId,
             "mediaUrl" to session.mediaUrl,
@@ -763,7 +795,7 @@ class CoupleFeaturesRepository(
         }
 
         _watchPartyFlow.value = current.copy(watching = newWatching, isPlaying = isPlaying, playScheduledAt = playScheduledAt, updatedAt = updatedAt)
-        val ref = loveCoupleRef() ?: return
+        val ref = watchPartyDocRef() ?: return
         val map = mapOf(
             "watching" to newWatching,
             "isPlaying" to isPlaying,
@@ -795,7 +827,7 @@ class CoupleFeaturesRepository(
             reactionAt = now,
             reactionCount = count
         )
-        val ref = loveCoupleRef() ?: return
+        val ref = watchPartyDocRef() ?: return
         val reaction = mapOf("id" to id, "e" to emoji, "by" to myId, "at" to now, "n" to count)
         ref.set(
             mapOf("watchParty" to mapOf("reaction" to reaction)),
@@ -813,7 +845,7 @@ class CoupleFeaturesRepository(
             voiceSnippetData = base64Data,
             voiceSnippetBy = myId
         )
-        val ref = loveCoupleRef() ?: return
+        val ref = watchPartyDocRef() ?: return
         val snippetMap = mapOf("id" to id, "data" to base64Data, "by" to myId)
         ref.set(mapOf(
             "watchParty" to mapOf("voiceSnippet" to snippetMap)
@@ -831,7 +863,7 @@ class CoupleFeaturesRepository(
             whisperText = text,
             whisperBy = myId
         )
-        val ref = loveCoupleRef() ?: return
+        val ref = watchPartyDocRef() ?: return
         val map = mapOf("id" to id, "t" to text, "by" to myId)
         ref.set(mapOf(
             "watchParty" to mapOf("whisper" to map)
@@ -853,7 +885,7 @@ class CoupleFeaturesRepository(
             adBy = adBy
         )
         _watchPartyFlow.value = updated
-        val ref = loveCoupleRef() ?: return
+        val ref = watchPartyDocRef() ?: return
         val map = mapOf(
             "isPlaying" to isPlaying,
             "positionSeconds" to positionSeconds,
@@ -878,7 +910,7 @@ class CoupleFeaturesRepository(
         val adBy = if (isAd) myId else current.adBy.takeIf { it != myId }.orEmpty()
         if (bufferingBy == current.bufferingBy && adBy == current.adBy) return
         _watchPartyFlow.value = current.copy(bufferingBy = bufferingBy, adBy = adBy)
-        val ref = loveCoupleRef() ?: return
+        val ref = watchPartyDocRef() ?: return
         ref.set(
             mapOf("watchParty" to mapOf("bufferingBy" to bufferingBy, "adBy" to adBy)),
             com.google.firebase.firestore.SetOptions.merge()
@@ -888,7 +920,7 @@ class CoupleFeaturesRepository(
     fun updateWatchPartySpeed(rate: Float) {
         val current = _watchPartyFlow.value?.takeIf { it.isActive } ?: return
         _watchPartyFlow.value = current.copy(playbackRate = rate)
-        val ref = loveCoupleRef() ?: return
+        val ref = watchPartyDocRef() ?: return
         ref.set(mapOf("watchParty" to mapOf("playbackRate" to rate)), com.google.firebase.firestore.SetOptions.merge())
     }
 
@@ -901,7 +933,7 @@ class CoupleFeaturesRepository(
             lastHeartburstBy = myId
         )
         _watchPartyFlow.value = updated
-        val ref = loveCoupleRef() ?: return
+        val ref = watchPartyDocRef() ?: return
         val map = mapOf(
             "lastHeartburstAt" to updated.lastHeartburstAt,
             "lastHeartburstBy" to myId
@@ -912,7 +944,7 @@ class CoupleFeaturesRepository(
 
     fun endWatchParty() {
         _watchPartyFlow.value = null
-        val ref = loveCoupleRef() ?: return
+        val ref = watchPartyDocRef() ?: return
         // A merge, so ending also works when no party was ever saved
         val map = mapOf(
             "isActive" to false,
@@ -937,7 +969,7 @@ class CoupleFeaturesRepository(
         )
         val updatedQueue = current.queue + item
         _watchPartyFlow.value = current.copy(queue = updatedQueue)
-        val ref = loveCoupleRef() ?: return
+        val ref = watchPartyDocRef() ?: return
         val mapList = updatedQueue.map { 
             mapOf("id" to it.id, "videoId" to it.videoId, "title" to it.title, "addedBy" to it.addedBy, "addedAt" to it.addedAt)
         }
@@ -968,7 +1000,7 @@ class CoupleFeaturesRepository(
             queue = remaining
         )
         _watchPartyFlow.value = updated
-        val ref = loveCoupleRef() ?: return
+        val ref = watchPartyDocRef() ?: return
         val mapList = remaining.map { 
             mapOf("id" to it.id, "videoId" to it.videoId, "title" to it.title, "addedBy" to it.addedBy, "addedAt" to it.addedAt)
         }
@@ -1008,7 +1040,7 @@ class CoupleFeaturesRepository(
             context.getSharedPreferences("cherish_love", Context.MODE_PRIVATE).edit().putString("note_before_sleep", currentNote).apply()
         }
         authRepository.updateStatusMessage("Asleep 🌙")
-        loveCoupleRef()?.set(
+        dailyUsDocRef()?.set(
             mapOf(
                 "sleepSync" to mapOf(
                     "timestamp" to now,
@@ -1019,7 +1051,7 @@ class CoupleFeaturesRepository(
                 )
             ),
             com.google.firebase.firestore.SetOptions.merge()
-        )
+        )?.addOnFailureListener { Log.w("CoupleFeaturesRepo", "Saving sleep sync failed", it) }
     }
 
     fun wakeUpFromSleep() {
@@ -1028,7 +1060,16 @@ class CoupleFeaturesRepository(
         val note = love.getString("note_before_sleep", null)?.ifBlank { null } ?: "Loving every moment with you ✨"
         love.edit().remove("note_before_sleep").apply()
         authRepository.updateStatusMessage(note)
-        loveCoupleRef()?.update(com.google.firebase.firestore.FieldPath.of("sleepSync", "isAsleep"), false)
+        val ref = dailyUsDocRef() ?: return
+        ref.update(com.google.firebase.firestore.FieldPath.of("sleepSync", "isAsleep"), false)
+            .addOnFailureListener {
+                ref.set(
+                    mapOf("sleepSync" to mapOf("isAsleep" to false)),
+                    com.google.firebase.firestore.SetOptions.merge()
+                ).addOnFailureListener {
+                    loveCoupleRef()?.update(com.google.firebase.firestore.FieldPath.of("sleepSync", "isAsleep"), false)
+                }
+            }
     }
 
     // ---- Lifetime Story: ages from our real birthdays and together date; the vow and the yearly
@@ -1134,14 +1175,29 @@ class CoupleFeaturesRepository(
             ?.addOnFailureListener { Log.w("CoupleFeaturesRepo", "Deleting the letter failed", it) }
     }
 
-    // ---- The couple's document, read by Daily Us, Open When and Lifetime Story ----
+    // ---- The couple's document, read by Open When and Lifetime Story ----
     private var coupleDocListener: com.google.firebase.firestore.ListenerRegistration? = null
+    private var watchPartyListener: com.google.firebase.firestore.ListenerRegistration? = null
+    private var entertainmentListener: com.google.firebase.firestore.ListenerRegistration? = null
+    private var dailyUsListener: com.google.firebase.firestore.ListenerRegistration? = null
     private var loveListeningCoupleId: String? = null
     @Volatile private var coupleDocData: Map<String, Any?> = emptyMap()
+    @Volatile private var watchPartyDocData: Map<String, Any?> = emptyMap()
+    @Volatile private var entertainmentDocData: Map<String, Any?> = emptyMap()
+    @Volatile private var dailyUsDocData: Map<String, Any?> = emptyMap()
     private val loveScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Main)
 
     private fun loveCoupleRef() = authRepository.currentUserState.value?.coupleId?.trim()?.ifBlank { null }
         ?.let { firestore?.collection("couples")?.document(it) }
+
+    private fun watchPartyDocRef() = authRepository.currentUserState.value?.coupleId?.trim()?.ifBlank { null }
+        ?.let { firestore?.collection("couples")?.document(it)?.collection("features")?.document("watchParty") }
+
+    private fun entertainmentDocRef() = authRepository.currentUserState.value?.coupleId?.trim()?.ifBlank { null }
+        ?.let { firestore?.collection("couples")?.document(it)?.collection("features")?.document("entertainment") }
+
+    private fun dailyUsDocRef() = authRepository.currentUserState.value?.coupleId?.trim()?.ifBlank { null }
+        ?.let { firestore?.collection("couples")?.document(it)?.collection("features")?.document("dailyUs") }
 
     private fun partnerIdOrNull(): String? =
         (authRepository.partnerUserState.value?.id ?: authRepository.currentUserState.value?.partnerId)?.trim()?.ifBlank { null }
@@ -1150,7 +1206,7 @@ class CoupleFeaturesRepository(
     private fun dayKey(now: Long = System.currentTimeMillis()): String =
         com.example.security.SecurityPreferences.getInstance(context).logicalDayKey(now)
 
-    /** Listens to the couple's document once a couple is known (again if it changes). */
+    /** Listens to the couple's document and split feature records once a couple is known (again if it changes). */
     fun ensureLoveUsListener() {
         val coupleId = authRepository.currentUserState.value?.coupleId?.trim()?.ifBlank { null }
         if (coupleId.isNullOrBlank()) {
@@ -1160,34 +1216,66 @@ class CoupleFeaturesRepository(
         if (loveListeningCoupleId == coupleId) return
         val fs = firestore ?: return
         coupleDocListener?.remove()
+        watchPartyListener?.remove()
+        entertainmentListener?.remove()
+        dailyUsListener?.remove()
         loveListeningCoupleId = coupleId
+
         coupleDocListener = fs.collection("couples").document(coupleId).addSnapshotListener { snapshot, error ->
             if (error != null || snapshot == null) return@addSnapshotListener
             coupleDocData = snapshot.data ?: emptyMap()
             rebuildLoveUs()
         }
+
+        watchPartyListener = fs.collection("couples").document(coupleId)
+            .collection("features").document("watchParty")
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    Log.w("CoupleFeaturesRepo", "WatchParty listen error", error)
+                    return@addSnapshotListener
+                }
+                watchPartyDocData = snapshot?.data ?: emptyMap()
+                parseWatchParty()
+            }
+
+        entertainmentListener = fs.collection("couples").document(coupleId)
+            .collection("features").document("entertainment")
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    Log.w("CoupleFeaturesRepo", "Entertainment listen error", error)
+                    return@addSnapshotListener
+                }
+                entertainmentDocData = snapshot?.data ?: emptyMap()
+                parseEntertainment()
+            }
+
+        dailyUsListener = fs.collection("couples").document(coupleId)
+            .collection("features").document("dailyUs")
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    Log.w("CoupleFeaturesRepo", "DailyUs listen error", error)
+                    return@addSnapshotListener
+                }
+                dailyUsDocData = snapshot?.data ?: emptyMap()
+                parseDailyUs()
+            }
     }
 
-    /** Re-reads everything (also called when Love & Us opens, so a new day gets its new question). */
-    fun rebuildLoveUs() {
-        ensureLoveUsListener()
-        val doc = coupleDocData
+    private fun parseDailyUs(data: Map<String, Any?>? = dailyUsDocData) {
         val myId = authRepository.getCurrentUserId()
         val partnerId = partnerIdOrNull()
-        val myName = authRepository.currentUserState.value?.displayName?.ifBlank { null } ?: "Me"
-        val partnerName = authRepository.partnerUserState.value?.displayName?.ifBlank { null } ?: "Your love"
-
-        // Daily Us
         val today = dayKey()
         val yesterday = dayKey(System.currentTimeMillis() - DAY_MS)
-        val daily = doc["dailyUs"] as? Map<*, *>
+
+        val daily = (data?.get("dailyUs") as? Map<*, *>) ?: (coupleDocData["dailyUs"] as? Map<*, *>)
         val sameDay = daily?.get("date") == today
         val answers = (if (sameDay) daily?.get("answers") as? Map<*, *> else null).orEmpty()
         val likes = (if (sameDay) daily?.get("likes") as? Map<*, *> else null).orEmpty()
         val theirKey = partnerId ?: answers.keys.firstOrNull { it != myId } as? String
         val mine = answers[myId] as? String
         val theirs = theirKey?.let { answers[it] } as? String
-        val streak = doc["dailyStreak"] as? Map<*, *>
+
+        val streak = (data?.get("dailyStreak") as? Map<*, *>) ?: (coupleDocData["dailyStreak"] as? Map<*, *>)
         val lastStreakDay = streak?.get("lastDate") as? String
         val streakDays = if (lastStreakDay == today || lastStreakDay == yesterday) (streak?.get("count") as? Number)?.toInt() ?: 0 else 0
         val (question, category) = dailyQuestionFor(today)
@@ -1203,6 +1291,156 @@ class CoupleFeaturesRepository(
             partnerLovedMyAnswer = theirKey != null && likes[theirKey] == true,
             streakDays = streakDays
         )
+
+        // Goodnight Kiss / Sleep Sync
+        val ss = (data?.get("sleepSync") as? Map<*, *>) ?: (coupleDocData["sleepSync"] as? Map<*, *>)
+        if (ss != null && ss["isAsleep"] == true) {
+            val ts = (ss["timestamp"] as? Number)?.toLong() ?: 0L
+            if (System.currentTimeMillis() - ts < 14L * 3600 * 1000) {
+                _sleepSyncFlow.value = com.example.data.model.SleepSyncEvent(
+                    timestamp = ts,
+                    senderId = ss["senderId"] as? String ?: "",
+                    senderName = ss["senderName"] as? String ?: "",
+                    status = ss["status"] as? String ?: "Asleep 🌙",
+                    isAsleep = true
+                )
+            } else {
+                _sleepSyncFlow.value = null
+            }
+        } else {
+            _sleepSyncFlow.value = null
+        }
+    }
+
+    private fun parseEntertainment(data: Map<String, Any?>? = entertainmentDocData) {
+        fun longs(value: Any?): Map<String, Long> = (value as? Map<*, *>).orEmpty().mapNotNull { (k, v) ->
+            val key = k as? String ?: return@mapNotNull null
+            val time = (v as? Number)?.toLong() ?: return@mapNotNull null
+            key to time
+        }.toMap()
+
+        val moviesMap = (data?.get("movies") as? Map<*, *>) ?: (coupleDocData["movies"] as? Map<*, *>)
+        _moviesFlow.value = moviesMap.orEmpty().mapNotNull { (key, value) ->
+            val id = key as? String ?: return@mapNotNull null
+            val m = value as? Map<*, *> ?: return@mapNotNull null
+            val title = (m["title"] as? String)?.ifBlank { null } ?: return@mapNotNull null
+            com.example.data.model.MovieItem(
+                id = id,
+                title = title,
+                genre = m["genre"] as? String ?: "",
+                emoji = (m["emoji"] as? String)?.ifBlank { null } ?: "\uD83C\uDFAC",
+                notes = m["notes"] as? String ?: "",
+                addedBy = m["addedBy"] as? String ?: "",
+                addedAt = (m["addedAt"] as? Number)?.toLong() ?: 0L,
+                watchedAt = longs(m["watchedAt"])
+            )
+        }.sortedByDescending { it.addedAt }
+
+        val booksMap = (data?.get("books") as? Map<*, *>) ?: (coupleDocData["books"] as? Map<*, *>)
+        _booksFlow.value = booksMap.orEmpty().mapNotNull { (key, value) ->
+            val id = key as? String ?: return@mapNotNull null
+            val b = value as? Map<*, *> ?: return@mapNotNull null
+            val title = (b["title"] as? String)?.ifBlank { null } ?: return@mapNotNull null
+            com.example.data.model.BookItem(
+                id = id,
+                title = title,
+                author = b["author"] as? String ?: "",
+                totalPages = (b["totalPages"] as? Number)?.toInt()?.coerceAtLeast(1) ?: 1,
+                genre = b["genre"] as? String ?: "",
+                emoji = (b["emoji"] as? String)?.ifBlank { null } ?: "\uD83D\uDCD6",
+                notes = b["notes"] as? String ?: "",
+                addedBy = b["addedBy"] as? String ?: "",
+                addedAt = (b["addedAt"] as? Number)?.toLong() ?: 0L,
+                pages = (b["pages"] as? Map<*, *>).orEmpty().mapNotNull { (k, v) ->
+                    val user = k as? String ?: return@mapNotNull null
+                    val page = (v as? Number)?.toInt() ?: return@mapNotNull null
+                    user to page
+                }.toMap(),
+                finishedAt = longs(b["finishedAt"])
+            )
+        }.sortedByDescending { it.addedAt }
+    }
+
+    private fun parseWatchParty(data: Map<String, Any?>? = watchPartyDocData) {
+        val wp = if (!data.isNullOrEmpty()) {
+            (data["watchParty"] as? Map<*, *>) ?: data
+        } else {
+            coupleDocData["watchParty"] as? Map<*, *>
+        }
+        val wpUpdatedAt = (wp?.get("updatedAt") as? Number)?.toLong() ?: 0L
+        val wpWatching = (wp?.get("watching") as? Map<*, *>)?.entries?.mapNotNull { (k, v) ->
+            val userId = k as? String ?: return@mapNotNull null
+            userId to ((v as? Number)?.toLong() ?: 0L)
+        }?.toMap().orEmpty()
+        val wpLastActive = maxOf(wpUpdatedAt, wpWatching.values.maxOrNull() ?: 0L)
+        val wpOver = wp != null && (
+            wp["isActive"] != true ||
+                System.currentTimeMillis() - wpLastActive > WATCH_PARTY_IDLE_MS ||
+                (wp["videoId"] == "dQw4w9WgXcQ" && wp["title"] == "Cozy Ambient Music")
+        )
+        if (wp != null && !wpOver) {
+            val reaction = wp["reaction"] as? Map<*, *>
+            val voiceSnippet = wp["voiceSnippet"] as? Map<*, *>
+            val whisper = wp["whisper"] as? Map<*, *>
+            _watchPartyFlow.value = com.example.data.model.WatchPartySession(
+                id = "active",
+                videoId = wp["videoId"] as? String ?: "",
+                mediaUrl = wp["mediaUrl"] as? String ?: "",
+                title = wp["title"] as? String ?: "Watch Together",
+                isPlaying = wp["isPlaying"] as? Boolean ?: false,
+                positionSeconds = (wp["positionSeconds"] as? Number)?.toFloat() ?: 0f,
+                playbackRate = (wp["playbackRate"] as? Number)?.toFloat() ?: 1.0f,
+                playScheduledAt = (wp["playScheduledAt"] as? Number)?.toLong() ?: 0L,
+                updatedAt = wpUpdatedAt,
+                updatedBy = wp["updatedBy"] as? String ?: "",
+                bufferingBy = wp["bufferingBy"] as? String ?: "",
+                adBy = wp["adBy"] as? String ?: "",
+                startedBy = wp["startedBy"] as? String ?: "",
+                isActive = true,
+                lastHeartburstAt = (wp["lastHeartburstAt"] as? Number)?.toLong() ?: 0L,
+                lastHeartburstBy = wp["lastHeartburstBy"] as? String ?: "",
+                startedAt = (wp["startedAt"] as? Number)?.toLong() ?: 0L,
+                reactionId = reaction?.get("id") as? String ?: "",
+                reactionEmoji = reaction?.get("e") as? String ?: "",
+                reactionBy = reaction?.get("by") as? String ?: "",
+                reactionAt = (reaction?.get("at") as? Number)?.toLong() ?: 0L,
+                reactionCount = (reaction?.get("n") as? Number)?.toInt() ?: 1,
+                voiceSnippetId = voiceSnippet?.get("id") as? String ?: "",
+                voiceSnippetData = voiceSnippet?.get("data") as? String ?: "",
+                voiceSnippetBy = voiceSnippet?.get("by") as? String ?: "",
+                whisperId = whisper?.get("id") as? String ?: "",
+                whisperText = whisper?.get("t") as? String ?: "",
+                whisperBy = whisper?.get("by") as? String ?: "",
+                watching = wpWatching,
+                queue = (wp["queue"] as? List<*>)?.mapNotNull { q ->
+                    val qMap = q as? Map<*, *> ?: return@mapNotNull null
+                    com.example.data.model.WatchLaterVideo(
+                        id = qMap["id"] as? String ?: "",
+                        videoId = qMap["videoId"] as? String ?: "",
+                        title = qMap["title"] as? String ?: "",
+                        addedBy = qMap["addedBy"] as? String ?: "",
+                        addedAt = (qMap["addedAt"] as? Number)?.toLong() ?: 0L
+                    )
+                }.orEmpty()
+            )
+        } else if (wpOver || (data.isNullOrEmpty() && coupleDocData["watchParty"] == null)) {
+            _watchPartyFlow.value = null
+        }
+    }
+
+    /** Re-reads everything (also called when Love & Us opens, so a new day gets its new question). */
+    fun rebuildLoveUs() {
+        ensureLoveUsListener()
+        val doc = coupleDocData
+        val myId = authRepository.getCurrentUserId()
+        val partnerId = partnerIdOrNull()
+        val myName = authRepository.currentUserState.value?.displayName?.ifBlank { null } ?: "Me"
+        val partnerName = authRepository.partnerUserState.value?.displayName?.ifBlank { null } ?: "Your love"
+
+        // Keep split records in sync (falling back to root doc if sub-records are empty)
+        parseDailyUs()
+        parseEntertainment()
+        parseWatchParty()
 
         // Open When
         _openWhenFlow.value = (doc["openWhen"] as? Map<*, *>).orEmpty().mapNotNull { (key, value) ->
@@ -1263,129 +1501,6 @@ class CoupleFeaturesRepository(
                 authorId = authorId
             )
         }.sortedByDescending { it.year }
-
-        // Our movies and books
-        fun longs(value: Any?): Map<String, Long> = (value as? Map<*, *>).orEmpty().mapNotNull { (k, v) ->
-            val key = k as? String ?: return@mapNotNull null
-            val time = (v as? Number)?.toLong() ?: return@mapNotNull null
-            key to time
-        }.toMap()
-        _moviesFlow.value = (doc["movies"] as? Map<*, *>).orEmpty().mapNotNull { (key, value) ->
-            val id = key as? String ?: return@mapNotNull null
-            val m = value as? Map<*, *> ?: return@mapNotNull null
-            val title = (m["title"] as? String)?.ifBlank { null } ?: return@mapNotNull null
-            com.example.data.model.MovieItem(
-                id = id,
-                title = title,
-                genre = m["genre"] as? String ?: "",
-                emoji = (m["emoji"] as? String)?.ifBlank { null } ?: "\uD83C\uDFAC",
-                notes = m["notes"] as? String ?: "",
-                addedBy = m["addedBy"] as? String ?: "",
-                addedAt = (m["addedAt"] as? Number)?.toLong() ?: 0L,
-                watchedAt = longs(m["watchedAt"])
-            )
-        }.sortedByDescending { it.addedAt }
-        _booksFlow.value = (doc["books"] as? Map<*, *>).orEmpty().mapNotNull { (key, value) ->
-            val id = key as? String ?: return@mapNotNull null
-            val b = value as? Map<*, *> ?: return@mapNotNull null
-            val title = (b["title"] as? String)?.ifBlank { null } ?: return@mapNotNull null
-            com.example.data.model.BookItem(
-                id = id,
-                title = title,
-                author = b["author"] as? String ?: "",
-                totalPages = (b["totalPages"] as? Number)?.toInt()?.coerceAtLeast(1) ?: 1,
-                genre = b["genre"] as? String ?: "",
-                emoji = (b["emoji"] as? String)?.ifBlank { null } ?: "\uD83D\uDCD6",
-                notes = b["notes"] as? String ?: "",
-                addedBy = b["addedBy"] as? String ?: "",
-                addedAt = (b["addedAt"] as? Number)?.toLong() ?: 0L,
-                pages = (b["pages"] as? Map<*, *>).orEmpty().mapNotNull { (k, v) ->
-                    val user = k as? String ?: return@mapNotNull null
-                    val page = (v as? Number)?.toInt() ?: return@mapNotNull null
-                    user to page
-                }.toMap(),
-                finishedAt = longs(b["finishedAt"])
-            )
-        }.sortedByDescending { it.addedAt }
-
-        // Synced Watch Party: on from Start until either of us ends it
-        val wp = doc["watchParty"] as? Map<*, *>
-        val wpUpdatedAt = (wp?.get("updatedAt") as? Number)?.toLong() ?: 0L
-        val wpWatching = (wp?.get("watching") as? Map<*, *>)?.entries?.mapNotNull { (k, v) ->
-            val userId = k as? String ?: return@mapNotNull null
-            userId to ((v as? Number)?.toLong() ?: 0L)
-        }?.toMap().orEmpty()
-        // Idle: nobody has played, paused, moved or had it open for a while
-        val wpLastActive = maxOf(wpUpdatedAt, wpWatching.values.maxOrNull() ?: 0L)
-        val wpOver = wp != null && (
-            wp["isActive"] != true ||
-                System.currentTimeMillis() - wpLastActive > WATCH_PARTY_IDLE_MS ||
-                // The sample video older versions started by themselves whenever the button was tapped
-                (wp["videoId"] == "dQw4w9WgXcQ" && wp["title"] == "Cozy Ambient Music")
-            )
-        if (wp != null && !wpOver) {
-            val reaction = wp["reaction"] as? Map<*, *>
-            val voiceSnippet = wp["voiceSnippet"] as? Map<*, *>
-            val whisper = wp["whisper"] as? Map<*, *>
-            _watchPartyFlow.value = com.example.data.model.WatchPartySession(
-                id = "active",
-                videoId = wp["videoId"] as? String ?: "",
-                mediaUrl = wp["mediaUrl"] as? String ?: "",
-                title = wp["title"] as? String ?: "Watch Together",
-                isPlaying = wp["isPlaying"] as? Boolean ?: false,
-                positionSeconds = (wp["positionSeconds"] as? Number)?.toFloat() ?: 0f,
-                playbackRate = (wp["playbackRate"] as? Number)?.toFloat() ?: 1.0f,
-                playScheduledAt = (wp["playScheduledAt"] as? Number)?.toLong() ?: 0L,
-                updatedAt = wpUpdatedAt,
-                updatedBy = wp["updatedBy"] as? String ?: "",
-                bufferingBy = wp["bufferingBy"] as? String ?: "",
-                adBy = wp["adBy"] as? String ?: "",
-                startedBy = wp["startedBy"] as? String ?: "",
-                isActive = true,
-                lastHeartburstAt = (wp["lastHeartburstAt"] as? Number)?.toLong() ?: 0L,
-                lastHeartburstBy = wp["lastHeartburstBy"] as? String ?: "",
-                startedAt = (wp["startedAt"] as? Number)?.toLong() ?: 0L,
-                reactionId = reaction?.get("id") as? String ?: "",
-                reactionEmoji = reaction?.get("e") as? String ?: "",
-                reactionBy = reaction?.get("by") as? String ?: "",
-                reactionAt = (reaction?.get("at") as? Number)?.toLong() ?: 0L,
-                reactionCount = (reaction?.get("n") as? Number)?.toInt() ?: 1,
-                voiceSnippetId = voiceSnippet?.get("id") as? String ?: "",
-                voiceSnippetData = voiceSnippet?.get("data") as? String ?: "",
-                voiceSnippetBy = voiceSnippet?.get("by") as? String ?: "",
-                whisperId = whisper?.get("id") as? String ?: "",
-                whisperText = whisper?.get("t") as? String ?: "",
-                whisperBy = whisper?.get("by") as? String ?: "",
-                watching = wpWatching,
-                queue = (wp["queue"] as? List<*>)?.mapNotNull { q ->
-                    val qMap = q as? Map<*, *> ?: return@mapNotNull null
-                    com.example.data.model.WatchLaterVideo(
-                        id = qMap["id"] as? String ?: "",
-                        videoId = qMap["videoId"] as? String ?: "",
-                        title = qMap["title"] as? String ?: "",
-                        addedBy = qMap["addedBy"] as? String ?: "",
-                        addedAt = (qMap["addedAt"] as? Number)?.toLong() ?: 0L
-                    )
-                }.orEmpty()
-            )
-        } else if (wpOver) {
-            _watchPartyFlow.value = null
-        }
-
-        // Goodnight Kiss / Sleep Sync
-        val ss = doc["sleepSync"] as? Map<*, *>
-        if (ss != null && ss["isAsleep"] == true) {
-            val ts = (ss["timestamp"] as? Number)?.toLong() ?: 0L
-            if (System.currentTimeMillis() - ts < 14L * 3600 * 1000) {
-                _sleepSyncFlow.value = com.example.data.model.SleepSyncEvent(
-                    timestamp = ts,
-                    senderId = ss["senderId"] as? String ?: "",
-                    senderName = ss["senderName"] as? String ?: "",
-                    status = ss["status"] as? String ?: "Asleep 🌙",
-                    isAsleep = true
-                )
-            }
-        }
     }
 
     init {

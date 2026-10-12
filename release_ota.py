@@ -48,9 +48,16 @@ def main():
     tag_name = f"v{version_name}-{version_code}"
     release_name = f"Release {version_name} (Build {version_code})"
     release_body = (
-        "Improve notification handling (auto-clear on resume, single-session badge limits) "
-        "and boost chat performance with precomputed UI models and incremental backup loading."
+        "Fix Notes disguise top-left icon to match original app launcher icon, enable Android back button & gesture to close app cleanly from Notes disguise, fix received video notes & shared videos blank screen and playback errors with automatic HTTP redirect resolution and reliable local caching."
     )
+    if os.path.exists("version.json"):
+        try:
+            with open("version.json", "r", encoding="utf-8") as vf:
+                vj = json.load(vf)
+                if vj.get("releaseNotes"):
+                    release_body = vj["releaseNotes"]
+        except Exception:
+            pass
     
     headers = {
         "Authorization": f"token {token}",
@@ -183,7 +190,7 @@ def main():
         git_cmd = "git"
 
     print("Syncing git repository with latest version.json and build.gradle.kts...")
-    subprocess.run([git_cmd, "add", "app/build.gradle.kts", "version.json", "release_ota.py"])
+    subprocess.run([git_cmd, "add", "-A"])
     commit_msg = f"Bump version to {version_name} (build {version_code}) and release OTA"
     subprocess.run([git_cmd, "commit", "-m", commit_msg])
 

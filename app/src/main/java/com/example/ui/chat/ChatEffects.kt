@@ -129,12 +129,19 @@ fun Context.areAnimationsDisabled(): Boolean =
 
 /** A soft light sweep, used as a loading placeholder. */
 fun Modifier.shimmer(baseColor: Color, highlightColor: Color): Modifier = composed {
-    val progress by rememberInfiniteTransition(label = "shimmer").animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(tween(1100, easing = LinearEasing)),
-        label = "shimmer_progress"
-    )
+    val isForeground = com.example.ui.components.rememberAppIsResumed()
+    val progress: Float = if (isForeground) {
+        val transition = rememberInfiniteTransition(label = "shimmer")
+        val p by transition.animateFloat(
+            initialValue = 0f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(tween(1100, easing = LinearEasing)),
+            label = "shimmer_progress"
+        )
+        p
+    } else {
+        0f
+    }
     drawBehind {
         drawRect(baseColor)
         val band = size.width * 0.6f

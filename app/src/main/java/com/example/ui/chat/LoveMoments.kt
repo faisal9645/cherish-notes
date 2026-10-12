@@ -235,13 +235,19 @@ private fun TwinklingStars(modifier: Modifier = Modifier, count: Int = 60, brigh
             Star(random.nextFloat(), random.nextFloat(), 0.6f + random.nextFloat() * 1.8f, random.nextFloat())
         }
     }
-    val transition = rememberInfiniteTransition(label = "twinkle")
-    val time by transition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(tween(2600, easing = LinearEasing), RepeatMode.Restart),
-        label = "twinkle_time"
-    )
+    val isAppForeground = com.example.ui.components.rememberAppIsResumed()
+    val time: Float = if (isAppForeground) {
+        val transition = rememberInfiniteTransition(label = "twinkle")
+        val t by transition.animateFloat(
+            initialValue = 0f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(tween(2600, easing = LinearEasing), RepeatMode.Restart),
+            label = "twinkle_time"
+        )
+        t
+    } else {
+        0f
+    }
     Canvas(modifier = modifier) {
         stars.forEach { star ->
             val twinkle = 0.3f + 0.7f * (0.5f + 0.5f * sin(2f * PI.toFloat() * (time + star.phase)))
@@ -263,13 +269,19 @@ private fun TwinklingStars(modifier: Modifier = Modifier, count: Int = 60, brigh
 fun GoodnightCard(partnerName: String, onSendGoodnight: () -> Unit, onDismiss: () -> Unit) {
     var sent by remember { mutableStateOf(false) }
     val cardIn = remember { Animatable(0.88f) }
-    val moonFloat = rememberInfiniteTransition(label = "moon")
-    val moonY by moonFloat.animateFloat(
-        initialValue = -4f,
-        targetValue = 4f,
-        animationSpec = infiniteRepeatable(tween(2200, easing = FastOutSlowInEasing), RepeatMode.Reverse),
-        label = "moon_y"
-    )
+    val isAppForeground = com.example.ui.components.rememberAppIsResumed()
+    val moonY: Float = if (isAppForeground) {
+        val moonFloat = rememberInfiniteTransition(label = "moon")
+        val y by moonFloat.animateFloat(
+            initialValue = -4f,
+            targetValue = 4f,
+            animationSpec = infiniteRepeatable(tween(2200, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+            label = "moon_y"
+        )
+        y
+    } else {
+        0f
+    }
     LaunchedEffect(Unit) { cardIn.animateTo(1f, spring(dampingRatio = 0.65f, stiffness = 360f)) }
     LaunchedEffect(sent) {
         if (sent) {
@@ -380,13 +392,19 @@ fun GoodnightCard(partnerName: String, onSendGoodnight: () -> Unit, onDismiss: (
 fun GoodnightStarsOverlay(partnerName: String, onDismiss: () -> Unit) {
     val dim = remember { Animatable(0f) }
     LaunchedEffect(Unit) { dim.animateTo(1f, tween(1_400, easing = FastOutSlowInEasing)) }
-    val glow = rememberInfiniteTransition(label = "moon_glow")
-    val glowScale by glow.animateFloat(
-        initialValue = 0.92f,
-        targetValue = 1.1f,
-        animationSpec = infiniteRepeatable(tween(2000, easing = FastOutSlowInEasing), RepeatMode.Reverse),
-        label = "moon_glow_scale"
-    )
+    val isAppForeground = com.example.ui.components.rememberAppIsResumed()
+    val glowScale: Float = if (isAppForeground) {
+        val glow = rememberInfiniteTransition(label = "moon_glow")
+        val scale by glow.animateFloat(
+            initialValue = 0.92f,
+            targetValue = 1.1f,
+            animationSpec = infiniteRepeatable(tween(2000, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+            label = "moon_glow_scale"
+        )
+        scale
+    } else {
+        1.0f
+    }
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -459,13 +477,19 @@ fun LoveCelebration(title: String, subtitle: String?, onDismiss: () -> Unit) {
     }
     val time = remember { Animatable(0f) }
     val cardIn = remember { Animatable(0.8f) }
-    val beat = rememberInfiniteTransition(label = "celebrate_beat")
-    val beatScale by beat.animateFloat(
-        initialValue = 1f,
-        targetValue = 1.14f,
-        animationSpec = infiniteRepeatable(tween(520, easing = FastOutSlowInEasing), RepeatMode.Reverse),
-        label = "celebrate_beat_scale"
-    )
+    val isAppForeground = com.example.ui.components.rememberAppIsResumed()
+    val beatScale: Float = if (isAppForeground) {
+        val beat = rememberInfiniteTransition(label = "celebrate_beat")
+        val scale by beat.animateFloat(
+            initialValue = 1f,
+            targetValue = 1.14f,
+            animationSpec = infiniteRepeatable(tween(520, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+            label = "celebrate_beat_scale"
+        )
+        scale
+    } else {
+        1.0f
+    }
     LaunchedEffect(Unit) {
         launch { cardIn.animateTo(1f, spring(dampingRatio = 0.55f, stiffness = 320f)) }
         time.animateTo(1f, tween(6_000, easing = LinearEasing))
