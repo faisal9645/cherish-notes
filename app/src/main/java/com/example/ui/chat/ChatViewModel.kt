@@ -219,6 +219,7 @@ class ChatViewModel(
     // Preserved scroll position when navigating between tabs (Chat, Love & Us, Settings)
     var savedScrollIndex: Int = 0
     var savedScrollOffset: Int = 0
+    var savedScrollKey: String? = null
 
     init {
         authRepository.connectPartnerListenerOnce()

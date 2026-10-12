@@ -82,9 +82,8 @@ def create_github_release(token: str, repo: str, version_code: int, version_name
     return resp.json()
 
 
-def upload_apk_to_release(token: str, repo: str, release: dict, apk_path: str, version_code: int) -> str:
+def upload_single_asset(token: str, repo: str, release: dict, apk_path: str, asset_name: str) -> str:
     upload_url = release["upload_url"].replace("{?name,label}", "")
-    asset_name = f"app_update_{version_code}.apk"
 
     # Refresh release details to get up-to-date asset list
     try:
@@ -119,8 +118,8 @@ def upload_apk_to_release(token: str, repo: str, release: dict, apk_path: str, v
             chunk = self.f.read(size if size > 0 else 65536)
             self.read_bytes += len(chunk)
             pct = int(self.read_bytes * 100 / self.total) if self.total > 0 else 0
-            if pct != self.last_pct and pct % 5 == 0:
-                print(f"Uploading... {pct}% ({self.read_bytes}/{self.total} bytes)", flush=True)
+            if pct != self.last_pct and pct % 10 == 0:
+                print(f"Uploading {asset_name}... {pct}% ({self.read_bytes}/{self.total} bytes)", flush=True)
                 self.last_pct = pct
             return chunk
 
@@ -135,34 +134,72 @@ def upload_apk_to_release(token: str, repo: str, release: dict, apk_path: str, v
         "Content-Length": str(apk_size),
         "Accept": "application/vnd.github+json",
     }
-    print(f"Uploading {apk_path} -> {asset_name} ({os.path.getsize(apk_path)} bytes)...", flush=True)
-    
+    print(f"Uploading {apk_path} -> {asset_name} ({apk_size} bytes)...", flush=True)
+
     import time
     success = False
     for attempt in range(1, 4):
         try:
-            print(f"Upload attempt {attempt}/3...", flush=True)
+            print(f"Upload attempt {attempt}/3 for {asset_name}...", flush=True)
             resp = requests.post(url_with_param, headers=headers, data=ProgressReader(apk_path), timeout=600)
             if resp.status_code in (200, 201):
-                print("Upload succeeded!", flush=True)
+                print(f"Upload succeeded for {asset_name}!", flush=True)
                 success = True
                 break
             else:
-                print(f"ERROR uploading APK: {resp.status_code} — {resp.text}", flush=True)
+                print(f"ERROR uploading APK {asset_name}: {resp.status_code} — {resp.text}", flush=True)
         except Exception as e:
-            print(f"Exception during upload: {e}", flush=True)
-        
+            print(f"Exception during upload of {asset_name}: {e}", flush=True)
+
         if attempt < 3:
-            time.sleep(15)
-            
+            time.sleep(10)
+
     if not success:
-        print("Upload failed after 3 attempts.", flush=True)
+        print(f"Upload failed for {asset_name} after 3 attempts.", flush=True)
         sys.exit(1)
 
-    # Direct download URL (no login required)
     download_url = f"https://github.com/{repo}/releases/download/{release['tag_name']}/{asset_name}"
-    print(f"Upload complete!\nDownload URL: {download_url}")
+    print(f"Upload complete for {asset_name}!\nDownload URL: {download_url}")
     return download_url
+
+
+def upload_apk_to_release(token: str, repo: str, release: dict, apk_path: str, version_code: int) -> str:
+    primary_asset = f"app_update_{version_code}.apk"
+    primary_url = upload_single_asset(token, repo, release, apk_path, primary_asset)
+
+    # Also upload fallback alias asset names so older clients looking for cherish-notes-*.apk or app-release.apk succeed
+    tag = release.get("tag_name", "")
+    alias_assets = [f"cherish-notes-{tag}.apk", "app-release.apk"]
+    for alias in alias_assets:
+        try:
+            upload_single_asset(token, repo, release, apk_path, alias)
+        except Exception as e:
+            print(f"Note: Could not upload alias asset {alias}: {e}")
+
+    return primary_url
+
+
+def sync_git_and_push(project_root: str, token: str, version_code: int, version_name: str):
+    import subprocess
+    git_cmd = r"C:\Program Files\Git\cmd\git.exe"
+    if not os.path.exists(git_cmd):
+        git_cmd = "git"
+
+    print("Syncing git working tree and pushing version update to origin main...", flush=True)
+    subprocess.run([git_cmd, "add", "-A"], cwd=project_root)
+    commit_msg = f"Bump version to {version_name} (build {version_code}) and release OTA"
+    subprocess.run([git_cmd, "commit", "-m", commit_msg], cwd=project_root)
+
+    push_url = f"https://x-access-token:{token}@github.com/{GITHUB_REPO}.git"
+    res = subprocess.run([git_cmd, "push", push_url, "main"], cwd=project_root, capture_output=True, text=True)
+    if res.returncode == 0:
+        print("Pushed version bump and version.json to origin main successfully!", flush=True)
+    else:
+        res2 = subprocess.run([git_cmd, "push", "origin", "main"], cwd=project_root, capture_output=True, text=True)
+        if res2.returncode == 0:
+            print("Pushed to origin main via existing git remote credentials!", flush=True)
+        else:
+            print(f"Git push notice: {res.stderr or res2.stderr}", flush=True)
 
 
 def release_notes(version_name: str, version_code: int) -> str:
@@ -213,8 +250,12 @@ def build_apk(project_root: str):
     import subprocess
     print("Building release APK...", flush=True)
     gradlew = os.path.join(project_root, "gradlew.bat" if os.name == 'nt' else "gradlew")
+    env = os.environ.copy()
+    jbr_path = r"C:\Program Files\Android\Android Studio\jbr"
+    if os.path.exists(jbr_path):
+        env["JAVA_HOME"] = jbr_path
     try:
-        subprocess.check_call([gradlew, ":app:assembleRelease"], cwd=project_root)
+        subprocess.check_call([gradlew, ":app:assembleRelease"], cwd=project_root, env=env)
         print("Build successful!", flush=True)
     except subprocess.CalledProcessError as e:
         print(f"ERROR: Build failed with exit code {e.returncode}")
@@ -228,8 +269,10 @@ def main():
 
     args = sys.argv[1:]
     extra_repos = [args[i + 1] for i, a in enumerate(args[:-1]) if a == "--also"]
+    skip_build = "--skip-build" in args
 
-    build_apk(project_root)
+    if not skip_build:
+        build_apk(project_root)
 
     token                    = get_github_token(project_root)
     version_code, version_name = get_version(project_root)
@@ -247,6 +290,7 @@ def main():
     download_url = upload_apk_to_release(token, GITHUB_REPO, release, apk_path, version_code)
     write_version_json(project_root, version_code, version_name, download_url, apk_path)
     update_firestore(project_root, version_code, version_name, download_url)
+    sync_git_and_push(project_root, token, version_code, version_name)
 
     print("\nOTA update pushed successfully via GitHub Releases!")
     print(f"   Users will download from: {download_url}")

@@ -64,14 +64,20 @@ class OtaUpdateManager private constructor(private val appContext: Context) {
             // Tier 1: Static version.json via raw.githubusercontent.com (zero API rate limits on mobile carriers)
             var info = fetchFromVersionJson()
 
-            // Tier 2: GitHub Releases API
-            if (info == null) {
-                info = fetchFromApi()
+            // Tier 2: GitHub Releases API (checked if Tier 1 failed or didn't report an update)
+            if (info == null || !info.hasUpdate) {
+                val apiInfo = fetchFromApi()
+                if (apiInfo != null && (info == null || apiInfo.hasUpdate)) {
+                    info = apiInfo
+                }
             }
 
-            // Tier 3: GitHub Web Releases 302 redirect fallback
-            if (info == null) {
-                info = fetchFromWebRedirect()
+            // Tier 3: GitHub Web Releases 302 redirect fallback (checked if still no update found)
+            if (info == null || !info.hasUpdate) {
+                val webInfo = fetchFromWebRedirect()
+                if (webInfo != null && (info == null || webInfo.hasUpdate)) {
+                    info = webInfo
+                }
             }
 
             if (info != null) {

@@ -137,8 +137,6 @@ fun CherishNavGraph(
             app.voicePlayerHelper
         )
     }
-    fun isPrivateChat() =
-        sharedChatViewModel.uiState.value.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE
 
     // Hiding the secret app (emergency exit, or leaving the app) leaves nothing of it open, recording
     // or playing behind Notes: viewers, sheets and dialogs close, recording and playback stop.
@@ -232,11 +230,8 @@ fun CherishNavGraph(
         enterTransition = {
             val fromOrder = getTabOrder(initialState.destination.route)
             val toOrder = getTabOrder(targetState.destination.route)
-            val drawer = privateSettingsSlide(initialState.destination.route, targetState.destination.route, isPrivateChat())
             if (app.securityPreferences.isDisguiseActive()) {
                 EnterTransition.None
-            } else if (drawer != null) {
-                slideIntoContainer(towards = drawer, animationSpec = tween(300, easing = FastOutSlowInEasing))
             } else if (fromOrder >= 0 && toOrder >= 0 && fromOrder != toOrder) {
                 if (toOrder > fromOrder) {
                     slideIntoContainer(
@@ -257,11 +252,8 @@ fun CherishNavGraph(
         exitTransition = {
             val fromOrder = getTabOrder(initialState.destination.route)
             val toOrder = getTabOrder(targetState.destination.route)
-            val drawer = privateSettingsSlide(initialState.destination.route, targetState.destination.route, isPrivateChat())
             if (app.securityPreferences.isDisguiseActive()) {
                 ExitTransition.None
-            } else if (drawer != null) {
-                slideOutOfContainer(towards = drawer, animationSpec = tween(300, easing = FastOutSlowInEasing))
             } else if (fromOrder >= 0 && toOrder >= 0 && fromOrder != toOrder) {
                 if (toOrder > fromOrder) {
                     slideOutOfContainer(
@@ -282,11 +274,8 @@ fun CherishNavGraph(
         popEnterTransition = {
             val fromOrder = getTabOrder(initialState.destination.route)
             val toOrder = getTabOrder(targetState.destination.route)
-            val drawer = privateSettingsSlide(initialState.destination.route, targetState.destination.route, isPrivateChat())
             if (app.securityPreferences.isDisguiseActive()) {
                 EnterTransition.None
-            } else if (drawer != null) {
-                slideIntoContainer(towards = drawer, animationSpec = tween(300, easing = FastOutSlowInEasing))
             } else if (fromOrder >= 0 && toOrder >= 0 && fromOrder != toOrder) {
                 if (toOrder > fromOrder) {
                     slideIntoContainer(
@@ -307,11 +296,8 @@ fun CherishNavGraph(
         popExitTransition = {
             val fromOrder = getTabOrder(initialState.destination.route)
             val toOrder = getTabOrder(targetState.destination.route)
-            val drawer = privateSettingsSlide(initialState.destination.route, targetState.destination.route, isPrivateChat())
             if (app.securityPreferences.isDisguiseActive()) {
                 ExitTransition.None
-            } else if (drawer != null) {
-                slideOutOfContainer(towards = drawer, animationSpec = tween(300, easing = FastOutSlowInEasing))
             } else if (fromOrder >= 0 && toOrder >= 0 && fromOrder != toOrder) {
                 if (toOrder > fromOrder) {
                     slideOutOfContainer(
@@ -855,18 +841,6 @@ fun CherishNavGraph(
 
     } // End of Box
 } // End of CherishNavGraph
-
-/**
- * In private chat, Settings opens from the left and closes back that way, like ChatGPT's side menu:
- * the way to slide between the chat and Settings then, or null for the usual tab slide.
- */
-private fun privateSettingsSlide(from: String?, to: String?, privateChat: Boolean): AnimatedContentTransitionScope.SlideDirection? =
-    when {
-        !privateChat -> null
-        from == Screen.Chat.route && to == Screen.Profile.route -> AnimatedContentTransitionScope.SlideDirection.Right
-        from == Screen.Profile.route && to == Screen.Chat.route -> AnimatedContentTransitionScope.SlideDirection.Left
-        else -> null
-    }
 
 private fun getTabOrder(route: String?): Int {
     return when (route) {

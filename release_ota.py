@@ -48,7 +48,7 @@ def main():
     tag_name = f"v{version_name}-{version_code}"
     release_name = f"Release {version_name} (Build {version_code})"
     release_body = (
-        "Fix Notes disguise top-left icon to match original app launcher icon, enable Android back button & gesture to close app cleanly from Notes disguise, fix received video notes & shared videos blank screen and playback errors with automatic HTTP redirect resolution and reliable local caching."
+        f"Notes v{version_name} (Build {version_code}):\n• Cleaner, simpler layout\n• Voice typing and read aloud\n• Settings open with a swipe\n• Bug fixes and improvements"
     )
     if os.path.exists("version.json"):
         try:
@@ -139,7 +139,7 @@ def main():
                 else:
                     sys.exit(1)
 
-    assets_to_upload = [f"cherish-notes-{tag_name}.apk", "app-release.apk"]
+    assets_to_upload = [f"app_update_{version_code}.apk", f"cherish-notes-{tag_name}.apk", "app-release.apk"]
     for asset_name in assets_to_upload:
         if asset_name in existing_assets and existing_asset_sizes.get(asset_name) == apk_len:
             print(f"Asset {asset_name} is already uploaded with matching size ({apk_len} bytes). Skipping.")

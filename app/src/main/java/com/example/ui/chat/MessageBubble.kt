@@ -94,7 +94,7 @@ fun MessageBubble(
     // text with a row of small actions under it
     val bubbleShape = if (isPrivateMode) {
         if (isFromMe) {
-            RoundedCornerShape(22.dp)
+            RoundedCornerShape(24.dp)
         } else {
             RoundedCornerShape(4.dp)
         }
@@ -562,6 +562,7 @@ fun MessageBubble(
                             else PaddingValues(horizontal = 4.dp, vertical = 4.dp)
                         }
                         else if (isPrivateMode && !isFromMe) PaddingValues(start = 2.dp, end = 2.dp, top = 2.dp, bottom = 4.dp)
+                        else if (isPrivateMode) PaddingValues(horizontal = 17.dp, vertical = 11.dp)
                         else PaddingValues(horizontal = 12.dp, vertical = 7.dp)
                     )
             ) {
@@ -958,7 +959,10 @@ fun MessageBubble(
                     EmojiText(
                         text = message.text,
                         color = textColor,
-                        style = MaterialTheme.typography.bodyMedium,
+                        // ChatGPT's reading size in private chat
+                        style = if (isPrivateMode) {
+                            MaterialTheme.typography.bodyLarge.copy(fontSize = 16.sp, lineHeight = 23.sp)
+                        } else MaterialTheme.typography.bodyMedium,
                         fontStyle = if (message.isDeleted) FontStyle.Italic else FontStyle.Normal,
                         largeWhenEmojiOnly = true
                     )
@@ -1337,8 +1341,10 @@ private fun PrivateMessageActions(
     // Only I can react to my partner's message, so these are mine
     val reacted = message.reactions.values
     Row(
-        modifier = Modifier.padding(top = 8.dp, bottom = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        // The first icon lines up with the text, as in ChatGPT
+        modifier = Modifier
+            .padding(top = 10.dp, bottom = 6.dp)
+            .offset(x = (-8).dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         if (text.isNotBlank()) {
@@ -1369,10 +1375,10 @@ private fun PrivateAction(icon: ImageVector, label: String, tint: Color, onClick
     Box(
         contentAlignment = Alignment.Center,
         modifier = Modifier
-            .size(34.dp)
+            .size(36.dp)
             .clip(CircleShape)
             .clickable(onClick = onClick)
     ) {
-        Icon(icon, contentDescription = label, tint = tint, modifier = Modifier.size(19.dp))
+        Icon(icon, contentDescription = label, tint = tint, modifier = Modifier.size(20.dp))
     }
 }

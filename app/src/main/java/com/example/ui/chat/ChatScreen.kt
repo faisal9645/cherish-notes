@@ -96,6 +96,7 @@ import com.example.ui.theme.*
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.StateFlow
 import androidx.core.content.FileProvider
@@ -135,6 +136,8 @@ fun ChatScreen(
         onDispose {
             viewModel.savedScrollIndex = listState.firstVisibleItemIndex
             viewModel.savedScrollOffset = listState.firstVisibleItemScrollOffset
+            // The message there too: new ones arriving meanwhile shift the index, not the message
+            viewModel.savedScrollKey = listState.layoutInfo.visibleItemsInfo.firstOrNull()?.key as? String
         }
     }
     val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
@@ -383,19 +386,15 @@ fun ChatScreen(
     // Keyboard open / close scrolling:
     // When keyboard opens (user starts typing message in bottom bar) or closes,
     // ensure the chat list smoothly scrolls and stays anchored to the latest message in all states.
+    // Only when the keyboard opens and the newest messages are already in view: reading older ones,
+    // closing the keyboard, or a "Show in chat" jump must not pull the chat to the bottom
     LaunchedEffect(isImeVisible) {
-        if (reversedChatRowItems.isNotEmpty()) {
+        if (isImeVisible && reversedChatRowItems.isNotEmpty() && listState.firstVisibleItemIndex <= 2 &&
+            viewModel.uiState.value.targetScrollMessageId == null
+        ) {
             listState.scrollToItem(0, scrollOffset = 0)
-            delay(50)
-            listState.scrollToItem(0, scrollOffset = 0)
-            delay(120)
-            listState.scrollToItem(0, scrollOffset = 0)
-            delay(240)
-            listState.scrollToItem(0, scrollOffset = 0)
-            delay(380)
-            if (listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset != 0) {
-                listState.scrollToItem(0, scrollOffset = 0)
-            }
+            delay(300) // after the keyboard has finished sliding up
+            if (listState.firstVisibleItemIndex <= 2) listState.scrollToItem(0, scrollOffset = 0)
         }
     }
 
@@ -409,16 +408,30 @@ fun ChatScreen(
         val currentId = latestRowItemId ?: latestRawMessageId ?: return@LaunchedEffect
         val previousId = lastScrolledMessageId.value
         lastScrolledMessageId.value = currentId
+        // A "Show in chat" jump is on its way: it decides where the chat is
+        if (viewModel.uiState.value.targetScrollMessageId != null) return@LaunchedEffect
         if (previousId == null) {
-            // Initial entry: ensure list starts smoothly at the newest message
-            listState.scrollToItem(0, scrollOffset = 0)
+            // Opening the chat, or coming back to it (from Love & Us, Settings…): where I was reading.
+            // At the newest messages before (or the first time), the newest ones, new arrivals included.
+            val savedKey = viewModel.savedScrollKey
+            val savedIndex = if (viewModel.savedScrollIndex > 0 && savedKey != null) {
+                reversedChatRowItems.indexOfFirst { it.message.id == savedKey }
+            } else -1
+            when {
+                savedIndex > 0 -> listState.scrollToItem(savedIndex, viewModel.savedScrollOffset)
+                viewModel.savedScrollIndex == 0 -> listState.scrollToItem(0, scrollOffset = 0)
+                // That message isn't shown any more: the restored place stays
+            }
             return@LaunchedEffect
         }
         if (currentId == previousId) return@LaunchedEffect
 
-        // When a new message arrives (either opposite partner or me), scroll to bottom (index 0)
-        // Multiple checkpoints ensure animations and layout resizing (typing bubble disappearing, keyboard)
-        // leave the latest message cleanly visible directly above the message box.
+        // A new message: follow it if I sent it or I'm at the newest messages anyway. Someone reading
+        // older messages stays where they are (the ↓ button shows the new one).
+        val state = viewModel.uiState.value
+        val sentByMe = state.currentUser?.id != null &&
+            state.messages.lastOrNull { !it.isDeleted }?.senderId == state.currentUser.id
+        if (!sentByMe && listState.firstVisibleItemIndex > 2) return@LaunchedEffect
         listState.scrollToItem(0, scrollOffset = 0)
         delay(40)
         listState.scrollToItem(0, scrollOffset = 0)
@@ -436,7 +449,8 @@ fun ChatScreen(
             .map { it.isTyping to it.isRecordingAudio }
             .distinctUntilChanged()
             .collect { (typing, recording) ->
-                if (typing || recording) {
+                // Only while at the newest messages: their typing mustn't pull someone reading back down
+                if ((typing || recording) && listState.firstVisibleItemIndex <= 1) {
                     if (reversedChatRowItems.isNotEmpty()) {
                         delay(40)
                         listState.scrollToItem(0, scrollOffset = 0)
@@ -453,14 +467,14 @@ fun ChatScreen(
 
     // When user types in bottom bar, ensure chat remains anchored to the newest message
     LaunchedEffect(composerState.text) {
-        if (composerState.text.isNotEmpty() && (listState.firstVisibleItemIndex <= 4 || isImeVisible)) {
+        if (composerState.text.isNotEmpty() && listState.firstVisibleItemIndex <= 2) {
             listState.scrollToItem(0, scrollOffset = 0)
         }
     }
 
     // When bottom overlays appear (upload status, reply preview), keep the newest message clear of them
     LaunchedEffect(bottomOverlayHeightPx) {
-        if (bottomOverlayHeightPx > 0 && (listState.firstVisibleItemIndex <= 6 || isImeVisible) && reversedChatRowItems.isNotEmpty()) {
+        if (bottomOverlayHeightPx > 0 && listState.firstVisibleItemIndex <= 2 && reversedChatRowItems.isNotEmpty()) {
             delay(50)
             if (listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset != 0) {
                 listState.scrollToItem(0, scrollOffset = 0)
@@ -882,12 +896,18 @@ fun ChatScreen(
     }
 
     // Scroll to exact target message when navigating from gallery ("Show in chat")
-    LaunchedEffect(uiState.targetScrollMessageId, displayedMessages.size) {
+    // Found in the rows the list actually shows (worked out a moment after the messages), so the
+    // index is the list's own
+    LaunchedEffect(uiState.targetScrollMessageId, reversedChatRowItems.size) {
         val targetId = uiState.targetScrollMessageId
-        if (targetId != null && displayedMessages.isNotEmpty()) {
-            val normalIndex = displayedMessages.indexOfFirst { it.id == targetId }
-            if (normalIndex >= 0) {
-                val targetIndex = displayedMessages.lastIndex - normalIndex
+        if (targetId != null && reversedChatRowItems.isNotEmpty()) {
+            val targetIndex = reversedChatRowItems.indexOfFirst { it.message.id == targetId }
+            if (targetIndex >= 0) {
+                // Coming back from the gallery, the list lays out first (and the screen slides in)
+                kotlinx.coroutines.withTimeoutOrNull(1_500) {
+                    snapshotFlow { listState.layoutInfo.totalItemsCount }.first { it > targetIndex }
+                }
+                delay(150)
                 highlightedMessageId = targetId
                 listState.revealMessage(targetIndex)
                 kotlinx.coroutines.delay(800)
@@ -895,6 +915,13 @@ fun ChatScreen(
                 viewModel.clearTargetScrollMessageId()
             }
         }
+    }
+    // Never found (say, older than the chat shows): given up after a while, so the chat follows new
+    // messages again
+    LaunchedEffect(uiState.targetScrollMessageId) {
+        val targetId = uiState.targetScrollMessageId ?: return@LaunchedEffect
+        delay(12_000)
+        if (viewModel.uiState.value.targetScrollMessageId == targetId) viewModel.clearTargetScrollMessageId()
     }
 
     // Leaving the chat: stop any voice recording and hide the history again
@@ -928,8 +955,6 @@ fun ChatScreen(
             modifier = Modifier.fillMaxSize()
         )
     }
-    // The swipe below is set up once, so it reads the chat mode through this
-    val latestChatMode = rememberUpdatedState(uiState.chatExperienceMode)
     Scaffold(
         modifier = Modifier
             .pointerInput(Unit) {
@@ -965,16 +990,13 @@ fun ChatScreen(
                         }
 
                         if (directionLocked && isHorizontal) {
-                            val private = latestChatMode.value == com.example.ui.chat.ChatExperienceMode.PRIVATE
-                            // Swiping right glides to Love & Us; in private chat it opens Settings from
-                            // the left instead, like ChatGPT's side menu
+                            // Swiping right glides to Love & Us, left to Settings (private chat too)
                             if (accX > 70f) {
                                 change.consume()
-                                if (private) onNavigateToProfile() else onNavigateToHome()
+                                onNavigateToHome()
                                 break
                             }
-                            // Swiping left glides to Settings / Profile (not in private chat)
-                            if (accX < -70f && !private) {
+                            if (accX < -70f) {
                                 change.consume()
                                 onNavigateToProfile()
                                 break
@@ -1113,6 +1135,7 @@ fun ChatScreen(
                                     modifier = Modifier
                                         .clip(RoundedCornerShape(50))
                                         .background(if (isDark) PrivateChromeDark else PrivateChromeLight)
+                                        .border(1.dp, if (isDark) PrivateChromeEdgeDark else PrivateChromeEdgeLight, RoundedCornerShape(50))
                                         .padding(horizontal = 2.dp)
                                 ) {
                                     IconButton(
@@ -1121,7 +1144,7 @@ fun ChatScreen(
                                             .size(44.dp)
                                             .testTag("chat_new_chat_button")
                                     ) {
-                                        Icon(Icons.Outlined.Edit, contentDescription = "New chat", tint = iconTint, modifier = Modifier.size(21.dp))
+                                        NewChatIcon(tint = iconTint)
                                     }
                                     IconButton(
                                         onClick = { showChatMenu = true },
@@ -1351,18 +1374,14 @@ fun ChatScreen(
                     },
                     onSendHaptic = { view.chatHaptic(ChatHaptic.Send) },
                     onUnreadJumpDone = { unreadJumpDone = true },
+                    // Tapping the message box keeps the newest messages in view, but only when they
+                    // already are: someone reading back stays where they are
                     onInputFocused = {
-                        if (reversedChatRowItems.isNotEmpty()) {
+                        if (reversedChatRowItems.isNotEmpty() && listState.firstVisibleItemIndex <= 2) {
                             scope.launch {
                                 listState.scrollToItem(0, scrollOffset = 0)
-                                delay(60)
-                                listState.scrollToItem(0, scrollOffset = 0)
-                                delay(180)
-                                listState.scrollToItem(0, scrollOffset = 0)
                                 delay(320)
-                                if (listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset != 0) {
-                                    listState.scrollToItem(0, scrollOffset = 0)
-                                }
+                                if (listState.firstVisibleItemIndex <= 2) listState.scrollToItem(0, scrollOffset = 0)
                             }
                         }
                     }
@@ -1593,7 +1612,7 @@ fun ChatScreen(
                             val prevHeight = lastLazyColumnHeight
                             lastLazyColumnHeight = newSize.height
                             if (prevHeight > 0 && prevHeight != newSize.height && reversedChatRowItems.isNotEmpty()) {
-                                if (listState.firstVisibleItemIndex <= 3 || isImeVisible) {
+                                if (listState.firstVisibleItemIndex <= 2) {
                                     scope.launch {
                                         listState.scrollToItem(0, scrollOffset = 0)
                                     }
@@ -1935,8 +1954,12 @@ fun ChatScreen(
                 visible = showScrollButton,
                 enter = scaleIn(spring(dampingRatio = 0.55f, stiffness = 500f), initialScale = 0.4f) + fadeIn(tween(120)),
                 exit = scaleOut(tween(140), targetScale = 0.6f) + fadeOut(tween(140)),
+                // Private chat: in the middle above the message box, as in ChatGPT
                 modifier = Modifier
-                    .align(Alignment.BottomEnd)
+                    .align(
+                        if (uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE) Alignment.BottomCenter
+                        else Alignment.BottomEnd
+                    )
                     .padding(16.dp)
             ) {
                 val isPrivate = uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE
@@ -1964,11 +1987,15 @@ fun ChatScreen(
                                 }
                             }
                         },
-                        containerColor = if (isPrivate) (if (isDark) darkTone(Color(0xFF2E2F33)) else Color(0xFFE5E7EB)) else MaterialTheme.colorScheme.primaryContainer,
-                        contentColor = if (isPrivate) (if (isDark) darkTone(Color(0xFFECECEC)) else Color(0xFF1F2937)) else MaterialTheme.colorScheme.onPrimaryContainer,
+                        containerColor = if (isPrivate) (if (isDark) PrivateChromeDark else PrivateChromeLight) else MaterialTheme.colorScheme.primaryContainer,
+                        contentColor = if (isPrivate) (if (isDark) Color(0xFFECECEC) else Color(0xFF0D0D0D)) else MaterialTheme.colorScheme.onPrimaryContainer,
                         shape = CircleShape
                     ) {
-                        Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Scroll to bottom")
+                        Icon(
+                            imageVector = if (isPrivate) Icons.Default.ArrowDownward else Icons.Default.KeyboardArrowDown,
+                            contentDescription = "Scroll to bottom",
+                            modifier = Modifier.size(if (isPrivate) 21.dp else 24.dp)
+                        )
                     }
                     // New messages that arrived while scrolled up; bumps with each one
                     if (unseenIncomingCount > 0) {
@@ -3274,7 +3301,9 @@ private fun ChatMessageRow(
         } else {
             Color.Transparent
         }
-        val bubbleStartPadding = if (isSelectionMode) 6.dp else 16.dp
+        // Private chat sits nearer the edges, with more room between messages, like ChatGPT
+        val bubbleStartPadding = if (isSelectionMode) 6.dp else if (isPrivate) 14.dp else 16.dp
+        val bubbleEndPadding = if (isPrivate) 14.dp else 16.dp
         // Where the message sits on screen, for the long-press focus view
         val anchor = remember(message.id) { arrayOf(Rect.Zero) }
         Box(
@@ -3344,7 +3373,8 @@ private fun ChatMessageRow(
                 Box(
                     modifier = Modifier
                         .weight(1f)
-                        .padding(start = bubbleStartPadding, end = 16.dp)
+                        .padding(start = bubbleStartPadding, end = bubbleEndPadding)
+                        .padding(vertical = if (isPrivate) 6.dp else 0.dp)
                         .onGloballyPositioned { anchor[0] = it.boundsInRoot() }
                         .graphicsLayer {
                             val grow = 1f + 0.035f * bump.value
@@ -3363,7 +3393,9 @@ private fun ChatMessageRow(
                         onSeekAudio = { progress -> actions.seekAudio(message, progress) },
                         onImageClick = { url -> actions.openMedia(message, url, null) },
                         onImageClickWithList = { url, allUrls -> actions.openMedia(message, url, allUrls) },
-                        onSwipeToReply = { actions.reply(message) },
+                        // Not in private chat: its messages run the full width, so a sideways swipe on
+                        // them is left for moving to Love & Us / Settings (Reply is in the long-press menu)
+                        onSwipeToReply = if (isPrivate) null else ({ actions.reply(message) }),
                         onLongClick = { actions.longPress(message, anchor[0]) },
                         onReactionClick = { emoji -> actions.react(message, emoji) },
                         onOpenTheaterVideo = actions.openTheaterVideo,
@@ -4470,9 +4502,11 @@ private fun ChatBottomComposerBar(
 
 
 
-/** The round buttons and pill at the top of private chat (ChatGPT's dark grey). */
-private val PrivateChromeDark = Color(0xFF242424)
+/** The round buttons and pill at the top of private chat (ChatGPT's dark grey, with a fine edge). */
+private val PrivateChromeDark = Color(0xFF2A2A2A)
 private val PrivateChromeLight = Color(0xFFF0F0F0)
+private val PrivateChromeEdgeDark = Color(0xFF3A3A3A)
+private val PrivateChromeEdgeLight = Color(0xFFE0E0E0)
 
 @Composable
 private fun PrivateRoundButton(
@@ -4486,8 +4520,45 @@ private fun PrivateRoundButton(
         modifier = modifier
             .clip(CircleShape)
             .background(if (isDark) PrivateChromeDark else PrivateChromeLight)
+            .border(1.dp, if (isDark) PrivateChromeEdgeDark else PrivateChromeEdgeLight, CircleShape)
             .clickable(onClick = onClick)
     ) { content() }
+}
+
+/** ChatGPT's "new chat" mark: a rounded square, open at the top right, with a pen across it. */
+@Composable
+private fun NewChatIcon(tint: Color) {
+    androidx.compose.foundation.Canvas(modifier = Modifier.size(22.dp)) {
+        val w = size.width
+        val h = size.height
+        val frame = androidx.compose.ui.graphics.Path().apply {
+            moveTo(w * 0.48f, h * 0.16f)
+            lineTo(w * 0.30f, h * 0.16f)
+            quadraticTo(w * 0.14f, h * 0.16f, w * 0.14f, h * 0.32f)
+            lineTo(w * 0.14f, h * 0.70f)
+            quadraticTo(w * 0.14f, h * 0.86f, w * 0.30f, h * 0.86f)
+            lineTo(w * 0.68f, h * 0.86f)
+            quadraticTo(w * 0.84f, h * 0.86f, w * 0.84f, h * 0.70f)
+            lineTo(w * 0.84f, h * 0.52f)
+        }
+        drawPath(
+            path = frame,
+            color = tint,
+            style = androidx.compose.ui.graphics.drawscope.Stroke(
+                width = 1.9.dp.toPx(),
+                cap = androidx.compose.ui.graphics.StrokeCap.Round,
+                join = androidx.compose.ui.graphics.StrokeJoin.Round
+            )
+        )
+        // The pen, from the middle up to the open corner
+        drawLine(
+            color = tint,
+            start = androidx.compose.ui.geometry.Offset(w * 0.42f, h * 0.58f),
+            end = androidx.compose.ui.geometry.Offset(w * 0.86f, h * 0.14f),
+            strokeWidth = 2.3.dp.toPx(),
+            cap = androidx.compose.ui.graphics.StrokeCap.Round
+        )
+    }
 }
 
 /** ChatGPT's menu mark: two lines, the lower one shorter. */
