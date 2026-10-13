@@ -996,7 +996,7 @@ fun ProfileScreen(
                 if (partner != null) {
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), thickness = 0.6.dp)
                     val partnerNameDisplay = partner.displayName.ifBlank { "Partner" }
-                    val partnerNotifPerm = partner.notificationPermission
+                    val partnerNotifPerm = partner.notificationPermission ?: true
                     val partnerNotifStatus = partner.notificationStatus ?: "OPEN"
                     val isPermBlocked = !partnerNotifPerm
                     val isAlertClosed = partnerNotifStatus.uppercase() in listOf("CLOSED", "OFF", "MUTED")

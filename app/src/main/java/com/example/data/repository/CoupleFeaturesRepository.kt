@@ -118,7 +118,9 @@ class CoupleFeaturesRepository(
                         return@addSnapshotListener
                     }
                     if (snapshot != null) {
-                        val items = snapshot.documents.mapNotNull { it.toObject(Memory::class.java) }
+                        val items = snapshot.documents.mapNotNull {
+                            try { it.toObject(Memory::class.java) } catch (_: Exception) { null }
+                        }
                         _memoriesFlow.value = items
                         trySend(items)
                     }
@@ -192,7 +194,9 @@ class CoupleFeaturesRepository(
                         return@addSnapshotListener
                     }
                     if (snapshot != null) {
-                        val items = snapshot.documents.mapNotNull { it.toObject(ImportantDate::class.java) }
+                        val items = snapshot.documents.mapNotNull {
+                            try { it.toObject(ImportantDate::class.java) } catch (_: Exception) { null }
+                        }
                         _datesFlow.value = items
                         trySend(items)
                     }
@@ -266,7 +270,9 @@ class CoupleFeaturesRepository(
                 .addSnapshotListener { snapshot, error ->
                     if (error != null) return@addSnapshotListener
                     if (snapshot != null) {
-                        val items = snapshot.documents.mapNotNull { it.toObject(SharedNote::class.java) }
+                        val items = snapshot.documents.mapNotNull {
+                            try { it.toObject(SharedNote::class.java) } catch (_: Exception) { null }
+                        }
                         _notesFlow.value = items
                         trySend(items)
                     }
@@ -1540,7 +1546,9 @@ class CoupleFeaturesRepository(
                 .addSnapshotListener { snapshot, error ->
                     if (error != null) return@addSnapshotListener
                     if (snapshot != null) {
-                        val items = snapshot.documents.mapNotNull { it.toObject(com.example.data.model.WatchLaterVideo::class.java) }
+                        val items = snapshot.documents.mapNotNull {
+                            try { it.toObject(com.example.data.model.WatchLaterVideo::class.java) } catch (_: Exception) { null }
+                        }
                         _watchLaterFlow.value = items
                         trySend(items)
                     }

@@ -1380,6 +1380,96 @@ class AuthRepository(private val context: Context) {
         setCheckAfter(newTarget, _currentUserState.value?.checkAfterNote ?: "")
     }
 
+    fun parseUserSnapshot(snapshot: com.google.firebase.firestore.DocumentSnapshot): User? {
+        if (!snapshot.exists()) return null
+        try {
+            val user = snapshot.toObject(User::class.java)
+            if (user != null) return user
+        } catch (e: Exception) {
+            Log.w("AuthRepository", "Failed to deserialize User via reflection: ${e.message}")
+        }
+        return try {
+            val id = snapshot.getString("id") ?: snapshot.id
+            val email = snapshot.getString("email").orEmpty()
+            val displayName = snapshot.getString("displayName").orEmpty()
+            val photoUrl = snapshot.getString("photoUrl")
+            val statusMessage = snapshot.getString("statusMessage") ?: "Loving every moment with you ✨"
+            val partnerId = snapshot.getString("partnerId")
+            val partnerEmail = snapshot.getString("partnerEmail")
+            val coupleId = snapshot.getString("coupleId")
+            val isOnline = (snapshot.get("isOnline") as? Boolean)
+                ?: (snapshot.get("online") as? Boolean)
+                ?: try { snapshot.getBoolean("isOnline") ?: snapshot.getBoolean("online") } catch (_: Exception) { null }
+                ?: false
+            val lastSeen = (snapshot.get("lastSeen") as? Number)?.toLong()
+                ?: try { snapshot.getTimestamp("lastSeen")?.toDate()?.time } catch (_: Exception) { null }
+                ?: try { snapshot.getDate("lastSeen")?.time } catch (_: Exception) { null }
+                ?: System.currentTimeMillis()
+            val typingInChat = (snapshot.get("typingInChat") as? Boolean) ?: false
+            val typingPace = (snapshot.get("typingPace") as? Number)?.toInt() ?: 0
+            val fcmToken = snapshot.getString("fcmToken")
+            val createdAt = (snapshot.get("createdAt") as? Number)?.toLong() ?: System.currentTimeMillis()
+            val checkAfterTimeMillis = (snapshot.get("checkAfterTimeMillis") as? Number)?.toLong()
+            val checkAfterNote = snapshot.getString("checkAfterNote")
+            val checkAfterCreatedAt = (snapshot.get("checkAfterCreatedAt") as? Number)?.toLong()
+            val checkAfterActive = (snapshot.get("checkAfterActive") as? Boolean) ?: false
+            val recordingAudioInChat = (snapshot.get("recordingAudioInChat") as? Boolean) ?: false
+            val activityStatus = snapshot.getString("activityStatus")
+            val activityStatusNote = snapshot.getString("activityStatusNote")
+            val isActivityHidden = (snapshot.get("isActivityHidden") as? Boolean) ?: false
+            val mood = snapshot.getString("mood")
+            val moodAt = (snapshot.get("moodAt") as? Number)?.toLong() ?: 0L
+            val batteryLevel = (snapshot.get("batteryLevel") as? Number)?.toInt()
+            val isCharging = (snapshot.get("isCharging") as? Boolean) ?: false
+            val heartbeatTouchingTimestamp = (snapshot.get("heartbeatTouchingTimestamp") as? Number)?.toLong() ?: 0L
+            val heartbeatStreak = (snapshot.get("heartbeatStreak") as? Number)?.toInt() ?: 0
+            val lastHeartbeatSync = (snapshot.get("lastHeartbeatSync") as? Number)?.toLong() ?: 0L
+            val timeZone = snapshot.getString("timeZone")
+            val notificationStatus = snapshot.getString("notificationStatus")
+            val notifPerm = (snapshot.get("notificationPermission") as? Boolean)
+                ?: try { snapshot.getBoolean("notificationPermission") } catch (_: Exception) { null }
+                ?: true
+
+            User(
+                id = id,
+                email = email,
+                displayName = displayName,
+                photoUrl = photoUrl,
+                statusMessage = statusMessage,
+                partnerId = partnerId,
+                partnerEmail = partnerEmail,
+                coupleId = coupleId,
+                isOnline = isOnline,
+                lastSeen = lastSeen,
+                typingInChat = typingInChat,
+                typingPace = typingPace,
+                fcmToken = fcmToken,
+                createdAt = createdAt,
+                checkAfterTimeMillis = checkAfterTimeMillis,
+                checkAfterNote = checkAfterNote,
+                checkAfterCreatedAt = checkAfterCreatedAt,
+                checkAfterActive = checkAfterActive,
+                recordingAudioInChat = recordingAudioInChat,
+                activityStatus = activityStatus,
+                activityStatusNote = activityStatusNote,
+                isActivityHidden = isActivityHidden,
+                mood = mood,
+                moodAt = moodAt,
+                batteryLevel = batteryLevel,
+                isCharging = isCharging,
+                heartbeatTouchingTimestamp = heartbeatTouchingTimestamp,
+                heartbeatStreak = heartbeatStreak,
+                lastHeartbeatSync = lastHeartbeatSync,
+                timeZone = timeZone,
+                notificationStatus = notificationStatus,
+                notificationPermission = notifPerm
+            )
+        } catch (e: Exception) {
+            Log.e("AuthRepository", "Fallback manual user parsing error", e)
+            null
+        }
+    }
+
     private fun listenToCurrentUser(uid: String) {
         val cleanUid = uid.trim().ifBlank { null } ?: return
         // Prevent duplicate listener for same user
@@ -1388,21 +1478,21 @@ class AuthRepository(private val context: Context) {
         currentListeningUserId = cleanUid
         val docRef = getUserDocRef(cleanUid) ?: return
         currentUserListener = docRef.addSnapshotListener { snapshot, error ->
+            try {
                 if (error != null) {
                     Log.w("AuthRepository", "Listen to current user failed", error)
                     return@addSnapshotListener
                 }
                 if (snapshot != null && snapshot.exists()) {
-                    var user = snapshot.toObject(User::class.java)
+                    var user = parseUserSnapshot(snapshot)
                     if (user != null) {
-                        val boolOnline = snapshot.getBoolean("isOnline")
-                            ?: snapshot.getBoolean("online")
-                            ?: (snapshot.get("isOnline") as? Boolean)
+                        val boolOnline = (snapshot.get("isOnline") as? Boolean)
                             ?: (snapshot.get("online") as? Boolean)
+                            ?: try { snapshot.getBoolean("isOnline") ?: snapshot.getBoolean("online") } catch (_: Exception) { null }
                             ?: user.isOnline
                         val docLastSeen = (snapshot.get("lastSeen") as? Number)?.toLong()
-                            ?: snapshot.getTimestamp("lastSeen")?.toDate()?.time
-                            ?: snapshot.getDate("lastSeen")?.time
+                            ?: try { snapshot.getTimestamp("lastSeen")?.toDate()?.time } catch (_: Exception) { null }
+                            ?: try { snapshot.getDate("lastSeen")?.time } catch (_: Exception) { null }
                             ?: user.lastSeen
                         if (user.isOnline != boolOnline || user.lastSeen != docLastSeen) {
                             user = user.copy(
@@ -1411,7 +1501,8 @@ class AuthRepository(private val context: Context) {
                             )
                         }
                         val docNotifStatus = snapshot.getString("notificationStatus")
-                        val docNotifPerm = snapshot.getBoolean("notificationPermission")
+                        val docNotifPerm = (snapshot.get("notificationPermission") as? Boolean)
+                            ?: try { snapshot.getBoolean("notificationPermission") } catch (_: Exception) { null }
                         if (!docNotifStatus.isNullOrBlank() && user.notificationStatus != docNotifStatus) {
                             user = user.copy(notificationStatus = docNotifStatus)
                         }
@@ -1428,7 +1519,10 @@ class AuthRepository(private val context: Context) {
                         listenToPartner(newPartnerId)
                     }
                 }
+            } catch (e: Exception) {
+                Log.e("AuthRepository", "Unhandled error inside currentUserListener", e)
             }
+        }
     }
 
     /**
@@ -1478,55 +1572,59 @@ class AuthRepository(private val context: Context) {
      * after being disconnected, falls back to comparing clocks until the next heartbeat.
      */
     private fun publishPartnerSnapshot(doc: com.google.firebase.firestore.DocumentSnapshot) {
-        var partner = doc.toObject(User::class.java)
-        if (partner != null) {
-            val boolOnline = doc.getBoolean("isOnline")
-                ?: doc.getBoolean("online")
-                ?: (doc.get("isOnline") as? Boolean)
-                ?: (doc.get("online") as? Boolean)
-                ?: partner.isOnline
-            val docLastSeen = (doc.get("lastSeen") as? Number)?.toLong()
-                ?: doc.getTimestamp("lastSeen")?.toDate()?.time
-                ?: doc.getDate("lastSeen")?.time
-                ?: partner.lastSeen
-            if (partner.isOnline != boolOnline || partner.lastSeen != docLastSeen) {
-                partner = partner.copy(
-                    isOnline = boolOnline,
-                    lastSeen = docLastSeen
-                )
-            }
-            val docNotifStatus = doc.getString("notificationStatus")
-            val docNotifPerm = doc.getBoolean("notificationPermission")
-            if (!docNotifStatus.isNullOrBlank() && partner.notificationStatus != docNotifStatus) {
-                partner = partner.copy(notificationStatus = docNotifStatus)
-            }
-            if (docNotifPerm != null && partner.notificationPermission != docNotifPerm) {
-                partner = partner.copy(notificationPermission = docNotifPerm)
-            }
-            if (!doc.metadata.isFromCache) {
-                val now = System.currentTimeMillis()
-                val previous = partnerServerLastSeen
-                val step = if (previous != null && previous.first == doc.id) docLastSeen - previous.second else -1L
-                val clockDiff = kotlin.math.abs(now - docLastSeen)
-
-                if (!boolOnline) {
-                    partnerPresenceReceivedAt = 0L
-                } else if (step in 1L..LIVE_HEARTBEAT_MAX_STEP_MS) {
-                    partnerPresenceReceivedAt = now
-                } else if (step == 0L && partnerPresenceReceivedAt > 0L && (now - partnerPresenceReceivedAt) <= User.ONLINE_WINDOW_MS) {
-                    partnerPresenceReceivedAt = now
-                } else if (clockDiff <= 300_000L) {
-                    // Live snapshot received from server with recent lastSeen within 5 minutes (covers new logins & cross-country clock drift)
-                    partnerPresenceReceivedAt = now
-                } else {
-                    partnerPresenceReceivedAt = 0L
+        try {
+            var partner = parseUserSnapshot(doc)
+            if (partner != null) {
+                val boolOnline = (doc.get("isOnline") as? Boolean)
+                    ?: (doc.get("online") as? Boolean)
+                    ?: try { doc.getBoolean("isOnline") ?: doc.getBoolean("online") } catch (_: Exception) { null }
+                    ?: partner.isOnline
+                val docLastSeen = (doc.get("lastSeen") as? Number)?.toLong()
+                    ?: try { doc.getTimestamp("lastSeen")?.toDate()?.time } catch (_: Exception) { null }
+                    ?: try { doc.getDate("lastSeen")?.time } catch (_: Exception) { null }
+                    ?: partner.lastSeen
+                if (partner.isOnline != boolOnline || partner.lastSeen != docLastSeen) {
+                    partner = partner.copy(
+                        isOnline = boolOnline,
+                        lastSeen = docLastSeen
+                    )
                 }
-                partnerServerLastSeen = doc.id to docLastSeen
+                val docNotifStatus = doc.getString("notificationStatus")
+                val docNotifPerm = (doc.get("notificationPermission") as? Boolean)
+                    ?: try { doc.getBoolean("notificationPermission") } catch (_: Exception) { null }
+                if (!docNotifStatus.isNullOrBlank() && partner.notificationStatus != docNotifStatus) {
+                    partner = partner.copy(notificationStatus = docNotifStatus)
+                }
+                if (docNotifPerm != null && partner.notificationPermission != docNotifPerm) {
+                    partner = partner.copy(notificationPermission = docNotifPerm)
+                }
+                if (!doc.metadata.isFromCache) {
+                    val now = System.currentTimeMillis()
+                    val previous = partnerServerLastSeen
+                    val step = if (previous != null && previous.first == doc.id) docLastSeen - previous.second else -1L
+                    val clockDiff = kotlin.math.abs(now - docLastSeen)
+
+                    if (!boolOnline) {
+                        partnerPresenceReceivedAt = 0L
+                    } else if (step in 1L..LIVE_HEARTBEAT_MAX_STEP_MS) {
+                        partnerPresenceReceivedAt = now
+                    } else if (step == 0L && partnerPresenceReceivedAt > 0L && (now - partnerPresenceReceivedAt) <= User.ONLINE_WINDOW_MS) {
+                        partnerPresenceReceivedAt = now
+                    } else if (clockDiff <= 300_000L) {
+                        // Live snapshot received from server with recent lastSeen within 5 minutes (covers new logins & cross-country clock drift)
+                        partnerPresenceReceivedAt = now
+                    } else {
+                        partnerPresenceReceivedAt = 0L
+                    }
+                    partnerServerLastSeen = doc.id to docLastSeen
+                }
+                if (partnerServerLastSeen?.first == doc.id) partner.presenceReceivedAt = partnerPresenceReceivedAt
             }
-            if (partnerServerLastSeen?.first == doc.id) partner.presenceReceivedAt = partnerPresenceReceivedAt
+            _partnerUserState.value = partner
+            handlePartnerCheckAfterReminder(partner)
+        } catch (e: Exception) {
+            Log.e("AuthRepository", "Unhandled error inside publishPartnerSnapshot", e)
         }
-        _partnerUserState.value = partner
-        handlePartnerCheckAfterReminder(partner)
     }
 
     private fun findAndListenToPartner(partnerEmail: String?, coupleId: String?, uid: String) {
@@ -1615,7 +1713,7 @@ class AuthRepository(private val context: Context) {
     private suspend fun fetchUserFromFirestore(uid: String): User? {
         return try {
             val doc = userDocument(uid)?.get()?.await()
-            doc?.toObject(User::class.java)
+            if (doc != null && doc.exists()) parseUserSnapshot(doc) else null
         } catch (e: Exception) {
             null
         }
@@ -1753,6 +1851,7 @@ class AuthRepository(private val context: Context) {
             .putBoolean("checkAfterActive", user.checkAfterActive)
             .putString("timeZone", user.timeZone ?: TimeZone.getDefault().id)
             .putString("notificationStatus", user.notificationStatus ?: "OPEN")
+            .putBoolean("notificationPermission", user.notificationPermission ?: true)
             .apply()
     }
 
@@ -1773,6 +1872,7 @@ class AuthRepository(private val context: Context) {
             val coupleId = rawCoupleId
             val timeZone = prefs.getString("timeZone", null)?.trim()?.ifBlank { null } ?: TimeZone.getDefault().id
             val notificationStatus = prefs.getString("notificationStatus", "OPEN") ?: "OPEN"
+            val notificationPermission = prefs.getBoolean("notificationPermission", true)
             val defaultName = uid.removePrefix("user_").replaceFirstChar { it.uppercase() }
             val user = User(
                 id = uid,
@@ -1787,7 +1887,8 @@ class AuthRepository(private val context: Context) {
                 checkAfterNote = note.ifBlank { null },
                 checkAfterActive = active,
                 timeZone = timeZone,
-                notificationStatus = notificationStatus
+                notificationStatus = notificationStatus,
+                notificationPermission = notificationPermission
             )
             _currentUserState.value = user
             if (!partnerId.isNullOrBlank()) {

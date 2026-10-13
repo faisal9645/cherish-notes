@@ -80,6 +80,16 @@ class CherishApplication : Application(), coil.ImageLoaderFactory {
         super.onCreate()
         instance = this
 
+        val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
+            Log.e("CherishApp", "FATAL UNCAUGHT EXCEPTION on thread ${thread.name}: ${throwable.message}", throwable)
+            try {
+                val crashFile = java.io.File(filesDir, "last_crash.txt")
+                crashFile.writeText("${java.util.Date()}\nThread: ${thread.name}\n${Log.getStackTraceString(throwable)}")
+            } catch (_: Exception) {}
+            defaultHandler?.uncaughtException(thread, throwable)
+        }
+
         try {
             if (FirebaseApp.getApps(this).isEmpty()) {
                 try {
