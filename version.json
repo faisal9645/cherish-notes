@@ -2,8 +2,8 @@
   "versionCode": 140,
   "versionName": "1.7.68",
   "tagName": "v1.7.68-140",
-  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.7.68-140/app-release.apk",
-  "assetSize": 32432816,
-  "releaseNotes": "Notes v1.7.68 (Build 140):\n• Fix online voice calling internal error and call setup\n• Resilient partner matching and Agora token generation\n• High-priority push call invitations & auto-healing\n• Stability and performance improvements",
-  "releaseDate": "2026-10-13T17:05:00Z"
+  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.7.68-140/app_update_140.apk",
+  "assetSize": 32432820,
+  "releaseNotes": "Notes v1.7.68 (Build 140):\n• Cleaner, simpler layout\n• Voice typing and read aloud\n• Settings open with a swipe\n• Bug fixes and improvements",
+  "releaseDate": "2026-10-13T17:20:22Z"
 }
