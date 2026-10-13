@@ -9,6 +9,7 @@ import io.agora.rtc2.RtcEngine
 import io.agora.rtc2.RtcEngineConfig
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.withTimeoutOrNull
+import java.io.File
 
 /**
  * The call's live audio, through Agora. One engine per call: created when the call starts,
@@ -133,6 +134,20 @@ class AgoraVoiceEngine(private val context: Context) {
             AudioRoute.EARPIECE -> rtc.setEnableSpeakerphone(false) == 0
             else -> false
         }
+    }
+
+    fun startRecording(file: File): Boolean {
+        val rtc = engine ?: return false
+        val res = rtc.startAudioRecording(file.absolutePath, Constants.AUDIO_RECORDING_QUALITY_MEDIUM)
+        if (res != 0) Log.w(TAG, "startAudioRecording returned $res")
+        return res == 0
+    }
+
+    fun stopRecording(): Boolean {
+        val rtc = engine ?: return false
+        val res = rtc.stopAudioRecording()
+        if (res != 0) Log.w(TAG, "stopAudioRecording returned $res")
+        return res == 0
     }
 
     /** Leaves the call and releases the engine (in the background: it can take a moment). */

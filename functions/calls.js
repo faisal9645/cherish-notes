@@ -46,8 +46,8 @@ const AGORA_WEBHOOK_SECRET = defineSecret("AGORA_WEBHOOK_SECRET");
 const RECORDING_HMAC_ACCESS_ID = defineSecret("RECORDING_HMAC_ACCESS_ID");
 const RECORDING_HMAC_SECRET = defineSecret("RECORDING_HMAC_SECRET");
 
-const CALL_SECRETS = [AGORA_APP_CERTIFICATE, AGORA_CUSTOMER_ID, AGORA_CUSTOMER_SECRET];
-const RECORDING_SECRETS = [...CALL_SECRETS, RECORDING_HMAC_ACCESS_ID, RECORDING_HMAC_SECRET];
+const CALL_SECRETS = [AGORA_APP_CERTIFICATE];
+const RECORDING_SECRETS = [AGORA_APP_CERTIFICATE];
 
 /** A call whose recording finished uploading this long ago and still isn't here won't come. */
 const UPLOAD_GIVE_UP_MS = 6 * 60 * 60 * 1000;
@@ -309,6 +309,16 @@ async function setRecordingFailed(coupleId, callId, code, reason) {
 /** Starts Agora's recorder in the call's channel (once both phones are confirmed in it). */
 async function startRecording(coupleId, callId) {
   try {
+    let hasCloud = false;
+    try {
+      hasCloud = Boolean(AGORA_CUSTOMER_ID.value() && RECORDING_HMAC_ACCESS_ID.value());
+    } catch (_) {
+      hasCloud = false;
+    }
+    if (!hasCloud) {
+      logger.info("Agora Cloud Recording credentials not provided; client-side in-app recording active", { callId });
+      return;
+    }
     const client = agora();
     const resourceId = await client.acquire(callId, RECORDER_UID);
     await jobRef(callId).set({ resourceId, recorderUid: RECORDER_UID, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
@@ -731,6 +741,19 @@ exports.callRenewToken = onCall({ secrets: CALL_SECRETS }, async (request) => {
   const call = await requireParticipantCall(coupleId, callId, userId);
   if (!logic.isActive(call)) throw new HttpsError("failed-precondition", "The call is over.");
   return { status: call.state, callId, ...joinInfo(callId, logic.agoraUidFor(call, userId)) };
+});
+
+/**
+ * Finalizes an in-app call recording uploaded by the phone to Storage.
+ */
+exports.callFinalizeClientRecording = onCall({ secrets: CALL_SECRETS }, async (request) => {
+  const { coupleId, callId, userId } = request.data || {};
+  requireCallId(callId);
+  const couple = await requireMember(request, coupleId);
+  requireCoupleUser(couple, userId);
+  await requireParticipantCall(coupleId, callId, userId);
+  const status = await finalizeRecording(coupleId, callId);
+  return { status, callId };
 });
 
 // ---------- Agora webhook ----------

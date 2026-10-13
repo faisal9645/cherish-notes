@@ -22,12 +22,11 @@ service firebase.storage {
                    && request.resource.size < 50 * 1024 * 1024;
     }
 
-    // Call recordings: added and deleted only by the backend; only this couple's own phones
-    // (their sign-ins in the couple's memberUids) can play them
+    // Call recordings: only this couple's own phones (their sign-ins in memberUids)
+    // can upload and play them
     match /couples/{coupleId}/call-recordings/{callId}/{fileName} {
-      allow read: if isAuthenticated()
+      allow read, write: if isAuthenticated()
                   && request.auth.uid in firestore.get(/databases/(default)/documents/couples/$(coupleId)).data.get('memberUids', []);
-      allow write: if false;
     }
 
     // Profile avatars

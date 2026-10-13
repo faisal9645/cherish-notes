@@ -7,9 +7,11 @@ import android.media.ToneGenerator
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
+import android.net.Uri
 import android.util.Log
 import com.example.CherishApplication
 import com.example.audio.VoicePlayerHelper
+import com.google.firebase.storage.FirebaseStorage
 import io.agora.rtc2.Constants
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -17,6 +19,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.tasks.await
+import java.io.File
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -80,6 +84,8 @@ object CallManager {
     private var endResetJob: Job? = null
     private var ringback: ToneGenerator? = null
     private var watchingIncoming = false
+    private var activeRecordFile: File? = null
+    private var uploadJob: Job? = null
 
     /** Calls already rung (or declined) on this phone, so a late push or listener can't ring again. */
     private val seenCalls = LinkedHashSet<String>()
@@ -546,10 +552,22 @@ object CallManager {
             it.copy(
                 phase = CallPhase.CONNECTED,
                 connectedAtElapsed = if (it.connectedAtElapsed > 0L) it.connectedAtElapsed else SystemClock.elapsedRealtime(),
-                peerReconnecting = false
+                peerReconnecting = false,
+                recordingStatus = RecordingStatus.RECORDING
             )
         }
         updateScreenOffAtEar()
+
+        // Start in-app automatic call recording
+        val currentCallId = callId
+        if (activeRecordFile == null && currentCallId != null) {
+            val recordDir = File(app.cacheDir, "callrec").apply { mkdirs() }
+            val file = File(recordDir, "rec_${currentCallId}.mp4")
+            if (engine.startRecording(file)) {
+                activeRecordFile = file
+                Log.i(TAG, "In-app call recording started: ${file.absolutePath}")
+            }
+        }
     }
 
     /** Tells the backend this phone is in the call's audio, until it confirms the call connected. */
@@ -618,6 +636,16 @@ object CallManager {
         val endedCouple = coupleId
         val endedCall = callId
         val me = myUserId
+        val recordingFile = activeRecordFile
+        activeRecordFile = null
+        engine.stopRecording()
+        val durationSec = if (_state.value.connectedAtElapsed > 0L) {
+            ((SystemClock.elapsedRealtime() - _state.value.connectedAtElapsed) / 1000).toInt()
+        } else 0
+        if (durationSec >= 2 && recordingFile != null && recordingFile.exists() && endedCouple != null && endedCall != null && !me.isNullOrBlank()) {
+            uploadRecording(endedCouple, endedCall, me, recordingFile)
+        }
+
         cancelCallJobs()
         stopRingback()
         engine.stop()
@@ -677,6 +705,8 @@ object CallManager {
 
     private fun reset() {
         cancelCallJobs()
+        activeRecordFile?.delete()
+        activeRecordFile = null
         coupleId = null
         myUserId = null
         callId = null
@@ -685,6 +715,31 @@ object CallManager {
         localJoined = false
         remoteJoined = false
         _state.value = CallUiState()
+    }
+
+    private fun uploadRecording(
+        couple: String,
+        call: String,
+        me: String,
+        file: File
+    ) {
+        uploadJob?.cancel()
+        uploadJob = scope.launch(Dispatchers.IO) {
+            try {
+                if (file.length() < 1024) {
+                    file.delete()
+                    return@launch
+                }
+                val storage = FirebaseStorage.getInstance()
+                val path = "couples/$couple/call-recordings/$call/recording.mp4"
+                storage.reference.child(path).putFile(Uri.fromFile(file)).await()
+                file.delete()
+                repo.finalizeClientRecording(couple, me, call)
+                Log.i(TAG, "In-app call recording uploaded and finalized: $path")
+            } catch (e: Exception) {
+                Log.w(TAG, "In-app call recording upload failed", e)
+            }
+        }
     }
 
     private fun cancelCallJobs() {

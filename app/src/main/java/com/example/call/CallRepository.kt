@@ -81,6 +81,9 @@ class CallRepository(private val context: Context) {
     suspend fun renewToken(coupleId: String, userId: String, callId: String): CallResponse =
         callFunction("callRenewToken", coupleId, mapOf("coupleId" to coupleId, "userId" to userId, "callId" to callId))
 
+    suspend fun finalizeClientRecording(coupleId: String, userId: String, callId: String): CallResponse =
+        callFunction("callFinalizeClientRecording", coupleId, mapOf("coupleId" to coupleId, "userId" to userId, "callId" to callId))
+
     private suspend fun callFunction(name: String, coupleId: String, data: Map<String, Any>): CallResponse {
         val fns = functions ?: throw CallActionException(CallActionException.Kind.SERVICE, "Calls aren't available on this phone")
         if (!ensureMember(coupleId)) {
