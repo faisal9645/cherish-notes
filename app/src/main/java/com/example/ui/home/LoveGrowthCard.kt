@@ -207,5 +207,6 @@ fun lastMessagePreview(message: Message): String = when (message.getTypedType())
     MessageType.VIDEO -> if (message.isCircularVideoNote()) "🎥 Video note" else "🎥 Video"
     MessageType.AUDIO -> "🎤 Voice message"
     MessageType.DOCUMENT -> "📄 Document"
+    MessageType.CALL_RECORDING -> "📞 Call recording"
     else -> message.text.ifBlank { "Message" }
 }

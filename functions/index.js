@@ -5,6 +5,7 @@
  *
  * - notifyPartner: a new message.
  * - heartbeatPartner: a "thinking of you" heartbeat (a vibration, only if delivered right away).
+ * - Voice calls and their recordings: see calls.js.
  */
 const { onDocumentCreated, onDocumentUpdated } = require("firebase-functions/v2/firestore");
 const logger = require("firebase-functions/logger");
@@ -98,6 +99,8 @@ exports.notifyPartnerOnMessage = onDocumentCreated(
   async (event) => {
     const message = event.data && event.data.data();
     if (!message || message.isDeleted) return;
+    // A call recording is added by the server after the call; the app shows it without a push
+    if (String(message.type || "").toUpperCase() === "CALL_RECORDING") return;
 
     const { conversationId, messageId } = event.params;
     const db = getFirestore();
@@ -158,3 +161,6 @@ exports.heartbeatPartnerOnUpdate = onDocumentUpdated("couples/{coupleId}", async
     }
   );
 });
+
+// Voice calls and their recordings
+Object.assign(exports, require("./calls"));

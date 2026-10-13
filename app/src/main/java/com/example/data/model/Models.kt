@@ -10,7 +10,9 @@ enum class MessageType {
     IMAGE,
     VIDEO,
     AUDIO,
-    DOCUMENT
+    DOCUMENT,
+    // A voice call's recording, added by the server once it's saved (older app versions show its text)
+    CALL_RECORDING
 }
 
 enum class MessageStatus {
@@ -175,7 +177,11 @@ data class Message(
     // A special message: "goodnight" dims the partner's screen with stars when they see it
     var effect: String? = null,
     // Voice note listened state: shows a small blue dot if unplayed, cleared once listened
-    var isAudioPlayed: Boolean = false
+    var isAudioPlayed: Boolean = false,
+    // A call recording: its call, and where its audio is in private storage (no download link)
+    var callId: String? = null,
+    var recordingPath: String? = null,
+    var recordingPaths: List<String> = emptyList()
 ) {
     @com.google.firebase.firestore.Exclude
     fun isCircularVideoNote(): Boolean {

@@ -120,6 +120,10 @@ class CherishApplication : Application(), coil.ImageLoaderFactory {
             coupleFeaturesRepository
         )
 
+        // Voice calls: ring while the app runs, even before (or without) a push
+        com.example.call.CallManager.init(this)
+        com.example.call.CallManager.watchForIncomingCalls()
+
         com.example.notifications.NoteReminderScheduler.rescheduleAllUpcomingReminders(this, notesRepository)
         com.example.update.OtaUpdateManager.getInstance(this).cleanupDownloadedInstallers()
 

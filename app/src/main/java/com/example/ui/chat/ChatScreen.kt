@@ -153,6 +153,17 @@ fun ChatScreen(
     var showClearChatDialog by remember { mutableStateOf(false) }
     var showFullProfilePicViewer by remember { mutableStateOf(false) }
     var showChatMenu by remember { mutableStateOf(false) }
+    // Voice calls: a one-time notice that calls are recorded, then the call screen
+    var showCallRecordingNotice by remember { mutableStateOf(false) }
+    val startVoiceCall: () -> Unit = {
+        val prefs = (context.applicationContext as? com.example.CherishApplication)?.securityPreferences
+        if (prefs != null && !prefs.hasSeenCallRecordingNotice()) {
+            showCallRecordingNotice = true
+        } else {
+            com.example.call.CallActivity.startOutgoing(context)
+        }
+    }
+    val callState by com.example.call.CallManager.state.collectAsState()
     var showVideoNoteRecorder by remember { mutableStateOf(false) }
     var showHeartbeatTouch by remember { mutableStateOf(false) }
     var showMoodPicker by remember { mutableStateOf(false) }
@@ -1166,6 +1177,15 @@ fun ChatScreen(
                                     onDismissRequest = { showChatMenu = false }
                                 ) {
                                     DropdownMenuItem(
+                                        text = { Text("Voice call") },
+                                        onClick = {
+                                            showChatMenu = false
+                                            startVoiceCall()
+                                        },
+                                        leadingIcon = { Icon(Icons.Outlined.Call, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface) },
+                                        modifier = Modifier.testTag("chat_menu_voice_call")
+                                    )
+                                    DropdownMenuItem(
                                         text = { Text("Search") },
                                         onClick = {
                                             showChatMenu = false
@@ -1200,6 +1220,14 @@ fun ChatScreen(
                                 }
                             }
                         } else {
+                            IconButton(
+                                onClick = startVoiceCall,
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .testTag("chat_call_button")
+                            ) {
+                                Icon(Icons.Outlined.Call, contentDescription = "Voice call", tint = iconTint, modifier = Modifier.size(23.dp))
+                            }
                             IconButton(
                                 onClick = { viewModel.setSearching(true) },
                                 modifier = Modifier
@@ -1311,6 +1339,24 @@ fun ChatScreen(
             // No line under the bar in private chat (ChatGPT has none)
             if (uiState.chatExperienceMode != com.example.ui.chat.ChatExperienceMode.PRIVATE) {
                 HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+            }
+            if (com.example.call.CallManager.hasActiveCall() && callState.phase != com.example.call.CallPhase.INCOMING_RINGING) {
+                Surface(
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { com.example.call.CallActivity.startOutgoing(context) }
+                        .testTag("chat_return_to_call")
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Outlined.Call, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Call in progress \u00b7 tap to return", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                    }
+                }
             }
             }
             }
@@ -2658,6 +2704,37 @@ fun ChatScreen(
         InlineVideoTheaterModal(
             videoId = videoId,
             onDismiss = { viewModel.closeTheaterVideo() }
+        )
+    }
+
+    // Before the first call from this phone: calls are recorded automatically (said once here,
+    // and on every call screen)
+    if (showCallRecordingNotice) {
+        AlertDialog(
+            onDismissRequest = { showCallRecordingNotice = false },
+            title = { Text("Calls are recorded", fontWeight = FontWeight.Bold) },
+            text = {
+                Text(
+                    text = "Every call that connects is recorded automatically, for both of you. The recording " +
+                        "is saved privately in this chat and in the Shared Gallery, and either of you can delete it. " +
+                        "The call screen shows when a call is being recorded.",
+                    lineHeight = 20.sp
+                )
+            },
+            confirmButton = {
+                Button(onClick = {
+                    (context.applicationContext as? com.example.CherishApplication)?.securityPreferences?.setSeenCallRecordingNotice()
+                    showCallRecordingNotice = false
+                    com.example.call.CallActivity.startOutgoing(context)
+                }) {
+                    Text("Call")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showCallRecordingNotice = false }) {
+                    Text("Not now")
+                }
+            }
         )
     }
 

@@ -255,7 +255,11 @@ def build_apk(project_root: str):
     if os.path.exists(jbr_path):
         env["JAVA_HOME"] = jbr_path
     try:
-        subprocess.check_call([gradlew, ":app:assembleRelease"], cwd=project_root, env=env)
+        subprocess.check_call(
+            [gradlew, ":app:assembleRelease", "--daemon", "--parallel", "--build-cache"],
+            cwd=project_root,
+            env=env
+        )
         print("Build successful!", flush=True)
     except subprocess.CalledProcessError as e:
         print(f"ERROR: Build failed with exit code {e.returncode}")

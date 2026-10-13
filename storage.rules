@@ -6,14 +6,28 @@ service firebase.storage {
       return request.auth != null;
     }
 
-    // Couples private media folder
+    function isCallRecordingPath(name) {
+      return name.matches('couples/[^/]+/call-recordings/.*');
+    }
+
+    // Couples private media folder. Call recordings are left out here: they have their own,
+    // stricter rules below (rules add up, so this one must not cover them).
     match /couples/{coupleId}/{allPaths=**} {
       // Must be authenticated to read or write
-      allow read: if isAuthenticated();
+      allow read: if isAuthenticated() && !isCallRecordingPath(resource.name);
 
       // Enforce max upload size: 25MB for images/audio, 50MB for video/documents
       allow write: if isAuthenticated()
+                   && !isCallRecordingPath(request.resource.name)
                    && request.resource.size < 50 * 1024 * 1024;
+    }
+
+    // Call recordings: added and deleted only by the backend; only this couple's own phones
+    // (their sign-ins in the couple's memberUids) can play them
+    match /couples/{coupleId}/call-recordings/{callId}/{fileName} {
+      allow read: if isAuthenticated()
+                  && request.auth.uid in firestore.get(/databases/(default)/documents/couples/$(coupleId)).data.get('memberUids', []);
+      allow write: if false;
     }
 
     // Profile avatars

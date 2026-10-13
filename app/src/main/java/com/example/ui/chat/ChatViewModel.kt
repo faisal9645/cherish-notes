@@ -233,7 +233,10 @@ class ChatViewModel(
             chatRepository.messagesFlow.collect { msgList ->
                 val pinned = msgList.lastOrNull { it.isPinned && !it.isDeleted }
                 val currentUserId = authRepository.getCurrentUserId()
-                val newIncoming = msgList.lastOrNull { it.senderId != currentUserId && it.timestamp > highestMessageTimestamp }
+                val newIncoming = msgList.lastOrNull {
+                    it.senderId != currentUserId && it.timestamp > highestMessageTimestamp &&
+                        it.getTypedType() != MessageType.CALL_RECORDING
+                }
                 if (highestMessageTimestamp > 0L && newIncoming != null) {
                     val isDisguised = securityPreferences.isDisguiseActive.value
                     val isActivelyInChat = authRepository.isUserActivelyInChat()

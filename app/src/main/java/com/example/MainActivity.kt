@@ -459,7 +459,10 @@ class MainActivity : FragmentActivity() {
         coverSecretApp()
         super.onUserLeaveHint()
         if (isChangingConfigurations) return
-        if (!app.securityPreferences.ignoreNextPause && 
+        // With a call on (or its screen opening) this may just be the call screen coming up; onStop
+        // decides, and leaving the app for real still disguises it there
+        if (com.example.call.CallManager.hasActiveCall() || com.example.call.CallManager.isCallScreenVisible) return
+        if (!app.securityPreferences.ignoreNextPause &&
             !app.securityPreferences.isTheaterModeActive &&
             !app.securityPreferences.isMediaViewerActive &&
             !app.securityPreferences.isExternalPickerActive &&
@@ -478,11 +481,14 @@ class MainActivity : FragmentActivity() {
         if (isChangingConfigurations) return
         app.authRepository.onAppForegroundStateChanged(false)
         // Re-disguise ONLY when the user truly leaves the app (activity stopped without active picker/viewer),
-        // and disguise mode is enabled in user settings.
-        if (!app.securityPreferences.ignoreNextPause && 
+        // and disguise mode is enabled in user settings. The call screen covering the chat isn't leaving
+        // (going home from the call screen is: the whole app stops then, see CherishApplication).
+        if (!app.securityPreferences.ignoreNextPause &&
             !app.securityPreferences.isTheaterModeActive &&
             !app.securityPreferences.isMediaViewerActive &&
             !app.securityPreferences.isExternalPickerActive &&
+            !com.example.call.CallManager.isCallScreenVisible &&
+            !com.example.call.CallManager.hasActiveCall() &&
             app.securityPreferences.isDisguiseModeEnabled()) {
             app.securityPreferences.reDisguise()
         }

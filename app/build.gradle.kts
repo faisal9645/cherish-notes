@@ -21,7 +21,13 @@ android {
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     resourceConfigurations += listOf("en")
+    // Phones only: the call audio engine's native code is large, and emulator (x86) copies of it
+    // would roughly double the update download
+    ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
   }
+
+  // Native code compressed in the APK (unpacked at install), so updates download less
+  packaging { jniLibs { useLegacyPackaging = true } }
 
   signingConfigs {
     val releaseKeyFile = file(System.getenv("KEYSTORE_PATH") ?: "${rootDir}/my-upload-key.jks")
@@ -49,12 +55,19 @@ android {
   buildTypes {
     release {
       isCrunchPngs = true
-      // No R8: release builds keep all code and resources as they are
-      isMinifyEnabled = false
+      isMinifyEnabled = true
+      isShrinkResources = true
+      proguardFiles(
+        getDefaultProguardFile("proguard-android-optimize.txt"),
+        "proguard-rules.pro"
+      )
       val hasReleaseConfig = signingConfigs.findByName("release") != null
       signingConfig = if (hasReleaseConfig) signingConfigs.getByName("release") else signingConfigs.getByName("debugConfig")
     }
-    debug { signingConfig = signingConfigs.getByName("debugConfig") }
+    debug {
+      isMinifyEnabled = false
+      signingConfig = signingConfigs.getByName("debugConfig")
+    }
   }
   compileOptions {
     sourceCompatibility = JavaVersion.VERSION_11
@@ -118,6 +131,9 @@ dependencies {
   implementation(libs.firebase.auth)
   implementation(libs.firebase.storage)
   implementation(libs.firebase.messaging)
+  implementation(libs.firebase.functions)
+  implementation(libs.agora.voice.rtc.basic)
+  implementation(libs.agora.ains)
   implementation(libs.androidx.biometric)
   implementation(libs.androidx.credentials)
   implementation(libs.androidx.credentials.play.services)

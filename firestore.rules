@@ -77,6 +77,29 @@ service cloud.firestore {
           && isValidMoment(request.resource.data);
         allow delete: if isCoupleMember();
       }
+
+      // Voice calls and their recording status: only the backend (Cloud Functions) writes them,
+      // and only this couple's own phones can read them
+      match /calls/{callId} {
+        allow read: if isCoupleMember();
+        allow write: if false;
+      }
+
+      // Which call is going on right now (for "busy" and for ringing while the app is open)
+      match /callControl/{docId} {
+        allow read: if isCoupleMember();
+        allow write: if false;
+      }
+    }
+
+    // The backend's own call bookkeeping (Agora's recording session ids, webhook deliveries):
+    // no phone can read or write it
+    match /callJobs/{callId} {
+      allow read, write: if false;
+    }
+
+    match /callWebhookEvents/{noticeId} {
+      allow read, write: if false;
     }
   }
 }

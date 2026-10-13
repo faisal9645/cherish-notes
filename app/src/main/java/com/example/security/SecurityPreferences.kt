@@ -593,6 +593,13 @@ class SecurityPreferences(context: Context) {
         prefs.edit().putBoolean(KEY_HAS_SEEN_STEALTH_SHIELD_TIP, seen).apply()
     }
 
+    // --- CALL RECORDING NOTICE (shown once before this phone's first call) ---
+    fun hasSeenCallRecordingNotice(): Boolean = prefs.getBoolean(KEY_SEEN_CALL_RECORDING_NOTICE, false)
+
+    fun setSeenCallRecordingNotice() {
+        prefs.edit().putBoolean(KEY_SEEN_CALL_RECORDING_NOTICE, true).apply()
+    }
+
     // --- PARTNER CUSTOM TIME ZONE ---
     fun getPartnerCustomTimeZone(): String? = prefs.getString(KEY_PARTNER_CUSTOM_TIMEZONE, null)?.takeIf { it.isNotBlank() }
 
@@ -666,6 +673,7 @@ class SecurityPreferences(context: Context) {
         private const val KEY_SIDE_EMERGENCY_EXIT_OPACITY = "side_emergency_exit_opacity"
         private const val KEY_CHAT_SOUNDS_ENABLED = "chat_sounds_enabled"
         private const val KEY_PARTNER_CUSTOM_TIMEZONE = "partner_custom_timezone"
+        private const val KEY_SEEN_CALL_RECORDING_NOTICE = "seen_call_recording_notice"
 
         @Volatile
         private var INSTANCE: SecurityPreferences? = null

@@ -471,6 +471,7 @@ fun MessageBubble(
                         else -> 280.dp
                     }
                     MessageType.AUDIO -> 260.dp
+                    MessageType.CALL_RECORDING -> 250.dp
                     MessageType.VIDEO -> 240.dp
                     MessageType.DOCUMENT -> 200.dp
                     else -> 60.dp
@@ -482,6 +483,7 @@ fun MessageBubble(
                         else -> 310.dp
                     }
                     MessageType.AUDIO -> 310.dp
+                    MessageType.CALL_RECORDING -> 300.dp
                     MessageType.VIDEO -> 268.dp
                     MessageType.DOCUMENT -> 260.dp
                     else -> if (isPrivateMode && !isFromMe) 340.dp else 295.dp
@@ -898,6 +900,31 @@ fun MessageBubble(
                         }
                     }
 
+                    MessageType.CALL_RECORDING -> {
+                        CallRecordingPlayerRow(
+                            message = message,
+                            contentColor = textColor,
+                            buttonColor = when {
+                                isPrivateMode -> (if (isDark) darkTone(Color(0xFFECECEC)) else Color(0xFF1F2937)).copy(alpha = 0.2f)
+                                isFromMe -> Color.White.copy(alpha = 0.25f)
+                                else -> MaterialTheme.colorScheme.primary
+                            },
+                            buttonIconColor = if (isPrivateMode) textColor else Color.White,
+                            trackColor = textColor.copy(alpha = 0.25f),
+                            progressColor = if (isPrivateMode || isFromMe) textColor else MaterialTheme.colorScheme.primary,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp, horizontal = 2.dp),
+                            trailing = {
+                                Text(
+                                    text = formatMessageTime(message.timestamp),
+                                    fontSize = 10.sp,
+                                    color = timeColor
+                                )
+                            }
+                        )
+                    }
+
                     else -> {}
                 }
 
@@ -958,7 +985,9 @@ fun MessageBubble(
                 }
 
                 // Text Content & Inline YouTube / Link Preview
-                if (message.text.isNotEmpty() && message.getTypedType() != MessageType.AUDIO && message.getTypedType() != MessageType.IMAGE) {
+                if (message.text.isNotEmpty() && message.getTypedType() != MessageType.AUDIO && message.getTypedType() != MessageType.IMAGE &&
+                    message.getTypedType() != MessageType.CALL_RECORDING
+                ) {
                     EmojiText(
                         text = message.text,
                         color = textColor,
@@ -992,7 +1021,9 @@ fun MessageBubble(
 
                 // Bubble Footer for non-audio, non-image, non-video messages: the time on every message
                 // (none in private chat, which shows no times, like ChatGPT)
-                if (!isPrivateMode && message.getTypedType() != MessageType.AUDIO && message.getTypedType() != MessageType.IMAGE && message.getTypedType() != MessageType.VIDEO) {
+                if (!isPrivateMode && message.getTypedType() != MessageType.AUDIO && message.getTypedType() != MessageType.IMAGE &&
+                    message.getTypedType() != MessageType.VIDEO && message.getTypedType() != MessageType.CALL_RECORDING
+                ) {
                     // Tapping the time of my message shows when it was seen (or delivered/sent)
                     var showStatusDetail by remember(message.id) { mutableStateOf(false) }
                     LaunchedEffect(showStatusDetail) {

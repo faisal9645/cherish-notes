@@ -395,9 +395,12 @@ class ChatRepository(
         source: Source,
         conversationId: String
     ) = coroutineScope {
-        // Photos, videos, voice notes, starred and link messages can all be queried directly
+        // Photos, videos, voice notes, call recordings, starred and link messages can all be queried directly
         val targetedQueries = listOf(
-            messagesRef.whereIn("type", listOf(MessageType.IMAGE.name, MessageType.VIDEO.name, MessageType.AUDIO.name)),
+            messagesRef.whereIn(
+                "type",
+                listOf(MessageType.IMAGE.name, MessageType.VIDEO.name, MessageType.AUDIO.name, MessageType.CALL_RECORDING.name)
+            ),
             messagesRef.whereEqualTo("isStarred", true),
             messagesRef.whereEqualTo("hasLink", true)
         )
@@ -469,7 +472,7 @@ class ChatRepository(
     private fun isGalleryRelevant(message: Message): Boolean {
         if (message.isDeleted) return false
         return when (message.getTypedType()) {
-            MessageType.IMAGE, MessageType.VIDEO, MessageType.AUDIO -> true
+            MessageType.IMAGE, MessageType.VIDEO, MessageType.AUDIO, MessageType.CALL_RECORDING -> true
             else -> message.isStarred || message.isVideoNote ||
                 !message.mediaUrl.isNullOrBlank() || message.mediaUrls.isNotEmpty() ||
                 LINK_REGEX.containsMatchIn(message.text)
@@ -619,6 +622,8 @@ class ChatRepository(
                     for (change in snapshot.documentChanges) {
                         if (change.type == com.google.firebase.firestore.DocumentChange.Type.ADDED) {
                             val msg = change.document.toMessageOrNull() ?: continue
+                            // A call recording isn't a message from the partner: no notification for it
+                            if (msg.getTypedType() == MessageType.CALL_RECORDING) continue
                             val currentUserId = authRepository.getCurrentUserId()
                             if (msg.senderId != currentUserId && msg.status != MessageStatus.READ.name) {
                                 if (!com.example.notifications.NotificationHelper.isAppOpenOnScreen(context)) {
@@ -1002,6 +1007,8 @@ class ChatRepository(
         val ids = messageIds.filter { it.isNotBlank() }.toSet()
         if (ids.isEmpty()) return
         deletedMessageIds.addAll(ids)
+        // A deleted call recording's audio leaves this phone too (the server deletes the original)
+        com.example.call.CallRecordingPlayer.forget(context, ids)
 
         // Remove from every in-memory source at once, so the messages leave chat and gallery immediately
         // and can't be merged back from a stale list before Firestore confirms

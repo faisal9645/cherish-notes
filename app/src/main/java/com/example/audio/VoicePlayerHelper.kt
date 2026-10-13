@@ -103,6 +103,9 @@ class VoicePlayerHelper(private val context: Context) {
     }
 
     fun playAudio(messageId: String, audioUriOrUrl: String, onCompletion: () -> Unit = {}) {
+        // Nothing plays over a voice call (it would also change the call's audio routing)
+        if (callInProgress) return
+
         // Case 1: Already active and currently playing -> PAUSE
         if (_currentTrackId.value == messageId && _isPlaying.value && mediaPlayer != null) {
             pause()
@@ -336,6 +339,8 @@ class VoicePlayerHelper(private val context: Context) {
     }
 
     private fun routeToEarpiece(earpiece: Boolean) {
+        // A voice call owns the audio mode and routing while it's on
+        if (callInProgress) return
         val am = audioManager ?: return
         try {
             if (earpiece) {
@@ -355,6 +360,12 @@ class VoicePlayerHelper(private val context: Context) {
         } catch (e: Exception) {
             Log.w("VoicePlayerHelper", "Could not route audio", e)
         }
+    }
+
+    companion object {
+        /** Set while a voice call is on: voice notes and recordings don't play then. */
+        @Volatile
+        var callInProgress: Boolean = false
     }
 
     private fun hasHeadphones(): Boolean {

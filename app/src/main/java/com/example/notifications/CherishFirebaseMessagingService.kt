@@ -35,6 +35,18 @@ class CherishFirebaseMessagingService : FirebaseMessagingService() {
             return
         }
 
+        // Calls ring even with the app open (they open their own screen, never the chat or Notes)
+        when (remoteMessage.data["type"]) {
+            "call_invite" -> {
+                com.example.call.CallManager.onPushInvite(remoteMessage.data)
+                return
+            }
+            "call_cancel" -> {
+                com.example.call.CallManager.onPushCancel(remoteMessage.data)
+                return
+            }
+        }
+
         val myUid = app.authRepository.getCurrentUserId()
         val senderId = remoteMessage.data["senderId"]
         if (!senderId.isNullOrBlank() && myUid.isNotBlank() && senderId == myUid) {
