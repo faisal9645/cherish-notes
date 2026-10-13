@@ -237,6 +237,8 @@ object NotificationHelper {
 
         try {
             createNotificationChannels(context)
+            // Cancel legacy separate heartbeat notification from older builds so only 1 notification is ever visible
+            NotificationManagerCompat.from(context).cancel(1003)
             NotificationManagerCompat.from(context).notify(NOTIFICATION_ID_MESSAGE, notification)
             android.util.Log.d("NotificationHelper", "Message notification posted successfully (unread: $unreadCount)")
         } catch (e: SecurityException) {
@@ -246,7 +248,7 @@ object NotificationHelper {
         }
     }
 
-    const val NOTIFICATION_ID_HEARTBEAT = 1003
+    const val NOTIFICATION_ID_HEARTBEAT = NOTIFICATION_ID_MESSAGE
 
     /**
      * Show a heartbeat notification when the app is closed/in background,
@@ -323,7 +325,8 @@ object NotificationHelper {
             .build()
 
         try {
-            NotificationManagerCompat.from(context).notify(NOTIFICATION_ID_HEARTBEAT, notification)
+            NotificationManagerCompat.from(context).cancel(1003)
+            NotificationManagerCompat.from(context).notify(NOTIFICATION_ID_MESSAGE, notification)
         } catch (_: SecurityException) {}
     }
 
@@ -335,6 +338,7 @@ object NotificationHelper {
             NotificationManagerCompat.from(context).cancel(NOTIFICATION_ID_MESSAGE)
             NotificationManagerCompat.from(context).cancel(NOTIFICATION_ID_CHECK_AFTER)
             NotificationManagerCompat.from(context).cancel(NOTIFICATION_ID_HEARTBEAT)
+            NotificationManagerCompat.from(context).cancel(1003)
         } catch (_: Exception) {}
     }
 
@@ -349,6 +353,7 @@ object NotificationHelper {
             NotificationManagerCompat.from(context).cancel(NOTIFICATION_ID_MESSAGE)
             NotificationManagerCompat.from(context).cancel(NOTIFICATION_ID_CHECK_AFTER)
             NotificationManagerCompat.from(context).cancel(NOTIFICATION_ID_HEARTBEAT)
+            NotificationManagerCompat.from(context).cancel(1003)
         } catch (_: Exception) {}
         updateLauncherBadge(context, 0)
     }

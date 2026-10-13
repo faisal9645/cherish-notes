@@ -77,6 +77,9 @@ class CherishSyncService : Service() {
         super.onDestroy()
     }
 
+    private var currentAttachedCoupleId: String? = null
+    private var currentAttachedUid: String? = null
+
     private fun observeAccount() {
         val app = applicationContext as? CherishApplication ?: return
         scope.launch {
@@ -84,8 +87,14 @@ class CherishSyncService : Service() {
                 val coupleId = user?.coupleId?.trim()?.ifBlank { null }
                 val myUid = user?.id?.trim()?.ifBlank { null }
                 if (!coupleId.isNullOrBlank() && !myUid.isNullOrBlank()) {
-                    attachListeners(coupleId, myUid)
+                    if (coupleId != currentAttachedCoupleId || myUid != currentAttachedUid) {
+                        currentAttachedCoupleId = coupleId
+                        currentAttachedUid = myUid
+                        attachListeners(coupleId, myUid)
+                    }
                 } else {
+                    currentAttachedCoupleId = null
+                    currentAttachedUid = null
                     detachListeners()
                 }
             }
@@ -116,12 +125,13 @@ class CherishSyncService : Service() {
                 for (change in snapshot.documentChanges) {
                     if (change.type == com.google.firebase.firestore.DocumentChange.Type.ADDED) {
                         val msg = change.document.toMessageOrNull() ?: continue
+                        if (msg.id.isBlank()) msg.id = change.document.id
                         if (msg.getTypedType() == MessageType.CALL_RECORDING) continue
 
                         val senderClean = msg.senderId.removePrefix("user_").lowercase()
                         if (senderClean != cleanMyUid) {
-                            // If user is actively viewing chat screen, skip notification
-                            if (!NotificationHelper.isUserActivelyViewingChat(this)) {
+                            // If user is actively viewing chat screen or app is open on screen, skip duplicate notification
+                            if (!NotificationHelper.isAppOpenOnScreen(this) && !NotificationHelper.isUserActivelyViewingChat(this)) {
                                 val previewText = when (msg.getTypedType()) {
                                     MessageType.TEXT -> msg.text
                                     MessageType.IMAGE -> "Photo"
@@ -156,10 +166,14 @@ class CherishSyncService : Service() {
                 val calleeId = snapshot.getString("calleeId").orEmpty()
                 val callerId = snapshot.getString("callerId").orEmpty()
                 val callId = snapshot.getString("callId").orEmpty()
-                val ringExpiresAt = snapshot.getTimestamp("ringExpiresAt")?.toDate()?.time ?: 0L
+                val ringExpiresAt = snapshot.getRingExpiry()
 
                 val cleanCallee = calleeId.removePrefix("user_").lowercase()
-                if (state == CallRecord.STATE_RINGING && cleanCallee == cleanMyUid && ringExpiresAt > System.currentTimeMillis()) {
+                val cleanCaller = callerId.removePrefix("user_").lowercase()
+                val isForMe = (cleanCallee == cleanMyUid) || (cleanCaller.isNotBlank() && cleanCaller != cleanMyUid) || cleanCallee.isBlank()
+                val now = System.currentTimeMillis()
+
+                if (state == CallRecord.STATE_RINGING && isForMe && (ringExpiresAt > (now - 15_000L) || ringExpiresAt == 0L)) {
                     val partnerName = (applicationContext as? CherishApplication)?.authRepository?.partnerUserState?.value?.displayName.orEmpty()
                     CallManager.onIncomingInvite(
                         CallInvite(
@@ -167,7 +181,7 @@ class CherishSyncService : Service() {
                             coupleId = coupleId,
                             callerId = callerId,
                             callerName = partnerName,
-                            ringUntil = ringExpiresAt
+                            ringUntil = if (ringExpiresAt > now) ringExpiresAt else (now + 45_000L)
                         )
                     )
                 }
@@ -239,6 +253,16 @@ class CherishSyncService : Service() {
         } ?: return null
         if (message.id.isBlank()) message.id = id
         return message
+    }
+
+    private fun DocumentSnapshot.getRingExpiry(): Long {
+        val num = try { getLong("ringExpiresAtMs") } catch (_: Exception) { null }
+        if (num != null && num > 0L) return num
+        val ts = try { getTimestamp("ringExpiresAt")?.toDate()?.time } catch (_: Exception) { null }
+        if (ts != null && ts > 0L) return ts
+        val directLong = try { getLong("ringExpiresAt") } catch (_: Exception) { null }
+        if (directLong != null && directLong > 0L) return directLong
+        return System.currentTimeMillis() + 45_000L
     }
 
     companion object {

@@ -221,7 +221,8 @@ object CallManager {
 
     fun onIncomingInvite(invite: CallInvite) = post {
         val now = System.currentTimeMillis()
-        if (invite.ringUntil in 1 until now) return@post
+        // Allow reasonable clock drift between partner devices (up to 30s)
+        if (invite.ringUntil > 0 && invite.ringUntil < (now - 30_000L)) return@post
         val me = app.authRepository.getCurrentUserId()
         val myCouple = currentCoupleId()
         if (me.isBlank() || myCouple == null || invite.coupleId != myCouple || isSameUser(invite.callerId, me)) return@post
@@ -245,7 +246,9 @@ object CallManager {
         _state.value = freshState(invite.callId, outgoing = false).copy(phase = CallPhase.INCOMING_RINGING)
         CallNotifications.showIncoming(app, invite)
         observeCallRecord()
-        val ringLeft = (invite.ringUntil - System.currentTimeMillis()).coerceIn(5_000L, 60_000L)
+        val remaining = invite.ringUntil - System.currentTimeMillis()
+        // Ensure the callee has ample time to attend (at least 45 seconds) rather than clamping to 5 seconds!
+        val ringLeft = if (remaining < 20_000L) RING_TIMEOUT_MS else remaining.coerceAtMost(60_000L)
         val id = invite.callId
         ringTimeoutJob = scope.launch {
             delay(ringLeft + 3_000L)
@@ -414,16 +417,17 @@ object CallManager {
                     }
                     if (!repo.ensureMember(couple)) return@collectLatest
                     repo.observeControl(couple).collect { control ->
-                        if (control != null && control.state == CallRecord.STATE_RINGING &&
-                            isSameUser(control.calleeId, me) && control.ringExpiresAt > System.currentTimeMillis()
-                        ) {
+                        val now = System.currentTimeMillis()
+                        val isCallee = control != null && (isSameUser(control.calleeId, me) || control.calleeId.isBlank() || (!isSameUser(control.callerId, me) && control.callerId.isNotBlank()))
+                        val notExpired = control != null && (control.ringExpiresAt > (now - 15_000L) || control.ringExpiresAt == 0L)
+                        if (control != null && control.state == CallRecord.STATE_RINGING && isCallee && notExpired) {
                             onIncomingInvite(
                                 CallInvite(
                                     callId = control.callId,
                                     coupleId = couple,
                                     callerId = control.callerId,
                                     callerName = app.authRepository.partnerUserState.value?.displayName.orEmpty(),
-                                    ringUntil = control.ringExpiresAt
+                                    ringUntil = if (control.ringExpiresAt > now) control.ringExpiresAt else (now + RING_TIMEOUT_MS)
                                 )
                             )
                         }
@@ -891,7 +895,12 @@ object CallManager {
                 Constants.CONNECTION_STATE_FAILED -> {
                     val tokenProblem = reason == Constants.CONNECTION_CHANGED_INVALID_TOKEN ||
                         reason == Constants.CONNECTION_CHANGED_TOKEN_EXPIRED
-                    finish(if (tokenProblem) CallEndReason.FAILED else CallEndReason.NETWORK, serverReason = "error")
+                    if (tokenProblem) {
+                        Log.w(TAG, "Connection failed due to token ($reason), renewing token...")
+                        renewToken()
+                    } else {
+                        finish(CallEndReason.NETWORK, serverReason = "network")
+                    }
                 }
                 Constants.CONNECTION_STATE_DISCONNECTED -> {
                     if (reason == Constants.CONNECTION_CHANGED_BANNED_BY_SERVER ||

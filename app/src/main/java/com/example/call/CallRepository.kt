@@ -67,56 +67,23 @@ class CallRepository(private val context: Context) {
     )
 
     suspend fun start(coupleId: String, userId: String, callId: String): CallResponse {
-        try {
-            return withTimeoutOrNull(2_000L) {
-                callFunction("callStart", coupleId, mapOf("coupleId" to coupleId, "userId" to userId, "callId" to callId))
-            } ?: directStart(coupleId, userId, callId)
-        } catch (e: Exception) {
-            Log.w(TAG, "callStart Cloud Function unavailable (${e.message}), switching to direct Firestore signaling")
-            return directStart(coupleId, userId, callId)
-        }
+        return directStart(coupleId, userId, callId)
     }
 
     suspend fun answer(coupleId: String, userId: String, callId: String): CallResponse {
-        try {
-            return withTimeoutOrNull(2_000L) {
-                callFunction("callAnswer", coupleId, mapOf("coupleId" to coupleId, "userId" to userId, "callId" to callId))
-            } ?: directAnswer(coupleId, userId, callId)
-        } catch (e: Exception) {
-            Log.w(TAG, "callAnswer Cloud Function unavailable (${e.message}), switching to direct Firestore signaling")
-            return directAnswer(coupleId, userId, callId)
-        }
+        return directAnswer(coupleId, userId, callId)
     }
 
     suspend fun end(coupleId: String, userId: String, callId: String, reason: String): CallResponse {
-        try {
-            return withTimeoutOrNull(2_000L) {
-                callFunction("callEnd", coupleId, mapOf("coupleId" to coupleId, "userId" to userId, "callId" to callId, "reason" to reason))
-            } ?: directEnd(coupleId, userId, callId, reason)
-        } catch (e: Exception) {
-            Log.w(TAG, "callEnd Cloud Function unavailable (${e.message}), switching to direct Firestore signaling")
-            return directEnd(coupleId, userId, callId, reason)
-        }
+        return directEnd(coupleId, userId, callId, reason)
     }
 
     suspend fun joined(coupleId: String, userId: String, callId: String): CallResponse {
-        return try {
-            withTimeoutOrNull(2_000L) {
-                callFunction("callJoined", coupleId, mapOf("coupleId" to coupleId, "userId" to userId, "callId" to callId))
-            } ?: CallResponse(status = "ok", callId = callId, callerId = null, join = null)
-        } catch (_: Exception) {
-            CallResponse(status = "ok", callId = callId, callerId = null, join = null)
-        }
+        return CallResponse(status = "ok", callId = callId, callerId = null, join = null)
     }
 
     suspend fun renewToken(coupleId: String, userId: String, callId: String): CallResponse {
-        try {
-            return withTimeoutOrNull(2_000L) {
-                callFunction("callRenewToken", coupleId, mapOf("coupleId" to coupleId, "userId" to userId, "callId" to callId))
-            } ?: directRenewToken(coupleId, userId, callId)
-        } catch (e: Exception) {
-            return directRenewToken(coupleId, userId, callId)
-        }
+        return directRenewToken(coupleId, userId, callId)
     }
 
     suspend fun finalizeClientRecording(coupleId: String, userId: String, callId: String): CallResponse {
@@ -142,7 +109,9 @@ class CallRepository(private val context: Context) {
             val activeCallId = controlSnap.getString("callId").orEmpty()
             val activeCaller = controlSnap.getString("callerId").orEmpty()
             val activeCallee = controlSnap.getString("calleeId").orEmpty()
-            val ringExpires = controlSnap.getTimestamp("ringExpiresAt")?.toDate()?.time ?: 0L
+            val ringExpires = controlSnap.getTimestamp("ringExpiresAt")?.toDate()?.time
+                ?: controlSnap.getLong("ringExpiresAtMs")
+                ?: 0L
 
             // If partner called us at the exact same moment: pick up theirs
             if (activeState == CallRecord.STATE_RINGING && isSameId(activeCallee, userId) && ringExpires > now) {
@@ -153,9 +122,8 @@ class CallRepository(private val context: Context) {
                     join = null
                 )
             }
-            if ((activeState == CallRecord.STATE_RINGING || activeState == CallRecord.STATE_CONNECTING || activeState == CallRecord.STATE_CONNECTED)
-                && activeCallId.isNotBlank() && activeCallId != callId && ringExpires > now
-            ) {
+            // Only return BUSY if partner is actively on another ongoing CONNECTED call with someone else
+            if (activeState == CallRecord.STATE_CONNECTED && activeCallId.isNotBlank() && activeCallId != callId && !isSameId(activeCaller, userId) && ringExpires > now) {
                 return CallResponse(status = CallRecord.STATE_BUSY, callId = null, callerId = null, join = null)
             }
         }
@@ -174,6 +142,7 @@ class CallRepository(private val context: Context) {
         )
 
         val ringExpiresAt = com.google.firebase.Timestamp(java.util.Date(now + 45_000L))
+        val ringExpiresAtMs = now + 45_000L
 
         // Set call document
         val callDoc = mapOf(
@@ -186,6 +155,7 @@ class CallRepository(private val context: Context) {
             "state" to CallRecord.STATE_RINGING,
             "createdAt" to FieldValue.serverTimestamp(),
             "ringExpiresAt" to ringExpiresAt,
+            "ringExpiresAtMs" to ringExpiresAtMs,
             "durationSec" to 0,
             "recording" to mapOf("status" to "waiting", "updatedAt" to FieldValue.serverTimestamp()),
             "updatedAt" to FieldValue.serverTimestamp()
@@ -197,17 +167,18 @@ class CallRepository(private val context: Context) {
             Log.w(TAG, "directStart writing calls failed: ${e.message}")
         }
 
-        // Set active control document
+        // Set active control document (clean overwrite without merge so stale endedBy/endReason are wiped)
         val controlDoc = mapOf(
             "callId" to callId,
             "state" to CallRecord.STATE_RINGING,
             "callerId" to userId,
             "calleeId" to partnerId,
             "ringExpiresAt" to ringExpiresAt,
+            "ringExpiresAtMs" to ringExpiresAtMs,
             "updatedAt" to FieldValue.serverTimestamp()
         )
         try {
-            controlRef.set(controlDoc, SetOptions.merge()).await()
+            controlRef.set(controlDoc).await()
         } catch (e: Exception) {
             Log.w(TAG, "directStart writing callControl failed: ${e.message}")
         }
@@ -330,16 +301,24 @@ class CallRepository(private val context: Context) {
     }
 
     private suspend fun resolvePartnerId(coupleId: String, userId: String): String {
-        val partnerFromState = (context.applicationContext as? com.example.CherishApplication)
-            ?.authRepository?.partnerUserState?.value?.id
+        val app = context.applicationContext as? com.example.CherishApplication
+        val partnerFromState = app?.authRepository?.partnerUserState?.value?.id
         if (!partnerFromState.isNullOrBlank()) return partnerFromState
+
+        val authPartner = app?.authRepository?.currentUserState?.value?.partnerId
+        if (!authPartner.isNullOrBlank()) return authPartner
 
         val coupleSnap = firestore?.collection("couples")?.document(coupleId)?.get()?.await()
         if (coupleSnap != null && coupleSnap.exists()) {
             val p1 = coupleSnap.getString("partner1Id").orEmpty()
             val p2 = coupleSnap.getString("partner2Id").orEmpty()
             val cleanUid = userId.removePrefix("user_").lowercase()
-            return if (p1.removePrefix("user_").lowercase() == cleanUid) p2 else p1
+            if (p1.isNotBlank() && p2.isNotBlank()) {
+                return if (p1.removePrefix("user_").lowercase() == cleanUid) p2 else p1
+            }
+            val members = (coupleSnap.get("members") as? List<*>)?.filterIsInstance<String>().orEmpty()
+            val otherMember = members.firstOrNull { it.removePrefix("user_").lowercase() != cleanUid }
+            if (!otherMember.isNullOrBlank()) return otherMember
         }
         return "partner"
     }
@@ -541,12 +520,16 @@ class CallRepository(private val context: Context) {
     private fun DocumentSnapshot.toControlState(): ControlState? {
         if (!exists()) return null
         val callId = getString("callId")?.ifBlank { null } ?: return null
+        val ringExpires = getTimestamp("ringExpiresAt")?.toDate()?.time
+            ?: getLong("ringExpiresAtMs")
+            ?: getLong("ringExpiresAt")
+            ?: (System.currentTimeMillis() + 45_000L)
         return ControlState(
             callId = callId,
             state = getString("state").orEmpty(),
             callerId = getString("callerId").orEmpty(),
             calleeId = getString("calleeId").orEmpty(),
-            ringExpiresAt = getTimestamp("ringExpiresAt")?.toDate()?.time ?: 0L
+            ringExpiresAt = ringExpires
         )
     }
 

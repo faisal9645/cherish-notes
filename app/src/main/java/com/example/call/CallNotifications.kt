@@ -94,7 +94,8 @@ object CallNotifications {
         val decline = PendingIntent.getBroadcast(
             context, REQUEST_DECLINE, CallActionReceiver.declineIntent(context, invite), immutableFlags()
         )
-        val ringFor = (invite.ringUntil - System.currentTimeMillis()).coerceIn(5_000L, 60_000L)
+        val remaining = invite.ringUntil - System.currentTimeMillis()
+        val ringFor = if (remaining < 20_000L) 45_000L else remaining.coerceAtMost(60_000L)
 
         val builder = NotificationCompat.Builder(context, CHANNEL_INCOMING)
             .setSmallIcon(R.drawable.ic_stat_notes)
