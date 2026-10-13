@@ -469,9 +469,16 @@ class AuthRepository(private val context: Context) {
 
         var finalPartnerId = fallbackPartnerId
 
-        try {
-            auth?.signInAnonymously()?.await()
-        } catch (_: Exception) {}
+        var authError: String? = null
+        val a = auth
+        if (a != null && a.currentUser == null) {
+            try {
+                a.signInAnonymously().await()
+            } catch (authEx: Exception) {
+                Log.w("AuthRepository", "Anonymous sign-in failed: ${authEx.message}")
+                authError = authEx.message
+            }
+        }
 
         val fs = firestore ?: return Result.failure(Exception(CONNECTION_PROBLEM))
         val coupleDocRef = fs.collection("couples").document(coupleId)
@@ -479,6 +486,10 @@ class AuthRepository(private val context: Context) {
             coupleDocRef.get().await()
         } catch (e: Exception) {
             Log.w("AuthRepository", "Couple check failed: ${e.message}")
+            val msg = e.message.orEmpty()
+            if (msg.contains("PERMISSION_DENIED", ignoreCase = true) || authError?.contains("disabled", ignoreCase = true) == true) {
+                return Result.failure(Exception("Authentication error: Please enable 'Anonymous' authentication in Firebase Console (Authentication > Sign-in method)."))
+            }
             return Result.failure(Exception(CONNECTION_PROBLEM))
         }
 
