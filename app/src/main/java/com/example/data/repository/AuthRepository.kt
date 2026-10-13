@@ -485,10 +485,13 @@ class AuthRepository(private val context: Context) {
         val coupleSnap = try {
             coupleDocRef.get().await()
         } catch (e: Exception) {
-            Log.w("AuthRepository", "Couple check failed: ${e.message}")
+            Log.w("AuthRepository", "Couple check failed: ${e.message}", e)
             val msg = e.message.orEmpty()
-            if (msg.contains("PERMISSION_DENIED", ignoreCase = true) || authError?.contains("disabled", ignoreCase = true) == true) {
-                return Result.failure(Exception("Authentication error: Please enable 'Anonymous' authentication in Firebase Console (Authentication > Sign-in method)."))
+            if (authError != null) {
+                return Result.failure(Exception("Authentication failed: $authError"))
+            }
+            if (msg.contains("PERMISSION_DENIED", ignoreCase = true)) {
+                return Result.failure(Exception("Authentication error: Permission denied reading couple space."))
             }
             return Result.failure(Exception(CONNECTION_PROBLEM))
         }

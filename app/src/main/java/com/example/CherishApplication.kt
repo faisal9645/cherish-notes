@@ -88,7 +88,9 @@ class CherishApplication : Application(), coil.ImageLoaderFactory {
             }
             if (FirebaseApp.getApps(this).isEmpty()) {
                 val rawKey = BuildConfig.FIREBASE_API_KEY
-                val apiKey = if (rawKey.isBlank() || rawKey == "YOUR_FIREBASE_API_KEY") "AIzaSyPlaceholderForFirebaseInit" else rawKey
+                val apiKey = if (rawKey.isBlank() || rawKey.startsWith("DEFAULT_") || rawKey == "YOUR_FIREBASE_API_KEY") {
+                    "AIzaSyCYWCJQpzY9bZV9YFxzePy8ti9pL6Z1HQ4"
+                } else rawKey
                 val options = com.google.firebase.FirebaseOptions.Builder()
                     .setApplicationId("1:589800064404:android:48e44687a5abaab671bb81")
                     .setApiKey(apiKey)
