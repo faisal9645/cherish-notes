@@ -26,7 +26,7 @@ import kotlinx.coroutines.flow.asSharedFlow
  */
 object ThinkingOfYou {
     /** A heartbeat older than this (or this far in the future, for clock differences) is dropped. */
-    private const val FRESH_WINDOW_MS = 45_000L
+    private const val FRESH_WINDOW_MS = 120_000L
     private const val PREFS = "cherish_love"
     private const val KEY_LAST_SIGNAL = "last_heartbeat_signal"
 
@@ -51,12 +51,16 @@ object ThinkingOfYou {
 
         val now = System.currentTimeMillis()
         val effectiveSentAt = if (sentAt <= 0L) now else sentAt
-        if (kotlin.math.abs(now - effectiveSentAt) > FRESH_WINDOW_MS) return false
+        if (kotlin.math.abs(now - effectiveSentAt) > FRESH_WINDOW_MS) {
+            Log.d("ThinkingOfYou", "Heartbeat $signalId dropped: outside fresh window (${now - effectiveSentAt}ms)")
+            return false
+        }
 
         val secPrefs = SecurityPreferences.getInstance(context)
-        if (!secPrefs.isHeartbeatTriggerEnabled()) return false
-        if (!secPrefs.isNotificationsEnabled()) return false
-        if (!NotificationManagerCompat.from(context).areNotificationsEnabled()) return false
+        if (!secPrefs.isHeartbeatTriggerEnabled()) {
+            Log.d("ThinkingOfYou", "Heartbeat trigger is disabled in settings")
+            return false
+        }
 
         // Acquire a brief partial wake lock so the heartbeat vibration pattern completes
         // even if the phone screen is off or app is closed in background
@@ -65,6 +69,7 @@ object ThinkingOfYou {
         try {
             wakeLock?.acquire(2000L)
             playHeartbeat(context)
+            Log.d("ThinkingOfYou", "Heartbeat vibration played successfully for $signalId")
         } finally {
             if (wakeLock?.isHeld == true) {
                 try { wakeLock.release() } catch (_: Exception) {}
@@ -74,11 +79,13 @@ object ThinkingOfYou {
         _received.tryEmit(System.currentTimeMillis())
 
         // When the app is closed or in the background, alert according to user disguise & badge preferences
-        if (!NotificationHelper.isAppOpenOnScreen(context)) {
+        if (!NotificationHelper.isAppOpenOnScreen(context) && secPrefs.isNotificationsEnabled()) {
             if (secPrefs.isBadgeNotificationEnabled()) {
                 NotificationHelper.updateLauncherBadge(context, 1)
             }
-            NotificationHelper.showHeartbeatNotification(context)
+            if (NotificationManagerCompat.from(context).areNotificationsEnabled()) {
+                NotificationHelper.showHeartbeatNotification(context)
+            }
         }
 
         return true

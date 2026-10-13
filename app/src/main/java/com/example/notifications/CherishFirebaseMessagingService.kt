@@ -23,9 +23,24 @@ class CherishFirebaseMessagingService : FirebaseMessagingService() {
      */
     override fun onMessageReceived(remoteMessage: RemoteMessage) {
         super.onMessageReceived(remoteMessage)
-        val app = applicationContext as? com.example.CherishApplication ?: return
-        if (!app.authRepository.isUserLoggedIn()) return
-        if (remoteMessage.data["senderId"] == app.authRepository.getCurrentUserId()) return
+        Log.d("CherishFCM", "Push received: data=${remoteMessage.data}, notification=${remoteMessage.notification?.title}")
+
+        val app = applicationContext as? com.example.CherishApplication ?: run {
+            Log.w("CherishFCM", "applicationContext is not CherishApplication")
+            return
+        }
+
+        if (!app.authRepository.isUserLoggedIn()) {
+            Log.w("CherishFCM", "User is not logged in, skipping message notification")
+            return
+        }
+
+        val myUid = app.authRepository.getCurrentUserId()
+        val senderId = remoteMessage.data["senderId"]
+        if (!senderId.isNullOrBlank() && myUid.isNotBlank() && senderId == myUid) {
+            Log.d("CherishFCM", "Message sent by self ($senderId), skipping notification")
+            return
+        }
 
         // "Thinking of you": a heartbeat pulse and notification based on settings
         if (remoteMessage.data["type"] == "heartbeat") {
@@ -54,9 +69,11 @@ class CherishFirebaseMessagingService : FirebaseMessagingService() {
 
         // If user is inside the Cherish app on screen, never show system notification
         if (NotificationHelper.isAppOpenOnScreen(applicationContext)) {
+            Log.d("CherishFCM", "App is open on screen, suppressing status bar notification")
             return
         }
 
+        Log.d("CherishFCM", "Posting notification from $senderName, messageId=$messageId")
         NotificationHelper.showMessageNotification(
             context = applicationContext,
             senderName = senderName,

@@ -138,7 +138,7 @@ object NotificationHelper {
             }
         }
 
-        pendingUnreadCount.incrementAndGet()
+        val unreadCount = pendingUnreadCount.incrementAndGet()
         val prefs = SecurityPreferences.getInstance(context)
         val isNotifBarEnabled = prefs.isNotificationsEnabled()
         val isBadgeEnabled = prefs.isBadgeNotificationEnabled()
@@ -148,19 +148,14 @@ object NotificationHelper {
             return
         }
 
-        // Launcher icon badge always shows 1 only, even with multiple messages, until the app is opened
+        // Launcher icon badge always shows unread count (or 1) until the app is opened
         if (isBadgeEnabled) {
-            updateLauncherBadge(context, 1)
+            updateLauncherBadge(context, unreadCount.coerceAtLeast(1))
         } else {
             updateLauncherBadge(context, 0)
         }
 
-        // Notification triggers 1 time only until the app is opened
-        val alreadyTriggered = isNotificationAlertTriggered.getAndSet(true)
-        if (alreadyTriggered) {
-            // Already triggered once while closed; keep badge at 1 and avoid re-alerting until opened
-            return
-        }
+        isNotificationAlertTriggered.set(true)
 
         // If notification bar is turned off, do not post status bar notification
         if (!isNotifBarEnabled) {
@@ -210,8 +205,7 @@ object NotificationHelper {
             .setContentText(if (isDiscreet) maskedText else displayText)
             .setSubText(subText)
             .setBadgeIconType(if (isBadgeEnabled) NotificationCompat.BADGE_ICON_SMALL else NotificationCompat.BADGE_ICON_NONE)
-            .setNumber(if (isBadgeEnabled) 1 else 0)
-            .setOnlyAlertOnce(true)
+            .setNumber(if (isBadgeEnabled) unreadCount.coerceAtLeast(1) else 0)
             .build()
 
         val notification = NotificationCompat.Builder(context, CHANNEL_MESSAGES_ID)
@@ -226,7 +220,7 @@ object NotificationHelper {
             .apply {
                 if (isBadgeEnabled) {
                     setBadgeIconType(NotificationCompat.BADGE_ICON_SMALL)
-                    setNumber(1)
+                    setNumber(unreadCount.coerceAtLeast(1))
                 } else {
                     setBadgeIconType(NotificationCompat.BADGE_ICON_NONE)
                     setNumber(0)
@@ -239,13 +233,16 @@ object NotificationHelper {
             .setCategory(NotificationCompat.CATEGORY_MESSAGE)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setPublicVersion(publicNotification)
-            .setOnlyAlertOnce(true)
             .build()
 
         try {
+            createNotificationChannels(context)
             NotificationManagerCompat.from(context).notify(NOTIFICATION_ID_MESSAGE, notification)
-        } catch (_: SecurityException) {
-            // Handled if POST_NOTIFICATIONS runtime permission not yet prompted
+            android.util.Log.d("NotificationHelper", "Message notification posted successfully (unread: $unreadCount)")
+        } catch (e: SecurityException) {
+            android.util.Log.w("NotificationHelper", "POST_NOTIFICATIONS runtime permission not granted: ${e.message}")
+        } catch (e: Exception) {
+            android.util.Log.e("NotificationHelper", "Failed to post notification", e)
         }
     }
 

@@ -263,10 +263,12 @@ class AuthRepository(private val context: Context) {
         if (localUser != null && localUser.id.isNotBlank()) {
             // Every start: keep this phone's push address on the profile current, so message
             // notifications arrive even when the app is closed
-            updateFcmToken(localUser.id)
-            listenToCurrentUser(localUser.id)
-            connectPartnerListenerOnce()
-            localUser.coupleId?.trim()?.ifBlank { null }?.let { listenToCoupleRoom(it, localUser.id) }
+            ensureFirebaseAuth {
+                updateFcmToken(localUser.id)
+                listenToCurrentUser(localUser.id)
+                connectPartnerListenerOnce()
+                localUser.coupleId?.trim()?.ifBlank { null }?.let { listenToCoupleRoom(it, localUser.id) }
+            }
         }
 
         // When disguise state changes (e.g. entering Notes), update presence immediately
@@ -277,12 +279,36 @@ class AuthRepository(private val context: Context) {
         }
     }
 
+    fun ensureFirebaseAuth(onReady: () -> Unit = {}) {
+        val a = auth ?: run {
+            onReady()
+            return
+        }
+        if (a.currentUser != null) {
+            onReady()
+            return
+        }
+        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+            try {
+                a.signInAnonymously().await()
+                Log.i("AuthRepository", "Firebase anonymous authentication established")
+            } catch (e: Exception) {
+                Log.w("AuthRepository", "Firebase anonymous authentication failed", e)
+            }
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                onReady()
+            }
+        }
+    }
+
     /**
      * Logged in = a couple login was made on this phone (saved session). The Firebase anonymous
      * sign-in alone doesn't count: it also happens before a login's details are checked.
      */
     fun isUserLoggedIn(): Boolean {
-        return _currentUserState.value != null
+        if (_currentUserState.value != null) return true
+        val prefs = context.getSharedPreferences("cherish_user_session", Context.MODE_PRIVATE)
+        return !prefs.getString("uid", null).isNullOrBlank()
     }
 
     /**
@@ -291,7 +317,10 @@ class AuthRepository(private val context: Context) {
      * versions created a stray users/local_user_a that way).
      */
     fun getCurrentUserId(): String {
-        return _currentUserState.value?.id?.trim().orEmpty()
+        val stateId = _currentUserState.value?.id?.trim().orEmpty()
+        if (stateId.isNotBlank()) return stateId
+        return context.getSharedPreferences("cherish_user_session", Context.MODE_PRIVATE)
+            .getString("uid", "")?.trim().orEmpty()
     }
 
     /** This user's profile document; null when nobody is logged in, so nothing gets written. */
@@ -400,15 +429,23 @@ class AuthRepository(private val context: Context) {
      */
     fun sendThinkingOfYou(): Boolean {
         val uid = getCurrentUserId()
-        val coupleRef = getCoupleDocRef(_currentUserState.value?.coupleId) ?: return false
         if (uid.isBlank()) return false
+        val coupleId = _currentUserState.value?.coupleId?.trim()?.ifBlank { null } ?: getSavedCoupleId()
+        val coupleRef = getCoupleDocRef(coupleId) ?: return false
         val signal = mapOf(
             "id" to java.util.UUID.randomUUID().toString(),
             "type" to "heartbeat",
             "senderId" to uid,
             "at" to com.google.firebase.firestore.FieldValue.serverTimestamp()
         )
-        coupleRef.set(mapOf("signal" to signal), com.google.firebase.firestore.SetOptions.merge())
+        ensureFirebaseAuth {
+            try {
+                coupleRef.set(mapOf("signal" to signal), com.google.firebase.firestore.SetOptions.merge())
+                Log.d("AuthRepository", "Heartbeat signal dispatched for couple $coupleId")
+            } catch (e: Exception) {
+                Log.w("AuthRepository", "Failed to dispatch heartbeat signal: ${e.message}")
+            }
+        }
         return true
     }
 
@@ -664,6 +701,28 @@ class AuthRepository(private val context: Context) {
                         "password" to pass
                     )
                     userDocRef.set(updates, com.google.firebase.firestore.SetOptions.merge())
+
+                    // Also ensure couples document is created/linked for push notifications & heartbeat
+                    val coupleDocRef = fs.collection("couples").document(coupleId)
+                    val currentAuthUid = auth?.currentUser?.uid
+                    val coupleUpdates = mutableMapOf<String, Any>(
+                        "id" to coupleId,
+                        "updatedAt" to System.currentTimeMillis()
+                    )
+                    if (partnerId.isNullOrBlank()) {
+                        coupleUpdates["partner1Id"] = uid
+                        coupleUpdates["partner1Name"] = displayName
+                    } else {
+                        coupleUpdates["partner1Id"] = uid
+                        coupleUpdates["partner1Name"] = displayName
+                        coupleUpdates["partner2Id"] = partnerId
+                        coupleUpdates["partner2Name"] = cleanPartner.replaceFirstChar { it.uppercase() }
+                    }
+                    if (currentAuthUid != null) {
+                        coupleUpdates["memberUids"] = com.google.firebase.firestore.FieldValue.arrayUnion(currentAuthUid)
+                    }
+                    coupleDocRef.set(coupleUpdates, com.google.firebase.firestore.SetOptions.merge())
+
                     updateFcmToken(uid)
                 }
             } catch (e: Exception) {
@@ -1421,11 +1480,17 @@ class AuthRepository(private val context: Context) {
     fun saveFcmToken(token: String) {
         val uid = getCurrentUserId()
         if (uid.isBlank() || token.isBlank()) return
-        try {
-            userDocument(uid)?.set(mapOf("fcmToken" to token), com.google.firebase.firestore.SetOptions.merge())
-            Log.i("AuthRepository", "FCM token saved successfully for user $uid")
-        } catch (e: Exception) {
-            Log.w("AuthRepository", "Failed saving FCM token: ${e.message}")
+        context.getSharedPreferences("cherish_user_session", Context.MODE_PRIVATE)
+            .edit()
+            .putString("fcmToken", token)
+            .apply()
+        ensureFirebaseAuth {
+            try {
+                userDocument(uid)?.set(mapOf("fcmToken" to token), com.google.firebase.firestore.SetOptions.merge())
+                Log.i("AuthRepository", "FCM token saved successfully for user $uid")
+            } catch (e: Exception) {
+                Log.w("AuthRepository", "Failed saving FCM token: ${e.message}")
+            }
         }
     }
 
@@ -1437,8 +1502,14 @@ class AuthRepository(private val context: Context) {
             messaging.token
                 .addOnSuccessListener { token ->
                     if (!token.isNullOrBlank()) {
-                        userDocument(uid)?.set(mapOf("fcmToken" to token), com.google.firebase.firestore.SetOptions.merge())
-                        Log.i("AuthRepository", "FCM token updated successfully for user $uid")
+                        context.getSharedPreferences("cherish_user_session", Context.MODE_PRIVATE)
+                            .edit()
+                            .putString("fcmToken", token)
+                            .apply()
+                        ensureFirebaseAuth {
+                            userDocument(uid)?.set(mapOf("fcmToken" to token), com.google.firebase.firestore.SetOptions.merge())
+                            Log.i("AuthRepository", "FCM token updated successfully for user $uid")
+                        }
                     }
                 }
                 .addOnFailureListener { e ->
@@ -1512,8 +1583,9 @@ class AuthRepository(private val context: Context) {
     private fun loadLocalUserSession() {
         val prefs = context.getSharedPreferences("cherish_user_session", Context.MODE_PRIVATE)
         val rawUid = prefs.getString("uid", null)?.trim()?.ifBlank { null }
-        val rawCoupleId = prefs.getString("coupleId", null)?.trim()?.ifBlank { null }
-        if (rawUid != null && rawCoupleId != null) {
+        if (rawUid != null) {
+            val rawCoupleId = prefs.getString("coupleId", null)?.trim()?.ifBlank { null }
+                ?: securityPrefs.getCoupleSecretKey().trim().ifBlank { null }
             val uid = rawUid
             val targetTime = prefs.getLong("checkAfterTimeMillis", 0L)
             val note = prefs.getString("checkAfterNote", "") ?: ""

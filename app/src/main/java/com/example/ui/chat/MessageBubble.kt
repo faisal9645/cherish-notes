@@ -107,10 +107,13 @@ fun MessageBubble(
     }
 
     val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+    val isAmoledBlack = com.example.ui.theme.LocalAmoledBlack.current
 
     val bubbleBg = if (isPrivateMode) {
         if (isFromMe) {
-            if (isDark) PrivateBubbleDark else PrivateBubbleLight
+            if (isAmoledBlack) Color(0xFF212121)
+            else if (isDark) Color(0xFF2F2F2F)
+            else PrivateBubbleLight
         } else {
             Color.Transparent
         }
@@ -1323,9 +1326,9 @@ private fun ReplyIndicator(
     }
 }
 
-/** My bubble in private chat, dark and light: ChatGPT's deep blue. */
-internal val PrivateBubbleDark = Color(0xFF0B1F78)
-internal val PrivateBubbleLight = Color(0xFFDCE6FF)
+/** My bubble in private chat, dark and light: sleek ChatGPT tones. */
+internal val PrivateBubbleDark = Color(0xFF2F2F2F)
+internal val PrivateBubbleLight = Color(0xFFE5E5EA)
 
 /** The small icons under my partner's message in private chat: copy, 👍, 👎, read aloud, share, more. */
 @Composable

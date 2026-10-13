@@ -2031,7 +2031,11 @@ fun ChatScreen(
                                 }
                             }
                         },
-                        containerColor = if (isPrivate) (if (isDark) PrivateChromeDark else PrivateChromeLight) else MaterialTheme.colorScheme.primaryContainer,
+                        containerColor = if (isPrivate) {
+                            if (isDark) {
+                                if (com.example.ui.theme.LocalAmoledBlack.current) Color(0xFF171717) else PrivateChromeDark
+                            } else PrivateChromeLight
+                        } else MaterialTheme.colorScheme.primaryContainer,
                         contentColor = if (isPrivate) (if (isDark) Color(0xFFECECEC) else Color(0xFF0D0D0D)) else MaterialTheme.colorScheme.onPrimaryContainer,
                         shape = CircleShape
                     ) {
@@ -4568,12 +4572,15 @@ private fun PrivateRoundButton(
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit
 ) {
+    val isAmoled = com.example.ui.theme.LocalAmoledBlack.current
+    val bg = if (isDark) (if (isAmoled) Color(0xFF171717) else PrivateChromeDark) else PrivateChromeLight
+    val edge = if (isDark) (if (isAmoled) Color(0xFF262626) else PrivateChromeEdgeDark) else PrivateChromeEdgeLight
     Box(
         contentAlignment = Alignment.Center,
         modifier = modifier
             .clip(CircleShape)
-            .background(if (isDark) PrivateChromeDark else PrivateChromeLight)
-            .border(1.dp, if (isDark) PrivateChromeEdgeDark else PrivateChromeEdgeLight, CircleShape)
+            .background(bg)
+            .border(1.dp, edge, CircleShape)
             .clickable(onClick = onClick)
     ) { content() }
 }

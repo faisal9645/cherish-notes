@@ -278,18 +278,23 @@ fun MessageComposer(
     }
 
     val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+    val isAmoled = com.example.ui.theme.LocalAmoledBlack.current
     val barBg = if (isPrivateMode) {
         if (isDark) Color.Black else Color.White
     } else {
         MaterialTheme.colorScheme.surface
     }
     val pillBg = if (isPrivateMode) {
-        if (isDark) Color(0xFF2A2A2A) else Color(0xFFF2F2F2)
+        if (isAmoled) Color(0xFF171717)
+        else if (isDark) Color(0xFF2A2A2A)
+        else Color(0xFFF2F2F2)
     } else {
         if (isDark) darkSurface(Color(0xFF1E2638)) else Color.White
     }
     val pillBorder = if (isPrivateMode) {
-        if (isDark) Color(0xFF353535) else Color(0xFFE3E3E3)
+        if (isAmoled) Color(0xFF262626)
+        else if (isDark) Color(0xFF353535)
+        else Color(0xFFE3E3E3)
     } else {
         if (isDark) darkSurface(Color(0xFF2A364F), Color(0xFF262626)) else Color(0xFFE2E8F0)
     }
@@ -972,7 +977,7 @@ fun MessageComposer(
                             val nothingToSend = text.isBlank()
                             val sendBg = if (isPrivateMode) {
                                 if (nothingToSend) {
-                                    if (isDark) Color(0xFF2F2F2F) else Color(0xFFE5E5EA)
+                                    if (isAmoled) Color(0xFF1E1E1E) else if (isDark) Color(0xFF2F2F2F) else Color(0xFFE5E5EA)
                                 } else {
                                     if (isDark) Color.White else Color(0xFF000000)
                                 }
@@ -1580,16 +1585,17 @@ fun ReplyPreviewCard(
     modifier: Modifier = Modifier
 ) {
     val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+    val isAmoled = com.example.ui.theme.LocalAmoledBlack.current
     val accent = if (isPrivateMode) Color(0xFF10A37F) else MaterialTheme.colorScheme.primary
     val cardColor = when {
-        isPrivateMode -> if (isDark) Color(0xFF2F2F2F) else Color(0xFFF4F4F4)
+        isPrivateMode -> if (isAmoled) Color(0xFF171717) else if (isDark) Color(0xFF2F2F2F) else Color(0xFFF4F4F4)
         isDark -> darkSurface(Color(0xFF263049), Color(0xFF181818))
         else -> androidx.compose.ui.graphics.lerp(Color.White, accent, 0.07f)
     }
     Surface(
         shape = RoundedCornerShape(14.dp),
         color = cardColor,
-        border = BorderStroke(1.dp, if (isPrivateMode) (if (isDark) Color(0xFF383838) else Color(0xFFE5E5E5)) else accent.copy(alpha = if (isDark) 0.35f else 0.22f)),
+        border = BorderStroke(1.dp, if (isPrivateMode) (if (isAmoled) Color(0xFF262626) else if (isDark) Color(0xFF383838) else Color(0xFFE5E5E5)) else accent.copy(alpha = if (isDark) 0.35f else 0.22f)),
         shadowElevation = 6.dp,
         modifier = modifier
     ) {
