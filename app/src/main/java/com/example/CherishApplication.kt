@@ -126,6 +126,9 @@ class CherishApplication : Application(), coil.ImageLoaderFactory {
         com.example.call.CallManager.init(this)
         com.example.call.CallManager.watchForIncomingCalls()
 
+        // Background sync: messages, calls, and heartbeats when app is closed or minimized
+        com.example.sync.CherishSyncService.start(this)
+
         com.example.notifications.NoteReminderScheduler.rescheduleAllUpcomingReminders(this, notesRepository)
         com.example.update.OtaUpdateManager.getInstance(this).cleanupDownloadedInstallers()
 

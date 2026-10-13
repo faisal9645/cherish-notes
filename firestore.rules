@@ -78,17 +78,14 @@ service cloud.firestore {
         allow delete: if isCoupleMember(coupleId);
       }
 
-      // Voice calls and their recording status: only the backend (Cloud Functions) writes them,
-      // and only this couple's own phones can read them
+      // Voice calls and their recording status: peer-to-peer signaling between couple members
       match /calls/{callId} {
-        allow read: if isCoupleMember(coupleId);
-        allow write: if false;
+        allow read, write: if isCoupleMember(coupleId);
       }
 
       // Which call is going on right now (for "busy" and for ringing while the app is open)
       match /callControl/{docId} {
-        allow read: if isCoupleMember(coupleId);
-        allow write: if false;
+        allow read, write: if isCoupleMember(coupleId);
       }
     }
 

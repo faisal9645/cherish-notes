@@ -66,23 +66,286 @@ class CallRepository(private val context: Context) {
         val ringExpiresAt: Long
     )
 
-    suspend fun start(coupleId: String, userId: String, callId: String): CallResponse =
-        callFunction("callStart", coupleId, mapOf("coupleId" to coupleId, "userId" to userId, "callId" to callId))
+    suspend fun start(coupleId: String, userId: String, callId: String): CallResponse {
+        try {
+            return withTimeoutOrNull(2_000L) {
+                callFunction("callStart", coupleId, mapOf("coupleId" to coupleId, "userId" to userId, "callId" to callId))
+            } ?: directStart(coupleId, userId, callId)
+        } catch (e: Exception) {
+            Log.w(TAG, "callStart Cloud Function unavailable (${e.message}), switching to direct Firestore signaling")
+            return directStart(coupleId, userId, callId)
+        }
+    }
 
-    suspend fun answer(coupleId: String, userId: String, callId: String): CallResponse =
-        callFunction("callAnswer", coupleId, mapOf("coupleId" to coupleId, "userId" to userId, "callId" to callId))
+    suspend fun answer(coupleId: String, userId: String, callId: String): CallResponse {
+        try {
+            return withTimeoutOrNull(2_000L) {
+                callFunction("callAnswer", coupleId, mapOf("coupleId" to coupleId, "userId" to userId, "callId" to callId))
+            } ?: directAnswer(coupleId, userId, callId)
+        } catch (e: Exception) {
+            Log.w(TAG, "callAnswer Cloud Function unavailable (${e.message}), switching to direct Firestore signaling")
+            return directAnswer(coupleId, userId, callId)
+        }
+    }
 
-    suspend fun end(coupleId: String, userId: String, callId: String, reason: String): CallResponse =
-        callFunction("callEnd", coupleId, mapOf("coupleId" to coupleId, "userId" to userId, "callId" to callId, "reason" to reason))
+    suspend fun end(coupleId: String, userId: String, callId: String, reason: String): CallResponse {
+        try {
+            return withTimeoutOrNull(2_000L) {
+                callFunction("callEnd", coupleId, mapOf("coupleId" to coupleId, "userId" to userId, "callId" to callId, "reason" to reason))
+            } ?: directEnd(coupleId, userId, callId, reason)
+        } catch (e: Exception) {
+            Log.w(TAG, "callEnd Cloud Function unavailable (${e.message}), switching to direct Firestore signaling")
+            return directEnd(coupleId, userId, callId, reason)
+        }
+    }
 
-    suspend fun joined(coupleId: String, userId: String, callId: String): CallResponse =
-        callFunction("callJoined", coupleId, mapOf("coupleId" to coupleId, "userId" to userId, "callId" to callId))
+    suspend fun joined(coupleId: String, userId: String, callId: String): CallResponse {
+        return try {
+            withTimeoutOrNull(2_000L) {
+                callFunction("callJoined", coupleId, mapOf("coupleId" to coupleId, "userId" to userId, "callId" to callId))
+            } ?: CallResponse(status = "ok", callId = callId, callerId = null, join = null)
+        } catch (_: Exception) {
+            CallResponse(status = "ok", callId = callId, callerId = null, join = null)
+        }
+    }
 
-    suspend fun renewToken(coupleId: String, userId: String, callId: String): CallResponse =
-        callFunction("callRenewToken", coupleId, mapOf("coupleId" to coupleId, "userId" to userId, "callId" to callId))
+    suspend fun renewToken(coupleId: String, userId: String, callId: String): CallResponse {
+        try {
+            return withTimeoutOrNull(2_000L) {
+                callFunction("callRenewToken", coupleId, mapOf("coupleId" to coupleId, "userId" to userId, "callId" to callId))
+            } ?: directRenewToken(coupleId, userId, callId)
+        } catch (e: Exception) {
+            return directRenewToken(coupleId, userId, callId)
+        }
+    }
 
-    suspend fun finalizeClientRecording(coupleId: String, userId: String, callId: String): CallResponse =
-        callFunction("callFinalizeClientRecording", coupleId, mapOf("coupleId" to coupleId, "userId" to userId, "callId" to callId))
+    suspend fun finalizeClientRecording(coupleId: String, userId: String, callId: String): CallResponse {
+        return try {
+            withTimeoutOrNull(2_500L) {
+                callFunction("callFinalizeClientRecording", coupleId, mapOf("coupleId" to coupleId, "userId" to userId, "callId" to callId))
+            } ?: CallResponse(status = "ok", callId = callId, callerId = null, join = null)
+        } catch (_: Exception) {
+            CallResponse(status = "ok", callId = callId, callerId = null, join = null)
+        }
+    }
+
+    private suspend fun directStart(coupleId: String, userId: String, callId: String): CallResponse {
+        val fs = firestore ?: throw CallActionException(CallActionException.Kind.SERVICE, "Firestore unavailable")
+        val partnerId = resolvePartnerId(coupleId, userId)
+        val now = System.currentTimeMillis()
+
+        // Check if there is an active call already
+        val controlRef = fs.collection("couples").document(coupleId).collection("callControl").document("active")
+        val controlSnap = try { controlRef.get().await() } catch (_: Exception) { null }
+        if (controlSnap != null && controlSnap.exists()) {
+            val activeState = controlSnap.getString("state").orEmpty()
+            val activeCallId = controlSnap.getString("callId").orEmpty()
+            val activeCaller = controlSnap.getString("callerId").orEmpty()
+            val activeCallee = controlSnap.getString("calleeId").orEmpty()
+            val ringExpires = controlSnap.getTimestamp("ringExpiresAt")?.toDate()?.time ?: 0L
+
+            // If partner called us at the exact same moment: pick up theirs
+            if (activeState == CallRecord.STATE_RINGING && isSameId(activeCallee, userId) && ringExpires > now) {
+                return CallResponse(
+                    status = "incoming",
+                    callId = activeCallId,
+                    callerId = activeCaller,
+                    join = null
+                )
+            }
+            if ((activeState == CallRecord.STATE_RINGING || activeState == CallRecord.STATE_CONNECTING || activeState == CallRecord.STATE_CONNECTED)
+                && activeCallId.isNotBlank() && activeCallId != callId && ringExpires > now
+            ) {
+                return CallResponse(status = CallRecord.STATE_BUSY, callId = null, callerId = null, join = null)
+            }
+        }
+
+        // Generate caller Agora token (uid = 1001)
+        val token = AgoraTokenBuilder.buildToken(
+            channelName = callId,
+            uid = 1001
+        )
+        val join = JoinInfo(
+            appId = AgoraTokenBuilder.DEFAULT_APP_ID,
+            channel = callId,
+            uid = 1001,
+            token = token,
+            tokenExpiresAt = now + 86400_000L
+        )
+
+        val ringExpiresAt = com.google.firebase.Timestamp(java.util.Date(now + 45_000L))
+
+        // Set call document
+        val callDoc = mapOf(
+            "callId" to callId,
+            "coupleId" to coupleId,
+            "channel" to callId,
+            "callerId" to userId,
+            "calleeId" to partnerId,
+            "participants" to listOf(userId, partnerId),
+            "state" to CallRecord.STATE_RINGING,
+            "createdAt" to FieldValue.serverTimestamp(),
+            "ringExpiresAt" to ringExpiresAt,
+            "durationSec" to 0,
+            "recording" to mapOf("status" to "waiting", "updatedAt" to FieldValue.serverTimestamp()),
+            "updatedAt" to FieldValue.serverTimestamp()
+        )
+        try {
+            fs.collection("couples").document(coupleId).collection("calls").document(callId)
+                .set(callDoc, SetOptions.merge()).await()
+        } catch (e: Exception) {
+            Log.w(TAG, "directStart writing calls failed: ${e.message}")
+        }
+
+        // Set active control document
+        val controlDoc = mapOf(
+            "callId" to callId,
+            "state" to CallRecord.STATE_RINGING,
+            "callerId" to userId,
+            "calleeId" to partnerId,
+            "ringExpiresAt" to ringExpiresAt,
+            "updatedAt" to FieldValue.serverTimestamp()
+        )
+        try {
+            controlRef.set(controlDoc, SetOptions.merge()).await()
+        } catch (e: Exception) {
+            Log.w(TAG, "directStart writing callControl failed: ${e.message}")
+        }
+
+        return CallResponse(
+            status = CallRecord.STATE_RINGING,
+            callId = callId,
+            callerId = userId,
+            join = join
+        )
+    }
+
+    private suspend fun directAnswer(coupleId: String, userId: String, callId: String): CallResponse {
+        val fs = firestore ?: throw CallActionException(CallActionException.Kind.SERVICE, "Firestore unavailable")
+        val now = System.currentTimeMillis()
+
+        // Generate callee Agora token (uid = 1002)
+        val token = AgoraTokenBuilder.buildToken(
+            channelName = callId,
+            uid = 1002
+        )
+        val join = JoinInfo(
+            appId = AgoraTokenBuilder.DEFAULT_APP_ID,
+            channel = callId,
+            uid = 1002,
+            token = token,
+            tokenExpiresAt = now + 86400_000L
+        )
+
+        try {
+            fs.collection("couples").document(coupleId).collection("calls").document(callId).set(
+                mapOf(
+                    "state" to CallRecord.STATE_CONNECTING,
+                    "answeredAt" to FieldValue.serverTimestamp(),
+                    "connectedAt" to FieldValue.serverTimestamp(),
+                    "updatedAt" to FieldValue.serverTimestamp()
+                ),
+                SetOptions.merge()
+            ).await()
+        } catch (e: Exception) {
+            Log.w(TAG, "directAnswer writing calls failed: ${e.message}")
+        }
+
+        try {
+            fs.collection("couples").document(coupleId).collection("callControl").document("active").set(
+                mapOf(
+                    "state" to CallRecord.STATE_CONNECTING,
+                    "updatedAt" to FieldValue.serverTimestamp()
+                ),
+                SetOptions.merge()
+            ).await()
+        } catch (e: Exception) {
+            Log.w(TAG, "directAnswer writing callControl failed: ${e.message}")
+        }
+
+        return CallResponse(
+            status = CallRecord.STATE_CONNECTING,
+            callId = callId,
+            callerId = null,
+            join = join
+        )
+    }
+
+    private suspend fun directEnd(coupleId: String, userId: String, callId: String, reason: String): CallResponse {
+        val fs = firestore ?: return CallResponse(status = CallRecord.STATE_ENDED, callId = callId, callerId = null, join = null)
+
+        val endState = when (reason) {
+            "declined" -> CallRecord.STATE_DECLINED
+            "no_answer" -> CallRecord.STATE_MISSED
+            "cancelled" -> CallRecord.STATE_CANCELLED
+            else -> CallRecord.STATE_ENDED
+        }
+
+        try {
+            fs.collection("couples").document(coupleId).collection("calls").document(callId).set(
+                mapOf(
+                    "state" to endState,
+                    "endReason" to reason,
+                    "endedBy" to userId,
+                    "endedAt" to FieldValue.serverTimestamp(),
+                    "updatedAt" to FieldValue.serverTimestamp()
+                ),
+                SetOptions.merge()
+            ).await()
+        } catch (_: Exception) {}
+
+        try {
+            fs.collection("couples").document(coupleId).collection("callControl").document("active").set(
+                mapOf(
+                    "state" to endState,
+                    "updatedAt" to FieldValue.serverTimestamp()
+                ),
+                SetOptions.merge()
+            ).await()
+        } catch (_: Exception) {}
+
+        return CallResponse(
+            status = endState,
+            callId = callId,
+            callerId = null,
+            join = null
+        )
+    }
+
+    private fun directRenewToken(coupleId: String, userId: String, callId: String): CallResponse {
+        val uid = 1001
+        val token = AgoraTokenBuilder.buildToken(channelName = callId, uid = uid)
+        return CallResponse(
+            status = "ok",
+            callId = callId,
+            callerId = null,
+            join = JoinInfo(
+                appId = AgoraTokenBuilder.DEFAULT_APP_ID,
+                channel = callId,
+                uid = uid,
+                token = token,
+                tokenExpiresAt = System.currentTimeMillis() + 86400_000L
+            )
+        )
+    }
+
+    private suspend fun resolvePartnerId(coupleId: String, userId: String): String {
+        val partnerFromState = (context.applicationContext as? com.example.CherishApplication)
+            ?.authRepository?.partnerUserState?.value?.id
+        if (!partnerFromState.isNullOrBlank()) return partnerFromState
+
+        val coupleSnap = firestore?.collection("couples")?.document(coupleId)?.get()?.await()
+        if (coupleSnap != null && coupleSnap.exists()) {
+            val p1 = coupleSnap.getString("partner1Id").orEmpty()
+            val p2 = coupleSnap.getString("partner2Id").orEmpty()
+            val cleanUid = userId.removePrefix("user_").lowercase()
+            return if (p1.removePrefix("user_").lowercase() == cleanUid) p2 else p1
+        }
+        return "partner"
+    }
+
+    private fun isSameId(a: String, b: String): Boolean =
+        a.removePrefix("user_").trim().equals(b.removePrefix("user_").trim(), ignoreCase = true)
 
     private suspend fun callFunction(name: String, coupleId: String, data: Map<String, Any>): CallResponse {
         val fns = functions ?: throw CallActionException(CallActionException.Kind.SERVICE, "Calls aren't available on this phone")

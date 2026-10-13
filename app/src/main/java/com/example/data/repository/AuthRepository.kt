@@ -417,9 +417,10 @@ class AuthRepository(private val context: Context) {
                 // A "thinking of you" heartbeat from the partner while this app is running (when
                 // it isn't, the push brings it; whichever comes first plays, the other is ignored)
                 (snapshot.get("signal") as? Map<*, *>)?.let { signal ->
-                    val senderId = signal["senderId"] as? String
-                    if (signal["type"] == "heartbeat" && !senderId.isNullOrBlank() && senderId != cleanUid) {
-                        val sentAt = (signal["at"] as? com.google.firebase.Timestamp)?.toDate()?.time ?: 0L
+                    val senderId = signal["senderId"] as? String ?: ""
+                    val cleanSender = senderId.removePrefix("user_").lowercase()
+                    if (signal["type"] == "heartbeat" && cleanSender.isNotBlank() && cleanSender != cleanUid) {
+                        val sentAt = (signal["at"] as? com.google.firebase.Timestamp)?.toDate()?.time ?: System.currentTimeMillis()
                         com.example.notifications.ThinkingOfYou.onSignal(context, signal["id"] as? String ?: "", sentAt)
                     }
                 }

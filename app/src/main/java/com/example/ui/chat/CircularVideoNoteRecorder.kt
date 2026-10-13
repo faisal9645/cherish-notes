@@ -83,13 +83,9 @@ fun CircularVideoNoteRecorderDialog(
     var recordingStartTime by remember { mutableLongStateOf(0L) }
 
     var isRecording by remember { mutableStateOf(false) }
-    var isLocked by remember { mutableStateOf(false) }
     var isCancelled by remember { mutableStateOf(false) }
     var recordingDurationSec by remember { mutableIntStateOf(0) }
     var cameraFacing by remember { mutableIntStateOf(Camera.CameraInfo.CAMERA_FACING_FRONT) }
-
-    var dragOffsetX by remember { mutableFloatStateOf(0f) }
-    var dragOffsetY by remember { mutableFloatStateOf(0f) }
 
     var cameraRef by remember { mutableStateOf<Camera?>(null) }
     var cameraId by remember { mutableIntStateOf(0) }
@@ -390,11 +386,7 @@ fun CircularVideoNoteRecorderDialog(
                         Spacer(modifier = Modifier.width(8.dp))
                     }
                     Text(
-                        text = when {
-                            isLocked -> "🔒 Locked • Hands-free recording"
-                            isRecording -> "Recording Video Note..."
-                            else -> "Circular Video Note"
-                        },
+                        text = if (isRecording) "Recording Video Note..." else "Circular Video Note",
                         color = Color.White,
                         fontSize = 17.sp,
                         fontWeight = FontWeight.Bold
@@ -402,11 +394,7 @@ fun CircularVideoNoteRecorderDialog(
                 }
 
                 Text(
-                    text = when {
-                        isLocked -> "Tap check to send • Tap trash to discard"
-                        isRecording -> "Swipe up to lock • Slide left to cancel"
-                        else -> "Tap record for hands-free • Hold to record"
-                    },
+                    text = if (isRecording) "Tap check to send • Tap trash to discard" else "Tap record button to begin",
                     color = Color.White.copy(alpha = 0.75f),
                     fontSize = 13.sp
                 )
@@ -575,71 +563,10 @@ fun CircularVideoNoteRecorderDialog(
                             )
                         }
 
-                        // 🔴 Central Record Button (Tap for hands-free, or Hold to record)
+                        // 🔴 Central Record Button (Single tap to start recording)
                         Box(
                             modifier = Modifier
                                 .size(76.dp)
-                                .pointerInput(Unit) {
-                                    awaitEachGesture {
-                                        val down = awaitFirstDown(requireUnconsumed = false)
-                                        val startTime = System.currentTimeMillis()
-                                        dragOffsetX = 0f
-                                        dragOffsetY = 0f
-
-                                        if (!beginRecording()) {
-                                            failAndClose()
-                                            return@awaitEachGesture
-                                        }
-
-                                        var hasTriggeredLock = false
-                                        var hasTriggeredCancel = false
-
-                                        while (true) {
-                                            val event = awaitPointerEvent()
-                                            val change = event.changes.firstOrNull { it.id == down.id }
-                                            if (change == null || !change.pressed) break
-                                            change.consume()
-
-                                            val delta = change.position - down.position
-                                            dragOffsetX = delta.x.coerceAtMost(0f)
-                                            dragOffsetY = delta.y.coerceAtMost(0f)
-
-                                            // Swipe TOP (up) to lock threshold (-45f)
-                                            if (delta.y < -45f && !hasTriggeredLock) {
-                                                hasTriggeredLock = true
-                                                isLocked = true
-                                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                                dragOffsetX = 0f
-                                                dragOffsetY = 0f
-                                                break
-                                            }
-
-                                            // Slide LEFT to cancel threshold (-55f)
-                                            if (delta.x < -55f && !hasTriggeredCancel) {
-                                                hasTriggeredCancel = true
-                                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                                cancelAndDiscard()
-                                                break
-                                            }
-                                        }
-
-                                        // Finger released
-                                        dragOffsetX = 0f
-                                        dragOffsetY = 0f
-
-                                        if (!hasTriggeredLock && !hasTriggeredCancel) {
-                                            val elapsed = System.currentTimeMillis() - startTime
-                                            if (elapsed >= 1000L) {
-                                                // Hold confirmed: send immediately upon release
-                                                stopAndSend()
-                                            } else {
-                                                // Quick tap: lock into hands-free mode
-                                                isLocked = true
-                                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                            }
-                                        }
-                                    }
-                                }
                                 .clip(CircleShape)
                                 .background(
                                     Brush.radialGradient(
@@ -648,7 +575,14 @@ fun CircularVideoNoteRecorderDialog(
                                             RoseGoldPrimary
                                         )
                                     )
-                                ),
+                                )
+                                .clickable {
+                                    if (beginRecording()) {
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    } else {
+                                        failAndClose()
+                                    }
+                                },
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
@@ -684,185 +618,8 @@ fun CircularVideoNoteRecorderDialog(
                             )
                         }
                     }
-                } else if (!isLocked) {
-                    // HOLDING MODE: Shows Lock indicator above, Slide to Cancel on left, and Hold button
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        // Swipe Up to Lock Indicator
-                        AnimatedVisibility(
-                            visible = isRecording,
-                            enter = fadeIn() + slideInVertically { it },
-                            exit = fadeOut()
-                        ) {
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                modifier = Modifier
-                                    .padding(bottom = 12.dp)
-                                    .offset { IntOffset(0, (arrowBounce + (dragOffsetY * 0.2f)).roundToInt()) }
-                            ) {
-                                Surface(
-                                    shape = RoundedCornerShape(16.dp),
-                                    color = if (dragOffsetY < -45f) RoseGoldPrimary else Color.White.copy(alpha = 0.2f),
-                                    border = androidx.compose.foundation.BorderStroke(
-                                        1.dp,
-                                        if (dragOffsetY < -45f) Color.White else Color.White.copy(alpha = 0.3f)
-                                    )
-                                ) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
-                                    ) {
-                                        Icon(
-                                            imageVector = if (dragOffsetY < -45f) Icons.Default.LockOpen else Icons.Default.Lock,
-                                            contentDescription = "Lock",
-                                            tint = Color.White,
-                                            modifier = Modifier.size(16.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text(
-                                            text = if (dragOffsetY < -45f) "Release to Lock!" else "Swipe UP to lock",
-                                            color = Color.White,
-                                            fontSize = 12.5.sp,
-                                            fontWeight = FontWeight.SemiBold
-                                        )
-                                    }
-                                }
-                                Icon(
-                                    imageVector = Icons.Default.KeyboardArrowUp,
-                                    contentDescription = null,
-                                    tint = if (dragOffsetY < -45f) RoseGoldPrimary else Color.White.copy(alpha = 0.7f),
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
-                        }
-
-                        // Bottom Row: [ < < < Slide to cancel ] + [ Central Record Button ]
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.Center,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            // Slide to cancel hint
-                            AnimatedVisibility(
-                                visible = isRecording,
-                                enter = fadeIn(),
-                                exit = fadeOut()
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier
-                                        .padding(end = 16.dp)
-                                        .offset { IntOffset((dragOffsetX * 0.4f).roundToInt(), 0) }
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                        contentDescription = null,
-                                        tint = if (dragOffsetX < -60f) HeartRed else Color.White.copy(alpha = 0.6f),
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text(
-                                        text = if (dragOffsetX < -60f) "Release to Cancel!" else "< < Slide to cancel",
-                                        color = if (dragOffsetX < -60f) HeartRed else Color.White.copy(alpha = 0.75f),
-                                        fontSize = 12.5.sp,
-                                        fontWeight = FontWeight.Medium
-                                    )
-                                }
-                            }
-
-                            // Interactive Hold-to-Record Button
-                            Box(
-                                modifier = Modifier
-                                    .size(76.dp)
-                                    .pointerInput(Unit) {
-                                        awaitEachGesture {
-                                            val down = awaitFirstDown(requireUnconsumed = false)
-                                            val startTime = System.currentTimeMillis()
-                                            dragOffsetX = 0f
-                                            dragOffsetY = 0f
-
-                                            if (!isRecording && !beginRecording()) {
-                                                failAndClose()
-                                                return@awaitEachGesture
-                                            }
-
-                                            var hasTriggeredLock = false
-                                            var hasTriggeredCancel = false
-
-                                            while (true) {
-                                                val event = awaitPointerEvent()
-                                                val change = event.changes.firstOrNull { it.id == down.id }
-                                                if (change == null || !change.pressed) break
-                                                change.consume()
-
-                                                val delta = change.position - down.position
-                                                dragOffsetX = delta.x.coerceAtMost(0f)
-                                                dragOffsetY = delta.y.coerceAtMost(0f)
-
-                                                // Swipe TOP (up) to lock threshold (-45f)
-                                                if (delta.y < -45f && !hasTriggeredLock) {
-                                                    hasTriggeredLock = true
-                                                    isLocked = true
-                                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                                    dragOffsetX = 0f
-                                                    dragOffsetY = 0f
-                                                    break
-                                                }
-
-                                                // Slide LEFT to cancel threshold (-55f)
-                                                if (delta.x < -55f && !hasTriggeredCancel) {
-                                                    hasTriggeredCancel = true
-                                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                                    cancelAndDiscard()
-                                                    break
-                                                }
-                                            }
-
-                                            // Finger released
-                                            dragOffsetX = 0f
-                                            dragOffsetY = 0f
-
-                                            if (!hasTriggeredLock && !hasTriggeredCancel) {
-                                                val elapsed = System.currentTimeMillis() - startTime
-                                                if (elapsed >= 1000L || recordingDurationSec >= 1) {
-                                                    // Send immediately upon release
-                                                    stopAndSend()
-                                                } else {
-                                                    // Quick tap or short release: lock into hands-free so recording isn't lost
-                                                    isLocked = true
-                                                    Toast.makeText(context, "Hands-free active • Tap send when ready", Toast.LENGTH_SHORT).show()
-                                                }
-                                            }
-                                        }
-                                    }
-                                    .graphicsLayer {
-                                        translationX = dragOffsetX
-                                        translationY = dragOffsetY
-                                    }
-                                    .clip(CircleShape)
-                                    .background(
-                                        Brush.radialGradient(
-                                            colors = listOf(
-                                                HeartRed,
-                                                RoseGoldPrimary
-                                            )
-                                        )
-                                    ),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Videocam,
-                                    contentDescription = "Hold to record video note",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(38.dp)
-                                )
-                            }
-                        }
-                    }
                 } else {
-                    // LOCKED HANDS-FREE CONTROLS: [ 🗑️ Cancel ] [ 🔄 Flip Camera ] [ 🪞 Mirror Toggle ] [ ✈️ Send ]
+                    // RECORDING CONTROLS: [ 🗑️ Cancel ] [ 🔄 Flip Camera ] [ 🪞 Mirror Toggle ] [ ✈️ Send ]
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(24.dp),
                         verticalAlignment = Alignment.CenterVertically

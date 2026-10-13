@@ -1123,14 +1123,14 @@ fun ChatScreen(
                                 },
                                 modifier = Modifier
                                     .padding(start = 2.dp)
-                                    .size(34.dp)
+                                    .size(38.dp)
                                     .testTag("chat_back_button")
                             ) {
                                 Icon(
                                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                                     contentDescription = "Back",
                                     tint = MaterialTheme.colorScheme.onSurface,
-                                    modifier = Modifier.size(22.dp)
+                                    modifier = Modifier.size(24.dp)
                                 )
                             }
                         }
@@ -1142,7 +1142,7 @@ fun ChatScreen(
                             onClick = { viewModel.setSearching(false) },
                             modifier = Modifier.size(40.dp)
                         ) {
-                            Icon(Icons.Default.Close, contentDescription = "Close search", modifier = Modifier.size(23.dp))
+                            Icon(Icons.Default.Close, contentDescription = "Close search", modifier = Modifier.size(24.dp))
                         }
                     } else {
                         val isPrivateChat = uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE
@@ -1152,7 +1152,7 @@ fun ChatScreen(
                             Box(modifier = Modifier.padding(end = 6.dp)) {
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(2.dp)
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                                 ) {
                                     IconButton(
                                         onClick = { showClearChatDialog = true },
@@ -1220,52 +1220,53 @@ fun ChatScreen(
                         CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides androidx.compose.ui.unit.Dp.Unspecified) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(1.dp)
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                modifier = Modifier.padding(end = 4.dp)
                             ) {
                                 IconButton(
                                     onClick = startVoiceCall,
                                     modifier = Modifier
-                                        .size(32.dp)
+                                        .size(36.dp)
                                         .testTag("chat_call_button")
                                 ) {
-                                    Icon(Icons.Outlined.Call, contentDescription = "Voice call", tint = iconTint, modifier = Modifier.size(20.dp))
+                                    Icon(Icons.Outlined.Call, contentDescription = "Voice call", tint = iconTint, modifier = Modifier.size(23.dp))
                                 }
                                 IconButton(
                                     onClick = { viewModel.setSearching(true) },
                                     modifier = Modifier
-                                        .size(32.dp)
+                                        .size(36.dp)
                                         .testTag("chat_search_button")
                                 ) {
-                                    Icon(Icons.Default.Search, contentDescription = "Search messages", tint = iconTint, modifier = Modifier.size(20.dp))
+                                    Icon(Icons.Default.Search, contentDescription = "Search messages", tint = iconTint, modifier = Modifier.size(23.dp))
                                 }
                                 IconButton(
                                     onClick = onNavigateToGallery,
                                     modifier = Modifier
-                                        .size(32.dp)
+                                        .size(36.dp)
                                         .testTag("chat_gallery_button")
                                 ) {
-                                    Icon(Icons.Outlined.PhotoLibrary, contentDescription = "Couple Media Gallery", tint = iconTint, modifier = Modifier.size(20.dp))
+                                    Icon(Icons.Outlined.PhotoLibrary, contentDescription = "Couple Media Gallery", tint = iconTint, modifier = Modifier.size(23.dp))
                                 }
                                 IconButton(
                                     onClick = { viewModel.openCheckAfterSheet() },
                                     modifier = Modifier
-                                        .size(32.dp)
+                                        .size(36.dp)
                                         .testTag("chat_check_after_button")
                                 ) {
                                     Icon(
                                         imageVector = if (partnerHasCheckAfter || iHaveCheckAfter) Icons.Filled.HourglassTop else Icons.Outlined.HourglassTop,
                                         contentDescription = "Check After Timer",
                                         tint = if (partnerHasCheckAfter || iHaveCheckAfter) MaterialTheme.colorScheme.primary else iconTint,
-                                        modifier = Modifier.size(20.dp)
+                                        modifier = Modifier.size(23.dp)
                                     )
                                 }
 
                                 Box {
                                     IconButton(
                                         onClick = { showChatMenu = true },
-                                        modifier = Modifier.size(32.dp)
+                                        modifier = Modifier.size(36.dp)
                                     ) {
-                                        Icon(Icons.Default.MoreVert, contentDescription = "More options", tint = iconTint, modifier = Modifier.size(20.dp))
+                                        Icon(Icons.Default.MoreVert, contentDescription = "More options", tint = iconTint, modifier = Modifier.size(23.dp))
                                     }
                                     DropdownMenu(
                                         expanded = showChatMenu,

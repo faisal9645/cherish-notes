@@ -49,13 +49,6 @@ object ThinkingOfYou {
         if (prefs.getString(KEY_LAST_SIGNAL, null) == signalId) return false
         prefs.edit().putString(KEY_LAST_SIGNAL, signalId).apply()
 
-        val now = System.currentTimeMillis()
-        val effectiveSentAt = if (sentAt <= 0L) now else sentAt
-        if (kotlin.math.abs(now - effectiveSentAt) > FRESH_WINDOW_MS) {
-            Log.d("ThinkingOfYou", "Heartbeat $signalId dropped: outside fresh window (${now - effectiveSentAt}ms)")
-            return false
-        }
-
         val secPrefs = SecurityPreferences.getInstance(context)
         if (!secPrefs.isHeartbeatTriggerEnabled()) {
             Log.d("ThinkingOfYou", "Heartbeat trigger is disabled in settings")

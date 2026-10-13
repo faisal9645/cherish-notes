@@ -187,10 +187,17 @@ def upload_single_asset(token: str, repo: str, release: dict, apk_path: str, ass
 
     import time
     success = False
-    for attempt in range(1, 4):
+    for attempt in range(1, 6):
         try:
-            print(f"Upload attempt {attempt}/3 for {asset_name}...", flush=True)
-            resp = requests.post(url_with_param, headers=headers, data=ProgressReader(apk_path), timeout=600)
+            print(f"Upload attempt {attempt}/5 for {asset_name}...", flush=True)
+            reader = ProgressReader(apk_path)
+            try:
+                resp = requests.post(url_with_param, headers=headers, data=reader, timeout=600)
+            finally:
+                try:
+                    reader.f.close()
+                except Exception:
+                    pass
             if resp.status_code in (200, 201):
                 print(f"Upload succeeded for {asset_name}!", flush=True)
                 success = True
@@ -200,11 +207,11 @@ def upload_single_asset(token: str, repo: str, release: dict, apk_path: str, ass
         except Exception as e:
             print(f"Exception during upload of {asset_name}: {e}", flush=True)
 
-        if attempt < 3:
-            time.sleep(10)
+        if attempt < 5:
+            time.sleep(5)
 
     if not success:
-        print(f"Upload failed for {asset_name} after 3 attempts.", flush=True)
+        print(f"Upload failed for {asset_name} after 5 attempts.", flush=True)
         sys.exit(1)
 
     download_url = f"https://github.com/{repo}/releases/download/{release['tag_name']}/{asset_name}"

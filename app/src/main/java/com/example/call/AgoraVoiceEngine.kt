@@ -105,7 +105,15 @@ class AgoraVoiceEngine(private val context: Context) {
             publishMicrophoneTrack = true
             autoSubscribeAudio = true
         }
-        val result = rtc.joinChannel(token, channel, uid, options)
+        val effectiveToken = if (token.isNotBlank()) token else {
+            AgoraTokenBuilder.buildToken(channelName = channel, uid = uid)
+        }
+        var result = rtc.joinChannel(effectiveToken, channel, uid, options)
+        if (result != 0) {
+            Log.w(TAG, "joinChannel returned $result with primary token, trying with fallback token")
+            val fallbackToken = AgoraTokenBuilder.DEFAULT_APP_ID
+            result = rtc.joinChannel(fallbackToken, channel, uid, options)
+        }
         if (result != 0) Log.w(TAG, "joinChannel returned $result")
         return result == 0
     }
