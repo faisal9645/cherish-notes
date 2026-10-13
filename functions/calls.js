@@ -21,7 +21,7 @@ const { getMessaging } = require("firebase-admin/messaging");
 const { getStorage } = require("firebase-admin/storage");
 
 const logic = require("./lib/callLogic");
-const { buildRtcToken, createAgoraClient } = require("./lib/agora");
+const { buildRtcToken } = require("./lib/agora");
 
 const {
   CALL_STATE,
@@ -65,27 +65,53 @@ const recordingMessageRef = (coupleId, callId) =>
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-function agora() {
-  return createAgoraClient({
-    appId: AGORA_APP_ID.value(),
-    customerId: AGORA_CUSTOMER_ID.value(),
-    customerSecret: AGORA_CUSTOMER_SECRET.value(),
-  });
-}
-
 /** What a phone needs to join the call's channel as [uid]. */
 function joinInfo(callId, uid) {
+  let appId = "";
+  try {
+    appId = (process.env.AGORA_APP_ID || AGORA_APP_ID.value() || "").trim();
+  } catch (_) {
+    appId = (process.env.AGORA_APP_ID || "").trim();
+  }
+  let appCertificate = "";
+  try {
+    appCertificate = (process.env.AGORA_APP_CERTIFICATE || AGORA_APP_CERTIFICATE.value() || "").trim();
+  } catch (_) {
+    appCertificate = (process.env.AGORA_APP_CERTIFICATE || "").trim();
+  }
+
+  if (!appId) {
+    logger.error("AGORA_APP_ID is not configured in Cloud Functions", { callId });
+    throw new HttpsError(
+      "failed-precondition",
+      "AGORA_APP_ID is not configured in Firebase. Please add your Agora App ID to Cloud Functions."
+    );
+  }
+
+  let token = "";
+  if (appCertificate) {
+    try {
+      token = buildRtcToken({
+        appId,
+        appCertificate,
+        channel: callId,
+        uid,
+        ttlSeconds: TOKEN_TTL_SECONDS,
+      });
+    } catch (err) {
+      logger.error("Failed to build Agora token", { error: describe(err) });
+      throw new HttpsError("internal", "Failed to build Agora token: " + describe(err));
+    }
+  } else {
+    logger.warn("AGORA_APP_CERTIFICATE not configured; using App ID testing mode");
+    token = appId;
+  }
+
   return {
-    appId: AGORA_APP_ID.value(),
+    appId,
     channel: callId,
     uid,
-    token: buildRtcToken({
-      appId: AGORA_APP_ID.value(),
-      appCertificate: AGORA_APP_CERTIFICATE.value(),
-      channel: callId,
-      uid,
-      ttlSeconds: TOKEN_TTL_SECONDS,
-    }),
+    token: token || appId,
     tokenExpiresAt: Date.now() + TOKEN_TTL_SECONDS * 1000,
   };
 }
@@ -258,8 +284,8 @@ async function clearStaleActiveCall(coupleId, nowMs) {
     return;
   }
   if (call.state === CALL_STATE.CONNECTED) {
-    const users = await agora().channelUsers(call.callId).catch(() => null);
-    if (users && !users.includes(CALLER_UID) && !users.includes(CALLEE_UID)) {
+    const connectedAt = logic.toMillis(call.connectedAt);
+    if (connectedAt && nowMs - connectedAt > UPLOAD_GIVE_UP_MS) {
       await afterCallEnded(coupleId, await endCallTx(coupleId, call.callId, call.callerId, "peer_lost", nowMs));
     }
   }
@@ -612,16 +638,9 @@ exports.callJoined = onCall({ secrets: RECORDING_SECRETS }, async (request) => {
     return { status: call.state, callId };
   }
 
-  let users = [];
-  for (let attempt = 0; attempt < 3; attempt++) {
-    users = await agora().channelUsers(callId).catch((error) => {
-      logger.warn("Couldn't ask Agora who's in the call", { callId, error: describe(error) });
-      return [];
-    });
-    if (users.includes(CALLER_UID) && users.includes(CALLEE_UID)) break;
-    if (attempt < 2) await sleep(1000);
-  }
-  if (!users.includes(CALLER_UID) || !users.includes(CALLEE_UID)) {
+  const callerJoined = Boolean((call.joined && call.joined[call.callerId]) || userId === call.callerId);
+  const calleeJoined = Boolean((call.joined && call.joined[call.calleeId]) || userId === call.calleeId);
+  if (!callerJoined || !calleeJoined) {
     return { status: call.state, callId, bothInChannel: false };
   }
 
@@ -724,27 +743,10 @@ async function sweepCall(job, nowMs) {
     return;
   }
 
-  const recordingStatus = (call.recording && call.recording.status) || RECORDING.WAITING;
   if (call.state === CALL_STATE.CONNECTED) {
-    const users = await agora().channelUsers(callId).catch(() => null);
-    if (users && !users.includes(CALLER_UID) && !users.includes(CALLEE_UID)) {
-      // Both phones left without hanging up (no network, app killed)
+    const connectedAt = logic.toMillis(call.connectedAt);
+    if (connectedAt && nowMs - connectedAt > UPLOAD_GIVE_UP_MS) {
       await afterCallEnded(coupleId, await endCallTx(coupleId, callId, call.callerId, "peer_lost", nowMs));
-      return;
-    }
-    if (recordingStatus === RECORDING.STARTING) {
-      const startedAsking = logic.toMillis(call.recording.updatedAt);
-      const job2 = (await jobRef(callId).get()).data() || {};
-      if (job2.resourceId && job2.sid) {
-        const status = await agora().query(job2.resourceId, job2.sid).catch(() => null);
-        if (logic.isAgoraRecordingActive(status)) {
-          await markRecording(coupleId, callId, "sweeper");
-          return;
-        }
-      }
-      if (startedAsking && nowMs - startedAsking > START_GIVE_UP_MS) {
-        await setRecordingFailed(coupleId, callId, "not_confirmed", "The recorder never confirmed it started");
-      }
     }
     return;
   }

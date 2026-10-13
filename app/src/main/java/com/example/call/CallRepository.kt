@@ -116,11 +116,18 @@ class CallRepository(private val context: Context) {
     }
 
     private fun toActionException(e: FirebaseFunctionsException): CallActionException {
-        Log.w(TAG, "Call function failed: ${e.code}")
+        val msg = e.message?.takeIf { it.isNotBlank() } ?: "Call failed"
+        Log.w(TAG, "Call function failed: ${e.code} ($msg)")
         val kind = when (e.code) {
             FirebaseFunctionsException.Code.PERMISSION_DENIED,
             FirebaseFunctionsException.Code.UNAUTHENTICATED -> CallActionException.Kind.NOT_ALLOWED
-            FirebaseFunctionsException.Code.FAILED_PRECONDITION -> CallActionException.Kind.NOT_PAIRED
+            FirebaseFunctionsException.Code.FAILED_PRECONDITION -> {
+                if (msg.contains("partner", ignoreCase = true) || msg.contains("join", ignoreCase = true) || msg.contains("pair", ignoreCase = true)) {
+                    CallActionException.Kind.NOT_PAIRED
+                } else {
+                    CallActionException.Kind.SERVICE
+                }
+            }
             FirebaseFunctionsException.Code.UNAVAILABLE,
             FirebaseFunctionsException.Code.DEADLINE_EXCEEDED -> CallActionException.Kind.NETWORK
             FirebaseFunctionsException.Code.NOT_FOUND,
@@ -128,7 +135,7 @@ class CallRepository(private val context: Context) {
             FirebaseFunctionsException.Code.UNIMPLEMENTED -> CallActionException.Kind.SERVICE
             else -> CallActionException.Kind.OTHER
         }
-        return CallActionException(kind, e.message ?: "Call failed", e)
+        return CallActionException(kind, msg, e)
     }
 
     private fun parseResponse(map: Map<*, *>?): CallResponse {
