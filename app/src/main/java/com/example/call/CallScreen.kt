@@ -129,10 +129,6 @@ fun CallScreen(
             Spacer(modifier = Modifier.height(16.dp))
             RecordingIndicator(state)
 
-            if (showRecordingNotice && state.phase == CallPhase.INCOMING_RINGING) {
-                Spacer(modifier = Modifier.height(16.dp))
-                RecordingNoticeCard()
-            }
 
             Spacer(modifier = Modifier.weight(1f))
 
@@ -153,14 +149,7 @@ fun CallScreen(
                 onDismiss = onDismiss
             )
 
-            Spacer(modifier = Modifier.height(18.dp))
-            // Always on the call screen: calls are recorded, and both of you know it
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Outlined.Info, contentDescription = null, tint = colors.onSurfaceVariant, modifier = Modifier.size(14.dp))
-                Spacer(modifier = Modifier.width(6.dp))
-                Text("Calls are recorded automatically", fontSize = 12.sp, color = colors.onSurfaceVariant)
-            }
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(16.dp))
         }
     }
 }

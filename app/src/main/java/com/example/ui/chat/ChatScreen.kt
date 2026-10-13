@@ -153,15 +153,8 @@ fun ChatScreen(
     var showClearChatDialog by remember { mutableStateOf(false) }
     var showFullProfilePicViewer by remember { mutableStateOf(false) }
     var showChatMenu by remember { mutableStateOf(false) }
-    // Voice calls: a one-time notice that calls are recorded, then the call screen
-    var showCallRecordingNotice by remember { mutableStateOf(false) }
     val startVoiceCall: () -> Unit = {
-        val prefs = (context.applicationContext as? com.example.CherishApplication)?.securityPreferences
-        if (prefs != null && !prefs.hasSeenCallRecordingNotice()) {
-            showCallRecordingNotice = true
-        } else {
-            com.example.call.CallActivity.startOutgoing(context)
-        }
+        com.example.call.CallActivity.startOutgoing(context)
     }
     val callState by com.example.call.CallManager.state.collectAsState()
     var showVideoNoteRecorder by remember { mutableStateOf(false) }
@@ -2707,36 +2700,6 @@ fun ChatScreen(
         )
     }
 
-    // Before the first call from this phone: calls are recorded automatically (said once here,
-    // and on every call screen)
-    if (showCallRecordingNotice) {
-        AlertDialog(
-            onDismissRequest = { showCallRecordingNotice = false },
-            title = { Text("Calls are recorded", fontWeight = FontWeight.Bold) },
-            text = {
-                Text(
-                    text = "Every call that connects is recorded automatically, for both of you. The recording " +
-                        "is saved privately in this chat and in the Shared Gallery, and either of you can delete it. " +
-                        "The call screen shows when a call is being recorded.",
-                    lineHeight = 20.sp
-                )
-            },
-            confirmButton = {
-                Button(onClick = {
-                    (context.applicationContext as? com.example.CherishApplication)?.securityPreferences?.setSeenCallRecordingNotice()
-                    showCallRecordingNotice = false
-                    com.example.call.CallActivity.startOutgoing(context)
-                }) {
-                    Text("Call")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showCallRecordingNotice = false }) {
-                    Text("Not now")
-                }
-            }
-        )
-    }
 
     // Clear Chat Dialog (clears temporary screen only, recoverable from settings)
     if (showClearChatDialog) {
