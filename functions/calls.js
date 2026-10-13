@@ -36,15 +36,9 @@ const {
   MIN_RECORDING_BYTES,
 } = logic;
 
-// Agora project (App ID is public; the rest are secrets kept in Secret Manager)
+// Agora project (App ID is public; Certificate is kept in Secret Manager)
 const AGORA_APP_ID = defineString("AGORA_APP_ID");
 const AGORA_APP_CERTIFICATE = defineSecret("AGORA_APP_CERTIFICATE");
-const AGORA_CUSTOMER_ID = defineSecret("AGORA_CUSTOMER_ID");
-const AGORA_CUSTOMER_SECRET = defineSecret("AGORA_CUSTOMER_SECRET");
-const AGORA_WEBHOOK_SECRET = defineSecret("AGORA_WEBHOOK_SECRET");
-// HMAC key of the service account Agora uploads recordings with (write access to the staging folder)
-const RECORDING_HMAC_ACCESS_ID = defineSecret("RECORDING_HMAC_ACCESS_ID");
-const RECORDING_HMAC_SECRET = defineSecret("RECORDING_HMAC_SECRET");
 
 const CALL_SECRETS = [AGORA_APP_CERTIFICATE];
 const RECORDING_SECRETS = [AGORA_APP_CERTIFICATE];
@@ -308,83 +302,12 @@ async function setRecordingFailed(coupleId, callId, code, reason) {
 
 /** Starts Agora's recorder in the call's channel (once both phones are confirmed in it). */
 async function startRecording(coupleId, callId) {
-  try {
-    let hasCloud = false;
-    try {
-      hasCloud = Boolean(AGORA_CUSTOMER_ID.value() && RECORDING_HMAC_ACCESS_ID.value());
-    } catch (_) {
-      hasCloud = false;
-    }
-    if (!hasCloud) {
-      logger.info("Agora Cloud Recording credentials not provided; client-side in-app recording active", { callId });
-      return;
-    }
-    const client = agora();
-    const resourceId = await client.acquire(callId, RECORDER_UID);
-    await jobRef(callId).set({ resourceId, recorderUid: RECORDER_UID, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
-    const bucket = getStorage().bucket();
-    const sid = await client.startMixRecording(resourceId, callId, RECORDER_UID, {
-      token: buildRtcToken({
-        appId: AGORA_APP_ID.value(),
-        appCertificate: AGORA_APP_CERTIFICATE.value(),
-        channel: callId,
-        uid: RECORDER_UID,
-        // The recorder stays as long as the call (a token can't last longer than 24 hours)
-        ttlSeconds: 24 * 60 * 60,
-      }),
-      recordingConfig: {
-        channelType: 0,
-        streamTypes: 0,
-        audioProfile: 0,
-        maxIdleTime: 30,
-        subscribeAudioUids: [String(CALLER_UID), String(CALLEE_UID)],
-      },
-      recordingFileConfig: { avFileType: ["hls", "mp4"] },
-      storageConfig: {
-        vendor: 6,
-        region: 0,
-        bucket: bucket.name,
-        accessKey: RECORDING_HMAC_ACCESS_ID.value(),
-        secretKey: RECORDING_HMAC_SECRET.value(),
-        fileNamePrefix: logic.stagingPathSegments(callId),
-      },
-    });
-    await jobRef(callId).set({ sid, startRequestedAt: FieldValue.serverTimestamp() }, { merge: true });
-    // Hung up while the recorder was starting: stop it again straight away
-    if (!logic.isActive((await callRef(coupleId, callId).get()).data())) {
-      await stopRecording(coupleId, callId);
-      return;
-    }
-    // Ask Agora until it says it's recording; the recorder_started webhook can also confirm it
-    for (let attempt = 0; attempt < 4; attempt++) {
-      await sleep(1500);
-      const status = await client.query(resourceId, sid).catch(() => null);
-      if (logic.isAgoraRecordingActive(status)) {
-        await markRecording(coupleId, callId, "query");
-        return;
-      }
-    }
-    logger.info("Recording started but not confirmed yet", { callId });
-  } catch (error) {
-    logger.error("Couldn't start the recording", { callId, error: describe(error) });
-    await setRecordingFailed(coupleId, callId, "start_failed", describe(error));
-  }
+  logger.info("In-app mobile call recording active", { coupleId, callId });
 }
 
-/** Stops the recorder; files then upload. Safe to call again. */
+/** Stops the recorder. Cloud recording not active; mobile app records and uploads directly. */
 async function stopRecording(coupleId, callId) {
-  const job = (await jobRef(callId).get()).data();
-  if (!job || !job.resourceId || !job.sid || job.stopOk) return;
-  try {
-    const response = await agora().stop(job.resourceId, job.sid, callId, RECORDER_UID);
-    await jobRef(callId).set({ stopOk: true, stopRequestedAt: FieldValue.serverTimestamp() }, { merge: true });
-    const uploading = response && response.serverResponse && response.serverResponse.uploadingStatus;
-    if (uploading === "uploaded") await finalizeRecording(coupleId, callId);
-  } catch (error) {
-    // Agora may already have stopped by itself (the channel emptied); the files still arrive
-    logger.warn("Stopping the recording failed", { callId, error: describe(error) });
-    await jobRef(callId).set({ stopError: describe(error), stopRequestedAt: FieldValue.serverTimestamp() }, { merge: true });
-  }
+  // Cloud recording not active; mobile app records and uploads directly to Firebase Storage
 }
 
 /**
@@ -754,114 +677,6 @@ exports.callFinalizeClientRecording = onCall({ secrets: CALL_SECRETS }, async (r
   await requireParticipantCall(coupleId, callId, userId);
   const status = await finalizeRecording(coupleId, callId);
   return { status, callId };
-});
-
-// ---------- Agora webhook ----------
-
-/** Handles one Cloud Recording event for one of our calls (anything else is ignored). */
-async function handleRecordingEvent(body) {
-  const eventType = Number(body.eventType);
-  const payload = body.payload || {};
-  const callId = String(payload.cname || "");
-  if (!logic.isValidCallId(callId)) return "not_ours";
-  const job = (await jobRef(callId).get()).data();
-  if (!job || !logic.isSafeId(job.coupleId)) return "not_ours";
-  // An event from an older recording session of the same call
-  if (job.sid && payload.sid && payload.sid !== job.sid) return "old_session";
-  const coupleId = job.coupleId;
-  const details = payload.details || payload;
-
-  switch (eventType) {
-    case 40: // recorder_started
-      if (details.status === undefined || Number(details.status) === 0) await markRecording(coupleId, callId, "webhook");
-      return "started";
-    case 1: {
-      // cloud_recording_error: fatal, or the upload failed for good
-      const fatal = Number(details.errorLevel) >= 5;
-      const uploadFailed = Number(details.module) === 1 && Number(details.errorCode) === 47;
-      if (fatal || uploadFailed) {
-        await setRecordingFailed(coupleId, callId, `agora_${details.errorCode}`, details.errorMsg || "Recording error");
-      }
-      return "error";
-    }
-    case 31: // uploaded: every file is in our bucket
-      return finalizeRecording(coupleId, callId);
-    case 11: // session_exit
-    case 41: {
-      // recorder_leave: the recorder is gone. Mid-call that means the call is no longer being
-      // recorded, so the phones must stop saying it is; what it recorded is still kept at the end.
-      const call = (await callRef(coupleId, callId).get()).data();
-      if (logic.isActive(call)) {
-        await setRecordingFailed(coupleId, callId, "recorder_left", "Recording stopped during the call");
-        return "stopped_mid_call";
-      }
-      return finalizeRecording(coupleId, callId);
-    }
-    case 32: // backuped: Agora keeps the files and uploads them later; the sweeper picks them up
-      return "delayed";
-    default:
-      return "ignored";
-  }
-}
-
-exports.agoraRecordingWebhook = onRequest({ secrets: [AGORA_WEBHOOK_SECRET] }, async (req, res) => {
-  if (req.method !== "POST") {
-    res.status(405).json({ ok: false });
-    return;
-  }
-  const signature = req.get("Agora-Signature-V2");
-  if (!signature) {
-    // Not processed. Answered OK so Agora's console health check (if unsigned) still passes.
-    logger.info("Unsigned webhook request ignored");
-    res.status(200).json({ ok: true, ignored: true });
-    return;
-  }
-  if (!logic.verifyAgoraSignature(req.rawBody, signature, AGORA_WEBHOOK_SECRET.value())) {
-    logger.warn("Webhook signature didn't match");
-    res.status(401).json({ ok: false });
-    return;
-  }
-  let body;
-  try {
-    body = JSON.parse(req.rawBody.toString("utf8"));
-  } catch (_) {
-    res.status(400).json({ ok: false });
-    return;
-  }
-  const noticeId = String(body.noticeId || "");
-  if (!logic.isSafeId(noticeId)) {
-    res.status(400).json({ ok: false });
-    return;
-  }
-
-  // Agora resends events; each one is handled once
-  const eventRef = db().collection("callWebhookEvents").doc(noticeId);
-  try {
-    await eventRef.create({
-      eventType: Number(body.eventType) || 0,
-      productId: Number(body.productId) || 0,
-      cname: String((body.payload && body.payload.cname) || "").slice(0, 64),
-      receivedAt: FieldValue.serverTimestamp(),
-      done: false,
-    });
-  } catch (error) {
-    if (error.code !== 6) throw error; // 6 = already exists
-    const seen = (await eventRef.get()).data();
-    if (seen && seen.done) {
-      res.status(200).json({ ok: true, duplicate: true });
-      return;
-    }
-  }
-
-  try {
-    const outcome = await handleRecordingEvent(body);
-    await eventRef.update({ done: true, outcome: String(outcome).slice(0, 40) });
-    res.status(200).json({ ok: true });
-  } catch (error) {
-    logger.error("Webhook handling failed", { noticeId, error: describe(error) });
-    // Agora retries; the sweeper finishes it otherwise
-    res.status(500).json({ ok: false });
-  }
 });
 
 // ---------- Deleting a recording ----------
