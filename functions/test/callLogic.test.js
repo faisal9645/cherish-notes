@@ -159,3 +159,32 @@ test("Agora query: only status 5 counts as recording", () => {
   assert.equal(logic.isAgoraRecordingActive({ serverResponse: { status: 20 } }), false);
   assert.equal(logic.isAgoraRecordingActive(null), false);
 });
+
+test("isSameUser compares user IDs with or without user_ prefix and ignores case", () => {
+  assert.equal(logic.isSameUser("user_karthik", "karthik"), true);
+  assert.equal(logic.isSameUser("karthik", "user_karthik"), true);
+  assert.equal(logic.isSameUser("user_faisal", "user_faisal"), true);
+  assert.equal(logic.isSameUser("FAISAL", "user_faisal"), true);
+  assert.equal(logic.isSameUser("user_faisal", "user_karthik"), false);
+  assert.equal(logic.isSameUser("", "karthik"), false);
+  assert.equal(logic.isSameUser(null, "karthik"), false);
+});
+
+test("isMemberOfCouple and partnerOf resolve partner accurately across prefixes", () => {
+  const couple = {
+    partner1Id: "faisal",
+    partner1Name: "Faisal",
+    partner2Id: "karthik",
+    partner2Name: "Karthik",
+  };
+  assert.equal(logic.isMemberOfCouple(couple, "user_faisal"), true);
+  assert.equal(logic.isMemberOfCouple(couple, "faisal"), true);
+  assert.equal(logic.isMemberOfCouple(couple, "user_karthik"), true);
+  assert.equal(logic.isMemberOfCouple(couple, "stranger"), false);
+
+  assert.equal(logic.isSameUser(logic.partnerOf(couple, "user_faisal"), "karthik"), true);
+  assert.equal(logic.isSameUser(logic.partnerOf(couple, "faisal"), "karthik"), true);
+  assert.equal(logic.isSameUser(logic.partnerOf(couple, "user_karthik"), "faisal"), true);
+  assert.equal(logic.isSameUser(logic.partnerOf(couple, "karthik"), "faisal"), true);
+});
+

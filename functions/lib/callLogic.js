@@ -67,11 +67,57 @@ function memberId(id, name) {
   return fromName ? `user_${fromName}` : "";
 }
 
+/** Whether two user IDs represent the same user (handles optional 'user_' prefix and case). */
+function isSameUser(a, b) {
+  if (!a || !b) return false;
+  if (a === b) return true;
+  const cleanA = String(a).trim().replace(/^user_/, "").toLowerCase();
+  const cleanB = String(b).trim().replace(/^user_/, "").toLowerCase();
+  return cleanA.length > 0 && cleanA === cleanB;
+}
+
 /** The couple's two members (app user ids), without blanks or placeholders. */
 function coupleMembers(couple) {
   if (!couple) return [];
   const ids = [memberId(couple.partner1Id, couple.partner1Name), memberId(couple.partner2Id, couple.partner2Name)];
   return [...new Set(ids.filter((id) => id && !PLACEHOLDER_IDS.has(id)))];
+}
+
+/** Checks whether [userId] is a member of [couple], comparing IDs and names flexibly. */
+function isMemberOfCouple(couple, userId) {
+  if (!couple || !userId) return false;
+  const members = coupleMembers(couple);
+  if (members.some((m) => isSameUser(m, userId))) return true;
+  const cleanUser = String(userId).trim().replace(/^user_/, "").toLowerCase();
+  const p1 = String(couple.partner1Id || "").trim().replace(/^user_/, "").toLowerCase();
+  const p2 = String(couple.partner2Id || "").trim().replace(/^user_/, "").toLowerCase();
+  const n1 = String(couple.partner1Name || "").trim().toLowerCase().replace(/[^a-z0-9_]/g, "");
+  const n2 = String(couple.partner2Name || "").trim().toLowerCase().replace(/[^a-z0-9_]/g, "");
+  return (p1 && p1 === cleanUser) ||
+         (p2 && p2 === cleanUser) ||
+         (n1 && n1 === cleanUser) ||
+         (n2 && n2 === cleanUser);
+}
+
+/** Finds the partner of [userId] in [couple]. Never returns the user themselves. */
+function partnerOf(couple, userId) {
+  if (!couple || !userId) return null;
+  const cleanUser = String(userId).trim().replace(/^user_/, "").toLowerCase();
+  const p1 = memberId(couple.partner1Id, couple.partner1Name);
+  const p2 = memberId(couple.partner2Id, couple.partner2Name);
+  const p1Clean = String(p1 || "").replace(/^user_/, "").toLowerCase();
+  const p2Clean = String(p2 || "").replace(/^user_/, "").toLowerCase();
+  const n1Clean = String(couple.partner1Name || "").trim().toLowerCase().replace(/[^a-z0-9_]/g, "");
+  const n2Clean = String(couple.partner2Name || "").trim().toLowerCase().replace(/[^a-z0-9_]/g, "");
+
+  if (cleanUser === p1Clean || (n1Clean && cleanUser === n1Clean)) {
+    return p2 && !isSameUser(p2, userId) ? p2 : (couple.partner2Id || (n2Clean ? `user_${n2Clean}` : null));
+  }
+  if (cleanUser === p2Clean || (n2Clean && cleanUser === n2Clean)) {
+    return p1 && !isSameUser(p1, userId) ? p1 : (couple.partner1Id || (n1Clean ? `user_${n1Clean}` : null));
+  }
+  const members = coupleMembers(couple);
+  return members.find((id) => !isSameUser(id, userId)) || null;
 }
 
 /** A Firestore document id we accept from a phone: no slashes, not empty, not huge. */
@@ -114,8 +160,8 @@ function isConnectTimedOut(call, nowMs) {
 /** The Agora uid a member uses in this call, or null for someone who isn't in it. */
 function agoraUidFor(call, userId) {
   if (!call || !userId) return null;
-  if (userId === call.callerId) return CALLER_UID;
-  if (userId === call.calleeId) return CALLEE_UID;
+  if (isSameUser(userId, call.callerId)) return CALLER_UID;
+  if (isSameUser(userId, call.calleeId)) return CALLEE_UID;
   return null;
 }
 
@@ -129,7 +175,7 @@ function endTransition(call, userId, reason) {
   if (!isActive(call)) return null;
   const why = END_REASONS.has(reason) ? reason : "hangup";
   if (call.state === CALL_STATE.RINGING) {
-    if (userId === call.calleeId) return { state: CALL_STATE.DECLINED, endReason: "declined" };
+    if (isSameUser(userId, call.calleeId)) return { state: CALL_STATE.DECLINED, endReason: "declined" };
     if (why === "no_answer") return { state: CALL_STATE.MISSED, endReason: "no_answer" };
     return { state: CALL_STATE.CANCELLED, endReason: "cancelled" };
   }
@@ -257,7 +303,10 @@ module.exports = {
   MIN_RECORDING_BYTES,
   STAGING_ROOT,
   memberId,
+  isSameUser,
   coupleMembers,
+  isMemberOfCouple,
+  partnerOf,
   isSafeId,
   isValidCallId,
   isActive,

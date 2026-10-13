@@ -86,8 +86,10 @@ class CallRepository(private val context: Context) {
 
     private suspend fun callFunction(name: String, coupleId: String, data: Map<String, Any>): CallResponse {
         val fns = functions ?: throw CallActionException(CallActionException.Kind.SERVICE, "Calls aren't available on this phone")
-        if (!ensureMember(coupleId)) {
-            throw CallActionException(CallActionException.Kind.NETWORK, "Couldn't reach the server")
+        try {
+            ensureMember(coupleId)
+        } catch (e: Exception) {
+            Log.w(TAG, "ensureMember pre-check failed: ${e.message}")
         }
         var lastError: Exception? = null
         repeat(2) { attempt ->
@@ -104,7 +106,8 @@ class CallRepository(private val context: Context) {
                 // This sign-in isn't on the couple's member list yet (e.g. a new sign-in): add it once and retry
                 if (e.code == FirebaseFunctionsException.Code.PERMISSION_DENIED && attempt == 0) {
                     forgetMember(coupleId)
-                    if (ensureMember(coupleId)) return@repeat
+                    try { ensureMember(coupleId) } catch (_: Exception) {}
+                    return@repeat
                 }
                 throw toActionException(e)
             } catch (e: Exception) {

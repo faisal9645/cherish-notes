@@ -224,7 +224,7 @@ object CallManager {
         if (invite.ringUntil in 1 until now) return@post
         val me = app.authRepository.getCurrentUserId()
         val myCouple = currentCoupleId()
-        if (me.isBlank() || myCouple == null || invite.coupleId != myCouple || invite.callerId == me) return@post
+        if (me.isBlank() || myCouple == null || invite.coupleId != myCouple || isSameUser(invite.callerId, me)) return@post
         if (hasActiveCall()) return@post
         if (!markSeen(invite.callId)) return@post
         ringFor(invite, me)
@@ -415,7 +415,7 @@ object CallManager {
                     if (!repo.ensureMember(couple)) return@collectLatest
                     repo.observeControl(couple).collect { control ->
                         if (control != null && control.state == CallRecord.STATE_RINGING &&
-                            control.calleeId == me && control.ringExpiresAt > System.currentTimeMillis()
+                            isSameUser(control.calleeId, me) && control.ringExpiresAt > System.currentTimeMillis()
                         ) {
                             onIncomingInvite(
                                 CallInvite(
@@ -533,7 +533,7 @@ object CallManager {
                 finish(if (isOutgoing) CallEndReason.NO_ANSWER else CallEndReason.MISSED, serverReason = null)
             }
             CallRecord.STATE_ENDED ->
-                finish(if (record.endedBy == myUserId) CallEndReason.HANGUP else CallEndReason.REMOTE_HANGUP, serverReason = null)
+                finish(if (isSameUser(record.endedBy, myUserId)) CallEndReason.HANGUP else CallEndReason.REMOTE_HANGUP, serverReason = null)
             CallRecord.STATE_UNAVAILABLE -> finish(CallEndReason.UNAVAILABLE, serverReason = null)
             CallRecord.STATE_BUSY -> finish(CallEndReason.BUSY, serverReason = null)
             CallRecord.STATE_FAILED -> finish(CallEndReason.FAILED, serverReason = null)
@@ -775,6 +775,13 @@ object CallManager {
         return app.authRepository.partnerUserState.value?.displayName?.trim()?.ifBlank { null }
             ?: fallback?.trim()?.ifBlank { null }
             ?: "Your partner"
+    }
+
+    fun isSameUser(id1: String?, id2: String?): Boolean {
+        if (id1.isNullOrBlank() || id2.isNullOrBlank()) return false
+        val clean1 = id1.trim().removePrefix("user_").lowercase()
+        val clean2 = id2.trim().removePrefix("user_").lowercase()
+        return clean1 == clean2
     }
 
     private fun peerPhoto(): String? =

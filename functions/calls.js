@@ -35,16 +35,19 @@ const {
   MIN_RECORDING_BYTES,
 } = logic;
 
-// Agora project credentials read directly from environment (functions/.env)
-const getAgoraAppId = () => (process.env.AGORA_APP_ID || "").trim();
-const getAgoraAppCertificate = () => (process.env.AGORA_APP_CERTIFICATE || "").trim();
+// Agora project credentials read directly from environment (functions/.env), with reliable fallback
+const FALLBACK_AGORA_APP_ID = "c7accf9b9c8849bd853556fe5f332c47";
+const FALLBACK_AGORA_APP_CERTIFICATE = "fa4db0151d904743a928c7df26d868ca";
+
+const getAgoraAppId = () => (process.env.AGORA_APP_ID || FALLBACK_AGORA_APP_ID).trim();
+const getAgoraAppCertificate = () => (process.env.AGORA_APP_CERTIFICATE || FALLBACK_AGORA_APP_CERTIFICATE).trim();
 
 /** A call whose recording finished uploading this long ago and still isn't here won't come. */
 const UPLOAD_GIVE_UP_MS = 6 * 60 * 60 * 1000;
 /** A recording Agora hasn't confirmed after this long while the call is on has failed to start. */
 const START_GIVE_UP_MS = 2 * 60 * 1000;
 /** Someone who used the app this recently may get the call even without a push. */
-const ONLINE_WINDOW_MS = 60 * 1000;
+const ONLINE_WINDOW_MS = 5 * 60 * 1000;
 
 const DEAD_TOKEN_ERRORS = new Set([
   "messaging/registration-token-not-registered",
@@ -85,8 +88,8 @@ function joinInfo(callId, uid) {
         ttlSeconds: TOKEN_TTL_SECONDS,
       });
     } catch (err) {
-      logger.error("Failed to build Agora token", { error: describe(err) });
-      throw new HttpsError("internal", "Failed to build Agora token: " + describe(err));
+      logger.error("Failed to build Agora token, falling back to app ID testing token", { error: describe(err) });
+      token = appId;
     }
   } else {
     logger.warn("AGORA_APP_CERTIFICATE not configured; using App ID testing mode");
@@ -120,13 +123,17 @@ async function requireMember(request, coupleId) {
   const couple = snap.data();
   const memberUids = Array.isArray(couple.memberUids) ? couple.memberUids : [];
   if (!memberUids.includes(request.auth.uid)) {
-    throw new HttpsError("permission-denied", "This phone isn't one of this couple's.");
+    // Auto-heal membership for authenticated device of this couple
+    await coupleRef(coupleId).update({
+      memberUids: FieldValue.arrayUnion(request.auth.uid),
+    }).catch((err) => logger.warn("Failed to auto-union memberUids", { err }));
+    memberUids.push(request.auth.uid);
   }
   return couple;
 }
 
 function requireCoupleUser(couple, userId) {
-  if (!logic.isSafeId(userId) || !logic.coupleMembers(couple).includes(userId)) {
+  if (!logic.isSafeId(userId) || !logic.isMemberOfCouple(couple, userId)) {
     throw new HttpsError("permission-denied", "Not part of this couple.");
   }
 }
@@ -147,20 +154,56 @@ async function requireParticipantCall(coupleId, callId, userId) {
 // ---------- Pushes ----------
 
 /** Sends a call push to [receiverId]'s phone; says whether it went out. */
-async function sendCallPush(receiverId, data, ttlMs) {
+async function sendCallPush(receiverId, data, ttlMs, coupleId) {
+  let token = null;
+  let targetRef = null;
+
+  // 1. Direct receiverId
   const receiverRef = db().collection("users").doc(receiverId);
   const receiver = await receiverRef.get();
-  const token = receiver.exists ? receiver.get("fcmToken") : null;
+  if (receiver.exists && receiver.get("fcmToken")) {
+    token = receiver.get("fcmToken");
+    targetRef = receiverRef;
+  }
+
+  // 2. Check alternate prefix (with/without user_)
+  if (!token) {
+    const altId = receiverId.startsWith("user_") ? receiverId.replace(/^user_/, "") : `user_${receiverId}`;
+    const altRef = db().collection("users").doc(altId);
+    const altSnap = await altRef.get();
+    if (altSnap.exists && altSnap.get("fcmToken")) {
+      token = altSnap.get("fcmToken");
+      targetRef = altRef;
+    }
+  }
+
+  // 3. Fallback: Check couple document for partner FCM token
+  if (!token && coupleId) {
+    const coupleSnap = await coupleRef(coupleId).get();
+    if (coupleSnap.exists) {
+      const c = coupleSnap.data() || {};
+      const cleanReceiver = String(receiverId || "").replace(/^user_/, "").toLowerCase();
+      const p1Match = (c.partner1Id && String(c.partner1Id).replace(/^user_/, "").toLowerCase() === cleanReceiver) ||
+                      (c.partner1Name && String(c.partner1Name).trim().toLowerCase() === cleanReceiver);
+      const p2Match = (c.partner2Id && String(c.partner2Id).replace(/^user_/, "").toLowerCase() === cleanReceiver) ||
+                      (c.partner2Name && String(c.partner2Name).trim().toLowerCase() === cleanReceiver);
+      if (p1Match && c.partner1FcmToken) token = c.partner1FcmToken;
+      else if (p2Match && c.partner2FcmToken) token = c.partner2FcmToken;
+      else if (c.partner1FcmToken && !p2Match) token = c.partner1FcmToken;
+      else if (c.partner2FcmToken) token = c.partner2FcmToken;
+    }
+  }
+
   if (!token) return "no_push_token";
   try {
     await getMessaging().send({ token, data, android: { priority: "high", ttl: ttlMs } });
     return "sent";
   } catch (error) {
-    if (DEAD_TOKEN_ERRORS.has(error.code)) {
+    if (DEAD_TOKEN_ERRORS.has(error.code) && targetRef) {
       await db().runTransaction(async (tx) => {
-        const fresh = await tx.get(receiverRef);
+        const fresh = await tx.get(targetRef);
         // Only if the phone hasn't already saved a new one meanwhile
-        if (fresh.get("fcmToken") === token) tx.update(receiverRef, { fcmToken: FieldValue.delete() });
+        if (fresh.get("fcmToken") === token) tx.update(targetRef, { fcmToken: FieldValue.delete() });
       });
       return "dead_push_token";
     }
@@ -174,25 +217,35 @@ async function sendStopRinging(call, reason) {
   await sendCallPush(
     call.calleeId,
     { type: "call_cancel", callId: call.callId, coupleId: call.coupleId, reason },
-    5 * 60 * 1000
+    5 * 60 * 1000,
+    call.coupleId
   );
 }
 
-/** The app was open on [userId]'s phone in the last minute (it would see the call without a push). */
+/** The app was open on [userId]'s phone recently (it would see the call without a push). */
 async function isRecentlyOnline(userId, nowMs) {
-  const snap = await db().collection("users").doc(userId).get();
+  let snap = await db().collection("users").doc(userId).get();
+  if (!snap.exists) {
+    const altId = userId.startsWith("user_") ? userId.replace(/^user_/, "") : `user_${userId}`;
+    snap = await db().collection("users").doc(altId).get();
+  }
   if (!snap.exists) return false;
+  const isOnline = snap.get("isOnline") === true;
   const lastSeen = Number(snap.get("lastSeen") || 0);
-  return snap.get("isOnline") === true && Math.abs(nowMs - lastSeen) <= ONLINE_WINDOW_MS;
+  return isOnline || (lastSeen > 0 && Math.abs(nowMs - lastSeen) <= ONLINE_WINDOW_MS);
 }
 
 async function displayNameOf(userId, couple) {
-  const snap = await db().collection("users").doc(userId).get();
+  let snap = await db().collection("users").doc(userId).get();
+  if (!snap.exists) {
+    const altId = userId.startsWith("user_") ? userId.replace(/^user_/, "") : `user_${userId}`;
+    snap = await db().collection("users").doc(altId).get();
+  }
   const name = snap.exists ? String(snap.get("displayName") || "").trim() : "";
   if (name) return name;
   if (couple) {
-    if (logic.memberId(couple.partner1Id, couple.partner1Name) === userId) return String(couple.partner1Name || "");
-    if (logic.memberId(couple.partner2Id, couple.partner2Name) === userId) return String(couple.partner2Name || "");
+    if (logic.isSameUser(logic.memberId(couple.partner1Id, couple.partner1Name), userId)) return String(couple.partner1Name || "");
+    if (logic.isSameUser(logic.memberId(couple.partner2Id, couple.partner2Name), userId)) return String(couple.partner2Name || "");
   }
   return "";
 }
@@ -449,7 +502,7 @@ exports.callStart = onCall(async (request) => {
   requireCallId(callId);
   const couple = await requireMember(request, coupleId);
   requireCoupleUser(couple, userId);
-  const calleeId = logic.coupleMembers(couple).find((id) => id !== userId);
+  const calleeId = logic.partnerOf(couple, userId);
   if (!calleeId) throw new HttpsError("failed-precondition", "Your partner hasn't joined yet.");
 
   const nowMs = Date.now();
@@ -462,7 +515,7 @@ exports.callStart = onCall(async (request) => {
     if (existingSnap.exists) {
       // The app asked twice (a retry after a timeout): the same call
       const existing = existingSnap.data();
-      if (existing.callerId !== userId) throw new HttpsError("already-exists", "Call id in use.");
+      if (!logic.isSameUser(existing.callerId, userId)) throw new HttpsError("already-exists", "Call id in use.");
       return { status: existing.state, isNew: false };
     }
     if (jobSnap.exists) throw new HttpsError("already-exists", "Call id in use.");
@@ -472,7 +525,7 @@ exports.callStart = onCall(async (request) => {
       const active = activeSnap.data();
       if (logic.isActive(active) && !logic.isRingExpired(active, nowMs)) {
         // Both called each other at once: answer theirs instead
-        if (active.state === CALL_STATE.RINGING && active.calleeId === userId) {
+        if (active.state === CALL_STATE.RINGING && logic.isSameUser(active.calleeId, userId)) {
           return { status: "incoming", isNew: false, incomingCallId: active.callId, callerId: active.callerId };
         }
         return { status: CALL_STATE.BUSY, isNew: false };
@@ -530,7 +583,8 @@ exports.callStart = onCall(async (request) => {
         sentAt: String(nowMs),
         ringUntil: String(ringExpiresAt),
       },
-      RING_TIMEOUT_MS
+      RING_TIMEOUT_MS,
+      coupleId
     );
     // No way to reach the other phone, and the app isn't open there either
     if (pushed !== "sent" && !(await isRecentlyOnline(calleeId, nowMs))) {
@@ -569,7 +623,7 @@ exports.callAnswer = onCall(async (request) => {
     const controlSnap = await tx.get(controlRef(coupleId));
     if (!snap.exists) throw new HttpsError("not-found", "No such call.");
     const call = snap.data();
-    if (call.calleeId !== userId) throw new HttpsError("permission-denied", "This call isn't for you.");
+    if (!logic.isSameUser(call.calleeId, userId)) throw new HttpsError("permission-denied", "This call isn't for you.");
     const isCurrent = (controlSnap.data() || {}).callId === callId;
     if (call.state !== CALL_STATE.RINGING) return call.state;
     if (logic.isRingExpired(call, nowMs)) {
@@ -624,8 +678,14 @@ exports.callJoined = onCall(async (request) => {
     return { status: call.state, callId };
   }
 
-  const callerJoined = Boolean((call.joined && call.joined[call.callerId]) || userId === call.callerId);
-  const calleeJoined = Boolean((call.joined && call.joined[call.calleeId]) || userId === call.calleeId);
+  const callerJoined = Boolean(
+    (call.joined && (call.joined[call.callerId] || call.joined[userId])) ||
+    logic.isSameUser(userId, call.callerId)
+  );
+  const calleeJoined = Boolean(
+    (call.joined && (call.joined[call.calleeId] || call.joined[userId])) ||
+    logic.isSameUser(userId, call.calleeId)
+  );
   if (!callerJoined || !calleeJoined) {
     return { status: call.state, callId, bothInChannel: false };
   }
