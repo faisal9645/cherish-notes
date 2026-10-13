@@ -480,89 +480,126 @@ class AuthRepository(private val context: Context) {
             }
         }
 
-        val fs = firestore ?: return Result.failure(Exception(CONNECTION_PROBLEM))
-        val coupleDocRef = fs.collection("couples").document(coupleId)
-        val coupleSnap = try {
-            coupleDocRef.get().await()
-        } catch (e: Exception) {
-            Log.w("AuthRepository", "Couple check failed: ${e.message}", e)
-            val msg = e.message.orEmpty()
-            if (authError != null) {
-                return Result.failure(Exception("Authentication failed: $authError"))
-            }
-            if (msg.contains("PERMISSION_DENIED", ignoreCase = true)) {
-                return Result.failure(Exception("Authentication error: Permission denied reading couple space."))
-            }
-            return Result.failure(Exception(CONNECTION_PROBLEM))
+        val fs = firestore
+
+        val functions = try {
+            if (FirebaseApp.getApps(context).isNotEmpty()) com.google.firebase.functions.FirebaseFunctions.getInstance() else null
+        } catch (_: Exception) {
+            null
         }
 
-        val currentAuthUid = auth?.currentUser?.uid
-
-        if (!coupleSnap.exists()) {
-            // Automatic registration for new secret codes: creates a new isolated couple space
-            val newCoupleData = mutableMapOf<String, Any?>(
-                "id" to coupleId,
+        var joinedViaServer = false
+        if (functions != null) {
+            val payload = hashMapOf(
                 "secretCode" to cleanCode,
-                "partner1Id" to uid,
-                "partner1Name" to displayName,
-                "partner2Name" to partnerDisplayName,
-                "createdAt" to System.currentTimeMillis(),
-                "updatedAt" to System.currentTimeMillis()
+                "username" to cleanUser,
+                "partnerName" to cleanPartner
             )
-            if (currentAuthUid != null) {
-                newCoupleData["memberUids"] = listOf(currentAuthUid)
-            }
             try {
-                coupleDocRef.set(newCoupleData).await()
+                val callResult = functions.getHttpsCallable("coupleJoin").call(payload).await()
+                val data = callResult.data as? Map<*, *>
+                val returnedPartnerId = data?.get("partnerId") as? String
+                if (!returnedPartnerId.isNullOrBlank()) {
+                    finalPartnerId = returnedPartnerId
+                }
+                joinedViaServer = true
             } catch (e: Exception) {
-                Log.w("AuthRepository", "Failed to create couple space: ${e.message}")
-                return Result.failure(Exception("Failed to create couple space: ${e.localizedMessage}"))
-            }
-            finalPartnerId = fallbackPartnerId
-        } else {
-            // Existing couple space: link or reconnect
-            val p1Id = coupleSnap.getString("partner1Id")
-            val p2Id = coupleSnap.getString("partner2Id")
-
-            when {
-                // Partner 1 logging back in
-                p1Id == uid -> {
-                    finalPartnerId = p2Id ?: fallbackPartnerId
-                }
-                // Partner 2 logging back in
-                p2Id == uid -> {
-                    finalPartnerId = p1Id ?: fallbackPartnerId
-                }
-                // Partner 2 entering the secret code for the first time
-                p2Id == null && p1Id != uid -> {
-                    finalPartnerId = p1Id ?: fallbackPartnerId
-                    val updates = mutableMapOf<String, Any>(
-                        "partner2Id" to uid,
-                        "partner2Name" to displayName,
-                        "updatedAt" to System.currentTimeMillis()
-                    )
-                    try {
-                        coupleDocRef.update(updates).await()
-                        if (p1Id != null) {
-                            fs.collection("users").document(p1Id).update(mapOf("partnerId" to uid))
-                        }
-                    } catch (e: Exception) {
-                        Log.w("AuthRepository", "Couple linking: ${e.message}")
-                    }
-                }
-                // Both slots already taken by other user IDs
-                else -> {
+                Log.w("AuthRepository", "Server coupleJoin failed: ${e.message}", e)
+                val msg = e.message.orEmpty()
+                if (msg.contains("already in use by two registered partners", ignoreCase = true)) {
                     return Result.failure(Exception("This Couple Secret Code is already in use by two registered partners."))
                 }
+                if (msg.contains("permission-denied", ignoreCase = true) || msg.contains("invalid secret code", ignoreCase = true)) {
+                    return Result.failure(Exception("Invalid secret code or access denied."))
+                }
+            }
+        }
+
+        if (!joinedViaServer) {
+            if (fs == null) return Result.failure(Exception(CONNECTION_PROBLEM))
+            val coupleDocRef = fs.collection("couples").document(coupleId)
+            val coupleSnap = try {
+                coupleDocRef.get().await()
+            } catch (e: Exception) {
+                Log.w("AuthRepository", "Couple check failed: ${e.message}", e)
+                val msg = e.message.orEmpty()
+                if (authError != null) {
+                    return Result.failure(Exception("Authentication failed: $authError"))
+                }
+                if (msg.contains("PERMISSION_DENIED", ignoreCase = true)) {
+                    return Result.failure(Exception("Authentication error: Permission denied reading couple space."))
+                }
+                return Result.failure(Exception(CONNECTION_PROBLEM))
             }
 
-            // Ensure current auth UID is in memberUids so security rules allow synchronicity & couple documents
-            if (currentAuthUid != null) {
-                val memberUids = (coupleSnap.get("memberUids") as? List<*>)?.filterIsInstance<String>().orEmpty()
-                if (currentAuthUid !in memberUids) {
-                    try {
-                        coupleDocRef.update("memberUids", com.google.firebase.firestore.FieldValue.arrayUnion(currentAuthUid))
-                    } catch (_: Exception) {}
+            val currentAuthUid = auth?.currentUser?.uid
+
+            if (!coupleSnap.exists()) {
+                // Automatic registration for new secret codes: creates a new isolated couple space
+                val newCoupleData = mutableMapOf<String, Any?>(
+                    "id" to coupleId,
+                    "secretCode" to cleanCode,
+                    "partner1Id" to uid,
+                    "partner1Name" to displayName,
+                    "partner2Name" to partnerDisplayName,
+                    "createdAt" to System.currentTimeMillis(),
+                    "updatedAt" to System.currentTimeMillis()
+                )
+                if (currentAuthUid != null) {
+                    newCoupleData["memberUids"] = listOf(currentAuthUid)
+                }
+                try {
+                    coupleDocRef.set(newCoupleData).await()
+                } catch (e: Exception) {
+                    Log.w("AuthRepository", "Failed to create couple space: ${e.message}")
+                    return Result.failure(Exception("Failed to create couple space: ${e.localizedMessage}"))
+                }
+                finalPartnerId = fallbackPartnerId
+            } else {
+                // Existing couple space: link or reconnect
+                val p1Id = coupleSnap.getString("partner1Id")
+                val p2Id = coupleSnap.getString("partner2Id")
+
+                when {
+                    // Partner 1 logging back in
+                    p1Id == uid -> {
+                        finalPartnerId = p2Id ?: fallbackPartnerId
+                    }
+                    // Partner 2 logging back in
+                    p2Id == uid -> {
+                        finalPartnerId = p1Id ?: fallbackPartnerId
+                    }
+                    // Partner 2 entering the secret code for the first time
+                    p2Id == null && p1Id != uid -> {
+                        finalPartnerId = p1Id ?: fallbackPartnerId
+                        val updates = mutableMapOf<String, Any>(
+                            "partner2Id" to uid,
+                            "partner2Name" to displayName,
+                            "updatedAt" to System.currentTimeMillis()
+                        )
+                        try {
+                            coupleDocRef.update(updates).await()
+                            if (p1Id != null) {
+                                fs.collection("users").document(p1Id).update(mapOf("partnerId" to uid))
+                            }
+                        } catch (e: Exception) {
+                            Log.w("AuthRepository", "Couple linking: ${e.message}")
+                        }
+                    }
+                    // Both slots already taken by other user IDs
+                    else -> {
+                        return Result.failure(Exception("This Couple Secret Code is already in use by two registered partners."))
+                    }
+                }
+
+                // Ensure current auth UID is in memberUids so security rules allow synchronicity & couple documents
+                if (currentAuthUid != null) {
+                    val memberUids = (coupleSnap.get("memberUids") as? List<*>)?.filterIsInstance<String>().orEmpty()
+                    if (currentAuthUid !in memberUids) {
+                        try {
+                            coupleDocRef.update("memberUids", com.google.firebase.firestore.FieldValue.arrayUnion(currentAuthUid))
+                        } catch (_: Exception) {}
+                    }
                 }
             }
         }
