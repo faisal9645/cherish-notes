@@ -85,7 +85,8 @@ data class User(
     val heartbeatTouchingTimestamp: Long = 0L,
     val heartbeatStreak: Int = 0,
     val lastHeartbeatSync: Long = 0L,
-    val timeZone: String? = null
+    val timeZone: String? = null,
+    val notificationStatus: String? = null
 ) {
     /**
      * When this phone received this user's latest live presence update, on this phone's own clock

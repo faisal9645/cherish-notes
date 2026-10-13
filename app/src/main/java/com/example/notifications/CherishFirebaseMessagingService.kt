@@ -49,7 +49,9 @@ class CherishFirebaseMessagingService : FirebaseMessagingService() {
 
         val myUid = app.authRepository.getCurrentUserId()
         val senderId = remoteMessage.data["senderId"]
-        if (!senderId.isNullOrBlank() && myUid.isNotBlank() && senderId == myUid) {
+        val cleanMyUid = myUid.removePrefix("user_").trim().lowercase()
+        val cleanSenderId = senderId?.removePrefix("user_")?.trim()?.lowercase()
+        if (!cleanSenderId.isNullOrBlank() && cleanMyUid.isNotBlank() && cleanSenderId == cleanMyUid) {
             Log.d("CherishFCM", "Message sent by self ($senderId), skipping notification")
             return
         }
@@ -79,9 +81,9 @@ class CherishFirebaseMessagingService : FirebaseMessagingService() {
         val conversationId = remoteMessage.data["conversationId"]
         val messageId = remoteMessage.data["messageId"] ?: remoteMessage.data["id"] ?: remoteMessage.messageId
 
-        // If user is inside the Cherish app on screen, never show system notification
-        if (NotificationHelper.isAppOpenOnScreen(applicationContext)) {
-            Log.d("CherishFCM", "App is open on screen, suppressing status bar notification")
+        // If user is actively viewing the live chat on screen, suppress status bar notification
+        if (NotificationHelper.isUserActivelyViewingChat(applicationContext)) {
+            Log.d("CherishFCM", "User is actively viewing chat, suppressing status bar notification")
             return
         }
 

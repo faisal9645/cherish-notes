@@ -1665,9 +1665,28 @@ fun SharedGalleryScreen(
         val galleryAllUrls = remember(galleryMediaItems) {
             galleryMediaItems.map { it.mediaUrl }.filter { it.isNotBlank() }.distinct()
         }
+        val circularUrls = remember(galleryMediaItems, sourceMessages) {
+            val fromGallery = galleryMediaItems
+                .filter { it.originalMessage.isCircularVideoNote() || it.originalMessage.isVideoNote }
+                .map { it.mediaUrl }
+            val fromSource = sourceMessages
+                .filter { it.isCircularVideoNote() || it.isVideoNote }
+                .flatMap { it.getAllMediaUrls().ifEmpty { listOfNotNull(it.mediaUrl) } }
+            (fromGallery + fromSource).filter { it.isNotBlank() }.toSet()
+        }
+        val isCurrentCircular = remember(url, selectedMessageIdForViewer, circularUrls) {
+            url in circularUrls ||
+            selectedMessageIdForViewer?.let { id ->
+                sourceMessages.find { it.id == id }?.let { it.isCircularVideoNote() || it.isVideoNote }
+            } == true ||
+            url.contains("video_note", ignoreCase = true) ||
+            url.contains("videonote", ignoreCase = true)
+        }
         FullScreenMediaViewer(
             mediaUrl = url,
             allMediaUrls = if (galleryAllUrls.isNotEmpty()) galleryAllUrls else listOf(url),
+            isCircularVideo = isCurrentCircular,
+            circularMediaUrls = circularUrls,
             onShowInChat = { clickedUrl ->
                 val targetMsg = sourceMessages.find { it.mediaUrl == clickedUrl || it.getAllMediaUrls().contains(clickedUrl) }
                     ?: allGalleryItems.find { it.mediaUrl == clickedUrl || it.getAllMediaUrls().contains(clickedUrl) }

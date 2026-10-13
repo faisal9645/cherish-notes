@@ -346,6 +346,9 @@ class AuthRepository(private val context: Context) {
         updatePresence()
         if (inForeground) {
             startHeartbeat()
+            kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                updateNotificationStatus()
+            }
         } else {
             heartbeatJob?.cancel()
         }
@@ -566,18 +569,47 @@ class AuthRepository(private val context: Context) {
                 // Existing couple space: link or reconnect
                 val p1Id = coupleSnap.getString("partner1Id")
                 val p2Id = coupleSnap.getString("partner2Id")
+                val p1Name = coupleSnap.getString("partner1Name")
+                val p2Name = coupleSnap.getString("partner2Name")
+
+                val isP1 = p1Id == uid ||
+                    p1Id?.removePrefix("user_")?.equals(cleanUser, ignoreCase = true) == true ||
+                    p1Name?.trim()?.equals(cleanUser, ignoreCase = true) == true ||
+                    p1Name?.trim()?.equals(displayName, ignoreCase = true) == true
+
+                val isP2 = p2Id == uid ||
+                    p2Id?.removePrefix("user_")?.equals(cleanUser, ignoreCase = true) == true ||
+                    p2Name?.trim()?.equals(cleanUser, ignoreCase = true) == true ||
+                    p2Name?.trim()?.equals(displayName, ignoreCase = true) == true
 
                 when {
                     // Partner 1 logging back in
-                    p1Id == uid -> {
+                    isP1 -> {
                         finalPartnerId = p2Id ?: fallbackPartnerId
                     }
                     // Partner 2 logging back in
-                    p2Id == uid -> {
+                    isP2 -> {
                         finalPartnerId = p1Id ?: fallbackPartnerId
                     }
+                    // Partner 1 slot is open
+                    p1Id.isNullOrBlank() -> {
+                        finalPartnerId = p2Id ?: fallbackPartnerId
+                        val updates = mutableMapOf<String, Any>(
+                            "partner1Id" to uid,
+                            "partner1Name" to displayName,
+                            "updatedAt" to System.currentTimeMillis()
+                        )
+                        if (currentAuthUid != null) {
+                            updates["memberUids"] = com.google.firebase.firestore.FieldValue.arrayUnion(currentAuthUid)
+                        }
+                        try {
+                            coupleDocRef.update(updates).await()
+                        } catch (e: Exception) {
+                            Log.w("AuthRepository", "Couple linking p1: ${e.message}")
+                        }
+                    }
                     // Partner 2 entering the secret code for the first time
-                    p2Id == null && p1Id != uid -> {
+                    p2Id.isNullOrBlank() && !isP1 -> {
                         finalPartnerId = p1Id ?: fallbackPartnerId
                         val updates = mutableMapOf<String, Any>(
                             "partner2Id" to uid,
@@ -1040,6 +1072,53 @@ class AuthRepository(private val context: Context) {
         }
     }
 
+    /**
+     * Computes the current phone's alert status:
+     * - "CLOSED" if notifications are turned off in-app or blocked in Android system settings
+     * - "SAFE" if notifications are on, but content is disguised as Notes for privacy
+     * - "OPEN" if notifications are normal, active, and previewing
+     */
+    fun getComputedNotificationStatus(): String {
+        return try {
+            val sysEnabled = androidx.core.app.NotificationManagerCompat.from(context).areNotificationsEnabled()
+            val appEnabled = securityPrefs.isNotificationsEnabled()
+            val hideContent = securityPrefs.isHideNotificationContent()
+            when {
+                !sysEnabled || !appEnabled -> "CLOSED"
+                hideContent -> "SAFE"
+                else -> "OPEN"
+            }
+        } catch (_: Exception) {
+            "OPEN"
+        }
+    }
+
+    suspend fun updateNotificationStatus(): Result<Unit> {
+        val status = getComputedNotificationStatus()
+        return updateNotificationStatus(status)
+    }
+
+    suspend fun updateNotificationStatus(status: String): Result<Unit> {
+        val uid = getCurrentUserId()
+        if (uid.isBlank()) return Result.success(Unit)
+        val current = _currentUserState.value ?: User(id = uid)
+        if (current.notificationStatus == status) {
+            return Result.success(Unit)
+        }
+        val updated = current.copy(notificationStatus = status)
+        _currentUserState.value = updated
+        saveLocalUserSession(updated)
+        return try {
+            userDocument(uid)?.set(
+                mapOf("notificationStatus" to status),
+                com.google.firebase.firestore.SetOptions.merge()
+            )
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.success(Unit)
+        }
+    }
+
     private var heartbeatTouchJob: kotlinx.coroutines.Job? = null
 
     fun setHeartbeatTouch(active: Boolean) {
@@ -1165,12 +1244,17 @@ class AuthRepository(private val context: Context) {
                         }
                     }
                     if (uid.isNotBlank()) {
+                        val currentNotif = getComputedNotificationStatus()
                         val updates = mapOf<String, Any>(
                             "isOnline" to true,
                             "online" to true,
                             "lastSeen" to System.currentTimeMillis(),
-                            "timeZone" to TimeZone.getDefault().id
+                            "timeZone" to TimeZone.getDefault().id,
+                            "notificationStatus" to currentNotif
                         )
+                        if (_currentUserState.value?.notificationStatus != currentNotif) {
+                            _currentUserState.value = _currentUserState.value?.copy(notificationStatus = currentNotif)
+                        }
                         try {
                             userDocument(uid)?.set(
                                 updates,
@@ -1191,17 +1275,20 @@ class AuthRepository(private val context: Context) {
         val uid = getCurrentUserId()
         if (uid.isBlank()) return
         val currentTz = TimeZone.getDefault().id
+        val currentNotif = getComputedNotificationStatus()
         _currentUserState.value = _currentUserState.value?.copy(
             isOnline = online,
             lastSeen = System.currentTimeMillis(),
-            timeZone = currentTz
+            timeZone = currentTz,
+            notificationStatus = currentNotif
         )
         try {
             val updates = mutableMapOf<String, Any>(
                 "isOnline" to online,
                 "online" to online,
                 "lastSeen" to System.currentTimeMillis(),
-                "timeZone" to currentTz
+                "timeZone" to currentTz,
+                "notificationStatus" to currentNotif
             )
             if (!online) {
                 updates["typingInChat"] = false
@@ -1344,6 +1431,10 @@ class AuthRepository(private val context: Context) {
                                 lastSeen = docLastSeen
                             )
                         }
+                        val docNotifStatus = snapshot.getString("notificationStatus")
+                        if (!docNotifStatus.isNullOrBlank() && user.notificationStatus != docNotifStatus) {
+                            user = user.copy(notificationStatus = docNotifStatus)
+                        }
                     }
                     _currentUserState.value = user
                     user?.let { saveLocalUserSession(it) }
@@ -1420,6 +1511,10 @@ class AuthRepository(private val context: Context) {
                     isOnline = boolOnline,
                     lastSeen = docLastSeen
                 )
+            }
+            val docNotifStatus = doc.getString("notificationStatus")
+            if (!docNotifStatus.isNullOrBlank() && partner.notificationStatus != docNotifStatus) {
+                partner = partner.copy(notificationStatus = docNotifStatus)
             }
             if (!doc.metadata.isFromCache) {
                 val now = System.currentTimeMillis()
@@ -1550,7 +1645,22 @@ class AuthRepository(private val context: Context) {
         ensureFirebaseAuth {
             try {
                 userDocument(uid)?.set(mapOf("fcmToken" to token), com.google.firebase.firestore.SetOptions.merge())
-                Log.i("AuthRepository", "FCM token saved successfully for user $uid")
+                val altUid = if (uid.startsWith("user_")) uid.removePrefix("user_") else "user_$uid"
+                userDocument(altUid)?.set(mapOf("fcmToken" to token), com.google.firebase.firestore.SetOptions.merge())
+                val coupleId = _currentUserState.value?.coupleId
+                if (!coupleId.isNullOrBlank()) {
+                    val cleanUid = uid.removePrefix("user_").lowercase()
+                    firestore?.collection("couples")?.document(coupleId)
+                        ?.get()?.addOnSuccessListener { snap ->
+                            if (snap != null && snap.exists()) {
+                                val p1Id = snap.getString("partner1Id")?.removePrefix("user_")?.lowercase()
+                                val isP1 = p1Id == cleanUid || snap.getString("partner1Name")?.trim()?.lowercase() == cleanUid
+                                val tokenField = if (isP1) "partner1FcmToken" else "partner2FcmToken"
+                                snap.reference.set(mapOf(tokenField to token), com.google.firebase.firestore.SetOptions.merge())
+                            }
+                        }
+                }
+                Log.i("AuthRepository", "FCM token saved successfully for user $uid and couple")
             } catch (e: Exception) {
                 Log.w("AuthRepository", "Failed saving FCM token: ${e.message}")
             }
@@ -1571,7 +1681,22 @@ class AuthRepository(private val context: Context) {
                             .apply()
                         ensureFirebaseAuth {
                             userDocument(uid)?.set(mapOf("fcmToken" to token), com.google.firebase.firestore.SetOptions.merge())
-                            Log.i("AuthRepository", "FCM token updated successfully for user $uid")
+                            val altUid = if (uid.startsWith("user_")) uid.removePrefix("user_") else "user_$uid"
+                            userDocument(altUid)?.set(mapOf("fcmToken" to token), com.google.firebase.firestore.SetOptions.merge())
+                            val coupleId = _currentUserState.value?.coupleId
+                            if (!coupleId.isNullOrBlank()) {
+                                val cleanUid = uid.removePrefix("user_").lowercase()
+                                firestore?.collection("couples")?.document(coupleId)
+                                    ?.get()?.addOnSuccessListener { snap ->
+                                        if (snap != null && snap.exists()) {
+                                            val p1Id = snap.getString("partner1Id")?.removePrefix("user_")?.lowercase()
+                                            val isP1 = p1Id == cleanUid || snap.getString("partner1Name")?.trim()?.lowercase() == cleanUid
+                                            val tokenField = if (isP1) "partner1FcmToken" else "partner2FcmToken"
+                                            snap.reference.set(mapOf(tokenField to token), com.google.firebase.firestore.SetOptions.merge())
+                                        }
+                                    }
+                            }
+                            Log.i("AuthRepository", "FCM token updated successfully for user $uid and couple")
                         }
                     }
                 }
@@ -1640,6 +1765,7 @@ class AuthRepository(private val context: Context) {
             .putString("checkAfterNote", user.checkAfterNote ?: "")
             .putBoolean("checkAfterActive", user.checkAfterActive)
             .putString("timeZone", user.timeZone ?: TimeZone.getDefault().id)
+            .putString("notificationStatus", user.notificationStatus ?: "OPEN")
             .apply()
     }
 
@@ -1659,6 +1785,7 @@ class AuthRepository(private val context: Context) {
             val partnerEmail = prefs.getString("partnerEmail", null)?.trim()?.ifBlank { null }
             val coupleId = rawCoupleId
             val timeZone = prefs.getString("timeZone", null)?.trim()?.ifBlank { null } ?: TimeZone.getDefault().id
+            val notificationStatus = prefs.getString("notificationStatus", "OPEN") ?: "OPEN"
             val defaultName = uid.removePrefix("user_").replaceFirstChar { it.uppercase() }
             val user = User(
                 id = uid,
@@ -1672,7 +1799,8 @@ class AuthRepository(private val context: Context) {
                 checkAfterTimeMillis = if (targetTime > 0L) targetTime else null,
                 checkAfterNote = note.ifBlank { null },
                 checkAfterActive = active,
-                timeZone = timeZone
+                timeZone = timeZone,
+                notificationStatus = notificationStatus
             )
             _currentUserState.value = user
             if (!partnerId.isNullOrBlank()) {
@@ -1686,7 +1814,8 @@ class AuthRepository(private val context: Context) {
                         partnerEmail = user.email,
                         coupleId = coupleId,
                         isOnline = false,
-                        statusMessage = "Always with you 💕"
+                        statusMessage = "Always with you 💕",
+                        notificationStatus = "OPEN"
                     )
                 }
             }

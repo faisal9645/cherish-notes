@@ -993,6 +993,22 @@ fun ProfileScreen(
                     }
                 )
 
+                if (partner != null) {
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), thickness = 0.6.dp)
+                    val partnerNotifStatus = partner.notificationStatus ?: "OPEN"
+                    val (partnerLabel, partnerIcon, partnerDesc) = when (partnerNotifStatus.uppercase()) {
+                        "SAFE", "HIDDEN" -> Triple("Safe", "🛡️", "Disguised as Notes for privacy")
+                        "CLOSED", "OFF", "MUTED" -> Triple("Closed", "🔕", "Notifications turned off or muted")
+                        else -> Triple("Open", "🔔", "Notifications turned on and visible")
+                    }
+                    val partnerNameDisplay = partner.displayName.ifBlank { "Partner" }
+                    ListItem(
+                        headlineContent = { Text("$partnerNameDisplay's Alerts: $partnerLabel", fontSize = 15.sp, fontWeight = FontWeight.SemiBold) },
+                        supportingContent = { Text(partnerDesc, fontSize = 13.sp) },
+                        leadingContent = { Text(partnerIcon, fontSize = 20.sp) }
+                    )
+                }
+
             }
 
             // 4. Appearance & Experience Section
@@ -1460,10 +1476,14 @@ fun ProfileScreen(
                     supportingContent = {
                         val currentTz = uiState.partnerCustomTimeZone ?: partner?.timeZone ?: "Auto-detect"
                         val displayCity = when {
-                            currentTz.contains("Dubai", ignoreCase = true) -> "Dubai (GST, UTC+4) 🇦🇪"
-                            currentTz.contains("Kolkata", ignoreCase = true) ||
-                                currentTz.contains("Calcutta", ignoreCase = true) ||
-                                currentTz.contains("Chennai", ignoreCase = true) -> "Chennai / India (IST, UTC+5:30) 🇮🇳"
+                            currentTz.contains("Sydney", ignoreCase = true) -> "Sydney (AEST/AEDT, UTC+10/11) 🇦🇺"
+                            currentTz.contains("Melbourne", ignoreCase = true) -> "Melbourne (AEST/AEDT, UTC+10/11) 🇦🇺"
+                            currentTz.contains("Brisbane", ignoreCase = true) -> "Brisbane (AEST, UTC+10) 🇦🇺"
+                            currentTz.contains("Perth", ignoreCase = true) -> "Perth (AWST, UTC+8) 🇦🇺"
+                            currentTz.contains("Adelaide", ignoreCase = true) -> "Adelaide (ACST/ACDT, UTC+9:30/10:30) 🇦🇺"
+                            currentTz.contains("Darwin", ignoreCase = true) -> "Darwin (ACST, UTC+9:30) 🇦🇺"
+                            currentTz.contains("Hobart", ignoreCase = true) -> "Hobart (AEST/AEDT, UTC+10/11) 🇦🇺"
+                            currentTz.startsWith("Australia/", ignoreCase = true) -> currentTz.substringAfter("Australia/") + " 🇦🇺"
                             else -> currentTz
                         }
                         Text("Active: $displayCity", fontSize = 13.sp)
@@ -1479,8 +1499,11 @@ fun ProfileScreen(
                 ) {
                     listOf(
                         "Auto" to null,
-                        "Dubai (UAE)" to "Asia/Dubai",
-                        "Chennai (India)" to "Asia/Kolkata"
+                        "Sydney" to "Australia/Sydney",
+                        "Melbourne" to "Australia/Melbourne",
+                        "Brisbane" to "Australia/Brisbane",
+                        "Perth" to "Australia/Perth",
+                        "Adelaide" to "Australia/Adelaide"
                     ).forEach { (label, tz) ->
                         val isSelected = if (tz == null) uiState.partnerCustomTimeZone == null else uiState.partnerCustomTimeZone == tz
                         FilterChip(

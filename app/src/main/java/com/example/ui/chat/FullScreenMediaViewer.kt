@@ -97,6 +97,8 @@ fun FullScreenMediaViewer(
     onShowInChat: ((url: String) -> Unit)? = null,
     onDeleteMedia: ((url: String) -> Unit)? = null,
     openFrom: TransformOrigin = TransformOrigin.Center,
+    isCircularVideo: Boolean = false,
+    circularMediaUrls: Set<String> = emptySet(),
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
@@ -545,16 +547,36 @@ fun FullScreenMediaViewer(
                         ),
                     contentAlignment = Alignment.Center
                 ) {
-                    val isVideoNote = isVideo && (
+                    val isVideoNote = (isVideo || isCircularVideo || pageUrl in circularMediaUrls) && (
+                        (pageUrl == mediaUrl && isCircularVideo) ||
+                        pageUrl in circularMediaUrls ||
                         pageUrl.contains("videonote", ignoreCase = true) ||
                         pageUrl.contains("video_note", ignoreCase = true)
                     )
                     if (isVideoNote) {
-                        com.example.ui.components.CircularVideoNoteView(
-                            videoUrl = pageUrl,
-                            autoPlay = true,
-                            modifier = Modifier.size(340.dp)
-                        )
+                        val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+                        val screenWidth = configuration.screenWidthDp.dp
+                        val screenHeight = configuration.screenHeightDp.dp
+                        // Maximize circular video player: make it big, filling almost the entire screen width
+                        // with a small clean margin, while fitting comfortably vertically above bottom controls
+                        val maxAllowedDiameter = minOf(screenWidth - 16.dp, screenHeight - 140.dp)
+                        val playerDiameter = maxAllowedDiameter.coerceAtLeast(340.dp)
+                        Box(
+                            modifier = Modifier
+                                .size(playerDiameter)
+                                .clip(CircleShape)
+                                .background(Color(0xFF0F172A))
+                                .border(3.dp, Color(0xFF3B82F6).copy(alpha = 0.65f), CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            com.example.ui.components.CircularVideoNoteView(
+                                videoUrl = pageUrl,
+                                autoPlay = true,
+                                shape = CircleShape,
+                                cropToFill = true,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
                     } else if (isVideo) {
                         // A shared video: full width, whole picture shown
                         com.example.ui.components.CircularVideoNoteView(

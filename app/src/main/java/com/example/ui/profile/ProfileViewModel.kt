@@ -188,6 +188,9 @@ class ProfileViewModel(
             com.example.notifications.NotificationHelper.cancelStatusBarNotifications(context)
         }
         _uiState.update { it.copy(isNotificationsEnabled = enabled) }
+        viewModelScope.launch {
+            authRepository.updateNotificationStatus()
+        }
     }
 
     fun setBadgeNotificationEnabled(context: android.content.Context, enabled: Boolean) {
@@ -356,6 +359,9 @@ class ProfileViewModel(
     fun setHideNotificationContent(hide: Boolean) {
         securityPreferences.setHideNotificationContent(hide)
         _uiState.update { it.copy(isHideNotificationContent = hide) }
+        viewModelScope.launch {
+            authRepository.updateNotificationStatus()
+        }
     }
 
     fun setDisguiseMode(enabled: Boolean) {

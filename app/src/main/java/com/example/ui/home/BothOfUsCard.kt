@@ -126,7 +126,8 @@ data class LovePerson(
     val isCharging: Boolean = false,
     // Only used to tell which of us is which side
     val email: String? = null,
-    val timeZone: String? = null
+    val timeZone: String? = null,
+    val notificationStatus: String? = null
 )
 
 /**
@@ -164,10 +165,14 @@ fun formatPartnerLocalTimeIfDifferent(
     }
     val timeFormatted = formatter.format(Date(now))
     val cityPrefix = when {
-        cleanPartnerTz.contains("Dubai", ignoreCase = true) -> "Dubai"
-        cleanPartnerTz.contains("Kolkata", ignoreCase = true) ||
-            cleanPartnerTz.contains("Calcutta", ignoreCase = true) ||
-            cleanPartnerTz.contains("Chennai", ignoreCase = true) -> "Chennai"
+        cleanPartnerTz.contains("Sydney", ignoreCase = true) -> "Sydney"
+        cleanPartnerTz.contains("Melbourne", ignoreCase = true) -> "Melbourne"
+        cleanPartnerTz.contains("Brisbane", ignoreCase = true) -> "Brisbane"
+        cleanPartnerTz.contains("Perth", ignoreCase = true) -> "Perth"
+        cleanPartnerTz.contains("Adelaide", ignoreCase = true) -> "Adelaide"
+        cleanPartnerTz.contains("Darwin", ignoreCase = true) -> "Darwin"
+        cleanPartnerTz.contains("Hobart", ignoreCase = true) -> "Hobart"
+        cleanPartnerTz.startsWith("Australia/", ignoreCase = true) -> cleanPartnerTz.substringAfter("Australia/")
         else -> null
     }
     val prefix = if (cityPrefix != null) "$cityPrefix time" else label
@@ -1148,6 +1153,63 @@ private fun PersonDetails(
             CardBattery(level = person.batteryLevel, isCharging = person.isCharging, showPercentage = person.isOnline)
         }
 
+        // Alerts / Notification Status (Open, Safe, Closed)
+        val notifStatus = person.notificationStatus ?: "OPEN"
+        val notifInfo = when (notifStatus.uppercase()) {
+            "SAFE", "HIDDEN" -> NotificationStatusInfo(
+                label = "Safe",
+                icon = "🛡️",
+                bg = Color(0xFFF59E0B).copy(alpha = if (cc.isLight) 0.12f else 0.22f),
+                border = Color(0xFFF59E0B).copy(alpha = 0.45f),
+                tint = if (cc.isLight) Color(0xFFB45309) else Color(0xFFFBBF24),
+                desc = if (isPartner) "Partner's alerts are disguised as Notes for privacy" else "Your alerts are disguised as Notes for privacy"
+            )
+            "CLOSED", "OFF", "MUTED" -> NotificationStatusInfo(
+                label = "Closed",
+                icon = "🔕",
+                bg = cc.dimInk.copy(alpha = if (cc.isLight) 0.08f else 0.18f),
+                border = cc.dimInk.copy(alpha = 0.35f),
+                tint = cc.dimInk,
+                desc = if (isPartner) "Partner has turned off or muted notifications" else "Your notifications are currently turned off or muted"
+            )
+            else -> NotificationStatusInfo(
+                label = "Open",
+                icon = "🔔",
+                bg = OnlineGreen.copy(alpha = if (cc.isLight) 0.10f else 0.20f),
+                border = OnlineGreen.copy(alpha = 0.40f),
+                tint = if (cc.isLight) Color(0xFF1B5E20) else OnlineGreen,
+                desc = if (isPartner) "Partner has notifications turned on and visible" else "Your notifications are turned on and visible"
+            )
+        }
+        val context = LocalContext.current
+        Spacer(modifier = Modifier.height(3.5.dp))
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .clip(RoundedCornerShape(50))
+                .background(notifInfo.bg)
+                .border(0.8.dp, notifInfo.border, RoundedCornerShape(50))
+                .clickable {
+                    Toast.makeText(
+                        context,
+                        "${if (isPartner) "Partner" else "You"}: Alerts ${notifInfo.label} · ${notifInfo.desc}",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+                .padding(horizontal = 7.dp, vertical = 2.dp)
+                .testTag("notification_status_${person.id}")
+        ) {
+            Text(text = notifInfo.icon, fontSize = 9.sp)
+            Spacer(modifier = Modifier.width(3.dp))
+            Text(
+                text = "Alerts: ${notifInfo.label}",
+                fontSize = 10.5.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = notifInfo.tint,
+                letterSpacing = 0.1.sp
+            )
+        }
+
         // Age, days of life and birthday (tap to set or change the birthday)
         val born = parseDay(person.birthday)?.takeIf { now >= it.timeInMillis }
         Column(
@@ -1376,3 +1438,13 @@ fun DayPickerDialog(title: String, initial: String?, onPick: (String) -> Unit, o
         )
     }
 }
+
+private data class NotificationStatusInfo(
+    val label: String,
+    val icon: String,
+    val bg: Color,
+    val border: Color,
+    val tint: Color,
+    val desc: String
+)
+

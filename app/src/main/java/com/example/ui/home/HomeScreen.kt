@@ -325,6 +325,7 @@ fun HomeScreen(
                 while (true) {
                     val info = battery.getCurrentBattery()
                     homeApp.authRepository.updateBatteryStatus(info.level, info.isCharging)
+                    homeApp.authRepository.updateNotificationStatus()
                     delay(BATTERY_REFRESH_MS)
                 }
             }
@@ -356,7 +357,8 @@ fun HomeScreen(
                     batteryLevel = currentUser?.batteryLevel,
                     isCharging = currentUser?.isCharging == true,
                     email = currentUser?.email,
-                    timeZone = myTz
+                    timeZone = myTz,
+                    notificationStatus = currentUser?.notificationStatus
                 )
             val partnerPerson = LovePerson(
                     id = partnerId,
@@ -369,7 +371,8 @@ fun HomeScreen(
                     batteryLevel = partner?.batteryLevel,
                     isCharging = partner?.isCharging == true,
                     email = partner?.email?.ifBlank { null } ?: currentUser?.partnerEmail,
-                    timeZone = effectivePartnerTz
+                    timeZone = effectivePartnerTz,
+                    notificationStatus = partner?.notificationStatus
                 )
             BothOfUsCard(
                 me = mePerson,

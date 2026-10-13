@@ -580,7 +580,8 @@ fun ChatScreen(
             },
             openMedia = { message, url, siblings ->
                 (context.applicationContext as? com.example.CherishApplication)?.securityPreferences?.isMediaViewerActive = true
-                val isVideo = message.getTypedType() == MessageType.VIDEO || message.isVideoNote || message.isCircularVideoNote()
+                val isVideoNote = message.isCircularVideoNote() || message.isVideoNote
+                val isVideo = message.getTypedType() == MessageType.VIDEO || isVideoNote
                 val ownPhotos = siblings ?: message.getAllMediaUrls()
                 val mediaList = when {
                     isVideo -> listOf(url)
@@ -591,7 +592,7 @@ fun ChatScreen(
                         .distinct()
                         .ifEmpty { listOf(url) }
                 }
-                viewModel.openFullScreenMedia(url, if (isVideo) MessageType.VIDEO else MessageType.IMAGE, mediaList)
+                viewModel.openFullScreenMedia(url, if (isVideo) MessageType.VIDEO else MessageType.IMAGE, mediaList, isVideoNote = isVideoNote)
             },
             reply = { message -> viewModel.setReplyingTo(message) },
             longPress = { message, bounds ->
@@ -895,7 +896,7 @@ fun ChatScreen(
         } else if (uiState.isSearching) {
             viewModel.setSearching(false)
         } else {
-            onQuickDisguise()
+            onNavigateBack()
         }
     }
 
@@ -2682,10 +2683,19 @@ fun ChatScreen(
     // Full-screen media viewer
     uiState.fullScreenMediaUrl?.let { url ->
         val openFrom = remember(url) { TransformOrigin(lastTouchFraction[0], lastTouchFraction[1]) }
+        val circularUrls = remember(uiState.messages) {
+            uiState.messages
+                .filter { it.isCircularVideoNote() || it.isVideoNote }
+                .flatMap { it.getAllMediaUrls().ifEmpty { listOfNotNull(it.mediaUrl) } }
+                .filter { it.isNotBlank() }
+                .toSet()
+        }
         FullScreenMediaViewer(
             mediaUrl = url,
             allMediaUrls = uiState.allMediaUrlsForViewer,
             openFrom = openFrom,
+            isCircularVideo = uiState.isFullScreenVideoNote,
+            circularMediaUrls = circularUrls,
             onShowInChat = { clickedUrl ->
                 val targetMsg = uiState.messages.find { it.mediaUrl == clickedUrl || it.getAllMediaUrls().contains(clickedUrl) }
                 if (targetMsg != null && !viewModel.navigateToMessageInChat(targetMsg.id)) {

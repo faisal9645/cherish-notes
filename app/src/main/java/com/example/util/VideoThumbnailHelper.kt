@@ -14,6 +14,13 @@ import java.net.HttpURLConnection
 import java.net.URL
 import kotlin.math.abs
 
+data class VideoInfo(
+    val aspect: Float,
+    val durationSeconds: Int,
+    val width: Int,
+    val height: Int
+)
+
 object VideoThumbnailHelper {
     private val maxCacheBytes = ((Runtime.getRuntime().maxMemory() / 16)
         .coerceIn(4 * 1024 * 1024L, 24 * 1024 * 1024L)).toInt()
@@ -23,6 +30,10 @@ object VideoThumbnailHelper {
             return value.byteCount.coerceAtLeast(1)
         }
     }
+
+    private val videoInfoCache = java.util.concurrent.ConcurrentHashMap<String, VideoInfo>()
+
+    fun getVideoInfo(videoPathOrUrl: String): VideoInfo? = videoInfoCache[videoPathOrUrl]
 
     fun trimMemory(level: Int) {
         if (level >= android.content.ComponentCallbacks2.TRIM_MEMORY_MODERATE) {
@@ -211,6 +222,24 @@ object VideoThumbnailHelper {
                 if (bitmap != null) {
                     memoryCache.put(videoPathOrUrl, bitmap)
                 }
+
+                try {
+                    val rot = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_ROTATION)?.toIntOrNull() ?: 0
+                    val rawW = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)?.toIntOrNull() ?: (bitmap?.width ?: 0)
+                    val rawH = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)?.toIntOrNull() ?: (bitmap?.height ?: 0)
+                    val durMs = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L
+                    val isRotated = rot == 90 || rot == 270
+                    val orientedW = if (isRotated) rawH else rawW
+                    val orientedH = if (isRotated) rawW else rawH
+                    val aspect = if (orientedH > 0 && orientedW > 0) orientedW.toFloat() / orientedH.toFloat() else (bitmap?.let { it.width.toFloat() / it.height.toFloat() } ?: 1f)
+                    videoInfoCache[videoPathOrUrl] = VideoInfo(
+                        aspect = aspect,
+                        durationSeconds = (durMs / 1000).toInt().coerceAtLeast(0),
+                        width = orientedW,
+                        height = orientedH
+                    )
+                } catch (_: Exception) {}
+
                 bitmap
             } catch (e: Exception) {
                 Log.w("VideoThumbnailHelper", "Failed getting thumbnail: ${e.message}")

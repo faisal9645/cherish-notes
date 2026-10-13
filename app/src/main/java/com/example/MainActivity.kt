@@ -411,6 +411,7 @@ class MainActivity : FragmentActivity() {
             val info = batteryHelper.getCurrentBattery()
             lifecycleScope.launch {
                 app.authRepository.updateBatteryStatus(info.level, info.isCharging)
+                app.authRepository.updateNotificationStatus()
             }
             // Morning unlock: resets "Asleep 🌙" status to active when partner or user opens phone in morning
             val currentStatus = app.authRepository.currentUserState.value?.statusMessage

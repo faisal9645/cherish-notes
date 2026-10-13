@@ -116,9 +116,9 @@ object NotificationHelper {
         conversationId: String? = null,
         messageId: String? = null
     ) {
-        // Nothing pops up while the app is open on screen (any tab, or Notes): the app shows new
-        // messages itself. Notifications are for when it's closed or in the background.
-        if (isAppOpenOnScreen(context)) {
+        // Don't show status bar notification only if user is actively viewing the live chat screen
+        // (if in Notes disguise, other tabs, or app is backgrounded/closed, notification alerts normally)
+        if (isUserActivelyViewingChat(context)) {
             return
         }
 

@@ -53,6 +53,7 @@ data class ChatUiState(
     val selectedMessageForActions: Message? = null,
     val fullScreenMediaUrl: String? = null,
     val fullScreenMediaType: MessageType? = null,
+    val isFullScreenVideoNote: Boolean = false,
     val allMediaUrlsForViewer: List<String> = emptyList(),
     val gallerySize: String = "large",
     val isUploadingMedia: Boolean = false,
@@ -961,12 +962,13 @@ class ChatViewModel(
         }
     }
 
-    fun openFullScreenMedia(url: String, type: MessageType, allUrls: List<String> = emptyList()) {
+    fun openFullScreenMedia(url: String, type: MessageType, allUrls: List<String> = emptyList(), isVideoNote: Boolean = false) {
         _uiState.update {
             it.copy(
                 fullScreenMediaUrl = url,
                 fullScreenMediaType = type,
-                allMediaUrlsForViewer = if (allUrls.isNotEmpty()) allUrls else listOf(url)
+                allMediaUrlsForViewer = if (allUrls.isNotEmpty()) allUrls else listOf(url),
+                isFullScreenVideoNote = isVideoNote
             )
         }
     }
@@ -977,7 +979,7 @@ class ChatViewModel(
     }
 
     fun closeFullScreenMedia() {
-        _uiState.update { it.copy(fullScreenMediaUrl = null, fullScreenMediaType = null, allMediaUrlsForViewer = emptyList()) }
+        _uiState.update { it.copy(fullScreenMediaUrl = null, fullScreenMediaType = null, allMediaUrlsForViewer = emptyList(), isFullScreenVideoNote = false) }
     }
 
     /**

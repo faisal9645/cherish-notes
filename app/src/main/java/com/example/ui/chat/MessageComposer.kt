@@ -459,7 +459,7 @@ fun MessageComposer(
                 .fillMaxWidth()
                 .align(Alignment.CenterHorizontally)
                 .padding(start = 12.dp, end = 12.dp, top = if (isPrivateMode) 6.dp else 8.dp, bottom = if (isPrivateMode) 6.dp else 8.dp),
-            verticalAlignment = if (isPrivateMode) Alignment.Bottom else Alignment.CenterVertically
+            verticalAlignment = Alignment.CenterVertically
         ) {
             Column(
                 modifier = Modifier.weight(1f),
@@ -685,7 +685,7 @@ fun MessageComposer(
                             .background(pillBg)
                             .border(BorderStroke(1.dp, pillBorder), RoundedCornerShape(26.dp))
                             .padding(start = 6.dp, end = 6.dp, top = 4.dp, bottom = 4.dp),
-                        verticalAlignment = Alignment.Bottom
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
                         // ChatGPT's plain "+" at the start (toggles attachment/emoji panel)
                         IconButton(

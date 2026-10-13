@@ -85,7 +85,8 @@ fun CherishNavGraph(
     val isDisguiseActive by app.securityPreferences.isDisguiseActive.collectAsState()
     val hasRevealedSecretApp by app.securityPreferences.hasRevealedSecretAppInSession.collectAsState()
     val isAppLocked by app.securityPreferences.isAppLocked.collectAsState()
-    val isUserLoggedIn = remember { app.authRepository.isUserLoggedIn() }
+    val currentUserState by app.authRepository.currentUserState.collectAsState()
+    val isUserLoggedIn = currentUserState != null || app.authRepository.isUserLoggedIn()
 
     // Stable start destination: computed once per process, survives recomposition
     // and Activity recreation so navigation state is never accidentally reset

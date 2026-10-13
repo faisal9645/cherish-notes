@@ -130,13 +130,19 @@ jobs:
           VERSION_CODE=$(grep -oP 'versionCode\s*=\s*\K[0-9]+' app/build.gradle.kts)
           TAG_NAME="v${VERSION_NAME}-${VERSION_CODE}"
           
+          # Create alias APK filenames for seamless OTA downloading
+          if [ -f app/build/outputs/apk/release/app-release.apk ]; then
+            cp app/build/outputs/apk/release/app-release.apk app/build/outputs/apk/release/app_update_${VERSION_CODE}.apk || true
+            cp app/build/outputs/apk/release/app-release.apk app/build/outputs/apk/release/cherish-notes-${TAG_NAME}.apk || true
+          fi
+
           # Check if release already exists
           if gh release view "$TAG_NAME" > /dev/null 2>&1; then
             echo "Release $TAG_NAME already exists, skipping creation."
           else
             echo "Creating new release $TAG_NAME..."
             gh release create "$TAG_NAME" \
-              --title "Release $TAG_NAME" \
+              --title "$TAG_NAME" \
               --notes "Automated OTA update for version $VERSION_NAME (Build $VERSION_CODE)" \
               app/build/outputs/apk/release/*.apk
           fi
