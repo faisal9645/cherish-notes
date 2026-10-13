@@ -243,6 +243,7 @@ def sync_git_and_push(project_root: str, token: str, version_code: int, version_
     res = subprocess.run([git_cmd, "push", push_url, "main"], cwd=project_root, capture_output=True, text=True)
     if res.returncode == 0:
         print("Pushed version bump and version.json to origin main successfully!", flush=True)
+        subprocess.run([git_cmd, "fetch", "origin", "main"], cwd=project_root, capture_output=True)
     else:
         res2 = subprocess.run([git_cmd, "push", "origin", "main"], cwd=project_root, capture_output=True, text=True)
         if res2.returncode == 0:
