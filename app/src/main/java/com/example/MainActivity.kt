@@ -183,6 +183,7 @@ class MainActivity : FragmentActivity() {
 
     private fun handleNotificationIntent(intent: android.content.Intent?) {
         if (intent == null) return
+        com.example.notifications.NotificationHelper.clearNotifications(this)
         val openNoteId = intent.getStringExtra("open_note_id")
         if (!openNoteId.isNullOrBlank()) {
             app.securityPreferences.reDisguise()
@@ -393,6 +394,11 @@ class MainActivity : FragmentActivity() {
 
     /** Set when the app comes back, so the next window focus can drop a left-over keyboard. */
     private var hideKeyboardOnFocus = false
+
+    override fun onStart() {
+        super.onStart()
+        com.example.notifications.NotificationHelper.clearNotifications(this)
+    }
 
     override fun onResume() {
         super.onResume()

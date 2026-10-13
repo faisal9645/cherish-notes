@@ -41,7 +41,7 @@ import kotlinx.coroutines.withTimeoutOrNull
  */
 object CallManager {
     private const val TAG = "CallManager"
-    private const val RING_TIMEOUT_MS = 45_000L
+    private const val RING_TIMEOUT_MS = 75_000L
     private const val RECONNECT_GIVE_UP_MS = 60_000L
     private const val PEER_LOST_GIVE_UP_MS = 45_000L
     private const val ENDED_SCREEN_MS = 2_500L
@@ -221,8 +221,8 @@ object CallManager {
 
     fun onIncomingInvite(invite: CallInvite) = post {
         val now = System.currentTimeMillis()
-        // Allow reasonable clock drift between partner devices (up to 30s)
-        if (invite.ringUntil > 0 && invite.ringUntil < (now - 30_000L)) return@post
+        // Allow reasonable clock drift between partner devices (up to 60s)
+        if (invite.ringUntil > 0 && invite.ringUntil < (now - 60_000L)) return@post
         val me = app.authRepository.getCurrentUserId()
         val myCouple = currentCoupleId()
         if (me.isBlank() || myCouple == null || invite.coupleId != myCouple || isSameUser(invite.callerId, me)) return@post
@@ -247,11 +247,11 @@ object CallManager {
         CallNotifications.showIncoming(app, invite)
         observeCallRecord()
         val remaining = invite.ringUntil - System.currentTimeMillis()
-        // Ensure the callee has ample time to attend (at least 45 seconds) rather than clamping to 5 seconds!
-        val ringLeft = if (remaining < 20_000L) RING_TIMEOUT_MS else remaining.coerceAtMost(60_000L)
+        // Ensure the callee has ample time to attend (at least 75 seconds) rather than premature timeout
+        val ringLeft = if (remaining < 25_000L) RING_TIMEOUT_MS else remaining.coerceAtMost(90_000L)
         val id = invite.callId
         ringTimeoutJob = scope.launch {
-            delay(ringLeft + 3_000L)
+            delay(ringLeft + 5_000L)
             if (callId == id && _state.value.phase == CallPhase.INCOMING_RINGING) {
                 CallNotifications.showMissed(app, id, peerName(callerNameHint))
                 finish(CallEndReason.MISSED, serverReason = null)
@@ -478,7 +478,10 @@ object CallManager {
         myUid = info.uid
         peerUid = if (info.uid == CALLER_UID) CALLEE_UID else CALLER_UID
         if (!engine.start(info.appId, engineListener)) {
-            if (callId == id) finish(CallEndReason.FAILED, serverReason = "error")
+            Log.e(TAG, "Agora engine failed to start on this device")
+            if (callId == id && _state.value.phase == CallPhase.CONNECTED) {
+                finish(CallEndReason.FAILED, serverReason = "error")
+            }
             return
         }
         // Ended while the audio was starting: don't join after all
@@ -486,7 +489,9 @@ object CallManager {
             engine.stop()
             return
         }
-        if (!engine.join(info.token, info.channel, info.uid)) finish(CallEndReason.FAILED, serverReason = "error")
+        if (!engine.join(info.token, info.channel, info.uid)) {
+            Log.w(TAG, "Agora join returned non-zero, engine will attempt reconnect")
+        }
     }
 
     private fun endOnServer(couple: String, me: String, id: String, reason: String) {

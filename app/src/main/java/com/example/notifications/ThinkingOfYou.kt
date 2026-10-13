@@ -55,24 +55,39 @@ object ThinkingOfYou {
             return false
         }
 
-        // Acquire a brief partial wake lock so the heartbeat vibration pattern completes
-        // even if the phone screen is off or app is closed in background
-        val powerManager = context.getSystemService(Context.POWER_SERVICE) as? PowerManager
-        val wakeLock = powerManager?.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "Cherish::HeartbeatWakeLock")
-        try {
-            wakeLock?.acquire(2000L)
-            playHeartbeat(context)
-            Log.d("ThinkingOfYou", "Heartbeat vibration played successfully for $signalId")
-        } finally {
-            if (wakeLock?.isHeld == true) {
-                try { wakeLock.release() } catch (_: Exception) {}
-            }
+        val isAppInForeground = NotificationHelper.isAppOpenOnScreen(context)
+
+        // If Cherish app is closed or in background, and a notification is already sitting in tray (not cleared),
+        // suppress both vibration and notification so duplicate alerts/sounds do not happen.
+        if (!isAppInForeground && NotificationHelper.isAlertAlreadyTriggered()) {
+            Log.d("ThinkingOfYou", "Prior notification not yet opened/cleared; suppressing duplicate heartbeat alert")
+            return false
         }
 
-        _received.tryEmit(System.currentTimeMillis())
+        // If app is currently open on screen, play gentle heartbeat and emit pulse to chat
+        if (isAppInForeground) {
+            playHeartbeat(context)
+            _received.tryEmit(System.currentTimeMillis())
+            return true
+        }
 
-        // When the app is closed or in the background, alert according to user disguise & badge preferences
-        if (!NotificationHelper.isAppOpenOnScreen(context) && secPrefs.isNotificationsEnabled()) {
+        // Cherish is closed/in background and no prior notification is waiting:
+        // Alert once according to preferences
+        if (secPrefs.isNotificationsEnabled()) {
+            val powerManager = context.getSystemService(Context.POWER_SERVICE) as? PowerManager
+            val wakeLock = powerManager?.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "Cherish::HeartbeatWakeLock")
+            try {
+                wakeLock?.acquire(2000L)
+                playHeartbeat(context)
+                Log.d("ThinkingOfYou", "Heartbeat vibration played successfully for $signalId")
+            } finally {
+                if (wakeLock?.isHeld == true) {
+                    try { wakeLock.release() } catch (_: Exception) {}
+                }
+            }
+
+            _received.tryEmit(System.currentTimeMillis())
+
             if (secPrefs.isBadgeNotificationEnabled()) {
                 NotificationHelper.updateLauncherBadge(context, 1)
             }

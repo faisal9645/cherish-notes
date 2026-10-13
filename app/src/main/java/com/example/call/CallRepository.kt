@@ -141,8 +141,8 @@ class CallRepository(private val context: Context) {
             tokenExpiresAt = now + 86400_000L
         )
 
-        val ringExpiresAt = com.google.firebase.Timestamp(java.util.Date(now + 45_000L))
-        val ringExpiresAtMs = now + 45_000L
+        val ringExpiresAt = com.google.firebase.Timestamp(java.util.Date(now + 75_000L))
+        val ringExpiresAtMs = now + 75_000L
 
         // Set call document
         val callDoc = mapOf(

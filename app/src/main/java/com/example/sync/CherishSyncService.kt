@@ -173,7 +173,7 @@ class CherishSyncService : Service() {
                 val isForMe = (cleanCallee == cleanMyUid) || (cleanCaller.isNotBlank() && cleanCaller != cleanMyUid) || cleanCallee.isBlank()
                 val now = System.currentTimeMillis()
 
-                if (state == CallRecord.STATE_RINGING && isForMe && (ringExpiresAt > (now - 15_000L) || ringExpiresAt == 0L)) {
+                if (state == CallRecord.STATE_RINGING && isForMe && (ringExpiresAt > (now - 30_000L) || ringExpiresAt == 0L)) {
                     val partnerName = (applicationContext as? CherishApplication)?.authRepository?.partnerUserState?.value?.displayName.orEmpty()
                     CallManager.onIncomingInvite(
                         CallInvite(
@@ -181,7 +181,7 @@ class CherishSyncService : Service() {
                             coupleId = coupleId,
                             callerId = callerId,
                             callerName = partnerName,
-                            ringUntil = if (ringExpiresAt > now) ringExpiresAt else (now + 45_000L)
+                            ringUntil = if (ringExpiresAt > now) ringExpiresAt else (now + 75_000L)
                         )
                     )
                 }
@@ -219,12 +219,14 @@ class CherishSyncService : Service() {
             val channel = NotificationChannel(
                 CHANNEL_ID,
                 "Notes Sync",
-                NotificationManager.IMPORTANCE_LOW
+                NotificationManager.IMPORTANCE_MIN
             ).apply {
                 description = "Keeps notes, checklists and reminders up to date"
                 setShowBadge(false)
                 enableVibration(false)
                 enableLights(false)
+                setSound(null, null)
+                lockscreenVisibility = android.app.Notification.VISIBILITY_SECRET
             }
             val manager = getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
             manager?.createNotificationChannel(channel)
@@ -234,13 +236,18 @@ class CherishSyncService : Service() {
     private fun buildSyncNotification(): android.app.Notification {
         val prefs = SecurityPreferences.getInstance(this)
         val maskedTitle = prefs.getMaskedNotificationTitle()
+        val appIcon = com.example.notifications.NotificationHelper.getAppIconBitmap(this)
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_stat_notes)
+            .apply {
+                if (appIcon != null) setLargeIcon(appIcon)
+            }
             .setContentTitle(maskedTitle)
             .setContentText("Syncing notes & checklists")
-            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setPriority(NotificationCompat.PRIORITY_MIN)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
-            .setOngoing(true)
+            .setOngoing(false)
+            .setAutoCancel(true)
             .setShowWhen(false)
             .build()
     }

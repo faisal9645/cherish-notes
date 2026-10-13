@@ -95,10 +95,15 @@ object CallNotifications {
             context, REQUEST_DECLINE, CallActionReceiver.declineIntent(context, invite), immutableFlags()
         )
         val remaining = invite.ringUntil - System.currentTimeMillis()
-        val ringFor = if (remaining < 20_000L) 45_000L else remaining.coerceAtMost(60_000L)
+        val ringFor = if (remaining < 25_000L) 75_000L else remaining.coerceAtMost(90_000L)
+
+        val appIcon = com.example.notifications.NotificationHelper.getAppIconBitmap(context)
 
         val builder = NotificationCompat.Builder(context, CHANNEL_INCOMING)
             .setSmallIcon(R.drawable.ic_stat_notes)
+            .apply {
+                if (appIcon != null) setLargeIcon(appIcon)
+            }
             .setColor(ACCENT)
             .setContentTitle(title)
             .setContentText(text)

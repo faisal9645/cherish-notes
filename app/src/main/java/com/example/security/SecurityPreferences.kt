@@ -2,6 +2,7 @@ package com.example.security
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.os.Build
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -66,6 +67,27 @@ class SecurityPreferences(context: Context) {
         // If app lock is enabled and PIN is set, default to locked on cold start
         if (isAppLockEnabled() && hasPin()) {
             _isAppLocked.value = true
+        }
+
+        // Whenever an update installs or fresh install, ensure notifications, hide content,
+        // app icon badge, heartbeat trigger, and in-chat sound effects are all enabled ON
+        val currentVersionCode = try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                context.packageManager.getPackageInfo(context.packageName, 0).longVersionCode.toInt()
+            } else {
+                @Suppress("DEPRECATION")
+                context.packageManager.getPackageInfo(context.packageName, 0).versionCode
+            }
+        } catch (_: Exception) { 0 }
+
+        val lastSeenVersionCode = prefs.getInt(KEY_LAST_SEEN_APP_VERSION, 0)
+        if (currentVersionCode > lastSeenVersionCode) {
+            setNotificationsEnabled(true)
+            setHideNotificationContent(true)
+            setBadgeNotificationEnabled(true)
+            setHeartbeatTriggerEnabled(true)
+            setChatSoundsEnabled(true)
+            prefs.edit().putInt(KEY_LAST_SEEN_APP_VERSION, currentVersionCode).apply()
         }
     }
 
@@ -674,6 +696,7 @@ class SecurityPreferences(context: Context) {
         private const val KEY_CHAT_SOUNDS_ENABLED = "chat_sounds_enabled"
         private const val KEY_PARTNER_CUSTOM_TIMEZONE = "partner_custom_timezone"
         private const val KEY_SEEN_CALL_RECORDING_NOTICE = "seen_call_recording_notice"
+        private const val KEY_LAST_SEEN_APP_VERSION = "last_seen_app_version_code"
 
         @Volatile
         private var INSTANCE: SecurityPreferences? = null

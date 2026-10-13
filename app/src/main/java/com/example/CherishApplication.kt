@@ -171,7 +171,9 @@ class CherishApplication : Application(), coil.ImageLoaderFactory {
             override fun onActivityResumed(activity: android.app.Activity) {
                 val count = resumedCount.incrementAndGet()
                 isAppInForeground = count > 0
-                com.example.notifications.NotificationHelper.clearNotifications(activity)
+                if (activity !is com.example.call.CallActivity) {
+                    com.example.notifications.NotificationHelper.clearNotifications(activity)
+                }
             }
 
             override fun onActivityPaused(activity: android.app.Activity) {
@@ -179,7 +181,11 @@ class CherishApplication : Application(), coil.ImageLoaderFactory {
                 isAppInForeground = count > 0
             }
 
-            override fun onActivityStarted(activity: android.app.Activity) {}
+            override fun onActivityStarted(activity: android.app.Activity) {
+                if (activity !is com.example.call.CallActivity) {
+                    com.example.notifications.NotificationHelper.clearNotifications(activity)
+                }
+            }
             override fun onActivityStopped(activity: android.app.Activity) {}
             override fun onActivityCreated(activity: android.app.Activity, savedInstanceState: android.os.Bundle?) {}
             override fun onActivitySaveInstanceState(activity: android.app.Activity, outState: android.os.Bundle) {}

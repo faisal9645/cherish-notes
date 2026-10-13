@@ -60,7 +60,7 @@ object NotificationHelper {
                 description = "Discreet sync and reminder notifications"
                 enableVibration(true)
                 setShowBadge(true)
-                lockscreenVisibility = NotificationCompat.VISIBILITY_PUBLIC
+                lockscreenVisibility = android.app.Notification.VISIBILITY_PRIVATE
             }
 
             val remindersChannel = NotificationChannel(
@@ -72,7 +72,7 @@ object NotificationHelper {
                 enableVibration(true)
                 setShowBadge(true)
                 enableLights(true)
-                lockscreenVisibility = NotificationCompat.VISIBILITY_PUBLIC
+                lockscreenVisibility = android.app.Notification.VISIBILITY_PRIVATE
             }
 
             val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
@@ -103,6 +103,8 @@ object NotificationHelper {
 
     private val isNotificationAlertTriggered = java.util.concurrent.atomic.AtomicBoolean(false)
 
+    fun isAlertAlreadyTriggered(): Boolean = isNotificationAlertTriggered.get()
+
     /**
      * Show a stealth disguised notification that others will never suspect,
      * consolidated into a single notification without duplicates.
@@ -116,9 +118,14 @@ object NotificationHelper {
         conversationId: String? = null,
         messageId: String? = null
     ) {
-        // Don't show status bar notification only if user is actively viewing the live chat screen
-        // (if in Notes disguise, other tabs, or app is backgrounded/closed, notification alerts normally)
-        if (isUserActivelyViewingChat(context)) {
+        // Don't show notification if user is actively inside the Cherish app or viewing the chat
+        if (isUserActivelyViewingChat(context) || isAppOpenOnScreen(context)) {
+            return
+        }
+
+        // If a notification has already been received and Cherish app has not been opened yet,
+        // do not send/alert subsequent notifications until user opens Cherish chat and closes it
+        if (isNotificationAlertTriggered.get()) {
             return
         }
 
@@ -138,7 +145,6 @@ object NotificationHelper {
             }
         }
 
-        val unreadCount = pendingUnreadCount.incrementAndGet()
         val prefs = SecurityPreferences.getInstance(context)
         val isNotifBarEnabled = prefs.isNotificationsEnabled()
         val isBadgeEnabled = prefs.isBadgeNotificationEnabled()
@@ -148,9 +154,9 @@ object NotificationHelper {
             return
         }
 
-        // Launcher icon badge always shows unread count (or 1) until the app is opened
+        // Launcher icon badge always shows 1 only, even for multiple notifications
         if (isBadgeEnabled) {
-            updateLauncherBadge(context, unreadCount.coerceAtLeast(1))
+            updateLauncherBadge(context, 1)
         } else {
             updateLauncherBadge(context, 0)
         }
@@ -162,12 +168,14 @@ object NotificationHelper {
             return
         }
 
-        val isDiscreet = prefs.isHideNotificationContent() && prefs.isDisguiseModeEnabled()
+        val isHideContent = prefs.isHideNotificationContent()
+        val isDiscreet = isHideContent && prefs.isDisguiseModeEnabled()
 
         val intent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
             putExtra("from_notification", true)
             putExtra("is_discreet", isDiscreet)
+            putExtra("open_chat", !isDiscreet)
             if (!conversationId.isNullOrBlank()) {
                 putExtra("conversationId", conversationId)
             }
@@ -180,11 +188,10 @@ object NotificationHelper {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        // When discreet/hidden mode is enabled, notification payloads mask sender names and contents
-        // Masked: what was chosen in Settings (by default "Notes" / "Checklist reminder updated")
+        // When hide notification content is OFF, behave like normal chat app notifications
         val maskedTitle = prefs.getMaskedNotificationTitle()
         val maskedText = prefs.getMaskedNotificationText()
-        val displayTitle = if (isDiscreet) maskedTitle else senderName
+        val displayTitle = if (isDiscreet) maskedTitle else senderName.ifBlank { "Your Partner" }
         val displayText = if (isDiscreet) {
             maskedText
         } else {
@@ -205,10 +212,13 @@ object NotificationHelper {
             .setContentText(if (isDiscreet) maskedText else displayText)
             .setSubText(subText)
             .setBadgeIconType(if (isBadgeEnabled) NotificationCompat.BADGE_ICON_SMALL else NotificationCompat.BADGE_ICON_NONE)
-            .setNumber(if (isBadgeEnabled) unreadCount.coerceAtLeast(1) else 0)
+            .setNumber(if (isBadgeEnabled) 1 else 0)
+            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+            .setAutoCancel(true)
+            .setOngoing(false)
             .build()
 
-        val notification = NotificationCompat.Builder(context, CHANNEL_MESSAGES_ID)
+        val notificationBuilder = NotificationCompat.Builder(context, CHANNEL_MESSAGES_ID)
             .setSmallIcon(R.drawable.ic_stat_notes)
             .apply {
                 if (appIcon != null) setLargeIcon(appIcon)
@@ -218,29 +228,30 @@ object NotificationHelper {
             .setContentText(displayText)
             .setSubText(subText)
             .apply {
-                if (isBadgeEnabled) {
-                    setBadgeIconType(NotificationCompat.BADGE_ICON_SMALL)
-                    setNumber(unreadCount.coerceAtLeast(1))
-                } else {
-                    setBadgeIconType(NotificationCompat.BADGE_ICON_NONE)
-                    setNumber(0)
+                if (!isDiscreet) {
+                    setStyle(NotificationCompat.BigTextStyle().bigText(displayText))
                 }
             }
+            .setBadgeIconType(if (isBadgeEnabled) NotificationCompat.BADGE_ICON_SMALL else NotificationCompat.BADGE_ICON_NONE)
+            .setNumber(if (isBadgeEnabled) 1 else 0)
             .setAutoCancel(true)
+            .setOngoing(false)
+            .setOnlyAlertOnce(true)
             .setContentIntent(pendingIntent)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setDefaults(NotificationCompat.DEFAULT_ALL)
             .setCategory(NotificationCompat.CATEGORY_MESSAGE)
-            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
             .setPublicVersion(publicNotification)
-            .build()
+
+        val notification = notificationBuilder.build()
 
         try {
             createNotificationChannels(context)
             // Cancel legacy separate heartbeat notification from older builds so only 1 notification is ever visible
             NotificationManagerCompat.from(context).cancel(1003)
             NotificationManagerCompat.from(context).notify(NOTIFICATION_ID_MESSAGE, notification)
-            android.util.Log.d("NotificationHelper", "Message notification posted successfully (unread: $unreadCount)")
+            android.util.Log.d("NotificationHelper", "Message notification posted successfully (badge 1)")
         } catch (e: SecurityException) {
             android.util.Log.w("NotificationHelper", "POST_NOTIFICATIONS runtime permission not granted: ${e.message}")
         } catch (e: Exception) {
@@ -259,6 +270,9 @@ object NotificationHelper {
         val prefs = SecurityPreferences.getInstance(context)
         if (!prefs.isNotificationsEnabled()) return
         if (!prefs.isHeartbeatTriggerEnabled()) return
+
+        // If a notification has already been sent and app hasn't been opened yet, do not send again
+        if (isNotificationAlertTriggered.get()) return
 
         val isDiscreet = prefs.isHideNotificationContent() && prefs.isDisguiseModeEnabled()
 
@@ -285,6 +299,11 @@ object NotificationHelper {
         val isBadgeEnabled = prefs.isBadgeNotificationEnabled()
         val appIcon = getAppIconBitmap(context)
 
+        if (isBadgeEnabled) {
+            updateLauncherBadge(context, 1)
+        }
+        isNotificationAlertTriggered.set(true)
+
         val publicNotification = NotificationCompat.Builder(context, CHANNEL_MESSAGES_ID)
             .setSmallIcon(R.drawable.ic_stat_notes)
             .apply {
@@ -296,6 +315,9 @@ object NotificationHelper {
             .setSubText(subText)
             .setBadgeIconType(if (isBadgeEnabled) NotificationCompat.BADGE_ICON_SMALL else NotificationCompat.BADGE_ICON_NONE)
             .setNumber(if (isBadgeEnabled) 1 else 0)
+            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+            .setAutoCancel(true)
+            .setOngoing(false)
             .build()
 
         val notification = NotificationCompat.Builder(context, CHANNEL_MESSAGES_ID)
@@ -307,20 +329,15 @@ object NotificationHelper {
             .setContentTitle(displayTitle)
             .setContentText(displayText)
             .setSubText(subText)
-            .apply {
-                if (isBadgeEnabled) {
-                    setBadgeIconType(NotificationCompat.BADGE_ICON_SMALL)
-                    setNumber(1)
-                } else {
-                    setBadgeIconType(NotificationCompat.BADGE_ICON_NONE)
-                    setNumber(0)
-                }
-            }
+            .setBadgeIconType(if (isBadgeEnabled) NotificationCompat.BADGE_ICON_SMALL else NotificationCompat.BADGE_ICON_NONE)
+            .setNumber(if (isBadgeEnabled) 1 else 0)
             .setAutoCancel(true)
+            .setOngoing(false)
+            .setOnlyAlertOnce(true)
             .setContentIntent(pendingIntent)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(NotificationCompat.CATEGORY_SOCIAL)
-            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
             .setPublicVersion(publicNotification)
             .build()
 
@@ -335,10 +352,15 @@ object NotificationHelper {
      */
     fun cancelStatusBarNotifications(context: Context) {
         try {
-            NotificationManagerCompat.from(context).cancel(NOTIFICATION_ID_MESSAGE)
-            NotificationManagerCompat.from(context).cancel(NOTIFICATION_ID_CHECK_AFTER)
-            NotificationManagerCompat.from(context).cancel(NOTIFICATION_ID_HEARTBEAT)
-            NotificationManagerCompat.from(context).cancel(1003)
+            val nm = NotificationManagerCompat.from(context)
+            nm.cancel(NOTIFICATION_ID_MESSAGE)
+            nm.cancel(NOTIFICATION_ID_CHECK_AFTER)
+            nm.cancel(NOTIFICATION_ID_HEARTBEAT)
+            nm.cancel(1003)
+            nm.cancel(1004)
+            if (!com.example.call.CallManager.hasActiveCall()) {
+                nm.cancelAll()
+            }
         } catch (_: Exception) {}
     }
 
@@ -350,19 +372,25 @@ object NotificationHelper {
         pendingUnreadCount.set(0)
         notifiedMessageIds.clear()
         try {
-            NotificationManagerCompat.from(context).cancel(NOTIFICATION_ID_MESSAGE)
-            NotificationManagerCompat.from(context).cancel(NOTIFICATION_ID_CHECK_AFTER)
-            NotificationManagerCompat.from(context).cancel(NOTIFICATION_ID_HEARTBEAT)
-            NotificationManagerCompat.from(context).cancel(1003)
+            val nm = NotificationManagerCompat.from(context)
+            nm.cancel(NOTIFICATION_ID_MESSAGE)
+            nm.cancel(NOTIFICATION_ID_CHECK_AFTER)
+            nm.cancel(NOTIFICATION_ID_HEARTBEAT)
+            nm.cancel(1003)
+            nm.cancel(1004)
+            if (!com.example.call.CallManager.hasActiveCall()) {
+                nm.cancelAll()
+            }
         } catch (_: Exception) {}
         updateLauncherBadge(context, 0)
     }
 
     /**
      * Broadcasts unread count badge to Samsung, Sony, HTC and compatible OEM launchers
+     * Always shows 1 only when there are unread notifications.
      */
     fun updateLauncherBadge(context: Context, count: Int) {
-        val badgeCount = if (count > 0) count else 0
+        val badgeCount = if (count > 0) 1 else 0
         try {
             val intent = Intent("android.intent.action.BADGE_COUNT_UPDATE").apply {
                 putExtra("badge_count", badgeCount)

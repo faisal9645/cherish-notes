@@ -39,7 +39,7 @@ const RECORDING = Object.freeze({
 const SETTLED_RECORDING = Object.freeze([RECORDING.READY, RECORDING.FAILED, RECORDING.DELETED, RECORDING.NONE]);
 
 /** How long a phone rings before the call counts as missed. */
-const RING_TIMEOUT_MS = 45 * 1000;
+const RING_TIMEOUT_MS = 75 * 1000;
 /** An answered call that hasn't connected by now has failed. */
 const CONNECT_TIMEOUT_MS = 60 * 1000;
 /** How long a token works (and its join/publish rights last); the app renews it before then. */

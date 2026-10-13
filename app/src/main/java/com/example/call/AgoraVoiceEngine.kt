@@ -110,8 +110,8 @@ class AgoraVoiceEngine(private val context: Context) {
         }
         var result = rtc.joinChannel(effectiveToken, channel, uid, options)
         if (result != 0) {
-            Log.w(TAG, "joinChannel returned $result with primary token, trying with fallback token")
-            val fallbackToken = AgoraTokenBuilder.DEFAULT_APP_ID
+            Log.w(TAG, "joinChannel returned $result with primary token, trying with empty token fallback")
+            val fallbackToken = ""
             result = rtc.joinChannel(fallbackToken, channel, uid, options)
         }
         if (result != 0) Log.w(TAG, "joinChannel returned $result")
