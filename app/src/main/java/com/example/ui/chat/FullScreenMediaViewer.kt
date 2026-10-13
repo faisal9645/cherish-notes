@@ -377,8 +377,13 @@ fun FullScreenMediaViewer(
                 val pageUrl = mediaList.getOrNull(page) ?: currentUrl
                 val isVideo = remember(pageUrl) {
                     pageUrl.contains(".mp4", ignoreCase = true) ||
+                    pageUrl.contains(".mov", ignoreCase = true) ||
+                    pageUrl.contains(".mkv", ignoreCase = true) ||
+                    pageUrl.contains(".webm", ignoreCase = true) ||
                     pageUrl.contains("videonote", ignoreCase = true) ||
+                    pageUrl.contains("video_note", ignoreCase = true) ||
                     pageUrl.contains("/videos/", ignoreCase = true) ||
+                    pageUrl.contains("videos%2F", ignoreCase = true) ||
                     pageUrl.contains("video", ignoreCase = true) ||
                     (pageUrl.startsWith("content://") && pageUrl.contains("video", ignoreCase = true)) ||
                     (pageUrl.startsWith("data:video"))
@@ -540,7 +545,11 @@ fun FullScreenMediaViewer(
                         ),
                     contentAlignment = Alignment.Center
                 ) {
-                    if (isVideo && pageUrl.contains("videonote", ignoreCase = true)) {
+                    val isVideoNote = isVideo && (
+                        pageUrl.contains("videonote", ignoreCase = true) ||
+                        pageUrl.contains("video_note", ignoreCase = true)
+                    )
+                    if (isVideoNote) {
                         com.example.ui.components.CircularVideoNoteView(
                             videoUrl = pageUrl,
                             autoPlay = true,

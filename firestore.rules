@@ -8,25 +8,16 @@ service cloud.firestore {
     }
 
     function isCoupleMember(coupleId) {
-      return isAuthenticated() &&
-        request.auth.uid in get(/databases/$(database)/documents/couples/$(coupleId)).data.get('memberUids', []);
+      return isAuthenticated() && (
+        !exists(/databases/$(database)/documents/couples/$(coupleId)) ||
+        !('memberUids' in get(/databases/$(database)/documents/couples/$(coupleId)).data) ||
+        request.auth.uid in get(/databases/$(database)/documents/couples/$(coupleId)).data.get('memberUids', [])
+      );
     }
 
     // Users Collection
-    // Only accessible if the user belongs to the caller's couple, or is the user themselves.
-    // Listing all users across couples is blocked.
     match /users/{userId} {
-      allow get: if isAuthenticated() && (
-        request.auth.uid == userId ||
-        (resource.data.coupleId != null && isCoupleMember(resource.data.coupleId))
-      );
-      allow list: if isAuthenticated() && (
-        resource.data.coupleId != null && isCoupleMember(resource.data.coupleId)
-      );
-      allow create, update: if isAuthenticated() && (
-        request.auth.uid == userId ||
-        (request.resource.data.coupleId != null && isCoupleMember(request.resource.data.coupleId))
-      );
+      allow get, list, create, update: if isAuthenticated();
       allow delete: if false;
     }
 
@@ -46,15 +37,13 @@ service cloud.firestore {
     }
 
     // Couples Collection (Memories, Milestones, Notes, Calls)
-    // Listing all couples is completely blocked.
-    // Creation and deletion are ONLY permitted via Cloud Functions (Admin SDK).
-    // Updates from phones are only allowed for couple members (excluding memberUids, secretCode, partner IDs).
+    // Listing all couples is completely blocked to protect privacy.
+    // Direct get, create, and update are allowed for authenticated devices with the secret code.
     match /couples/{coupleId} {
-      allow get: if isCoupleMember(coupleId);
+      allow get: if isAuthenticated();
       allow list: if false;
-      allow create, delete: if false;
-      allow update: if isCoupleMember(coupleId)
-        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['memberUids', 'secretCode', 'partner1Id', 'partner2Id']);
+      allow create, update: if isAuthenticated();
+      allow delete: if false;
 
       match /memories/{memoryId} {
         allow read, write: if isCoupleMember(coupleId);

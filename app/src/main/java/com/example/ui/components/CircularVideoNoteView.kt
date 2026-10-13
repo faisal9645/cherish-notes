@@ -12,6 +12,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -35,6 +36,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -66,6 +68,8 @@ fun CircularVideoNoteView(
     durationSeconds: Int = 0,
     autoPlay: Boolean = false,
     onExpandClick: (() -> Unit)? = null,
+    onLongClick: (() -> Unit)? = null,
+    onDoubleClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
     // CircleShape for round video notes; a rounded rectangle for shared videos
     shape: androidx.compose.ui.graphics.Shape = CircleShape,
@@ -151,7 +155,7 @@ fun CircularVideoNoteView(
 
     // Toggle play / pause helper
     val togglePlayPause: () -> Unit = {
-        if (!playerRequested) {
+        if (!playerRequested || mediaPlayerRef == null) {
             startPlayback()
         } else {
             mediaPlayerRef?.let { mp ->
@@ -168,12 +172,10 @@ fun CircularVideoNoteView(
                     }
                 } catch (e: Exception) {
                     Log.w("CircularVideoNoteView", "Toggle play error", e)
-                    isPlaying = !isPlaying
-                    shouldPlayWhenReady = isPlaying
+                    startPlayback()
                 }
             } ?: run {
-                isPlaying = !isPlaying
-                shouldPlayWhenReady = isPlaying
+                startPlayback()
             }
         }
     }
@@ -213,11 +215,12 @@ fun CircularVideoNoteView(
             .clip(shape)
             .background(Color(0xFF1E1A26))
             .then(if (isRound) Modifier.border(3.5.dp, RoseGoldPrimary.copy(alpha = 0.65f), CircleShape) else Modifier)
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null
-            ) {
-                togglePlayPause()
+            .pointerInput(playbackKey, onLongClick, onDoubleClick) {
+                detectTapGestures(
+                    onLongPress = { onLongClick?.invoke() },
+                    onDoubleTap = { onDoubleClick?.invoke() },
+                    onTap = { togglePlayPause() }
+                )
             },
         contentAlignment = Alignment.Center
     ) {
@@ -228,12 +231,17 @@ fun CircularVideoNoteView(
                     val textureView = TextureView(ctx)
                     var activeSurface: Surface? = null
 
-                    fun setupAndPlay(mp: MediaPlayer, f: File) {
+                    fun setupAndPlay(mp: MediaPlayer, source: String) {
                         try {
                             mp.reset()
                             activeSurface?.let { mp.setSurface(it) }
                             mp.isLooping = true
-                            mp.setDataSource(f.absolutePath)
+                            if (source.startsWith("http://") || source.startsWith("https://") || source.startsWith("content://")) {
+                                mp.setDataSource(ctx, Uri.parse(source))
+                            } else {
+                                val path = source.removePrefix("file://")
+                                mp.setDataSource(path)
+                            }
                             if (isMuted) mp.setVolume(0f, 0f) else mp.setVolume(1f, 1f)
                             mp.setOnPreparedListener { preparedMp ->
                                 mediaPlayerRef = preparedMp
@@ -281,15 +289,20 @@ fun CircularVideoNoteView(
 
                                 val readyFile = localVideoFile
                                 if (readyFile != null && readyFile.exists() && readyFile.length() > 1024) {
-                                    setupAndPlay(mp, readyFile)
+                                    setupAndPlay(mp, readyFile.absolutePath)
                                 } else {
                                     isLoading = true
                                     scope.launch(Dispatchers.IO) {
                                         val f = VideoThumbnailHelper.getCachedFile(ctx, videoUrl)
                                         withContext(Dispatchers.Main) {
-                                            if (f != null && f.exists() && activeSurface != null) {
-                                                localVideoFile = f
-                                                setupAndPlay(mp, f)
+                                            if (activeSurface != null) {
+                                                if (f != null && f.exists()) {
+                                                    localVideoFile = f
+                                                    setupAndPlay(mp, f.absolutePath)
+                                                } else {
+                                                    // Stream directly via network/URI fallback
+                                                    setupAndPlay(mp, videoUrl)
+                                                }
                                             } else {
                                                 isLoading = false
                                             }

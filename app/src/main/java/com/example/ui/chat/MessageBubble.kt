@@ -365,13 +365,6 @@ fun MessageBubble(
                                     Modifier.border(BorderStroke(3.dp, RoseGoldPrimary.copy(alpha = highlightPulse.value)), CircleShape)
                                 } else Modifier
                             )
-                            .pointerInput(message.id) {
-                                detectTapGestures(
-                                    onPress = trackPress,
-                                    onLongPress = onBubbleLongPress,
-                                    onDoubleTap = { triggerHeartBurst() }
-                                )
-                            }
                             .testTag("message_bubble_${message.id}"),
                         contentAlignment = Alignment.Center
                     ) {
@@ -380,6 +373,8 @@ fun MessageBubble(
                                 videoUrl = videoUrl,
                                 durationSeconds = message.durationSeconds,
                                 onExpandClick = openBigVideoNote,
+                                onLongClick = { onBubbleLongPress(androidx.compose.ui.geometry.Offset.Zero) },
+                                onDoubleClick = { triggerHeartBurst() },
                                 modifier = Modifier.fillMaxSize()
                             )
                         }

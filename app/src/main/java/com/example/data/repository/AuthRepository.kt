@@ -517,13 +517,20 @@ class AuthRepository(private val context: Context) {
 
         if (!joinedViaServer) {
             if (fs == null) return Result.failure(Exception(CONNECTION_PROBLEM))
+            if (a != null && a.currentUser == null) {
+                try {
+                    a.signInAnonymously().await()
+                } catch (authEx: Exception) {
+                    Log.w("AuthRepository", "Anonymous sign-in retry failed: ${authEx.message}")
+                }
+            }
             val coupleDocRef = fs.collection("couples").document(coupleId)
             val coupleSnap = try {
                 coupleDocRef.get().await()
             } catch (e: Exception) {
                 Log.w("AuthRepository", "Couple check failed: ${e.message}", e)
                 val msg = e.message.orEmpty()
-                if (authError != null) {
+                if (authError != null && a?.currentUser == null) {
                     return Result.failure(Exception("Authentication failed: $authError"))
                 }
                 if (msg.contains("PERMISSION_DENIED", ignoreCase = true)) {
@@ -577,6 +584,9 @@ class AuthRepository(private val context: Context) {
                             "partner2Name" to displayName,
                             "updatedAt" to System.currentTimeMillis()
                         )
+                        if (currentAuthUid != null) {
+                            updates["memberUids"] = com.google.firebase.firestore.FieldValue.arrayUnion(currentAuthUid)
+                        }
                         try {
                             coupleDocRef.update(updates).await()
                             if (p1Id != null) {
@@ -597,8 +607,10 @@ class AuthRepository(private val context: Context) {
                     val memberUids = (coupleSnap.get("memberUids") as? List<*>)?.filterIsInstance<String>().orEmpty()
                     if (currentAuthUid !in memberUids) {
                         try {
-                            coupleDocRef.update("memberUids", com.google.firebase.firestore.FieldValue.arrayUnion(currentAuthUid))
-                        } catch (_: Exception) {}
+                            coupleDocRef.update("memberUids", com.google.firebase.firestore.FieldValue.arrayUnion(currentAuthUid)).await()
+                        } catch (e: Exception) {
+                            Log.w("AuthRepository", "Failed to union memberUids: ${e.message}")
+                        }
                     }
                 }
             }

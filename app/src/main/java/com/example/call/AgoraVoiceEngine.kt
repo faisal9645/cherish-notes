@@ -66,8 +66,21 @@ class AgoraVoiceEngine(private val context: Context) {
                 mEventHandler = handler
                 mChannelProfile = Constants.CHANNEL_PROFILE_COMMUNICATION
                 mAudioScenario = Constants.AUDIO_SCENARIO_DEFAULT
+                mAreaCode = RtcEngineConfig.AreaCode.AREA_CODE_GLOB
             }
             val created = RtcEngine.create(config)
+
+            // UAE / Dubai VoIP compatibility: UAE telecom operators (Etisalat & du) block standard UDP VoIP.
+            // Enabling TCP Cloud Proxy (TLS over port 443) routes call media through
+            // Agora's encrypted proxy nodes, allowing calls between Chennai & Dubai to connect seamlessly.
+            val proxyRes = created.setCloudProxy(Constants.TRANSPORT_TYPE_TCP_PROXY)
+            if (proxyRes != 0) {
+                Log.w(TAG, "setCloudProxy(TRANSPORT_TYPE_TCP_PROXY) returned $proxyRes, falling back to AUTO_FALLBACK")
+                created.setCloudProxy(Constants.PROXY_TYPE_TCP_AUTO_FALLBACK)
+            } else {
+                Log.i(TAG, "Agora Cloud Proxy (TCP TLS 443) enabled for UAE/Dubai calling")
+            }
+
             created.enableAudio()
             // Clear wideband speech; Agora adapts its bitrate to the network
             created.setAudioProfile(Constants.AUDIO_PROFILE_SPEECH_STANDARD)

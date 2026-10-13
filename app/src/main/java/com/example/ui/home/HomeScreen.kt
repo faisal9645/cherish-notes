@@ -337,7 +337,9 @@ fun HomeScreen(
             } else null
             val activeSleepSync by homeApp.coupleFeaturesRepository.sleepSyncFlow.collectAsState()
 
-            val effectivePartnerTz = partner?.timeZone?.takeIf { it.isNotBlank() } ?: java.util.TimeZone.getDefault().id
+            val effectivePartnerTz = partner?.timeZone?.takeIf { it.isNotBlank() }
+                ?: homeApp.securityPreferences.getPartnerCustomTimeZone()
+                ?: java.util.TimeZone.getDefault().id
             val myTz = currentUser?.timeZone?.takeIf { it.isNotBlank() } ?: java.util.TimeZone.getDefault().id
             val partnerStatusText = when {
                 partner?.statusMessage == "Asleep 🌙" -> "Asleep 🌙"

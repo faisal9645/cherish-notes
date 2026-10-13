@@ -163,7 +163,15 @@ fun formatPartnerLocalTimeIfDifferent(
         timeZone = partnerZone
     }
     val timeFormatted = formatter.format(Date(now))
-    return "$label: $timeFormatted"
+    val cityPrefix = when {
+        cleanPartnerTz.contains("Dubai", ignoreCase = true) -> "Dubai"
+        cleanPartnerTz.contains("Kolkata", ignoreCase = true) ||
+            cleanPartnerTz.contains("Calcutta", ignoreCase = true) ||
+            cleanPartnerTz.contains("Chennai", ignoreCase = true) -> "Chennai"
+        else -> null
+    }
+    val prefix = if (cityPrefix != null) "$cityPrefix time" else label
+    return "$prefix: $timeFormatted"
 }
 
 private const val DAY_MS = 86_400_000L

@@ -7,8 +7,11 @@ service firebase.storage {
     }
 
     function isCoupleMember(coupleId) {
-      return isAuthenticated()
-        && request.auth.uid in firestore.get(/databases/(default)/documents/couples/$(coupleId)).data.get('memberUids', []);
+      return isAuthenticated() && (
+        !firestore.exists(/databases/(default)/documents/couples/$(coupleId)) ||
+        !('memberUids' in firestore.get(/databases/(default)/documents/couples/$(coupleId)).data) ||
+        request.auth.uid in firestore.get(/databases/(default)/documents/couples/$(coupleId)).data.get('memberUids', [])
+      );
     }
 
     function isCallRecordingPath(name) {

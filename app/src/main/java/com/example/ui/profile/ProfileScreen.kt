@@ -1452,6 +1452,44 @@ fun ProfileScreen(
                         )
                     }
                 )
+
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), thickness = 0.6.dp)
+
+                ListItem(
+                    headlineContent = { Text("Partner Location & Time Zone", fontSize = 15.sp, fontWeight = FontWeight.SemiBold) },
+                    supportingContent = {
+                        val currentTz = uiState.partnerCustomTimeZone ?: partner?.timeZone ?: "Auto-detect"
+                        val displayCity = when {
+                            currentTz.contains("Dubai", ignoreCase = true) -> "Dubai (GST, UTC+4) 🇦🇪"
+                            currentTz.contains("Kolkata", ignoreCase = true) ||
+                                currentTz.contains("Calcutta", ignoreCase = true) ||
+                                currentTz.contains("Chennai", ignoreCase = true) -> "Chennai / India (IST, UTC+5:30) 🇮🇳"
+                            else -> currentTz
+                        }
+                        Text("Active: $displayCity", fontSize = 13.sp)
+                    },
+                    leadingContent = { Icon(Icons.Default.Schedule, contentDescription = null, tint = primaryAccent) }
+                )
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 14.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    listOf(
+                        "Auto" to null,
+                        "Dubai (UAE)" to "Asia/Dubai",
+                        "Chennai (India)" to "Asia/Kolkata"
+                    ).forEach { (label, tz) ->
+                        val isSelected = if (tz == null) uiState.partnerCustomTimeZone == null else uiState.partnerCustomTimeZone == tz
+                        FilterChip(
+                            selected = isSelected,
+                            onClick = { viewModel.setPartnerCustomTimeZone(tz) },
+                            label = { Text(label, fontSize = 12.sp) }
+                        )
+                    }
+                }
             }
 
             // 6. Security Tools & Vault Section

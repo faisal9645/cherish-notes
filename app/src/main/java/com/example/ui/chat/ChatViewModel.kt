@@ -276,7 +276,7 @@ class ChatViewModel(
                     displayName = partner?.displayName.orEmpty(),
                     mood = partner?.mood,
                     moodAt = partner?.moodAt ?: 0L,
-                    timeZone = partner?.timeZone,
+                    timeZone = partner?.timeZone?.takeIf { it.isNotBlank() } ?: securityPreferences.getPartnerCustomTimeZone(),
                     typingPace = partner?.typingPace ?: 1,
                     checkAfterActive = partner?.hasActiveCheckAfter() ?: false,
                     checkAfterTimeMillis = partner?.checkAfterTimeMillis,
@@ -627,8 +627,6 @@ class ChatViewModel(
                 mediaRepository.copyToCache(uri, mediaName)
             }
 
-            // The preview uploads alongside the photo, so it doesn't delay the send
-            val thumbnail = if (type == MessageType.IMAGE) async { uploadThumbnail(preparedFile, coupleId) } else null
             val url = mediaRepository.uploadFile(
                 file = preparedFile,
                 type = type,
@@ -636,7 +634,6 @@ class ChatViewModel(
                 onProgress = ::reportUploadProgress
             ).getOrNull()
             if (url == null || !isDeliverable(url)) {
-                thumbnail?.cancel()
                 return@runUpload FailedUpload(label, retry)
             }
 
@@ -644,7 +641,6 @@ class ChatViewModel(
                 com.example.util.VideoThumbnailHelper.cacheLocalVideo(com.example.CherishApplication.instance, preparedFile, url)
             }
 
-            val thumbnailUrl = thumbnail?.await().orEmpty()
             chatRepository.sendMessage(
                 text = when (type) {
                     MessageType.IMAGE -> "Sent a photo"
@@ -656,7 +652,7 @@ class ChatViewModel(
                 mediaName = mediaName ?: preparedFile.name,
                 mediaSize = preparedFile.length(),
                 replyTo = _uiState.value.replyingToMessage,
-                thumbnailUrls = if (thumbnailUrl.isNotBlank()) listOf(thumbnailUrl) else emptyList()
+                thumbnailUrls = emptyList()
             )
             _uiState.update { it.copy(replyingToMessage = null) }
             null
@@ -664,16 +660,10 @@ class ChatViewModel(
     }
 
     /**
-     * Uploads a small preview of a prepared photo; "" when it can't. Only real storage URLs are
-     * used, never the inline data fallback, so previews can't bloat the message document.
+     * Previews are generated and cached locally by Coil directly from the main compressed photo URL,
+     * avoiding duplicate thumbnail files in cloud storage.
      */
-    private suspend fun uploadThumbnail(image: File, coupleId: String): String {
-        val thumbnail = mediaRepository.createThumbnail(image) ?: return ""
-        val url = mediaRepository.uploadFile(file = thumbnail, type = MessageType.IMAGE, coupleId = coupleId)
-            .getOrNull()
-            .orEmpty()
-        return if (url.startsWith("https://") || url.startsWith("http://")) url else ""
-    }
+    private suspend fun uploadThumbnail(image: File, coupleId: String): String = ""
 
     fun sendMultipleImages(uris: List<Uri>) {
         if (uris.isEmpty()) return
@@ -681,14 +671,10 @@ class ChatViewModel(
         runUpload(labelFor(uris.size), retry = { sendMultipleImages(uris) }) {
             val coupleId = chatRepository.getConversationId()
             val uploadedUrls = mutableListOf<String>()
-            // Same order as uploadedUrls; each resolves to "" where a preview couldn't be made
-            val thumbnails = mutableListOf<Deferred<String>>()
             val notSent = mutableListOf<Uri>()
             for ((index, uri) in uris.withIndex()) {
                 val url = try {
                     val preparedFile = mediaRepository.compressAndPrepareImage(uri)
-                    // The preview uploads alongside the photo, so it doesn't delay the send
-                    val thumbnail = async { uploadThumbnail(preparedFile, coupleId) }
                     val uploaded = mediaRepository.uploadFile(
                         file = preparedFile,
                         type = MessageType.IMAGE,
@@ -696,10 +682,8 @@ class ChatViewModel(
                         onProgress = { p -> reportUploadProgress((index + p) / uris.size.toFloat()) }
                     ).getOrNull()
                     if (uploaded != null && isDeliverable(uploaded)) {
-                        thumbnails.add(thumbnail)
                         uploaded
                     } else {
-                        thumbnail.cancel()
                         null
                     }
                 } catch (e: CancellationException) {
@@ -711,14 +695,13 @@ class ChatViewModel(
                 if (url != null) uploadedUrls.add(url) else notSent.add(uri)
             }
             if (uploadedUrls.isNotEmpty()) {
-                val thumbnailUrls = thumbnails.awaitAll()
                 chatRepository.sendMessage(
                     text = if (uploadedUrls.size == 1) "Sent a photo" else "Sent ${uploadedUrls.size} photos",
                     type = MessageType.IMAGE,
                     mediaUrl = uploadedUrls.firstOrNull(),
                     mediaUrls = uploadedUrls,
                     replyTo = _uiState.value.replyingToMessage,
-                    thumbnailUrls = if (thumbnailUrls.any { it.isNotBlank() }) thumbnailUrls else emptyList()
+                    thumbnailUrls = emptyList()
                 )
                 _uiState.update { it.copy(replyingToMessage = null) }
             }
