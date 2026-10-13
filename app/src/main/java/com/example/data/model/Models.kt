@@ -86,8 +86,7 @@ data class User(
     val heartbeatStreak: Int = 0,
     val lastHeartbeatSync: Long = 0L,
     val timeZone: String? = null,
-    val notificationStatus: String? = null,
-    val notificationPermission: Boolean? = true
+    val notificationStatus: String? = null
 ) {
     /**
      * When this phone received this user's latest live presence update, on this phone's own clock
@@ -95,6 +94,9 @@ data class User(
      */
     @get:Exclude @set:Exclude
     var presenceReceivedAt: Long = 0L
+
+    @get:PropertyName("notificationPermission") @set:PropertyName("notificationPermission")
+    var notificationPermission: Boolean = true
 
     fun isEffectivelyOnline(): Boolean {
         if (!isOnline) return false

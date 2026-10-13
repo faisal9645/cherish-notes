@@ -1075,7 +1075,7 @@ class AuthRepository(private val context: Context) {
         if (current.notificationStatus == status && current.notificationPermission == perm) {
             return Result.success(Unit)
         }
-        val updated = current.copy(notificationStatus = status, notificationPermission = perm)
+        val updated = current.copy(notificationStatus = status).apply { notificationPermission = perm }
         _currentUserState.value = updated
         saveLocalUserSession(updated)
         return try {
@@ -1227,7 +1227,7 @@ class AuthRepository(private val context: Context) {
                             "notificationPermission" to currentSysPerm
                         )
                         if (_currentUserState.value?.notificationStatus != currentNotif || _currentUserState.value?.notificationPermission != currentSysPerm) {
-                            _currentUserState.value = _currentUserState.value?.copy(notificationStatus = currentNotif, notificationPermission = currentSysPerm)
+                            _currentUserState.value = _currentUserState.value?.copy(notificationStatus = currentNotif)?.apply { notificationPermission = currentSysPerm }
                         }
                         try {
                             userDocument(uid)?.set(
@@ -1257,9 +1257,10 @@ class AuthRepository(private val context: Context) {
             isOnline = online,
             lastSeen = System.currentTimeMillis(),
             timeZone = currentTz,
-            notificationStatus = currentNotif,
+            notificationStatus = currentNotif
+        )?.apply {
             notificationPermission = currentSysPerm
-        )
+        }
         try {
             val updates = mutableMapOf<String, Any>(
                 "isOnline" to online,
@@ -1384,8 +1385,13 @@ class AuthRepository(private val context: Context) {
         if (!snapshot.exists()) return null
         try {
             val user = snapshot.toObject(User::class.java)
-            if (user != null) return user
-        } catch (e: Exception) {
+            if (user != null) {
+                val docPerm = (snapshot.get("notificationPermission") as? Boolean)
+                    ?: try { snapshot.getBoolean("notificationPermission") } catch (_: Throwable) { null }
+                if (docPerm != null) user.notificationPermission = docPerm
+                return user
+            }
+        } catch (e: Throwable) {
             Log.w("AuthRepository", "Failed to deserialize User via reflection: ${e.message}")
         }
         return try {
@@ -1461,10 +1467,11 @@ class AuthRepository(private val context: Context) {
                 heartbeatStreak = heartbeatStreak,
                 lastHeartbeatSync = lastHeartbeatSync,
                 timeZone = timeZone,
-                notificationStatus = notificationStatus,
+                notificationStatus = notificationStatus
+            ).apply {
                 notificationPermission = notifPerm
-            )
-        } catch (e: Exception) {
+            }
+        } catch (e: Throwable) {
             Log.e("AuthRepository", "Fallback manual user parsing error", e)
             null
         }
@@ -1507,7 +1514,7 @@ class AuthRepository(private val context: Context) {
                             user = user.copy(notificationStatus = docNotifStatus)
                         }
                         if (docNotifPerm != null && user.notificationPermission != docNotifPerm) {
-                            user = user.copy(notificationPermission = docNotifPerm)
+                            user.notificationPermission = docNotifPerm
                         }
                     }
                     _currentUserState.value = user
@@ -1519,7 +1526,7 @@ class AuthRepository(private val context: Context) {
                         listenToPartner(newPartnerId)
                     }
                 }
-            } catch (e: Exception) {
+            } catch (e: Throwable) {
                 Log.e("AuthRepository", "Unhandled error inside currentUserListener", e)
             }
         }
@@ -1596,7 +1603,7 @@ class AuthRepository(private val context: Context) {
                     partner = partner.copy(notificationStatus = docNotifStatus)
                 }
                 if (docNotifPerm != null && partner.notificationPermission != docNotifPerm) {
-                    partner = partner.copy(notificationPermission = docNotifPerm)
+                    partner.notificationPermission = docNotifPerm
                 }
                 if (!doc.metadata.isFromCache) {
                     val now = System.currentTimeMillis()
@@ -1622,7 +1629,7 @@ class AuthRepository(private val context: Context) {
             }
             _partnerUserState.value = partner
             handlePartnerCheckAfterReminder(partner)
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             Log.e("AuthRepository", "Unhandled error inside publishPartnerSnapshot", e)
         }
     }
@@ -1887,9 +1894,10 @@ class AuthRepository(private val context: Context) {
                 checkAfterNote = note.ifBlank { null },
                 checkAfterActive = active,
                 timeZone = timeZone,
-                notificationStatus = notificationStatus,
-                notificationPermission = notificationPermission
-            )
+                notificationStatus = notificationStatus
+            ).apply {
+                this.notificationPermission = notificationPermission
+            }
             _currentUserState.value = user
             if (!partnerId.isNullOrBlank()) {
                 val partnerName = partnerId.removePrefix("user_").replaceFirstChar { it.uppercase() }

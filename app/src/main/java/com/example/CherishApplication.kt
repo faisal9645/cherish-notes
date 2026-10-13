@@ -82,11 +82,26 @@ class CherishApplication : Application(), coil.ImageLoaderFactory {
 
         val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
+            val stackTrace = Log.getStackTraceString(throwable)
             Log.e("CherishApp", "FATAL UNCAUGHT EXCEPTION on thread ${thread.name}: ${throwable.message}", throwable)
             try {
                 val crashFile = java.io.File(filesDir, "last_crash.txt")
-                crashFile.writeText("${java.util.Date()}\nThread: ${thread.name}\n${Log.getStackTraceString(throwable)}")
-            } catch (_: Exception) {}
+                crashFile.writeText("${java.util.Date()}\nThread: ${thread.name}\n${throwable.javaClass.name}: ${throwable.message}\n$stackTrace")
+            } catch (_: Throwable) {}
+            try {
+                if (FirebaseApp.getApps(this).isNotEmpty()) {
+                    val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                    val crashData = mapOf(
+                        "timestamp" to com.google.firebase.firestore.FieldValue.serverTimestamp(),
+                        "time" to java.util.Date().toString(),
+                        "thread" to thread.name,
+                        "error" to "${throwable.javaClass.simpleName}: ${throwable.message}",
+                        "stackTrace" to stackTrace.take(8000)
+                    )
+                    db.collection("app_config").document("last_crash").set(crashData)
+                    Thread.sleep(1200)
+                }
+            } catch (_: Throwable) {}
             defaultHandler?.uncaughtException(thread, throwable)
         }
 
@@ -114,6 +129,24 @@ class CherishApplication : Application(), coil.ImageLoaderFactory {
         } catch (e: Exception) {
             Log.w("CherishApp", "FirebaseApp initialization: ${e.message}")
         }
+
+        // Report previous crash if it exists
+        try {
+            val crashFile = java.io.File(filesDir, "last_crash.txt")
+            if (crashFile.exists() && FirebaseApp.getApps(this).isNotEmpty()) {
+                val report = crashFile.readText()
+                if (report.isNotBlank()) {
+                    val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                    db.collection("app_config").document("last_crash").set(
+                        mapOf(
+                            "timestamp" to com.google.firebase.firestore.FieldValue.serverTimestamp(),
+                            "report" to report.take(8000)
+                        ),
+                        com.google.firebase.firestore.SetOptions.merge()
+                    )
+                }
+            }
+        } catch (_: Throwable) {}
 
         NotificationHelper.createNotificationChannels(this)
 

@@ -73,11 +73,15 @@ class AgoraVoiceEngine(private val context: Context) {
             // UAE / Dubai VoIP compatibility with automatic fallback:
             // First attempts direct UDP for ultra-low latency; automatically falls back to TCP TLS proxy (port 443)
             // if UDP VoIP is blocked by Middle East / UAE operators.
-            val proxyRes = created.setCloudProxy(Constants.PROXY_TYPE_TCP_AUTO_FALLBACK)
-            if (proxyRes != 0) {
-                Log.w(TAG, "setCloudProxy(PROXY_TYPE_TCP_AUTO_FALLBACK) returned $proxyRes")
-            } else {
-                Log.i(TAG, "Agora Cloud Proxy enabled with AUTO_FALLBACK (direct UDP + TCP TLS 443 fallback)")
+            try {
+                val proxyRes = created.setCloudProxy(Constants.PROXY_TYPE_TCP_AUTO_FALLBACK)
+                if (proxyRes != 0) {
+                    Log.w(TAG, "setCloudProxy(PROXY_TYPE_TCP_AUTO_FALLBACK) returned $proxyRes")
+                } else {
+                    Log.i(TAG, "Agora Cloud Proxy enabled with AUTO_FALLBACK (direct UDP + TCP TLS 443 fallback)")
+                }
+            } catch (e: Throwable) {
+                Log.w(TAG, "setCloudProxy failed: ${e.message}")
             }
 
             created.enableAudio()

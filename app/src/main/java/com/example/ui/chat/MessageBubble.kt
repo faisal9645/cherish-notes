@@ -362,7 +362,7 @@ fun MessageBubble(
 
                 Column(
                     horizontalAlignment = if (isFromMe) Alignment.End else Alignment.Start,
-                    modifier = Modifier.wrapContentSize().animateContentSize()
+                    modifier = Modifier.wrapContentSize()
                 ) {
                     Box(
                         modifier = Modifier

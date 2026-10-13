@@ -59,8 +59,11 @@ class CherishSyncService : Service() {
 
         try {
             ServiceCompat.startForeground(this, NOTIFICATION_ID, notification, serviceType)
-        } catch (e: Exception) {
-            Log.w(TAG, "startForeground for CherishSyncService: ${e.message}")
+        } catch (e: Throwable) {
+            Log.w(TAG, "startForeground for CherishSyncService with type $serviceType failed: ${e.message}")
+            try {
+                ServiceCompat.startForeground(this, NOTIFICATION_ID, notification, 0)
+            } catch (_: Throwable) {}
         }
 
         observeAccount()
@@ -281,7 +284,7 @@ class CherishSyncService : Service() {
             try {
                 val intent = Intent(context, CherishSyncService::class.java)
                 ContextCompat.startForegroundService(context, intent)
-            } catch (e: Exception) {
+            } catch (e: Throwable) {
                 Log.w(TAG, "Failed starting CherishSyncService: ${e.message}")
             }
         }

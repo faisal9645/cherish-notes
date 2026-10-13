@@ -119,3 +119,7 @@
 -keep class com.example.notifications.ScheduledMessageReceiver { *; }
 -keep class com.example.notifications.CheckAfterReminderReceiver { *; }
 -keep class com.example.notifications.NoteReminderReceiver { *; }
+-keep class com.example.sync.** { *; }
+-keepclassmembers class com.example.sync.** { *; }
+-keep class com.example.ui.home.LovePerson { *; }
+-keepclassmembers class com.example.ui.home.LovePerson { *; }
