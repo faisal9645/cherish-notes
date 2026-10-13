@@ -654,7 +654,8 @@ class ChatRepository(
                     val msg = doc.toMessageOrNull() ?: return@mapNotNull null
                     // My message that hasn't reached the server yet is still sending (a clock, not a tick)
                     if (doc.metadata.hasPendingWrites() && msg.senderId == currentUserId &&
-                        msg.status == MessageStatus.SENT.name
+                        msg.status == MessageStatus.SENT.name &&
+                        !acknowledgedSentIds.contains(msg.id)
                     ) {
                         msg.status = MessageStatus.SENDING.name
                     }
@@ -683,6 +684,8 @@ class ChatRepository(
 
     // Partner messages this phone already marked delivered, so each one costs a single write
     private val deliveredMarkedIds: MutableSet<String> = ConcurrentHashMap.newKeySet()
+    // Messages this phone confirmed reached the server so pending write cache won't revert them to sending
+    private val acknowledgedSentIds: MutableSet<String> = ConcurrentHashMap.newKeySet()
 
     /** The partner's messages have reached this phone (straight from the server): tell the sender. */
     private fun markArrivedAsDelivered(messagesRef: CollectionReference, messages: List<Message>, currentUserId: String) {
@@ -801,12 +804,16 @@ class ChatRepository(
         val convId = getConversationId()
         val messageId = UUID.randomUUID().toString()
 
+        val resolvedReceiverId = partner?.id?.takeIf { it.isNotBlank() }
+            ?: currentUser?.partnerId?.takeIf { it.isNotBlank() }
+            ?: "user_partner"
+
         val newMessage = Message(
             id = messageId,
             conversationId = convId,
             senderId = currentUser?.id ?: "user_me",
             senderName = currentUser?.displayName ?: "Me",
-            receiverId = partner?.id ?: "user_partner",
+            receiverId = resolvedReceiverId,
             text = text,
             timestamp = System.currentTimeMillis(),
             type = type.name,
@@ -830,10 +837,30 @@ class ChatRepository(
         _messagesFlow.value = _messagesFlow.value + newMessage.copy(status = MessageStatus.SENDING.name)
 
         return try {
+            val a = com.google.firebase.auth.FirebaseAuth.getInstance()
+            if (a.currentUser == null) {
+                try {
+                    a.signInAnonymously().await()
+                } catch (e: Exception) {
+                    Log.w("ChatRepository", "Anonymous sign-in before send failed: ${e.message}")
+                }
+            }
+
             val fs = firestore
             if (fs != null) {
                 val convRef = fs.collection("conversations").document(convId)
-                convRef.collection("messages").document(messageId).set(newMessage)
+                convRef.collection("messages").document(messageId).set(newMessage).await()
+
+                acknowledgedSentIds.add(messageId)
+
+                // Instantly update local state so single tick appears immediately!
+                _messagesFlow.update { list ->
+                    list.map {
+                        if (it.id == messageId && it.status == MessageStatus.SENDING.name) {
+                            it.copy(status = MessageStatus.SENT.name)
+                        } else it
+                    }
+                }
 
                 // Update conversation summary
                 val summary = mapOf(
@@ -870,7 +897,7 @@ class ChatRepository(
         val readAt = System.currentTimeMillis()
         _messagesFlow.update { list ->
             list.map {
-                if (it.id in ids && it.receiverId == currentUserId) {
+                if (it.id in ids && (it.receiverId == currentUserId || it.senderId != currentUserId)) {
                     it.copy(status = MessageStatus.READ.name, readTimestamp = readAt)
                 } else it
             }

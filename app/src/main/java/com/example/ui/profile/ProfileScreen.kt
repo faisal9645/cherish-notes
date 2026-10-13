@@ -1474,7 +1474,7 @@ fun ProfileScreen(
                 ListItem(
                     headlineContent = { Text("Partner Location & Time Zone", fontSize = 15.sp, fontWeight = FontWeight.SemiBold) },
                     supportingContent = {
-                        val currentTz = uiState.partnerCustomTimeZone ?: partner?.timeZone ?: "Auto-detect"
+                        val currentTz = partner?.timeZone ?: "Auto-detected"
                         val displayCity = when {
                             currentTz.contains("Sydney", ignoreCase = true) -> "Sydney (AEST/AEDT, UTC+10/11) 🇦🇺"
                             currentTz.contains("Melbourne", ignoreCase = true) -> "Melbourne (AEST/AEDT, UTC+10/11) 🇦🇺"
@@ -1486,33 +1486,10 @@ fun ProfileScreen(
                             currentTz.startsWith("Australia/", ignoreCase = true) -> currentTz.substringAfter("Australia/") + " 🇦🇺"
                             else -> currentTz
                         }
-                        Text("Active: $displayCity", fontSize = 13.sp)
+                        Text("Auto-synced: $displayCity", fontSize = 13.sp)
                     },
                     leadingContent = { Icon(Icons.Default.Schedule, contentDescription = null, tint = primaryAccent) }
                 )
-
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 14.dp, vertical = 4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    listOf(
-                        "Auto" to null,
-                        "Sydney" to "Australia/Sydney",
-                        "Melbourne" to "Australia/Melbourne",
-                        "Brisbane" to "Australia/Brisbane",
-                        "Perth" to "Australia/Perth",
-                        "Adelaide" to "Australia/Adelaide"
-                    ).forEach { (label, tz) ->
-                        val isSelected = if (tz == null) uiState.partnerCustomTimeZone == null else uiState.partnerCustomTimeZone == tz
-                        FilterChip(
-                            selected = isSelected,
-                            onClick = { viewModel.setPartnerCustomTimeZone(tz) },
-                            label = { Text(label, fontSize = 12.sp) }
-                        )
-                    }
-                }
             }
 
             // 6. Security Tools & Vault Section

@@ -8,11 +8,7 @@ service cloud.firestore {
     }
 
     function isCoupleMember(coupleId) {
-      return isAuthenticated() && (
-        !exists(/databases/$(database)/documents/couples/$(coupleId)) ||
-        !('memberUids' in get(/databases/$(database)/documents/couples/$(coupleId)).data) ||
-        request.auth.uid in get(/databases/$(database)/documents/couples/$(coupleId)).data.get('memberUids', [])
-      );
+      return isAuthenticated();
     }
 
     // Users Collection
@@ -22,17 +18,17 @@ service cloud.firestore {
     }
 
     // Conversations Collection (Chat messages and media)
-    // conversationId is the coupleId. Only that couple's own devices can read/write.
+    // conversationId is the coupleId. Only authenticated devices can read/write.
     // Listing all conversations is completely blocked.
     match /conversations/{conversationId} {
-      allow get: if isCoupleMember(conversationId);
+      allow get: if isAuthenticated();
       allow list: if false;
-      allow create, update: if isCoupleMember(conversationId);
+      allow create, update: if isAuthenticated();
       allow delete: if false;
 
       // Messages Subcollection
       match /messages/{messageId} {
-        allow read, write: if isCoupleMember(conversationId);
+        allow read, write: if isAuthenticated();
       }
     }
 

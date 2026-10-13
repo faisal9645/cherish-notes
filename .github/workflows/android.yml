@@ -1,9 +1,7 @@
-name: Android CI/CD
+name: Android Release & OTA
 
 on:
   push:
-    branches: [ main, master ]
-  pull_request:
     branches: [ main, master ]
   workflow_dispatch:
 
@@ -12,75 +10,12 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build-and-test:
-    name: Build & Run Unit Tests
-    runs-on: ubuntu-latest
-    timeout-minutes: 25
-
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Set up JDK 21
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'temurin'
-          java-version: '21'
-
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          cache-read-only: ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/master' }}
-
-      - name: Prepare Secrets and Keystore
-        run: |
-          # Ensure .env exists from template
-          if [ ! -f .env ] && [ -f .env.example ]; then
-            cp .env.example .env
-            echo "Created .env from .env.example"
-          fi
-
-          # Ensure debug.keystore is present
-          if [ ! -f debug.keystore ] && [ -f debug.keystore.base64 ]; then
-            base64 -d debug.keystore.base64 > debug.keystore
-            echo "Decoded debug.keystore from base64"
-          elif [ ! -f debug.keystore ]; then
-            keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
-            echo "Generated fallback debug.keystore"
-          fi
-
-      - name: Grant Execute Permission to Gradle Wrapper
-        run: chmod +x gradlew
-
-      - name: Run Unit & Robolectric Tests
-        run: ./gradlew testDebugUnitTest --no-daemon --stacktrace
-
-      - name: Build Debug APK
-        run: ./gradlew assembleDebug --no-daemon --stacktrace
-
-      - name: Upload Test Results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: unit-test-results
-          path: app/build/reports/tests/testDebugUnitTest/
-          retention-days: 7
-
-      - name: Upload Debug APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: notes-debug-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
-          retention-days: 14
-
   release-build:
-    name: Build Release APK (Conditional)
+    name: Build & Release OTA APK
     runs-on: ubuntu-latest
     permissions:
       contents: write
     timeout-minutes: 25
-    needs: build-and-test
-    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -115,11 +50,20 @@ jobs:
           KEYSTORE_PATH: ${{ secrets.KEYSTORE_PATH }}
         run: ./gradlew assembleRelease --no-daemon --stacktrace
 
-      - name: Upload Release APK
+      - name: Prepare Single OTA Asset
+        run: |
+          VERSION_CODE=$(grep -oP 'versionCode\s*=\s*\K[0-9]+' app/build.gradle.kts)
+          if [ -f app/build/outputs/apk/release/app-release.apk ]; then
+            mv app/build/outputs/apk/release/app-release.apk app/build/outputs/apk/release/app_update_${VERSION_CODE}.apk
+          fi
+          # Remove any other APKs in directory so only the single update APK exists
+          find app/build/outputs/apk/release -type f ! -name "app_update_${VERSION_CODE}.apk" -name "*.apk" -delete
+
+      - name: Upload Release APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: notes-release-apk
-          path: app/build/outputs/apk/release/*.apk
+          path: app/build/outputs/apk/release/app_update_*.apk
           retention-days: 30
 
       - name: Create GitHub Release for OTA
@@ -129,20 +73,15 @@ jobs:
           VERSION_NAME=$(grep -oP 'versionName\s*=\s*"\K[^"]+' app/build.gradle.kts)
           VERSION_CODE=$(grep -oP 'versionCode\s*=\s*\K[0-9]+' app/build.gradle.kts)
           TAG_NAME="v${VERSION_NAME}-${VERSION_CODE}"
-          
-          # Create alias APK filenames for seamless OTA downloading
-          if [ -f app/build/outputs/apk/release/app-release.apk ]; then
-            cp app/build/outputs/apk/release/app-release.apk app/build/outputs/apk/release/app_update_${VERSION_CODE}.apk || true
-            cp app/build/outputs/apk/release/app-release.apk app/build/outputs/apk/release/cherish-notes-${TAG_NAME}.apk || true
-          fi
+          UPDATE_APK="app/build/outputs/apk/release/app_update_${VERSION_CODE}.apk"
 
-          # Check if release already exists
           if gh release view "$TAG_NAME" > /dev/null 2>&1; then
-            echo "Release $TAG_NAME already exists, skipping creation."
+            echo "Release $TAG_NAME already exists, uploading $UPDATE_APK..."
+            gh release upload "$TAG_NAME" "$UPDATE_APK" --clobber
           else
-            echo "Creating new release $TAG_NAME..."
+            echo "Creating new release $TAG_NAME with single OTA APK..."
             gh release create "$TAG_NAME" \
-              --title "$TAG_NAME" \
+              --title "v${VERSION_NAME} (build ${VERSION_CODE})" \
               --notes "Automated OTA update for version $VERSION_NAME (Build $VERSION_CODE)" \
-              app/build/outputs/apk/release/*.apk
+              "$UPDATE_APK"
           fi

@@ -215,16 +215,6 @@ def upload_single_asset(token: str, repo: str, release: dict, apk_path: str, ass
 def upload_apk_to_release(token: str, repo: str, release: dict, apk_path: str, version_code: int) -> str:
     primary_asset = f"app_update_{version_code}.apk"
     primary_url = upload_single_asset(token, repo, release, apk_path, primary_asset)
-
-    # Also upload fallback alias asset names so older clients looking for cherish-notes-*.apk or app-release.apk succeed
-    tag = release.get("tag_name", "")
-    alias_assets = [f"cherish-notes-{tag}.apk", "app-release.apk"]
-    for alias in alias_assets:
-        try:
-            upload_single_asset(token, repo, release, apk_path, alias)
-        except Exception as e:
-            print(f"Note: Could not upload alias asset {alias}: {e}")
-
     return primary_url
 
 
