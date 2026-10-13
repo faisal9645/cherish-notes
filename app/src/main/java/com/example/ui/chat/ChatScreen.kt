@@ -1019,8 +1019,9 @@ fun ChatScreen(
                     onDelete = { showMultiDeleteConfirmDialog = true }
                 )
             } else Box {
+                val isPrivate = uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE
                 // Frosted glass: the wallpaper behind the bar, blurred (Android 12+; tinted before)
-                if (showWallpaper && android.os.Build.VERSION.SDK_INT >= 31 && chatScreenSize != IntSize.Zero) {
+                if (showWallpaper && !isPrivate && android.os.Build.VERSION.SDK_INT >= 31 && chatScreenSize != IntSize.Zero) {
                     Box(modifier = Modifier.matchParentSize().clipToBounds()) {
                         ChatWallpaper(
                             chatBgTheme = uiState.chatBgTheme,
@@ -1034,7 +1035,22 @@ fun ChatScreen(
                         )
                     }
                 }
-                Column {
+                val topBarBackgroundModifier = if (isPrivate) {
+                    Modifier
+                        .fillMaxWidth()
+                        .background(
+                            Brush.verticalGradient(
+                                colorStops = arrayOf(
+                                    0.0f to (if (isDark) Color.Black.copy(alpha = 0.95f) else Color.White.copy(alpha = 0.98f)),
+                                    0.7f to (if (isDark) Color.Black.copy(alpha = 0.85f) else Color.White.copy(alpha = 0.88f)),
+                                    1.0f to Color.Transparent
+                                )
+                            )
+                        )
+                } else {
+                    Modifier.fillMaxWidth()
+                }
+                Column(modifier = topBarBackgroundModifier) {
                 TopAppBar(
                     title = {
                     if (uiState.isSearching) {
@@ -1060,8 +1076,6 @@ fun ChatScreen(
                                 .testTag("chat_search_input")
                         )
                     } else {
-                        val isPrivate = uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE
-                        
                         if (isPrivate) {
                             // Like the ChatGPT app: no title, only the round buttons
                         } else {
@@ -1082,13 +1096,12 @@ fun ChatScreen(
                 },
                 navigationIcon = {
                     if (uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE && !uiState.isSearching) {
-                        // ChatGPT's round menu button: opens Settings, as sliding right does
-                        PrivateRoundButton(
-                            isDark = isDark,
+                        // ChatGPT's clean menu button: opens Settings, as sliding right does
+                        IconButton(
                             onClick = onNavigateToProfile,
                             modifier = Modifier
-                                .padding(start = 8.dp)
-                                .size(44.dp)
+                                .padding(start = 6.dp)
+                                .size(42.dp)
                                 .testTag("chat_back_button")
                         ) {
                             TwoLineMenuIcon(tint = if (isDark) Color(0xFFECECEC) else Color(0xFF0D0D0D))
@@ -1124,33 +1137,28 @@ fun ChatScreen(
                             Icon(Icons.Default.Close, contentDescription = "Close search", modifier = Modifier.size(23.dp))
                         }
                     } else {
-                        val isPrivate = uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE
-                        val iconTint = if (isPrivate) (if (isDark) Color(0xFFECECEC) else Color(0xFF0D0D0D)) else MaterialTheme.colorScheme.onSurface
-                        if (isPrivate) {
-                            // ChatGPT's pill: new chat (clears the screen, kept safe) and more. No
-                            // Settings here: sliding right (or the round menu button) opens them.
-                            Box(modifier = Modifier.padding(end = 8.dp)) {
+                        val isPrivateChat = uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE
+                        val iconTint = if (isPrivateChat) (if (isDark) Color(0xFFECECEC) else Color(0xFF0D0D0D)) else MaterialTheme.colorScheme.onSurface
+                        if (isPrivateChat) {
+                            // ChatGPT style: clean new chat and overflow icons without distracting heavy borders
+                            Box(modifier = Modifier.padding(end = 6.dp)) {
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(50))
-                                        .background(if (isDark) PrivateChromeDark else PrivateChromeLight)
-                                        .border(1.dp, if (isDark) PrivateChromeEdgeDark else PrivateChromeEdgeLight, RoundedCornerShape(50))
-                                        .padding(horizontal = 2.dp)
+                                    horizontalArrangement = Arrangement.spacedBy(2.dp)
                                 ) {
                                     IconButton(
                                         onClick = { showClearChatDialog = true },
                                         modifier = Modifier
-                                            .size(44.dp)
+                                            .size(42.dp)
                                             .testTag("chat_new_chat_button")
                                     ) {
                                         NewChatIcon(tint = iconTint)
                                     }
                                     IconButton(
                                         onClick = { showChatMenu = true },
-                                        modifier = Modifier.size(44.dp)
+                                        modifier = Modifier.size(42.dp)
                                     ) {
-                                        Icon(Icons.Default.MoreVert, contentDescription = "More options", tint = iconTint, modifier = Modifier.size(22.dp))
+                                        Icon(Icons.Default.MoreVert, contentDescription = "More options", tint = iconTint, modifier = Modifier.size(24.dp))
                                     }
                                 }
                                 DropdownMenu(
@@ -1291,7 +1299,7 @@ fun ChatScreen(
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = if (uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE) {
-                        if (isDark) Color.Black else Color.White
+                        Color.Transparent
                     } else if (showWallpaper) {
                         MaterialTheme.colorScheme.surface.copy(alpha = if (android.os.Build.VERSION.SDK_INT >= 31) 0.72f else 0.92f)
                     } else {
@@ -1310,14 +1318,15 @@ fun ChatScreen(
         },
         bottomBar = {
             val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
-            val barBg = if (uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE) {
+            val isPrivate = uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE
+            val barBg = if (isPrivate) {
                 if (isDark) Color.Black else Color.White
             } else if (isDark) TrueDarkSurface else Color.White
-            // Not a Surface, which clips its content: the voice-lock hint floats above the mic button
+            // In private mode (ChatGPT style): flat background with no harsh shadow or border
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .shadow(8.dp, RectangleShape, clip = false)
+                    .then(if (!isPrivate) Modifier.shadow(8.dp, RectangleShape, clip = false) else Modifier)
                     .background(barBg)
                     // Touches on the tray stay in the tray
                     .pointerInput(Unit) {}
@@ -1327,8 +1336,7 @@ fun ChatScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .background(barBg)
-                        .navigationBarsPadding()
-                        .imePadding()
+                        .windowInsetsPadding(WindowInsets.navigationBars.union(WindowInsets.ime))
                 ) {
                 ChatBottomComposerBar(
                     composerState = composerState,
@@ -1346,7 +1354,32 @@ fun ChatScreen(
                         }
                     },
                     triggerCameraSnap = triggerCameraSnap,
-                    onPickAttachment = { showAttachmentSheet = true },
+                    onPickAttachment = {
+                        if (isPrivate) {
+                            val prefs = com.example.security.SecurityPreferences.getInstance(context)
+                            prefs.isExternalPickerActive = true
+                            prefs.ignoreNextPause = true
+                            photoPickerLauncher.launch(
+                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                            )
+                        } else {
+                            showAttachmentSheet = true
+                        }
+                    },
+                    onPickVideo = {
+                        val prefs = com.example.security.SecurityPreferences.getInstance(context)
+                        prefs.isExternalPickerActive = true
+                        prefs.ignoreNextPause = true
+                        videoPickerLauncher.launch(
+                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly)
+                        )
+                    },
+                    onPickDocument = {
+                        val prefs = com.example.security.SecurityPreferences.getInstance(context)
+                        prefs.isExternalPickerActive = true
+                        prefs.ignoreNextPause = true
+                        documentPickerLauncher.launch(arrayOf("*/*"))
+                    },
                     onRecordVideoNote = {
                         val missing = listOf(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO).filter {
                             ContextCompat.checkSelfPermission(context, it) != PackageManager.PERMISSION_GRANTED
@@ -1603,6 +1636,15 @@ fun ChatScreen(
                 // The typing bubble sits under the list, so as it grows the newest messages move up
                 Column(modifier = Modifier.fillMaxSize()) {
                 var lastLazyColumnHeight by remember { mutableIntStateOf(0) }
+                val density = LocalDensity.current
+                val imeBottom = WindowInsets.ime.getBottom(density)
+                LaunchedEffect(imeBottom) {
+                    if (imeBottom > 0 && reversedChatRowItems.isNotEmpty()) {
+                        if (listState.firstVisibleItemIndex <= 2) {
+                            listState.animateScrollToItem(0, scrollOffset = 0)
+                        }
+                    }
+                }
                 LazyColumn(
                     state = listState,
                     modifier = Modifier
@@ -1746,9 +1788,11 @@ fun ChatScreen(
                 // follow them, where the first message will land (once it does, its row shows them)
                 if (showEmptyTodayHeader && reversedChatRowItems.isNotEmpty()) {
                     val isPrivate = uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE
-                    Column(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
-                        DateSeparatorBadge(dateText = "Today", isPrivateMode = isPrivate, isDark = isDark)
-                        if (!isPrivate) StrictlyTwoPersonBanner(isPrivateMode = false, isDark = isDark)
+                    if (!isPrivate) {
+                        Column(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
+                            DateSeparatorBadge(dateText = "Today", isPrivateMode = isPrivate, isDark = isDark)
+                            StrictlyTwoPersonBanner(isPrivateMode = false, isDark = isDark)
+                        }
                     }
                 }
 
@@ -3258,8 +3302,10 @@ private fun ChatMessageRow(
         if (isFirstOfDay) {
             val dateSep = if (dateSeparatorText.isNotEmpty()) dateSeparatorText else formatDateSeparator(message.timestamp)
             val today = isToday(message.timestamp)
-            // Private chat stays plain: no banner, and "Today" only to divide it from older days
-            if (dateSep.isNotEmpty() && !(isPrivate && today && isOldestShown)) {
+            val isTodayOrYesterday = dateSep.equals("Today", ignoreCase = true) || dateSep.equals("Yesterday", ignoreCase = true)
+            val hideInPrivate = isPrivate && isTodayOrYesterday
+            // Only hide Today and Yesterday date separators in private mode; normal mode renders them
+            if (dateSep.isNotEmpty() && !hideInPrivate && !(isPrivate && today && isOldestShown)) {
                 DateSeparatorBadge(dateText = dateSep, isPrivateMode = isPrivate, isDark = isDark)
             }
             if (today && !isPrivate) {
@@ -4086,6 +4132,9 @@ fun DateSeparatorBadge(
     isDark: Boolean,
     modifier: Modifier = Modifier
 ) {
+    if (isPrivateMode && (dateText.equals("Today", ignoreCase = true) || dateText.equals("Yesterday", ignoreCase = true))) {
+        return
+    }
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -4446,6 +4495,8 @@ private fun ChatBottomComposerBar(
     onScheduleText: () -> Unit,
     triggerCameraSnap: () -> Unit,
     onPickAttachment: () -> Unit,
+    onPickVideo: () -> Unit = {},
+    onPickDocument: () -> Unit = {},
     onRecordVideoNote: () -> Unit,
     onMicPermissionRequired: () -> Unit,
     onSendHaptic: () -> Unit,
@@ -4479,13 +4530,15 @@ private fun ChatBottomComposerBar(
         onCancelVoiceRecord = { viewModel.cancelVoiceRecording() },
         onTakePhoto = triggerCameraSnap,
         onPickAttachment = onPickAttachment,
+        onPickVideo = onPickVideo,
+        onPickDocument = onPickDocument,
         onScheduleText = onScheduleText,
         onRecordVideoNote = onRecordVideoNote,
         myPhotoUrl = myUser?.photoUrl,
         myName = myUser?.displayName ?: "Me",
         placeholder = when {
             uiState.isStealthCurtainActive -> "Add a note..."
-            uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE -> "Ask anything"
+            uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE -> "Reply to ChatGPT"
             else -> "Message $partnerName... ❤️"
         },
         isPrivateMode = (uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE),

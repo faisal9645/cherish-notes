@@ -11,6 +11,9 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
+import androidx.compose.ui.text.PlatformTextStyle
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -103,6 +106,8 @@ fun MessageComposer(
     isPrivateMode: Boolean = false,
     onEmergencyExit: (() -> Unit)? = null,
     onInputFocused: () -> Unit = {},
+    onPickDocument: (() -> Unit)? = null,
+    onPickVideo: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -118,16 +123,14 @@ fun MessageComposer(
     var dragOffsetY by remember { mutableFloatStateOf(0f) }
     var isVideoMode by remember { mutableStateOf(false) }
 
-    // The emoji board and the keyboard take turns in the same space under the message box. The
-    // board is as tall as the keyboard, and while one slides away the other fills exactly the
-    // space it leaves, so the message box stays put when switching between them.
     val density = LocalDensity.current
     val keyboardInsets = WindowInsets.ime.exclude(WindowInsets.navigationBars)
     val keyboardTargetInsets = WindowInsets.imeAnimationTarget.exclude(WindowInsets.navigationBars)
     var keyboardHeightPx by rememberSaveable { mutableIntStateOf(0) }
-    // 0 = board hidden, 1 = board at full height (before subtracting the keyboard)
     val emojiBoardOpen = remember { Animatable(0f) }
     val isEmojiBoardShown by remember { derivedStateOf { showEmojiPanel || emojiBoardOpen.value > 0f } }
+
+    val effectivePlaceholder = if (isPrivateMode) "Reply to ChatGPT" else placeholder
 
     // The keyboard's full height, taken each time it finishes opening
     LaunchedEffect(Unit) {
@@ -137,55 +140,70 @@ fun MessageComposer(
         }.collect { settled -> if (settled > 0) keyboardHeightPx = settled }
     }
 
-    /** The board shrinks away under the rising keyboard, then goes. */
     fun giveWayToKeyboard() {
         showEmojiPanel = false
-        scope.launch {
-            val keyboardOpened = withTimeoutOrNull(800) {
-                snapshotFlow {
-                    val now = keyboardInsets.getBottom(density)
-                    now > 0 && now == keyboardTargetInsets.getBottom(density)
-                }.first { it }
-            } != null
-            if (showEmojiPanel) return@launch
-            if (keyboardOpened) emojiBoardOpen.snapTo(0f) else emojiBoardOpen.animateTo(0f, tween(180))
+        if (!isPrivateMode) {
+            scope.launch {
+                val keyboardOpened = withTimeoutOrNull(800) {
+                    snapshotFlow {
+                        val now = keyboardInsets.getBottom(density)
+                        now > 0 && now == keyboardTargetInsets.getBottom(density)
+                    }.first { it }
+                } != null
+                if (showEmojiPanel) return@launch
+                if (keyboardOpened) emojiBoardOpen.snapTo(0f) else emojiBoardOpen.animateTo(0f, tween(180))
+            }
         }
     }
 
     fun openEmojiBoard() {
         onInputFocused()
-        val keyboardNow = keyboardInsets.getBottom(density)
-        if (keyboardNow > 0) keyboardHeightPx = keyboardNow
-        showEmojiPanel = true
-        keyboardController?.hide()
-        scope.launch {
-            // Taking over from the keyboard: full height at once, uncovered as the keyboard slides down
-            if (keyboardNow > 0) emojiBoardOpen.snapTo(1f)
-            else emojiBoardOpen.animateTo(1f, tween(240, easing = FastOutSlowInEasing))
+        if (isPrivateMode) {
+            keyboardController?.hide()
+            focusManager.clearFocus()
+            showEmojiPanel = true
+        } else {
+            val keyboardNow = keyboardInsets.getBottom(density)
+            if (keyboardNow > 0) keyboardHeightPx = keyboardNow
+            showEmojiPanel = true
+            keyboardController?.hide()
+            scope.launch {
+                if (keyboardNow > 0) emojiBoardOpen.snapTo(1f)
+                else emojiBoardOpen.animateTo(1f, tween(240, easing = FastOutSlowInEasing))
+            }
         }
     }
 
     fun switchToKeyboard() {
+        showEmojiPanel = false
         onInputFocused()
         focusRequester.requestFocus()
         keyboardController?.show()
-        giveWayToKeyboard()
+        if (!isPrivateMode) {
+            giveWayToKeyboard()
+        }
     }
 
     fun closeEmojiBoard() {
-        if (!showEmojiPanel) return
+        if (!showEmojiPanel && emojiBoardOpen.value == 0f) return
         showEmojiPanel = false
-        scope.launch { emojiBoardOpen.animateTo(0f, tween(200, easing = FastOutSlowInEasing)) }
+        if (!isPrivateMode) {
+            scope.launch { emojiBoardOpen.animateTo(0f, tween(200, easing = FastOutSlowInEasing)) }
+        }
     }
 
-    // Tapping the message box while the board is open brings the keyboard back in its place
+    // Tapping the message box while the panel is open closes the panel (or gives way to keyboard in normal mode)
     LaunchedEffect(Unit) {
         snapshotFlow { keyboardTargetInsets.getBottom(density) > 0 }
-            .collect { keyboardComing -> if (keyboardComing && showEmojiPanel) giveWayToKeyboard() }
+            .collect { keyboardComing ->
+                if (keyboardComing && (showEmojiPanel || emojiBoardOpen.value > 0f)) {
+                    if (isPrivateMode) closeEmojiBoard() else giveWayToKeyboard()
+                }
+            }
     }
 
     // Back closes the emoji board first, before anything else on the chat screen
-    BackHandler(enabled = showEmojiPanel) { closeEmojiBoard() }
+    BackHandler(enabled = isEmojiBoardShown) { closeEmojiBoard() }
 
     // When replyingTo message is set (glide/swipe to reply), open keyboard and focus input automatically
     LaunchedEffect(replyingTo) {
@@ -390,16 +408,53 @@ fun MessageComposer(
             .fillMaxWidth()
             .background(barBg)
     ) {
-        // 23. WhatsApp-Style Composer Row:
+        // Selection Panel (Attachments & Emojis) positioned ABOVE the input bar (PRIVATE MODE ONLY):
+        if (isPrivateMode) {
+            AnimatedVisibility(
+                visible = showEmojiPanel && !isRecordingVoice,
+                enter = expandVertically(animationSpec = tween(220, easing = FastOutSlowInEasing)) + fadeIn(tween(180)),
+                exit = shrinkVertically(animationSpec = tween(180, easing = FastOutSlowInEasing)) + fadeOut(tween(120))
+            ) {
+                EmojiAttachmentPanel(
+                    isDark = isDark,
+                    pillBorder = pillBorder,
+                    isPrivateMode = isPrivateMode,
+                    emojiTabs = emojiTabs,
+                    emojiCategories = emojiCategories,
+                    emojiPagerState = emojiPagerState,
+                    haptic = haptic,
+                    onEmojiPicked = { emoji -> onTextChanged(text + emoji) },
+                    onClose = { closeEmojiBoard() },
+                    onTakePhoto = {
+                        closeEmojiBoard()
+                        onTakePhoto()
+                    },
+                    onPickAttachment = {
+                        closeEmojiBoard()
+                        onPickAttachment()
+                    },
+                    onPickDocument = {
+                        closeEmojiBoard()
+                        onPickDocument?.invoke() ?: onPickAttachment()
+                    },
+                    onPickVideo = {
+                        closeEmojiBoard()
+                        onPickVideo?.invoke() ?: onPickAttachment()
+                    }
+                )
+            }
+        }
+
+        // WhatsApp / ChatGPT-Style Composer Row:
         // [ Reply Bar ]
-        // [ 🙂 | Message your love... | 📎 | 📷 | 📹 ]    [ 🎤 / ✈️ ]
+        // [ 🙂 | Reply to ChatGPT | 📎 | 📷 | 📹 ]    [ 🎤 / ✈️ ]
         Row(
             modifier = Modifier
                 .widthIn(max = 600.dp)
                 .fillMaxWidth()
                 .align(Alignment.CenterHorizontally)
-                .padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = if (isPrivateMode) 4.dp else 8.dp),
-            verticalAlignment = Alignment.Bottom
+                .padding(start = 12.dp, end = 12.dp, top = if (isPrivateMode) 6.dp else 8.dp, bottom = if (isPrivateMode) 6.dp else 8.dp),
+            verticalAlignment = if (isPrivateMode) Alignment.Bottom else Alignment.CenterVertically
         ) {
             Column(
                 modifier = Modifier.weight(1f),
@@ -615,100 +670,97 @@ fun MessageComposer(
                     }
                 }
             } else {
-                // ChatGPT / Messaging Text Input Pill:
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(min = if (isPrivateMode) 54.dp else 44.dp)
-                        .clip(RoundedCornerShape(if (isPrivateMode) 28.dp else 26.dp))
-                        .background(pillBg)
-                        .border(BorderStroke(1.dp, pillBorder), RoundedCornerShape(if (isPrivateMode) 28.dp else 26.dp))
-                        .padding(start = if (isPrivateMode) 6.dp else 4.dp, end = if (isPrivateMode) 7.dp else 4.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    if (isPrivateMode) {
-                        // ChatGPT's plain "+" at the start
+                if (isPrivateMode) {
+                    // ChatGPT Text Input Pill (Private mode):
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 52.dp)
+                            .clip(RoundedCornerShape(26.dp))
+                            .background(pillBg)
+                            .border(BorderStroke(1.dp, pillBorder), RoundedCornerShape(26.dp))
+                            .padding(start = 6.dp, end = 6.dp, top = 4.dp, bottom = 4.dp),
+                        verticalAlignment = Alignment.Bottom
+                    ) {
+                        // ChatGPT's plain "+" at the start (toggles attachment/emoji panel)
                         IconButton(
-                            onClick = onPickAttachment,
+                            onClick = {
+                                if (showEmojiPanel) closeEmojiBoard() else openEmojiBoard()
+                            },
                             modifier = Modifier
                                 .size(40.dp)
                                 .testTag("composer_attach_button")
                         ) {
+                            val plusRotation by animateFloatAsState(
+                                targetValue = if (showEmojiPanel) 45f else 0f,
+                                animationSpec = spring(dampingRatio = 0.75f, stiffness = Spring.StiffnessMedium),
+                                label = "plus_rotation"
+                            )
                             Icon(
                                 imageVector = Icons.Default.Add,
                                 contentDescription = "Attach file or photo",
                                 tint = if (isDark) Color(0xFFECECEC) else Color(0xFF0D0D0D),
-                                modifier = Modifier.size(26.dp)
+                                modifier = Modifier
+                                    .size(24.dp)
+                                    .graphicsLayer { rotationZ = plusRotation }
                             )
                         }
-                    } else {
-                        // Far Left: 🙂 Emoji button
-                        IconButton(
-                            onClick = { if (showEmojiPanel) switchToKeyboard() else openEmojiBoard() },
-                            modifier = Modifier
-                                .size(38.dp)
-                                .testTag("composer_emoji_button")
-                        ) {
-                            Icon(
-                                imageVector = if (showEmojiPanel) Icons.Default.Keyboard else Icons.Outlined.Mood,
-                                contentDescription = "Toggle emoji panel",
-                                tint = if (showEmojiPanel) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(24.dp)
-                            )
-                        }
-                    }
 
-                    // Center: Auto-expanding text input
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .padding(horizontal = 6.dp, vertical = 6.dp),
-                        contentAlignment = Alignment.CenterStart
-                    ) {
-                        if (text.isEmpty()) {
-                            Text(
-                                text = placeholder,
-                                color = if (isPrivateMode) {
-                                    if (isDark) Color(0xFF8E8E93) else Color(0xFF8E8E93)
-                                } else {
-                                    Color(0xFF64748B)
-                                },
-                                fontSize = if (isPrivateMode) 15.sp else 13.sp,
-                                maxLines = 1,
-                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                            )
-                        }
-                        BasicTextField(
-                            value = text,
-                            onValueChange = onTextChanged,
-                            textStyle = TextStyle(
-                                // The app's typeface, like the messages
-                                fontFamily = LocalTextStyle.current.fontFamily,
-                                color = if (isPrivateMode) {
-                                    if (isDark) Color(0xFFECECEC) else Color(0xFF0D0D0D)
-                                } else {
-                                    if (isDark) Color.White else Color(0xFF0F172A)
-                                },
-                                fontSize = if (isPrivateMode) 15.sp else 14.sp,
-                                lineHeight = if (isPrivateMode) 20.sp else 18.sp
-                            ),
-                            cursorBrush = SolidColor(if (isPrivateMode) (if (isDark) Color(0xFFECECEC) else Color(0xFF0D0D0D)) else DayBluePrimary),
-                            maxLines = 5,
+                        // Center: Auto-expanding text input, vertically centered
+                        Box(
                             modifier = Modifier
-                                .fillMaxWidth()
-                                .focusRequester(focusRequester)
-                                .onFocusChanged { focusState ->
-                                    if (focusState.isFocused) {
-                                        onInputFocused()
+                                .weight(1f)
+                                .heightIn(min = 40.dp)
+                                .padding(horizontal = 6.dp),
+                            contentAlignment = Alignment.CenterStart
+                        ) {
+                            @Suppress("DEPRECATION")
+                            val inputTextStyle = TextStyle(
+                                fontFamily = LocalTextStyle.current.fontFamily,
+                                color = if (isDark) Color(0xFFECECEC) else Color(0xFF0D0D0D),
+                                fontSize = 16.sp,
+                                lineHeight = 22.sp,
+                                platformStyle = PlatformTextStyle(includeFontPadding = false)
+                            )
+
+                            BasicTextField(
+                                value = text,
+                                onValueChange = onTextChanged,
+                                textStyle = inputTextStyle,
+                                cursorBrush = SolidColor(if (isDark) Color(0xFFECECEC) else Color(0xFF0D0D0D)),
+                                maxLines = 5,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .focusRequester(focusRequester)
+                                    .onFocusChanged { focusState ->
+                                        if (focusState.isFocused) {
+                                            closeEmojiBoard()
+                                            onInputFocused()
+                                        }
+                                    }
+                                    .testTag("composer_text_input"),
+                                decorationBox = { innerTextField ->
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(vertical = 4.dp),
+                                        contentAlignment = Alignment.CenterStart
+                                    ) {
+                                        if (text.isEmpty()) {
+                                            Text(
+                                                text = "Reply to ChatGPT",
+                                                style = inputTextStyle.copy(color = Color(0xFF8E8E93)),
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        }
+                                        innerTextField()
                                     }
                                 }
-                                .testTag("composer_text_input")
-                        )
-                    }
+                            )
+                        }
 
-                    if (isPrivateMode) {
-                        // ChatGPT's mic (voice typing) and its round blue button: send, or voice typing
-                        // while there's nothing to send
+                        // ChatGPT's mic (voice typing) and round send button
                         val canSend = text.isNotBlank()
                         IconButton(
                             onClick = { startVoiceTyping() },
@@ -733,7 +785,7 @@ fun MessageComposer(
                                     scaleY = sendBounce.value
                                 }
                                 .clip(CircleShape)
-                                .background(PrivateSendBlue)
+                                .background(if (canSend) PrivateSendBlue else (if (isDark) Color(0xFF2A2A2A) else Color(0xFFE0E0E0)))
                                 .bounceClick(
                                     onLongClick = onScheduleText?.takeIf { canSend }?.let { schedule ->
                                         {
@@ -758,13 +810,77 @@ fun MessageComposer(
                             Icon(
                                 imageVector = if (canSend) Icons.Default.ArrowUpward else Icons.Default.GraphicEq,
                                 contentDescription = if (canSend) "Send" else "Voice typing",
-                                tint = Color.White,
-                                modifier = Modifier.size(21.dp)
+                                tint = if (canSend) Color.White else (if (isDark) Color(0xFF9E9E9E) else Color(0xFF757575)),
+                                modifier = Modifier.size(20.dp)
                             )
                         }
                     }
+                } else {
+                    // Normal Chat Text Input Pill (unchanged from original):
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 44.dp)
+                            .clip(RoundedCornerShape(26.dp))
+                            .background(pillBg)
+                            .border(BorderStroke(1.dp, pillBorder), RoundedCornerShape(26.dp))
+                            .padding(start = 4.dp, end = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // Far Left: 🙂 Emoji button
+                        IconButton(
+                            onClick = { if (isEmojiBoardShown) switchToKeyboard() else openEmojiBoard() },
+                            modifier = Modifier
+                                .size(38.dp)
+                                .testTag("composer_emoji_button")
+                        ) {
+                            Icon(
+                                imageVector = if (isEmojiBoardShown) Icons.Default.Keyboard else Icons.Outlined.Mood,
+                                contentDescription = "Toggle emoji panel",
+                                tint = if (isEmojiBoardShown) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
 
-                    if (!isPrivateMode) {
+                        // Center: Auto-expanding text input
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(horizontal = 6.dp, vertical = 6.dp),
+                            contentAlignment = Alignment.CenterStart
+                        ) {
+                            if (text.isEmpty()) {
+                                Text(
+                                    text = placeholder,
+                                    color = Color(0xFF64748B),
+                                    fontSize = 13.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                            BasicTextField(
+                                value = text,
+                                onValueChange = onTextChanged,
+                                textStyle = TextStyle(
+                                    fontFamily = LocalTextStyle.current.fontFamily,
+                                    color = if (isDark) Color.White else Color(0xFF0F172A),
+                                    fontSize = 14.sp,
+                                    lineHeight = 18.sp
+                                ),
+                                cursorBrush = SolidColor(DayBluePrimary),
+                                maxLines = 5,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .focusRequester(focusRequester)
+                                    .onFocusChanged { focusState ->
+                                        if (focusState.isFocused) {
+                                            onInputFocused()
+                                        }
+                                    }
+                                    .testTag("composer_text_input")
+                            )
+                        }
+
                         // Right inside pill: 📎 Attachment button
                         IconButton(
                             onClick = onPickAttachment,
@@ -794,7 +910,6 @@ fun MessageComposer(
                                 modifier = Modifier.size(22.dp)
                             )
                         }
-
                     }
                 }
             }
@@ -1152,16 +1267,14 @@ fun MessageComposer(
             }
         }
 
-        // 22. WhatsApp/Telegram-Style Tabbed Emoji Panel, in the keyboard's place
-        if (isEmojiBoardShown && !isRecordingVoice) {
+        // WhatsApp/Telegram-Style Tabbed Emoji Panel, in the keyboard's place (NORMAL MODE ONLY)
+        if (!isPrivateMode && isEmojiBoardShown && !isRecordingVoice) {
             val boardHeightPx = if (keyboardHeightPx > 0) keyboardHeightPx else with(density) { 280.dp.roundToPx() }
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clipToBounds()
                     .layout { measurable, constraints ->
-                        // Only the part the keyboard isn't covering takes space; read here, so the
-                        // keyboard's slide moves the board without recomposing the composer
                         val shownPx = (boardHeightPx * emojiBoardOpen.value - keyboardInsets.getBottom(this))
                             .roundToInt()
                             .coerceIn(0, boardHeightPx)
@@ -1169,96 +1282,289 @@ fun MessageComposer(
                         layout(board.width, shownPx) { board.place(0, 0) }
                     }
             ) {
-            Surface(
-                color = if (isDark) MaterialTheme.colorScheme.surfaceVariant else Color(0xFFF8FAFC),
-                border = BorderStroke(1.dp, pillBorder),
-                shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
-                modifier = Modifier.fillMaxSize()
-            ) {
-                Column(modifier = Modifier.fillMaxSize()) {
-                    // Category Tab Row (bottom-style like WhatsApp)
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(if (isDark) darkTone(Color(0xFF1A1C22)) else Color(0xFFF1F3F5))
-                            .padding(horizontal = 4.dp, vertical = 2.dp),
-                        horizontalArrangement = Arrangement.SpaceEvenly,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        emojiTabs.forEachIndexed { index, tabEmoji ->
-                            val isSelected = emojiPagerState.currentPage == index
-                            Box(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(
-                                        if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
-                                        else Color.Transparent
-                                    )
-                                    .clickable {
-                                        scope.launch {
-                                            emojiPagerState.animateScrollToPage(index)
+                Surface(
+                    color = if (isDark) MaterialTheme.colorScheme.surfaceVariant else Color(0xFFF8FAFC),
+                    border = BorderStroke(1.dp, pillBorder),
+                    shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    Column(modifier = Modifier.fillMaxSize()) {
+                        // Category Tab Row (bottom-style like WhatsApp)
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(if (isDark) darkTone(Color(0xFF1A1C22)) else Color(0xFFF1F3F5))
+                                .padding(horizontal = 4.dp, vertical = 2.dp),
+                            horizontalArrangement = Arrangement.SpaceEvenly,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            emojiTabs.forEachIndexed { index, tabEmoji ->
+                                val isSelected = emojiPagerState.currentPage == index
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(
+                                            if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                                            else Color.Transparent
+                                        )
+                                        .clickable {
+                                            scope.launch {
+                                                emojiPagerState.animateScrollToPage(index)
+                                            }
                                         }
-                                    }
-                                    .padding(vertical = 6.dp),
-                                contentAlignment = Alignment.Center
+                                        .padding(vertical = 6.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = tabEmoji,
+                                        fontSize = if (isSelected) 20.sp else 17.sp
+                                    )
+                                }
+                            }
+
+                            // Close button at end
+                            IconButton(
+                                onClick = { closeEmojiBoard() },
+                                modifier = Modifier.size(32.dp)
                             ) {
-                                Text(
-                                    text = tabEmoji,
-                                    fontSize = if (isSelected) 20.sp else 17.sp
+                                Icon(
+                                    Icons.Default.Close,
+                                    contentDescription = "Close",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(16.dp)
                                 )
                             }
                         }
-                        
-                        // Close button at end
-                        IconButton(
-                            onClick = { closeEmojiBoard() },
-                            modifier = Modifier.size(32.dp)
-                        ) {
-                            Icon(
-                                Icons.Default.Close,
-                                contentDescription = "Close",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(16.dp)
-                            )
-                        }
-                    }
 
-                    // Emoji pager for smooth left/right gliding between categories
-                    androidx.compose.foundation.pager.HorizontalPager(
-                        state = emojiPagerState,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .weight(1f)
-                    ) { pageIndex ->
-                        val currentEmojis = emojiCategories.getOrElse(pageIndex) { emptyList() }
-                        LazyVerticalGrid(
-                            columns = GridCells.Fixed(8),
-                            modifier = Modifier.fillMaxSize(),
-                            contentPadding = PaddingValues(6.dp),
-                            horizontalArrangement = Arrangement.SpaceEvenly,
-                            verticalArrangement = Arrangement.spacedBy(2.dp)
-                        ) {
-                            items(currentEmojis, key = { "${pageIndex}_$it" }) { emoji ->
-                                Box(
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(8.dp))
-                                        .clickable {
-                                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                            onTextChanged(text + emoji)
-                                        }
-                                        .padding(vertical = 4.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(text = emoji, fontSize = 34.sp)
+                        // Emoji pager for smooth left/right gliding between categories
+                        androidx.compose.foundation.pager.HorizontalPager(
+                            state = emojiPagerState,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f)
+                        ) { pageIndex ->
+                            val currentEmojis = emojiCategories.getOrElse(pageIndex) { emptyList() }
+                            LazyVerticalGrid(
+                                columns = GridCells.Fixed(8),
+                                modifier = Modifier.fillMaxSize(),
+                                contentPadding = PaddingValues(6.dp),
+                                horizontalArrangement = Arrangement.SpaceEvenly,
+                                verticalArrangement = Arrangement.spacedBy(2.dp)
+                            ) {
+                                items(currentEmojis, key = { "${pageIndex}_$it" }) { emoji ->
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .clickable {
+                                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                                onTextChanged(text + emoji)
+                                            }
+                                            .padding(vertical = 4.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(text = emoji, fontSize = 34.sp)
+                                    }
                                 }
                             }
                         }
                     }
                 }
             }
+        }
+
+    }
+}
+
+@Composable
+private fun EmojiAttachmentPanel(
+    isDark: Boolean,
+    pillBorder: Color,
+    isPrivateMode: Boolean,
+    emojiTabs: List<String>,
+    emojiCategories: List<List<String>>,
+    emojiPagerState: androidx.compose.foundation.pager.PagerState,
+    haptic: androidx.compose.ui.hapticfeedback.HapticFeedback,
+    onEmojiPicked: (String) -> Unit,
+    onClose: () -> Unit,
+    onTakePhoto: () -> Unit,
+    onPickAttachment: () -> Unit,
+    onPickDocument: () -> Unit,
+    onPickVideo: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val panelBg = if (isDark) Color(0xFF1E1E1E) else Color(0xFFF9FAFB)
+    val scope = rememberCoroutineScope()
+
+    Surface(
+        color = panelBg,
+        shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
+        border = BorderStroke(1.dp, pillBorder),
+        modifier = modifier
+            .fillMaxWidth()
+            .height(290.dp)
+            .padding(horizontal = 8.dp)
+    ) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            // Top Section: Quick Attachment Action Items
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 10.dp),
+                horizontalArrangement = Arrangement.SpaceAround,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                PanelActionItem(
+                    icon = Icons.Default.CameraAlt,
+                    label = "Camera",
+                    color = Color(0xFF3B82F6),
+                    isDark = isDark,
+                    onClick = onTakePhoto
+                )
+                PanelActionItem(
+                    icon = Icons.Outlined.PhotoLibrary,
+                    label = "Photos",
+                    color = Color(0xFF10B981),
+                    isDark = isDark,
+                    onClick = onPickAttachment
+                )
+                PanelActionItem(
+                    icon = Icons.Default.Videocam,
+                    label = "Video",
+                    color = Color(0xFFEC4899),
+                    isDark = isDark,
+                    onClick = onPickVideo
+                )
+                PanelActionItem(
+                    icon = Icons.Outlined.InsertDriveFile,
+                    label = "Files",
+                    color = Color(0xFF8B5CF6),
+                    isDark = isDark,
+                    onClick = onPickDocument
+                )
+            }
+
+            HorizontalDivider(
+                thickness = 0.5.dp,
+                color = if (isDark) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.06f)
+            )
+
+            // Category Tab Row
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(if (isDark) Color(0xFF161616) else Color(0xFFF1F3F5))
+                    .padding(horizontal = 4.dp, vertical = 2.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                emojiTabs.forEachIndexed { index, tabEmoji ->
+                    val isSelected = emojiPagerState.currentPage == index
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(
+                                if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                                else Color.Transparent
+                            )
+                            .clickable {
+                                scope.launch { emojiPagerState.animateScrollToPage(index) }
+                            }
+                            .padding(vertical = 4.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = tabEmoji,
+                            fontSize = if (isSelected) 18.sp else 16.sp
+                        )
+                    }
+                }
+
+                IconButton(
+                    onClick = onClose,
+                    modifier = Modifier.size(28.dp)
+                ) {
+                    Icon(
+                        Icons.Default.Close,
+                        contentDescription = "Close",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+            }
+
+            // Emoji Pager
+            androidx.compose.foundation.pager.HorizontalPager(
+                state = emojiPagerState,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+            ) { pageIndex ->
+                val currentEmojis = emojiCategories.getOrElse(pageIndex) { emptyList() }
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(8),
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    items(currentEmojis, key = { "${pageIndex}_$it" }) { emoji ->
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable {
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    onEmojiPicked(emoji)
+                                }
+                                .padding(vertical = 4.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(text = emoji, fontSize = 28.sp)
+                        }
+                    }
+                }
             }
         }
+    }
+}
+
+@Composable
+private fun PanelActionItem(
+    icon: ImageVector,
+    label: String,
+    color: Color,
+    isDark: Boolean,
+    onClick: () -> Unit
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier
+            .clip(RoundedCornerShape(12.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 8.dp, vertical = 4.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(44.dp)
+                .clip(CircleShape)
+                .background(if (isDark) Color(0xFF2A2A2A) else Color(0xFFECEFF1)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = label,
+                tint = color,
+                modifier = Modifier.size(22.dp)
+            )
+        }
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = label,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Medium,
+            color = if (isDark) Color(0xFFECECEC) else Color(0xFF334155)
+        )
     }
 }
 
