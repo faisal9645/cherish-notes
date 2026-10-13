@@ -14,7 +14,6 @@
 const { onCall, onRequest, HttpsError } = require("firebase-functions/v2/https");
 const { onDocumentDeleted } = require("firebase-functions/v2/firestore");
 const { onSchedule } = require("firebase-functions/v2/scheduler");
-const { defineSecret, defineString } = require("firebase-functions/params");
 const logger = require("firebase-functions/logger");
 const { getFirestore, FieldValue, Timestamp } = require("firebase-admin/firestore");
 const { getMessaging } = require("firebase-admin/messaging");
@@ -36,12 +35,9 @@ const {
   MIN_RECORDING_BYTES,
 } = logic;
 
-// Agora project (App ID is public; Certificate is kept in Secret Manager)
-const AGORA_APP_ID = defineString("AGORA_APP_ID");
-const AGORA_APP_CERTIFICATE = defineSecret("AGORA_APP_CERTIFICATE");
-
-const CALL_SECRETS = [AGORA_APP_CERTIFICATE];
-const RECORDING_SECRETS = [AGORA_APP_CERTIFICATE];
+// Agora project credentials read directly from environment (functions/.env)
+const getAgoraAppId = () => (process.env.AGORA_APP_ID || "").trim();
+const getAgoraAppCertificate = () => (process.env.AGORA_APP_CERTIFICATE || "").trim();
 
 /** A call whose recording finished uploading this long ago and still isn't here won't come. */
 const UPLOAD_GIVE_UP_MS = 6 * 60 * 60 * 1000;
@@ -67,18 +63,8 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /** What a phone needs to join the call's channel as [uid]. */
 function joinInfo(callId, uid) {
-  let appId = "";
-  try {
-    appId = (process.env.AGORA_APP_ID || AGORA_APP_ID.value() || "").trim();
-  } catch (_) {
-    appId = (process.env.AGORA_APP_ID || "").trim();
-  }
-  let appCertificate = "";
-  try {
-    appCertificate = (process.env.AGORA_APP_CERTIFICATE || AGORA_APP_CERTIFICATE.value() || "").trim();
-  } catch (_) {
-    appCertificate = (process.env.AGORA_APP_CERTIFICATE || "").trim();
-  }
+  const appId = getAgoraAppId();
+  const appCertificate = getAgoraAppCertificate();
 
   if (!appId) {
     logger.error("AGORA_APP_ID is not configured in Cloud Functions", { callId });
@@ -458,7 +444,7 @@ async function finalizeRecording(coupleId, callId) {
 
 // ---------- Callable functions ----------
 
-exports.callStart = onCall({ secrets: CALL_SECRETS }, async (request) => {
+exports.callStart = onCall(async (request) => {
   const { coupleId, userId, callId } = request.data || {};
   requireCallId(callId);
   const couple = await requireMember(request, coupleId);
@@ -570,7 +556,7 @@ exports.callStart = onCall({ secrets: CALL_SECRETS }, async (request) => {
   return { status: outcome.status, callId, ringExpiresAt, ...joinInfo(callId, CALLER_UID) };
 });
 
-exports.callAnswer = onCall({ secrets: CALL_SECRETS }, async (request) => {
+exports.callAnswer = onCall(async (request) => {
   const { coupleId, callId, userId } = request.data || {};
   requireCallId(callId);
   const couple = await requireMember(request, coupleId);
@@ -609,7 +595,7 @@ exports.callAnswer = onCall({ secrets: CALL_SECRETS }, async (request) => {
   return { status, callId };
 });
 
-exports.callEnd = onCall({ secrets: CALL_SECRETS }, async (request) => {
+exports.callEnd = onCall(async (request) => {
   const { coupleId, callId, userId, reason } = request.data || {};
   requireCallId(callId);
   const couple = await requireMember(request, coupleId);
@@ -625,7 +611,7 @@ exports.callEnd = onCall({ secrets: CALL_SECRETS }, async (request) => {
  * The app joined the call's channel (or saw the other phone join). Once Agora itself shows both
  * phones in the channel, the call is connected and its recording starts.
  */
-exports.callJoined = onCall({ secrets: RECORDING_SECRETS }, async (request) => {
+exports.callJoined = onCall(async (request) => {
   const { coupleId, callId, userId } = request.data || {};
   requireCallId(callId);
   const couple = await requireMember(request, coupleId);
@@ -675,7 +661,7 @@ exports.callJoined = onCall({ secrets: RECORDING_SECRETS }, async (request) => {
   return { status: after.state || claim.state, callId, bothInChannel: true, recordingStatus: (after.recording || {}).status || null };
 });
 
-exports.callRenewToken = onCall({ secrets: CALL_SECRETS }, async (request) => {
+exports.callRenewToken = onCall(async (request) => {
   const { coupleId, callId, userId } = request.data || {};
   requireCallId(callId);
   const couple = await requireMember(request, coupleId);
@@ -688,7 +674,7 @@ exports.callRenewToken = onCall({ secrets: CALL_SECRETS }, async (request) => {
 /**
  * Finalizes an in-app call recording uploaded by the phone to Storage.
  */
-exports.callFinalizeClientRecording = onCall({ secrets: CALL_SECRETS }, async (request) => {
+exports.callFinalizeClientRecording = onCall(async (request) => {
   const { coupleId, callId, userId } = request.data || {};
   requireCallId(callId);
   const couple = await requireMember(request, coupleId);
@@ -774,7 +760,7 @@ async function sweepCall(job, nowMs) {
   }
 }
 
-exports.callSweeper = onSchedule({ schedule: "every 5 minutes", secrets: RECORDING_SECRETS }, async () => {
+exports.callSweeper = onSchedule("every 5 minutes", async () => {
   const nowMs = Date.now();
   const open = await db().collection("callJobs").where("open", "==", true).limit(50).get();
   for (const doc of open.docs) {

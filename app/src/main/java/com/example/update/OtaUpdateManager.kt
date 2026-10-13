@@ -10,6 +10,7 @@ import android.widget.Toast
 import androidx.core.content.FileProvider
 import com.example.BuildConfig
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -94,7 +95,7 @@ class OtaUpdateManager private constructor(private val appContext: Context) {
                 return@withContext null
             }
         } catch (e: Exception) {
-            if (!silent) _updateState.value = UpdateState.Error(e.message ?: "Failed to check for updates")
+            if (!silent) _updateState.value = UpdateState.Error(sanitizeError(e.message))
             return@withContext null
         }
     }
@@ -282,125 +283,165 @@ class OtaUpdateManager private constructor(private val appContext: Context) {
         }
     }
 
+    private fun sanitizeError(raw: String?): String {
+        if (raw.isNullOrBlank()) return "Network connection interrupted. Please try again."
+        val lower = raw.lowercase()
+        return when {
+            lower.contains("ssl") || lower.contains("decrypt") || lower.contains("cipher") ||
+            lower.contains("handshake") || lower.contains("record_mac") || lower.contains("protocol error") ||
+            lower.contains("bad_record") || lower.contains("bad_decrypt") ->
+                "Secure connection interrupted by network. Tap Download & Install to retry."
+            lower.contains("timeout") || lower.contains("timed out") ->
+                "Download timed out. Please check your connection and retry."
+            lower.contains("connection reset") || lower.contains("broken pipe") || lower.contains("eof") ->
+                "Connection lost during download. Tap Download & Install to retry."
+            lower.contains("incomplete") || lower.contains("corrupted") ->
+                "Downloaded file was incomplete. Tap Download & Install to retry."
+            lower.contains("code 404") || lower.contains("404") ->
+                "Update package not found on server. Please try again later."
+            lower.contains("no space") || lower.contains("enospc") ->
+                "Not enough storage space to download update."
+            else -> raw
+        }
+    }
+
+    private fun openConnectionWithHeaders(urlString: String): HttpURLConnection {
+        return (URL(urlString).openConnection() as HttpURLConnection).apply {
+            instanceFollowRedirects = true
+            setRequestProperty("User-Agent", "CherishApp/${BuildConfig.VERSION_NAME}")
+            setRequestProperty("Connection", "close")
+            setRequestProperty("Accept-Encoding", "identity")
+            connectTimeout = 20000
+            readTimeout = 45000
+        }
+    }
+
+    private fun resolveDownloadConnection(initialUrl: String): HttpURLConnection {
+        var currentUrl = initialUrl
+        var conn = openConnectionWithHeaders(currentUrl)
+        var responseCode = conn.responseCode
+        var redirectCount = 0
+
+        while (responseCode in arrayOf(HttpURLConnection.HTTP_MOVED_PERM, HttpURLConnection.HTTP_MOVED_TEMP, 307, 308) && redirectCount < 5) {
+            val newUrl = conn.getHeaderField("Location") ?: break
+            conn.disconnect()
+            currentUrl = newUrl
+            conn = openConnectionWithHeaders(currentUrl)
+            responseCode = conn.responseCode
+            redirectCount++
+        }
+        return conn
+    }
+
     suspend fun downloadAndInstallUpdate(context: Context, info: UpdateInfo) = withContext(Dispatchers.IO) {
         if (info.downloadUrl.isBlank()) {
             _updateState.value = UpdateState.Error("No download URL provided")
             return@withContext
         }
 
-        try {
-            val updatesDir = File(appContext.cacheDir, "updates").apply { mkdirs() }
-            val apkFile = File(updatesDir, "cherish_update_${info.latestVersionCode}.apk")
+        val updatesDir = File(appContext.cacheDir, "updates").apply { mkdirs() }
+        val apkFile = File(updatesDir, "cherish_update_${info.latestVersionCode}.apk")
+        val partFile = File(updatesDir, "cherish_update_${info.latestVersionCode}.apk.part")
 
-            // Already downloaded, e.g. before the app restarted to get install permission
-            if (apkFile.exists()) {
-                val archive = appContext.packageManager.getPackageArchiveInfo(apkFile.absolutePath, 0)
-                if (archive != null && archive.packageName == appContext.packageName) {
-                    if (info.assetSize <= 0L || apkFile.length() == info.assetSize) {
-                        _updateState.value = UpdateState.ReadyToInstall(apkFile)
-                        withContext(Dispatchers.Main) { installApk(context, apkFile) }
-                        return@withContext
-                    }
-                }
-            }
-
-            val url = URL(info.downloadUrl)
-            val conn = (url.openConnection() as HttpURLConnection).apply {
-                instanceFollowRedirects = true
-                setRequestProperty("User-Agent", "CherishApp/${BuildConfig.VERSION_NAME}")
-                connectTimeout = 15000
-                readTimeout = 30000
-            }
-
-            // Handle redirects if needed (up to 5 times)
-            var redirectConn = conn
-            var responseCode = redirectConn.responseCode
-            var redirectCount = 0
-            while (responseCode in arrayOf(HttpURLConnection.HTTP_MOVED_PERM, HttpURLConnection.HTTP_MOVED_TEMP, 307, 308) && redirectCount < 5) {
-                val newUrl = redirectConn.getHeaderField("Location")
-                if (newUrl == null) break
-                redirectConn = (URL(newUrl).openConnection() as HttpURLConnection).apply {
-                    setRequestProperty("User-Agent", "CherishApp/${BuildConfig.VERSION_NAME}")
-                    connectTimeout = 15000
-                    readTimeout = 30000
-                }
-                responseCode = redirectConn.responseCode
-                redirectCount++
-            }
-
-            // If 404 on cherish-notes-{tag}.apk, fallback to app-release.apk
-            if (responseCode == 404 && info.downloadUrl.contains("cherish-notes-")) {
-                val altUrl = info.downloadUrl.substringBeforeLast("/") + "/app-release.apk"
-                val altConn = (URL(altUrl).openConnection() as HttpURLConnection).apply {
-                    instanceFollowRedirects = true
-                    setRequestProperty("User-Agent", "CherishApp/${BuildConfig.VERSION_NAME}")
-                    connectTimeout = 15000
-                    readTimeout = 30000
-                }
-                var altRedirect = altConn
-                var altCode = altRedirect.responseCode
-                var altCount = 0
-                while (altCode in arrayOf(HttpURLConnection.HTTP_MOVED_PERM, HttpURLConnection.HTTP_MOVED_TEMP, 307, 308) && altCount < 5) {
-                    val altLoc = altRedirect.getHeaderField("Location") ?: break
-                    altRedirect = (URL(altLoc).openConnection() as HttpURLConnection).apply {
-                        setRequestProperty("User-Agent", "CherishApp/${BuildConfig.VERSION_NAME}")
-                        connectTimeout = 15000
-                        readTimeout = 30000
-                    }
-                    altCode = altRedirect.responseCode
-                    altCount++
-                }
-                if (altCode in 200..299) {
-                    redirectConn = altRedirect
-                    responseCode = altCode
-                }
-            }
-
-            if (responseCode !in 200..299) {
-                _updateState.value = UpdateState.Error("Server returned code $responseCode")
-                return@withContext
-            }
-
-            val totalBytes = redirectConn.contentLengthLong.let { if (it <= 0) info.assetSize else it }
-            var downloadedBytes = 0L
-
-            redirectConn.inputStream.use { input ->
-                FileOutputStream(apkFile).use { output ->
-                    val buffer = ByteArray(8192)
-                    var bytesRead: Int
-                    var lastReportTime = System.currentTimeMillis()
-
-                    while (input.read(buffer).also { bytesRead = it } != -1) {
-                        output.write(buffer, 0, bytesRead)
-                        downloadedBytes += bytesRead
-
-                        val now = System.currentTimeMillis()
-                        if (now - lastReportTime > 150) { // report every 150ms
-                            lastReportTime = now
-                            val progress = if (totalBytes > 0) downloadedBytes.toFloat() / totalBytes.toFloat() else 0f
-                            _updateState.value = UpdateState.Downloading(progress.coerceIn(0f, 1f), downloadedBytes, totalBytes)
-                        }
-                    }
-                }
-            }
-
-            // Verify package archive integrity
+        // Already downloaded, e.g. before the app restarted to get install permission
+        if (apkFile.exists()) {
             val archive = appContext.packageManager.getPackageArchiveInfo(apkFile.absolutePath, 0)
-            if (archive == null || archive.packageName != appContext.packageName) {
-                apkFile.delete()
-                _updateState.value = UpdateState.Error("Downloaded update is incomplete. Please try again.")
-                return@withContext
+            if (archive != null && archive.packageName == appContext.packageName) {
+                if (info.assetSize <= 0L || apkFile.length() == info.assetSize) {
+                    _updateState.value = UpdateState.ReadyToInstall(apkFile)
+                    withContext(Dispatchers.Main) { installApk(context, apkFile) }
+                    return@withContext
+                }
             }
-
-            _updateState.value = UpdateState.ReadyToInstall(apkFile)
-
-            withContext(Dispatchers.Main) {
-                installApk(context, apkFile)
-            }
-
-        } catch (e: Exception) {
-            _updateState.value = UpdateState.Error(e.message ?: "Download failed")
+            apkFile.delete()
         }
+
+        var lastException: Exception? = null
+        val maxAttempts = 3
+
+        for (attempt in 1..maxAttempts) {
+            var activeConn: HttpURLConnection? = null
+            try {
+                if (partFile.exists()) partFile.delete()
+
+                var conn = resolveDownloadConnection(info.downloadUrl)
+                var responseCode = conn.responseCode
+
+                // If 404 on cherish-notes-{tag}.apk, fallback to app-release.apk
+                if (responseCode == 404 && info.downloadUrl.contains("cherish-notes-")) {
+                    conn.disconnect()
+                    val altUrl = info.downloadUrl.substringBeforeLast("/") + "/app-release.apk"
+                    conn = resolveDownloadConnection(altUrl)
+                    responseCode = conn.responseCode
+                }
+
+                if (responseCode !in 200..299) {
+                    conn.disconnect()
+                    throw java.io.IOException("Server returned HTTP $responseCode")
+                }
+
+                activeConn = conn
+                val totalBytes = conn.contentLengthLong.let { if (it <= 0) info.assetSize else it }
+                var downloadedBytes = 0L
+
+                conn.inputStream.use { input ->
+                    FileOutputStream(partFile).use { output ->
+                        val buffer = ByteArray(32 * 1024)
+                        var bytesRead: Int
+                        var lastReportTime = System.currentTimeMillis()
+
+                        while (input.read(buffer).also { bytesRead = it } != -1) {
+                            output.write(buffer, 0, bytesRead)
+                            downloadedBytes += bytesRead
+
+                            val now = System.currentTimeMillis()
+                            if (now - lastReportTime > 150) { // report every 150ms
+                                lastReportTime = now
+                                val progress = if (totalBytes > 0) downloadedBytes.toFloat() / totalBytes.toFloat() else 0f
+                                _updateState.value = UpdateState.Downloading(progress.coerceIn(0f, 1f), downloadedBytes, totalBytes)
+                            }
+                        }
+                        output.flush()
+                    }
+                }
+                activeConn.disconnect()
+                activeConn = null
+
+                // Verify package archive integrity
+                val archive = appContext.packageManager.getPackageArchiveInfo(partFile.absolutePath, 0)
+                if (archive == null || archive.packageName != appContext.packageName) {
+                    partFile.delete()
+                    throw java.io.IOException("Downloaded update is incomplete. Please try again.")
+                }
+
+                // Promote verified partFile to final apkFile
+                if (apkFile.exists()) apkFile.delete()
+                if (!partFile.renameTo(apkFile)) {
+                    partFile.copyTo(apkFile, overwrite = true)
+                    partFile.delete()
+                }
+
+                _updateState.value = UpdateState.ReadyToInstall(apkFile)
+
+                withContext(Dispatchers.Main) {
+                    installApk(context, apkFile)
+                }
+                return@withContext
+
+            } catch (e: Exception) {
+                lastException = e
+                android.util.Log.w("OtaUpdateManager", "Download attempt $attempt of $maxAttempts failed: ${e.message}")
+                try { activeConn?.disconnect() } catch (_: Exception) {}
+                if (partFile.exists()) partFile.delete()
+
+                if (attempt < maxAttempts) {
+                    delay(1200L * attempt)
+                }
+            }
+        }
+
+        val friendlyError = sanitizeError(lastException?.message)
+        _updateState.value = UpdateState.Error(friendlyError)
     }
 
     fun installApk(context: Context, apkFile: File) {

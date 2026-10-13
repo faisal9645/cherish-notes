@@ -679,8 +679,8 @@ fun CherishNavGraph(
                             updateState.isChecking -> "Checking for Updates..."
                             updateState.isDownloading -> "Downloading Update..."
                             updateState.isReadyToInstall -> "Update Ready to Install!"
-                            updateState.isUpdateAvailable -> "Update Available! ??"
-                            else -> "Cherish is Up to Date ?"
+                            updateState.isUpdateAvailable -> "Update Available!"
+                            else -> "Cherish is Up to Date"
                         },
                         fontSize = 19.sp,
                         fontWeight = FontWeight.Bold,
@@ -763,10 +763,16 @@ fun CherishNavGraph(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     lineHeight = 19.sp
                                 )
-                                if (updateState.errorMessage != null) {
+                                val errorMsg = updateState.errorMessage
+                                if (errorMsg != null) {
                                     Spacer(modifier = Modifier.height(6.dp))
+                                    val safeError = if (errorMsg.contains("OPENSSL", ignoreCase = true) || errorMsg.contains("ssl=", ignoreCase = true) || errorMsg.contains("Cipher", ignoreCase = true)) {
+                                        "Secure connection interrupted by network. Tap Download & Install to retry."
+                                    } else {
+                                        errorMsg
+                                    }
                                     Text(
-                                        text = "Note: ${updateState.errorMessage}",
+                                        text = "Note: $safeError",
                                         fontSize = 12.sp,
                                         color = Color(0xFFE53935)
                                     )
