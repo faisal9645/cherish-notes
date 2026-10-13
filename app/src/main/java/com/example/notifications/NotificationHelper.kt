@@ -357,10 +357,6 @@ object NotificationHelper {
             nm.cancel(NOTIFICATION_ID_CHECK_AFTER)
             nm.cancel(NOTIFICATION_ID_HEARTBEAT)
             nm.cancel(1003)
-            nm.cancel(1004)
-            if (!com.example.call.CallManager.hasActiveCall()) {
-                nm.cancelAll()
-            }
         } catch (_: Exception) {}
     }
 
@@ -377,10 +373,6 @@ object NotificationHelper {
             nm.cancel(NOTIFICATION_ID_CHECK_AFTER)
             nm.cancel(NOTIFICATION_ID_HEARTBEAT)
             nm.cancel(1003)
-            nm.cancel(1004)
-            if (!com.example.call.CallManager.hasActiveCall()) {
-                nm.cancelAll()
-            }
         } catch (_: Exception) {}
         updateLauncherBadge(context, 0)
     }

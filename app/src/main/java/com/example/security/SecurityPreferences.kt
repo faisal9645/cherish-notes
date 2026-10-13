@@ -57,39 +57,6 @@ class SecurityPreferences(context: Context) {
     private val _partnerCustomTimeZone = MutableStateFlow(prefs.getString(KEY_PARTNER_CUSTOM_TIMEZONE, null))
     val partnerCustomTimeZone: StateFlow<String?> = _partnerCustomTimeZone.asStateFlow()
 
-    init {
-        val disguiseEnabled = isDisguiseModeEnabled()
-        _isDisguiseActive.value = disguiseEnabled
-        if (!disguiseEnabled) {
-            _hasRevealedSecretAppInSession.value = true
-        }
-
-        // If app lock is enabled and PIN is set, default to locked on cold start
-        if (isAppLockEnabled() && hasPin()) {
-            _isAppLocked.value = true
-        }
-
-        // Whenever an update installs or fresh install, ensure notifications, hide content,
-        // app icon badge, heartbeat trigger, and in-chat sound effects are all enabled ON
-        val currentVersionCode = try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                context.packageManager.getPackageInfo(context.packageName, 0).longVersionCode.toInt()
-            } else {
-                @Suppress("DEPRECATION")
-                context.packageManager.getPackageInfo(context.packageName, 0).versionCode
-            }
-        } catch (_: Exception) { 0 }
-
-        val lastSeenVersionCode = prefs.getInt(KEY_LAST_SEEN_APP_VERSION, 0)
-        if (currentVersionCode > lastSeenVersionCode) {
-            setNotificationsEnabled(true)
-            setHideNotificationContent(true)
-            setBadgeNotificationEnabled(true)
-            setHeartbeatTriggerEnabled(true)
-            setChatSoundsEnabled(true)
-            prefs.edit().putInt(KEY_LAST_SEEN_APP_VERSION, currentVersionCode).apply()
-        }
-    }
 
     fun isDisguiseActive(): Boolean = _isDisguiseActive.value
 
@@ -638,6 +605,44 @@ class SecurityPreferences(context: Context) {
     private fun hashPin(pin: String): String {
         val bytes = MessageDigest.getInstance("SHA-256").digest(pin.toByteArray())
         return bytes.joinToString("") { "%02x".format(it) }
+    }
+
+    init {
+        try {
+            val disguiseEnabled = isDisguiseModeEnabled()
+            _isDisguiseActive.value = disguiseEnabled
+            if (!disguiseEnabled) {
+                _hasRevealedSecretAppInSession.value = true
+            }
+
+            // If app lock is enabled and PIN is set, default to locked on cold start
+            if (isAppLockEnabled() && hasPin()) {
+                _isAppLocked.value = true
+            }
+
+            // Whenever an update installs or fresh install, ensure notifications, hide content,
+            // app icon badge, heartbeat trigger, and in-chat sound effects are all enabled ON
+            val currentVersionCode = try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    context.packageManager.getPackageInfo(context.packageName, 0).longVersionCode.toInt()
+                } else {
+                    @Suppress("DEPRECATION")
+                    context.packageManager.getPackageInfo(context.packageName, 0).versionCode
+                }
+            } catch (_: Throwable) { 0 }
+
+            val lastSeenVersionCode = prefs.getInt(KEY_LAST_SEEN_APP_VERSION, 0)
+            if (currentVersionCode > lastSeenVersionCode) {
+                setNotificationsEnabled(true)
+                setHideNotificationContent(true)
+                setBadgeNotificationEnabled(true)
+                setHeartbeatTriggerEnabled(true)
+                setChatSoundsEnabled(true)
+                prefs.edit().putInt(KEY_LAST_SEEN_APP_VERSION, currentVersionCode).apply()
+            }
+        } catch (e: Throwable) {
+            android.util.Log.e("SecurityPreferences", "Initialization error: ${e.message}", e)
+        }
     }
 
     companion object {

@@ -1,9 +1,9 @@
 {
-  "versionCode": 148,
-  "versionName": "1.7.76",
-  "tagName": "v1.7.76-148",
-  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.7.76-148/app_update_148.apk",
-  "assetSize": 32459012,
-  "releaseNotes": "Notes v1.7.76 (Build 148):\n• Cleaner, simpler layout\n• Voice typing and read aloud\n• Settings open with a swipe\n• Bug fixes and improvements",
-  "releaseDate": "2026-10-13T23:36:12Z"
+  "versionCode": 149,
+  "versionName": "1.7.77",
+  "tagName": "v1.7.77-149",
+  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.7.77-149/app_update_149.apk",
+  "assetSize": 32458792,
+  "releaseNotes": "Notes v1.7.77 (Build 149):\nFix startup auto-close crash caused by preferences initialization order; add safe cold start handling and keep background sync active",
+  "releaseDate": "2026-10-13T23:58:37Z"
 }

@@ -166,14 +166,31 @@ class CherishApplication : Application(), coil.ImageLoaderFactory {
         )
 
         // Voice calls: ring while the app runs, even before (or without) a push
-        com.example.call.CallManager.init(this)
-        com.example.call.CallManager.watchForIncomingCalls()
+        try {
+            com.example.call.CallManager.init(this)
+            com.example.call.CallManager.watchForIncomingCalls()
+        } catch (e: Throwable) {
+            Log.w("CherishApp", "CallManager init/watch error: ${e.message}")
+        }
 
         // Background sync: messages, calls, and heartbeats when app is closed or minimized
-        com.example.sync.CherishSyncService.start(this)
+        try {
+            com.example.sync.CherishSyncService.start(this)
+        } catch (e: Throwable) {
+            Log.w("CherishApp", "CherishSyncService start error: ${e.message}")
+        }
 
-        com.example.notifications.NoteReminderScheduler.rescheduleAllUpcomingReminders(this, notesRepository)
-        com.example.update.OtaUpdateManager.getInstance(this).cleanupDownloadedInstallers()
+        try {
+            com.example.notifications.NoteReminderScheduler.rescheduleAllUpcomingReminders(this, notesRepository)
+        } catch (e: Throwable) {
+            Log.w("CherishApp", "NoteReminderScheduler error: ${e.message}")
+        }
+
+        try {
+            com.example.update.OtaUpdateManager.getInstance(this).cleanupDownloadedInstallers()
+        } catch (e: Throwable) {
+            Log.w("CherishApp", "OtaUpdateManager cleanup error: ${e.message}")
+        }
 
         // Background cache maintenance: clean stale temporary uploads, installers, and enforce LRU limits
         kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
