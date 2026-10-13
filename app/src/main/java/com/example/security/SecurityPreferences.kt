@@ -497,8 +497,8 @@ class SecurityPreferences(context: Context) {
     fun isHeartbeatTriggerEnabled(): Boolean = prefs.getBoolean(KEY_HEARTBEAT_TRIGGER_ENABLED, true)
     fun setHeartbeatTriggerEnabled(enabled: Boolean) = prefs.edit().putBoolean(KEY_HEARTBEAT_TRIGGER_ENABLED, enabled).apply()
 
-    /** How loud the app's own sounds play, 0 to 100 (100 = full). */
-    fun getAppSoundVolume(): Int = prefs.getInt(KEY_APP_SOUND_VOLUME, 100)
+    /** How loud the app's own sounds play, 0 to 100 (25 = 25% initial volume). */
+    fun getAppSoundVolume(): Int = prefs.getInt(KEY_APP_SOUND_VOLUME, 25)
     fun setAppSoundVolume(volume: Int) = prefs.edit().putInt(KEY_APP_SOUND_VOLUME, volume.coerceIn(0, 100)).apply()
 
     /** What a masked (hidden-content / disguised) notification says. */

@@ -1059,22 +1059,28 @@ class AuthRepository(private val context: Context) {
 
     suspend fun updateNotificationStatus(): Result<Unit> {
         val status = getComputedNotificationStatus()
-        return updateNotificationStatus(status)
+        val sysPerm = try {
+            androidx.core.app.NotificationManagerCompat.from(context).areNotificationsEnabled()
+        } catch (_: Exception) { true }
+        return updateNotificationStatus(status, sysPerm)
     }
 
-    suspend fun updateNotificationStatus(status: String): Result<Unit> {
+    suspend fun updateNotificationStatus(status: String, permissionEnabled: Boolean? = null): Result<Unit> {
         val uid = getCurrentUserId()
         if (uid.isBlank()) return Result.success(Unit)
+        val perm = permissionEnabled ?: try {
+            androidx.core.app.NotificationManagerCompat.from(context).areNotificationsEnabled()
+        } catch (_: Exception) { true }
         val current = _currentUserState.value ?: User(id = uid)
-        if (current.notificationStatus == status) {
+        if (current.notificationStatus == status && current.notificationPermission == perm) {
             return Result.success(Unit)
         }
-        val updated = current.copy(notificationStatus = status)
+        val updated = current.copy(notificationStatus = status, notificationPermission = perm)
         _currentUserState.value = updated
         saveLocalUserSession(updated)
         return try {
             userDocument(uid)?.set(
-                mapOf("notificationStatus" to status),
+                mapOf("notificationStatus" to status, "notificationPermission" to perm),
                 com.google.firebase.firestore.SetOptions.merge()
             )
             Result.success(Unit)
@@ -1209,15 +1215,19 @@ class AuthRepository(private val context: Context) {
                     }
                     if (uid.isNotBlank()) {
                         val currentNotif = getComputedNotificationStatus()
+                        val currentSysPerm = try {
+                            androidx.core.app.NotificationManagerCompat.from(context).areNotificationsEnabled()
+                        } catch (_: Exception) { true }
                         val updates = mapOf<String, Any>(
                             "isOnline" to true,
                             "online" to true,
                             "lastSeen" to System.currentTimeMillis(),
                             "timeZone" to TimeZone.getDefault().id,
-                            "notificationStatus" to currentNotif
+                            "notificationStatus" to currentNotif,
+                            "notificationPermission" to currentSysPerm
                         )
-                        if (_currentUserState.value?.notificationStatus != currentNotif) {
-                            _currentUserState.value = _currentUserState.value?.copy(notificationStatus = currentNotif)
+                        if (_currentUserState.value?.notificationStatus != currentNotif || _currentUserState.value?.notificationPermission != currentSysPerm) {
+                            _currentUserState.value = _currentUserState.value?.copy(notificationStatus = currentNotif, notificationPermission = currentSysPerm)
                         }
                         try {
                             userDocument(uid)?.set(
@@ -1240,11 +1250,15 @@ class AuthRepository(private val context: Context) {
         if (uid.isBlank()) return
         val currentTz = TimeZone.getDefault().id
         val currentNotif = getComputedNotificationStatus()
+        val currentSysPerm = try {
+            androidx.core.app.NotificationManagerCompat.from(context).areNotificationsEnabled()
+        } catch (_: Exception) { true }
         _currentUserState.value = _currentUserState.value?.copy(
             isOnline = online,
             lastSeen = System.currentTimeMillis(),
             timeZone = currentTz,
-            notificationStatus = currentNotif
+            notificationStatus = currentNotif,
+            notificationPermission = currentSysPerm
         )
         try {
             val updates = mutableMapOf<String, Any>(
@@ -1252,7 +1266,8 @@ class AuthRepository(private val context: Context) {
                 "online" to online,
                 "lastSeen" to System.currentTimeMillis(),
                 "timeZone" to currentTz,
-                "notificationStatus" to currentNotif
+                "notificationStatus" to currentNotif,
+                "notificationPermission" to currentSysPerm
             )
             if (!online) {
                 updates["typingInChat"] = false
@@ -1396,8 +1411,12 @@ class AuthRepository(private val context: Context) {
                             )
                         }
                         val docNotifStatus = snapshot.getString("notificationStatus")
+                        val docNotifPerm = snapshot.getBoolean("notificationPermission")
                         if (!docNotifStatus.isNullOrBlank() && user.notificationStatus != docNotifStatus) {
                             user = user.copy(notificationStatus = docNotifStatus)
+                        }
+                        if (docNotifPerm != null && user.notificationPermission != docNotifPerm) {
+                            user = user.copy(notificationPermission = docNotifPerm)
                         }
                     }
                     _currentUserState.value = user
@@ -1477,8 +1496,12 @@ class AuthRepository(private val context: Context) {
                 )
             }
             val docNotifStatus = doc.getString("notificationStatus")
+            val docNotifPerm = doc.getBoolean("notificationPermission")
             if (!docNotifStatus.isNullOrBlank() && partner.notificationStatus != docNotifStatus) {
                 partner = partner.copy(notificationStatus = docNotifStatus)
+            }
+            if (docNotifPerm != null && partner.notificationPermission != docNotifPerm) {
+                partner = partner.copy(notificationPermission = docNotifPerm)
             }
             if (!doc.metadata.isFromCache) {
                 val now = System.currentTimeMillis()

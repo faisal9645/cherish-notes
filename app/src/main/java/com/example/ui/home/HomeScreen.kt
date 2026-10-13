@@ -358,7 +358,8 @@ fun HomeScreen(
                     isCharging = currentUser?.isCharging == true,
                     email = currentUser?.email,
                     timeZone = myTz,
-                    notificationStatus = currentUser?.notificationStatus
+                    notificationStatus = currentUser?.notificationStatus,
+                    notificationPermission = currentUser?.notificationPermission ?: true
                 )
             val partnerPerson = LovePerson(
                     id = partnerId,
@@ -372,7 +373,8 @@ fun HomeScreen(
                     isCharging = partner?.isCharging == true,
                     email = partner?.email?.ifBlank { null } ?: currentUser?.partnerEmail,
                     timeZone = effectivePartnerTz,
-                    notificationStatus = partner?.notificationStatus
+                    notificationStatus = partner?.notificationStatus,
+                    notificationPermission = partner?.notificationPermission ?: true
                 )
             BothOfUsCard(
                 me = mePerson,

@@ -347,13 +347,26 @@ fun MessageBubble(
                     1f + 0.04f * kotlin.math.sin(highlightPulse.value * Math.PI.toFloat())
                 } else 1f
 
+                var isPlayingVideoNote by remember { mutableStateOf(false) }
+                val screenWidth = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp.dp
+                val restingCircleSize = 235.dp
+                val expandedCircleSize = (screenWidth - 24.dp).coerceAtMost(360.dp)
+                val animatedCircleSize by androidx.compose.animation.core.animateDpAsState(
+                    targetValue = if (isPlayingVideoNote) expandedCircleSize else restingCircleSize,
+                    animationSpec = androidx.compose.animation.core.spring(
+                        dampingRatio = androidx.compose.animation.core.Spring.DampingRatioLowBouncy,
+                        stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow
+                    ),
+                    label = "circleVideoSize"
+                )
+
                 Column(
                     horizontalAlignment = if (isFromMe) Alignment.End else Alignment.Start,
-                    modifier = Modifier.wrapContentSize()
+                    modifier = Modifier.wrapContentSize().animateContentSize()
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(240.dp)
+                            .size(animatedCircleSize)
                             .graphicsLayer {
                                 scaleX = pressScale * videoHighlightScale
                                 scaleY = pressScale * videoHighlightScale
@@ -375,6 +388,7 @@ fun MessageBubble(
                                 onExpandClick = openBigVideoNote,
                                 onLongClick = { onBubbleLongPress(androidx.compose.ui.geometry.Offset.Zero) },
                                 onDoubleClick = { triggerHeartBurst() },
+                                onPlayingChanged = { isPlayingVideoNote = it },
                                 modifier = Modifier.fillMaxSize()
                             )
                         }
@@ -465,7 +479,7 @@ fun MessageBubble(
                         "medium" -> 220.dp
                         else -> 280.dp
                     }
-                    MessageType.AUDIO -> 260.dp
+                    MessageType.AUDIO -> 275.dp
                     MessageType.CALL_RECORDING -> 250.dp
                     MessageType.VIDEO -> 240.dp
                     MessageType.DOCUMENT -> 200.dp
@@ -477,7 +491,7 @@ fun MessageBubble(
                         "medium" -> 245.dp
                         else -> 310.dp
                     }
-                    MessageType.AUDIO -> 310.dp
+                    MessageType.AUDIO -> 325.dp
                     MessageType.CALL_RECORDING -> 300.dp
                     MessageType.VIDEO -> 268.dp
                     MessageType.DOCUMENT -> 260.dp
@@ -745,15 +759,37 @@ fun MessageBubble(
                                 .fillMaxWidth()
                                 .padding(vertical = 4.dp, horizontal = 2.dp)
                         ) {
-                            // Sent voice message: profile icon on the LEFT side
+                            // Sent voice message: profile icon on the LEFT side with sticky mic badge
                             if (isFromMe && !isPrivateMode) {
-                                com.example.ui.components.AvatarView(
-                                    photoUrl = senderPhotoUrl,
-                                    name = message.senderName,
-                                    size = 50.dp,
-                                    isOnline = false,
-                                    showOnlineBadge = false
-                                )
+                                Box(
+                                    modifier = Modifier.size(56.dp),
+                                    contentAlignment = Alignment.BottomEnd
+                                ) {
+                                    com.example.ui.components.AvatarView(
+                                        photoUrl = senderPhotoUrl,
+                                        name = message.senderName,
+                                        size = 56.dp,
+                                        isOnline = false,
+                                        showOnlineBadge = false
+                                    )
+                                    Surface(
+                                        shape = CircleShape,
+                                        color = Color(0xFF25D366),
+                                        border = BorderStroke(1.5.dp, Color.White),
+                                        modifier = Modifier
+                                            .size(20.dp)
+                                            .offset(x = 2.dp, y = 2.dp)
+                                    ) {
+                                        Box(contentAlignment = Alignment.Center) {
+                                            Icon(
+                                                imageVector = Icons.Default.Mic,
+                                                contentDescription = "Voice message",
+                                                tint = Color.White,
+                                                modifier = Modifier.size(12.dp)
+                                            )
+                                        }
+                                    }
+                                }
                                 Spacer(modifier = Modifier.width(8.dp))
                             }
 
@@ -881,16 +917,38 @@ fun MessageBubble(
                                 }
                             }
 
-                            // Opposite user voice message: profile icon on the RIGHT side
+                            // Opposite user voice message: profile icon on the RIGHT side with sticky mic badge
                             if (!isFromMe && !isPrivateMode) {
                                 Spacer(modifier = Modifier.width(8.dp))
-                                com.example.ui.components.AvatarView(
-                                    photoUrl = senderPhotoUrl,
-                                    name = message.senderName,
-                                    size = 50.dp,
-                                    isOnline = false,
-                                    showOnlineBadge = false
-                                )
+                                Box(
+                                    modifier = Modifier.size(56.dp),
+                                    contentAlignment = Alignment.BottomEnd
+                                ) {
+                                    com.example.ui.components.AvatarView(
+                                        photoUrl = senderPhotoUrl,
+                                        name = message.senderName,
+                                        size = 56.dp,
+                                        isOnline = false,
+                                        showOnlineBadge = false
+                                    )
+                                    Surface(
+                                        shape = CircleShape,
+                                        color = Color(0xFF3B82F6),
+                                        border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.surface),
+                                        modifier = Modifier
+                                            .size(20.dp)
+                                            .offset(x = 2.dp, y = 2.dp)
+                                    ) {
+                                        Box(contentAlignment = Alignment.Center) {
+                                            Icon(
+                                                imageVector = Icons.Default.Mic,
+                                                contentDescription = "Voice message",
+                                                tint = Color.White,
+                                                modifier = Modifier.size(12.dp)
+                                            )
+                                        }
+                                    }
+                                }
                             }
                         }
                     }

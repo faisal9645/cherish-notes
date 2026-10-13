@@ -70,15 +70,14 @@ class AgoraVoiceEngine(private val context: Context) {
             }
             val created = RtcEngine.create(config)
 
-            // UAE / Dubai VoIP compatibility: UAE telecom operators (Etisalat & du) block standard UDP VoIP.
-            // Enabling TCP Cloud Proxy (TLS over port 443) routes call media through
-            // Agora's encrypted proxy nodes, allowing calls between Chennai & Dubai to connect seamlessly.
-            val proxyRes = created.setCloudProxy(Constants.TRANSPORT_TYPE_TCP_PROXY)
+            // UAE / Dubai VoIP compatibility with automatic fallback:
+            // First attempts direct UDP for ultra-low latency; automatically falls back to TCP TLS proxy (port 443)
+            // if UDP VoIP is blocked by Middle East / UAE operators.
+            val proxyRes = created.setCloudProxy(Constants.PROXY_TYPE_TCP_AUTO_FALLBACK)
             if (proxyRes != 0) {
-                Log.w(TAG, "setCloudProxy(TRANSPORT_TYPE_TCP_PROXY) returned $proxyRes, falling back to AUTO_FALLBACK")
-                created.setCloudProxy(Constants.PROXY_TYPE_TCP_AUTO_FALLBACK)
+                Log.w(TAG, "setCloudProxy(PROXY_TYPE_TCP_AUTO_FALLBACK) returned $proxyRes")
             } else {
-                Log.i(TAG, "Agora Cloud Proxy (TCP TLS 443) enabled for UAE/Dubai calling")
+                Log.i(TAG, "Agora Cloud Proxy enabled with AUTO_FALLBACK (direct UDP + TCP TLS 443 fallback)")
             }
 
             created.enableAudio()

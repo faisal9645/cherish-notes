@@ -770,6 +770,7 @@ class CoupleFeaturesRepository(
         )
         ref.set(mapOf("watchParty" to map), com.google.firebase.firestore.SetOptions.merge())
             .addOnFailureListener { Log.w("CoupleFeaturesRepo", "Starting the watch party failed", it) }
+        loveCoupleRef()?.set(mapOf("watchParty" to map), com.google.firebase.firestore.SetOptions.merge())
     }
 
     /** My phone has the party open ([watching]), said about once a minute, or I left it. */
@@ -806,6 +807,7 @@ class CoupleFeaturesRepository(
             mapOf("watchParty" to map),
             com.google.firebase.firestore.SetOptions.merge()
         ).addOnFailureListener { Log.w("CoupleFeaturesRepo", "Saving who's watching failed", it) }
+        loveCoupleRef()?.set(mapOf("watchParty" to map), com.google.firebase.firestore.SetOptions.merge())
     }
 
     /** I close the party: it goes on while my partner's watching, otherwise it's over. */
@@ -897,6 +899,7 @@ class CoupleFeaturesRepository(
         )
         ref.set(mapOf("watchParty" to map), com.google.firebase.firestore.SetOptions.merge())
             .addOnFailureListener { Log.w("CoupleFeaturesRepo", "Saving play / pause failed", it) }
+        loveCoupleRef()?.set(mapOf("watchParty" to map), com.google.firebase.firestore.SetOptions.merge())
     }
 
     /**
@@ -955,6 +958,7 @@ class CoupleFeaturesRepository(
         )
         ref.set(mapOf("watchParty" to map), com.google.firebase.firestore.SetOptions.merge())
             .addOnFailureListener { Log.w("CoupleFeaturesRepo", "Ending the watch party failed", it) }
+        loveCoupleRef()?.set(mapOf("watchParty" to map), com.google.firebase.firestore.SetOptions.merge())
     }
 
     fun enqueueWatchPartyVideo(videoId: String, title: String) {

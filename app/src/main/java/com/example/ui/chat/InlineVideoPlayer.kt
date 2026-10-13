@@ -440,12 +440,6 @@ fun InlineYouTubeCard(
                         }
                     )
                     CardHeaderButton(
-                        icon = Icons.Default.Fullscreen,
-                        contentDescription = "Theater Mode (Landscape Full Screen)",
-                        modifier = Modifier.testTag("youtube_theater"),
-                        onClick = { onOpenTheater(videoId) }
-                    )
-                    CardHeaderButton(
                         icon = Icons.Default.BookmarkBorder,
                         contentDescription = "Save to Watch Later",
                         modifier = Modifier.testTag("youtube_watch_later"),

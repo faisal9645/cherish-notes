@@ -21,6 +21,7 @@ import androidx.compose.material.icons.filled.OpenInFull
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
@@ -74,6 +75,7 @@ fun CircularVideoNoteView(
     onExpandClick: (() -> Unit)? = null,
     onLongClick: (() -> Unit)? = null,
     onDoubleClick: (() -> Unit)? = null,
+    onPlayingChanged: ((Boolean) -> Unit)? = null,
     modifier: Modifier = Modifier,
     // CircleShape for round video notes; a rounded rectangle for shared videos
     shape: androidx.compose.ui.graphics.Shape = CircleShape,
@@ -87,6 +89,7 @@ fun CircularVideoNoteView(
     var shouldPlayWhenReady by remember { mutableStateOf(autoPlay) }
     var isCompleted by remember { mutableStateOf(false) }
     var isMuted by remember { mutableStateOf(false) }
+    var isLooping by remember { mutableStateOf(false) }
     var progress by remember { mutableFloatStateOf(0f) }
     var mediaPlayerRef by remember { mutableStateOf<MediaPlayer?>(null) }
     var isVideoReady by remember { mutableStateOf(false) }
@@ -101,6 +104,17 @@ fun CircularVideoNoteView(
     val scope = rememberCoroutineScope()
     val playbackKey = remember { Any() }
 
+    val activelyPlaying = isPlaying && isVideoReady
+    LaunchedEffect(activelyPlaying) {
+        onPlayingChanged?.invoke(activelyPlaying)
+    }
+
+    LaunchedEffect(isLooping) {
+        try {
+            mediaPlayerRef?.isLooping = isLooping
+        } catch (_: Exception) {}
+    }
+
     fun releasePlayer() {
         try {
             mediaPlayerRef?.stop()
@@ -114,6 +128,7 @@ fun CircularVideoNoteView(
         isLoading = false
         isCompleted = false
         progress = 0f
+        onPlayingChanged?.invoke(false)
     }
 
     fun startPlayback() {
@@ -156,6 +171,7 @@ fun CircularVideoNoteView(
 
     DisposableEffect(playbackKey) {
         onDispose {
+            onPlayingChanged?.invoke(false)
             if (VideoNotePlayback.activeKey === playbackKey) {
                 VideoNotePlayback.activeKey = null
             }
@@ -334,7 +350,7 @@ fun CircularVideoNoteView(
                         try {
                             mp.reset()
                             activeSurface?.let { mp.setSurface(it) }
-                            mp.isLooping = false
+                            mp.isLooping = isLooping
                             if (source.startsWith("http://") || source.startsWith("https://") || source.startsWith("content://")) {
                                 mp.setDataSource(ctx, Uri.parse(source))
                             } else {
@@ -373,9 +389,22 @@ fun CircularVideoNoteView(
                                 true
                             }
                             mp.setOnCompletionListener {
-                                isPlaying = false
-                                isCompleted = true
-                                progress = 1f
+                                if (isLooping) {
+                                    try {
+                                        mp.seekTo(0)
+                                        mp.start()
+                                        isPlaying = true
+                                        isCompleted = false
+                                    } catch (_: Exception) {
+                                        isPlaying = false
+                                        isCompleted = true
+                                        progress = 1f
+                                    }
+                                } else {
+                                    isPlaying = false
+                                    isCompleted = true
+                                    progress = 1f
+                                }
                             }
                             isLoading = true
                             mp.prepareAsync()
@@ -530,33 +559,35 @@ fun CircularVideoNoteView(
         }
 
         // Center Play / Pause / Loading Visual Overlay
-        // Intentionally non-clickable so long presses and taps pass through to the circular container
-        Surface(
-            shape = CircleShape,
-            color = Color.Black.copy(alpha = if (isPlaying && isVideoReady) 0.35f else 0.65f),
-            modifier = Modifier.size(56.dp)
-        ) {
-            Box(contentAlignment = Alignment.Center) {
-                if (isLoading) {
-                    CircularProgressIndicator(
-                        color = BlueCircularBorder,
-                        strokeWidth = 2.5.dp,
-                        modifier = Modifier.size(28.dp)
-                    )
-                } else if (hasError) {
-                    Icon(
-                        imageVector = Icons.Default.Refresh,
-                        contentDescription = "Retry playback",
-                        tint = Color.White,
-                        modifier = Modifier.size(32.dp)
-                    )
-                } else {
-                    Icon(
-                        imageVector = if (isPlaying && isVideoReady) Icons.Default.Pause else Icons.Default.PlayArrow,
-                        contentDescription = if (isPlaying && isVideoReady) "Pause video note" else "Play video note",
-                        tint = Color.White,
-                        modifier = Modifier.size(34.dp)
-                    )
+        // Hidden when video is actively playing, shown when paused, loading, or retry
+        if (!isPlaying || !isVideoReady || isLoading || hasError) {
+            Surface(
+                shape = CircleShape,
+                color = Color.Black.copy(alpha = 0.65f),
+                modifier = Modifier.size(56.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    if (isLoading) {
+                        CircularProgressIndicator(
+                            color = BlueCircularBorder,
+                            strokeWidth = 2.5.dp,
+                            modifier = Modifier.size(28.dp)
+                        )
+                    } else if (hasError) {
+                        Icon(
+                            imageVector = Icons.Default.Refresh,
+                            contentDescription = "Retry playback",
+                            tint = Color.White,
+                            modifier = Modifier.size(32.dp)
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Default.PlayArrow,
+                            contentDescription = "Play video note",
+                            tint = Color.White,
+                            modifier = Modifier.size(34.dp)
+                        )
+                    }
                 }
             }
         }
@@ -587,12 +618,35 @@ fun CircularVideoNoteView(
             }
         }
 
-        // Top-right mute/unmute toggle
-        Box(
+        // Top-right controls: Continuous Loop button & Mute/Unmute toggle
+        Row(
             modifier = Modifier
                 .align(Alignment.TopEnd)
-                .padding(12.dp)
+                .padding(10.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
+            // Continuous loop toggle button
+            Surface(
+                shape = CircleShape,
+                color = if (isLooping) Color(0xFF3B82F6).copy(alpha = 0.85f) else Color.Black.copy(alpha = 0.6f),
+                modifier = Modifier
+                    .size(32.dp)
+                    .clickable {
+                        isLooping = !isLooping
+                    }
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = Icons.Default.Repeat,
+                        contentDescription = if (isLooping) "Continuous loop enabled" else "Continuous loop disabled",
+                        tint = Color.White,
+                        modifier = Modifier.size(17.dp)
+                    )
+                }
+            }
+
+            // Mute/unmute toggle
             Surface(
                 shape = CircleShape,
                 color = Color.Black.copy(alpha = 0.6f),

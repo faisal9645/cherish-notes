@@ -309,6 +309,19 @@ internal fun WatchPartyVideo(
                         return true
                     }
 
+                    @Deprecated("Deprecated in Java")
+                    override fun shouldOverrideUrlLoading(view: WebView?, url: String?): Boolean {
+                        val u = url.orEmpty()
+                        val isAllowed = u.contains("/embed/") ||
+                            u.contains("youtube") ||
+                            u.contains("googlevideo.com") ||
+                            u.contains("ytimg.com") ||
+                            u.contains("google.com") ||
+                            u.contains("gstatic.com") ||
+                            u.contains("doubleclick.net")
+                        return !isAllowed
+                    }
+
                     override fun onPageFinished(view: WebView?, url: String?) {
                         if (player.onWatchPage && view != null && url.orEmpty().contains("youtube.com/watch")) {
                             view.evaluateJavascript(watchPageScript(videoId, autoplay), null)
@@ -316,7 +329,7 @@ internal fun WatchPartyVideo(
                     }
                 }
                 if (page != null) {
-                    loadDataWithBaseURL("https://www.youtube-nocookie.com", page, "text/html", "UTF-8", null)
+                    loadDataWithBaseURL("https://www.youtube.com", page, "text/html", "UTF-8", null)
                 } else {
                     player.errorCode = 2
                 }
@@ -442,11 +455,11 @@ window.addEventListener('message', function (e) {
 function onYouTubeIframeAPIReady() {
   player = new YT.Player('player', {
     width: '100%', height: '100%', videoId: '$videoId',
-    host: 'https://www.youtube-nocookie.com',
+    host: 'https://www.youtube.com',
     playerVars: {
       autoplay: ${if (autoplay) 1 else 0}, start: $startSeconds, playsinline: 1, controls: 0,
       disablekb: 1, fs: 0, rel: 0, modestbranding: 1, iv_load_policy: 3, enablejsapi: 1,
-      origin: 'https://www.youtube-nocookie.com'
+      origin: 'https://www.youtube.com'
     },
     events: {
       onReady: function () {
@@ -493,7 +506,7 @@ function onYouTubeIframeAPIReady() {
 }
 
 var tag = document.createElement('script');
-tag.src = 'https://www.youtube-nocookie.com/iframe_api';
+tag.src = 'https://www.youtube.com/iframe_api';
 document.head.appendChild(tag);
 
 if (window.YT && window.YT.Player) {

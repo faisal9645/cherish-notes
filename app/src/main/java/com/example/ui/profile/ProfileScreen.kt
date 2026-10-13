@@ -995,16 +995,71 @@ fun ProfileScreen(
 
                 if (partner != null) {
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), thickness = 0.6.dp)
-                    val partnerNotifStatus = partner.notificationStatus ?: "OPEN"
-                    val (partnerLabel, partnerIcon, partnerDesc) = when (partnerNotifStatus.uppercase()) {
-                        "SAFE", "HIDDEN" -> Triple("Safe", "🛡️", "Disguised as Notes for privacy")
-                        "CLOSED", "OFF", "MUTED" -> Triple("Closed", "🔕", "Notifications turned off or muted")
-                        else -> Triple("Open", "🔔", "Notifications turned on and visible")
-                    }
                     val partnerNameDisplay = partner.displayName.ifBlank { "Partner" }
+                    val partnerNotifPerm = partner.notificationPermission
+                    val partnerNotifStatus = partner.notificationStatus ?: "OPEN"
+                    val isPermBlocked = !partnerNotifPerm
+                    val isAlertClosed = partnerNotifStatus.uppercase() in listOf("CLOSED", "OFF", "MUTED")
+
+                    // Alert card based on partner mobile notification permission & settings
+                    if (isPermBlocked || isAlertClosed) {
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = if (isPermBlocked) Color(0xFFEF4444).copy(alpha = 0.12f) else Color(0xFFF59E0B).copy(alpha = 0.12f),
+                            border = BorderStroke(1.dp, if (isPermBlocked) Color(0xFFEF4444).copy(alpha = 0.45f) else Color(0xFFF59E0B).copy(alpha = 0.45f)),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 6.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(if (isPermBlocked) "⚠️" else "🔕", fontSize = 22.sp)
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Column {
+                                    Text(
+                                        text = if (isPermBlocked) 
+                                            "$partnerNameDisplay's Notification Permission is OFF!"
+                                        else 
+                                            "$partnerNameDisplay's Notifications are Muted!",
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 13.5.sp,
+                                        color = if (isPermBlocked) (if (isDark) Color(0xFFFCA5A5) else Color(0xFFDC2626)) else (if (isDark) Color(0xFFFDE68A) else Color(0xFFD97706))
+                                    )
+                                    Text(
+                                        text = if (isPermBlocked)
+                                            "System notification permission is turned OFF on their mobile device. They will not receive incoming message or call ring alerts until allowed in Android settings."
+                                        else
+                                            "In-app notifications are silenced on their phone.",
+                                        fontSize = 12.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    val (partnerLabel, partnerIcon, partnerDesc) = when {
+                        isPermBlocked -> Triple("Permission Blocked", "⚠️", "Device notification permission is turned OFF")
+                        partnerNotifStatus.uppercase() in listOf("SAFE", "HIDDEN") -> Triple("Safe", "🛡️", "Disguised as Notes for privacy")
+                        isAlertClosed -> Triple("Closed", "🔕", "Notifications turned off or muted in app")
+                        else -> Triple("Open", "🔔", "Notifications active & alerts enabled")
+                    }
+
                     ListItem(
                         headlineContent = { Text("$partnerNameDisplay's Alerts: $partnerLabel", fontSize = 15.sp, fontWeight = FontWeight.SemiBold) },
-                        supportingContent = { Text(partnerDesc, fontSize = 13.sp) },
+                        supportingContent = {
+                            Column {
+                                Text(
+                                    text = "Mobile Device Permission: " + if (partnerNotifPerm) "ON (Allowed) ✅" else "OFF (Blocked) ❌",
+                                    fontSize = 12.5.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = if (partnerNotifPerm) Color(0xFF10B981) else Color(0xFFEF4444)
+                                )
+                                Text(partnerDesc, fontSize = 12.sp)
+                            }
+                        },
                         leadingContent = { Text(partnerIcon, fontSize = 20.sp) }
                     )
                 }

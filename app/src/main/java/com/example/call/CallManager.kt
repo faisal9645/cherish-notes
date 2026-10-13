@@ -903,8 +903,11 @@ object CallManager {
                     if (tokenProblem) {
                         Log.w(TAG, "Connection failed due to token ($reason), renewing token...")
                         renewToken()
-                    } else {
+                    } else if (phase == CallPhase.CONNECTED || phase == CallPhase.RECONNECTING) {
                         finish(CallEndReason.NETWORK, serverReason = "network")
+                    } else {
+                        Log.w(TAG, "Connection state failed ($reason) during $phase; not cutting ringing call prematurely")
+                        _state.update { it.copy(isWeakNetwork = true) }
                     }
                 }
                 Constants.CONNECTION_STATE_DISCONNECTED -> {

@@ -299,6 +299,7 @@ fun ChatScreen(
     // Real-time camera snap launcher
     var tempCameraUri by remember { mutableStateOf<Uri?>(null) }
     var showAttachmentSheet by remember { mutableStateOf(false) }
+    var showWatchPartySetup by remember { mutableStateOf(false) }
 
     val cameraSnapLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.TakePicture()
@@ -645,7 +646,7 @@ fun ChatScreen(
     val isChatInView = !isDisguiseActive && !uiState.isStealthCurtainActive &&
         chatLifecycleState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)
     // Moments, one after another when the chat is opened: good morning (7 AM to noon, once a day),
-    // the anniversary / monthly date / 100th day (once that day), and from 10 PM the goodnight card
+    // the anniversary / monthly date / 100th day (once that day), and from 11:30 PM the goodnight card
     // (once a night, unless a goodnight was already sent tonight)
     var showGoodMorning by remember { mutableStateOf(false) }
     var celebration by remember { mutableStateOf<String?>(null) }
@@ -2588,9 +2589,32 @@ fun ChatScreen(
                             documentPickerLauncher.launch(arrayOf("*/*"))
                         }
                     )
+
+                    AttachmentOptionItem(
+                        icon = Icons.Default.PlayCircle,
+                        label = "Watch Together",
+                        color = Color(0xFFE53935),
+                        onClick = {
+                            showAttachmentSheet = false
+                            showWatchPartySetup = true
+                        }
+                    )
                 }
             }
         }
+    }
+
+    if (showWatchPartySetup) {
+        val app = context.applicationContext as? com.example.CherishApplication
+        val coupleRepo = app?.coupleFeaturesRepository
+        com.example.ui.chat.WatchPartySetupDialog(
+            onStart = { videoId, title ->
+                showWatchPartySetup = false
+                coupleRepo?.startWatchParty(videoId, title, "")
+                com.example.ui.watchparty.WatchPartyUi.openTheater()
+            },
+            onDismiss = { showWatchPartySetup = false }
+        )
     }
 
     // Edit Message Dialog

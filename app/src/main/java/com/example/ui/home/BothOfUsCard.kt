@@ -127,7 +127,8 @@ data class LovePerson(
     // Only used to tell which of us is which side
     val email: String? = null,
     val timeZone: String? = null,
-    val notificationStatus: String? = null
+    val notificationStatus: String? = null,
+    val notificationPermission: Boolean = true
 )
 
 /**
@@ -1151,6 +1152,26 @@ private fun PersonDetails(
             )
             Spacer(modifier = Modifier.width(4.dp))
             CardBattery(level = person.batteryLevel, isCharging = person.isCharging, showPercentage = person.isOnline)
+        }
+
+        // Partner notification permission / muted alert pill
+        if (isPartner && (!person.notificationPermission || person.notificationStatus == "CLOSED")) {
+            Spacer(modifier = Modifier.height(3.dp))
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(50))
+                    .background(Color(0xFFEF4444).copy(alpha = if (cc.isLight) 0.12f else 0.22f))
+                    .border(0.8.dp, Color(0xFFEF4444).copy(alpha = 0.5f), RoundedCornerShape(50))
+                    .padding(horizontal = 6.dp, vertical = 2.dp)
+            ) {
+                Text(
+                    text = if (!person.notificationPermission) "⚠️ Notif Perm OFF" else "🔕 Alerts Muted",
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = if (cc.isLight) Color(0xFFDC2626) else Color(0xFFFCA5A5)
+                )
+            }
         }
 
 

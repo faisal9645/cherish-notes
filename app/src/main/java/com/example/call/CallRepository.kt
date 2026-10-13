@@ -113,14 +113,24 @@ class CallRepository(private val context: Context) {
                 ?: controlSnap.getLong("ringExpiresAtMs")
                 ?: 0L
 
-            // If partner called us at the exact same moment: pick up theirs
-            if (activeState == CallRecord.STATE_RINGING && isSameId(activeCallee, userId) && ringExpires > now) {
-                return CallResponse(
-                    status = "incoming",
-                    callId = activeCallId,
-                    callerId = activeCaller,
-                    join = null
-                )
+            // If partner called us at the exact same moment (within 7s collision): pick up theirs
+            val activeCreatedAt = controlSnap.getTimestamp("createdAt")?.toDate()?.time
+                ?: controlSnap.getTimestamp("updatedAt")?.toDate()?.time
+                ?: 0L
+            val isRecentCollision = (now - activeCreatedAt) in 0..7_000L
+            if (activeState == CallRecord.STATE_RINGING && isSameId(activeCallee, userId) && ringExpires > now && isRecentCollision && activeCallId.isNotBlank()) {
+                val targetCallDoc = try {
+                    fs.collection("couples").document(coupleId).collection("calls").document(activeCallId).get().await()
+                } catch (_: Exception) { null }
+                val targetState = targetCallDoc?.getString("state")
+                if (targetCallDoc != null && targetCallDoc.exists() && targetState == CallRecord.STATE_RINGING) {
+                    return CallResponse(
+                        status = "incoming",
+                        callId = activeCallId,
+                        callerId = activeCaller,
+                        join = null
+                    )
+                }
             }
             // Only return BUSY if partner is actively on another ongoing CONNECTED call with someone else
             if (activeState == CallRecord.STATE_CONNECTED && activeCallId.isNotBlank() && activeCallId != callId && !isSameId(activeCaller, userId) && ringExpires > now) {

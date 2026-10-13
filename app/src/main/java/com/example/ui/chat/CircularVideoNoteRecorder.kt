@@ -740,12 +740,12 @@ private fun displayRotationDegrees(context: Context): Int =
         else -> 0
     }
 
-/** The recording profile for a video note: 720p where the camera has it, else the best below. */
+/** The recording profile for a video note: 480p preferred for lightweight high-speed compression. */
 private fun videoNoteProfile(cameraId: Int): CamcorderProfile? {
     val qualities = intArrayOf(
-        CamcorderProfile.QUALITY_720P,
         CamcorderProfile.QUALITY_480P,
-        CamcorderProfile.QUALITY_HIGH,
+        CamcorderProfile.QUALITY_720P,
+        CamcorderProfile.QUALITY_QVGA,
         CamcorderProfile.QUALITY_LOW
     )
     for (quality in qualities) {
@@ -770,8 +770,8 @@ private fun choosePreviewSize(sizes: List<Camera.Size>, videoW: Int, videoH: Int
         ?: candidates.maxByOrNull { it.width * it.height }
 }
 
-/** Sharp enough for a round video note while keeping the upload small (about 19 MB a minute). */
-private const val VIDEO_NOTE_BIT_RATE = 2_500_000
+/** High-efficiency compression for round video note messages (approx 6-7 MB per minute, fast upload). */
+private const val VIDEO_NOTE_BIT_RATE = 950_000
 
 private fun startVideoRecording(
     context: Context,
@@ -797,6 +797,7 @@ private fun startVideoRecording(
             recorder.setVideoSize(640, 480)
             recorder.setVideoFrameRate(30)
             recorder.setVideoEncodingBitRate(VIDEO_NOTE_BIT_RATE)
+            recorder.setAudioEncodingBitRate(64_000)
         }
         recorder.setOutputFile(outputFile.absolutePath)
         recorder.setOrientationHint(orientationHint)

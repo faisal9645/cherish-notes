@@ -124,7 +124,7 @@ fun SharedGalleryScreen(
 ) {
     val context = LocalContext.current
     val chatState by chatViewModel.uiState.collectAsState()
-    val tabs = listOf("Media", "Voice Notes", "Calls", "Links", "Starred")
+    val tabs = listOf("Media", "Voice Notes", "Links", "Starred", "Calls")
     val pagerState = rememberPagerState(initialPage = 0, pageCount = { tabs.size })
     val coroutineScope = rememberCoroutineScope()
     var selectedMediaUrl by remember { mutableStateOf<String?>(null) }
@@ -322,9 +322,9 @@ fun SharedGalleryScreen(
         when (pagerState.currentPage) {
             0 -> galleryMediaItems.map { it.id }
             1 -> voiceMessages.map { it.id }
-            2 -> callRecordings.map { it.id }
-            3 -> extractedLinks.map { it.messageId }.distinct()
-            else -> starredMessages.map { it.id }
+            2 -> extractedLinks.map { it.messageId }.distinct()
+            3 -> starredMessages.map { it.id }
+            else -> callRecordings.map { it.id }
         }
     }
     val allOnPageSelected = selectableIdsOnPage.isNotEmpty() && selectedItemIds.containsAll(selectableIdsOnPage)
@@ -436,9 +436,9 @@ fun SharedGalleryScreen(
                             val countText = when (pagerState.currentPage) {
                                 0 -> "${galleryMediaItems.size} photos & videos"
                                 1 -> "${voiceMessages.size} voice notes"
-                                2 -> "${callRecordings.size} call recordings"
-                                3 -> "${extractedLinks.size} shared links"
-                                else -> "${starredMessages.size} starred items"
+                                2 -> "${extractedLinks.size} shared links"
+                                3 -> "${starredMessages.size} starred items"
+                                else -> "${callRecordings.size} call recordings"
                             }
                             val subtitle = if (selectedDateMillis != null) {
                                 val sdf = SimpleDateFormat("MMM d, yyyy", Locale.getDefault())
@@ -1099,8 +1099,8 @@ fun SharedGalleryScreen(
                         }
                     }
 
-                    // TAB 2: Calls (each call's recording: the same one as in the chat, never a copy)
-                    2 -> {
+                    // TAB 4: Calls (each call's recording: the same one as in the chat, never a copy)
+                    4 -> {
                         if (callRecordings.isEmpty()) {
                             val emptyText = if (selectedDateMillis != null) {
                                 val sdf = SimpleDateFormat("MMM d, yyyy", Locale.getDefault())
@@ -1219,8 +1219,8 @@ fun SharedGalleryScreen(
                         }
                     }
 
-                    // TAB 3: Links (WhatsApp Style with dates, times, and actions)
-                    3 -> {
+                    // TAB 2: Links (WhatsApp Style with dates, times, and actions)
+                    2 -> {
                         if (extractedLinks.isEmpty()) {
                             val emptyText = if (selectedDateMillis != null) {
                                 val sdf = SimpleDateFormat("MMM d, yyyy", Locale.getDefault())
@@ -1420,8 +1420,8 @@ fun SharedGalleryScreen(
                         }
                     }
 
-                    // TAB 4: Starred
-                    4 -> {
+                    // TAB 3: Starred
+                    3 -> {
                         if (starredMessages.isEmpty()) {
                             val emptyText = if (selectedDateMillis != null) {
                                 val sdf = SimpleDateFormat("MMM d, yyyy", Locale.getDefault())
@@ -1574,9 +1574,9 @@ fun SharedGalleryScreen(
         val itemLabel = when (pagerState.currentPage) {
             0 -> if (count == 1) "photo or video" else "photos & videos"
             1 -> if (count == 1) "voice note" else "voice notes"
-            2 -> if (count == 1) "call recording" else "call recordings"
-            3 -> if (count == 1) "link message" else "link messages"
-            else -> if (count == 1) "starred message" else "starred messages"
+            2 -> if (count == 1) "link message" else "link messages"
+            3 -> if (count == 1) "starred message" else "starred messages"
+            else -> if (count == 1) "call recording" else "call recordings"
         }
         AlertDialog(
             onDismissRequest = { showMultiDeleteConfirmDialog = false },
