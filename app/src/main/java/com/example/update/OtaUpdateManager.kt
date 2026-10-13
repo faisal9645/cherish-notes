@@ -266,7 +266,11 @@ class OtaUpdateManager private constructor(private val appContext: Context) {
                 isSemanticVersionNewer(remoteVersionName, BuildConfig.VERSION_NAME)
             }
 
-            val apkDownloadUrl = "https://github.com/faisal9645/cherish-notes/releases/download/$resolvedTag/cherish-notes-$resolvedTag.apk"
+            val apkDownloadUrl = if (remoteVersionCode > 0) {
+                "https://github.com/faisal9645/cherish-notes/releases/download/$resolvedTag/app_update_$remoteVersionCode.apk"
+            } else {
+                "https://github.com/faisal9645/cherish-notes/releases/download/$resolvedTag/app-release.apk"
+            }
 
             UpdateInfo(
                 hasUpdate = isNewer,
@@ -364,19 +368,33 @@ class OtaUpdateManager private constructor(private val appContext: Context) {
             try {
                 if (partFile.exists()) partFile.delete()
 
-                var conn = resolveDownloadConnection(info.downloadUrl)
-                var responseCode = conn.responseCode
+                val baseTagUrl = info.downloadUrl.substringBeforeLast("/")
+                val candidateUrls = listOfNotNull(
+                    info.downloadUrl.takeIf { it.isNotBlank() },
+                    if (info.latestVersionCode > 0) "$baseTagUrl/app_update_${info.latestVersionCode}.apk" else null,
+                    "$baseTagUrl/app-release.apk",
+                    if (info.latestVersionName.isNotBlank() && info.latestVersionCode > 0)
+                        "$baseTagUrl/cherish-notes-v${info.latestVersionName}-${info.latestVersionCode}.apk" else null,
+                    if (info.latestVersionName.isNotBlank())
+                        "$baseTagUrl/cherish-notes-v${info.latestVersionName}.apk" else null
+                ).distinct()
 
-                // If 404 on cherish-notes-{tag}.apk, fallback to app-release.apk
-                if (responseCode == 404 && info.downloadUrl.contains("cherish-notes-")) {
-                    conn.disconnect()
-                    val altUrl = info.downloadUrl.substringBeforeLast("/") + "/app-release.apk"
-                    conn = resolveDownloadConnection(altUrl)
-                    responseCode = conn.responseCode
+                var conn: HttpURLConnection? = null
+                var responseCode = -1
+
+                for (candUrl in candidateUrls) {
+                    val attemptConn = resolveDownloadConnection(candUrl)
+                    val code = attemptConn.responseCode
+                    if (code in 200..299) {
+                        conn = attemptConn
+                        responseCode = code
+                        break
+                    }
+                    attemptConn.disconnect()
+                    responseCode = code
                 }
 
-                if (responseCode !in 200..299) {
-                    conn.disconnect()
+                if (conn == null || responseCode !in 200..299) {
                     throw java.io.IOException("Server returned HTTP $responseCode")
                 }
 

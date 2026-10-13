@@ -2,6 +2,7 @@ import os
 import re
 import sys
 import json
+import argparse
 import requests
 import firebase_admin
 from firebase_admin import credentials, firestore
@@ -19,11 +20,11 @@ def get_github_token(project_root: str) -> str:
         print("ERROR: github_token.txt not found in project root!")
         print("Create it with just your GitHub PAT inside.")
         sys.exit(1)
-    with open(token_path, "r") as f:
+    with open(token_path, "r", encoding="utf-8") as f:
         return f.read().strip()
 
 
-def get_version(project_root: str):
+def get_version(project_root: str) -> tuple:
     gradle_path = os.path.join(project_root, "app", "build.gradle.kts")
     with open(gradle_path, "r", encoding="utf-8") as f:
         content = f.read()
@@ -33,6 +34,54 @@ def get_version(project_root: str):
         print("ERROR: Could not parse version from build.gradle.kts")
         sys.exit(1)
     return int(vcode.group(1)), vname.group(1)
+
+
+def bump_version_in_gradle(project_root: str, target_code: int = None, target_name: str = None) -> tuple:
+    """Auto-increments versionCode and patch version in app/build.gradle.kts before building."""
+    gradle_path = os.path.join(project_root, "app", "build.gradle.kts")
+    with open(gradle_path, "r", encoding="utf-8") as f:
+        content = f.read()
+
+    vcode_match = re.search(r"versionCode\s*=\s*(\d+)", content)
+    vname_match = re.search(r'versionName\s*=\s*"([^"]+)"', content)
+    if not vcode_match or not vname_match:
+        print("ERROR: Could not parse version from build.gradle.kts to bump")
+        sys.exit(1)
+
+    current_code = int(vcode_match.group(1))
+    current_name = vname_match.group(1)
+
+    new_code = target_code if target_code is not None else (current_code + 1)
+
+    if target_name is not None:
+        new_name = target_name
+    else:
+        # Increment last dotted component (e.g. 1.7.68 -> 1.7.69)
+        parts = current_name.split(".")
+        if parts and parts[-1].isdigit():
+            parts[-1] = str(int(parts[-1]) + 1)
+            new_name = ".".join(parts)
+        else:
+            new_name = f"{current_name}.1"
+
+    new_content = re.sub(
+        r"versionCode\s*=\s*\d+",
+        f"versionCode = {new_code}",
+        content,
+        count=1
+    )
+    new_content = re.sub(
+        r'versionName\s*=\s*"[^"]+"',
+        f'versionName = "{new_name}"',
+        new_content,
+        count=1
+    )
+
+    with open(gradle_path, "w", encoding="utf-8") as f:
+        f.write(new_content)
+
+    print(f"BUMPED VERSION: {current_name} (Build {current_code}) -> {new_name} (Build {new_code})", flush=True)
+    return new_code, new_name
 
 
 def get_apk_path(project_root: str) -> str:
@@ -202,13 +251,20 @@ def sync_git_and_push(project_root: str, token: str, version_code: int, version_
             print(f"Git push notice: {res.stderr or res2.stderr}", flush=True)
 
 
-def release_notes(version_name: str, version_code: int) -> str:
+def release_notes(version_name: str, version_code: int, custom_notes: str = None) -> str:
     """Public text (the release page and the in-app update dialog): a plain notes app only."""
-    return (f"Notes v{version_name} (Build {version_code}):\n• Cleaner, simpler layout\n"
-            "• Voice typing and read aloud\n• Settings open with a swipe\n• Bug fixes and improvements")
+    if custom_notes:
+        return f"Notes v{version_name} (Build {version_code}):\n{custom_notes}"
+    return (
+        f"Notes v{version_name} (Build {version_code}):\n"
+        "\u2022 Cleaner, simpler layout\n"
+        "\u2022 Voice typing and read aloud\n"
+        "\u2022 Settings open with a swipe\n"
+        "\u2022 Bug fixes and improvements"
+    )
 
 
-def write_version_json(project_root: str, version_code: int, version_name: str, download_url: str, apk_path: str):
+def write_version_json(project_root: str, version_code: int, version_name: str, download_url: str, apk_path: str, custom_notes: str = None):
     """Installed apps read version.json from main first (OtaUpdateManager.RAW_VERSION_JSON_URL) and
     only fall back to the releases API without it, so it must name this release and be pushed."""
     import datetime
@@ -218,7 +274,7 @@ def write_version_json(project_root: str, version_code: int, version_name: str, 
         "tagName": f"v{version_name}-{version_code}",
         "downloadUrl": download_url,
         "assetSize": os.path.getsize(apk_path),
-        "releaseNotes": release_notes(version_name, version_code),
+        "releaseNotes": release_notes(version_name, version_code, custom_notes),
         "releaseDate": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
     }
     with open(os.path.join(project_root, "version.json"), "w", encoding="utf-8", newline="\n") as f:
@@ -230,7 +286,7 @@ def write_version_json(project_root: str, version_code: int, version_name: str, 
 def update_firestore(project_root: str, version_code: int, version_name: str, download_url: str):
     key_path = os.path.join(project_root, "firebase_admin_key.json")
     if not os.path.exists(key_path):
-        print("WARNING: firebase_admin_key.json not found — skipping Firestore update.")
+        print("WARNING: firebase_admin_key.json not found \u2014 skipping Firestore update.")
         return
     cred = credentials.Certificate(key_path)
     if not firebase_admin._apps:
@@ -241,7 +297,7 @@ def update_firestore(project_root: str, version_code: int, version_name: str, do
         "versionName":  version_name,
         "downloadUrl":  download_url,
         "releaseDate":  firestore.SERVER_TIMESTAMP,
-        "releaseNotes": f"v{version_name} — Live couple avatars, Double-tap heartbursts, and Watch Party sync notifications",
+        "releaseNotes": f"v{version_name} \u2014 Live couple avatars, Double-tap heartbursts, and Watch Party sync notifications",
     }, merge=True)
     print("Firestore app_config/version updated successfully!")
 
@@ -251,9 +307,15 @@ def build_apk(project_root: str):
     print("Building release APK...", flush=True)
     gradlew = os.path.join(project_root, "gradlew.bat" if os.name == 'nt' else "gradlew")
     env = os.environ.copy()
-    jbr_path = r"C:\Program Files\Android\Android Studio\jbr"
-    if os.path.exists(jbr_path):
-        env["JAVA_HOME"] = jbr_path
+    candidate_jdks = [
+        r"C:\Program Files\Android\Android Studio\jbr",
+        r"C:\Program Files\Android\Android Studio\jre",
+        env.get("JAVA_HOME", "")
+    ]
+    for jdk in candidate_jdks:
+        if jdk and os.path.exists(jdk):
+            env["JAVA_HOME"] = jdk
+            break
     try:
         subprocess.check_call(
             [gradlew, ":app:assembleRelease", "--daemon", "--parallel", "--build-cache"],
@@ -271,28 +333,52 @@ def main():
     script_dir   = os.path.dirname(os.path.abspath(__file__))
     project_root = os.path.abspath(os.path.join(script_dir, "..", ".."))
 
-    args = sys.argv[1:]
-    extra_repos = [args[i + 1] for i, a in enumerate(args[:-1]) if a == "--also"]
-    skip_build = "--skip-build" in args
+    parser = argparse.ArgumentParser(description="Cherish Notes OTA Release and Upload Tool")
+    parser.add_argument("--bump", dest="bump", action="store_true", default=True,
+                        help="Automatically increment versionCode and patch version (default: True)")
+    parser.add_argument("--no-bump", dest="bump", action="store_false",
+                        help="Do not increment version, keep existing version in build.gradle.kts")
+    parser.add_argument("--version-code", type=int, default=None,
+                        help="Explicitly set a versionCode (e.g. 141)")
+    parser.add_argument("--version-name", type=str, default=None,
+                        help="Explicitly set a versionName (e.g. 1.7.69)")
+    parser.add_argument("--notes", type=str, default=None,
+                        help="Custom release notes string")
+    parser.add_argument("--skip-build", action="store_true", default=False,
+                        help="Skip running Gradle assembleRelease and reuse existing APK")
+    parser.add_argument("--also", action="append", default=[],
+                        help="Also publish to secondary GitHub repo (can be repeated)")
 
-    if not skip_build:
+    args = parser.parse_args()
+
+    token = get_github_token(project_root)
+
+    # Version handling: auto-bump by default so client phones see the update
+    if args.bump or args.version_code is not None or args.version_name is not None:
+        version_code, version_name = bump_version_in_gradle(
+            project_root,
+            target_code=args.version_code,
+            target_name=args.version_name
+        )
+    else:
+        version_code, version_name = get_version(project_root)
+
+    if not args.skip_build:
         build_apk(project_root)
 
-    token                    = get_github_token(project_root)
-    version_code, version_name = get_version(project_root)
-    apk_path                 = get_apk_path(project_root)
+    apk_path = get_apk_path(project_root)
 
     print(f"Version  : {version_name} (code {version_code})")
     print(f"APK      : {apk_path}")
 
-    for repo in extra_repos:
+    for repo in args.also:
         print(f"\nAlso publishing to {repo}...")
         extra_release = create_github_release(token, repo, version_code, version_name)
         upload_apk_to_release(token, repo, extra_release, apk_path, version_code)
 
     release      = create_github_release(token, GITHUB_REPO, version_code, version_name)
     download_url = upload_apk_to_release(token, GITHUB_REPO, release, apk_path, version_code)
-    write_version_json(project_root, version_code, version_name, download_url, apk_path)
+    write_version_json(project_root, version_code, version_name, download_url, apk_path, args.notes)
     update_firestore(project_root, version_code, version_name, download_url)
     sync_git_and_push(project_root, token, version_code, version_name)
 
