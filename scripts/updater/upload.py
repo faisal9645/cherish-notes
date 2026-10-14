@@ -380,7 +380,15 @@ def main():
     update_firestore(project_root, version_code, version_name, download_url)
     sync_git_and_push(project_root, token, version_code, version_name)
 
-    print("\nOTA update pushed successfully via GitHub Releases!")
+    # Purge jsDelivr CDN cache so phones get the new version.json globally with zero latency
+    try:
+        purge_url = f"https://purge.jsdelivr.net/gh/{GITHUB_REPO}@main/version.json"
+        p_resp = requests.get(purge_url, timeout=10)
+        print(f"Purged jsDelivr CDN cache for instant global update propagation: HTTP {p_resp.status_code}", flush=True)
+    except Exception as e:
+        print(f"jsDelivr CDN purge notice: {e}", flush=True)
+
+    print("\nOTA update pushed successfully via GitHub Releases & jsDelivr Anycast CDN!")
     print(f"   Users will download from: {download_url}")
 
 

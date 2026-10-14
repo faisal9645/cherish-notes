@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.tasks.await
 import org.json.JSONObject
 import java.io.File
 import java.io.FileOutputStream
@@ -62,10 +63,18 @@ class OtaUpdateManager private constructor(private val appContext: Context) {
     suspend fun checkForUpdates(silent: Boolean = false): UpdateInfo? = withContext(Dispatchers.IO) {
         if (!silent) _updateState.value = UpdateState.Checking
         try {
-            // Tier 1: Static version.json via raw.githubusercontent.com (zero API rate limits on mobile carriers)
+            // Tier 1: Static version.json via resilient Anycast CDN mirrors (jsDelivr, Statically) + raw GitHub
             var info = fetchFromVersionJson()
 
-            // Tier 2: GitHub Releases API (checked if Tier 1 failed or didn't report an update)
+            // Tier 2: Cloud Firestore app_config/version fallback (Google infrastructure, immune to GitHub DNS blocks)
+            if (info == null || !info.hasUpdate) {
+                val firestoreInfo = fetchFromFirestore()
+                if (firestoreInfo != null && (info == null || firestoreInfo.hasUpdate)) {
+                    info = firestoreInfo
+                }
+            }
+
+            // Tier 3: GitHub Releases API (checked if Tier 1 & 2 failed or didn't report an update)
             if (info == null || !info.hasUpdate) {
                 val apiInfo = fetchFromApi()
                 if (apiInfo != null && (info == null || apiInfo.hasUpdate)) {
@@ -73,7 +82,7 @@ class OtaUpdateManager private constructor(private val appContext: Context) {
                 }
             }
 
-            // Tier 3: GitHub Web Releases 302 redirect fallback (checked if still no update found)
+            // Tier 4: GitHub Web Releases 302 redirect fallback (checked if still no update found)
             if (info == null || !info.hasUpdate) {
                 val webInfo = fetchFromWebRedirect()
                 if (webInfo != null && (info == null || webInfo.hasUpdate)) {
@@ -101,38 +110,88 @@ class OtaUpdateManager private constructor(private val appContext: Context) {
     }
 
     private fun fetchFromVersionJson(): UpdateInfo? {
-        return try {
-            val url = URL("$RAW_VERSION_JSON_URL?t=${System.currentTimeMillis()}")
-            val conn = (url.openConnection() as HttpURLConnection).apply {
-                requestMethod = "GET"
-                setRequestProperty("User-Agent", "CherishApp/${BuildConfig.VERSION_NAME}")
-                setRequestProperty("Cache-Control", "no-cache")
-                setRequestProperty("Pragma", "no-cache")
-                connectTimeout = 8000
-                readTimeout = 8000
+        val mirrors = listOf(
+            "https://cdn.jsdelivr.net/gh/faisal9645/cherish-notes@main/version.json",
+            "https://fastly.jsdelivr.net/gh/faisal9645/cherish-notes@main/version.json",
+            "https://raw.githubusercontent.com/faisal9645/cherish-notes/main/version.json",
+            "https://cdn.statically.io/gh/faisal9645/cherish-notes/main/version.json"
+        )
+        for (mirrorUrl in mirrors) {
+            var conn: HttpURLConnection? = null
+            try {
+                val url = URL("$mirrorUrl?t=${System.currentTimeMillis()}")
+                conn = (url.openConnection() as HttpURLConnection).apply {
+                    requestMethod = "GET"
+                    setRequestProperty("User-Agent", "CherishApp/${BuildConfig.VERSION_NAME}")
+                    setRequestProperty("Cache-Control", "no-cache")
+                    setRequestProperty("Pragma", "no-cache")
+                    connectTimeout = 7000
+                    readTimeout = 7000
+                }
+
+                if (conn.responseCode != 200) {
+                    conn.disconnect()
+                    continue
+                }
+
+                val text = conn.inputStream.bufferedReader().use { it.readText() }
+                conn.disconnect()
+                val json = JSONObject(text)
+
+                val remoteVersionCode = json.optInt("versionCode", -1)
+                val remoteVersionName = json.optString("versionName", "")
+                val downloadUrl = json.optString("downloadUrl", "")
+                val releaseNotes = json.optString("releaseNotes", "Performance improvements and bug fixes.")
+                val assetSize = json.optLong("assetSize", 0L)
+                val releaseDate = json.optString("releaseDate", "")
+
+                val currentCode = BuildConfig.VERSION_CODE
+                val isNewer = if (remoteVersionCode > 0) {
+                    remoteVersionCode > currentCode
+                } else {
+                    isSemanticVersionNewer(remoteVersionName, BuildConfig.VERSION_NAME)
+                }
+
+                if (downloadUrl.isBlank()) continue
+
+                return UpdateInfo(
+                    hasUpdate = isNewer,
+                    latestVersionName = remoteVersionName.ifBlank { "v$remoteVersionName" },
+                    latestVersionCode = remoteVersionCode,
+                    releaseNotes = releaseNotes,
+                    downloadUrl = downloadUrl,
+                    assetSize = assetSize,
+                    releaseDate = releaseDate
+                )
+            } catch (e: Exception) {
+                android.util.Log.w("OtaUpdateManager", "Mirror $mirrorUrl failed: ${e.message}")
+            } finally {
+                try { conn?.disconnect() } catch (_: Exception) {}
             }
+        }
+        return null
+    }
 
-            if (conn.responseCode != 200) return null
-
-            val text = conn.inputStream.bufferedReader().use { it.readText() }
-            val json = JSONObject(text)
-
-            val remoteVersionCode = json.optInt("versionCode", -1)
-            val remoteVersionName = json.optString("versionName", "")
-            val downloadUrl = json.optString("downloadUrl", "")
-            val releaseNotes = json.optString("releaseNotes", "Performance improvements and bug fixes.")
-            val assetSize = json.optLong("assetSize", 0L)
-            val releaseDate = json.optString("releaseDate", "")
-
+    private suspend fun fetchFromFirestore(): UpdateInfo? {
+        return try {
+            val doc = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                .collection("app_config")
+                .document("version")
+                .get()
+                .await()
+            if (!doc.exists()) return null
+            val remoteVersionCode = doc.getLong("versionCode")?.toInt() ?: -1
+            val remoteVersionName = doc.getString("versionName") ?: ""
+            val downloadUrl = doc.getString("downloadUrl") ?: ""
+            val releaseNotes = doc.getString("releaseNotes") ?: "Performance improvements and bug fixes."
+            val assetSize = doc.getLong("assetSize") ?: 0L
             val currentCode = BuildConfig.VERSION_CODE
             val isNewer = if (remoteVersionCode > 0) {
                 remoteVersionCode > currentCode
             } else {
                 isSemanticVersionNewer(remoteVersionName, BuildConfig.VERSION_NAME)
             }
-
             if (downloadUrl.isBlank()) return null
-
             UpdateInfo(
                 hasUpdate = isNewer,
                 latestVersionName = remoteVersionName.ifBlank { "v$remoteVersionName" },
@@ -140,10 +199,10 @@ class OtaUpdateManager private constructor(private val appContext: Context) {
                 releaseNotes = releaseNotes,
                 downloadUrl = downloadUrl,
                 assetSize = assetSize,
-                releaseDate = releaseDate
+                releaseDate = ""
             )
         } catch (e: Exception) {
-            android.util.Log.w("OtaUpdateManager", "fetchFromVersionJson failed: ${e.message}")
+            android.util.Log.w("OtaUpdateManager", "fetchFromFirestore failed: ${e.message}")
             null
         }
     }
@@ -291,6 +350,9 @@ class OtaUpdateManager private constructor(private val appContext: Context) {
         if (raw.isNullOrBlank()) return "Network connection interrupted. Please try again."
         val lower = raw.lowercase()
         return when {
+            lower.contains("unable to resolve host") || lower.contains("no address associated with hostname") ||
+            lower.contains("unknownhost") || lower.contains("eai_nodata") || lower.contains("eai_noname") ->
+                "Network DNS error connecting to update servers. Tap to retry or switch Wi-Fi / mobile data."
             lower.contains("ssl") || lower.contains("decrypt") || lower.contains("cipher") ||
             lower.contains("handshake") || lower.contains("record_mac") || lower.contains("protocol error") ||
             lower.contains("bad_record") || lower.contains("bad_decrypt") ->
@@ -369,7 +431,7 @@ class OtaUpdateManager private constructor(private val appContext: Context) {
                 if (partFile.exists()) partFile.delete()
 
                 val baseTagUrl = info.downloadUrl.substringBeforeLast("/")
-                val candidateUrls = listOfNotNull(
+                val directUrls = listOfNotNull(
                     info.downloadUrl.takeIf { it.isNotBlank() },
                     if (info.latestVersionCode > 0) "$baseTagUrl/app_update_${info.latestVersionCode}.apk" else null,
                     "$baseTagUrl/app-release.apk",
@@ -379,19 +441,33 @@ class OtaUpdateManager private constructor(private val appContext: Context) {
                         "$baseTagUrl/cherish-notes-v${info.latestVersionName}.apk" else null
                 ).distinct()
 
+                // Multi-CDN mirrors to guarantee downloads even if GitHub domain has DNS issues
+                val candidateUrls = mutableListOf<String>()
+                for (u in directUrls) {
+                    candidateUrls.add(u)
+                    if (u.startsWith("https://github.com/")) {
+                        candidateUrls.add("https://ghproxy.net/$u")
+                        candidateUrls.add("https://gh-proxy.com/$u")
+                    }
+                }
+
                 var conn: HttpURLConnection? = null
                 var responseCode = -1
 
                 for (candUrl in candidateUrls) {
-                    val attemptConn = resolveDownloadConnection(candUrl)
-                    val code = attemptConn.responseCode
-                    if (code in 200..299) {
-                        conn = attemptConn
+                    try {
+                        val attemptConn = resolveDownloadConnection(candUrl)
+                        val code = attemptConn.responseCode
+                        if (code in 200..299) {
+                            conn = attemptConn
+                            responseCode = code
+                            break
+                        }
+                        attemptConn.disconnect()
                         responseCode = code
-                        break
+                    } catch (e: Exception) {
+                        android.util.Log.w("OtaUpdateManager", "Candidate $candUrl failed: ${e.message}")
                     }
-                    attemptConn.disconnect()
-                    responseCode = code
                 }
 
                 if (conn == null || responseCode !in 200..299) {

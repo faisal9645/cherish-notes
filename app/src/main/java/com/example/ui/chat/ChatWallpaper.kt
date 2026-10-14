@@ -53,14 +53,14 @@ import kotlinx.coroutines.flow.consumeAsFlow
  * Supported Themes:
  * - 0: Normal (Minimalist, modern clean canvas with subtle depth)
  * - 1: Theme 1 (Classic Doodle Art Wallpaper)
- * - 2: Theme 2 (Cosmic Stars & Constellations Wallpaper)
+ * - 2: Theme 2 (Romantic Couple Love Doodles Wallpaper)
  */
 @Composable
 fun ChatWallpaper(
     chatBgTheme: Int,
     modifier: Modifier = Modifier
 ) {
-    val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+    val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f || com.example.ui.theme.isAppInDark()
 
     when (chatBgTheme) {
         1 -> DoodleWallpaper(isDark = isDark, modifier = modifier)
@@ -85,46 +85,44 @@ fun NormalWallpaper(
 }
 
 /**
- * Animated Immersive Love Wallpaper (Theme 2)
+ * Romantic Couple Doodles Wallpaper (Theme 2)
+ * High-definition couple love doodles artwork that seamlessly adapts to Day and Dark modes:
+ * - Day Mode: Pure white background (#FFFFFF) with crisp royal theme blue (#1D4ED8) doodles.
+ * - Dark Mode: Deep midnight royal blue (#011565) background with crisp luminous doodles.
+ * - AMOLED Mode: True pitch black (#000000) background for infinite OLED contrast and battery savings.
  */
 @Composable
 fun LoveImmersiveWallpaper(
     isDark: Boolean,
     modifier: Modifier = Modifier
 ) {
-    val top1 = if (isDark) darkTone(Color(0xFF180A12)) else Color(0xFFFFF0F5)
-    val top2 = if (isDark) darkTone(Color(0xFF28111B)) else Color(0xFFFFE4E1)
-    val bottom1 = if (isDark) darkTone(Color(0xFF0F060A)) else Color(0xFFFFF8F8)
-    val bottom2 = if (isDark) darkTone(Color(0xFF1C0A11)) else Color(0xFFFFEBF0)
-
-    // The colours drift for about half a minute after the chat opens, then rest (an endless
-    // animation behind the chat kept the phone drawing every frame)
-    val phase = remember { Animatable(0f) }
-    LaunchedEffect(Unit) {
-        val drift = androidx.compose.animation.core.tween<Float>(6000, easing = androidx.compose.animation.core.FastOutSlowInEasing)
-        repeat(2) {
-            phase.animateTo(1f, drift)
-            phase.animateTo(0f, drift)
-        }
+    val isAmoled = com.example.ui.theme.LocalAmoledBlack.current
+    val drawableRes = when {
+        isAmoled -> com.example.R.drawable.chat_bg_theme_2_amoled
+        isDark -> com.example.R.drawable.chat_bg_theme_2_dark
+        else -> com.example.R.drawable.chat_bg_theme_2_day
+    }
+    val fallbackBg = when {
+        isAmoled -> Color(0xFF000000)
+        isDark -> Color(0xFF011565)
+        else -> Color(0xFFFFFFFF)
     }
 
     Box(
         modifier = modifier
             .fillMaxSize()
-            // Colours are read while drawing, so each animation frame only redraws the gradient
-            // instead of recomposing
-            .drawBehind {
-                val p = phase.value
-                drawRect(
-                    Brush.verticalGradient(
-                        listOf(
-                            androidx.compose.ui.graphics.lerp(top1, top2, p),
-                            androidx.compose.ui.graphics.lerp(bottom1, bottom2, p)
-                        )
-                    )
-                )
-            }
-    )
+            .background(fallbackBg)
+            .clipToBounds()
+    ) {
+        androidx.compose.foundation.Image(
+            painter = androidx.compose.ui.res.painterResource(id = drawableRes),
+            contentDescription = "Theme 2 Love Wallpaper",
+            contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+            modifier = Modifier
+                .fillMaxSize()
+                .tiltParallax()
+        )
+    }
 }
 
 /**

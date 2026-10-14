@@ -782,10 +782,12 @@ fun CherishNavGraph(
                                 val errorMsg = updateState.errorMessage
                                 if (errorMsg != null) {
                                     Spacer(modifier = Modifier.height(6.dp))
-                                    val safeError = if (errorMsg.contains("OPENSSL", ignoreCase = true) || errorMsg.contains("ssl=", ignoreCase = true) || errorMsg.contains("Cipher", ignoreCase = true)) {
-                                        "Secure connection interrupted by network. Tap Download & Install to retry."
-                                    } else {
-                                        errorMsg
+                                    val safeError = when {
+                                        errorMsg.contains("OPENSSL", ignoreCase = true) || errorMsg.contains("ssl=", ignoreCase = true) || errorMsg.contains("Cipher", ignoreCase = true) ->
+                                            "Secure connection interrupted by network. Tap Download & Install to retry."
+                                        errorMsg.contains("unable to resolve host", ignoreCase = true) || errorMsg.contains("no address associated", ignoreCase = true) || errorMsg.contains("unknownhost", ignoreCase = true) ->
+                                            "Network DNS error connecting to update servers. Tap to retry or switch Wi-Fi / mobile data."
+                                        else -> errorMsg
                                     }
                                     Text(
                                         text = "Note: $safeError",
