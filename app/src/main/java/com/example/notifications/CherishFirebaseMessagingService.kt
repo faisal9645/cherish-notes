@@ -58,10 +58,26 @@ class CherishFirebaseMessagingService : FirebaseMessagingService() {
 
         // "Thinking of you": a heartbeat pulse and notification based on settings
         if (remoteMessage.data["type"] == "heartbeat") {
-            ThinkingOfYou.onSignal(
+            val signalId = remoteMessage.data["signalId"].orEmpty()
+            val sentAt = remoteMessage.data["sentAt"]?.toLongOrNull() ?: System.currentTimeMillis()
+            val handled = ThinkingOfYou.onSignal(
                 applicationContext,
-                remoteMessage.data["signalId"].orEmpty(),
-                remoteMessage.data["sentAt"]?.toLongOrNull() ?: System.currentTimeMillis()
+                signalId,
+                sentAt
+            )
+            if (handled && signalId.isNotBlank()) {
+                app.authRepository.acknowledgeHeartbeatFelt(signalId)
+            }
+            return
+        }
+
+        if (remoteMessage.data["type"] == "heartbeat_felt") {
+            val signalId = remoteMessage.data["signalId"].orEmpty()
+            val sentAt = remoteMessage.data["sentAt"]?.toLongOrNull() ?: System.currentTimeMillis()
+            ThinkingOfYou.onPartnerFeltHeartbeat(
+                applicationContext,
+                signalId,
+                sentAt
             )
             return
         }

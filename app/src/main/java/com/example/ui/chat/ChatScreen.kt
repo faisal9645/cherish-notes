@@ -756,9 +756,14 @@ fun ChatScreen(
 
     // A "thinking of you" heartbeat arrived while the chat is open: a heart beats with it
     var heartbeatPulseKey by remember { mutableStateOf(0L) }
+    var partnerFeltKey by remember { mutableStateOf(0L) }
     LaunchedEffect(isChatInView) {
         if (!isChatInView) return@LaunchedEffect
         com.example.notifications.ThinkingOfYou.received.collect { heartbeatPulseKey = it }
+    }
+    LaunchedEffect(isChatInView) {
+        if (!isChatInView) return@LaunchedEffect
+        com.example.notifications.ThinkingOfYou.partnerFelt.collect { partnerFeltKey = it.timestamp }
     }
 
     // The partner is stressed (a fresh mood): offer to send a hug, once per mood
@@ -2306,6 +2311,12 @@ fun ChatScreen(
     if (heartbeatPulseKey != 0L) {
         key(heartbeatPulseKey) {
             HeartbeatReceivedPulse(onDone = { heartbeatPulseKey = 0L })
+        }
+    }
+
+    if (partnerFeltKey != 0L) {
+        key(partnerFeltKey) {
+            PartnerFeltOverlay(partnerName = partnerName, onDone = { partnerFeltKey = 0L })
         }
     }
 

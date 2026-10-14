@@ -178,32 +178,61 @@ exports.notifyPartnerOnMessage = onDocumentCreated(
 exports.heartbeatPartnerOnUpdate = onDocumentUpdated("couples/{coupleId}", async (event) => {
   const before = (event.data && event.data.before.data()) || {};
   const after = (event.data && event.data.after.data()) || {};
+  
+  // 1. Heartbeat Trigger Signal (sent to receiver)
   const signal = after.signal;
-  if (!signal || signal.type !== "heartbeat" || !signal.id) return;
-  // Only a new heartbeat (the couple document also changes for other reasons)
-  if (before.signal && before.signal.id === signal.id) return;
+  if (signal && signal.type === "heartbeat" && signal.id) {
+    if (!before.signal || before.signal.id !== signal.id) {
+      const senderId = String(signal.senderId || "");
+      const receiverId = otherMember(after, senderId);
+      if (receiverId) {
+        const sentAt = signal.at && typeof signal.at.toMillis === "function" ? signal.at.toMillis() : Date.now();
+        await pushTo(
+          getFirestore(),
+          receiverId,
+          {
+            type: "heartbeat",
+            signalId: String(signal.id),
+            senderId,
+            sentAt: String(sentAt),
+          },
+          {
+            priority: "high",
+            // Fresh delivery: 60s allows FCM to wake closed app / sleeping radio
+            ttl: 60 * 1000,
+          },
+          event.params.coupleId
+        );
+      }
+    }
+  }
 
-  const senderId = String(signal.senderId || "");
-  const receiverId = otherMember(after, senderId);
-  if (!receiverId) return;
-
-  const sentAt = signal.at && typeof signal.at.toMillis === "function" ? signal.at.toMillis() : Date.now();
-  await pushTo(
-    getFirestore(),
-    receiverId,
-    {
-      type: "heartbeat",
-      signalId: String(signal.id),
-      senderId,
-      sentAt: String(sentAt),
-    },
-    {
-      priority: "high",
-      // Fresh delivery: 60s allows FCM to wake closed app / sleeping radio
-      ttl: 60 * 1000,
-    },
-    event.params.coupleId
-  );
+  // 2. Heartbeat Felt Acknowledgment (sent back to original sender)
+  const signalFelt = after.signalFelt;
+  if (signalFelt && signalFelt.type === "heartbeat_felt" && signalFelt.id) {
+    if (!before.signalFelt || before.signalFelt.id !== signalFelt.id) {
+      const feltBy = String(signalFelt.senderId || "");
+      const originalSender = otherMember(after, feltBy);
+      if (originalSender) {
+        const sentAt = signalFelt.at && typeof signalFelt.at.toMillis === "function" ? signalFelt.at.toMillis() : Date.now();
+        await pushTo(
+          getFirestore(),
+          originalSender,
+          {
+            type: "heartbeat_felt",
+            signalId: String(signalFelt.id),
+            senderId: feltBy,
+            sentAt: String(sentAt),
+          },
+          {
+            priority: "high",
+            ttl: 60 * 1000,
+          },
+          event.params.coupleId
+        );
+      }
+    }
+  }
 });
 
 /**

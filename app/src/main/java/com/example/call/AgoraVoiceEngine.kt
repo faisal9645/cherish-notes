@@ -70,25 +70,22 @@ class AgoraVoiceEngine(private val context: Context) {
             }
             val created = RtcEngine.create(config)
 
-            // UAE / Dubai VoIP compatibility with automatic fallback:
-            // First attempts direct UDP for ultra-low latency; automatically falls back to TCP TLS proxy (port 443)
-            // if UDP VoIP is blocked by Middle East / UAE operators.
+            // Direct UDP connection for reliable, ultra-low latency audio worldwide
             try {
-                val proxyRes = created.setCloudProxy(Constants.PROXY_TYPE_TCP_AUTO_FALLBACK)
-                if (proxyRes != 0) {
-                    Log.w(TAG, "setCloudProxy(PROXY_TYPE_TCP_AUTO_FALLBACK) returned $proxyRes")
-                } else {
-                    Log.i(TAG, "Agora Cloud Proxy enabled with AUTO_FALLBACK (direct UDP + TCP TLS 443 fallback)")
-                }
+                created.setCloudProxy(Constants.PROXY_TYPE_NONE_PROXY)
             } catch (e: Throwable) {
-                Log.w(TAG, "setCloudProxy failed: ${e.message}")
+                Log.w(TAG, "setCloudProxy(NONE_PROXY) failed: ${e.message}")
             }
 
             created.enableAudio()
             // Clear wideband speech; Agora adapts its bitrate to the network
             created.setAudioProfile(Constants.AUDIO_PROFILE_SPEECH_STANDARD)
-            // AI noise suppression, balanced (not the aggressive modes that make voices sound thin)
-            created.setAINSMode(true, AINS_MODE_BALANCED)
+            // AI noise suppression, balanced (safely guarded against native library missing)
+            try {
+                created.setAINSMode(true, AINS_MODE_BALANCED)
+            } catch (e: Throwable) {
+                Log.w(TAG, "setAINSMode failed: ${e.message}")
+            }
             // A call starts on the earpiece, like a phone call; headsets take over when connected
             created.setDefaultAudioRoutetoSpeakerphone(false)
             engine = created

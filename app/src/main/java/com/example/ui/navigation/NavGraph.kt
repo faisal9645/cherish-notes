@@ -97,6 +97,8 @@ fun CherishNavGraph(
         }
     }
 
+    val context = androidx.compose.ui.platform.LocalContext.current
+
     // Whenever opening secret app, it should go to chat tab only
     LaunchedEffect(isDisguiseActive) {
         if (!isDisguiseActive && isUserLoggedIn) {
@@ -108,6 +110,20 @@ fun CherishNavGraph(
                         popUpTo(0) { inclusive = false }
                         launchSingleTop = true
                     }
+                }
+            }
+
+            // Once Cherish is opened/unlocked, if an incoming call is ringing, open calling screen now!
+            val callPhase = com.example.call.CallManager.state.value.phase
+            val invite = com.example.call.CallManager.currentInvite
+            if (callPhase == com.example.call.CallPhase.INCOMING_RINGING && invite != null) {
+                try {
+                    context.startActivity(
+                        com.example.call.CallActivity.incomingIntent(context, invite)
+                            .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                    )
+                } catch (e: Exception) {
+                    android.util.Log.w("NavGraph", "Could not open incoming call after unlocking Cherish", e)
                 }
             }
         }
@@ -192,7 +208,6 @@ fun CherishNavGraph(
         GoogleDriveBackupViewModel(app.googleDriveBackupManager)
     }
 
-    val context = LocalContext.current
     val updateState by profileViewModel.updateState.collectAsState()
 
     LaunchedEffect(isDisguiseActive) {

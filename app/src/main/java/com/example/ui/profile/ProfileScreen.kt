@@ -1041,7 +1041,7 @@ fun ProfileScreen(
                     }
 
                     val (partnerLabel, partnerIcon, partnerDesc) = when {
-                        isPermBlocked -> Triple("Permission Blocked", "⚠️", "Device notification permission is turned OFF")
+                        isPermBlocked -> Triple("Permission Blocked", "⚠️", "Notification permission is turned OFF")
                         partnerNotifStatus.uppercase() in listOf("SAFE", "HIDDEN") -> Triple("Safe", "🛡️", "Disguised as Notes for privacy")
                         isAlertClosed -> Triple("Closed", "🔕", "Notifications turned off or muted in app")
                         else -> Triple("Open", "🔔", "Notifications active & alerts enabled")
@@ -1052,7 +1052,7 @@ fun ProfileScreen(
                         supportingContent = {
                             Column {
                                 Text(
-                                    text = "Mobile Device Permission: " + if (partnerNotifPerm) "ON (Allowed) ✅" else "OFF (Blocked) ❌",
+                                    text = "Notification: " + if (partnerNotifPerm) "ON ✅" else "OFF ❌",
                                     fontSize = 12.5.sp,
                                     fontWeight = FontWeight.Medium,
                                     color = if (partnerNotifPerm) Color(0xFF10B981) else Color(0xFFEF4444)

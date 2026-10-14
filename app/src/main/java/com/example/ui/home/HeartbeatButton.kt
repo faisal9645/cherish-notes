@@ -28,6 +28,24 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.delay
+
 /**
  * The heartbeat colours, also used by Heartbeat Touch and the Both of us card: pink and the app's
  * own blue, the same in every theme.
@@ -38,7 +56,8 @@ val HeartbeatBlue = com.example.ui.theme.DayBluePrimary
 /**
  * The heart at the bottom of Love & Us: a tap opens Heartbeat Touch; a long press sends a
  * "thinking of you" heartbeat to the partner's phone (a small heart floats up when it's sent).
- * It beats gently while the partner is holding their side of Heartbeat Touch.
+ * It beats gently while the partner is holding their side of Heartbeat Touch, and pulses
+ * dynamically when the partner receives and feels the heartbeat trigger.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -50,8 +69,11 @@ fun HeartbeatButton(
 ) {
     val scope = rememberCoroutineScope()
     val sent = remember { Animatable(0f) }
-    // Beats only while the partner is touching (no animation running the rest of the time)
+    val feltAnim = remember { Animatable(0f) }
+    var feltStatus by remember { mutableStateOf<String?>(null) }
+    // Beats while partner is touching or when partner feels/responds to heartbeat
     val beat = remember { Animatable(1f) }
+
     LaunchedEffect(isPartnerTouching) {
         if (isPartnerTouching) {
             while (true) {
@@ -63,7 +85,86 @@ fun HeartbeatButton(
         }
     }
 
+    // React to partner receiving and feeling our heartbeat trigger
+    LaunchedEffect(Unit) {
+        com.example.notifications.ThinkingOfYou.partnerFelt.collect {
+            feltStatus = "Partner felt your heartbeat 💓"
+            scope.launch {
+                // Lively joyful double heartbeat flutter on the button
+                repeat(3) {
+                    beat.animateTo(1.22f, tween(160, easing = FastOutSlowInEasing))
+                    beat.animateTo(0.96f, tween(120, easing = FastOutSlowInEasing))
+                    beat.animateTo(1.16f, tween(140, easing = FastOutSlowInEasing))
+                    beat.animateTo(1.0f, tween(240, easing = FastOutSlowInEasing))
+                    delay(80)
+                }
+            }
+            scope.launch {
+                feltAnim.snapTo(0f)
+                feltAnim.animateTo(1f, tween(2_400, easing = FastOutSlowInEasing))
+                feltAnim.snapTo(0f)
+            }
+            delay(4_000)
+            if (feltStatus == "Partner felt your heartbeat 💓") {
+                feltStatus = null
+            }
+        }
+    }
+
+    // React to incoming heartbeat from partner to this phone
+    LaunchedEffect(Unit) {
+        com.example.notifications.ThinkingOfYou.received.collect {
+            feltStatus = "Heartbeat received 💓"
+            scope.launch {
+                repeat(2) {
+                    beat.animateTo(1.24f, tween(180, easing = FastOutSlowInEasing))
+                    beat.animateTo(1.0f, tween(240, easing = FastOutSlowInEasing))
+                }
+            }
+            scope.launch {
+                feltAnim.snapTo(0f)
+                feltAnim.animateTo(1f, tween(2_000, easing = FastOutSlowInEasing))
+                feltAnim.snapTo(0f)
+            }
+            delay(3_500)
+            if (feltStatus == "Heartbeat received 💓") {
+                feltStatus = null
+            }
+        }
+    }
+
     Box(contentAlignment = Alignment.Center, modifier = modifier) {
+        // Floating status badge above the heartbeat button
+        AnimatedVisibility(
+            visible = !feltStatus.isNullOrBlank(),
+            enter = fadeIn(tween(250)) + slideInVertically(tween(300)) { it / 2 },
+            exit = fadeOut(tween(400)) + slideOutVertically(tween(350)) { -it / 2 },
+            modifier = Modifier.align(Alignment.TopCenter)
+        ) {
+            Surface(
+                shape = CircleShape,
+                color = Color(0xFF1E1B4B).copy(alpha = 0.94f),
+                border = BorderStroke(1.2.dp, HeartbeatPink.copy(alpha = 0.8f)),
+                shadowElevation = 8.dp,
+                modifier = Modifier
+                    .offset(y = (-48).dp)
+                    .testTag("heartbeat_felt_status")
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
+                ) {
+                    Text(
+                        text = feltStatus.orEmpty(),
+                        fontSize = 12.5.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color.White,
+                        maxLines = 1
+                    )
+                }
+            }
+        }
+
         Box(
             contentAlignment = Alignment.Center,
             modifier = Modifier
@@ -90,6 +191,7 @@ fun HeartbeatButton(
                     // The heartbeat itself is the feedback (no extra click buzz before it)
                     hapticFeedbackEnabled = false,
                     onLongClick = {
+                        feltStatus = "Heartbeat sent... 💓"
                         // Sending also plays the thump-thump on this phone
                         if (onSendThinkingOfYou()) {
                             scope.launch {
@@ -122,6 +224,31 @@ fun HeartbeatButton(
                         alpha = ((1f - t) * 0.8f).coerceIn(0f, 1f)
                     }
                     .border(2.5.dp, HeartbeatPink, CircleShape)
+            )
+        }
+
+        // Glowing radiant aura rings when heartbeat is felt by partner
+        if (feltAnim.value > 0f) {
+            val t = feltAnim.value
+            Box(
+                modifier = Modifier
+                    .size(72.dp)
+                    .graphicsLayer {
+                        scaleX = 1f + t * 1.35f
+                        scaleY = 1f + t * 1.35f
+                        alpha = ((1f - t) * 0.95f).coerceIn(0f, 1f)
+                    }
+                    .border(3.dp, Brush.radialGradient(listOf(Color(0xFFFFD700), HeartbeatPink)), CircleShape)
+            )
+            Box(
+                modifier = Modifier
+                    .size(72.dp)
+                    .graphicsLayer {
+                        scaleX = 1f + t * 0.7f
+                        scaleY = 1f + t * 0.7f
+                        alpha = ((1f - t) * 0.85f).coerceIn(0f, 1f)
+                    }
+                    .border(2.dp, HeartbeatPink, CircleShape)
             )
         }
 

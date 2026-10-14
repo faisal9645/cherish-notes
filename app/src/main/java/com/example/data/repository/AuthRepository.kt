@@ -421,7 +421,22 @@ class AuthRepository(private val context: Context) {
                     val cleanSender = senderId.removePrefix("user_").lowercase()
                     if (signal["type"] == "heartbeat" && cleanSender.isNotBlank() && cleanSender != cleanUid) {
                         val sentAt = (signal["at"] as? com.google.firebase.Timestamp)?.toDate()?.time ?: System.currentTimeMillis()
-                        com.example.notifications.ThinkingOfYou.onSignal(context, signal["id"] as? String ?: "", sentAt)
+                        val signalId = signal["id"] as? String ?: ""
+                        val handled = com.example.notifications.ThinkingOfYou.onSignal(context, signalId, sentAt)
+                        if (handled && signalId.isNotBlank()) {
+                            acknowledgeHeartbeatFelt(signalId)
+                        }
+                    }
+                }
+
+                // Partner received and felt our heartbeat trigger
+                (snapshot.get("signalFelt") as? Map<*, *>)?.let { felt ->
+                    val senderId = felt["senderId"] as? String ?: ""
+                    val cleanSender = senderId.removePrefix("user_").lowercase()
+                    if (felt["type"] == "heartbeat_felt" && cleanSender.isNotBlank() && cleanSender != cleanUid) {
+                        val feltId = felt["id"] as? String ?: ""
+                        val feltAt = (felt["at"] as? com.google.firebase.Timestamp)?.toDate()?.time ?: System.currentTimeMillis()
+                        com.example.notifications.ThinkingOfYou.onPartnerFeltHeartbeat(context, feltId, feltAt)
                     }
                 }
             }
@@ -436,8 +451,9 @@ class AuthRepository(private val context: Context) {
         if (uid.isBlank()) return false
         val coupleId = _currentUserState.value?.coupleId?.trim()?.ifBlank { null } ?: getSavedCoupleId()
         val coupleRef = getCoupleDocRef(coupleId) ?: return false
+        val signalId = java.util.UUID.randomUUID().toString()
         val signal = mapOf(
-            "id" to java.util.UUID.randomUUID().toString(),
+            "id" to signalId,
             "type" to "heartbeat",
             "senderId" to uid,
             "at" to com.google.firebase.firestore.FieldValue.serverTimestamp()
@@ -451,6 +467,32 @@ class AuthRepository(private val context: Context) {
             }
         }
         return true
+    }
+
+    /**
+     * Acknowledges that a received heartbeat trigger was felt on this phone.
+     * This signals the sender's phone to play the reciprocal flutter haptic and display living response.
+     */
+    fun acknowledgeHeartbeatFelt(signalId: String) {
+        if (signalId.isBlank()) return
+        val uid = getCurrentUserId()
+        if (uid.isBlank()) return
+        val coupleId = _currentUserState.value?.coupleId?.trim()?.ifBlank { null } ?: getSavedCoupleId()
+        val coupleRef = getCoupleDocRef(coupleId) ?: return
+        val feltData = mapOf(
+            "id" to signalId,
+            "type" to "heartbeat_felt",
+            "senderId" to uid,
+            "at" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+        )
+        ensureFirebaseAuth {
+            try {
+                coupleRef.set(mapOf("signalFelt" to feltData), com.google.firebase.firestore.SetOptions.merge())
+                Log.d("AuthRepository", "Heartbeat felt acknowledgment dispatched for $signalId")
+            } catch (e: Exception) {
+                Log.w("AuthRepository", "Failed to dispatch heartbeat felt: ${e.message}")
+            }
+        }
     }
 
     suspend fun loginWithCoupleCredentials(

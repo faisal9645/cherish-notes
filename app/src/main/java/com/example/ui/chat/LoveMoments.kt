@@ -10,6 +10,7 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -608,6 +609,57 @@ fun HeartbeatReceivedPulse(onDone: () -> Unit) {
                     scaleY = scale.value
                 }
         )
+    }
+}
+
+/**
+ * Romantic toast / overlay when partner receives and feels our heartbeat trigger.
+ */
+@Composable
+fun PartnerFeltOverlay(partnerName: String, onDone: () -> Unit) {
+    val scale = remember { Animatable(0.7f) }
+    val alpha = remember { Animatable(0f) }
+    LaunchedEffect(Unit) {
+        alpha.animateTo(1f, tween(180))
+        scale.animateTo(1.15f, tween(180, easing = FastOutSlowInEasing))
+        scale.animateTo(1.0f, tween(160, easing = FastOutSlowInEasing))
+        delay(2_600)
+        alpha.animateTo(0f, tween(400))
+        onDone()
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .statusBarsPadding()
+            .padding(top = 72.dp),
+        contentAlignment = Alignment.TopCenter
+    ) {
+        Surface(
+            shape = CircleShape,
+            color = Color(0xFF1E1B4B).copy(alpha = 0.94f),
+            border = BorderStroke(1.2.dp, Brush.horizontalGradient(listOf(Color(0xFFFFD700), Color(0xFFFF4F9A)))),
+            shadowElevation = 10.dp,
+            modifier = Modifier.graphicsLayer {
+                this.alpha = alpha.value
+                scaleX = scale.value
+                scaleY = scale.value
+            }
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+            ) {
+                Text(text = "💓", fontSize = 16.sp)
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = "$partnerName felt your heartbeat!",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Color.White
+                )
+            }
+        }
     }
 }
 

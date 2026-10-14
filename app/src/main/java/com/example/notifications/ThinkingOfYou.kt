@@ -16,6 +16,14 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 
 /**
+ * Event emitted when the partner receives and feels our heartbeat trigger.
+ */
+data class HeartbeatFeltEvent(
+    val signalId: String,
+    val timestamp: Long
+)
+
+/**
  * "Thinking of you": one tap on the partner's phone, a heartbeat (thump-thump… thump-thump) on
  * this one. No words and nothing shown in the notification shade.
  *
@@ -34,7 +42,12 @@ object ThinkingOfYou {
     /** A heartbeat just played on this phone, for the chat's heart pulse. */
     val received: SharedFlow<Long> = _received.asSharedFlow()
 
+    private val _partnerFelt = MutableSharedFlow<HeartbeatFeltEvent>(extraBufferCapacity = 4)
+    /** Partner received and felt our heartbeat trigger. */
+    val partnerFelt: SharedFlow<HeartbeatFeltEvent> = _partnerFelt.asSharedFlow()
+
     private val seen = LinkedHashSet<String>()
+    private val seenFelt = LinkedHashSet<String>()
 
     /**
      * A heartbeat from the partner, from the push or from the couple listener (whichever comes
@@ -100,6 +113,33 @@ object ThinkingOfYou {
     }
 
     /**
+     * Called when the partner acknowledges receiving and feeling our heartbeat trigger.
+     */
+    @Synchronized
+    fun onPartnerFeltHeartbeat(context: Context, signalId: String, feltAt: Long): Boolean {
+        if (signalId.isBlank() || !seenFelt.add(signalId)) return false
+        if (seenFelt.size > 50) seenFelt.remove(seenFelt.first())
+
+        val secPrefs = SecurityPreferences.getInstance(context)
+        if (!secPrefs.isHeartbeatTriggerEnabled()) return false
+
+        // Gentle reciprocal flutter haptic so the sender physically feels partner's acknowledgment
+        playReciprocalFeltHaptic(context)
+
+        val event = HeartbeatFeltEvent(signalId, feltAt)
+        _partnerFelt.tryEmit(event)
+        Log.d("ThinkingOfYou", "Partner felt our heartbeat trigger for signal $signalId")
+
+        val isAppInForeground = NotificationHelper.isAppOpenOnScreen(context)
+        if (!isAppInForeground && secPrefs.isNotificationsEnabled()) {
+            if (NotificationManagerCompat.from(context).areNotificationsEnabled()) {
+                NotificationHelper.showHeartbeatFeltNotification(context)
+            }
+        }
+        return true
+    }
+
+    /**
      * Two soft heartbeats (thump-thump... thump-thump). Played as a notification vibration, so it
      * also works from the background. Also played on the sender's phone as the heartbeat goes out.
      */
@@ -134,6 +174,43 @@ object ThinkingOfYou {
             }
         } catch (e: Exception) {
             Log.w("ThinkingOfYou", "Heartbeat vibration failed", e)
+        }
+    }
+
+    /**
+     * Gentle reciprocal flutter haptic: played on sender's phone when partner feels the heartbeat.
+     */
+    fun playReciprocalFeltHaptic(context: Context) {
+        try {
+            val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                (context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager)?.defaultVibrator
+            } else {
+                @Suppress("DEPRECATION")
+                context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+            } ?: return
+            if (!vibrator.hasVibrator()) return
+
+            // Gentle reciprocal flutter: flutter-flutter (distinct reciprocal feel)
+            val timings = longArrayOf(0, 35, 75, 45, 180, 35, 75, 45)
+            val attributes = AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_NOTIFICATION)
+                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                .build()
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val amplitudes = intArrayOf(0, 110, 0, 195, 0, 110, 0, 195)
+                val effect = if (vibrator.hasAmplitudeControl()) {
+                    VibrationEffect.createWaveform(timings, amplitudes, -1)
+                } else {
+                    VibrationEffect.createWaveform(timings, -1)
+                }
+                @Suppress("DEPRECATION")
+                vibrator.vibrate(effect, attributes)
+            } else {
+                @Suppress("DEPRECATION")
+                vibrator.vibrate(timings, -1, attributes)
+            }
+        } catch (e: Exception) {
+            Log.w("ThinkingOfYou", "Reciprocal heartbeat vibration failed", e)
         }
     }
 }

@@ -79,7 +79,27 @@ class CallRepository(private val context: Context) {
     }
 
     suspend fun joined(coupleId: String, userId: String, callId: String): CallResponse {
-        return CallResponse(status = "ok", callId = callId, callerId = null, join = null)
+        val fs = firestore ?: return CallResponse(status = "ok", callId = callId, callerId = null, join = null)
+        try {
+            fs.collection("couples").document(coupleId).collection("calls").document(callId).set(
+                mapOf(
+                    "state" to CallRecord.STATE_CONNECTED,
+                    "connectedAt" to FieldValue.serverTimestamp(),
+                    "updatedAt" to FieldValue.serverTimestamp()
+                ),
+                SetOptions.merge()
+            ).await()
+            fs.collection("couples").document(coupleId).collection("callControl").document("active").set(
+                mapOf(
+                    "state" to CallRecord.STATE_CONNECTED,
+                    "updatedAt" to FieldValue.serverTimestamp()
+                ),
+                SetOptions.merge()
+            ).await()
+        } catch (e: Exception) {
+            Log.w(TAG, "joined writing calls failed: ${e.message}")
+        }
+        return CallResponse(status = CallRecord.STATE_CONNECTED, callId = callId, callerId = null, join = null)
     }
 
     suspend fun renewToken(coupleId: String, userId: String, callId: String): CallResponse {

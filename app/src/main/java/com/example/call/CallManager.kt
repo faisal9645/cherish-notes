@@ -74,10 +74,12 @@ object CallManager {
     private var userMuted = false
     private var onHold = false
     private var invite: CallInvite? = null
+    val currentInvite: CallInvite? get() = invite
     private var callerNameHint: String? = null
 
     private var docJob: Job? = null
     private var ringTimeoutJob: Job? = null
+    private var connectTimeoutJob: Job? = null
     private var reconnectJob: Job? = null
     private var peerLostJob: Job? = null
     private var joinedReportJob: Job? = null
@@ -229,8 +231,11 @@ object CallManager {
         if (hasActiveCall()) return@post
         if (!markSeen(invite.callId)) return@post
         ringFor(invite, me)
-        // With the app open, the call screen comes up right away (the notification still rings)
-        if (CherishApplication.isAppInForeground) {
+        val secPrefs = app.securityPreferences
+        val isMasked = secPrefs.isHideNotificationContent() || secPrefs.isDisguiseModeEnabled() || secPrefs.isDisguiseActive()
+
+        // With the app open and NOT disguised/masked, the call screen comes up right away
+        if (CherishApplication.isAppInForeground && !isMasked) {
             try {
                 app.startActivity(CallActivity.incomingIntent(app, invite).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
             } catch (e: Exception) {
@@ -468,6 +473,24 @@ object CallManager {
     private fun setPhase(phase: CallPhase) {
         _state.update { it.copy(phase = phase) }
         updateScreenOffAtEar()
+        if (phase == CallPhase.CONNECTING) {
+            startConnectTimeout()
+        } else {
+            connectTimeoutJob?.cancel()
+            connectTimeoutJob = null
+        }
+    }
+
+    private fun startConnectTimeout() {
+        connectTimeoutJob?.cancel()
+        val id = callId
+        connectTimeoutJob = scope.launch {
+            delay(35_000L)
+            if (callId == id && _state.value.phase == CallPhase.CONNECTING) {
+                Log.w(TAG, "Call connection timed out after 35s")
+                finish(CallEndReason.NETWORK, serverReason = "timeout", errorMessage = "Connection timed out")
+            }
+        }
     }
 
     private suspend fun joinAudio(info: CallRepository.JoinInfo) {
@@ -479,8 +502,8 @@ object CallManager {
         peerUid = if (info.uid == CALLER_UID) CALLEE_UID else CALLER_UID
         if (!engine.start(info.appId, engineListener)) {
             Log.e(TAG, "Agora engine failed to start on this device")
-            if (callId == id && _state.value.phase == CallPhase.CONNECTED) {
-                finish(CallEndReason.FAILED, serverReason = "error")
+            if (callId == id) {
+                finish(CallEndReason.FAILED, serverReason = "error", errorMessage = "Audio engine could not start")
             }
             return
         }
@@ -526,7 +549,12 @@ object CallManager {
                 ringTimeoutJob?.cancel()
                 setPhase(CallPhase.CONNECTING)
             }
-            CallRecord.STATE_CONNECTED -> if (remoteJoined) markConnected()
+            CallRecord.STATE_CONNECTED -> {
+                if (localJoined) {
+                    remoteJoined = true
+                    markConnected()
+                }
+            }
             CallRecord.STATE_DECLINED ->
                 finish(if (isOutgoing) CallEndReason.REMOTE_DECLINED else CallEndReason.DECLINED, serverReason = null)
             CallRecord.STATE_CANCELLED -> {
@@ -557,6 +585,8 @@ object CallManager {
         stopRingback()
         ringTimeoutJob?.cancel()
         reconnectJob?.cancel()
+        connectTimeoutJob?.cancel()
+        connectTimeoutJob = null
         _state.update {
             it.copy(
                 phase = CallPhase.CONNECTED,
@@ -754,11 +784,13 @@ object CallManager {
     private fun cancelCallJobs() {
         docJob?.cancel()
         ringTimeoutJob?.cancel()
+        connectTimeoutJob?.cancel()
         reconnectJob?.cancel()
         peerLostJob?.cancel()
         joinedReportJob?.cancel()
         docJob = null
         ringTimeoutJob = null
+        connectTimeoutJob = null
         reconnectJob = null
         peerLostJob = null
         joinedReportJob = null
@@ -851,17 +883,18 @@ object CallManager {
         }
 
         override fun onRemoteJoined(uid: Int) = post {
-            // Agora's recorder joins the channel too; only the partner counts
-            if (uid != peerUid) return@post
+            // Agora's recorder joins the channel too; only remote users count
+            if (uid == myUid || uid == 0) return@post
             remoteJoined = true
             peerLostJob?.cancel()
+            connectTimeoutJob?.cancel()
             _state.update { it.copy(peerReconnecting = false) }
             markConnected()
             reportJoined()
         }
 
         override fun onRemoteLeft(uid: Int, dropped: Boolean) = post {
-            if (uid != peerUid) return@post
+            if (uid == myUid || uid == 0) return@post
             remoteJoined = false
             if (!dropped) {
                 finish(CallEndReason.REMOTE_HANGUP, serverReason = "hangup")

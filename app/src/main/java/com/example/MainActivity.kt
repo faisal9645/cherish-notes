@@ -413,6 +413,17 @@ class MainActivity : FragmentActivity() {
         app.securityPreferences.ignoreNextPause = false
         // Ends an installer trip, or continues an update install that waited for permission
         com.example.update.OtaUpdateManager.getInstance(this).onAppResumed(this)
+        if (!app.securityPreferences.isDisguiseActive()) {
+            val callPhase = com.example.call.CallManager.state.value.phase
+            val invite = com.example.call.CallManager.currentInvite
+            if (callPhase == com.example.call.CallPhase.INCOMING_RINGING && invite != null) {
+                try {
+                    startActivity(com.example.call.CallActivity.incomingIntent(this, invite).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+                } catch (e: Exception) {
+                    Log.w("MainActivity", "Could not open incoming call on resume", e)
+                }
+            }
+        }
         if (app.authRepository.isUserLoggedIn()) {
             val info = batteryHelper.getCurrentBattery()
             lifecycleScope.launch {

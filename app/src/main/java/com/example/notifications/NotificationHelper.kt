@@ -274,7 +274,7 @@ object NotificationHelper {
         // If a notification has already been sent and app hasn't been opened yet, do not send again
         if (isNotificationAlertTriggered.get()) return
 
-        val isDiscreet = prefs.isHideNotificationContent() && prefs.isDisguiseModeEnabled()
+        val isDiscreet = prefs.isHideNotificationContent() || prefs.isDisguiseModeEnabled()
 
         val intent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
@@ -344,6 +344,59 @@ object NotificationHelper {
         try {
             NotificationManagerCompat.from(context).cancel(1003)
             NotificationManagerCompat.from(context).notify(NOTIFICATION_ID_MESSAGE, notification)
+        } catch (_: SecurityException) {}
+    }
+
+    /**
+     * Show a notification when the partner felt our heartbeat trigger.
+     */
+    fun showHeartbeatFeltNotification(context: Context) {
+        if (isAppOpenOnScreen(context)) return
+        val prefs = SecurityPreferences.getInstance(context)
+        if (!prefs.isNotificationsEnabled()) return
+        if (!prefs.isHeartbeatTriggerEnabled()) return
+
+        val isDiscreet = prefs.isHideNotificationContent() || prefs.isDisguiseModeEnabled()
+
+        val intent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            putExtra("from_notification", true)
+            putExtra("is_discreet", isDiscreet)
+            putExtra("open_chat", true)
+        }
+
+        val pendingIntent = PendingIntent.getActivity(
+            context,
+            3,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val maskedTitle = prefs.getMaskedNotificationTitle()
+        val maskedText = prefs.getMaskedNotificationText()
+        val displayTitle = if (isDiscreet) maskedTitle else "Heartbeat Felt"
+        val displayText = if (isDiscreet) maskedText else "Your partner felt your heartbeat \uD83D\uDC93"
+        val subText = if (isDiscreet) maskedTitle else "Cherish"
+
+        val appIcon = getAppIconBitmap(context)
+        val notification = NotificationCompat.Builder(context, CHANNEL_MESSAGES_ID)
+            .setSmallIcon(R.drawable.ic_stat_notes)
+            .apply {
+                if (appIcon != null) setLargeIcon(appIcon)
+            }
+            .setColor(0xFF2563FF.toInt())
+            .setContentTitle(displayTitle)
+            .setContentText(displayText)
+            .setSubText(subText)
+            .setAutoCancel(true)
+            .setContentIntent(pendingIntent)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setCategory(NotificationCompat.CATEGORY_SOCIAL)
+            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+            .build()
+
+        try {
+            NotificationManagerCompat.from(context).notify(NOTIFICATION_ID_HEARTBEAT, notification)
         } catch (_: SecurityException) {}
     }
 

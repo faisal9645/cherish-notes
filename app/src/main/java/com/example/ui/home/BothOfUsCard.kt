@@ -1,6 +1,7 @@
 package com.example.ui.home
 
 import android.widget.Toast
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
@@ -410,6 +411,20 @@ fun BothOfUsCard(
         still
     }
 
+    // Active reciprocal heart surge when partner feels or triggers heartbeat
+    val feltSurge = remember { Animatable(0f) }
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.flow.merge(
+            com.example.notifications.ThinkingOfYou.partnerFelt,
+            com.example.notifications.ThinkingOfYou.received
+        ).collect {
+            repeat(3) {
+                feltSurge.animateTo(0.24f, tween(160, easing = FastOutSlowInEasing))
+                feltSurge.animateTo(0f, tween(240, easing = FastOutSlowInEasing))
+            }
+        }
+    }
+
     // The background hearts float very slowly (one gentle clock, read only while drawing)
     val drift: State<Float> = if (isCardActive) {
         rememberInfiniteTransition(label = "couple_background").animateFloat(
@@ -528,7 +543,7 @@ fun BothOfUsCard(
                                 RingedAvatar(left, pink) { viewingPhotoUrl = it }
                                 RingedAvatar(right, blue) { viewingPhotoUrl = it }
                             }
-                            TwinHearts(pink, blue, beat)
+                            TwinHearts(pink, blue, beat, feltSurge.value)
 
                             // Right static heart (based on right color: blue)
                             StaticSideHeart(
@@ -935,7 +950,7 @@ private fun RingedAvatar(person: LovePerson, color: Color, onOpenPhoto: (String)
 
 /** Two hearts beating gently between us: her pink heart on the left and his blue heart on the right, crossing each other and connecting both ring profiles. */
 @Composable
-private fun TwinHearts(pink: Color, blue: Color, beat: State<Float>) {
+private fun TwinHearts(pink: Color, blue: Color, beat: State<Float>, feltSurge: Float = 0f) {
     val outline = LocalCardColors.current.pill.copy(alpha = 1f)
     val cardIsLight = LocalCardColors.current.isLight
     Box(
@@ -955,8 +970,8 @@ private fun TwinHearts(pink: Color, blue: Color, beat: State<Float>) {
                 // The edge matches the card behind, so the overlapping hearts read as two crossing hearts
                 val edgeColor = if (cardIsLight) outline else NightCardEdge
                 onDrawBehind {
-                    // Beating scale expands and shrinks like a true living heartbeat
-                    val scaleFactor = beat.value
+                    // Beating scale expands and shrinks like a true living heartbeat (with reciprocal surge when felt)
+                    val scaleFactor = beat.value + feltSurge
                     val s = heartSize * scaleFactor
 
                     // Soft ambient radiant heartbeat glow when pulsing/expanding
