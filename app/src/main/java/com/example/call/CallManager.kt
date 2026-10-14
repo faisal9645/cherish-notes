@@ -1,12 +1,18 @@
 package com.example.call
 
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.media.AudioManager
 import android.media.ToneGenerator
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
 import android.net.Uri
 import android.util.Log
 import com.example.CherishApplication
@@ -96,6 +102,70 @@ object CallManager {
     private var activeRecordFile: File? = null
     private var uploadJob: Job? = null
     private var recordingJob: Job? = null
+
+    private var screenOffReceiverRegistered = false
+    private var quotaAlertJob: Job? = null
+    private var alerted5Min = false
+    private var alerted1Min = false
+
+    private fun vibrateDevice(durationMs: Long) {
+        try {
+            val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                (app.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager)?.defaultVibrator
+            } else {
+                @Suppress("DEPRECATION")
+                app.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+            }
+            if (vibrator != null && vibrator.hasVibrator()) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    vibrator.vibrate(VibrationEffect.createOneShot(durationMs, VibrationEffect.DEFAULT_AMPLITUDE))
+                } else {
+                    @Suppress("DEPRECATION")
+                    vibrator.vibrate(durationMs)
+                }
+            }
+        } catch (_: Exception) {}
+    }
+
+    private val screenOffReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action == Intent.ACTION_SCREEN_OFF) {
+                val phase = _state.value.phase
+                val isSpeaking = phase == CallPhase.CONNECTED || phase == CallPhase.RECONNECTING || phase == CallPhase.CONNECTING
+                if (isSpeaking) {
+                    Log.i(TAG, "Lock button clicked while speaking on call -> cutting call")
+                    hangUp()
+                }
+            }
+        }
+    }
+
+    private fun registerScreenOffReceiver() {
+        if (screenOffReceiverRegistered) return
+        try {
+            val filter = IntentFilter(Intent.ACTION_SCREEN_OFF)
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    app.registerReceiver(screenOffReceiver, filter, Context.RECEIVER_EXPORTED)
+                } else {
+                    app.registerReceiver(screenOffReceiver, filter)
+                }
+            } catch (_: Exception) {
+                app.registerReceiver(screenOffReceiver, filter)
+            }
+            screenOffReceiverRegistered = true
+        } catch (e: Exception) {
+            Log.w(TAG, "Could not register screen off receiver", e)
+        }
+    }
+
+    private fun unregisterScreenOffReceiver() {
+        if (!screenOffReceiverRegistered) return
+        try {
+            app.unregisterReceiver(screenOffReceiver)
+        } catch (_: Exception) {}
+        screenOffReceiverRegistered = false
+    }
 
     /** Calls already rung (or declined) on this phone, so a late push or listener can't ring again. */
     private val seenCalls = LinkedHashSet<String>()
@@ -258,6 +328,9 @@ object CallManager {
         beginCall(invite.coupleId, me, invite.callId, outgoing = false)
         this.invite = invite
         callerNameHint = invite.callerName
+        // Pre-warm the native Agora engine in the background as soon as the incoming call screen appears
+        // to reduce answer-to-audio connection delay to <200ms
+        engine.prewarm(AgoraTokenBuilder.DEFAULT_APP_ID)
         _state.value = freshState(invite.callId, outgoing = false).copy(phase = CallPhase.INCOMING_RINGING)
         if (showNotification) {
             CallNotifications.showIncoming(app, invite)
@@ -394,6 +467,9 @@ object CallManager {
         userMuted = !userMuted
         engine.setMuted(userMuted || onHold)
         _state.update { it.copy(isMuted = userMuted) }
+        if (app.securityPreferences.isCallVibrateMute()) {
+            vibrateDevice(35L)
+        }
     }
 
     fun setRoute(route: AudioRoute) = post {
@@ -460,6 +536,7 @@ object CallManager {
     private fun beginCall(couple: String, me: String, id: String, outgoing: Boolean) {
         endResetJob?.cancel()
         cancelCallJobs()
+        registerScreenOffReceiver()
         coupleId = couple
         myUserId = me
         callId = id
@@ -534,6 +611,8 @@ object CallManager {
             engine.stop()
             return
         }
+        engine.setAudioMode(app.securityPreferences.getCallAiNoiseMode())
+        engine.setLowDataMode(app.securityPreferences.isCallLowDataMode())
         if (!engine.join(info.token, info.channel, info.uid)) {
             Log.w(TAG, "Agora join returned non-zero, engine will attempt reconnect")
         }
@@ -623,11 +702,48 @@ object CallManager {
             app.authRepository.setOnline(true)
         } catch (_: Exception) {}
 
+        // Vibrate when call connects
+        if (app.securityPreferences.isCallVibrateConnected()) {
+            vibrateDevice(75L)
+        }
+
+        // Start on speakerphone if user configured it as default
+        if (app.securityPreferences.getCallDefaultAudioOutput().equals("speaker", ignoreCase = true)) {
+            setRoute(AudioRoute.SPEAKER)
+        }
+
+        // Start daily call quota warning alert monitor (5m and 1m warnings)
+        startQuotaAlertMonitor()
+
         // Start in-app automatic call recording ONLY on the caller device (single mobile recording)
-        // to avoid duplicate/double recordings in the Shared Gallery calls tab.
+        // when Auto-Call Recording is enabled in Settings
         val currentCallId = callId
-        if (isOutgoing && activeRecordFile == null && currentCallId != null) {
+        if (isOutgoing && activeRecordFile == null && currentCallId != null && app.securityPreferences.isCallAutoRecordEnabled()) {
             startAutomaticRecording(currentCallId)
+        }
+    }
+
+    private fun startQuotaAlertMonitor() {
+        quotaAlertJob?.cancel()
+        alerted5Min = false
+        alerted1Min = false
+        quotaAlertJob = scope.launch {
+            while (_state.value.phase == CallPhase.CONNECTED) {
+                delay(12_000L)
+                val remaining = app.securityPreferences.getDailyFreeCallMinutesRemaining()
+                val currentCallMin = if (_state.value.connectedAtElapsed > 0L) {
+                    ((SystemClock.elapsedRealtime() - _state.value.connectedAtElapsed) / 60000L).toInt()
+                } else 0
+                val effectiveRemaining = (remaining - currentCallMin).coerceAtLeast(0)
+                if (effectiveRemaining <= 5 && !alerted5Min) {
+                    alerted5Min = true
+                    playTone(ToneGenerator.TONE_PROP_BEEP, 350)
+                }
+                if (effectiveRemaining <= 1 && !alerted1Min) {
+                    alerted1Min = true
+                    playTone(ToneGenerator.TONE_PROP_BEEP2, 450)
+                }
+            }
         }
     }
 
@@ -739,13 +855,41 @@ object CallManager {
             uploadRecording(endedCouple, endedCall, me, recordingFile, durationSec)
         }
 
+        vibrateDevice(50L)
         cancelCallJobs()
+        unregisterScreenOffReceiver()
         stopRingback()
         engine.stop()
         audio.stop()
         VoicePlayerHelper.callInProgress = false
         CallNotifications.cancelIncoming(app)
         CallService.stop(app)
+
+        if ((reason == CallEndReason.MISSED || reason == CallEndReason.NO_ANSWER || reason == CallEndReason.DECLINED) &&
+            endedCouple != null && !me.isNullOrBlank()
+        ) {
+            val partnerId = app.authRepository.partnerUserState.value?.id
+                ?: app.authRepository.currentUserState.value?.partnerId.orEmpty()
+            val text = when (reason) {
+                CallEndReason.DECLINED -> "Call declined"
+                else -> "Missed voice call"
+            }
+            val missedMsg = Message(
+                id = "call_${System.currentTimeMillis()}_${(1000..9999).random()}",
+                conversationId = endedCouple,
+                senderId = if (isOutgoing) me else partnerId,
+                senderName = if (isOutgoing) (app.authRepository.currentUserState.value?.displayName ?: "You") else (peerName(callerNameHint) ?: "Partner"),
+                receiverId = if (isOutgoing) partnerId else me,
+                text = text,
+                timestamp = System.currentTimeMillis(),
+                type = MessageType.TEXT.name,
+                status = MessageStatus.SENT.name,
+                callId = endedCall
+            )
+            try {
+                app.chatRepository.recordCallCompleted(missedMsg)
+            } catch (_: Exception) {}
+        }
         _state.update {
             it.copy(
                 phase = CallPhase.ENDED,
@@ -798,6 +942,7 @@ object CallManager {
 
     private fun reset() {
         cancelCallJobs()
+        unregisterScreenOffReceiver()
         activeRecordFile?.delete()
         activeRecordFile = null
         coupleId = null
@@ -946,6 +1091,8 @@ object CallManager {
     }
 
     private fun cancelCallJobs() {
+        quotaAlertJob?.cancel()
+        quotaAlertJob = null
         docJob?.cancel()
         ringTimeoutJob?.cancel()
         connectTimeoutJob?.cancel()
@@ -1145,6 +1292,12 @@ object CallManager {
             val weak = txQuality in Constants.QUALITY_POOR..Constants.QUALITY_DOWN ||
                 rxQuality in Constants.QUALITY_POOR..Constants.QUALITY_DOWN
             if (_state.value.isWeakNetwork != weak) _state.update { it.copy(isWeakNetwork = weak) }
+        }
+
+        override fun onRemoteVolumeIndication(volume: Int) = post {
+            if (_state.value.phase == CallPhase.CONNECTED) {
+                _state.update { it.copy(remoteVolume = volume) }
+            }
         }
 
         override fun onEngineError(code: Int) = post {

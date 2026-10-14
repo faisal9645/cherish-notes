@@ -568,13 +568,13 @@ fun HomeScreen(
                             modifier = Modifier
                                 .size(40.dp)
                                 .clip(CircleShape)
-                                .background(Color(0xFF1E3A8A).copy(alpha = 0.12f)),
+                                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 imageVector = if (hasActiveCall) Icons.Filled.PhoneInTalk else Icons.Filled.Call,
                                 contentDescription = "Daily Call Minutes",
-                                tint = Color(0xFF1E3A8A),
+                                tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(20.dp)
                             )
                         }
@@ -597,7 +597,7 @@ fun HomeScreen(
                                     text = "$freeCallMinutesRemaining mins left",
                                     fontSize = 13.sp,
                                     fontWeight = FontWeight.SemiBold,
-                                    color = if (freeCallMinutesRemaining > 10) Color(0xFF1E3A8A) else MaterialTheme.colorScheme.error
+                                    color = if (freeCallMinutesRemaining > 10) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
                                 )
                             }
                             Spacer(modifier = Modifier.height(2.dp))
@@ -618,8 +618,8 @@ fun HomeScreen(
                             .fillMaxWidth()
                             .height(6.dp)
                             .clip(CircleShape),
-                        color = Color(0xFF1E3A8A),
-                        trackColor = Color(0xFF1E3A8A).copy(alpha = 0.15f)
+                        color = MaterialTheme.colorScheme.primary,
+                        trackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
                     )
                 }
             }

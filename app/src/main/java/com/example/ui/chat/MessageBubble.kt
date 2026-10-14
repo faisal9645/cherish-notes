@@ -857,8 +857,8 @@ fun MessageBubble(
                                     )
                                     Surface(
                                         shape = CircleShape,
-                                        color = Color(0xFF1E3A8A),
-                                        border = BorderStroke(1.5.dp, Color.White),
+                                        color = Color.White,
+                                        border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.surface),
                                         modifier = Modifier
                                             .size(20.dp)
                                             .offset(x = 2.dp, y = 2.dp)
@@ -867,7 +867,7 @@ fun MessageBubble(
                                             Icon(
                                                 imageVector = Icons.Default.Mic,
                                                 contentDescription = "Voice message",
-                                                tint = Color.White,
+                                                tint = MaterialTheme.colorScheme.primary,
                                                 modifier = Modifier.size(12.dp)
                                             )
                                         }
@@ -1028,7 +1028,7 @@ fun MessageBubble(
                                     )
                                     Surface(
                                         shape = CircleShape,
-                                        color = Color(0xFF1E3A8A),
+                                        color = Color.White,
                                         border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.surface),
                                         modifier = Modifier
                                             .size(20.dp)
@@ -1038,7 +1038,7 @@ fun MessageBubble(
                                             Icon(
                                                 imageVector = Icons.Default.Mic,
                                                 contentDescription = "Voice message",
-                                                tint = Color.White,
+                                                tint = MaterialTheme.colorScheme.primary,
                                                 modifier = Modifier.size(12.dp)
                                             )
                                         }
@@ -1136,34 +1136,111 @@ fun MessageBubble(
                 if (message.text.isNotEmpty() && message.getTypedType() != MessageType.AUDIO && message.getTypedType() != MessageType.IMAGE &&
                     message.getTypedType() != MessageType.CALL_RECORDING
                 ) {
-                    EmojiText(
-                        text = message.text,
-                        color = textColor,
-                        // ChatGPT's reading size in private chat
-                        style = if (isPrivateMode) {
-                            MaterialTheme.typography.bodyLarge.copy(fontSize = 16.sp, lineHeight = 23.sp)
-                        } else MaterialTheme.typography.bodyMedium,
-                        fontStyle = if (message.isDeleted) FontStyle.Italic else FontStyle.Normal,
-                        largeWhenEmojiOnly = true
-                    )
-
-                    val youtubeVideoId = remember(message.text) {
-                        YouTubeHelper.extractVideoId(message.text)
-                    }
-                    val genericUrl = remember(message.text, youtubeVideoId) {
-                        if (youtubeVideoId == null) GenericLinkHelper.extractUrl(message.text) else null
+                    val isMissedCall = remember(message.text) {
+                        message.text.contains("Missed voice call", ignoreCase = true) ||
+                        message.text.contains("Missed call", ignoreCase = true) ||
+                        message.text.contains("Call declined", ignoreCase = true)
                     }
 
-                    if (youtubeVideoId != null) {
+                    if (isMissedCall) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(vertical = 4.dp, horizontal = 2.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(CircleShape)
+                                    .background(
+                                        if (isFromMe) Color.White.copy(alpha = 0.22f)
+                                        else Color(0xFFEF4444).copy(alpha = 0.15f)
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = if (message.text.contains("declined", ignoreCase = true)) Icons.Default.CallEnd else Icons.Default.PhoneMissed,
+                                    contentDescription = null,
+                                    tint = if (isFromMe) Color.White else Color(0xFFEF4444),
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = message.text,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = textColor
+                                )
+                                Text(
+                                    text = "Voice call",
+                                    fontSize = 11.sp,
+                                    color = textColor.copy(alpha = 0.75f)
+                                )
+                            }
+                        }
                         Spacer(modifier = Modifier.height(6.dp))
-                        InlineYouTubeCard(
-                            videoId = youtubeVideoId,
-                            onOpenTheater = { vid -> onOpenTheaterVideo?.invoke(vid) },
-                            modifier = Modifier.fillMaxWidth()
+                        // Direct "Call Back" action button
+                        Surface(
+                            onClick = {
+                                com.example.call.CallActivity.startOutgoing(context)
+                            },
+                            shape = RoundedCornerShape(10.dp),
+                            color = if (isFromMe) Color.White.copy(alpha = 0.22f) else MaterialTheme.colorScheme.primaryContainer,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 2.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Phone,
+                                    contentDescription = null,
+                                    tint = if (isFromMe) Color.White else MaterialTheme.colorScheme.onPrimaryContainer,
+                                    modifier = Modifier.size(15.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "Call Back",
+                                    fontSize = 12.5.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (isFromMe) Color.White else MaterialTheme.colorScheme.onPrimaryContainer
+                                )
+                            }
+                        }
+                    } else {
+                        EmojiText(
+                            text = message.text,
+                            color = textColor,
+                            // ChatGPT's reading size in private chat
+                            style = if (isPrivateMode) {
+                                MaterialTheme.typography.bodyLarge.copy(fontSize = 16.sp, lineHeight = 23.sp)
+                            } else MaterialTheme.typography.bodyMedium,
+                            fontStyle = if (message.isDeleted) FontStyle.Italic else FontStyle.Normal,
+                            largeWhenEmojiOnly = true
                         )
-                    } else if (genericUrl != null) {
-                        Spacer(modifier = Modifier.height(6.dp))
-                        LinkPreviewCard(url = genericUrl, textColor = textColor)
+
+                        val youtubeVideoId = remember(message.text) {
+                            YouTubeHelper.extractVideoId(message.text)
+                        }
+                        val genericUrl = remember(message.text, youtubeVideoId) {
+                            if (youtubeVideoId == null) GenericLinkHelper.extractUrl(message.text) else null
+                        }
+
+                        if (youtubeVideoId != null) {
+                            Spacer(modifier = Modifier.height(6.dp))
+                            InlineYouTubeCard(
+                                videoId = youtubeVideoId,
+                                onOpenTheater = { vid -> onOpenTheaterVideo?.invoke(vid) },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        } else if (genericUrl != null) {
+                            Spacer(modifier = Modifier.height(6.dp))
+                            LinkPreviewCard(url = genericUrl, textColor = textColor)
+                        }
                     }
                 }
 

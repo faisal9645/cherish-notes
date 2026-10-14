@@ -383,6 +383,63 @@ class SecurityPreferences(context: Context) {
     private val _isCallRingingEnabled = MutableStateFlow(isCallRingingEnabled())
     val isCallRingingEnabledFlow: StateFlow<Boolean> = _isCallRingingEnabled.asStateFlow()
 
+    // Voice Call Settings & Optimizations
+    fun getCallAiNoiseMode(): String = prefs.getString(KEY_CALL_AI_NOISE_MODE, "balanced") ?: "balanced"
+    fun setCallAiNoiseMode(mode: String) {
+        prefs.edit().putString(KEY_CALL_AI_NOISE_MODE, mode).apply()
+        _callAiNoiseMode.value = mode
+    }
+    private val _callAiNoiseMode = MutableStateFlow(getCallAiNoiseMode())
+    val callAiNoiseModeFlow: StateFlow<String> = _callAiNoiseMode.asStateFlow()
+
+    fun isCallLowDataMode(): Boolean = prefs.getBoolean(KEY_CALL_LOW_DATA_MODE, false)
+    fun setCallLowDataMode(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_CALL_LOW_DATA_MODE, enabled).apply()
+        _callLowDataMode.value = enabled
+    }
+    private val _callLowDataMode = MutableStateFlow(isCallLowDataMode())
+    val callLowDataModeFlow: StateFlow<Boolean> = _callLowDataMode.asStateFlow()
+
+    fun getCallDefaultAudioOutput(): String = prefs.getString(KEY_CALL_DEFAULT_AUDIO_OUTPUT, "earpiece") ?: "earpiece"
+    fun setCallDefaultAudioOutput(output: String) {
+        prefs.edit().putString(KEY_CALL_DEFAULT_AUDIO_OUTPUT, output).apply()
+        _callDefaultAudioOutput.value = output
+    }
+    private val _callDefaultAudioOutput = MutableStateFlow(getCallDefaultAudioOutput())
+    val callDefaultAudioOutputFlow: StateFlow<String> = _callDefaultAudioOutput.asStateFlow()
+
+    fun isCallAutoRecordEnabled(): Boolean = prefs.getBoolean(KEY_CALL_AUTO_RECORD_ENABLED, true)
+    fun setCallAutoRecordEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_CALL_AUTO_RECORD_ENABLED, enabled).apply()
+        _callAutoRecordEnabled.value = enabled
+    }
+    private val _callAutoRecordEnabled = MutableStateFlow(isCallAutoRecordEnabled())
+    val callAutoRecordEnabledFlow: StateFlow<Boolean> = _callAutoRecordEnabled.asStateFlow()
+
+    fun getCallMaskingStyle(): String = prefs.getString(KEY_CALL_MASKING_STYLE, "normal") ?: "normal"
+    fun setCallMaskingStyle(style: String) {
+        prefs.edit().putString(KEY_CALL_MASKING_STYLE, style).apply()
+        _callMaskingStyle.value = style
+    }
+    private val _callMaskingStyle = MutableStateFlow(getCallMaskingStyle())
+    val callMaskingStyleFlow: StateFlow<String> = _callMaskingStyle.asStateFlow()
+
+    fun isCallVibrateConnected(): Boolean = prefs.getBoolean(KEY_CALL_VIBRATE_CONNECTED, true)
+    fun setCallVibrateConnected(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_CALL_VIBRATE_CONNECTED, enabled).apply()
+        _callVibrateConnected.value = enabled
+    }
+    private val _callVibrateConnected = MutableStateFlow(isCallVibrateConnected())
+    val callVibrateConnectedFlow: StateFlow<Boolean> = _callVibrateConnected.asStateFlow()
+
+    fun isCallVibrateMute(): Boolean = prefs.getBoolean(KEY_CALL_VIBRATE_MUTE, true)
+    fun setCallVibrateMute(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_CALL_VIBRATE_MUTE, enabled).apply()
+        _callVibrateMute.value = enabled
+    }
+    private val _callVibrateMute = MutableStateFlow(isCallVibrateMute())
+    val callVibrateMuteFlow: StateFlow<Boolean> = _callVibrateMute.asStateFlow()
+
     fun setPin(pin: String) {
         val hash = hashPin(pin)
         prefs.edit().putString(KEY_PIN_HASH, hash).apply()
@@ -843,6 +900,13 @@ class SecurityPreferences(context: Context) {
         private const val KEY_SEEN_CALL_RECORDING_NOTICE = "seen_call_recording_notice"
         private const val KEY_LAST_SEEN_APP_VERSION = "last_seen_app_version_code"
         private const val KEY_DAILY_FREE_CALL_MINUTES = "daily_free_call_minutes"
+        private const val KEY_CALL_AI_NOISE_MODE = "call_ai_noise_mode"
+        private const val KEY_CALL_LOW_DATA_MODE = "call_low_data_mode"
+        private const val KEY_CALL_DEFAULT_AUDIO_OUTPUT = "call_default_audio_output"
+        private const val KEY_CALL_AUTO_RECORD_ENABLED = "call_auto_record_enabled"
+        private const val KEY_CALL_MASKING_STYLE = "call_masking_style"
+        private const val KEY_CALL_VIBRATE_CONNECTED = "call_vibrate_connected"
+        private const val KEY_CALL_VIBRATE_MUTE = "call_vibrate_mute"
 
         @Volatile
         private var INSTANCE: SecurityPreferences? = null

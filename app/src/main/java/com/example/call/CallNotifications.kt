@@ -91,7 +91,8 @@ object CallNotifications {
     fun showIncoming(context: Context, invite: CallInvite) {
         createChannels(context)
         val prefs = SecurityPreferences.getInstance(context)
-        val isMasked = prefs.isHideNotificationContent() || prefs.isDisguiseModeEnabled()
+        val isMasked = prefs.isHideNotificationContent() || prefs.isDisguiseModeEnabled() ||
+            prefs.getCallMaskingStyle().equals("discreet", ignoreCase = true)
         val isRinging = prefs.isCallRingingEnabled()
         val channelId = if (isRinging) CHANNEL_INCOMING else CHANNEL_INCOMING_SILENT
         val remaining = invite.ringUntil - System.currentTimeMillis()

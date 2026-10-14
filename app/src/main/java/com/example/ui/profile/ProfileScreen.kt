@@ -1266,7 +1266,274 @@ fun ProfileScreen(
 
             }
 
-            // 4. Appearance & Experience Section
+            // 4. Voice Calls Settings Section
+            SettingsSection(
+                title = "Voice Calls",
+                icon = Icons.Default.PhoneInTalk
+            ) {
+                // Incoming Call Ringing
+                ListItem(
+                    headlineContent = { Text("Call Notification Ringing", fontSize = 15.sp, fontWeight = FontWeight.SemiBold) },
+                    supportingContent = {
+                        Text(
+                            if (uiState.isCallRingingEnabled) "Play ringtone sound when your partner calls you"
+                            else "Silent incoming calls (vibrate or silent without ringtone audio)",
+                            fontSize = 13.sp
+                        )
+                    },
+                    leadingContent = {
+                        Icon(
+                            Icons.Default.PhoneInTalk,
+                            contentDescription = null,
+                            tint = if (uiState.isCallRingingEnabled) primaryAccent else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    },
+                    trailingContent = {
+                        Switch(
+                            checked = uiState.isCallRingingEnabled,
+                            onCheckedChange = { viewModel.setCallRingingEnabled(it) },
+                            modifier = Modifier.testTag("call_ringing_switch_voice")
+                        )
+                    }
+                )
+
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), thickness = 0.6.dp)
+
+                // Default Audio Output
+                ListItem(
+                    headlineContent = { Text("Default Audio Output", fontSize = 15.sp, fontWeight = FontWeight.SemiBold) },
+                    supportingContent = { Text("Route audio when starting or answering calls", fontSize = 13.sp) },
+                    leadingContent = { Icon(Icons.Default.VolumeUp, contentDescription = null, tint = primaryAccent) }
+                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                        .padding(4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    listOf(
+                        "earpiece" to "Earpiece (Default)",
+                        "speaker" to "Speakerphone"
+                    ).forEach { (output, label) ->
+                        val isSelected = uiState.callDefaultAudioOutput == output
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(if (isSelected) primaryAccent else Color.Transparent)
+                                .clickable { viewModel.setCallDefaultAudioOutput(output) }
+                                .padding(vertical = 8.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = label,
+                                color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                fontSize = 12.sp,
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(6.dp))
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), thickness = 0.6.dp)
+
+                // AI Noise Suppression Mode
+                ListItem(
+                    headlineContent = { Text("AI Noise Suppression", fontSize = 15.sp, fontWeight = FontWeight.SemiBold) },
+                    supportingContent = {
+                        Text(
+                            if (uiState.callAiNoiseMode == "whisper") "Night / Whisper Mode: Boosts soft whispering and pillow-talk gain"
+                            else "Balanced / Street: Suppresses wind, traffic, and background room noise",
+                            fontSize = 13.sp
+                        )
+                    },
+                    leadingContent = { Icon(Icons.Default.GraphicEq, contentDescription = null, tint = primaryAccent) }
+                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                        .padding(4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    listOf(
+                        "balanced" to "Balanced / Street 🏙️",
+                        "whisper" to "Night / Whisper 🌙"
+                    ).forEach { (mode, label) ->
+                        val isSelected = uiState.callAiNoiseMode == mode
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(if (isSelected) primaryAccent else Color.Transparent)
+                                .clickable { viewModel.setCallAiNoiseMode(mode) }
+                                .padding(vertical = 8.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = label,
+                                color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                fontSize = 12.sp,
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(6.dp))
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), thickness = 0.6.dp)
+
+                // Low-Data Calling Mode
+                ListItem(
+                    headlineContent = { Text("Low-Data Calling", fontSize = 15.sp, fontWeight = FontWeight.SemiBold) },
+                    supportingContent = {
+                        Text(
+                            "Reduces audio bitrate on weak mobile data to preserve smooth call stability",
+                            fontSize = 13.sp
+                        )
+                    },
+                    leadingContent = {
+                        Icon(
+                            Icons.Default.NetworkCheck,
+                            contentDescription = null,
+                            tint = if (uiState.isCallLowDataMode) primaryAccent else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    },
+                    trailingContent = {
+                        Switch(
+                            checked = uiState.isCallLowDataMode,
+                            onCheckedChange = { viewModel.setCallLowDataMode(it) }
+                        )
+                    }
+                )
+
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), thickness = 0.6.dp)
+
+                // Auto-Call Recording
+                ListItem(
+                    headlineContent = { Text("Auto-Call Recording", fontSize = 15.sp, fontWeight = FontWeight.SemiBold) },
+                    supportingContent = {
+                        Text(
+                            "Automatically save audio recordings of your calls into Shared Gallery memories",
+                            fontSize = 13.sp
+                        )
+                    },
+                    leadingContent = {
+                        Icon(
+                            Icons.Default.Mic,
+                            contentDescription = null,
+                            tint = if (uiState.isCallAutoRecordEnabled) primaryAccent else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    },
+                    trailingContent = {
+                        Switch(
+                            checked = uiState.isCallAutoRecordEnabled,
+                            onCheckedChange = { viewModel.setCallAutoRecordEnabled(it) }
+                        )
+                    }
+                )
+
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), thickness = 0.6.dp)
+
+                // Incoming Call Privacy / Masking Style
+                ListItem(
+                    headlineContent = { Text("Incoming Call Privacy", fontSize = 15.sp, fontWeight = FontWeight.SemiBold) },
+                    supportingContent = {
+                        Text(
+                            if (uiState.callMaskingStyle == "discreet") "Discreet: Lock screen disguises incoming call as a system alert"
+                            else "Normal: Displays partner's name and photo on incoming call screen",
+                            fontSize = 13.sp
+                        )
+                    },
+                    leadingContent = { Icon(Icons.Default.Security, contentDescription = null, tint = primaryAccent) }
+                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                        .padding(4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    listOf(
+                        "normal" to "Normal (Photo & Name)",
+                        "discreet" to "Discreet (Disguised)"
+                    ).forEach { (style, label) ->
+                        val isSelected = uiState.callMaskingStyle == style
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(if (isSelected) primaryAccent else Color.Transparent)
+                                .clickable { viewModel.setCallMaskingStyle(style) }
+                                .padding(vertical = 8.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = label,
+                                color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                fontSize = 12.sp,
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(6.dp))
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), thickness = 0.6.dp)
+
+                // Vibration Feedback: On Connect
+                ListItem(
+                    headlineContent = { Text("Vibrate When Connected", fontSize = 15.sp, fontWeight = FontWeight.SemiBold) },
+                    supportingContent = { Text("Short gentle haptic pulse when partner answers the call", fontSize = 13.sp) },
+                    leadingContent = {
+                        Icon(
+                            Icons.Default.Vibration,
+                            contentDescription = null,
+                            tint = if (uiState.isCallVibrateConnected) primaryAccent else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    },
+                    trailingContent = {
+                        Switch(
+                            checked = uiState.isCallVibrateConnected,
+                            onCheckedChange = { viewModel.setCallVibrateConnected(it) }
+                        )
+                    }
+                )
+
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), thickness = 0.6.dp)
+
+                // Vibration Feedback: On Mute Toggle
+                ListItem(
+                    headlineContent = { Text("Vibrate on Mute Toggle", fontSize = 15.sp, fontWeight = FontWeight.SemiBold) },
+                    supportingContent = { Text("Haptic confirmation when tapping microphone mute button", fontSize = 13.sp) },
+                    leadingContent = {
+                        Icon(
+                            Icons.Default.Vibration,
+                            contentDescription = null,
+                            tint = if (uiState.isCallVibrateMute) primaryAccent else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    },
+                    trailingContent = {
+                        Switch(
+                            checked = uiState.isCallVibrateMute,
+                            onCheckedChange = { viewModel.setCallVibrateMute(it) }
+                        )
+                    }
+                )
+            }
+
+            // 5. Appearance & Experience Section
             SettingsSection(
                 title = "Appearance & Experience",
                 icon = Icons.Default.Palette

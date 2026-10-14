@@ -3,11 +3,18 @@ package com.example.call
 import android.os.SystemClock
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.runtime.collectAsState
+import androidx.compose.ui.platform.LocalContext
+import com.example.security.SecurityPreferences
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -126,6 +133,41 @@ fun CallScreen(
             )
             Spacer(modifier = Modifier.height(6.dp))
             CallStatusText(state)
+
+            // Daily Call Quota Warning Alert (5m and 1m warnings)
+            val context = LocalContext.current
+            val secPrefs = remember { SecurityPreferences.getInstance(context) }
+            val dailyRemainingMinutes by secPrefs.dailyFreeCallMinutesRemaining.collectAsState()
+            val callElapsedMinutes = if (state.connectedAtElapsed > 0L) {
+                val now = SystemClock.elapsedRealtime()
+                ((now - state.connectedAtElapsed) / 60000L).toInt()
+            } else 0
+            val effectiveRemaining = (dailyRemainingMinutes - callElapsedMinutes).coerceAtLeast(0)
+
+            if (state.phase == CallPhase.CONNECTED && effectiveRemaining <= 5) {
+                Spacer(modifier = Modifier.height(10.dp))
+                Surface(
+                    shape = RoundedCornerShape(50),
+                    color = WarningAmber.copy(alpha = 0.16f),
+                    border = BorderStroke(1.dp, WarningAmber.copy(alpha = 0.45f))
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("⚠️", fontSize = 13.sp)
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            if (effectiveRemaining <= 1) "1 min free call left today"
+                            else "$effectiveRemaining mins free call left today",
+                            fontSize = 12.5.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = WarningAmber
+                        )
+                    }
+                }
+            }
+
             Spacer(modifier = Modifier.weight(1f))
 
             when {
@@ -161,13 +203,34 @@ private fun CallAvatar(state: CallUiState) {
         animationSpec = infiniteRepeatable(tween(1100, easing = FastOutSlowInEasing), RepeatMode.Reverse),
         label = "call_pulse_scale"
     )
+
+    // Live remote voice activity indicator: concentric audio ripples reflecting amplitude
+    val remoteNorm = (state.remoteVolume.coerceIn(0, 255) / 255f)
+    val animatedAmp by animateFloatAsState(
+        targetValue = if (state.phase == CallPhase.CONNECTED) remoteNorm else 0f,
+        animationSpec = spring(stiffness = Spring.StiffnessLow),
+        label = "call_voice_amp"
+    )
+
     Box(contentAlignment = Alignment.Center) {
+        // Outer concentric audio ripple (visual voice amplitude indication)
+        if (state.phase == CallPhase.CONNECTED) {
+            Box(
+                modifier = Modifier
+                    .size(175.dp)
+                    .scale(1f + (animatedAmp * 0.32f))
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = (0.05f + animatedAmp * 0.22f).coerceIn(0f, 0.4f)))
+            )
+        }
+
+        // Inner audio ripple / ringing pulse ring
         Box(
             modifier = Modifier
-                .size(150.dp)
-                .scale(if (ringing) pulseScale else 1f)
+                .size(145.dp)
+                .scale(if (ringing) pulseScale else (1f + (animatedAmp * 0.18f)))
                 .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f))
+                .background(MaterialTheme.colorScheme.primary.copy(alpha = if (ringing) 0.12f else (0.09f + animatedAmp * 0.28f).coerceIn(0f, 0.5f)))
         )
         if (state.peerName != null && !state.peerPhotoUrl.isNullOrBlank()) {
             AvatarView(photoUrl = state.peerPhotoUrl, name = state.peerName, size = 116.dp, showOnlineBadge = false)

@@ -25,6 +25,7 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -625,7 +626,7 @@ fun CircularVideoNoteView(
         // Top-right Continuous Loop button (safely inset within circle curve, fully inside boundary)
         Surface(
             shape = CircleShape,
-            color = if (isLooping) Color(0xFF1E3A8A) else Color.Black.copy(alpha = 0.65f),
+            color = if (isLooping) MaterialTheme.colorScheme.primary else Color.Black.copy(alpha = 0.65f),
             border = BorderStroke(1.dp, Color.White.copy(alpha = 0.7f)),
             shadowElevation = 3.dp,
             modifier = Modifier

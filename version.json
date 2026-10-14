@@ -1,9 +1,9 @@
 {
-  "versionCode": 158,
-  "versionName": "1.7.86",
-  "tagName": "v1.7.86-158",
-  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.7.86-158/app_update_158.apk",
-  "assetSize": 32866191,
-  "releaseNotes": "Notes v1.7.86 (Build 158):\nFix circular video loop icon inset, add Digital Wellbeing tracking protection",
-  "releaseDate": "2026-10-14T11:49:18Z"
+  "versionCode": 159,
+  "versionName": "1.7.87",
+  "tagName": "v1.7.87-159",
+  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.7.87-159/app_update_159.apk",
+  "assetSize": 32880135,
+  "releaseNotes": "Notes v1.7.87 (Build 159):\n• Cleaner, simpler layout\n• Voice typing and read aloud\n• Settings open with a swipe\n• Bug fixes and improvements",
+  "releaseDate": "2026-10-14T13:10:23Z"
 }

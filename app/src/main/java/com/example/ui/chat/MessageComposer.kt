@@ -776,7 +776,7 @@ fun MessageComposer(
                             Icon(
                                 imageVector = Icons.Outlined.Mic,
                                 contentDescription = "Voice typing",
-                                tint = if (isDark) Color(0xFF60A5FA) else Color(0xFF1E3A8A),
+                                tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(24.dp)
                             )
                         }
@@ -1046,7 +1046,7 @@ fun MessageComposer(
                                 if (isRecordingVoice) {
                                     if (isDark) darkTone(Color(0xFF111827)) else Color.White
                                 } else {
-                                    if (isDark) Color(0xFF60A5FA) else Color(0xFF1E3A8A)
+                                    MaterialTheme.colorScheme.primary
                                 }
                             } else Color.White
 

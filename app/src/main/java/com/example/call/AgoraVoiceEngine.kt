@@ -30,6 +30,7 @@ class AgoraVoiceEngine(private val context: Context) {
         fun onRouteChanged(route: AudioRoute)
         fun onLocalAudioStateChanged(state: Int, reason: Int)
         fun onNetworkQuality(uid: Int, txQuality: Int, rxQuality: Int)
+        fun onRemoteVolumeIndication(volume: Int)
         fun onEngineError(code: Int)
     }
 
@@ -37,6 +38,8 @@ class AgoraVoiceEngine(private val context: Context) {
     @Volatile private var engine: RtcEngine? = null
     @Volatile private var currentAppId: String? = null
     @Volatile private var activeListener: Listener? = null
+    @Volatile private var currentAudioMode: String = "balanced"
+    @Volatile private var isLowDataMode: Boolean = false
 
     private val eventHandler = object : IRtcEngineEventHandler() {
         override fun onJoinChannelSuccess(channel: String?, uid: Int, elapsed: Int) {
@@ -77,6 +80,28 @@ class AgoraVoiceEngine(private val context: Context) {
 
         override fun onNetworkQuality(uid: Int, txQuality: Int, rxQuality: Int) {
             activeListener?.onNetworkQuality(uid, txQuality, rxQuality)
+            // If network quality drops to POOR (4), BAD (5), or VERY_BAD (6), dynamically downgrade audio profile to prevent dropped packets
+            if (!isLowDataMode && (txQuality >= 4 || rxQuality >= 4)) {
+                try {
+                    engine?.setAudioProfile(Constants.AUDIO_PROFILE_SPEECH_STANDARD)
+                } catch (_: Throwable) {}
+            } else if (!isLowDataMode && txQuality <= 2 && rxQuality <= 2) {
+                try {
+                    engine?.setAudioProfile(Constants.AUDIO_PROFILE_MUSIC_STANDARD)
+                } catch (_: Throwable) {}
+            }
+        }
+
+        override fun onAudioVolumeIndication(speakers: Array<out AudioVolumeInfo>?, totalVolume: Int) {
+            if (speakers == null) return
+            var remoteMax = 0
+            for (speaker in speakers) {
+                // In Agora, uid == 0 is local microphone; uid != 0 is remote partner audio
+                if (speaker.uid != 0 && speaker.volume > remoteMax) {
+                    remoteMax = speaker.volume
+                }
+            }
+            activeListener?.onRemoteVolumeIndication(remoteMax)
         }
 
         override fun onError(err: Int) {
@@ -193,26 +218,22 @@ class AgoraVoiceEngine(private val context: Context) {
             Log.w(TAG, "enableAudio failed: ${e.message}")
         }
 
-        // Maximum mobile sound quality: 48 kHz full-band audio profile with boosted signal volume
+        // Audio profile: SPEECH_STANDARD if Low-Data mode is active; MUSIC_STANDARD (48 kHz) for HD voice
         try {
-            rtc.setAudioProfile(Constants.AUDIO_PROFILE_MUSIC_STANDARD)
+            val profile = if (isLowDataMode) Constants.AUDIO_PROFILE_SPEECH_STANDARD else Constants.AUDIO_PROFILE_MUSIC_STANDARD
+            rtc.setAudioProfile(profile)
         } catch (e: Throwable) {
             Log.w(TAG, "setAudioProfile failed: ${e.message}")
         }
 
-        // Boost recording and playback volume signal to maximum level
-        try {
-            rtc.adjustRecordingSignalVolume(150)
-            rtc.adjustPlaybackSignalVolume(150)
-        } catch (e: Throwable) {
-            Log.w(TAG, "adjustSignalVolume failed: ${e.message}")
-        }
+        // Apply AI noise suppression and signal volume based on selected mode
+        applyAudioMode(rtc, currentAudioMode)
 
-        // AI noise suppression, balanced (safely guarded against native library missing)
+        // Enable live voice amplitude detection (every 150ms) for UI concentric ripples
         try {
-            rtc.setAINSMode(true, AINS_MODE_BALANCED)
+            rtc.enableAudioVolumeIndication(150, 3, true)
         } catch (e: Throwable) {
-            Log.w(TAG, "setAINSMode failed: ${e.message}")
+            Log.w(TAG, "enableAudioVolumeIndication failed: ${e.message}")
         }
 
         // A call starts on the earpiece, like a phone call; headsets take over when connected
@@ -221,6 +242,59 @@ class AgoraVoiceEngine(private val context: Context) {
         } catch (e: Throwable) {
             Log.w(TAG, "setDefaultAudioRoutetoSpeakerphone failed: ${e.message}")
         }
+    }
+
+    private fun applyAudioMode(rtc: RtcEngine, mode: String) {
+        try {
+            if (mode.equals("whisper", ignoreCase = true)) {
+                // Night / Whisper Mode: Lowers threshold suppression and boosts soft input gain (200),
+                // making pillow-talk and whispering loud and clear without clipping
+                rtc.setAINSMode(false, AINS_MODE_BALANCED)
+                rtc.adjustRecordingSignalVolume(200)
+                rtc.adjustPlaybackSignalVolume(150)
+                Log.i(TAG, "Applied Night/Whisper audio profile (gain 200, relaxed AINS)")
+            } else {
+                // Balanced / Street: Suppresses traffic, wind, and cafe noise
+                rtc.setAINSMode(true, AINS_MODE_BALANCED)
+                rtc.adjustRecordingSignalVolume(120)
+                rtc.adjustPlaybackSignalVolume(150)
+                Log.i(TAG, "Applied Balanced/Street audio profile (gain 120, active AINS)")
+            }
+        } catch (e: Throwable) {
+            Log.w(TAG, "applyAudioMode failed: ${e.message}")
+        }
+    }
+
+    fun setAudioMode(mode: String) {
+        currentAudioMode = mode
+        val rtc = engine ?: return
+        applyAudioMode(rtc, mode)
+    }
+
+    fun setLowDataMode(enabled: Boolean) {
+        isLowDataMode = enabled
+        val rtc = engine ?: return
+        try {
+            val profile = if (enabled) Constants.AUDIO_PROFILE_SPEECH_STANDARD else Constants.AUDIO_PROFILE_MUSIC_STANDARD
+            rtc.setAudioProfile(profile)
+            Log.i(TAG, "Low data mode set to $enabled (profile=$profile)")
+        } catch (e: Throwable) {
+            Log.w(TAG, "setLowDataMode failed: ${e.message}")
+        }
+    }
+
+    fun prewarm(appId: String) {
+        val effectiveAppId = appId.trim().ifBlank { AgoraTokenBuilder.DEFAULT_APP_ID }
+        synchronized(engineLock) {
+            if (engine != null && currentAppId == effectiveAppId) return
+        }
+        val rtc = createRtcEngineInstance(effectiveAppId) ?: return
+        applyEngineConfigurations(rtc)
+        synchronized(engineLock) {
+            engine = rtc
+            currentAppId = effectiveAppId
+        }
+        Log.i(TAG, "Agora RTC engine pre-warmed in background for incoming call instant connection")
     }
 
     /** Joins the call's channel as [uid], talking and listening. */

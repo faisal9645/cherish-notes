@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
@@ -71,6 +72,7 @@ fun CallRecordingPlayerRow(
     val app = context.applicationContext as? CherishApplication ?: return
     val player = app.voicePlayerHelper
     val currentTrack by player.currentTrackId.collectAsState()
+    val speed by player.playbackSpeed.collectAsState()
     val isPlaying by player.isPlaying.collectAsState()
     val progress by player.playbackProgress.collectAsState()
     val positionSec by player.currentPositionSec.collectAsState()
@@ -119,9 +121,12 @@ fun CallRecordingPlayerRow(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Default.PhoneInTalk, contentDescription = null, tint = contentColor.copy(alpha = 0.85f), modifier = Modifier.size(14.dp))
                 Spacer(modifier = Modifier.width(5.dp))
-                Text("Call recording", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = contentColor)
+                val lengthFormatted = formatRecordingLength(message.durationSeconds)
+                Text("Voice Call ($lengthFormatted)", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = contentColor)
                 if (isActive && item.parts > 1) {
-                    Text("  · part ${item.part + 1} of ${item.parts}", fontSize = 11.sp, color = contentColor.copy(alpha = 0.75f))
+                    Text(" · part ${item.part + 1} of ${item.parts}", fontSize = 11.sp, color = contentColor.copy(alpha = 0.75f))
+                } else if (!isActive) {
+                    Text(" · Play Recording", fontSize = 11.sp, color = contentColor.copy(alpha = 0.75f))
                 }
             }
             Spacer(modifier = Modifier.height(6.dp))
@@ -161,6 +166,29 @@ fun CallRecordingPlayerRow(
                     fontWeight = FontWeight.Medium,
                     color = contentColor.copy(alpha = 0.85f)
                 )
+                if (isActive) {
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(buttonColor.copy(alpha = 0.35f))
+                            .clickable { player.togglePlaybackSpeed() }
+                            .padding(horizontal = 6.dp, vertical = 2.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        val speedLabel = when (speed) {
+                            1.5f -> "1.5x"
+                            2.0f -> "2x"
+                            else -> "1x"
+                        }
+                        Text(
+                            text = speedLabel,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = contentColor
+                        )
+                    }
+                }
                 Spacer(modifier = Modifier.weight(1f))
                 trailing?.invoke()
             }

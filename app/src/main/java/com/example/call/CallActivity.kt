@@ -8,6 +8,8 @@ import android.content.pm.PackageManager
 import android.media.AudioManager
 import android.os.Build
 import android.os.Bundle
+import android.os.PowerManager
+import android.util.Log
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -107,7 +109,7 @@ class CallActivity : ComponentActivity() {
             CallManager.state.collect { state ->
                 if (state.phase != CallPhase.IDLE) waitingForCall = false
                 if (state.phase == CallPhase.IDLE && !waitingForCall) finish()
-                keepScreenOn(state.phase == CallPhase.INCOMING_RINGING || state.phase == CallPhase.OUTGOING_RINGING)
+                keepScreenOn(state.phase != CallPhase.IDLE && state.phase != CallPhase.ENDED)
             }
         }
         lifecycleScope.launch {
@@ -140,6 +142,12 @@ class CallActivity : ComponentActivity() {
         val inv = pendingOrCurrentInvite()
         if (current.phase == CallPhase.INCOMING_RINGING && inv != null) {
             CallNotifications.showIncoming(this, inv)
+        }
+        val power = getSystemService(Context.POWER_SERVICE) as? PowerManager
+        val isSpeaking = current.phase == CallPhase.CONNECTED || current.phase == CallPhase.RECONNECTING || current.phase == CallPhase.CONNECTING
+        if (isSpeaking && power != null && !power.isInteractive) {
+            Log.i("CallActivity", "Lock button pressed on CallActivity while speaking -> hanging up")
+            CallManager.hangUp()
         }
     }
 

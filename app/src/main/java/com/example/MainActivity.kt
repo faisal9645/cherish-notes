@@ -17,12 +17,14 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.SystemBarStyle
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import com.example.call.FloatingCallBubble
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.DisposableEffect
@@ -167,7 +169,10 @@ class MainActivity : FragmentActivity() {
                         }
                     }
 
-                    CherishNavGraph(app = app)
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        CherishNavGraph(app = app)
+                        FloatingCallBubble()
+                    }
                 }
             }
         }

@@ -125,7 +125,8 @@ data class CallUiState(
     /** A phone (cellular) call or the system has taken the microphone for now. */
     val isOnHold: Boolean = false,
     val peerReconnecting: Boolean = false,
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
+    val remoteVolume: Int = 0
 ) {
     val isLive: Boolean
         get() = phase == CallPhase.CONNECTING || phase == CallPhase.CONNECTED || phase == CallPhase.RECONNECTING

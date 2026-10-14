@@ -68,7 +68,6 @@ import com.example.data.local.notes.NoteEntity
 import com.example.security.SecurityPreferences
 import com.example.ui.theme.*
 import kotlinx.coroutines.launch
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.Brush
 import com.example.R
 
@@ -134,22 +133,6 @@ fun NotesDisguiseScreen(
 
     val categories = listOf("All", "📌 Pinned", "Lists", "Personal", "Work", "Ideas")
 
-    val appLauncherIcon = remember(context) {
-        runCatching {
-            val drawable = context.packageManager.getApplicationIcon(context.applicationInfo)
-            val width = drawable.intrinsicWidth.takeIf { it > 0 } ?: 108
-            val height = drawable.intrinsicHeight.takeIf { it > 0 } ?: 108
-            val bitmap = android.graphics.Bitmap.createBitmap(
-                width,
-                height,
-                android.graphics.Bitmap.Config.ARGB_8888
-            )
-            val canvas = android.graphics.Canvas(bitmap)
-            drawable.setBounds(0, 0, canvas.width, canvas.height)
-            drawable.draw(canvas)
-            bitmap.asImageBitmap()
-        }.getOrNull()
-    }
 
     // Handle Back press or gesture in Notes Disguise: dismiss dialogs/menus/selection/search first, else close app cleanly
     BackHandler(enabled = true) {
@@ -390,36 +373,28 @@ fun NotesDisguiseScreen(
                                     .clip(RoundedCornerShape(12.dp))
                                     .testTag("notes_header")
                             ) {
-                                if (appLauncherIcon != null) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(32.dp)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(
+                                            Brush.linearGradient(
+                                                listOf(
+                                                    Color(0xFF1FC8FF),
+                                                    Color(0xFF2563FF),
+                                                    Color(0xFF3B1FF5)
+                                                )
+                                            )
+                                        ),
+                                    contentAlignment = Alignment.Center
+                                ) {
                                     Image(
-                                        bitmap = appLauncherIcon,
+                                        painter = painterResource(id = R.drawable.ic_launcher_foreground),
                                         contentDescription = "Notes",
                                         modifier = Modifier
-                                            .size(31.dp)
-                                            .clip(RoundedCornerShape(8.dp))
+                                            .fillMaxSize()
+                                            .scale(1.42f)
                                     )
-                                } else {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(31.dp)
-                                            .clip(RoundedCornerShape(8.dp))
-                                            .background(
-                                                Brush.linearGradient(
-                                                    listOf(
-                                                        Color(0xFF1FC8FF),
-                                                        Color(0xFF2563FF),
-                                                        Color(0xFF3B1FF5)
-                                                    )
-                                                )
-                                            ),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Image(
-                                            painter = painterResource(id = R.drawable.ic_launcher_foreground),
-                                            contentDescription = "Notes",
-                                            modifier = Modifier.fillMaxSize()
-                                        )
-                                    }
                                 }
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(

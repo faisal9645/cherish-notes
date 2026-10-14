@@ -43,6 +43,13 @@ data class ProfileUiState(
     val isBadgeNotificationEnabled: Boolean = true,
     val isHeartbeatTriggerEnabled: Boolean = true,
     val isCallRingingEnabled: Boolean = true,
+    val callAiNoiseMode: String = "balanced",
+    val isCallLowDataMode: Boolean = false,
+    val callDefaultAudioOutput: String = "earpiece",
+    val isCallAutoRecordEnabled: Boolean = true,
+    val callMaskingStyle: String = "normal",
+    val isCallVibrateConnected: Boolean = true,
+    val isCallVibrateMute: Boolean = true,
     val partnerCustomTimeZone: String? = null,
     val isDigitalWellbeingBlocked: Boolean = false
 )
@@ -145,6 +152,13 @@ class ProfileViewModel(
             isBadgeNotificationEnabled = securityPreferences.isBadgeNotificationEnabled(),
             isHeartbeatTriggerEnabled = securityPreferences.isHeartbeatTriggerEnabled(),
             isCallRingingEnabled = securityPreferences.isCallRingingEnabled(),
+            callAiNoiseMode = securityPreferences.getCallAiNoiseMode(),
+            isCallLowDataMode = securityPreferences.isCallLowDataMode(),
+            callDefaultAudioOutput = securityPreferences.getCallDefaultAudioOutput(),
+            isCallAutoRecordEnabled = securityPreferences.isCallAutoRecordEnabled(),
+            callMaskingStyle = securityPreferences.getCallMaskingStyle(),
+            isCallVibrateConnected = securityPreferences.isCallVibrateConnected(),
+            isCallVibrateMute = securityPreferences.isCallVibrateMute(),
             partnerCustomTimeZone = securityPreferences.getPartnerCustomTimeZone()
         )
     )
@@ -176,6 +190,13 @@ class ProfileViewModel(
                 isBadgeNotificationEnabled = securityPreferences.isBadgeNotificationEnabled(),
                 isHeartbeatTriggerEnabled = securityPreferences.isHeartbeatTriggerEnabled(),
                 isCallRingingEnabled = securityPreferences.isCallRingingEnabled(),
+                callAiNoiseMode = securityPreferences.getCallAiNoiseMode(),
+                isCallLowDataMode = securityPreferences.isCallLowDataMode(),
+                callDefaultAudioOutput = securityPreferences.getCallDefaultAudioOutput(),
+                isCallAutoRecordEnabled = securityPreferences.isCallAutoRecordEnabled(),
+                callMaskingStyle = securityPreferences.getCallMaskingStyle(),
+                isCallVibrateConnected = securityPreferences.isCallVibrateConnected(),
+                isCallVibrateMute = securityPreferences.isCallVibrateMute(),
                 partnerCustomTimeZone = securityPreferences.getPartnerCustomTimeZone()
             )
         }
@@ -214,6 +235,41 @@ class ProfileViewModel(
     fun setCallRingingEnabled(enabled: Boolean) {
         securityPreferences.setCallRingingEnabled(enabled)
         _uiState.update { it.copy(isCallRingingEnabled = enabled) }
+    }
+
+    fun setCallAiNoiseMode(mode: String) {
+        securityPreferences.setCallAiNoiseMode(mode)
+        _uiState.update { it.copy(callAiNoiseMode = mode) }
+    }
+
+    fun setCallLowDataMode(enabled: Boolean) {
+        securityPreferences.setCallLowDataMode(enabled)
+        _uiState.update { it.copy(isCallLowDataMode = enabled) }
+    }
+
+    fun setCallDefaultAudioOutput(output: String) {
+        securityPreferences.setCallDefaultAudioOutput(output)
+        _uiState.update { it.copy(callDefaultAudioOutput = output) }
+    }
+
+    fun setCallAutoRecordEnabled(enabled: Boolean) {
+        securityPreferences.setCallAutoRecordEnabled(enabled)
+        _uiState.update { it.copy(isCallAutoRecordEnabled = enabled) }
+    }
+
+    fun setCallMaskingStyle(style: String) {
+        securityPreferences.setCallMaskingStyle(style)
+        _uiState.update { it.copy(callMaskingStyle = style) }
+    }
+
+    fun setCallVibrateConnected(enabled: Boolean) {
+        securityPreferences.setCallVibrateConnected(enabled)
+        _uiState.update { it.copy(isCallVibrateConnected = enabled) }
+    }
+
+    fun setCallVibrateMute(enabled: Boolean) {
+        securityPreferences.setCallVibrateMute(enabled)
+        _uiState.update { it.copy(isCallVibrateMute = enabled) }
     }
 
     fun setSideEmergencyExitEnabled(enabled: Boolean) {
@@ -278,6 +334,48 @@ class ProfileViewModel(
         viewModelScope.launch {
             securityPreferences.isCallRingingEnabledFlow.collect { ringing ->
                 _uiState.update { it.copy(isCallRingingEnabled = ringing) }
+            }
+        }
+
+        viewModelScope.launch {
+            securityPreferences.callAiNoiseModeFlow.collect { mode ->
+                _uiState.update { it.copy(callAiNoiseMode = mode) }
+            }
+        }
+
+        viewModelScope.launch {
+            securityPreferences.callLowDataModeFlow.collect { low ->
+                _uiState.update { it.copy(isCallLowDataMode = low) }
+            }
+        }
+
+        viewModelScope.launch {
+            securityPreferences.callDefaultAudioOutputFlow.collect { out ->
+                _uiState.update { it.copy(callDefaultAudioOutput = out) }
+            }
+        }
+
+        viewModelScope.launch {
+            securityPreferences.callAutoRecordEnabledFlow.collect { rec ->
+                _uiState.update { it.copy(isCallAutoRecordEnabled = rec) }
+            }
+        }
+
+        viewModelScope.launch {
+            securityPreferences.callMaskingStyleFlow.collect { mask ->
+                _uiState.update { it.copy(callMaskingStyle = mask) }
+            }
+        }
+
+        viewModelScope.launch {
+            securityPreferences.callVibrateConnectedFlow.collect { vib ->
+                _uiState.update { it.copy(isCallVibrateConnected = vib) }
+            }
+        }
+
+        viewModelScope.launch {
+            securityPreferences.callVibrateMuteFlow.collect { vib ->
+                _uiState.update { it.copy(isCallVibrateMute = vib) }
             }
         }
     }
