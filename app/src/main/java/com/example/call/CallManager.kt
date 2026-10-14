@@ -95,6 +95,7 @@ object CallManager {
     private var watchingIncoming = false
     private var activeRecordFile: File? = null
     private var uploadJob: Job? = null
+    private var recordingJob: Job? = null
 
     /** Calls already rung (or declined) on this phone, so a late push or listener can't ring again. */
     private val seenCalls = LinkedHashSet<String>()
@@ -237,10 +238,11 @@ object CallManager {
         if (me.isBlank() || myCouple == null || invite.coupleId != myCouple || isSameUser(invite.callerId, me)) return@post
         if (hasActiveCall()) return@post
         if (!markSeen(invite.callId)) return@post
-        ringFor(invite, me)
         val secPrefs = app.securityPreferences
+        val isForegroundAndUndisguised = CherishApplication.isAppInForeground && !secPrefs.isDisguiseActive()
+        ringFor(invite, me, showNotification = !isForegroundAndUndisguised)
         // When inside Cherish app (in foreground and disguise not actively displayed), launch the call screen immediately
-        if (CherishApplication.isAppInForeground && !secPrefs.isDisguiseActive()) {
+        if (isForegroundAndUndisguised) {
             try {
                 val intent = CallActivity.incomingIntent(app, invite).apply {
                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
@@ -252,12 +254,14 @@ object CallManager {
         }
     }
 
-    private fun ringFor(invite: CallInvite, me: String) {
+    private fun ringFor(invite: CallInvite, me: String, showNotification: Boolean = true) {
         beginCall(invite.coupleId, me, invite.callId, outgoing = false)
         this.invite = invite
         callerNameHint = invite.callerName
         _state.value = freshState(invite.callId, outgoing = false).copy(phase = CallPhase.INCOMING_RINGING)
-        CallNotifications.showIncoming(app, invite)
+        if (showNotification) {
+            CallNotifications.showIncoming(app, invite)
+        }
         observeCallRecord()
         val remaining = invite.ringUntil - System.currentTimeMillis()
         // Ensure the callee has ample time to attend (at least 75 seconds) rather than premature timeout
@@ -619,15 +623,38 @@ object CallManager {
             app.authRepository.setOnline(true)
         } catch (_: Exception) {}
 
-        // Start in-app automatic call recording
+        // Start in-app automatic call recording ONLY on the caller device (single mobile recording)
+        // to avoid duplicate/double recordings in the Shared Gallery calls tab.
         val currentCallId = callId
-        if (activeRecordFile == null && currentCallId != null) {
-            val recordDir = File(app.cacheDir, "callrec").apply { mkdirs() }
-            val file = File(recordDir, "rec_${currentCallId}.aac")
-            if (engine.startRecording(file)) {
-                activeRecordFile = file
-                Log.i(TAG, "In-app call recording started: ${file.absolutePath}")
+        if (isOutgoing && activeRecordFile == null && currentCallId != null) {
+            startAutomaticRecording(currentCallId)
+        }
+    }
+
+    private fun startAutomaticRecording(callId: String) {
+        recordingJob?.cancel()
+        val recordDir = File(app.cacheDir, "callrec").apply { mkdirs() }
+        val file = File(recordDir, "rec_${callId}.aac")
+
+        if (engine.startRecording(file)) {
+            activeRecordFile = file
+            Log.i(TAG, "In-app call recording started immediately: ${file.absolutePath}")
+            return
+        }
+
+        recordingJob = scope.launch {
+            val delays = listOf(300L, 500L, 800L, 1200L, 1500L)
+            for (d in delays) {
+                delay(d)
+                if (_state.value.phase != CallPhase.CONNECTED || this@CallManager.callId != callId) return@launch
+                if (activeRecordFile != null) return@launch
+                if (engine.startRecording(file)) {
+                    activeRecordFile = file
+                    Log.i(TAG, "In-app call recording started on retry: ${file.absolutePath}")
+                    return@launch
+                }
             }
+            Log.w(TAG, "Failed to start call recording after retries for $callId")
         }
     }
 
@@ -699,6 +726,8 @@ object CallManager {
         val me = myUserId
         val recordingFile = activeRecordFile
         activeRecordFile = null
+        recordingJob?.cancel()
+        recordingJob = null
         engine.stopRecording()
         val durationSec = if (_state.value.connectedAtElapsed > 0L) {
             ((SystemClock.elapsedRealtime() - _state.value.connectedAtElapsed) / 1000).toInt()
@@ -706,7 +735,7 @@ object CallManager {
         if (durationSec > 0) {
             app.securityPreferences.addCallDurationSeconds(durationSec)
         }
-        if (durationSec >= 2 && recordingFile != null && endedCouple != null && endedCall != null && !me.isNullOrBlank()) {
+        if (durationSec >= 1 && recordingFile != null && endedCouple != null && endedCall != null && !me.isNullOrBlank()) {
             uploadRecording(endedCouple, endedCall, me, recordingFile, durationSec)
         }
 
@@ -793,7 +822,7 @@ object CallManager {
             try {
                 // Wait briefly for audio file buffer to flush to disk
                 var actualFile: File? = null
-                for (i in 0..10) {
+                for (i in 0..15) {
                     if (file.exists() && file.length() > 0) {
                         actualFile = file
                         break
@@ -806,8 +835,8 @@ object CallManager {
                     delay(150L)
                 }
 
-                if (actualFile == null || actualFile.length() < 1024) {
-                    Log.w(TAG, "In-app call recording file not found or too small (${actualFile?.length()} bytes)")
+                if (actualFile == null || actualFile.length() < 100) {
+                    Log.w(TAG, "In-app call recording file not found or empty (${actualFile?.length()} bytes)")
                     actualFile?.delete()
                     return@launch
                 }
@@ -825,23 +854,6 @@ object CallManager {
                     Log.w(TAG, "Couldn't save local recording copy to cache", e)
                 }
 
-                // 2. Upload to Firebase Storage
-                val storage = FirebaseStorage.getInstance()
-                val metadata = com.google.firebase.storage.StorageMetadata.Builder()
-                    .setContentType(if (actualFile.extension.equals("wav", ignoreCase = true)) "audio/wav" else "audio/aac")
-                    .build()
-                storage.reference.child(path).putFile(Uri.fromFile(actualFile), metadata).await()
-                actualFile.delete()
-
-                // 3. Finalize on backend Cloud Functions
-                try {
-                    repo.finalizeClientRecording(couple, me, call)
-                } catch (e: Exception) {
-                    Log.w(TAG, "Backend recording finalization failed, continuing with direct update", e)
-                }
-
-                // 4. Direct Firestore updates to guarantee instant appearance in Calls tab and Chat
-                val fs = FirebaseFirestore.getInstance()
                 val partnerId = app.authRepository.partnerUserState.value?.id
                     ?: app.authRepository.currentUserState.value?.partnerId.orEmpty()
                 val durationFormatted = formatRecordingLength(durationSec)
@@ -865,16 +877,29 @@ object CallManager {
                     recordingPaths = listOf(path)
                 )
 
-                val convRef = fs.collection("conversations").document(couple)
-                convRef.collection("messages").document(messageId).set(callMessage).await()
+                // 2. Immediately register in local ChatRepository so it appears in the Calls tab instantly!
+                try {
+                    app.chatRepository.recordCallCompleted(callMessage)
+                } catch (e: Exception) {
+                    Log.w(TAG, "Couldn't record call in local ChatRepository", e)
+                }
 
-                val summary = mapOf(
-                    "id" to couple,
-                    "lastMessageText" to "📞 Voice call ($durationFormatted)",
-                    "lastMessageSenderId" to me,
-                    "lastMessageTimestamp" to callMessage.timestamp
-                )
-                convRef.set(summary, SetOptions.merge()).await()
+                // 3. Direct Firestore updates to guarantee instant appearance in Calls tab and Chat
+                val fs = FirebaseFirestore.getInstance()
+                val convRef = fs.collection("conversations").document(couple)
+                try {
+                    convRef.collection("messages").document(messageId).set(callMessage).await()
+
+                    val summary = mapOf(
+                        "id" to couple,
+                        "lastMessageText" to "📞 Voice call ($durationFormatted)",
+                        "lastMessageSenderId" to me,
+                        "lastMessageTimestamp" to callMessage.timestamp
+                    )
+                    convRef.set(summary, SetOptions.merge()).await()
+                } catch (e: Exception) {
+                    Log.w(TAG, "Couldn't write call message to Firestore", e)
+                }
 
                 val callDocRef = fs.collection("couples").document(couple).collection("calls").document(call)
                 val callUpdates = mapOf(
@@ -888,7 +913,30 @@ object CallManager {
                     "state" to CallRecord.STATE_ENDED,
                     "updatedAt" to FieldValue.serverTimestamp()
                 )
-                callDocRef.set(callUpdates, SetOptions.merge()).await()
+                try {
+                    callDocRef.set(callUpdates, SetOptions.merge()).await()
+                } catch (e: Exception) {
+                    Log.w(TAG, "Couldn't write call update to Firestore", e)
+                }
+
+                // 4. Upload to Firebase Storage in background
+                try {
+                    val storage = FirebaseStorage.getInstance()
+                    val metadata = com.google.firebase.storage.StorageMetadata.Builder()
+                        .setContentType(if (actualFile.extension.equals("wav", ignoreCase = true)) "audio/wav" else "audio/aac")
+                        .build()
+                    storage.reference.child(path).putFile(Uri.fromFile(actualFile), metadata).await()
+                    actualFile.delete()
+                } catch (e: Exception) {
+                    Log.w(TAG, "Firebase Storage upload failed", e)
+                }
+
+                // 5. Finalize on backend Cloud Functions
+                try {
+                    repo.finalizeClientRecording(couple, me, call)
+                } catch (e: Exception) {
+                    Log.w(TAG, "Backend recording finalization failed, continuing with direct update", e)
+                }
 
                 Log.i(TAG, "In-app call recording uploaded and saved to calls tab: $path")
             } catch (e: Exception) {
@@ -904,12 +952,14 @@ object CallManager {
         reconnectJob?.cancel()
         peerLostJob?.cancel()
         joinedReportJob?.cancel()
+        recordingJob?.cancel()
         docJob = null
         ringTimeoutJob = null
         connectTimeoutJob = null
         reconnectJob = null
         peerLostJob = null
         joinedReportJob = null
+        recordingJob = null
     }
 
     /** False when [id] was already rung or decided on this phone. */

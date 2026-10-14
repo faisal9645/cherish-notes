@@ -64,7 +64,7 @@ object NotificationHelper {
                 description = "Discreet sync and reminder notifications"
                 enableVibration(true)
                 setShowBadge(true)
-                lockscreenVisibility = android.app.Notification.VISIBILITY_PRIVATE
+                lockscreenVisibility = android.app.Notification.VISIBILITY_SECRET
             }
 
             val remindersChannel = NotificationChannel(
@@ -76,7 +76,7 @@ object NotificationHelper {
                 enableVibration(true)
                 setShowBadge(true)
                 enableLights(true)
-                lockscreenVisibility = android.app.Notification.VISIBILITY_PRIVATE
+                lockscreenVisibility = android.app.Notification.VISIBILITY_SECRET
             }
 
             val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
@@ -106,11 +106,25 @@ object NotificationHelper {
     }
 
     private val isNotificationAlertTriggered = java.util.concurrent.atomic.AtomicBoolean(false)
+    private val hasAlertedWhileLocked = java.util.concurrent.atomic.AtomicBoolean(false)
+
+    fun isDeviceLockedOrSleeping(context: Context): Boolean {
+        return try {
+            val km = context.getSystemService(Context.KEYGUARD_SERVICE) as? android.app.KeyguardManager
+            val pm = context.getSystemService(Context.POWER_SERVICE) as? PowerManager
+            val isLocked = km?.isKeyguardLocked ?: false
+            val isInteractive = pm?.isInteractive ?: false
+            isLocked || !isInteractive
+        } catch (_: Exception) {
+            false
+        }
+    }
 
     fun isAlertAlreadyTriggered(): Boolean = isNotificationAlertTriggered.get()
 
     fun onNotificationDismissed(context: Context, noteId: String? = null) {
         isNotificationAlertTriggered.set(false)
+        hasAlertedWhileLocked.set(false)
         pendingUnreadCount.set(0)
         if (!noteId.isNullOrBlank()) {
             activeNoteReminderIds.remove(noteId.hashCode())
@@ -210,6 +224,17 @@ object NotificationHelper {
             return
         }
 
+        val isLocked = isDeviceLockedOrSleeping(context)
+        if (isLocked) {
+            if (hasAlertedWhileLocked.get()) {
+                // Partner locked screen and not using phone: show only ONE time until opening Cherish app
+                return
+            }
+            hasAlertedWhileLocked.set(true)
+        } else {
+            hasAlertedWhileLocked.set(false)
+        }
+
         // Launcher icon badge always shows 1 only, even for multiple notifications
         if (isBadgeEnabled) {
             updateLauncherBadge(context, 1)
@@ -257,23 +282,6 @@ object NotificationHelper {
 
         val appIcon = getAppIconBitmap(context)
 
-        // Public version shown on secure lock screens (discreet note icon, matching app logo)
-        val publicNotification = NotificationCompat.Builder(context, CHANNEL_MESSAGES_ID)
-            .setSmallIcon(R.drawable.ic_stat_notes)
-            .apply {
-                if (appIcon != null) setLargeIcon(appIcon)
-            }
-            .setColor(0xFF2563FF.toInt())
-            .setContentTitle(if (isDiscreet) maskedTitle else displayTitle)
-            .setContentText(if (isDiscreet) maskedText else displayText)
-            .setSubText(subText)
-            .setBadgeIconType(if (isBadgeEnabled) NotificationCompat.BADGE_ICON_SMALL else NotificationCompat.BADGE_ICON_NONE)
-            .setNumber(if (isBadgeEnabled) 1 else 0)
-            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
-            .setAutoCancel(true)
-            .setOngoing(false)
-            .build()
-
         val notificationBuilder = NotificationCompat.Builder(context, CHANNEL_MESSAGES_ID)
             .setSmallIcon(R.drawable.ic_stat_notes)
             .apply {
@@ -298,8 +306,7 @@ object NotificationHelper {
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setDefaults(NotificationCompat.DEFAULT_ALL)
             .setCategory(NotificationCompat.CATEGORY_MESSAGE)
-            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
-            .setPublicVersion(publicNotification)
+            .setVisibility(NotificationCompat.VISIBILITY_SECRET)
 
         val notification = notificationBuilder.build()
 
@@ -362,26 +369,18 @@ object NotificationHelper {
         val isBadgeEnabled = prefs.isBadgeNotificationEnabled()
         val appIcon = getAppIconBitmap(context)
 
+        val isLocked = isDeviceLockedOrSleeping(context)
+        if (isLocked) {
+            if (hasAlertedWhileLocked.get()) return
+            hasAlertedWhileLocked.set(true)
+        } else {
+            hasAlertedWhileLocked.set(false)
+        }
+
         if (isBadgeEnabled) {
             updateLauncherBadge(context, 1)
         }
         isNotificationAlertTriggered.set(true)
-
-        val publicNotification = NotificationCompat.Builder(context, CHANNEL_MESSAGES_ID)
-            .setSmallIcon(R.drawable.ic_stat_notes)
-            .apply {
-                if (appIcon != null) setLargeIcon(appIcon)
-            }
-            .setColor(0xFF2563FF.toInt())
-            .setContentTitle(displayTitle)
-            .setContentText(displayText)
-            .setSubText(subText)
-            .setBadgeIconType(if (isBadgeEnabled) NotificationCompat.BADGE_ICON_SMALL else NotificationCompat.BADGE_ICON_NONE)
-            .setNumber(if (isBadgeEnabled) 1 else 0)
-            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
-            .setAutoCancel(true)
-            .setOngoing(false)
-            .build()
 
         val notification = NotificationCompat.Builder(context, CHANNEL_MESSAGES_ID)
             .setSmallIcon(R.drawable.ic_stat_notes)
@@ -401,8 +400,7 @@ object NotificationHelper {
             .setDeleteIntent(getDismissIntent(context))
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(NotificationCompat.CATEGORY_SOCIAL)
-            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
-            .setPublicVersion(publicNotification)
+            .setVisibility(NotificationCompat.VISIBILITY_SECRET)
             .build()
 
         try {
@@ -464,7 +462,7 @@ object NotificationHelper {
             .setDeleteIntent(getDismissIntent(context))
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(NotificationCompat.CATEGORY_SOCIAL)
-            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+            .setVisibility(NotificationCompat.VISIBILITY_SECRET)
             .build()
 
         try {
@@ -511,6 +509,7 @@ object NotificationHelper {
      */
     fun clearNotifications(context: Context) {
         isNotificationAlertTriggered.set(false)
+        hasAlertedWhileLocked.set(false)
         pendingUnreadCount.set(0)
         notifiedMessageIds.clear()
 
@@ -625,7 +624,7 @@ object NotificationHelper {
             .setDeleteIntent(getDismissIntent(context))
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
-            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+            .setVisibility(NotificationCompat.VISIBILITY_SECRET)
             .build()
 
         try {
@@ -692,7 +691,7 @@ object NotificationHelper {
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setDefaults(NotificationCompat.DEFAULT_ALL)
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
-            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setVisibility(NotificationCompat.VISIBILITY_SECRET)
             .build()
 
         try {

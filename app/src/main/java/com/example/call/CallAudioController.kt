@@ -45,8 +45,7 @@ class CallAudioController(private val context: Context) {
         when (change) {
             AudioManager.AUDIOFOCUS_GAIN -> listener?.onInterrupted(false)
             AudioManager.AUDIOFOCUS_LOSS, AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> {
-                // Only a real phone call counts: the call's own audio engine can also take focus
-                if (isPhoneCallActive()) listener?.onInterrupted(true)
+                listener?.onInterrupted(true)
             }
         }
     }
@@ -118,7 +117,7 @@ class CallAudioController(private val context: Context) {
     /** A cellular call is on (ringing doesn't count: the user may not answer it). */
     fun isPhoneCallActive(): Boolean {
         val mode = audioManager?.mode ?: return false
-        if (mode == AudioManager.MODE_IN_CALL) return true
+        if (mode == AudioManager.MODE_IN_CALL || mode == AudioManager.MODE_RINGTONE) return true
         return Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && mode == AudioManager.MODE_CALL_SCREENING
     }
 
@@ -139,10 +138,10 @@ class CallAudioController(private val context: Context) {
         val am = audioManager ?: return
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                val request = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)
+                val request = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
                     .setAudioAttributes(
                         AudioAttributes.Builder()
-                            .setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION)
+                            .setUsage(AudioAttributes.USAGE_MEDIA)
                             .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
                             .build()
                     )
@@ -152,7 +151,7 @@ class CallAudioController(private val context: Context) {
                 am.requestAudioFocus(request)
             } else {
                 @Suppress("DEPRECATION")
-                am.requestAudioFocus(focusListener, AudioManager.STREAM_VOICE_CALL, AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)
+                am.requestAudioFocus(focusListener, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
             }
         } catch (e: Exception) {
             Log.w(TAG, "Audio focus request failed", e)

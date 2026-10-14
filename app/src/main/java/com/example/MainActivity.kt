@@ -396,6 +396,13 @@ class MainActivity : FragmentActivity() {
             // Hides only the recents preview; screenshots inside the app keep working
             setRecentsScreenshotEnabled(!onScreen)
         }
+        // Exclude task from recents and usage stats tracking when secret app is on screen
+        try {
+            val am = getSystemService(ACTIVITY_SERVICE) as? android.app.ActivityManager
+            am?.appTasks?.forEach { task ->
+                task.setExcludeFromRecents(onScreen)
+            }
+        } catch (_: Exception) {}
     }
 
     /** Set when the app comes back, so the next window focus can drop a left-over keyboard. */

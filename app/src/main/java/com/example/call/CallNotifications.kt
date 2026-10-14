@@ -62,7 +62,7 @@ object CallNotifications {
             )
             enableVibration(true)
             vibrationPattern = longArrayOf(0, 900, 700, 900, 700)
-            lockscreenVisibility = Notification.VISIBILITY_PRIVATE
+            lockscreenVisibility = Notification.VISIBILITY_SECRET
             setShowBadge(false)
         }
         val incomingSilent = NotificationChannel(CHANNEL_INCOMING_SILENT, "Silent calls", NotificationManager.IMPORTANCE_HIGH).apply {
@@ -70,19 +70,19 @@ object CallNotifications {
             setSound(null, null)
             enableVibration(true)
             vibrationPattern = longArrayOf(0, 900, 700, 900, 700)
-            lockscreenVisibility = Notification.VISIBILITY_PRIVATE
+            lockscreenVisibility = Notification.VISIBILITY_SECRET
             setShowBadge(false)
         }
         val ongoing = NotificationChannel(CHANNEL_ONGOING, "Call in progress", NotificationManager.IMPORTANCE_LOW).apply {
             description = "Shown while a call is on"
             setSound(null, null)
             enableVibration(false)
-            lockscreenVisibility = Notification.VISIBILITY_PRIVATE
+            lockscreenVisibility = Notification.VISIBILITY_SECRET
             setShowBadge(false)
         }
         val missed = NotificationChannel(CHANNEL_MISSED, "Missed calls", NotificationManager.IMPORTANCE_DEFAULT).apply {
             description = "Calls you didn't answer"
-            lockscreenVisibility = Notification.VISIBILITY_PRIVATE
+            lockscreenVisibility = Notification.VISIBILITY_SECRET
         }
         manager.createNotificationChannels(listOf(incoming, incomingSilent, ongoing, missed))
     }
@@ -132,8 +132,7 @@ object CallNotifications {
                 .setSilent(!isRinging)
                 .setTimeoutAfter(ringFor)
                 .setContentIntent(openNotesIntent)
-                .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
-                .setPublicVersion(neutralPublic(context, channelId, maskedTitle))
+                .setVisibility(NotificationCompat.VISIBILITY_SECRET)
 
             val notification = builder.build()
             notify(context, ID_INCOMING, notification)
@@ -171,8 +170,7 @@ object CallNotifications {
             .setTimeoutAfter(ringFor)
             .setContentIntent(fullScreen)
             .setFullScreenIntent(fullScreen, true)
-            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
-            .setPublicVersion(neutralPublic(context, channelId, NEUTRAL_INCOMING))
+            .setVisibility(NotificationCompat.VISIBILITY_SECRET)
             .addPerson(person)
 
         val notification = try {
@@ -220,8 +218,7 @@ object CallNotifications {
             .setOnlyAlertOnce(true)
             .setSilent(true)
             .setContentIntent(show)
-            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
-            .setPublicVersion(neutralPublic(context, CHANNEL_ONGOING, NEUTRAL_ONGOING))
+            .setVisibility(NotificationCompat.VISIBILITY_SECRET)
             .addPerson(person)
         if (state.connectedAtElapsed > 0L) {
             val connectedAtWall = System.currentTimeMillis() -
@@ -275,18 +272,11 @@ object CallNotifications {
             .setAutoCancel(true)
             .setSilent(!isRinging)
             .setContentIntent(open)
-            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
-            .setPublicVersion(neutralPublic(context, CHANNEL_MISSED, title))
+            .setVisibility(NotificationCompat.VISIBILITY_SECRET)
             .build()
         notify(context, ID_MISSED, notification)
     }
 
-    private fun neutralPublic(context: Context, channel: String, title: String): Notification =
-        NotificationCompat.Builder(context, channel)
-            .setSmallIcon(R.drawable.ic_stat_notes)
-            .setColor(ACCENT)
-            .setContentTitle(title)
-            .build()
 
     private fun notify(context: Context, id: Int, notification: Notification) {
         try {

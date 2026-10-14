@@ -593,18 +593,21 @@ fun CircularVideoNoteView(
             }
         }
 
-        // Top-left "Make Big" / Expand icon button
+        // Top-left "Make Big" / Expand icon button (safely inset within circle curve)
         if (onExpandClick != null) {
             Box(
                 modifier = Modifier
                     .align(Alignment.TopStart)
-                    .padding(12.dp)
+                    .padding(
+                        top = if (isRound) 30.dp else 12.dp,
+                        start = if (isRound) 30.dp else 12.dp
+                    )
             ) {
                 Surface(
                     shape = CircleShape,
                     color = Color.Black.copy(alpha = 0.6f),
                     modifier = Modifier
-                        .size(32.dp)
+                        .size(if (isRound) 28.dp else 32.dp)
                         .clickable { onExpandClick() }
                 ) {
                     Box(contentAlignment = Alignment.Center) {
@@ -612,67 +615,67 @@ fun CircularVideoNoteView(
                             imageVector = Icons.Default.OpenInFull,
                             contentDescription = "Make circle video big",
                             tint = Color.White,
-                            modifier = Modifier.size(17.dp)
+                            modifier = Modifier.size(if (isRound) 15.dp else 17.dp)
                         )
                     }
                 }
             }
         }
 
-        // Top-right controls: Continuous Loop button & Mute/Unmute toggle
-        Row(
+        // Top-right Continuous Loop button (safely inset within circle curve, fully inside boundary)
+        Surface(
+            shape = CircleShape,
+            color = if (isLooping) Color(0xFF1E3A8A) else Color.Black.copy(alpha = 0.65f),
+            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.7f)),
+            shadowElevation = 3.dp,
             modifier = Modifier
                 .align(Alignment.TopEnd)
-                .padding(top = 4.dp, end = 4.dp)
-                .offset(x = 6.dp, y = (-4).dp),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-            verticalAlignment = Alignment.CenterVertically
+                .padding(
+                    top = if (isRound) 30.dp else 12.dp,
+                    end = if (isRound) 30.dp else 12.dp
+                )
+                .size(if (isRound) 28.dp else 32.dp)
+                .clickable {
+                    isLooping = !isLooping
+                }
         ) {
-            // Continuous loop toggle button
-            Surface(
-                shape = CircleShape,
-                color = if (isLooping) Color(0xFF1E3A8A) else Color.Black.copy(alpha = 0.65f),
-                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.7f)),
-                shadowElevation = 3.dp,
-                modifier = Modifier
-                    .size(32.dp)
-                    .clickable {
-                        isLooping = !isLooping
-                    }
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        imageVector = Icons.Default.Repeat,
-                        contentDescription = if (isLooping) "Continuous loop enabled" else "Continuous loop disabled",
-                        tint = Color.White,
-                        modifier = Modifier.size(17.dp)
-                    )
-                }
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    imageVector = Icons.Default.Repeat,
+                    contentDescription = if (isLooping) "Continuous loop enabled" else "Continuous loop disabled",
+                    tint = Color.White,
+                    modifier = Modifier.size(if (isRound) 15.dp else 17.dp)
+                )
             }
+        }
 
-            // Mute/unmute toggle
-            Surface(
-                shape = CircleShape,
-                color = Color.Black.copy(alpha = 0.6f),
-                modifier = Modifier
-                    .size(32.dp)
-                    .clickable {
-                        isMuted = !isMuted
-                        mediaPlayerRef?.let { mp ->
-                            try {
-                                if (isMuted) mp.setVolume(0f, 0f) else mp.setVolume(1f, 1f)
-                            } catch (_: Exception) {}
-                        }
+        // Bottom-right Mute/unmute toggle (safely inset within circle curve)
+        Surface(
+            shape = CircleShape,
+            color = Color.Black.copy(alpha = 0.6f),
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(
+                    bottom = if (isRound) 30.dp else 12.dp,
+                    end = if (isRound) 30.dp else 12.dp
+                )
+                .size(if (isRound) 28.dp else 32.dp)
+                .clickable {
+                    isMuted = !isMuted
+                    mediaPlayerRef?.let { mp ->
+                        try {
+                            if (isMuted) mp.setVolume(0f, 0f) else mp.setVolume(1f, 1f)
+                        } catch (_: Exception) {}
                     }
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        imageVector = if (isMuted) Icons.AutoMirrored.Filled.VolumeOff else Icons.AutoMirrored.Filled.VolumeUp,
-                        contentDescription = if (isMuted) "Unmute audio" else "Mute audio",
-                        tint = Color.White,
-                        modifier = Modifier.size(17.dp)
-                    )
                 }
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    imageVector = if (isMuted) Icons.AutoMirrored.Filled.VolumeOff else Icons.AutoMirrored.Filled.VolumeUp,
+                    contentDescription = if (isMuted) "Unmute audio" else "Mute audio",
+                    tint = Color.White,
+                    modifier = Modifier.size(if (isRound) 15.dp else 17.dp)
+                )
             }
         }
 

@@ -125,11 +125,22 @@ class CallActivity : ComponentActivity() {
     override fun onStart() {
         super.onStart()
         CallManager.isCallScreenVisible = true
+        CallNotifications.cancelIncoming(this)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        CallNotifications.cancelIncoming(this)
     }
 
     override fun onStop() {
         super.onStop()
         CallManager.isCallScreenVisible = false
+        val current = CallManager.state.value
+        val inv = pendingOrCurrentInvite()
+        if (current.phase == CallPhase.INCOMING_RINGING && inv != null) {
+            CallNotifications.showIncoming(this, inv)
+        }
     }
 
     private fun handleIntent(intent: Intent) {

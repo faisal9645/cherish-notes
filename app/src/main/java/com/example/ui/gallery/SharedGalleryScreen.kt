@@ -178,6 +178,12 @@ fun SharedGalleryScreen(
         }
     }
 
+    LaunchedEffect(pagerState.currentPage) {
+        if (pagerState.currentPage == 4) {
+            chatViewModel.loadAllGalleryMedia()
+        }
+    }
+
     val sourceMessages = remember(chatState.messages, allGalleryItems) {
         (chatState.messages + allGalleryItems).distinctBy { it.id }
     }

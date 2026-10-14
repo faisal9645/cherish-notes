@@ -1,9 +1,9 @@
 {
-  "versionCode": 156,
-  "versionName": "1.7.84",
-  "tagName": "v1.7.84-156",
-  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.7.84-156/app_update_156.apk",
-  "assetSize": 32862055,
-  "releaseNotes": "Notes v1.7.84 (Build 156):\nHigh quality call audio, dark blue mic icons, daily free call minutes in Love & Us tab, online presence during calls, small photo thumbnail default, private mode grey icons, unclipped circle video loop icon, notes disguise icon, themed delete button",
-  "releaseDate": "2026-10-14T10:43:41Z"
+  "versionCode": 157,
+  "versionName": "1.7.85",
+  "tagName": "v1.7.85-157",
+  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.7.85-157/app_update_157.apk",
+  "assetSize": 32866191,
+  "releaseNotes": "Notes v1.7.85 (Build 157):\nFix call recording in Calls tab, single-mobile caller recording, and prevent ringing popup notification when caller screen is active",
+  "releaseDate": "2026-10-14T11:40:34Z"
 }

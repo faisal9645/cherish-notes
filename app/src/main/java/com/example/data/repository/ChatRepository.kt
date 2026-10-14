@@ -493,6 +493,13 @@ class ChatRepository(
         }
     }
 
+    fun recordCallCompleted(message: Message) {
+        publishGalleryItems(listOf(message))
+        _messagesFlow.update { current ->
+            (listOf(message) + current).distinctBy { it.id }.sortedBy { it.timestamp }
+        }
+    }
+
     private fun resetGalleryCache() {
         galleryLoadJob?.cancel()
         galleryLoadJob = null

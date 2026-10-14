@@ -133,6 +133,7 @@ fun ProfileScreen(
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
                 viewModel.reloadSettings()
+                viewModel.checkDigitalWellbeingStatus(context)
                 isBatteryOptimizationIgnored = NotificationHelper.isBatteryOptimizationIgnored(context)
             }
         }
@@ -808,6 +809,36 @@ fun ProfileScreen(
                                 }
                             }
                         )
+                    }
+                )
+
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), thickness = 0.6.dp)
+
+                // Digital Wellbeing & Screen Time Protection
+                ListItem(
+                    headlineContent = { Text("Digital Wellbeing Tracking", fontSize = 15.sp, fontWeight = FontWeight.SemiBold) },
+                    supportingContent = {
+                        Text(
+                            if (uiState.isDigitalWellbeingBlocked) "Tracking blocked: Digital Wellbeing cannot monitor screen time or app activity"
+                            else "Prevent Android Digital Wellbeing from tracking Notes/Cherish screen time",
+                            fontSize = 13.sp
+                        )
+                    },
+                    leadingContent = {
+                        Icon(
+                            if (uiState.isDigitalWellbeingBlocked) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                            contentDescription = null,
+                            tint = if (uiState.isDigitalWellbeingBlocked) primaryAccent else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    },
+                    trailingContent = {
+                        TextButton(onClick = { viewModel.openDigitalWellbeingSettings(context) }) {
+                            Text(
+                                if (uiState.isDigitalWellbeingBlocked) "Blocked" else "Turn Off",
+                                fontWeight = FontWeight.Bold,
+                                color = if (uiState.isDigitalWellbeingBlocked) primaryAccent else MaterialTheme.colorScheme.primary
+                            )
+                        }
                     }
                 )
 

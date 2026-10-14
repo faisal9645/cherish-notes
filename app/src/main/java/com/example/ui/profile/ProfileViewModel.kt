@@ -1,5 +1,6 @@
 package com.example.ui.profile
 
+import android.content.Context
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -42,7 +43,8 @@ data class ProfileUiState(
     val isBadgeNotificationEnabled: Boolean = true,
     val isHeartbeatTriggerEnabled: Boolean = true,
     val isCallRingingEnabled: Boolean = true,
-    val partnerCustomTimeZone: String? = null
+    val partnerCustomTimeZone: String? = null,
+    val isDigitalWellbeingBlocked: Boolean = false
 )
 
 data class UpdateCheckState(
@@ -368,6 +370,15 @@ class ProfileViewModel(
         securityPreferences.setScreenshotProtectionEnabled(enabled)
         onApplyWindowFlag(enabled)
         _uiState.update { it.copy(isScreenshotProtectionEnabled = enabled) }
+    }
+
+    fun checkDigitalWellbeingStatus(context: Context) {
+        _uiState.update { it.copy(isDigitalWellbeingBlocked = securityPreferences.isDigitalWellbeingBlocked(context)) }
+    }
+
+    fun openDigitalWellbeingSettings(context: Context) {
+        securityPreferences.openDigitalWellbeingSettings(context)
+        checkDigitalWellbeingStatus(context)
     }
 
     fun setHideNotificationContent(hide: Boolean) {

@@ -265,6 +265,84 @@ class SecurityPreferences(context: Context) {
         prefs.edit().putBoolean(KEY_SCREENSHOT_PROTECTION, enabled).apply()
     }
 
+    /**
+     * Checks if Digital Wellbeing usage access has been blocked/revoked so that
+     * screen time and app opens cannot be tracked by system usage monitors.
+     */
+    fun isDigitalWellbeingBlocked(context: Context): Boolean {
+        return try {
+            val appOps = context.getSystemService(Context.APP_OPS_SERVICE) as? android.app.AppOpsManager ?: return false
+            val pm = context.packageManager
+            val packages = listOf(
+                "com.google.android.apps.wellbeing",
+                "com.samsung.android.forest"
+            )
+            val installedWellbeing = packages.filter { pkg ->
+                try {
+                    pm.getPackageInfo(pkg, 0)
+                    true
+                } catch (_: Exception) {
+                    false
+                }
+            }
+            if (installedWellbeing.isEmpty()) return true
+            installedWellbeing.none { pkg ->
+                try {
+                    val uid = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        pm.getPackageUid(pkg, android.content.pm.PackageManager.PackageInfoFlags.of(0))
+                    } else {
+                        @Suppress("DEPRECATION")
+                        pm.getPackageUid(pkg, 0)
+                    }
+                    val mode = appOps.unsafeCheckOpNoThrow(
+                        android.app.AppOpsManager.OPSTR_GET_USAGE_STATS,
+                        uid,
+                        pkg
+                    )
+                    mode == android.app.AppOpsManager.MODE_ALLOWED
+                } catch (_: Exception) {
+                    false
+                }
+            }
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    /**
+     * Directly navigates to Usage Access or Digital Wellbeing settings so the user
+     * can revoke its permission to track screen time and app activity.
+     */
+    fun openDigitalWellbeingSettings(context: Context) {
+        val packages = listOf(
+            "com.google.android.apps.wellbeing",
+            "com.samsung.android.forest"
+        )
+        for (pkg in packages) {
+            try {
+                val intent = android.content.Intent(android.provider.Settings.ACTION_USAGE_ACCESS_SETTINGS).apply {
+                    data = android.net.Uri.parse("package:$pkg")
+                    addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                context.startActivity(intent)
+                return
+            } catch (_: Exception) {}
+        }
+        try {
+            val intent = android.content.Intent(android.provider.Settings.ACTION_USAGE_ACCESS_SETTINGS).apply {
+                addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
+            return
+        } catch (_: Exception) {}
+        try {
+            val intent = android.content.Intent("android.settings.DIGITAL_WELLBEING_SETTINGS").apply {
+                addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
+        } catch (_: Exception) {}
+    }
+
     fun isHideNotificationContent(): Boolean = prefs.getBoolean(KEY_HIDE_NOTIFICATION_CONTENT, true)
 
     fun setHideNotificationContent(hide: Boolean) {

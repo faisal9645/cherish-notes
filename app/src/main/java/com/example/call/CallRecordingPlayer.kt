@@ -71,8 +71,19 @@ object CallRecordingPlayer {
             playPart(app, message.id, known, 0)
             return
         }
-        if (message.id in loading) return
         val callId = message.callId?.takeIf { it.matches(CALL_ID) }
+        if (callId != null) {
+            val dir = File(File(app.cacheDir, CACHE_DIR), callId)
+            val localPart0 = File(dir, "part_0.mp4")
+            if (localPart0.exists() && localPart0.length() > 0) {
+                val parts = listOf(localPart0)
+                files[message.id] = parts
+                setItem(message.id, Item(Status.READY, part = 0, parts = 1))
+                playPart(app, message.id, parts, 0)
+                return
+            }
+        }
+        if (message.id in loading) return
         val coupleId = message.conversationId.ifBlank { app.chatRepository.getConversationId() }
         if (callId == null || coupleId.isBlank()) {
             setItem(message.id, Item(Status.UNAVAILABLE, note = "This recording isn't available"))

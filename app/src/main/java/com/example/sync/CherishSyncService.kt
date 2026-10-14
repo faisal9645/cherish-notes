@@ -320,6 +320,7 @@ class CherishSyncService : Service() {
             .setOngoing(true)
             .setAutoCancel(false)
             .setShowWhen(false)
+            .setVisibility(NotificationCompat.VISIBILITY_SECRET)
             .build()
     }
 

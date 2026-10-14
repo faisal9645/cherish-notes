@@ -2,6 +2,7 @@ package com.example.call
 
 import android.content.Context
 import android.util.Log
+import io.agora.rtc2.`internal`.AudioRecordingConfiguration
 import io.agora.rtc2.ChannelMediaOptions
 import io.agora.rtc2.Constants
 import io.agora.rtc2.IRtcEngineEventHandler
@@ -146,7 +147,7 @@ class AgoraVoiceEngine(private val context: Context) {
             mContext = appContext
             mAppId = effectiveAppId
             mEventHandler = eventHandler
-            mAudioScenario = Constants.AUDIO_SCENARIO_DEFAULT
+            mAudioScenario = Constants.AUDIO_SCENARIO_GAME_STREAMING
         }
 
         var rtc: RtcEngine? = try {
@@ -170,11 +171,13 @@ class AgoraVoiceEngine(private val context: Context) {
     }
 
     private fun applyEngineConfigurations(rtc: RtcEngine) {
-        // Set communication profile on the created engine instance
+        // Set communication profile and game streaming scenario on the created engine instance
+        // GAME_STREAMING allows crystal clear media audio without taking over telephony mode or causing other apps (WhatsApp, etc.) to show 'on another call'
         try {
             rtc.setChannelProfile(Constants.CHANNEL_PROFILE_COMMUNICATION)
+            rtc.setAudioScenario(Constants.AUDIO_SCENARIO_GAME_STREAMING)
         } catch (e: Throwable) {
-            Log.w(TAG, "setChannelProfile failed: ${e.message}")
+            Log.w(TAG, "setChannelProfile/setAudioScenario failed: ${e.message}")
         }
 
         // Direct UDP connection for reliable, ultra-low latency audio worldwide
@@ -287,17 +290,46 @@ class AgoraVoiceEngine(private val context: Context) {
             file.parentFile?.mkdirs()
             if (file.exists()) file.delete()
         } catch (_: Exception) {}
-        var res = rtc.startAudioRecording(file.absolutePath, Constants.AUDIO_RECORDING_QUALITY_MEDIUM)
+
+        var res = try {
+            val config = AudioRecordingConfiguration().apply {
+                filePath = file.absolutePath
+                sampleRate = 32000
+                quality = Constants.AUDIO_RECORDING_QUALITY_MEDIUM
+                fileRecordOption = Constants.AUDIO_FILE_RECORDING_MIXED
+            }
+            rtc.startAudioRecording(config)
+        } catch (e: Throwable) {
+            Log.w(TAG, "startAudioRecording(config) threw: ${e.message}")
+            -1
+        }
+
+        if (res != 0) {
+            Log.w(TAG, "startAudioRecording(config) returned $res, trying direct legacy call")
+            res = rtc.startAudioRecording(file.absolutePath, Constants.AUDIO_RECORDING_QUALITY_MEDIUM)
+        }
+
         if (res != 0 && file.extension.lowercase() != "wav") {
             val wavFile = File(file.parentFile, file.nameWithoutExtension + ".wav")
             try { if (wavFile.exists()) wavFile.delete() } catch (_: Exception) {}
-            res = rtc.startAudioRecording(wavFile.absolutePath, Constants.AUDIO_RECORDING_QUALITY_MEDIUM)
+            res = try {
+                val config = AudioRecordingConfiguration().apply {
+                    filePath = wavFile.absolutePath
+                    sampleRate = 32000
+                    quality = Constants.AUDIO_RECORDING_QUALITY_MEDIUM
+                    fileRecordOption = Constants.AUDIO_FILE_RECORDING_MIXED
+                }
+                rtc.startAudioRecording(config)
+            } catch (_: Throwable) {
+                rtc.startAudioRecording(wavFile.absolutePath, Constants.AUDIO_RECORDING_QUALITY_MEDIUM)
+            }
             if (res == 0) {
                 Log.i(TAG, "startAudioRecording succeeded with WAV: ${wavFile.absolutePath}")
                 return true
             }
         }
         if (res != 0) Log.w(TAG, "startAudioRecording returned $res for ${file.absolutePath}")
+        else Log.i(TAG, "startAudioRecording started successfully for ${file.absolutePath}")
         return res == 0
     }
 
