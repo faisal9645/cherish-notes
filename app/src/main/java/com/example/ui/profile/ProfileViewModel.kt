@@ -41,6 +41,7 @@ data class ProfileUiState(
     val isNotificationsEnabled: Boolean = true,
     val isBadgeNotificationEnabled: Boolean = true,
     val isHeartbeatTriggerEnabled: Boolean = true,
+    val isCallRingingEnabled: Boolean = true,
     val partnerCustomTimeZone: String? = null
 )
 
@@ -141,6 +142,7 @@ class ProfileViewModel(
             isNotificationsEnabled = securityPreferences.isNotificationsEnabled(),
             isBadgeNotificationEnabled = securityPreferences.isBadgeNotificationEnabled(),
             isHeartbeatTriggerEnabled = securityPreferences.isHeartbeatTriggerEnabled(),
+            isCallRingingEnabled = securityPreferences.isCallRingingEnabled(),
             partnerCustomTimeZone = securityPreferences.getPartnerCustomTimeZone()
         )
     )
@@ -171,6 +173,7 @@ class ProfileViewModel(
                 isNotificationsEnabled = securityPreferences.isNotificationsEnabled(),
                 isBadgeNotificationEnabled = securityPreferences.isBadgeNotificationEnabled(),
                 isHeartbeatTriggerEnabled = securityPreferences.isHeartbeatTriggerEnabled(),
+                isCallRingingEnabled = securityPreferences.isCallRingingEnabled(),
                 partnerCustomTimeZone = securityPreferences.getPartnerCustomTimeZone()
             )
         }
@@ -204,6 +207,11 @@ class ProfileViewModel(
     fun setHeartbeatTriggerEnabled(enabled: Boolean) {
         securityPreferences.setHeartbeatTriggerEnabled(enabled)
         _uiState.update { it.copy(isHeartbeatTriggerEnabled = enabled) }
+    }
+
+    fun setCallRingingEnabled(enabled: Boolean) {
+        securityPreferences.setCallRingingEnabled(enabled)
+        _uiState.update { it.copy(isCallRingingEnabled = enabled) }
     }
 
     fun setSideEmergencyExitEnabled(enabled: Boolean) {
@@ -262,6 +270,12 @@ class ProfileViewModel(
         viewModelScope.launch {
             securityPreferences.chatExperienceModeFlow.collect { mode ->
                 _uiState.update { it.copy(chatExperienceMode = mode) }
+            }
+        }
+
+        viewModelScope.launch {
+            securityPreferences.isCallRingingEnabledFlow.collect { ringing ->
+                _uiState.update { it.copy(isCallRingingEnabled = ringing) }
             }
         }
     }

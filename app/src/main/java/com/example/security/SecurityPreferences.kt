@@ -294,6 +294,16 @@ class SecurityPreferences(context: Context) {
     private val _isBadgeNotificationEnabled = MutableStateFlow(isBadgeNotificationEnabled())
     val isBadgeNotificationEnabledFlow: StateFlow<Boolean> = _isBadgeNotificationEnabled.asStateFlow()
 
+    fun isCallRingingEnabled(): Boolean = prefs.getBoolean(KEY_CALL_RINGING_ENABLED, true)
+
+    fun setCallRingingEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_CALL_RINGING_ENABLED, enabled).apply()
+        _isCallRingingEnabled.value = enabled
+    }
+
+    private val _isCallRingingEnabled = MutableStateFlow(isCallRingingEnabled())
+    val isCallRingingEnabledFlow: StateFlow<Boolean> = _isCallRingingEnabled.asStateFlow()
+
     fun setPin(pin: String) {
         val hash = hashPin(pin)
         prefs.edit().putString(KEY_PIN_HASH, hash).apply()
@@ -638,6 +648,9 @@ class SecurityPreferences(context: Context) {
                 setBadgeNotificationEnabled(true)
                 setHeartbeatTriggerEnabled(true)
                 setChatSoundsEnabled(true)
+                if (!prefs.contains(KEY_CALL_RINGING_ENABLED)) {
+                    setCallRingingEnabled(true)
+                }
                 prefs.edit().putInt(KEY_LAST_SEEN_APP_VERSION, currentVersionCode).apply()
             }
         } catch (e: Throwable) {
@@ -654,6 +667,7 @@ class SecurityPreferences(context: Context) {
         private const val KEY_HIDE_NOTIFICATION_CONTENT = "hide_notification_content"
         private const val KEY_NOTIFICATIONS_ENABLED = "notifications_enabled"
         private const val KEY_BADGE_NOTIFICATION_ENABLED = "badge_notification_enabled"
+        private const val KEY_CALL_RINGING_ENABLED = "call_ringing_enabled"
         private const val KEY_PIN_HASH = "pin_hash"
         private const val KEY_COUPLE_KEY = "couple_key"
         private const val KEY_PARTNER_EMAIL = "partner_email"

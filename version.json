@@ -1,9 +1,9 @@
 {
-  "versionCode": 150,
-  "versionName": "1.7.78",
-  "tagName": "v1.7.78-150",
-  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.7.78-150/app_update_150.apk",
-  "assetSize": 32467784,
-  "releaseNotes": "Notes v1.7.78 (Build 150):\nHeartbeat felt acknowledgment and masked reminder calling notifications",
-  "releaseDate": "2026-10-14T01:02:27Z"
+  "versionCode": 151,
+  "versionName": "1.7.79",
+  "tagName": "v1.7.79-151",
+  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.7.79-151/app_update_151.apk",
+  "assetSize": 32467184,
+  "releaseNotes": "Notes v1.7.79 (Build 151):\nCall notification ringing toggle in Settings, silent/vibrate incoming calls, and cloud Firestore rules sync",
+  "releaseDate": "2026-10-14T01:22:29Z"
 }

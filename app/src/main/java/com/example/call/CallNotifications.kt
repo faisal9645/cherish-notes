@@ -24,6 +24,7 @@ import com.example.security.SecurityPreferences
  */
 object CallNotifications {
     const val CHANNEL_INCOMING = "calls_incoming"
+    const val CHANNEL_INCOMING_SILENT = "calls_incoming_silent"
     const val CHANNEL_ONGOING = "calls_ongoing"
     const val CHANNEL_MISSED = "calls_missed"
 
@@ -64,6 +65,14 @@ object CallNotifications {
             lockscreenVisibility = Notification.VISIBILITY_PRIVATE
             setShowBadge(false)
         }
+        val incomingSilent = NotificationChannel(CHANNEL_INCOMING_SILENT, "Silent calls", NotificationManager.IMPORTANCE_HIGH).apply {
+            description = "Silent incoming calls without ringtone"
+            setSound(null, null)
+            enableVibration(true)
+            vibrationPattern = longArrayOf(0, 900, 700, 900, 700)
+            lockscreenVisibility = Notification.VISIBILITY_PRIVATE
+            setShowBadge(false)
+        }
         val ongoing = NotificationChannel(CHANNEL_ONGOING, "Call in progress", NotificationManager.IMPORTANCE_LOW).apply {
             description = "Shown while a call is on"
             setSound(null, null)
@@ -75,7 +84,7 @@ object CallNotifications {
             description = "Calls you didn't answer"
             lockscreenVisibility = Notification.VISIBILITY_PRIVATE
         }
-        manager.createNotificationChannels(listOf(incoming, ongoing, missed))
+        manager.createNotificationChannels(listOf(incoming, incomingSilent, ongoing, missed))
     }
 
     /** The ringing notification, with Answer and Decline. Full screen only where Android allows it. */
@@ -83,6 +92,8 @@ object CallNotifications {
         createChannels(context)
         val prefs = SecurityPreferences.getInstance(context)
         val isMasked = prefs.isHideNotificationContent() || prefs.isDisguiseModeEnabled()
+        val isRinging = prefs.isCallRingingEnabled()
+        val channelId = if (isRinging) CHANNEL_INCOMING else CHANNEL_INCOMING_SILENT
         val remaining = invite.ringUntil - System.currentTimeMillis()
         val ringFor = if (remaining < 25_000L) 75_000L else remaining.coerceAtMost(90_000L)
         val appIcon = com.example.notifications.NotificationHelper.getAppIconBitmap(context)
@@ -104,7 +115,7 @@ object CallNotifications {
                 immutableFlags()
             )
 
-            val builder = NotificationCompat.Builder(context, CHANNEL_INCOMING)
+            val builder = NotificationCompat.Builder(context, channelId)
                 .setSmallIcon(R.drawable.ic_stat_notes)
                 .apply {
                     if (appIcon != null) setLargeIcon(appIcon)
@@ -118,10 +129,11 @@ object CallNotifications {
                 .setOngoing(true)
                 .setAutoCancel(false)
                 .setOnlyAlertOnce(true)
+                .setSilent(!isRinging)
                 .setTimeoutAfter(ringFor)
                 .setContentIntent(openNotesIntent)
                 .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
-                .setPublicVersion(neutralPublic(context, CHANNEL_INCOMING, maskedTitle))
+                .setPublicVersion(neutralPublic(context, channelId, maskedTitle))
 
             val notification = builder.build()
             notify(context, ID_INCOMING, notification)
@@ -142,7 +154,7 @@ object CallNotifications {
             context, REQUEST_DECLINE, CallActionReceiver.declineIntent(context, invite), immutableFlags()
         )
 
-        val builder = NotificationCompat.Builder(context, CHANNEL_INCOMING)
+        val builder = NotificationCompat.Builder(context, channelId)
             .setSmallIcon(R.drawable.ic_stat_notes)
             .apply {
                 if (appIcon != null) setLargeIcon(appIcon)
@@ -154,12 +166,13 @@ object CallNotifications {
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setOngoing(true)
             .setAutoCancel(false)
-            .setOnlyAlertOnce(false)
+            .setOnlyAlertOnce(!isRinging)
+            .setSilent(!isRinging)
             .setTimeoutAfter(ringFor)
             .setContentIntent(fullScreen)
             .setFullScreenIntent(fullScreen, true)
             .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
-            .setPublicVersion(neutralPublic(context, CHANNEL_INCOMING, NEUTRAL_INCOMING))
+            .setPublicVersion(neutralPublic(context, channelId, NEUTRAL_INCOMING))
             .addPerson(person)
 
         val notification = try {
@@ -171,8 +184,10 @@ object CallNotifications {
                 .addAction(0, "Answer", answer)
                 .build()
         }
-        // Keeps ringing until answered, declined or timed out
-        notification.flags = notification.flags or Notification.FLAG_INSISTENT
+        if (isRinging) {
+            // Keeps ringing until answered, declined or timed out
+            notification.flags = notification.flags or Notification.FLAG_INSISTENT
+        }
         notify(context, ID_INCOMING, notification)
     }
 
@@ -250,6 +265,7 @@ object CallNotifications {
         )
         val title = if (isMasked) prefs.getMaskedNotificationTitle() else NEUTRAL_MISSED
         val text = if (isMasked) prefs.getMaskedNotificationText() else if (showIdentity && !callerName.isNullOrBlank()) "From $callerName" else "Tap to open"
+        val isRinging = prefs.isCallRingingEnabled()
         val notification = NotificationCompat.Builder(context, CHANNEL_MISSED)
             .setSmallIcon(R.drawable.ic_stat_notes)
             .setColor(ACCENT)
@@ -258,6 +274,7 @@ object CallNotifications {
             .setSubText(if (isMasked) prefs.getMaskedNotificationTitle() else "Cherish")
             .setCategory(if (isMasked) NotificationCompat.CATEGORY_REMINDER else NotificationCompat.CATEGORY_MISSED_CALL)
             .setAutoCancel(true)
+            .setSilent(!isRinging)
             .setContentIntent(open)
             .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
             .setPublicVersion(neutralPublic(context, CHANNEL_MISSED, title))
