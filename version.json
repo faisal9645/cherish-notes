@@ -1,9 +1,9 @@
 {
-  "versionCode": 152,
-  "versionName": "1.7.80",
-  "tagName": "v1.7.80-152",
-  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.7.80-152/app_update_152.apk",
-  "assetSize": 32467896,
-  "releaseNotes": "Notes v1.7.80 (Build 152):\nFix closed-app notifications, persistent heartbeat triggers, and background sync",
-  "releaseDate": "2026-10-14T01:53:31Z"
+  "versionCode": 153,
+  "versionName": "1.7.81",
+  "tagName": "v1.7.81-153",
+  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.7.81-153/app_update_153.apk",
+  "assetSize": 32348227,
+  "releaseNotes": "Notes v1.7.81 (Build 153):\n• Pure white day mode & full AMOLED black night mode wallpaper (Theme 1)\n• High-definition theme-matching vector doodles\n• Clean Both of Us card with alert pill removed\n• Circle video note ring preview & document sharing support",
+  "releaseDate": "2026-10-14T06:21:06Z"
 }

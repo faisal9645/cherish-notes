@@ -174,9 +174,10 @@ fun WatchPartyHost(app: CherishApplication, allowed: Boolean) {
     val lifecycleState by LocalLifecycleOwner.current.lifecycle.currentStateFlow.collectAsState()
     val onScreen = lifecycleState.isAtLeast(Lifecycle.State.STARTED)
 
+    val dockBounds = WatchPartyUi.chatDockBounds
     val mode = WatchPartyUi.mode
-    val docked = mode == WatchPartyMode.Mini && WatchPartyUi.chatOnScreen && !WatchPartyUi.chatBlocked
-    val floating = mode == WatchPartyMode.Mini && !WatchPartyUi.chatOnScreen
+    val docked = mode == WatchPartyMode.Mini && WatchPartyUi.chatOnScreen && !WatchPartyUi.chatBlocked && dockBounds != null
+    val floating = mode == WatchPartyMode.Mini && (!WatchPartyUi.chatOnScreen || WatchPartyUi.chatBlocked || dockBounds == null)
     val shown = allowed && onScreen && party != null
     val showPlayer = shown && (mode == WatchPartyMode.Theater || docked || floating)
     SideEffect { WatchPartyUi.playerVisible = showPlayer }
@@ -364,11 +365,25 @@ fun WatchPartyHost(app: CherishApplication, allowed: Boolean) {
     var theaterSlot by remember { mutableStateOf<Rect?>(null) }
     var dockSlot by remember { mutableStateOf<Rect?>(null) }
     var floatSlot by remember { mutableStateOf<Rect?>(null) }
-    val target = when {
+    val fallbackMiniSlot = remember(hostSize) {
+        val w = if (hostSize.width > 0) (hostSize.width * 0.44f).coerceIn(240f, 480f) else 320f
+        val h = w * 9f / 16f
+        val screenW = if (hostSize.width > 0) hostSize.width.toFloat() else 1080f
+        val screenH = if (hostSize.height > 0) hostSize.height.toFloat() else 1920f
+        Rect(
+            left = (screenW - w - 24f).coerceAtLeast(0f),
+            top = (screenH - h - 140f).coerceAtLeast(0f),
+            right = (screenW - 24f).coerceAtLeast(w),
+            bottom = (screenH - 140f).coerceAtLeast(h)
+        )
+    }
+    val target = (when {
         mode == WatchPartyMode.Theater -> theaterSlot
-        docked -> dockSlot
-        else -> floatSlot
-    }?.translate(-hostOrigin)
+        docked && dockSlot != null -> dockSlot
+        floating && floatSlot != null -> floatSlot
+        mode == WatchPartyMode.Mini -> fallbackMiniSlot
+        else -> null
+    })?.translate(-hostOrigin)
     val videoRect = remember { Animatable(Rect.Zero, Rect.VectorConverter) }
     var placed by remember { mutableStateOf(false) }
     var controlsVisible by remember { mutableStateOf(true) }
@@ -475,7 +490,6 @@ fun WatchPartyHost(app: CherishApplication, allowed: Boolean) {
                     onTogglePlay = { togglePlay() },
                     onSeek = { seek(it) },
                     onSpeedChange = { repo.updateWatchPartySpeed(it) },
-                    onSendVoice = { repo.sendWatchPartyVoiceSnippet(it) },
                     onSendWhisper = { repo.sendWatchPartyWhisper(it) },
                     controlsVisible = controlsVisible
                 )
@@ -880,7 +894,6 @@ private fun Theater(
     onTogglePlay: () -> Unit,
     onSeek: (Float) -> Unit,
     onSpeedChange: (Float) -> Unit,
-    onSendVoice: (String) -> Unit,
     onSendWhisper: (String) -> Unit,
     controlsVisible: Boolean
 ) {
@@ -950,7 +963,7 @@ private fun Theater(
                                     .padding(8.dp)
                             ) {
                                 header()
-                                ReactionBar(onReact = onReact, onSendVoice = onSendVoice, buttonSize = 42.dp)
+                                ReactionBar(onReact = onReact, buttonSize = 42.dp)
                                 Spacer(modifier = Modifier.height(8.dp))
                                 PlaybackDeck(party, player, onTogglePlay, onSeek, onSpeedChange)
                                 TheaterActions(onChatWhileWatching, onEndForBoth)
@@ -980,7 +993,7 @@ private fun Theater(
                             .padding(top = 10.dp)
                     )
                     Spacer(modifier = Modifier.weight(1f))
-                    ReactionBar(onReact = onReact, onSendVoice = onSendVoice, buttonSize = 54.dp)
+                    ReactionBar(onReact = onReact, buttonSize = 54.dp)
                     Spacer(modifier = Modifier.height(12.dp))
                     PlaybackDeck(party, player, onTogglePlay, onSeek, onSpeedChange)
                     TheaterActions(onChatWhileWatching, onEndForBoth)
@@ -1090,7 +1103,7 @@ private fun TheaterHeader(
 }
 
 @Composable
-private fun ReactionBar(onReact: (String) -> Unit, onSendVoice: (String) -> Unit, buttonSize: Dp) {
+private fun ReactionBar(onReact: (String) -> Unit, buttonSize: Dp) {
     Row(
         horizontalArrangement = Arrangement.SpaceEvenly,
         modifier = Modifier
@@ -1098,58 +1111,6 @@ private fun ReactionBar(onReact: (String) -> Unit, onSendVoice: (String) -> Unit
             .padding(horizontal = 12.dp, vertical = 4.dp)
     ) {
         ReactionEmojis.forEach { emoji -> ReactionButton(emoji, buttonSize) { onReact(emoji) } }
-        VoiceSnippetButton(buttonSize, onSendVoice)
-    }
-}
-
-@Composable
-private fun VoiceSnippetButton(size: Dp, onSendVoice: (String) -> Unit) {
-    val context = LocalContext.current
-    val helper = (context.applicationContext as com.example.CherishApplication).voiceRecorderHelper
-    val isRecording by helper.isRecording.collectAsState()
-    
-    val scope = rememberCoroutineScope()
-    val bounce = remember { Animatable(1f) }
-    
-    Box(
-        contentAlignment = Alignment.Center,
-        modifier = Modifier
-            .size(size)
-            .graphicsLayer {
-                scaleX = bounce.value
-                scaleY = bounce.value
-            }
-            .clip(CircleShape)
-            .background(if (isRecording) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant)
-            .pointerInput(Unit) {
-                detectTapGestures(
-                    onPress = {
-                        if (androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.RECORD_AUDIO) == android.content.pm.PackageManager.PERMISSION_GRANTED) {
-                            scope.launch { bounce.animateTo(1.2f) }
-                            helper.startRecording()
-                            try { awaitRelease() } finally {
-                                scope.launch { bounce.animateTo(1f) }
-                                val (file, duration) = helper.stopRecording()
-                                if (file != null && duration > 0) {
-                                    val bytes = file.readBytes()
-                                    val base64 = android.util.Base64.encodeToString(bytes, android.util.Base64.DEFAULT)
-                                    onSendVoice("data:audio/m4a;base64,$base64")
-                                    file.delete()
-                                }
-                            }
-                        } else {
-                            android.widget.Toast.makeText(context, "Microphone permission needed", android.widget.Toast.LENGTH_SHORT).show()
-                        }
-                    }
-                )
-            }
-    ) {
-        Icon(
-            Icons.Default.Mic, 
-            contentDescription = "Hold to talk", 
-            tint = if (isRecording) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(size * 0.5f)
-        )
     }
 }
 

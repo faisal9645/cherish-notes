@@ -34,6 +34,8 @@ fun MoodPickerSheet(
     // to send a hug)
     val quickMoods = listOf("Happy ☀️", "Tired 😴", "Missing you 🥰", "Stressed 😣")
     val presets = listOf(
+        "Loving ❤️",
+        "Loving mood 💕",
         "Thinking of you 💭",
         "At work 💼",
         "Studying 📚",

@@ -7,8 +7,6 @@ import io.agora.rtc2.Constants
 import io.agora.rtc2.IRtcEngineEventHandler
 import io.agora.rtc2.RtcEngine
 import io.agora.rtc2.RtcEngineConfig
-import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
 
 /**
@@ -34,14 +32,19 @@ class AgoraVoiceEngine(private val context: Context) {
     }
 
     private var engine: RtcEngine? = null
-    /** Completes when the previous call's engine has been fully released. */
-    private var released: CompletableDeferred<Unit>? = null
 
-    /** Creates the engine for a call; false if Agora couldn't start on this phone. */
     suspend fun start(appId: String, listener: Listener): Boolean {
-        if (engine != null) return true
-        // A new call right after the last one: wait for its engine to be gone first
-        released?.let { withTimeoutOrNull(RELEASE_WAIT_MS) { it.await() } }
+        // If an engine already exists, stop and clean it up first to prevent multiple instances
+        if (engine != null) {
+            try {
+                engine?.leaveChannel()
+            } catch (_: Throwable) {}
+            engine = null
+        }
+        try {
+            RtcEngine.destroy()
+        } catch (_: Throwable) {}
+
         val handler = object : IRtcEngineEventHandler() {
             override fun onJoinChannelSuccess(channel: String?, uid: Int, elapsed: Int) = listener.onJoined(uid)
             override fun onRejoinChannelSuccess(channel: String?, uid: Int, elapsed: Int) = listener.onJoined(uid)
@@ -59,16 +62,27 @@ class AgoraVoiceEngine(private val context: Context) {
                 listener.onNetworkQuality(uid, txQuality, rxQuality)
             override fun onError(err: Int) = listener.onEngineError(err)
         }
+
+        val effectiveAppId = appId.trim().ifBlank { AgoraTokenBuilder.DEFAULT_APP_ID }
         return try {
             val config = RtcEngineConfig().apply {
                 mContext = context.applicationContext
-                mAppId = appId
+                mAppId = effectiveAppId
                 mEventHandler = handler
                 mChannelProfile = Constants.CHANNEL_PROFILE_COMMUNICATION
                 mAudioScenario = Constants.AUDIO_SCENARIO_DEFAULT
-                mAreaCode = RtcEngineConfig.AreaCode.AREA_CODE_GLOB
             }
-            val created = RtcEngine.create(config)
+            val created = try {
+                RtcEngine.create(config)
+            } catch (e: Throwable) {
+                Log.e(TAG, "RtcEngine.create threw an exception", e)
+                null
+            }
+
+            if (created == null) {
+                Log.e(TAG, "RtcEngine.create returned null for appId: $effectiveAppId")
+                return false
+            }
 
             // Direct UDP connection for reliable, ultra-low latency audio worldwide
             try {
@@ -77,17 +91,33 @@ class AgoraVoiceEngine(private val context: Context) {
                 Log.w(TAG, "setCloudProxy(NONE_PROXY) failed: ${e.message}")
             }
 
-            created.enableAudio()
+            try {
+                created.enableAudio()
+            } catch (e: Throwable) {
+                Log.w(TAG, "enableAudio failed: ${e.message}")
+            }
+
             // Clear wideband speech; Agora adapts its bitrate to the network
-            created.setAudioProfile(Constants.AUDIO_PROFILE_SPEECH_STANDARD)
+            try {
+                created.setAudioProfile(Constants.AUDIO_PROFILE_SPEECH_STANDARD)
+            } catch (e: Throwable) {
+                Log.w(TAG, "setAudioProfile failed: ${e.message}")
+            }
+
             // AI noise suppression, balanced (safely guarded against native library missing)
             try {
                 created.setAINSMode(true, AINS_MODE_BALANCED)
             } catch (e: Throwable) {
                 Log.w(TAG, "setAINSMode failed: ${e.message}")
             }
+
             // A call starts on the earpiece, like a phone call; headsets take over when connected
-            created.setDefaultAudioRoutetoSpeakerphone(false)
+            try {
+                created.setDefaultAudioRoutetoSpeakerphone(false)
+            } catch (e: Throwable) {
+                Log.w(TAG, "setDefaultAudioRoutetoSpeakerphone failed: ${e.message}")
+            }
+
             engine = created
             true
         } catch (e: Exception) {
@@ -171,22 +201,19 @@ class AgoraVoiceEngine(private val context: Context) {
         return res == 0
     }
 
-    /** Leaves the call and releases the engine (in the background: it can take a moment). */
+    /** Leaves the call and releases the engine cleanly. */
     fun stop() {
-        val rtc = engine ?: return
+        val rtc = engine
         engine = null
         try {
-            rtc.leaveChannel()
-        } catch (e: Exception) {
+            rtc?.leaveChannel()
+        } catch (e: Throwable) {
             Log.w(TAG, "leaveChannel failed", e)
         }
-        val done = CompletableDeferred<Unit>()
-        released = done
         try {
-            RtcEngine.destroy { done.complete(Unit) }
-        } catch (e: Exception) {
-            Log.w(TAG, "Releasing the call's audio failed", e)
-            done.complete(Unit)
+            RtcEngine.destroy()
+        } catch (e: Throwable) {
+            Log.w(TAG, "RtcEngine.destroy failed", e)
         }
     }
 
@@ -202,6 +229,5 @@ class AgoraVoiceEngine(private val context: Context) {
     companion object {
         private const val TAG = "AgoraVoiceEngine"
         private const val AINS_MODE_BALANCED = 0
-        private const val RELEASE_WAIT_MS = 5_000L
     }
 }

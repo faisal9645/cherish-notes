@@ -283,7 +283,8 @@ fun ChatScreen(
         prefs.isExternalPickerActive = false
         prefs.ignoreNextPause = false
         if (uri != null) {
-            viewModel.sendMediaFile(uri, MessageType.DOCUMENT)
+            val fileName = com.example.util.DocumentHelper.getDisplayName(context, uri)
+            viewModel.sendMediaFile(uri, MessageType.DOCUMENT, fileName)
         }
     }
     val micPermissionLauncher = rememberLauncherForActivityResult(
@@ -673,6 +674,14 @@ fun ChatScreen(
     // In the first days of a month: last month's story is offered, and plays when asked
     var monthRecapInvite by remember { mutableStateOf<com.example.ui.recap.MonthRecap?>(null) }
     var monthRecapStory by remember { mutableStateOf<com.example.ui.recap.MonthRecap?>(null) }
+    val sentGoodMorningToday by rememberUpdatedState(
+        uiState.messages.any {
+            it.senderId == currentUserId &&
+            it.timestamp >= todayStartMillis() &&
+            (it.effect == EFFECT_GOODMORNING || it.text.contains("good morning", ignoreCase = true)) &&
+            !it.isDeleted
+        }
+    )
     val sentGoodnightTonight by rememberUpdatedState(
         uiState.messages.any {
             it.effect == EFFECT_GOODNIGHT && it.senderId == currentUserId && it.timestamp >= tonightStartMillis()
@@ -682,10 +691,11 @@ fun ChatScreen(
         if (!isChatInView) return@LaunchedEffect
         try {
             delay(450)
-            if (isGoodMorningDue(context)) {
+            val alreadySentGm = sentGoodMorningToday
+            if (isGoodMorningDue(context) && !alreadySentGm) {
                 markGoodMorningShown(context)
                 showGoodMorning = true
-                delay(5_500)
+                delay(8_500)
                 showGoodMorning = false
                 delay(400)
             }
@@ -1047,14 +1057,15 @@ fun ChatScreen(
                     }
                 }
                 val topBarBackgroundModifier = if (isPrivate) {
+                    val topBg = if (isDark) Color(0xFF212121) else Color.White
                     Modifier
                         .fillMaxWidth()
                         .background(
                             Brush.verticalGradient(
                                 colorStops = arrayOf(
-                                    0.0f to (if (isDark) Color.Black.copy(alpha = 0.95f) else Color.White.copy(alpha = 0.98f)),
-                                    0.7f to (if (isDark) Color.Black.copy(alpha = 0.85f) else Color.White.copy(alpha = 0.88f)),
-                                    1.0f to Color.Transparent
+                                    0.0f to topBg,
+                                    0.8f to topBg,
+                                    1.0f to topBg.copy(alpha = 0.92f)
                                 )
                             )
                         )
@@ -1170,9 +1181,9 @@ fun ChatScreen(
                                     }
                                     IconButton(
                                         onClick = { showChatMenu = true },
-                                        modifier = Modifier.size(42.dp)
+                                        modifier = Modifier.size(44.dp)
                                     ) {
-                                        Icon(Icons.Default.MoreVert, contentDescription = "More options", tint = iconTint, modifier = Modifier.size(24.dp))
+                                        Icon(Icons.Default.MoreVert, contentDescription = "More options", tint = iconTint, modifier = Modifier.size(26.dp))
                                     }
                                 }
                                 DropdownMenu(
@@ -1270,9 +1281,9 @@ fun ChatScreen(
                                 Box {
                                     IconButton(
                                         onClick = { showChatMenu = true },
-                                        modifier = Modifier.size(36.dp)
+                                        modifier = Modifier.size(40.dp)
                                     ) {
-                                        Icon(Icons.Default.MoreVert, contentDescription = "More options", tint = iconTint, modifier = Modifier.size(23.dp))
+                                        Icon(Icons.Default.MoreVert, contentDescription = "More options", tint = iconTint, modifier = Modifier.size(26.dp))
                                     }
                                     DropdownMenu(
                                         expanded = showChatMenu,
@@ -1482,7 +1493,7 @@ fun ChatScreen(
             }
     },
         containerColor = if (showWallpaper) Color.Transparent else if (uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE) {
-            if (isDark) Color.Black else Color.White
+            if (isDark) Color(0xFF212121) else Color.White
         } else MaterialTheme.colorScheme.background
     ) { paddingValues ->
         Column(
@@ -2137,6 +2148,26 @@ fun ChatScreen(
                 }
             }
 
+            val isPrivateChat = uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE
+            if (isPrivateChat) {
+                val fadeColor = if (isDark) Color(0xFF212121) else Color.White
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(28.dp)
+                        .align(Alignment.TopCenter)
+                        .background(
+                            Brush.verticalGradient(
+                                colorStops = arrayOf(
+                                    0.0f to fadeColor,
+                                    0.5f to fadeColor.copy(alpha = 0.65f),
+                                    1.0f to Color.Transparent
+                                )
+                            )
+                        )
+                )
+            }
+
             // Floating above the message box, over the chat: the upload in progress (or the one that
             // didn't go out, with Retry) and the reply preview. Lined up with the box, clear of the
             // mic/send button.
@@ -2233,15 +2264,6 @@ fun ChatScreen(
     }
     } // Box: wallpaper + Scaffold
 
-    val sentGoodMorningToday = remember(uiState.messages, currentUserId) {
-        val todayStart = todayStartMillis()
-        uiState.messages.any {
-            it.senderId == currentUserId &&
-            it.timestamp >= todayStart &&
-            (it.effect == EFFECT_GOODMORNING || it.text.contains("good morning", ignoreCase = true)) &&
-            !it.isDeleted
-        }
-    }
 
     androidx.compose.animation.AnimatedVisibility(
         visible = showGoodMorning,
@@ -3021,7 +3043,7 @@ private fun UploadStatusPill(
     }
 }
 
-private const val GOOD_MORNING_FROM_HOUR = 7
+private const val GOOD_MORNING_FROM_HOUR = 5
 private const val GOOD_MORNING_UNTIL_HOUR = 12
 
 private fun greetingPrefs(context: android.content.Context) =
@@ -3059,8 +3081,10 @@ private fun GoodMorningGreeting(
         // Automatically send the good morning message without needing to type!
         if (!sent) {
             delay(700)
-            sent = true
-            onSendGoodMorning()
+            if (!sent) {
+                sent = true
+                onSendGoodMorning()
+            }
         }
     }
     val isAppForeground = com.example.ui.components.rememberAppIsResumed()
@@ -3402,10 +3426,8 @@ private fun ChatMessageRow(
         if (isFirstOfDay) {
             val dateSep = if (dateSeparatorText.isNotEmpty()) dateSeparatorText else formatDateSeparator(message.timestamp)
             val today = isToday(message.timestamp)
-            val isTodayOrYesterday = dateSep.equals("Today", ignoreCase = true) || dateSep.equals("Yesterday", ignoreCase = true)
-            val hideInPrivate = isPrivate && isTodayOrYesterday
-            // Only hide Today and Yesterday date separators in private mode; normal mode renders them
-            if (dateSep.isNotEmpty() && !hideInPrivate && !(isPrivate && today && isOldestShown)) {
+            // In private mode (ChatGPT UI), date separator badges (Today, Yesterday, etc.) are never shown
+            if (dateSep.isNotEmpty() && !isPrivate) {
                 DateSeparatorBadge(dateText = dateSep, isPrivateMode = isPrivate, isDark = isDark)
             }
             if (today && !isPrivate) {
@@ -3891,7 +3913,7 @@ private fun ChatPartnerHeaderContent(
             AvatarView(
                 photoUrl = presence.photoUrl,
                 name = partnerName,
-                size = 38.dp,
+                size = 42.dp,
                 isOnline = isPartnerOnline,
                 showOnlineBadge = !partnerHasCheckAfter
             )
@@ -4227,7 +4249,7 @@ fun DateSeparatorBadge(
     isDark: Boolean,
     modifier: Modifier = Modifier
 ) {
-    if (isPrivateMode && (dateText.equals("Today", ignoreCase = true) || dateText.equals("Yesterday", ignoreCase = true))) {
+    if (isPrivateMode) {
         return
     }
     Row(

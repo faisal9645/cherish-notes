@@ -7,6 +7,7 @@ import android.content.Intent
 import android.widget.Toast
 import androidx.compose.material.icons.automirrored.outlined.VolumeUp
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.zIndex
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
@@ -94,7 +95,7 @@ fun MessageBubble(
     // text with a row of small actions under it
     val bubbleShape = if (isPrivateMode) {
         if (isFromMe) {
-            RoundedCornerShape(24.dp)
+            RoundedCornerShape(22.dp)
         } else {
             RoundedCornerShape(4.dp)
         }
@@ -373,6 +374,7 @@ fun MessageBubble(
                             }
                             .heartBurst(heartBurst)
                             .clip(CircleShape)
+                            .border(BorderStroke(2.5.dp, Color(0xFF3B82F6)), CircleShape)
                             .then(
                                 if (highlightPulse.value > 0.04f) {
                                     Modifier.border(BorderStroke(3.dp, RoseGoldPrimary.copy(alpha = highlightPulse.value)), CircleShape)
@@ -412,13 +414,14 @@ fun MessageBubble(
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(4.dp))
-
-                    // Telegram-Style Status Chip (Timestamp & ticks outside circle, NEVER cut off for both users!)
+                    // Align status chip closely against bottom edge of circular video
                     Surface(
                         shape = RoundedCornerShape(12.dp),
                         color = Color.Black.copy(alpha = 0.65f),
-                        modifier = Modifier.padding(horizontal = 4.dp)
+                        modifier = Modifier
+                            .offset(y = (-10).dp)
+                            .zIndex(1f)
+                            .padding(horizontal = 6.dp)
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
@@ -482,7 +485,7 @@ fun MessageBubble(
                     MessageType.AUDIO -> 275.dp
                     MessageType.CALL_RECORDING -> 250.dp
                     MessageType.VIDEO -> 240.dp
-                    MessageType.DOCUMENT -> 200.dp
+                    MessageType.DOCUMENT -> 240.dp
                     else -> 60.dp
                 }
                 val bubbleMaxWidth = when (message.getTypedType()) {
@@ -494,7 +497,7 @@ fun MessageBubble(
                     MessageType.AUDIO -> 325.dp
                     MessageType.CALL_RECORDING -> 300.dp
                     MessageType.VIDEO -> 268.dp
-                    MessageType.DOCUMENT -> 260.dp
+                    MessageType.DOCUMENT -> 285.dp
                     else -> if (isPrivateMode && !isFromMe) 340.dp else 295.dp
                 }
 
@@ -552,6 +555,12 @@ fun MessageBubble(
                                             } else {
                                                 onImageClick(mediaList[0])
                                             }
+                                        }
+                                    } else if (message.getTypedType() == MessageType.DOCUMENT) {
+                                        val docUrl = message.mediaUrl ?: message.mediaUrls.firstOrNull().orEmpty()
+                                        val fileName = message.mediaName?.takeIf { it.isNotBlank() } ?: "Document"
+                                        if (docUrl.isNotBlank()) {
+                                            com.example.util.DocumentHelper.downloadDocument(context, docUrl, fileName)
                                         }
                                     }
                                 },
@@ -685,8 +694,8 @@ fun MessageBubble(
                                                 Spacer(modifier = Modifier.width(3.dp))
                                                 MessageStatusTicks(message.getTypedStatus()) { status ->
                                                     when (status) {
-                                                        MessageStatus.SENDING -> Icon(Icons.Default.AccessTime, "Sending", tint = Color.White.copy(alpha = 0.7f), modifier = Modifier.size(10.dp))
-                                                        MessageStatus.SENT -> Icon(Icons.Default.Check, "Sent", tint = Color.White.copy(alpha = 0.85f), modifier = Modifier.size(11.dp))
+                                                        MessageStatus.SENDING -> Icon(Icons.Default.AccessTime, "Sending", tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(10.dp))
+                                                        MessageStatus.SENT -> Icon(Icons.Default.Check, "Sent", tint = Color.White.copy(alpha = 0.8f), modifier = Modifier.size(11.dp))
                                                         MessageStatus.DELIVERED -> Icon(Icons.Default.DoneAll, "Delivered", tint = Color.White.copy(alpha = 0.9f), modifier = Modifier.size(12.dp))
                                                         MessageStatus.READ -> Icon(Icons.Default.DoneAll, "Read", tint = Color(0xFF60A5FA), modifier = Modifier.size(12.dp))
                                                     }
@@ -722,26 +731,102 @@ fun MessageBubble(
                         }
                     }
                     MessageType.DOCUMENT -> {
-                        Row(
+                        val docUrl = message.mediaUrl ?: message.mediaUrls.firstOrNull().orEmpty()
+                        val fileName = message.mediaName?.takeIf { it.isNotBlank() } ?: "Document"
+                        val ext = fileName.substringAfterLast('.', "").uppercase().take(4)
+                        val sizeText = com.example.util.DocumentHelper.formatFileSize(message.mediaSize)
+
+                        val docIconBg = when (ext) {
+                            "PDF" -> Color(0xFFEF4444)
+                            "DOC", "DOCX" -> Color(0xFF2563EB)
+                            "XLS", "XLSX" -> Color(0xFF10B981)
+                            "PPT", "PPTX" -> Color(0xFFF97316)
+                            "ZIP", "RAR", "7Z" -> Color(0xFF8B5CF6)
+                            else -> if (isPrivateMode) Color(0xFF6B7280) else RoseGoldPrimary
+                        }
+
+                        Surface(
+                            shape = RoundedCornerShape(14.dp),
+                            color = if (isPrivateMode) {
+                                if (isDark) Color(0xFF242424) else Color(0xFFE5E7EB)
+                            } else {
+                                if (isFromMe) Color.White.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+                            },
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 12.dp, vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                                .clickable {
+                                    if (docUrl.isNotBlank()) {
+                                        com.example.util.DocumentHelper.downloadDocument(context, docUrl, fileName)
+                                    }
+                                }
+                                .padding(horizontal = 4.dp, vertical = 4.dp)
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.InsertDriveFile,
-                                contentDescription = "Document",
-                                modifier = Modifier.size(32.dp),
-                                tint = RoseGoldPrimary
-                            )
-                            Spacer(Modifier.width(8.dp))
-                            Text(
-                                text = message.mediaName ?: "Document",
-                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
-                                maxLines = 2,
-                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                                modifier = Modifier.weight(1f)
-                            )
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 10.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(42.dp)
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .background(docIconBg),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    if (ext.isNotBlank() && ext.length <= 4) {
+                                        Text(
+                                            text = ext,
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color.White
+                                        )
+                                    } else {
+                                        Icon(
+                                            imageVector = Icons.Default.InsertDriveFile,
+                                            contentDescription = "Document",
+                                            modifier = Modifier.size(24.dp),
+                                            tint = Color.White
+                                        )
+                                    }
+                                }
+                                Spacer(Modifier.width(10.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = fileName,
+                                        style = MaterialTheme.typography.bodyMedium.copy(
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = textColor
+                                        ),
+                                        maxLines = 1,
+                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                    )
+                                    if (sizeText.isNotBlank()) {
+                                        Spacer(Modifier.height(2.dp))
+                                        Text(
+                                            text = sizeText,
+                                            fontSize = 11.sp,
+                                            color = textColor.copy(alpha = 0.7f)
+                                        )
+                                    }
+                                }
+                                Spacer(Modifier.width(8.dp))
+                                IconButton(
+                                    onClick = {
+                                        if (docUrl.isNotBlank()) {
+                                            com.example.util.DocumentHelper.downloadDocument(context, docUrl, fileName)
+                                        }
+                                    },
+                                    modifier = Modifier.size(34.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.ArrowDownward,
+                                        contentDescription = "Download document",
+                                        tint = if (isPrivateMode) (if (isDark) Color.White else Color(0xFF1F2937)) else (if (isFromMe) Color.White else MaterialTheme.colorScheme.primary),
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            }
                         }
                     }
                     MessageType.AUDIO -> {
@@ -851,64 +936,76 @@ fun MessageBubble(
                                     height = 36.dp
                                 )
                                 Spacer(modifier = Modifier.height(6.dp))
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    modifier = Modifier.fillMaxWidth()
+                                CompositionLocalProvider(
+                                    LocalMinimumInteractiveComponentSize provides androidx.compose.ui.unit.Dp.Unspecified
                                 ) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Text(
-                                            text = "${message.durationSeconds} sec",
-                                            fontSize = 11.sp,
-                                            fontWeight = FontWeight.Medium,
-                                            color = if (isPrivateMode) textColor.copy(alpha = 0.8f) 
-                                                    else if (isFromMe) Color.White.copy(alpha = 0.9f) 
-                                                    else (if (isDark) darkTone(Color(0xFFCBD5E1)) else Color(0xFF0F172A))
-                                        )
-                                        if (isPlayingAudio && onToggleVoiceSpeed != null) {
-                                            Spacer(modifier = Modifier.width(6.dp))
-                                            Surface(
-                                                shape = RoundedCornerShape(6.dp),
-                                                color = (if (isPrivateMode) textColor else if (isFromMe) Color.White else darkTone(DayBluePrimary)).copy(alpha = 0.2f),
-                                                modifier = Modifier.clickable { onToggleVoiceSpeed() }
-                                            ) {
-                                                val speedLabel = when (voicePlaybackSpeed) {
-                                                    1.5f -> "1.5x"
-                                                    2.0f -> "2x"
-                                                    else -> "1x"
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        modifier = Modifier.fillMaxWidth().height(18.dp)
+                                    ) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            modifier = Modifier.height(18.dp)
+                                        ) {
+                                            Text(
+                                                text = "${message.durationSeconds} sec",
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Medium,
+                                                color = if (isPrivateMode) textColor.copy(alpha = 0.8f) 
+                                                        else if (isFromMe) Color.White.copy(alpha = 0.9f) 
+                                                        else (if (isDark) darkTone(Color(0xFFCBD5E1)) else Color(0xFF0F172A))
+                                            )
+                                            if (isPlayingAudio && onToggleVoiceSpeed != null) {
+                                                Spacer(modifier = Modifier.width(6.dp))
+                                                Box(
+                                                    modifier = Modifier
+                                                        .clip(RoundedCornerShape(4.dp))
+                                                        .background((if (isPrivateMode) textColor else if (isFromMe) Color.White else darkTone(DayBluePrimary)).copy(alpha = 0.2f))
+                                                        .clickable { onToggleVoiceSpeed() }
+                                                        .padding(horizontal = 4.dp, vertical = 1.dp),
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    val speedLabel = when (voicePlaybackSpeed) {
+                                                        1.5f -> "1.5x"
+                                                        2.0f -> "2x"
+                                                        else -> "1x"
+                                                    }
+                                                    Text(
+                                                        text = speedLabel,
+                                                        fontSize = 10.sp,
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = if (isPrivateMode) textColor else if (isFromMe) Color.White else darkTone(DayBluePrimary)
+                                                    )
                                                 }
-                                                Text(
-                                                    text = speedLabel,
-                                                    fontSize = 10.sp,
-                                                    fontWeight = FontWeight.Bold,
-                                                    color = if (isPrivateMode) textColor else if (isFromMe) Color.White else darkTone(DayBluePrimary),
-                                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
-                                                )
                                             }
                                         }
-                                    }
 
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Text(
-                                            text = formatMessageTime(message.timestamp),
-                                            fontSize = 10.sp,
-                                            color = timeColor
-                                        )
-                                        if (isFromMe) {
-                                            Spacer(modifier = Modifier.width(3.dp))
-                                            MessageStatusTicks(message.getTypedStatus()) { status ->
-                                                when (status) {
-                                                    MessageStatus.SENDING -> {
-                                                        Icon(Icons.Default.AccessTime, "Sending", tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(11.dp))
-                                                    }
-                                                    MessageStatus.SENT -> {
-                                                        Icon(Icons.Default.Check, "Sent", tint = Color.White.copy(alpha = 0.8f), modifier = Modifier.size(12.dp))
-                                                    }
-                                                    MessageStatus.DELIVERED -> {
-                                                        Icon(Icons.Default.DoneAll, "Delivered", tint = Color.White.copy(alpha = 0.9f), modifier = Modifier.size(13.dp))
-                                                    }
-                                                    MessageStatus.READ -> {
-                                                        Icon(Icons.Default.DoneAll, "Read", tint = Color.White, modifier = Modifier.size(13.dp))
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            modifier = Modifier.height(18.dp)
+                                        ) {
+                                            Text(
+                                                text = formatMessageTime(message.timestamp),
+                                                fontSize = 10.sp,
+                                                color = timeColor
+                                            )
+                                            if (isFromMe) {
+                                                Spacer(modifier = Modifier.width(3.dp))
+                                                MessageStatusTicks(message.getTypedStatus()) { status ->
+                                                    when (status) {
+                                                        MessageStatus.SENDING -> {
+                                                            Icon(Icons.Default.AccessTime, "Sending", tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(11.dp))
+                                                        }
+                                                        MessageStatus.SENT -> {
+                                                            Icon(Icons.Default.Check, "Sent", tint = Color.White.copy(alpha = 0.8f), modifier = Modifier.size(12.dp))
+                                                        }
+                                                        MessageStatus.DELIVERED -> {
+                                                            Icon(Icons.Default.DoneAll, "Delivered", tint = Color.White.copy(alpha = 0.9f), modifier = Modifier.size(13.dp))
+                                                        }
+                                                        MessageStatus.READ -> {
+                                                            Icon(Icons.Default.DoneAll, "Read", tint = Color.White, modifier = Modifier.size(13.dp))
+                                                        }
                                                     }
                                                 }
                                             }
@@ -1412,7 +1509,7 @@ private fun ReplyIndicator(
 
 /** My bubble in private chat, dark and light: sleek ChatGPT tones. */
 internal val PrivateBubbleDark = Color(0xFF2F2F2F)
-internal val PrivateBubbleLight = Color(0xFFE5E5EA)
+internal val PrivateBubbleLight = Color(0xFFF3F4F6)
 
 /** The small icons under my partner's message in private chat: copy, 👍, 👎, read aloud, share, more. */
 @Composable

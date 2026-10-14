@@ -179,6 +179,7 @@ class CallRepository(private val context: Context) {
             "callId" to callId,
             "coupleId" to coupleId,
             "channel" to callId,
+            "appId" to AgoraTokenBuilder.DEFAULT_APP_ID,
             "callerId" to userId,
             "calleeId" to partnerId,
             "participants" to listOf(userId, partnerId),
@@ -200,6 +201,8 @@ class CallRepository(private val context: Context) {
         // Set active control document (clean overwrite without merge so stale endedBy/endReason are wiped)
         val controlDoc = mapOf(
             "callId" to callId,
+            "channel" to callId,
+            "appId" to AgoraTokenBuilder.DEFAULT_APP_ID,
             "state" to CallRecord.STATE_RINGING,
             "callerId" to userId,
             "calleeId" to partnerId,
@@ -416,10 +419,10 @@ class CallRepository(private val context: Context) {
     private fun parseResponse(map: Map<*, *>?): CallResponse {
         val status = map?.get("status") as? String ?: ""
         val token = map?.get("token") as? String
-        val appId = map?.get("appId") as? String
+        val appId = (map?.get("appId") as? String)?.ifBlank { null } ?: AgoraTokenBuilder.DEFAULT_APP_ID
         val channel = map?.get("channel") as? String
         val uid = (map?.get("uid") as? Number)?.toInt()
-        val join = if (!token.isNullOrBlank() && !appId.isNullOrBlank() && !channel.isNullOrBlank() && uid != null) {
+        val join = if (!token.isNullOrBlank() && !channel.isNullOrBlank() && uid != null) {
             JoinInfo(
                 appId = appId,
                 channel = channel,

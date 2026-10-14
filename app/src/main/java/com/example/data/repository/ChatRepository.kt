@@ -687,8 +687,23 @@ class ChatRepository(
     // Messages this phone confirmed reached the server so pending write cache won't revert them to sending
     private val acknowledgedSentIds: MutableSet<String> = ConcurrentHashMap.newKeySet()
 
-    /** The partner's messages have reached this phone (straight from the server): tell the sender. */
+    /**
+     * Called when the partner opens the Cherish app to deliver all pending received messages.
+     * Double tick only appears when partner user actually opens Cherish.
+     */
+    fun markPendingDelivered() {
+        val convId = currentActiveConversationId ?: return
+        val fs = firestore ?: return
+        val currentUserId = authRepository.getCurrentUserId()
+        if (currentUserId.isBlank()) return
+        val convRef = fs.collection("conversations").document(convId).collection("messages")
+        markArrivedAsDelivered(convRef, todayMessages + previousMessages, currentUserId)
+    }
+
+    /** The partner's messages have reached this phone (straight from the server): tell the sender only if app is open. */
     private fun markArrivedAsDelivered(messagesRef: CollectionReference, messages: List<Message>, currentUserId: String) {
+        // Double tick should ONLY appear when the partner user actively opens the Cherish app
+        if (!com.example.notifications.NotificationHelper.isAppOpenOnScreen(context)) return
         val fs = firestore ?: return
         val arrived = messages.filter {
             it.senderId != currentUserId && !it.isDeleted &&

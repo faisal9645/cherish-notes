@@ -234,6 +234,8 @@ class CherishApplication : Application(), coil.ImageLoaderFactory {
                 if (activity !is com.example.call.CallActivity) {
                     com.example.notifications.NotificationHelper.clearNotifications(activity)
                 }
+                chatRepository.markPendingDelivered()
+                com.example.notifications.ThinkingOfYou.checkPendingHeartbeatFelt(activity)
             }
 
             override fun onActivityPaused(activity: android.app.Activity) {

@@ -225,6 +225,7 @@ class ChatViewModel(
     init {
         authRepository.connectPartnerListenerOnce()
         authRepository.updatePresence()
+        chatRepository.markPendingDelivered()
 
         // Collect messages from the single global listener in ChatRepository.
         // No duplicate listener creation — ChatRepository.init manages the Firestore listener
@@ -835,22 +836,58 @@ class ChatViewModel(
     }
 
     private var lastThinkingOfYouAt = 0L
+    private var isSendingGoodnight = false
+    private var isSendingGoodMorning = false
 
     /** The goodnight message; it dims the partner's screen with stars when they see it. */
     fun sendGoodnight() {
+        if (isSendingGoodnight) return
+        val currentUserId = _uiState.value.currentUser?.id.orEmpty()
+        val tonightStart = tonightStartMillis()
+        val alreadySentTonight = _uiState.value.messages.any {
+            it.senderId == currentUserId &&
+            it.timestamp >= tonightStart &&
+            it.effect == EFFECT_GOODNIGHT &&
+            !it.isDeleted
+        }
+        if (alreadySentTonight) return
+
+        isSendingGoodnight = true
         viewModelScope.launch {
-            chatRepository.sendMessage(text = "Goodnight, sleep well my love \uD83C\uDF19\u2728", effect = EFFECT_GOODNIGHT)
+            try {
+                chatRepository.sendMessage(text = "Goodnight, sleep well my love \uD83C\uDF19\u2728", effect = EFFECT_GOODNIGHT)
+            } finally {
+                kotlinx.coroutines.delay(1000)
+                isSendingGoodnight = false
+            }
         }
     }
 
     /** The good morning message; sends automatically when the sunrise banner appears. */
     fun sendGoodMorning(partnerName: String = "") {
+        if (isSendingGoodMorning) return
+        val currentUserId = _uiState.value.currentUser?.id.orEmpty()
+        val todayStart = todayStartMillis()
+        val alreadySentToday = _uiState.value.messages.any {
+            it.senderId == currentUserId &&
+            it.timestamp >= todayStart &&
+            (it.effect == EFFECT_GOODMORNING || it.text.contains("good morning", ignoreCase = true)) &&
+            !it.isDeleted
+        }
+        if (alreadySentToday) return
+
+        isSendingGoodMorning = true
         viewModelScope.launch {
-            val nameSuffix = if (partnerName.isNotBlank() && partnerName != "Partner" && partnerName != "love") " $partnerName" else ", my love"
-            chatRepository.sendMessage(
-                text = "Good morning$nameSuffix \u2600\uFE0F\uD83D\uDC9B Wishing you a beautiful day!",
-                effect = EFFECT_GOODMORNING
-            )
+            try {
+                val nameSuffix = if (partnerName.isNotBlank() && partnerName != "Partner" && partnerName != "love") " $partnerName" else ", my love"
+                chatRepository.sendMessage(
+                    text = "Good morning$nameSuffix \u2600\uFE0F\uD83D\uDC9B Wishing you a beautiful day!",
+                    effect = EFFECT_GOODMORNING
+                )
+            } finally {
+                kotlinx.coroutines.delay(1000)
+                isSendingGoodMorning = false
+            }
         }
     }
 

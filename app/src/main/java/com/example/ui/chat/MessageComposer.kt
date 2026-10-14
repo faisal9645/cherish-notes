@@ -765,7 +765,7 @@ fun MessageComposer(
                             )
                         }
 
-                        // ChatGPT's mic (voice typing) and round send button
+                        // ChatGPT's mic (voice typing) inside pill
                         val canSend = text.isNotBlank()
                         IconButton(
                             onClick = { startVoiceTyping() },
@@ -778,45 +778,6 @@ fun MessageComposer(
                                 contentDescription = "Voice typing",
                                 tint = if (isDark) Color(0xFFECECEC) else Color(0xFF0D0D0D),
                                 modifier = Modifier.size(24.dp)
-                            )
-                        }
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Box(
-                            contentAlignment = Alignment.Center,
-                            modifier = Modifier
-                                .size(38.dp)
-                                .graphicsLayer {
-                                    scaleX = sendBounce.value
-                                    scaleY = sendBounce.value
-                                }
-                                .clip(CircleShape)
-                                .background(if (canSend) PrivateSendBlue else (if (isDark) Color(0xFF2A2A2A) else Color(0xFFE0E0E0)))
-                                .bounceClick(
-                                    onLongClick = onScheduleText?.takeIf { canSend }?.let { schedule ->
-                                        {
-                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                            schedule()
-                                        }
-                                    }
-                                ) {
-                                    if (canSend) {
-                                        scope.launch {
-                                            sendBounce.animateTo(0.78f, tween(65, easing = FastOutSlowInEasing))
-                                            sendBounce.animateTo(1f, spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium))
-                                        }
-                                        onSendText()
-                                        closeEmojiBoard()
-                                    } else {
-                                        startVoiceTyping()
-                                    }
-                                }
-                                .testTag("composer_send_button")
-                        ) {
-                            Icon(
-                                imageVector = if (canSend) Icons.Default.ArrowUpward else Icons.Default.GraphicEq,
-                                contentDescription = if (canSend) "Send" else "Voice typing",
-                                tint = if (canSend) Color.White else (if (isDark) Color(0xFF9E9E9E) else Color(0xFF757575)),
-                                modifier = Modifier.size(20.dp)
                             )
                         }
                     }
@@ -921,13 +882,12 @@ fun MessageComposer(
         }
 
             // (private chat keeps its mic and send button inside the pill, like ChatGPT)
-            if (!isPrivateMode) {
-            Spacer(modifier = Modifier.width(6.dp))
+            Spacer(modifier = Modifier.width(if (isPrivateMode) 8.dp else 6.dp))
 
             // Right-Side Action Circle: 🎤 Mic button (transitions to ✈️ Send button)
             // Fixed width so the mic / send button never shifts
             Box(
-                modifier = Modifier.width(if (isPrivateMode) 40.dp else 48.dp),
+                modifier = Modifier.width(if (isPrivateMode) 44.dp else 48.dp),
                 contentAlignment = Alignment.BottomCenter
             ) {
                 // Lock indicator shown while holding Mic
@@ -977,24 +937,24 @@ fun MessageComposer(
                             val nothingToSend = text.isBlank()
                             val sendBg = if (isPrivateMode) {
                                 if (nothingToSend) {
-                                    if (isAmoled) Color(0xFF1E1E1E) else if (isDark) Color(0xFF2F2F2F) else Color(0xFFE5E5EA)
+                                    Color(0xFF2563FF) // ChatGPT voice mode vibrant blue button
                                 } else {
-                                    if (isDark) Color.White else Color(0xFF000000)
+                                    if (isDark) Color.White else Color(0xFF0D0D0D)
                                 }
                             } else null
                             val sendTint = if (isPrivateMode) {
                                 if (nothingToSend) {
-                                    if (isDark) Color(0xFF6E6E73) else Color(0xFF8E8E93)
+                                    Color.White
                                 } else {
-                                    if (isDark) Color(0xFF111827) else Color.White
+                                    if (isDark) Color(0xFF0D0D0D) else Color.White
                                 }
                             } else Color.White
 
-                            // Private chat keeps Send in place, faded until there's text
+                            // Private chat keeps Send / Voice mode in place
                             val sendAlpha by animateFloatAsState(if (isPrivateMode) 1f else (if (nothingToSend) 0.45f else 1f), label = "send_alpha")
                             Box(
                                 modifier = Modifier
-                                    .size(if (isPrivateMode) 40.dp else 48.dp)
+                                    .size(if (isPrivateMode) 44.dp else 48.dp)
                                     .graphicsLayer {
                                         scaleX = sendBounce.value
                                         scaleY = sendBounce.value
@@ -1022,16 +982,20 @@ fun MessageComposer(
                                             }
                                             onSendText()
                                             closeEmojiBoard()
+                                        } else if (isPrivateMode) {
+                                            startVoiceTyping()
                                         }
                                     }
                                     .testTag("composer_send_button"),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
-                                    imageVector = if (isPrivateMode) Icons.Default.ArrowUpward else Icons.Default.Send,
-                                    contentDescription = "Send",
+                                    imageVector = if (isPrivateMode) {
+                                        if (nothingToSend) Icons.Default.GraphicEq else Icons.Default.ArrowUpward
+                                    } else Icons.Default.Send,
+                                    contentDescription = if (isPrivateMode && nothingToSend) "Voice mode" else "Send",
                                     tint = sendTint,
-                                    modifier = Modifier.size(if (isPrivateMode) 20.dp else 22.dp)
+                                    modifier = Modifier.size(if (isPrivateMode) 22.dp else 22.dp)
                                 )
                             }
                         }
@@ -1268,7 +1232,6 @@ fun MessageComposer(
                         }
                     }
                 }
-            }
             }
         }
 

@@ -423,8 +423,12 @@ class AuthRepository(private val context: Context) {
                         val sentAt = (signal["at"] as? com.google.firebase.Timestamp)?.toDate()?.time ?: System.currentTimeMillis()
                         val signalId = signal["id"] as? String ?: ""
                         val handled = com.example.notifications.ThinkingOfYou.onSignal(context, signalId, sentAt)
-                        if (handled && signalId.isNotBlank()) {
+                        val isScreenOn = com.example.notifications.ThinkingOfYou.isScreenInteractive(context)
+                        val isAppOpen = com.example.notifications.NotificationHelper.isAppOpenOnScreen(context)
+                        if (handled && signalId.isNotBlank() && isScreenOn && isAppOpen) {
                             acknowledgeHeartbeatFelt(signalId)
+                        } else if (handled && signalId.isNotBlank() && isScreenOn) {
+                            com.example.notifications.ThinkingOfYou.setPendingHeartbeatFelt(context, signalId, sentAt)
                         }
                     }
                 }

@@ -534,25 +534,25 @@ fun CircularVideoNoteView(
             }
         }
 
-        // Subtle Blue Circular Outline & Unified Synchronized Progress Ring
+        // Blue Circular Outline & Unified Synchronized Progress Ring
         if (isRound) {
             Canvas(modifier = Modifier.fillMaxSize().padding(1.5.dp)) {
                 val strokeWidth = 3.dp.toPx()
                 val radius = (size.minDimension - strokeWidth) / 2f
-                // 1. Subtle blue outline around the circumference
+                // 1. Prominent blue circular ring outline around circumference by default
                 drawCircle(
-                    color = BlueCircularBorder.copy(alpha = 0.35f),
+                    color = BlueCircularBorder,
                     radius = radius,
                     style = Stroke(width = strokeWidth)
                 )
                 // 2. Synchronized active playback progress ring along the exact same circumference
                 if (progress > 0.002f) {
                     drawArc(
-                        color = BlueCircularBorder,
+                        color = Color(0xFF93C5FD),
                         startAngle = -90f,
                         sweepAngle = (progress * 360f).coerceIn(0f, 360f),
                         useCenter = false,
-                        style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
+                        style = Stroke(width = strokeWidth + 0.8f.dp.toPx(), cap = StrokeCap.Round)
                     )
                 }
             }

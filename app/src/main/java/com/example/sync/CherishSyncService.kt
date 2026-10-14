@@ -247,8 +247,12 @@ class CherishSyncService : Service() {
                         val sentAt = (signal["at"] as? com.google.firebase.Timestamp)?.toDate()?.time ?: System.currentTimeMillis()
                         if (!isInitialCoupleDoc || (System.currentTimeMillis() - sentAt < 90_000L)) {
                             val played = ThinkingOfYou.onSignal(this, signalId, sentAt)
-                            if (played) {
+                            val isScreenOn = ThinkingOfYou.isScreenInteractive(this)
+                            val isAppOpen = NotificationHelper.isAppOpenOnScreen(this)
+                            if (played && isScreenOn && isAppOpen) {
                                 (applicationContext as? CherishApplication)?.authRepository?.acknowledgeHeartbeatFelt(signalId)
+                            } else if (played && isScreenOn) {
+                                ThinkingOfYou.setPendingHeartbeatFelt(this, signalId, sentAt)
                             }
                         }
                     }

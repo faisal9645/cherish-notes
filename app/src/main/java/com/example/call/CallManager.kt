@@ -500,8 +500,9 @@ object CallManager {
         VoicePlayerHelper.callInProgress = true
         myUid = info.uid
         peerUid = if (info.uid == CALLER_UID) CALLEE_UID else CALLER_UID
-        if (!engine.start(info.appId, engineListener)) {
-            Log.e(TAG, "Agora engine failed to start on this device")
+        val effectiveAppId = if (info.appId.isNotBlank()) info.appId else AgoraTokenBuilder.DEFAULT_APP_ID
+        if (!engine.start(effectiveAppId, engineListener)) {
+            Log.e(TAG, "Agora engine failed to start on this device (appId=$effectiveAppId)")
             if (callId == id) {
                 finish(CallEndReason.FAILED, serverReason = "error", errorMessage = "Audio engine could not start")
             }

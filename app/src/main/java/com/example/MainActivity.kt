@@ -202,6 +202,10 @@ class MainActivity : FragmentActivity() {
                 // Original notification: reveal secret Cherish app and display chat
                 app.securityPreferences.revealSecretApp()
             }
+            val heartbeatSignalId = intent.getStringExtra("heartbeat_signal_id")
+            if (!heartbeatSignalId.isNullOrBlank()) {
+                app.authRepository.acknowledgeHeartbeatFelt(heartbeatSignalId)
+            }
         }
     }
 

@@ -305,7 +305,7 @@ object NotificationHelper {
      * Show a heartbeat notification when the app is closed/in background,
      * respecting disguise settings (disguised notes reminder or sweet heartbeat).
      */
-    fun showHeartbeatNotification(context: Context) {
+    fun showHeartbeatNotification(context: Context, signalId: String = "") {
         if (isAppOpenOnScreen(context)) return
         val prefs = SecurityPreferences.getInstance(context)
         if (!prefs.isNotificationsEnabled()) return
@@ -318,6 +318,9 @@ object NotificationHelper {
             putExtra("from_notification", true)
             putExtra("is_discreet", isDiscreet)
             putExtra("open_chat", true)
+            if (signalId.isNotBlank()) {
+                putExtra("heartbeat_signal_id", signalId)
+            }
         }
 
         val pendingIntent = PendingIntent.getActivity(

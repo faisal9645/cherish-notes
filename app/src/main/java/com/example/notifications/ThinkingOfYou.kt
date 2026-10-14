@@ -98,11 +98,40 @@ object ThinkingOfYou {
                 NotificationHelper.updateLauncherBadge(context, 1)
             }
             if (NotificationManagerCompat.from(context).areNotificationsEnabled()) {
-                NotificationHelper.showHeartbeatNotification(context)
+                NotificationHelper.showHeartbeatNotification(context, signalId)
             }
         }
 
         return true
+    }
+
+    private const val KEY_PENDING_FELT_SIGNAL = "pending_felt_signal_id"
+    private const val KEY_PENDING_FELT_AT = "pending_felt_sent_at"
+
+    fun isScreenInteractive(context: Context): Boolean {
+        val powerManager = context.getSystemService(Context.POWER_SERVICE) as? PowerManager
+        return powerManager?.isInteractive == true
+    }
+
+    fun setPendingHeartbeatFelt(context: Context, signalId: String, sentAt: Long) {
+        if (signalId.isBlank()) return
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        prefs.edit()
+            .putString(KEY_PENDING_FELT_SIGNAL, signalId)
+            .putLong(KEY_PENDING_FELT_AT, sentAt)
+            .apply()
+    }
+
+    fun checkPendingHeartbeatFelt(context: Context) {
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val signalId = prefs.getString(KEY_PENDING_FELT_SIGNAL, null) ?: return
+        val sentAt = prefs.getLong(KEY_PENDING_FELT_AT, 0L)
+        prefs.edit().remove(KEY_PENDING_FELT_SIGNAL).remove(KEY_PENDING_FELT_AT).apply()
+        // Only acknowledge if received within 5 minutes while partner's mobile was on
+        if (signalId.isNotBlank() && (System.currentTimeMillis() - sentAt < 300_000L)) {
+            val app = context.applicationContext as? com.example.CherishApplication
+            app?.authRepository?.acknowledgeHeartbeatFelt(signalId)
+        }
     }
 
     /**

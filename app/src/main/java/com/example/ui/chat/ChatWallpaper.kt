@@ -130,35 +130,67 @@ fun LoveImmersiveWallpaper(
 /**
  * Iconic Doodle Pattern Wallpaper (Theme 1)
  * High-definition procedural vector doodles that scale smoothly across any DPI.
+ * Pure white (#FFFFFF) in Day mode, true AMOLED Black (#000000) in Night mode.
+ * Doodle line and dot accents dynamically match the app's theme colors.
  */
 @Composable
 fun DoodleWallpaper(
     isDark: Boolean,
     modifier: Modifier = Modifier
 ) {
-    Box(modifier = modifier.fillMaxSize().clipToBounds()) {
-        androidx.compose.foundation.Image(
-            painter = androidx.compose.ui.res.painterResource(id = com.example.R.drawable.chat_bg_theme_1),
-            contentDescription = "Chat Background",
-            contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+    // Pure white for day mode, true AMOLED black for night mode
+    val bgColor = if (isDark) Color(0xFF000000) else Color(0xFFFFFFFF)
+    
+    // Crisp theme-matching strokes & accents
+    val strokeColor = if (isDark) {
+        Color(0xFF60A5FA).copy(alpha = 0.14f)
+    } else {
+        Color(0xFF2563EB).copy(alpha = 0.085f)
+    }
+    val dotColor = if (isDark) {
+        Color(0xFF93C5FD).copy(alpha = 0.24f)
+    } else {
+        Color(0xFF3B82F6).copy(alpha = 0.20f)
+    }
+
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .background(bgColor)
+            .clipToBounds()
+    ) {
+        Canvas(
             modifier = Modifier
                 .fillMaxSize()
                 .tiltParallax()
-        )
-        
-        // Overlay for day/night mode adaptation
-        if (isDark) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.75f))
+        ) {
+            val tileSize = 135.dp.toPx()
+            val cols = (size.width / tileSize).toInt() + 3
+            val rows = (size.height / tileSize).toInt() + 3
+            val stroke = Stroke(
+                width = 1.35f,
+                cap = StrokeCap.Round,
+                join = StrokeJoin.Round
             )
-        } else {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.White.copy(alpha = 0.4f))
-            )
+
+            for (r in -1 until rows) {
+                // Stagger alternate rows for organic distribution
+                val rowOffset = if ((r % 2 + 2) % 2 == 1) tileSize * 0.5f else 0f
+                for (c in -1 until cols) {
+                    val ox = c * tileSize + rowOffset
+                    val oy = r * tileSize
+                    val variant = ((r + 10) * 3 + (c + 10)) % 8
+                    drawDoodleTile(
+                        originX = ox,
+                        originY = oy,
+                        tileSize = tileSize,
+                        strokeColor = strokeColor,
+                        dotColor = dotColor,
+                        stroke = stroke,
+                        variant = variant
+                    )
+                }
+            }
         }
     }
 }
@@ -301,42 +333,84 @@ private fun DrawScope.drawDoodleTile(
     }
     drawPath(starPath, strokeColor, style = stroke)
 
-    // 5. Music Note or Coffee Cup in Center
-    if (variant % 2 == 0) {
-        // Music Note
-        val mx = originX + tileSize * 0.52f
-        val my = originY + tileSize * 0.48f
-        val ms = tileSize * 0.12f
-        val notePath = Path().apply {
-            drawCircle(color = strokeColor, radius = ms * 0.28f, center = Offset(mx, my + ms * 0.4f), style = stroke)
-            moveTo(mx + ms * 0.28f, my + ms * 0.4f)
-            lineTo(mx + ms * 0.28f, my - ms * 0.35f)
-            lineTo(mx + ms * 0.75f, my - ms * 0.15f)
+    // 5. Center Motif (Music Note, Coffee Cup, Smiley, or Camera based on variant)
+    when (variant % 4) {
+        0 -> {
+            // Music Note
+            val mx = originX + tileSize * 0.52f
+            val my = originY + tileSize * 0.48f
+            val ms = tileSize * 0.12f
+            val notePath = Path().apply {
+                drawCircle(color = strokeColor, radius = ms * 0.28f, center = Offset(mx, my + ms * 0.4f), style = stroke)
+                moveTo(mx + ms * 0.28f, my + ms * 0.4f)
+                lineTo(mx + ms * 0.28f, my - ms * 0.35f)
+                lineTo(mx + ms * 0.75f, my - ms * 0.15f)
+            }
+            drawPath(notePath, strokeColor, style = stroke)
         }
-        drawPath(notePath, strokeColor, style = stroke)
-    } else {
-        // Coffee Cup
-        val cx = originX + tileSize * 0.48f
-        val cy = originY + tileSize * 0.46f
-        val cw = tileSize * 0.14f
-        val ch = tileSize * 0.11f
-        val cupPath = Path().apply {
-            addRoundRect(
-                RoundRect(
-                    Rect(cx - cw / 2, cy - ch / 2, cx + cw / 2, cy + ch / 2),
-                    bottomLeft = androidx.compose.ui.geometry.CornerRadius(4.dp.toPx(), 4.dp.toPx()),
-                    bottomRight = androidx.compose.ui.geometry.CornerRadius(4.dp.toPx(), 4.dp.toPx())
+        1 -> {
+            // Coffee Cup
+            val cx = originX + tileSize * 0.48f
+            val cy = originY + tileSize * 0.46f
+            val cw = tileSize * 0.14f
+            val ch = tileSize * 0.11f
+            val cupPath = Path().apply {
+                addRoundRect(
+                    RoundRect(
+                        Rect(cx - cw / 2, cy - ch / 2, cx + cw / 2, cy + ch / 2),
+                        bottomLeft = androidx.compose.ui.geometry.CornerRadius(4.dp.toPx(), 4.dp.toPx()),
+                        bottomRight = androidx.compose.ui.geometry.CornerRadius(4.dp.toPx(), 4.dp.toPx())
+                    )
                 )
-            )
-            // handle
-            arcTo(
-                rect = Rect(cx + cw / 2 - 2f, cy - ch / 3, cx + cw / 2 + ch * 0.6f, cy + ch / 3),
-                startAngleDegrees = -90f,
-                sweepAngleDegrees = 180f,
-                forceMoveTo = true
-            )
+                // handle
+                arcTo(
+                    rect = Rect(cx + cw / 2 - 2f, cy - ch / 3, cx + cw / 2 + ch * 0.6f, cy + ch / 3),
+                    startAngleDegrees = -90f,
+                    sweepAngleDegrees = 180f,
+                    forceMoveTo = true
+                )
+            }
+            drawPath(cupPath, strokeColor, style = stroke)
         }
-        drawPath(cupPath, strokeColor, style = stroke)
+        2 -> {
+            // Smiley Face
+            val smx = originX + tileSize * 0.50f
+            val smy = originY + tileSize * 0.48f
+            val smr = tileSize * 0.08f
+            drawCircle(color = strokeColor, radius = smr, center = Offset(smx, smy), style = stroke)
+            drawCircle(color = dotColor, radius = 1.3f, center = Offset(smx - smr * 0.35f, smy - smr * 0.2f))
+            drawCircle(color = dotColor, radius = 1.3f, center = Offset(smx + smr * 0.35f, smy - smr * 0.2f))
+            val smilePath = Path().apply {
+                arcTo(
+                    rect = Rect(smx - smr * 0.5f, smy - smr * 0.2f, smx + smr * 0.5f, smy + smr * 0.55f),
+                    startAngleDegrees = 20f,
+                    sweepAngleDegrees = 140f,
+                    forceMoveTo = true
+                )
+            }
+            drawPath(smilePath, strokeColor, style = stroke)
+        }
+        else -> {
+            // Camera
+            val camX = originX + tileSize * 0.50f
+            val camY = originY + tileSize * 0.48f
+            val cw = tileSize * 0.15f
+            val ch = tileSize * 0.11f
+            val camPath = Path().apply {
+                addRoundRect(
+                    RoundRect(
+                        Rect(camX - cw / 2, camY - ch / 2, camX + cw / 2, camY + ch / 2),
+                        androidx.compose.ui.geometry.CornerRadius(3.dp.toPx(), 3.dp.toPx())
+                    )
+                )
+                moveTo(camX - cw * 0.22f, camY - ch / 2)
+                lineTo(camX - cw * 0.22f, camY - ch / 2 - 2.5.dp.toPx())
+                lineTo(camX - cw * 0.05f, camY - ch / 2 - 2.5.dp.toPx())
+                lineTo(camX - cw * 0.05f, camY - ch / 2)
+            }
+            drawPath(camPath, strokeColor, style = stroke)
+            drawCircle(color = strokeColor, radius = ch * 0.28f, center = Offset(camX, camY), style = stroke)
+        }
     }
 
     // 6. Subtle stardust dots for rich texture

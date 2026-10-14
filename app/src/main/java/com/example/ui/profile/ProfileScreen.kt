@@ -1041,7 +1041,7 @@ fun ProfileScreen(
                         Icon(
                             Icons.Filled.Sync,
                             contentDescription = null,
-                            tint = if (isBatteryOptimizationIgnored) primaryAccent else MaterialTheme.colorScheme.error
+                            tint = primaryAccent
                         )
                     },
                     trailingContent = {
