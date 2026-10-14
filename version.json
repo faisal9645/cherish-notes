@@ -1,9 +1,9 @@
 {
-  "versionCode": 157,
-  "versionName": "1.7.85",
-  "tagName": "v1.7.85-157",
-  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.7.85-157/app_update_157.apk",
+  "versionCode": 158,
+  "versionName": "1.7.86",
+  "tagName": "v1.7.86-158",
+  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.7.86-158/app_update_158.apk",
   "assetSize": 32866191,
-  "releaseNotes": "Notes v1.7.85 (Build 157):\nFix call recording in Calls tab, single-mobile caller recording, and prevent ringing popup notification when caller screen is active",
-  "releaseDate": "2026-10-14T11:40:34Z"
+  "releaseNotes": "Notes v1.7.86 (Build 158):\nFix circular video loop icon inset, add Digital Wellbeing tracking protection",
+  "releaseDate": "2026-10-14T11:49:18Z"
 }
