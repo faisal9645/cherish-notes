@@ -54,56 +54,27 @@ class CherishSyncService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        createSyncChannel()
-        val notification = buildSyncNotification()
-        val serviceType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
-        } else 0
-
-        try {
-            ServiceCompat.startForeground(this, NOTIFICATION_ID, notification, serviceType)
-        } catch (e: Throwable) {
-            Log.w(TAG, "startForeground for CherishSyncService with type $serviceType failed: ${e.message}")
-            try {
-                ServiceCompat.startForeground(this, NOTIFICATION_ID, notification, 0)
-            } catch (_: Throwable) {}
-        }
-
-        observeAccount()
+        // Disabled: User requested to remove always-running background service.
+        // Push notifications work purely on-demand via FCM (Firebase Messaging).
+        stopSelf()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        return START_STICKY
+        stopSelf()
+        return START_NOT_STICKY
     }
 
     override fun onTaskRemoved(rootIntent: Intent?) {
         super.onTaskRemoved(rootIntent)
-        // Ensure CherishSyncService is immediately resurrected if swiped away from Recents
-        try {
-            val restartServiceIntent = Intent(applicationContext, CherishSyncService::class.java).also {
-                it.setPackage(packageName)
-            }
-            val restartServicePendingIntent = PendingIntent.getService(
-                applicationContext,
-                1005,
-                restartServiceIntent,
-                PendingIntent.FLAG_ONE_SHOT or PendingIntent.FLAG_IMMUTABLE
-            )
-            val alarmService = getSystemService(Context.ALARM_SERVICE) as? AlarmManager
-            alarmService?.set(
-                AlarmManager.ELAPSED_REALTIME,
-                SystemClock.elapsedRealtime() + 1000L,
-                restartServicePendingIntent
-            )
-        } catch (e: Exception) {
-            Log.w(TAG, "onTaskRemoved alarm schedule failed: ${e.message}")
-        }
+        // No auto-resurrection: allow app to rest when not in use
     }
 
     override fun onDestroy() {
         detachListeners()
         scope.cancel()
-        ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
+        try {
+            ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
+        } catch (_: Throwable) {}
         super.onDestroy()
     }
 
@@ -350,18 +321,39 @@ class CherishSyncService : Service() {
         private const val NOTIFICATION_ID = 1004
 
         fun start(context: Context) {
-            try {
-                val intent = Intent(context, CherishSyncService::class.java)
-                ContextCompat.startForegroundService(context, intent)
-            } catch (e: Throwable) {
-                Log.w(TAG, "Failed starting CherishSyncService: ${e.message}")
-            }
+            // Disabled: Notifications now work purely on-demand via standard FCM push notifications like other modern messaging apps
+            stop(context)
         }
 
         fun stop(context: Context) {
             try {
+                // 1. Cancel any existing resurrection alarm
+                val restartServiceIntent = Intent(context.applicationContext, CherishSyncService::class.java).also {
+                    it.setPackage(context.packageName)
+                }
+                val restartPendingIntent = PendingIntent.getService(
+                    context.applicationContext,
+                    1005,
+                    restartServiceIntent,
+                    PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE
+                )
+                if (restartPendingIntent != null) {
+                    val alarmService = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager
+                    alarmService?.cancel(restartPendingIntent)
+                    restartPendingIntent.cancel()
+                }
+            } catch (_: Exception) {}
+
+            try {
+                // 2. Stop running service
                 val intent = Intent(context, CherishSyncService::class.java)
                 context.stopService(intent)
+            } catch (_: Exception) {}
+
+            try {
+                // 3. Remove notification
+                val nm = androidx.core.app.NotificationManagerCompat.from(context)
+                nm.cancel(NOTIFICATION_ID)
             } catch (_: Exception) {}
         }
     }

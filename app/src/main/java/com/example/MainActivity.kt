@@ -199,6 +199,7 @@ class MainActivity : FragmentActivity() {
         com.example.notifications.NotificationHelper.clearNotifications(this)
         val isFromNotification = intent.getBooleanExtra("from_notification", false) ||
                 intent.getBooleanExtra("open_chat", false) ||
+                intent.getBooleanExtra("from_call_ended", false) ||
                 intent.hasExtra("conversationId")
         if (isFromNotification) {
             val isDiscreet = intent.getBooleanExtra("is_discreet", false)

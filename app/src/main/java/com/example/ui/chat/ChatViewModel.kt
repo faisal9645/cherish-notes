@@ -406,12 +406,14 @@ class ChatViewModel(
                 val newRecording = partner?.isEffectivelyRecording() ?: false
 
                 _partnerPresence.update { current ->
+                    val partnerLastSeen = partner?.lastSeen ?: current.lastSeen
                     if (current.isOnline == newOnline &&
                         current.isTyping == newTyping &&
                         current.isRecordingAudio == newRecording &&
                         current.isHeartTouching == partnerTouching &&
                         current.batteryLevel == partner?.batteryLevel &&
-                        current.isCharging == (partner?.isCharging ?: false)
+                        current.isCharging == (partner?.isCharging ?: false) &&
+                        current.lastSeen == partnerLastSeen
                     ) {
                         current
                     } else {
@@ -421,7 +423,8 @@ class ChatViewModel(
                             isRecordingAudio = newRecording,
                             isHeartTouching = partnerTouching,
                             batteryLevel = partner?.batteryLevel,
-                            isCharging = partner?.isCharging ?: false
+                            isCharging = partner?.isCharging ?: false,
+                            lastSeen = partnerLastSeen
                         )
                     }
                 }

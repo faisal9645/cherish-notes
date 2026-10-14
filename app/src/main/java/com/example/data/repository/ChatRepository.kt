@@ -715,7 +715,11 @@ class ChatRepository(
     /** The partner's messages have reached this phone (straight from the server): tell the sender only if app is open. */
     private fun markArrivedAsDelivered(messagesRef: CollectionReference, messages: List<Message>, currentUserId: String) {
         // Double tick should ONLY appear when the partner user actively opens the Cherish app
-        if (!com.example.notifications.NotificationHelper.isAppOpenOnScreen(context)) return
+        // (Must be in foreground AND secret Cherish app revealed, NOT disguised as Notes)
+        val app = context.applicationContext as? com.example.CherishApplication
+        val isCherishAppOpen = com.example.CherishApplication.isAppInForeground &&
+            app?.securityPreferences?.isDisguiseActive() == false
+        if (!isCherishAppOpen) return
         val fs = firestore ?: return
         val arrived = messages.filter {
             it.senderId != currentUserId && !it.isDeleted &&

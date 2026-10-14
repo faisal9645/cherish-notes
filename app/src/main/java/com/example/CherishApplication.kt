@@ -174,11 +174,11 @@ class CherishApplication : Application(), coil.ImageLoaderFactory {
             Log.w("CherishApp", "CallManager init/watch error: ${e.message}")
         }
 
-        // Background sync: messages, calls, and heartbeats when app is closed or minimized
+        // Stop any background sync service if running previously (push notifications work on-demand via FCM)
         try {
-            com.example.sync.CherishSyncService.start(this)
+            com.example.sync.CherishSyncService.stop(this)
         } catch (e: Throwable) {
-            Log.w("CherishApp", "CherishSyncService start error: ${e.message}")
+            Log.w("CherishApp", "CherishSyncService stop error: ${e.message}")
         }
 
         try {
@@ -237,7 +237,9 @@ class CherishApplication : Application(), coil.ImageLoaderFactory {
                 if (activity !is com.example.call.CallActivity) {
                     com.example.notifications.NotificationHelper.clearNotifications(activity)
                 }
-                chatRepository.markPendingDelivered()
+                if (!securityPreferences.isDisguiseActive()) {
+                    chatRepository.markPendingDelivered()
+                }
                 com.example.notifications.ThinkingOfYou.checkPendingHeartbeatFelt(activity)
             }
 

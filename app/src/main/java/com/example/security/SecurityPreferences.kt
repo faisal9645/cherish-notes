@@ -8,7 +8,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import java.security.MessageDigest
 
-class SecurityPreferences(context: Context) {
+class SecurityPreferences(private val context: Context) {
     private val prefs: SharedPreferences = context.getSharedPreferences("cherish_secure_prefs", Context.MODE_PRIVATE)
 
     private val _isAppLocked = MutableStateFlow(false)
@@ -50,7 +50,7 @@ class SecurityPreferences(context: Context) {
 
     fun wasInCallRecently(): Boolean {
         val diff = android.os.SystemClock.elapsedRealtime() - lastCallEndedAt
-        return diff in 0L..15_000L
+        return diff in 0L..30_000L
     }
 
 
@@ -89,8 +89,11 @@ class SecurityPreferences(context: Context) {
     fun revealSecretApp() {
         _hasRevealedSecretAppInSession.value = true
         _isDisguiseActive.value = false
-        // What's shown follows "Recover all" for the 6 AM day (today only unless recovered); loaded
-        // history stays on the phone, so opening never wipes or re-downloads it
+        try {
+            val app = context.applicationContext as? com.example.CherishApplication
+            app?.chatRepository?.markPendingDelivered()
+            app?.authRepository?.updatePresence()
+        } catch (_: Exception) {}
     }
 
     fun reDisguise() {
@@ -100,6 +103,10 @@ class SecurityPreferences(context: Context) {
         isMediaViewerActive = false
         _hasRevealedSecretAppInSession.value = false
         _isDisguiseActive.value = true
+        try {
+            val app = context.applicationContext as? com.example.CherishApplication
+            app?.authRepository?.updatePresence()
+        } catch (_: Exception) {}
     }
 
     /**
@@ -115,6 +122,10 @@ class SecurityPreferences(context: Context) {
         ignoreNextPause = false
         _hasRevealedSecretAppInSession.value = false
         _isDisguiseActive.value = true
+        try {
+            val app = context.applicationContext as? com.example.CherishApplication
+            app?.authRepository?.updatePresence()
+        } catch (_: Exception) {}
     }
 
     private val _isSecretHistoryRevealed = MutableStateFlow(true)

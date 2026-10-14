@@ -364,14 +364,20 @@ class AgoraVoiceEngine(private val context: Context) {
     fun startRecording(file: File): Boolean {
         val rtc = engine ?: return false
         currentRecordedFile = null
+        // Agora voice-rtc-basic natively supports linear PCM/WAV recording without external codecs.
+        // Always record to WAV format to guarantee real audio bytes are captured and saved.
+        val targetWav = if (!file.name.endsWith(".wav", ignoreCase = true)) {
+            File(file.parentFile, file.nameWithoutExtension + ".wav")
+        } else file
+
         try {
-            file.parentFile?.mkdirs()
-            if (file.exists()) file.delete()
+            targetWav.parentFile?.mkdirs()
+            if (targetWav.exists()) targetWav.delete()
         } catch (_: Exception) {}
 
         var res = try {
             val config = AudioRecordingConfiguration().apply {
-                filePath = file.absolutePath
+                filePath = targetWav.absolutePath
                 sampleRate = 32000
                 quality = Constants.AUDIO_RECORDING_QUALITY_MEDIUM
                 fileRecordOption = Constants.AUDIO_FILE_RECORDING_MIXED
@@ -384,36 +390,36 @@ class AgoraVoiceEngine(private val context: Context) {
 
         if (res != 0) {
             Log.w(TAG, "startAudioRecording(config) returned $res, trying direct legacy call")
-            res = rtc.startAudioRecording(file.absolutePath, Constants.AUDIO_RECORDING_QUALITY_MEDIUM)
+            res = rtc.startAudioRecording(targetWav.absolutePath, Constants.AUDIO_RECORDING_QUALITY_MEDIUM)
         }
 
         if (res == 0) {
-            currentRecordedFile = file
-            Log.i(TAG, "startAudioRecording started successfully for ${file.absolutePath}")
+            currentRecordedFile = targetWav
+            Log.i(TAG, "startAudioRecording started successfully with WAV: ${targetWav.absolutePath}")
             return true
         }
 
-        if (file.extension.lowercase() != "wav") {
-            val wavFile = File(file.parentFile, file.nameWithoutExtension + ".wav")
-            try { if (wavFile.exists()) wavFile.delete() } catch (_: Exception) {}
+        // Secondary fallback to original file if WAV failed for any reason
+        if (targetWav != file) {
+            try { if (file.exists()) file.delete() } catch (_: Exception) {}
             res = try {
                 val config = AudioRecordingConfiguration().apply {
-                    filePath = wavFile.absolutePath
+                    filePath = file.absolutePath
                     sampleRate = 32000
                     quality = Constants.AUDIO_RECORDING_QUALITY_MEDIUM
                     fileRecordOption = Constants.AUDIO_FILE_RECORDING_MIXED
                 }
                 rtc.startAudioRecording(config)
             } catch (_: Throwable) {
-                rtc.startAudioRecording(wavFile.absolutePath, Constants.AUDIO_RECORDING_QUALITY_MEDIUM)
+                rtc.startAudioRecording(file.absolutePath, Constants.AUDIO_RECORDING_QUALITY_MEDIUM)
             }
             if (res == 0) {
-                currentRecordedFile = wavFile
-                Log.i(TAG, "startAudioRecording succeeded with WAV: ${wavFile.absolutePath}")
+                currentRecordedFile = file
+                Log.i(TAG, "startAudioRecording succeeded with fallback: ${file.absolutePath}")
                 return true
             }
         }
-        if (res != 0) Log.w(TAG, "startAudioRecording returned $res for ${file.absolutePath}")
+        Log.w(TAG, "startAudioRecording failed ($res) for ${targetWav.absolutePath}")
         return false
     }
 

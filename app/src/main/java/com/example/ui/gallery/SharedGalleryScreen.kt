@@ -1942,8 +1942,9 @@ private fun isCallAudioCached(context: Context, msg: Message): Boolean {
         java.io.File(dir, "part_0.wav"),
         java.io.File(dir, "recording.mp4"),
         java.io.File(dir, "recording.aac"),
-        java.io.File(recDir, "rec_${id}.aac"),
-        java.io.File(recDir, "rec_${id}.wav")
+        java.io.File(dir, "recording.wav"),
+        java.io.File(recDir, "rec_${id}.wav"),
+        java.io.File(recDir, "rec_${id}.aac")
     ).any { it.exists() && it.length() > 0 }
 }
 

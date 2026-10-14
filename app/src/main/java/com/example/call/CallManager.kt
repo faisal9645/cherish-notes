@@ -755,11 +755,11 @@ object CallManager {
     private fun startAutomaticRecording(callId: String) {
         recordingJob?.cancel()
         val recordDir = File(app.cacheDir, "callrec").apply { mkdirs() }
-        val file = File(recordDir, "rec_${callId}.aac")
+        val file = File(recordDir, "rec_${callId}.wav")
 
         if (engine.startRecording(file)) {
-            activeRecordFile = file
-            Log.i(TAG, "In-app call recording started immediately: ${file.absolutePath}")
+            activeRecordFile = engine.currentRecordedFile ?: file
+            Log.i(TAG, "In-app call recording started immediately: ${activeRecordFile?.absolutePath}")
             return
         }
 
@@ -770,8 +770,8 @@ object CallManager {
                 if (_state.value.phase != CallPhase.CONNECTED || this@CallManager.callId != callId) return@launch
                 if (activeRecordFile != null) return@launch
                 if (engine.startRecording(file)) {
-                    activeRecordFile = file
-                    Log.i(TAG, "In-app call recording started on retry: ${file.absolutePath}")
+                    activeRecordFile = engine.currentRecordedFile ?: file
+                    Log.i(TAG, "In-app call recording started on retry: ${activeRecordFile?.absolutePath}")
                     return@launch
                 }
             }
@@ -862,8 +862,8 @@ object CallManager {
         if (endedCouple != null && endedCall != null && !me.isNullOrBlank()) {
             val recordDir = File(app.cacheDir, "callrec")
             val candidateFile = recordingFile
-                ?: File(recordDir, "rec_${endedCall}.aac").takeIf { it.exists() && it.length() > 0 }
                 ?: File(recordDir, "rec_${endedCall}.wav").takeIf { it.exists() && it.length() > 0 }
+                ?: File(recordDir, "rec_${endedCall}.aac").takeIf { it.exists() && it.length() > 0 }
             if (candidateFile != null) {
                 uploadRecording(endedCouple, endedCall, me, candidateFile, effectiveDuration)
             } else if (durationSec > 0) {
@@ -964,6 +964,11 @@ object CallManager {
                 // Wait briefly for audio file buffer to flush to disk
                 var actualFile: File? = null
                 for (i in 0..15) {
+                    val wav = File(file.parentFile, file.nameWithoutExtension + ".wav")
+                    if (wav.exists() && wav.length() > 0) {
+                        actualFile = wav
+                        break
+                    }
                     if (file.exists() && file.length() > 0) {
                         actualFile = file
                         break
@@ -973,34 +978,34 @@ object CallManager {
                         actualFile = aac
                         break
                     }
-                    val wav = File(file.parentFile, file.nameWithoutExtension + ".wav")
-                    if (wav.exists() && wav.length() > 0) {
-                        actualFile = wav
-                        break
-                    }
                     delay(150L)
                 }
 
                 if (actualFile == null || actualFile.length() < 100) {
                     Log.w(TAG, "In-app call recording file not found or empty (${actualFile?.length()} bytes)")
                     actualFile?.delete()
+                    if (durationSec > 0) {
+                        recordCallWithoutRecording(couple, call, me, durationSec)
+                    }
                     return@launch
                 }
 
-                val ext = actualFile.extension.ifBlank { "aac" }
+                val ext = actualFile.extension.ifBlank { "wav" }
                 val primaryPath = "couples/$couple/call-recordings/$call/recording.$ext"
+                val wavPath = "couples/$couple/call-recordings/$call/recording.wav"
                 val mp4Path = "couples/$couple/call-recordings/$call/recording.mp4"
-                val pathsList = listOf(primaryPath, mp4Path).distinct()
+                val pathsList = listOf(primaryPath, wavPath, mp4Path).distinct()
 
                 // 1. Save to local private cache so it can be played immediately without re-downloading
                 var fileSize = actualFile.length()
                 try {
                     val cacheDir = File(File(app.cacheDir, "call_recordings"), call).apply { mkdirs() }
-                    val localTarget = File(cacheDir, "part_0.mp4")
-                    val localExtTarget = File(cacheDir, "part_0.$ext")
+                    val localTarget = File(cacheDir, "part_0.$ext")
                     actualFile.copyTo(localTarget, overwrite = true)
-                    actualFile.copyTo(localExtTarget, overwrite = true)
+                    actualFile.copyTo(File(cacheDir, "part_0.wav"), overwrite = true)
+                    actualFile.copyTo(File(cacheDir, "part_0.mp4"), overwrite = true)
                     actualFile.copyTo(File(cacheDir, "recording.$ext"), overwrite = true)
+                    actualFile.copyTo(File(cacheDir, "recording.wav"), overwrite = true)
                     fileSize = localTarget.length()
                 } catch (e: Exception) {
                     Log.w(TAG, "Couldn't save local recording copy to cache", e)

@@ -121,19 +121,17 @@ class CallActivity : ComponentActivity() {
     private fun dismissAndReturnToCherish() {
         app.securityPreferences.lastCallEndedAt = android.os.SystemClock.elapsedRealtime()
         app.securityPreferences.revealSecretApp()
-        val keyguard = getSystemService(Context.KEYGUARD_SERVICE) as? KeyguardManager
-        val isLocked = keyguard?.isKeyguardLocked == true
-        if (!isLocked) {
+        try {
             val intent = Intent(this, com.example.MainActivity::class.java).apply {
                 action = Intent.ACTION_MAIN
                 addCategory(Intent.CATEGORY_LAUNCHER)
-                flags = Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_SINGLE_TOP
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED or Intent.FLAG_ACTIVITY_SINGLE_TOP
+                putExtra("open_chat", true)
+                putExtra("from_call_ended", true)
             }
-            try {
-                startActivity(intent)
-            } catch (e: Exception) {
-                Log.w("CallActivity", "Failed to bring MainActivity to front", e)
-            }
+            startActivity(intent)
+        } catch (e: Exception) {
+            Log.w("CallActivity", "Failed to bring MainActivity to front", e)
         }
         finish()
     }

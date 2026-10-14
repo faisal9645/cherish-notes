@@ -1028,55 +1028,6 @@ fun ProfileScreen(
                     }
                 )
 
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), thickness = 0.6.dp)
-
-                // --- SUBSECTION 5: KEEP CONNECTED WHEN CLOSED ---
-                ListItem(
-                    headlineContent = { Text("Keep Connected When Closed", fontSize = 15.sp, fontWeight = FontWeight.SemiBold) },
-                    supportingContent = {
-                        Text(
-                            if (isBatteryOptimizationIgnored) "Unrestricted background activity. Instant notifications, calls, and heartbeat triggers stay active when Cherish is closed."
-                            else "Android battery optimization may freeze background sync when Cherish is closed. Tap to allow Unrestricted activity so you never miss messages or heartbeats.",
-                            fontSize = 13.sp
-                        )
-                    },
-                    leadingContent = {
-                        Icon(
-                            Icons.Filled.Sync,
-                            contentDescription = null,
-                            tint = primaryAccent
-                        )
-                    },
-                    trailingContent = {
-                        if (isBatteryOptimizationIgnored) {
-                            Surface(
-                                shape = RoundedCornerShape(16.dp),
-                                color = primaryAccent.copy(alpha = 0.15f)
-                            ) {
-                                Text(
-                                    "Active",
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = primaryAccent,
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-                                )
-                            }
-                        } else {
-                            FilledTonalButton(
-                                onClick = { NotificationHelper.requestIgnoreBatteryOptimization(context) },
-                                shape = RoundedCornerShape(16.dp),
-                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 2.dp)
-                            ) {
-                                Text("Allow", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                            }
-                        }
-                    },
-                    modifier = Modifier.clickable {
-                        if (!isBatteryOptimizationIgnored) {
-                            NotificationHelper.requestIgnoreBatteryOptimization(context)
-                        }
-                    }
-                )
 
                 if (partner != null) {
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), thickness = 0.6.dp)
@@ -1218,20 +1169,6 @@ fun ProfileScreen(
                                 Text(if (!isPermBlocked) "Active 🔴" else "Disabled", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = if (!isPermBlocked) Color(0xFF10B981) else Color(0xFFEF4444))
                             }
 
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 4.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
-                                    Icon(Icons.Default.Sync, contentDescription = null, tint = primaryAccent, modifier = Modifier.size(16.dp))
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text("Keep Connected / Sync", fontSize = 12.5.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f))
-                                }
-                                Text(if (partner.isEffectivelyOnline()) "Online & Active ⚡" else "Connected 🔋", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF10B981))
-                            }
                         }
                     }
                 }
