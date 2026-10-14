@@ -429,6 +429,9 @@ class MainActivity : FragmentActivity() {
         // Re-calling it causes a layout recalculation that shifts content after minimize/reopen.
         app.authRepository.onAppForegroundStateChanged(true)
         app.securityPreferences.ignoreNextPause = false
+        if (app.securityPreferences.wasInCallRecently()) {
+            app.securityPreferences.revealSecretApp()
+        }
         // Ends an installer trip, or continues an update install that waited for permission
         com.example.update.OtaUpdateManager.getInstance(this).onAppResumed(this)
         if (!app.securityPreferences.isDisguiseActive()) {
@@ -496,9 +499,10 @@ class MainActivity : FragmentActivity() {
         coverSecretApp()
         super.onUserLeaveHint()
         if (isChangingConfigurations) return
-        // With a call on (or its screen opening) this may just be the call screen coming up; onStop
-        // decides, and leaving the app for real still disguises it there
-        if (com.example.call.CallManager.hasActiveCall() || com.example.call.CallManager.isCallScreenVisible) return
+        // With a call on (or its screen opening, or a call ended recently), do not re-disguise
+        if (com.example.call.CallManager.hasActiveCall() ||
+            com.example.call.CallManager.isCallScreenVisible ||
+            app.securityPreferences.wasInCallRecently()) return
         if (!app.securityPreferences.ignoreNextPause &&
             !app.securityPreferences.isTheaterModeActive &&
             !app.securityPreferences.isExternalPickerActive &&
@@ -522,6 +526,7 @@ class MainActivity : FragmentActivity() {
         if (!app.securityPreferences.ignoreNextPause &&
             !app.securityPreferences.isTheaterModeActive &&
             !app.securityPreferences.isExternalPickerActive &&
+            !app.securityPreferences.wasInCallRecently() &&
             !com.example.call.CallManager.isCallScreenVisible &&
             !com.example.call.CallManager.hasActiveCall() &&
             app.securityPreferences.isDisguiseModeEnabled()) {

@@ -96,7 +96,7 @@ class CallActivity : ComponentActivity() {
                     },
                     onDismiss = {
                         CallManager.dismiss()
-                        finish()
+                        dismissAndReturnToCherish()
                     }
                 )
             }
@@ -108,14 +108,34 @@ class CallActivity : ComponentActivity() {
         lifecycleScope.launch {
             CallManager.state.collect { state ->
                 if (state.phase != CallPhase.IDLE) waitingForCall = false
-                if (state.phase == CallPhase.IDLE && !waitingForCall) finish()
+                if (state.phase == CallPhase.IDLE && !waitingForCall) dismissAndReturnToCherish()
                 keepScreenOn(state.phase != CallPhase.IDLE && state.phase != CallPhase.ENDED)
             }
         }
         lifecycleScope.launch {
             delay(NOTHING_TO_SHOW_MS)
-            if (CallManager.state.value.phase == CallPhase.IDLE && pendingAction == null) finish()
+            if (CallManager.state.value.phase == CallPhase.IDLE && pendingAction == null) dismissAndReturnToCherish()
         }
+    }
+
+    private fun dismissAndReturnToCherish() {
+        app.securityPreferences.lastCallEndedAt = android.os.SystemClock.elapsedRealtime()
+        app.securityPreferences.revealSecretApp()
+        val keyguard = getSystemService(Context.KEYGUARD_SERVICE) as? KeyguardManager
+        val isLocked = keyguard?.isKeyguardLocked == true
+        if (!isLocked) {
+            val intent = Intent(this, com.example.MainActivity::class.java).apply {
+                action = Intent.ACTION_MAIN
+                addCategory(Intent.CATEGORY_LAUNCHER)
+                flags = Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            }
+            try {
+                startActivity(intent)
+            } catch (e: Exception) {
+                Log.w("CallActivity", "Failed to bring MainActivity to front", e)
+            }
+        }
+        finish()
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -158,7 +178,7 @@ class CallActivity : ComponentActivity() {
             ACTION_ANSWER -> answer(invite)
             ACTION_INCOMING -> if (invite != null && !CallManager.hasActiveCall()) CallManager.onIncomingInvite(invite)
             // Back to a call that has ended meanwhile: nothing to show
-            ACTION_SHOW -> if (CallManager.state.value.phase == CallPhase.IDLE) finish()
+            ACTION_SHOW -> if (CallManager.state.value.phase == CallPhase.IDLE) dismissAndReturnToCherish()
             else -> Unit
         }
     }
@@ -241,6 +261,15 @@ class CallActivity : ComponentActivity() {
 
         /** Calls the partner (from the chat). Shows the current call instead if one is on. */
         fun startOutgoing(context: Context) {
+            val app = context.applicationContext as? CherishApplication
+            if (app?.securityPreferences?.isMonthlyCallLimitReached() == true && !CallManager.hasActiveCall()) {
+                android.widget.Toast.makeText(
+                    context,
+                    "Monthly 10,000 min limit reached. Calls will re-enable next month.",
+                    android.widget.Toast.LENGTH_LONG
+                ).show()
+                return
+            }
             val intent = if (CallManager.hasActiveCall()) showIntent(context) else {
                 Intent(context, CallActivity::class.java).setAction(ACTION_OUTGOING)
             }

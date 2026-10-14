@@ -41,6 +41,18 @@ class SecurityPreferences(context: Context) {
      */
     var isExternalPickerActive: Boolean = false
 
+    /**
+     * Timestamp of the most recent call termination. Prevents app from accidentally
+     * disguising into Notes immediately after hanging up or cutting a call.
+     */
+    @Volatile
+    var lastCallEndedAt: Long = 0L
+
+    fun wasInCallRecently(): Boolean {
+        val diff = android.os.SystemClock.elapsedRealtime() - lastCallEndedAt
+        return diff in 0L..15_000L
+    }
+
 
     private val _isDisguiseActive = MutableStateFlow(prefs.getBoolean(KEY_DISGUISE_ENABLED, true))
     val isDisguiseActive: StateFlow<Boolean> = _isDisguiseActive.asStateFlow()
@@ -83,7 +95,8 @@ class SecurityPreferences(context: Context) {
 
     fun reDisguise() {
         if (!isDisguiseModeEnabled()) return
-        if (ignoreNextPause || isTheaterModeActive || isExternalPickerActive) return
+        if (ignoreNextPause || isTheaterModeActive || isExternalPickerActive || wasInCallRecently()) return
+        if (com.example.call.CallManager.hasActiveCall() || com.example.call.CallManager.isCallScreenVisible) return
         isMediaViewerActive = false
         _hasRevealedSecretAppInSession.value = false
         _isDisguiseActive.value = true
@@ -608,12 +621,43 @@ class SecurityPreferences(context: Context) {
         return prefs.getInt(dateKey, 0)
     }
 
+    fun getCurrentMonthKey(): String {
+        val cal = java.util.Calendar.getInstance()
+        return "%04d_%02d".format(cal.get(java.util.Calendar.YEAR), cal.get(java.util.Calendar.MONTH) + 1)
+    }
+
+    fun getMonthCallDurationSeconds(): Int {
+        val monthKey = "call_month_secs_" + getCurrentMonthKey()
+        return prefs.getInt(monthKey, 0)
+    }
+
+    fun getMonthCallMinutesUsed(): Int {
+        return (getMonthCallDurationSeconds() + 59) / 60
+    }
+
+    fun isMonthlyCallLimitReached(): Boolean {
+        return getMonthCallMinutesUsed() >= 10_000
+    }
+
+    fun getMonthlyCallMinutesRemaining(): Int {
+        return (10_000 - getMonthCallMinutesUsed()).coerceAtLeast(0)
+    }
+
+    private val _monthlyFreeCallMinutesRemaining = MutableStateFlow(getMonthlyCallMinutesRemaining())
+    val monthlyFreeCallMinutesRemaining: StateFlow<Int> = _monthlyFreeCallMinutesRemaining.asStateFlow()
+
     fun addCallDurationSeconds(seconds: Int) {
         if (seconds <= 0) return
         val dateKey = "call_secs_" + getTodayLogicalDate()
         val current = prefs.getInt(dateKey, 0)
-        prefs.edit().putInt(dateKey, current + seconds).apply()
+        val monthKey = "call_month_secs_" + getCurrentMonthKey()
+        val currentMonthSecs = prefs.getInt(monthKey, 0)
+        prefs.edit()
+            .putInt(dateKey, current + seconds)
+            .putInt(monthKey, currentMonthSecs + seconds)
+            .apply()
         _dailyFreeCallMinutesRemaining.value = getDailyFreeCallMinutesRemaining()
+        _monthlyFreeCallMinutesRemaining.value = getMonthlyCallMinutesRemaining()
     }
 
     fun getDailyFreeCallMinutesTotal(): Int = prefs.getInt(KEY_DAILY_FREE_CALL_MINUTES, 60)
@@ -630,6 +674,7 @@ class SecurityPreferences(context: Context) {
 
     fun refreshDailyCallMinutes() {
         _dailyFreeCallMinutesRemaining.value = getDailyFreeCallMinutesRemaining()
+        _monthlyFreeCallMinutesRemaining.value = getMonthlyCallMinutesRemaining()
     }
 
     fun ensurePreferencesMigrated(currentVersionCode: Int) {

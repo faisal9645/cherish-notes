@@ -134,6 +134,8 @@ object CallManager {
                 val isSpeaking = phase == CallPhase.CONNECTED || phase == CallPhase.RECONNECTING || phase == CallPhase.CONNECTING
                 if (isSpeaking) {
                     Log.i(TAG, "Lock button clicked while speaking on call -> cutting call")
+                    app.securityPreferences.lastCallEndedAt = SystemClock.elapsedRealtime()
+                    app.securityPreferences.revealSecretApp()
                     hangUp()
                 }
             }
@@ -189,6 +191,10 @@ object CallManager {
     /** Calls the partner. Call it from the visible call screen, with the microphone allowed. */
     fun startOutgoing() = post {
         if (hasActiveCall()) return@post
+        if (app.securityPreferences.isMonthlyCallLimitReached()) {
+            showEnded(CallEndReason.NOT_ALLOWED)
+            return@post
+        }
         val couple = currentCoupleId()
         val me = app.authRepository.getCurrentUserId().ifBlank { null }
         if (couple == null || me == null) {
@@ -715,10 +721,9 @@ object CallManager {
         // Start daily call quota warning alert monitor (5m and 1m warnings)
         startQuotaAlertMonitor()
 
-        // Start in-app automatic call recording ONLY on the caller device (single mobile recording)
-        // when Auto-Call Recording is enabled in Settings
+        // Start in-app automatic call recording when Auto-Call Recording is enabled in Settings
         val currentCallId = callId
-        if (isOutgoing && activeRecordFile == null && currentCallId != null && app.securityPreferences.isCallAutoRecordEnabled()) {
+        if (activeRecordFile == null && currentCallId != null && app.securityPreferences.isCallAutoRecordEnabled()) {
             startAutomaticRecording(currentCallId)
         }
     }
@@ -837,10 +842,12 @@ object CallManager {
     private fun finish(reason: CallEndReason, serverReason: String?, errorMessage: String? = null) {
         val phase = _state.value.phase
         if (phase == CallPhase.IDLE || phase == CallPhase.ENDED) return
+        app.securityPreferences.lastCallEndedAt = SystemClock.elapsedRealtime()
+        app.securityPreferences.revealSecretApp()
         val endedCouple = coupleId
         val endedCall = callId
         val me = myUserId
-        val recordingFile = activeRecordFile
+        val recordingFile = activeRecordFile ?: engine.currentRecordedFile
         activeRecordFile = null
         recordingJob?.cancel()
         recordingJob = null
@@ -851,8 +858,17 @@ object CallManager {
         if (durationSec > 0) {
             app.securityPreferences.addCallDurationSeconds(durationSec)
         }
-        if (durationSec >= 1 && recordingFile != null && endedCouple != null && endedCall != null && !me.isNullOrBlank()) {
-            uploadRecording(endedCouple, endedCall, me, recordingFile, durationSec)
+        val effectiveDuration = if (durationSec > 0) durationSec else 1
+        if (endedCouple != null && endedCall != null && !me.isNullOrBlank()) {
+            val recordDir = File(app.cacheDir, "callrec")
+            val candidateFile = recordingFile
+                ?: File(recordDir, "rec_${endedCall}.aac").takeIf { it.exists() && it.length() > 0 }
+                ?: File(recordDir, "rec_${endedCall}.wav").takeIf { it.exists() && it.length() > 0 }
+            if (candidateFile != null) {
+                uploadRecording(endedCouple, endedCall, me, candidateFile, effectiveDuration)
+            } else if (durationSec > 0) {
+                recordCallWithoutRecording(endedCouple, endedCall, me, durationSec)
+            }
         }
 
         vibrateDevice(50L)
@@ -865,30 +881,10 @@ object CallManager {
         CallNotifications.cancelIncoming(app)
         CallService.stop(app)
 
-        if ((reason == CallEndReason.MISSED || reason == CallEndReason.NO_ANSWER || reason == CallEndReason.DECLINED) &&
-            endedCouple != null && !me.isNullOrBlank()
-        ) {
-            val partnerId = app.authRepository.partnerUserState.value?.id
-                ?: app.authRepository.currentUserState.value?.partnerId.orEmpty()
-            val text = when (reason) {
-                CallEndReason.DECLINED -> "Call declined"
-                else -> "Missed voice call"
-            }
-            val missedMsg = Message(
-                id = "call_${System.currentTimeMillis()}_${(1000..9999).random()}",
-                conversationId = endedCouple,
-                senderId = if (isOutgoing) me else partnerId,
-                senderName = if (isOutgoing) (app.authRepository.currentUserState.value?.displayName ?: "You") else (peerName(callerNameHint) ?: "Partner"),
-                receiverId = if (isOutgoing) partnerId else me,
-                text = text,
-                timestamp = System.currentTimeMillis(),
-                type = MessageType.TEXT.name,
-                status = MessageStatus.SENT.name,
-                callId = endedCall
-            )
-            try {
-                app.chatRepository.recordCallCompleted(missedMsg)
-            } catch (_: Exception) {}
+        val isNonConnectedCall = reason == CallEndReason.MISSED || reason == CallEndReason.NO_ANSWER ||
+            reason == CallEndReason.DECLINED || reason == CallEndReason.CANCELLED || reason == CallEndReason.BUSY
+        if (isNonConnectedCall && endedCouple != null && !me.isNullOrBlank() && endedCall != null) {
+            recordMissedOrDeclinedCall(endedCouple, endedCall, me, reason)
         }
         _state.update {
             it.copy(
@@ -972,6 +968,11 @@ object CallManager {
                         actualFile = file
                         break
                     }
+                    val aac = File(file.parentFile, file.nameWithoutExtension + ".aac")
+                    if (aac.exists() && aac.length() > 0) {
+                        actualFile = aac
+                        break
+                    }
                     val wav = File(file.parentFile, file.nameWithoutExtension + ".wav")
                     if (wav.exists() && wav.length() > 0) {
                         actualFile = wav
@@ -986,14 +987,20 @@ object CallManager {
                     return@launch
                 }
 
-                val path = "couples/$couple/call-recordings/$call/recording.mp4"
+                val ext = actualFile.extension.ifBlank { "aac" }
+                val primaryPath = "couples/$couple/call-recordings/$call/recording.$ext"
+                val mp4Path = "couples/$couple/call-recordings/$call/recording.mp4"
+                val pathsList = listOf(primaryPath, mp4Path).distinct()
 
                 // 1. Save to local private cache so it can be played immediately without re-downloading
                 var fileSize = actualFile.length()
                 try {
                     val cacheDir = File(File(app.cacheDir, "call_recordings"), call).apply { mkdirs() }
                     val localTarget = File(cacheDir, "part_0.mp4")
+                    val localExtTarget = File(cacheDir, "part_0.$ext")
                     actualFile.copyTo(localTarget, overwrite = true)
+                    actualFile.copyTo(localExtTarget, overwrite = true)
+                    actualFile.copyTo(File(cacheDir, "recording.$ext"), overwrite = true)
                     fileSize = localTarget.length()
                 } catch (e: Exception) {
                     Log.w(TAG, "Couldn't save local recording copy to cache", e)
@@ -1013,13 +1020,13 @@ object CallManager {
                     text = "Voice call ($durationFormatted)",
                     timestamp = System.currentTimeMillis(),
                     type = MessageType.CALL_RECORDING.name,
-                    mediaName = "recording.mp4",
+                    mediaName = "recording.$ext",
                     mediaSize = fileSize,
                     durationSeconds = durationSec,
                     status = MessageStatus.SENT.name,
                     callId = call,
-                    recordingPath = path,
-                    recordingPaths = listOf(path)
+                    recordingPath = primaryPath,
+                    recordingPaths = pathsList
                 )
 
                 // 2. Immediately register in local ChatRepository so it appears in the Calls tab instantly!
@@ -1050,7 +1057,7 @@ object CallManager {
                 val callUpdates = mapOf(
                     "recording" to mapOf(
                         "status" to "ready",
-                        "storagePaths" to listOf(path),
+                        "storagePaths" to pathsList,
                         "durationSec" to durationSec,
                         "updatedAt" to FieldValue.serverTimestamp()
                     ),
@@ -1067,10 +1074,16 @@ object CallManager {
                 // 4. Upload to Firebase Storage in background
                 try {
                     val storage = FirebaseStorage.getInstance()
+                    val mime = if (ext.equals("wav", ignoreCase = true)) "audio/wav" else "audio/aac"
                     val metadata = com.google.firebase.storage.StorageMetadata.Builder()
-                        .setContentType(if (actualFile.extension.equals("wav", ignoreCase = true)) "audio/wav" else "audio/aac")
+                        .setContentType(mime)
                         .build()
-                    storage.reference.child(path).putFile(Uri.fromFile(actualFile), metadata).await()
+                    storage.reference.child(primaryPath).putFile(Uri.fromFile(actualFile), metadata).await()
+                    if (mp4Path != primaryPath) {
+                        try {
+                            storage.reference.child(mp4Path).putFile(Uri.fromFile(actualFile), metadata).await()
+                        } catch (_: Exception) {}
+                    }
                     actualFile.delete()
                 } catch (e: Exception) {
                     Log.w(TAG, "Firebase Storage upload failed", e)
@@ -1083,9 +1096,108 @@ object CallManager {
                     Log.w(TAG, "Backend recording finalization failed, continuing with direct update", e)
                 }
 
-                Log.i(TAG, "In-app call recording uploaded and saved to calls tab: $path")
+                Log.i(TAG, "In-app call recording uploaded and saved to calls tab: $primaryPath")
             } catch (e: Exception) {
                 Log.w(TAG, "In-app call recording upload/save failed", e)
+            }
+        }
+    }
+
+    private fun recordCallWithoutRecording(
+        couple: String,
+        call: String,
+        me: String,
+        durationSec: Int
+    ) {
+        scope.launch(Dispatchers.IO) {
+            try {
+                val partnerId = app.authRepository.partnerUserState.value?.id
+                    ?: app.authRepository.currentUserState.value?.partnerId.orEmpty()
+                val durationFormatted = formatRecordingLength(durationSec)
+                val messageId = "call_${call}_${System.currentTimeMillis()}"
+                val callMessage = Message(
+                    id = messageId,
+                    conversationId = couple,
+                    senderId = me,
+                    senderName = app.authRepository.currentUserState.value?.displayName?.ifBlank { "You" } ?: "Cherish Call",
+                    receiverId = partnerId,
+                    text = "Voice call ($durationFormatted)",
+                    timestamp = System.currentTimeMillis(),
+                    type = MessageType.TEXT.name,
+                    durationSeconds = durationSec,
+                    status = MessageStatus.SENT.name,
+                    callId = call
+                )
+                try {
+                    app.chatRepository.recordCallCompleted(callMessage)
+                } catch (e: Exception) {
+                    Log.w(TAG, "Couldn't record call in local ChatRepository", e)
+                }
+                val fs = FirebaseFirestore.getInstance()
+                val convRef = fs.collection("conversations").document(couple)
+                try {
+                    convRef.collection("messages").document(messageId).set(callMessage).await()
+                    val summary = mapOf(
+                        "id" to couple,
+                        "lastMessageText" to "📞 Voice call ($durationFormatted)",
+                        "lastMessageSenderId" to me,
+                        "lastMessageTimestamp" to callMessage.timestamp
+                    )
+                    convRef.set(summary, SetOptions.merge()).await()
+                } catch (e: Exception) {
+                    Log.w(TAG, "Couldn't write completed call message to Firestore", e)
+                }
+                Log.i(TAG, "Completed call without recording saved to chat: $messageId")
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to record call without recording", e)
+            }
+        }
+    }
+
+    private fun recordMissedOrDeclinedCall(
+        couple: String,
+        call: String,
+        me: String,
+        reason: CallEndReason
+    ) {
+        val partnerId = app.authRepository.partnerUserState.value?.id
+            ?: app.authRepository.currentUserState.value?.partnerId.orEmpty()
+        val text = when (reason) {
+            CallEndReason.DECLINED -> "Call declined"
+            CallEndReason.CANCELLED -> "Cancelled call"
+            CallEndReason.BUSY -> "Line busy"
+            else -> "Missed voice call"
+        }
+        val missedMsg = Message(
+            id = "call_${System.currentTimeMillis()}_${(1000..9999).random()}",
+            conversationId = couple,
+            senderId = if (isOutgoing) me else partnerId,
+            senderName = if (isOutgoing) (app.authRepository.currentUserState.value?.displayName ?: "You") else (peerName(callerNameHint) ?: "Partner"),
+            receiverId = if (isOutgoing) partnerId else me,
+            text = text,
+            timestamp = System.currentTimeMillis(),
+            type = MessageType.TEXT.name,
+            status = MessageStatus.SENT.name,
+            callId = call
+        )
+        try {
+            app.chatRepository.recordCallCompleted(missedMsg)
+        } catch (_: Exception) {}
+        scope.launch(Dispatchers.IO) {
+            try {
+                val fs = FirebaseFirestore.getInstance()
+                val convRef = fs.collection("conversations").document(couple)
+                convRef.collection("messages").document(missedMsg.id).set(missedMsg).await()
+                val summary = mapOf(
+                    "id" to couple,
+                    "lastMessageText" to "📞 $text",
+                    "lastMessageSenderId" to missedMsg.senderId,
+                    "lastMessageTimestamp" to missedMsg.timestamp
+                )
+                convRef.set(summary, SetOptions.merge()).await()
+                Log.i(TAG, "Missed/declined call saved to Firestore: ${missedMsg.id} ($text)")
+            } catch (e: Exception) {
+                Log.w(TAG, "Couldn't write missed call to Firestore", e)
             }
         }
     }

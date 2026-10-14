@@ -544,6 +544,8 @@ fun HomeScreen(
 
             // Free Daily Voice Call Minutes Card
             val freeCallMinutesRemaining by homeApp.securityPreferences.dailyFreeCallMinutesRemaining.collectAsState()
+            val monthlyFreeCallMinutesRemaining by homeApp.securityPreferences.monthlyFreeCallMinutesRemaining.collectAsState()
+            val isMonthlyLimitReached = monthlyFreeCallMinutesRemaining <= 0
             val hasActiveCall = com.example.call.CallManager.hasActiveCall()
             Card(
                 modifier = Modifier
@@ -568,13 +570,13 @@ fun HomeScreen(
                             modifier = Modifier
                                 .size(40.dp)
                                 .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
+                                .background((if (isMonthlyLimitReached) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary).copy(alpha = 0.12f)),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 imageVector = if (hasActiveCall) Icons.Filled.PhoneInTalk else Icons.Filled.Call,
                                 contentDescription = "Daily Call Minutes",
-                                tint = MaterialTheme.colorScheme.primary,
+                                tint = if (isMonthlyLimitReached) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(20.dp)
                             )
                         }
@@ -594,15 +596,21 @@ fun HomeScreen(
                                     color = MaterialTheme.colorScheme.onSurface
                                 )
                                 Text(
-                                    text = "$freeCallMinutesRemaining mins left",
+                                    text = if (isMonthlyLimitReached) "Limit Reached" else "$freeCallMinutesRemaining mins left",
                                     fontSize = 13.sp,
                                     fontWeight = FontWeight.SemiBold,
-                                    color = if (freeCallMinutesRemaining > 10) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+                                    color = if (isMonthlyLimitReached || freeCallMinutesRemaining <= 10) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
                                 )
                             }
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
-                                text = if (hasActiveCall) "Active call in progress • Free daily limit" else "Resets daily at 6 AM • 60 mins/day",
+                                text = if (isMonthlyLimitReached) {
+                                    "10,000 mins used this month • Re-enables 1st of next month"
+                                } else if (hasActiveCall) {
+                                    "Active call in progress • Free daily limit"
+                                } else {
+                                    "Resets daily at 6 AM • 60 mins/day • ${10000 - monthlyFreeCallMinutesRemaining}/10k monthly"
+                                },
                                 fontSize = 12.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -611,15 +619,15 @@ fun HomeScreen(
 
                     Spacer(modifier = Modifier.height(10.dp))
 
-                    val callProgress = (freeCallMinutesRemaining / 60f).coerceIn(0f, 1f)
+                    val callProgress = if (isMonthlyLimitReached) 0f else (freeCallMinutesRemaining / 60f).coerceIn(0f, 1f)
                     LinearProgressIndicator(
                         progress = { callProgress },
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(6.dp)
                             .clip(CircleShape),
-                        color = MaterialTheme.colorScheme.primary,
-                        trackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                        color = if (isMonthlyLimitReached) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+                        trackColor = (if (isMonthlyLimitReached) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary).copy(alpha = 0.15f)
                     )
                 }
             }

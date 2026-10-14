@@ -1030,34 +1030,6 @@ fun ProfileScreen(
 
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), thickness = 0.6.dp)
 
-                // --- SUBSECTION 4: CALL NOTIFICATION RINGING ---
-                ListItem(
-                    headlineContent = { Text("Call Notification Ringing", fontSize = 15.sp, fontWeight = FontWeight.SemiBold) },
-                    supportingContent = {
-                        Text(
-                            if (uiState.isCallRingingEnabled) "Play phone ringtone and sound when your partner calls you"
-                            else "Silent incoming calls (vibrate or silent without ringtone audio)",
-                            fontSize = 13.sp
-                        )
-                    },
-                    leadingContent = {
-                        Icon(
-                            Icons.Filled.PhoneInTalk,
-                            contentDescription = null,
-                            tint = if (uiState.isCallRingingEnabled) primaryAccent else MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    },
-                    trailingContent = {
-                        Switch(
-                            checked = uiState.isCallRingingEnabled,
-                            onCheckedChange = { viewModel.setCallRingingEnabled(it) },
-                            modifier = Modifier.testTag("call_ringing_switch")
-                        )
-                    }
-                )
-
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), thickness = 0.6.dp)
-
                 // --- SUBSECTION 5: KEEP CONNECTED WHEN CLOSED ---
                 ListItem(
                     headlineContent = { Text("Keep Connected When Closed", fontSize = 15.sp, fontWeight = FontWeight.SemiBold) },

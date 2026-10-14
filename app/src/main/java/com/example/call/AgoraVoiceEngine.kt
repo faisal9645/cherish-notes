@@ -358,8 +358,12 @@ class AgoraVoiceEngine(private val context: Context) {
         }
     }
 
+    var currentRecordedFile: File? = null
+        private set
+
     fun startRecording(file: File): Boolean {
         val rtc = engine ?: return false
+        currentRecordedFile = null
         try {
             file.parentFile?.mkdirs()
             if (file.exists()) file.delete()
@@ -383,7 +387,13 @@ class AgoraVoiceEngine(private val context: Context) {
             res = rtc.startAudioRecording(file.absolutePath, Constants.AUDIO_RECORDING_QUALITY_MEDIUM)
         }
 
-        if (res != 0 && file.extension.lowercase() != "wav") {
+        if (res == 0) {
+            currentRecordedFile = file
+            Log.i(TAG, "startAudioRecording started successfully for ${file.absolutePath}")
+            return true
+        }
+
+        if (file.extension.lowercase() != "wav") {
             val wavFile = File(file.parentFile, file.nameWithoutExtension + ".wav")
             try { if (wavFile.exists()) wavFile.delete() } catch (_: Exception) {}
             res = try {
@@ -398,13 +408,13 @@ class AgoraVoiceEngine(private val context: Context) {
                 rtc.startAudioRecording(wavFile.absolutePath, Constants.AUDIO_RECORDING_QUALITY_MEDIUM)
             }
             if (res == 0) {
+                currentRecordedFile = wavFile
                 Log.i(TAG, "startAudioRecording succeeded with WAV: ${wavFile.absolutePath}")
                 return true
             }
         }
         if (res != 0) Log.w(TAG, "startAudioRecording returned $res for ${file.absolutePath}")
-        else Log.i(TAG, "startAudioRecording started successfully for ${file.absolutePath}")
-        return res == 0
+        return false
     }
 
     fun stopRecording(): Boolean {

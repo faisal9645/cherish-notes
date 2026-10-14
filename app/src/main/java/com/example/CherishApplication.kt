@@ -202,11 +202,14 @@ class CherishApplication : Application(), coil.ImageLoaderFactory {
         androidx.lifecycle.ProcessLifecycleOwner.get().lifecycle.addObserver(
             androidx.lifecycle.LifecycleEventObserver { _, event ->
                 if (event == androidx.lifecycle.Lifecycle.Event.ON_STOP) {
-                    // Leaving for a photo picker, the camera or a full-screen player doesn't count
+                    // Leaving for a photo picker, the camera, full-screen player or call doesn't count
                     val leftForReal = !securityPreferences.ignoreNextPause &&
                         !securityPreferences.ignoreChatNavigation &&
                         !securityPreferences.isExternalPickerActive &&
-                        !securityPreferences.isTheaterModeActive
+                        !securityPreferences.isTheaterModeActive &&
+                        !securityPreferences.wasInCallRecently() &&
+                        !com.example.call.CallManager.hasActiveCall() &&
+                        !com.example.call.CallManager.isCallScreenVisible
                     if (securityPreferences.isDisguiseModeEnabled() && leftForReal) {
                         securityPreferences.reDisguise()
                     }

@@ -475,6 +475,11 @@ class ChatRepository(
             MessageType.IMAGE, MessageType.VIDEO, MessageType.AUDIO, MessageType.CALL_RECORDING -> true
             else -> message.isStarred || message.isVideoNote ||
                 !message.mediaUrl.isNullOrBlank() || message.mediaUrls.isNotEmpty() ||
+                !message.callId.isNullOrBlank() ||
+                message.text.contains("voice call", ignoreCase = true) ||
+                message.text.contains("call declined", ignoreCase = true) ||
+                message.text.contains("cancelled call", ignoreCase = true) ||
+                message.text.contains("missed call", ignoreCase = true) ||
                 LINK_REGEX.containsMatchIn(message.text)
         }
     }

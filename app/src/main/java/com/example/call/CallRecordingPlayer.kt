@@ -71,12 +71,26 @@ object CallRecordingPlayer {
             playPart(app, message.id, known, 0)
             return
         }
-        val callId = message.callId?.takeIf { it.matches(CALL_ID) }
+        val rawCallId = message.callId?.trim()?.takeIf { it.isNotBlank() }
+            ?: message.recordingPath?.substringAfter("call-recordings/")?.substringBefore("/")?.takeIf { it.isNotBlank() }
+            ?: message.id.removePrefix(MESSAGE_PREFIX).takeIf { it.isNotBlank() }
+        val callId = rawCallId?.filter { it.isLetterOrDigit() || it == '-' || it == '_' }?.takeIf { it.length in 4..128 }
         if (callId != null) {
             val dir = File(File(app.cacheDir, CACHE_DIR), callId)
-            val localPart0 = File(dir, "part_0.mp4")
-            if (localPart0.exists() && localPart0.length() > 0) {
-                val parts = listOf(localPart0)
+            val recDir = File(app.cacheDir, "callrec")
+            val candidateFiles = listOf(
+                File(dir, "part_0.mp4"),
+                File(dir, "part_0.aac"),
+                File(dir, "part_0.wav"),
+                File(dir, "recording.mp4"),
+                File(dir, "recording.aac"),
+                File(dir, "recording.wav"),
+                File(recDir, "rec_${callId}.aac"),
+                File(recDir, "rec_${callId}.wav")
+            )
+            val localFile = candidateFiles.firstOrNull { it.exists() && it.length() > 0 }
+            if (localFile != null) {
+                val parts = listOf(localFile)
                 files[message.id] = parts
                 setItem(message.id, Item(Status.READY, part = 0, parts = 1))
                 playPart(app, message.id, parts, 0)
@@ -93,7 +107,7 @@ object CallRecordingPlayer {
         setItem(message.id, Item(Status.LOADING))
         scope.launch {
             try {
-                val parts = fetch(app, coupleId, callId)
+                val parts = fetch(app, coupleId, callId, message)
                 files[message.id] = parts
                 setItem(message.id, Item(Status.READY, part = 0, parts = parts.size))
                 playPart(app, message.id, parts, 0)
@@ -119,8 +133,16 @@ object CallRecordingPlayer {
             _items.update { it - id }
         }
         val root = File(context.applicationContext.cacheDir, CACHE_DIR)
+        val recDir = File(context.applicationContext.cacheDir, "callrec")
         scope.launch(Dispatchers.IO) {
-            callIds.filter { it.matches(CALL_ID) }.forEach { File(root, it).deleteRecursively() }
+            callIds.forEach { id ->
+                val safeId = id.filter { it.isLetterOrDigit() || it == '-' || it == '_' }
+                if (safeId.isNotBlank()) {
+                    File(root, safeId).deleteRecursively()
+                    File(recDir, "rec_${safeId}.aac").delete()
+                    File(recDir, "rec_${safeId}.wav").delete()
+                }
+            }
         }
     }
 
@@ -134,51 +156,95 @@ object CallRecordingPlayer {
     }
 
     /** The recording's parts on this phone, fetched once the server says it's ready. */
-    private suspend fun fetch(app: CherishApplication, coupleId: String, callId: String): List<File> {
+    private suspend fun fetch(app: CherishApplication, coupleId: String, callId: String, message: Message): List<File> {
         val repository = CallRepository(app)
-        repository.ensureMember(coupleId)
-        // The server's own record decides whether it can be played (a chat message alone doesn't)
-        val record = repository.getCall(coupleId, callId)
-        when (record?.recordingStatus) {
-            null, RecordingStatus.READY -> Unit
-            RecordingStatus.DELETED -> throw Unavailable("This recording was deleted")
-            RecordingStatus.FAILED -> throw Unavailable("This call wasn't recorded")
-            else -> throw Unavailable("This recording is still being saved")
+        try {
+            repository.ensureMember(coupleId)
+        } catch (_: Exception) {}
+
+        val record = try {
+            repository.getCall(coupleId, callId)
+        } catch (_: Exception) {
+            null
         }
+
+        if (record?.recordingStatus == RecordingStatus.DELETED) {
+            throw Unavailable("This recording was deleted")
+        }
+
         val prefix = "couples/$coupleId/call-recordings/$callId/"
-        val paths = record?.recordingPaths?.filter { it.startsWith(prefix) }?.ifEmpty { null }
-            ?: listOf("${prefix}recording.mp4")
+        val candidatePaths = mutableListOf<String>()
+        record?.recordingPaths?.filter { it.startsWith(prefix) }?.let { candidatePaths.addAll(it) }
+        message.recordingPaths.filter { it.startsWith(prefix) }.let { candidatePaths.addAll(it) }
+        message.recordingPath?.takeIf { it.startsWith(prefix) }?.let { candidatePaths.add(it) }
+        candidatePaths.add("${prefix}recording.aac")
+        candidatePaths.add("${prefix}recording.mp4")
+        candidatePaths.add("${prefix}recording.wav")
+        val uniquePaths = candidatePaths.distinct()
+
         if (FirebaseApp.getApps(app).isEmpty()) throw IllegalStateException("Firebase isn't set up")
         val storage = FirebaseStorage.getInstance()
 
         return withContext(Dispatchers.IO) {
             val dir = File(File(app.cacheDir, CACHE_DIR), callId).apply { mkdirs() }
-            val parts = paths.mapIndexed { index, path ->
-                val target = File(dir, "part_$index.mp4")
-                if (!target.exists() || target.length() == 0L) {
-                    val partial = File(dir, "part_$index.mp4.download")
-                    try {
-                        storage.reference.child(path).getFile(partial).await()
-                    } catch (e: StorageException) {
-                        partial.delete()
-                        when (e.errorCode) {
-                            StorageException.ERROR_OBJECT_NOT_FOUND -> throw Unavailable("This recording isn't available anymore")
-                            StorageException.ERROR_NOT_AUTHORIZED -> throw Unavailable("This phone can't open this recording")
-                            else -> throw e
-                        }
-                    }
-                    if (!partial.renameTo(target)) {
-                        partial.copyTo(target, overwrite = true)
-                        partial.delete()
-                    }
-                }
-                target.setLastModified(System.currentTimeMillis())
-                target
+            val existing = listOf("part_0.mp4", "part_0.aac", "part_0.wav", "recording.mp4", "recording.aac")
+                .map { File(dir, it) }
+                .firstOrNull { it.exists() && it.length() > 0L }
+            if (existing != null) {
+                return@withContext listOf(existing)
             }
-            // Most recently played last out of the cache
+
+            var downloadedFile: File? = null
+            var lastStorageException: StorageException? = null
+
+            for (path in uniquePaths) {
+                val ext = path.substringAfterLast('.', "mp4")
+                val destFile = File(dir, "part_0.$ext")
+                val partial = File(dir, "part_0.$ext.download")
+                try {
+                    storage.reference.child(path).getFile(partial).await()
+                    if (partial.exists() && partial.length() > 0L) {
+                        if (!partial.renameTo(destFile)) {
+                            partial.copyTo(destFile, overwrite = true)
+                            partial.delete()
+                        }
+                        val targetMp4 = File(dir, "part_0.mp4")
+                        if (destFile != targetMp4 && (!targetMp4.exists() || targetMp4.length() == 0L)) {
+                            try {
+                                destFile.copyTo(targetMp4, overwrite = true)
+                            } catch (_: Exception) {}
+                        }
+                        downloadedFile = destFile
+                        break
+                    }
+                } catch (e: StorageException) {
+                    partial.delete()
+                    lastStorageException = e
+                    if (e.errorCode == StorageException.ERROR_NOT_AUTHORIZED) {
+                        throw Unavailable("This phone can't open this recording")
+                    }
+                } catch (e: Exception) {
+                    partial.delete()
+                }
+            }
+
+            if (downloadedFile == null) {
+                if (record?.recordingStatus == RecordingStatus.FAILED) {
+                    throw Unavailable("This call wasn't recorded")
+                }
+                if (record?.recordingStatus == RecordingStatus.RECORDING) {
+                    throw Unavailable("This recording is still being saved")
+                }
+                if (lastStorageException?.errorCode == StorageException.ERROR_OBJECT_NOT_FOUND) {
+                    throw Unavailable("This recording isn't available anymore")
+                }
+                throw Unavailable("This recording isn't available")
+            }
+
+            downloadedFile.setLastModified(System.currentTimeMillis())
             dir.setLastModified(System.currentTimeMillis())
             pruneCache(File(app.cacheDir, CACHE_DIR), keep = dir)
-            parts
+            listOf(downloadedFile)
         }
     }
 
@@ -199,5 +265,5 @@ object CallRecordingPlayer {
     }
 
     private const val MESSAGE_PREFIX = "callrec_"
-    private val CALL_ID = Regex("^[A-Za-z0-9]{16,40}$")
+    private val CALL_ID = Regex("^[A-Za-z0-9_-]{4,128}$")
 }

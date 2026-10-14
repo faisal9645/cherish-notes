@@ -312,10 +312,17 @@ fun SharedGalleryScreen(
             .sortedByDescending { it.timestamp }
     }
 
-    // Call recordings: one per call, keyed by the call (so retries and listeners can't double them)
-    val callRecordings = remember(filteredMessages) {
-        filteredMessages.filter { it.getTypedType() == MessageType.CALL_RECORDING }
-            .sortedByDescending { it.timestamp }
+    // All calls: recordings, completed, missed, declined, cancelled
+    val callHistoryItems = remember(filteredMessages) {
+        filteredMessages.filter { msg ->
+            msg.getTypedType() == MessageType.CALL_RECORDING ||
+            !msg.callId.isNullOrBlank() ||
+            msg.text.contains("Voice call", ignoreCase = true) ||
+            msg.text.contains("Call declined", ignoreCase = true) ||
+            msg.text.contains("Cancelled call", ignoreCase = true) ||
+            msg.text.contains("Missed voice call", ignoreCase = true) ||
+            msg.text.contains("Missed call", ignoreCase = true)
+        }.distinctBy { it.callId ?: it.id }.sortedByDescending { it.timestamp }
     }
 
     val starredMessages = remember(filteredMessages) {
@@ -324,13 +331,13 @@ fun SharedGalleryScreen(
     }
 
     // Multi-select works per tab: one key per photo/video tile, otherwise one key per message
-    val selectableIdsOnPage = remember(pagerState.currentPage, galleryMediaItems, voiceMessages, callRecordings, extractedLinks, starredMessages) {
+    val selectableIdsOnPage = remember(pagerState.currentPage, galleryMediaItems, voiceMessages, callHistoryItems, extractedLinks, starredMessages) {
         when (pagerState.currentPage) {
             0 -> galleryMediaItems.map { it.id }
             1 -> voiceMessages.map { it.id }
             2 -> extractedLinks.map { it.messageId }.distinct()
             3 -> starredMessages.map { it.id }
-            else -> callRecordings.map { it.id }
+            else -> callHistoryItems.map { it.id }
         }
     }
     val allOnPageSelected = selectableIdsOnPage.isNotEmpty() && selectedItemIds.containsAll(selectableIdsOnPage)
@@ -444,7 +451,7 @@ fun SharedGalleryScreen(
                                 1 -> "${voiceMessages.size} voice notes"
                                 2 -> "${extractedLinks.size} shared links"
                                 3 -> "${starredMessages.size} starred items"
-                                else -> "${callRecordings.size} call recordings"
+                                else -> "${callHistoryItems.size} calls"
                             }
                             val subtitle = if (selectedDateMillis != null) {
                                 val sdf = SimpleDateFormat("MMM d, yyyy", Locale.getDefault())
@@ -1105,126 +1112,6 @@ fun SharedGalleryScreen(
                         }
                     }
 
-                    // TAB 4: Calls (each call's recording: the same one as in the chat, never a copy)
-                    4 -> {
-                        if (callRecordings.isEmpty()) {
-                            val emptyText = if (selectedDateMillis != null) {
-                                val sdf = SimpleDateFormat("MMM d, yyyy", Locale.getDefault())
-                                "No call recordings found on ${sdf.format(Date(selectedDateMillis!!))}"
-                            } else {
-                                "No call recordings yet\nCalls are recorded automatically and show up here once saved."
-                            }
-                            EmptyGalleryNotice(emptyText, isLoading = isGalleryLoading)
-                        } else {
-                            LazyColumn(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .padding(horizontal = 14.dp, vertical = 10.dp),
-                                verticalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                items(callRecordings, key = { it.id }) { msg ->
-                                    Surface(
-                                        shape = RoundedCornerShape(16.dp),
-                                        color = MaterialTheme.colorScheme.surface,
-                                        shadowElevation = 1.5.dp,
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .gallerySelectable(
-                                                key = msg.id,
-                                                isSelectionMode = isSelectionMode,
-                                                isSelected = msg.id in selectedItemIds,
-                                                accentColor = RoseGoldPrimary,
-                                                onToggle = { toggleSelection(msg.id) },
-                                                onStartSelection = { startSelection(msg.id) }
-                                            )
-                                            .testTag("gallery_call_${msg.id}")
-                                    ) {
-                                        Column(modifier = Modifier.padding(14.dp)) {
-                                            Row(
-                                                modifier = Modifier.fillMaxWidth(),
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                if (isSelectionMode) {
-                                                    SelectionCheckBadge(isSelected = msg.id in selectedItemIds)
-                                                    Spacer(modifier = Modifier.width(10.dp))
-                                                }
-                                                Box(
-                                                    modifier = Modifier
-                                                        .size(34.dp)
-                                                        .clip(CircleShape)
-                                                        .background(RoseGoldPrimary.copy(alpha = 0.12f)),
-                                                    contentAlignment = Alignment.Center
-                                                ) {
-                                                    Icon(
-                                                        imageVector = Icons.Default.PhoneInTalk,
-                                                        contentDescription = null,
-                                                        tint = RoseGoldPrimary,
-                                                        modifier = Modifier.size(18.dp)
-                                                    )
-                                                }
-                                                Spacer(modifier = Modifier.width(10.dp))
-                                                Column(modifier = Modifier.weight(1f)) {
-                                                    Text(
-                                                        text = "Call recording",
-                                                        fontWeight = FontWeight.SemiBold,
-                                                        fontSize = 13.sp,
-                                                        color = MaterialTheme.colorScheme.onSurface
-                                                    )
-                                                    Text(
-                                                        text = "${formatGalleryDateTime(msg.timestamp)} \u2022 ${com.example.ui.chat.formatRecordingLength(msg.durationSeconds)}",
-                                                        fontSize = 11.sp,
-                                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                                    )
-                                                }
-
-                                                OutlinedButton(
-                                                    onClick = { onNavigateToMessage(msg.id) },
-                                                    shape = RoundedCornerShape(20.dp),
-                                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                                                    modifier = Modifier.height(32.dp)
-                                                ) {
-                                                    Icon(
-                                                        imageVector = Icons.Default.Chat,
-                                                        contentDescription = null,
-                                                        tint = RoseGoldPrimary,
-                                                        modifier = Modifier.size(13.dp)
-                                                    )
-                                                    Spacer(modifier = Modifier.width(4.dp))
-                                                    Text("Show in chat", fontSize = 11.sp, color = RoseGoldPrimary)
-                                                }
-
-                                                Spacer(modifier = Modifier.width(8.dp))
-
-                                                IconButton(
-                                                    onClick = { messageToDelete = msg },
-                                                    modifier = Modifier.size(32.dp)
-                                                ) {
-                                                    Icon(Icons.Default.DeleteOutline, contentDescription = "Delete", tint = Color(0xFF9CA3AF), modifier = Modifier.size(18.dp))
-                                                }
-                                            }
-
-                                            Spacer(modifier = Modifier.height(10.dp))
-
-                                            com.example.ui.chat.CallRecordingPlayerRow(
-                                                message = msg,
-                                                contentColor = MaterialTheme.colorScheme.onSurface,
-                                                buttonColor = RoseGoldPrimary,
-                                                buttonIconColor = Color.White,
-                                                trackColor = RoseGoldPrimary.copy(alpha = 0.25f),
-                                                progressColor = RoseGoldPrimary,
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .clip(RoundedCornerShape(12.dp))
-                                                    .background(MaterialTheme.colorScheme.surfaceVariant)
-                                                    .padding(horizontal = 10.dp, vertical = 8.dp)
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-
                     // TAB 2: Links (WhatsApp Style with dates, times, and actions)
                     2 -> {
                         if (extractedLinks.isEmpty()) {
@@ -1569,6 +1456,156 @@ fun SharedGalleryScreen(
                             }
                         }
                     }
+
+                    // TAB 4: Calls & Recordings
+                    4 -> {
+                        if (callHistoryItems.isEmpty()) {
+                            val emptyText = if (selectedDateMillis != null) {
+                                val sdf = SimpleDateFormat("MMM d, yyyy", Locale.getDefault())
+                                "No calls or recordings found on ${sdf.format(Date(selectedDateMillis!!))} 📞"
+                            } else {
+                                "No calls or recordings yet 📞"
+                            }
+                            EmptyGalleryNotice(emptyText, isLoading = isGalleryLoading)
+                        } else {
+                            LazyColumn(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                                verticalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                items(callHistoryItems, key = { it.id }) { msg ->
+                                    val isRecording = msg.getTypedType() == MessageType.CALL_RECORDING ||
+                                        !msg.recordingPath.isNullOrBlank() ||
+                                        msg.recordingPaths.isNotEmpty() ||
+                                        isCallAudioCached(context, msg)
+
+                                    val isDeclined = msg.text.contains("declined", ignoreCase = true)
+                                    val isCancelled = msg.text.contains("cancelled", ignoreCase = true)
+                                    val isMissed = msg.text.contains("missed", ignoreCase = true)
+                                    val isCompleted = !isDeclined && !isCancelled && !isMissed
+
+                                    val callIcon = when {
+                                        isRecording -> Icons.Filled.PhoneInTalk
+                                        isDeclined || isCancelled -> Icons.Default.CallEnd
+                                        isMissed -> Icons.Default.PhoneMissed
+                                        else -> Icons.Default.Call
+                                    }
+                                    val callColor = when {
+                                        isRecording -> RoseGoldPrimary
+                                        isCompleted -> Color(0xFF10B981)
+                                        isCancelled -> Color(0xFFF59E0B)
+                                        else -> Color(0xFFEF4444)
+                                    }
+                                    val titleText = when {
+                                        isRecording -> "Voice Call Recording"
+                                        isDeclined -> "Call Declined"
+                                        isCancelled -> "Cancelled Call"
+                                        isMissed -> "Missed Voice Call"
+                                        else -> "Voice Call"
+                                    }
+                                    val durationText = if (msg.durationSeconds > 0) {
+                                        " • ${msg.durationSeconds / 60}m ${msg.durationSeconds % 60}s"
+                                    } else ""
+
+                                    Surface(
+                                        shape = RoundedCornerShape(16.dp),
+                                        color = MaterialTheme.colorScheme.surface,
+                                        shadowElevation = 1.5.dp,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .gallerySelectable(
+                                                key = msg.id,
+                                                isSelectionMode = isSelectionMode,
+                                                isSelected = msg.id in selectedItemIds,
+                                                accentColor = RoseGoldPrimary,
+                                                onToggle = { toggleSelection(msg.id) },
+                                                onStartSelection = { startSelection(msg.id) }
+                                            )
+                                            .testTag("gallery_call_${msg.id}")
+                                    ) {
+                                        Column(modifier = Modifier.padding(14.dp)) {
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                if (isSelectionMode) {
+                                                    SelectionCheckBadge(isSelected = msg.id in selectedItemIds)
+                                                    Spacer(modifier = Modifier.width(10.dp))
+                                                }
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(36.dp)
+                                                        .clip(CircleShape)
+                                                        .background(callColor.copy(alpha = 0.14f)),
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    Icon(
+                                                        imageVector = callIcon,
+                                                        contentDescription = null,
+                                                        tint = callColor,
+                                                        modifier = Modifier.size(18.dp)
+                                                    )
+                                                }
+                                                Spacer(modifier = Modifier.width(10.dp))
+                                                Column(modifier = Modifier.weight(1f)) {
+                                                    Text(
+                                                        text = titleText,
+                                                        fontSize = 14.sp,
+                                                        fontWeight = FontWeight.SemiBold,
+                                                        color = MaterialTheme.colorScheme.onSurface
+                                                    )
+                                                    Text(
+                                                        text = "${formatGalleryDateTime(msg.timestamp)}$durationText",
+                                                        fontSize = 11.sp,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                    )
+                                                }
+                                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                                    OutlinedButton(
+                                                        onClick = { onNavigateToMessage(msg.id) },
+                                                        shape = RoundedCornerShape(20.dp),
+                                                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                                        modifier = Modifier.height(30.dp)
+                                                    ) {
+                                                        Icon(Icons.Default.Chat, contentDescription = null, tint = RoseGoldPrimary, modifier = Modifier.size(13.dp))
+                                                        Spacer(modifier = Modifier.width(4.dp))
+                                                        Text("Chat", fontSize = 11.sp, color = RoseGoldPrimary)
+                                                    }
+                                                }
+                                            }
+
+                                            if (isRecording) {
+                                                Spacer(modifier = Modifier.height(10.dp))
+                                                com.example.ui.chat.CallRecordingPlayerRow(
+                                                    message = msg,
+                                                    contentColor = MaterialTheme.colorScheme.onSurface,
+                                                    buttonColor = RoseGoldPrimary,
+                                                    buttonIconColor = Color.White,
+                                                    trackColor = RoseGoldPrimary.copy(alpha = 0.25f),
+                                                    progressColor = RoseGoldPrimary,
+                                                    modifier = Modifier.fillMaxWidth()
+                                                )
+                                            } else {
+                                                Spacer(modifier = Modifier.height(8.dp))
+                                                FilledTonalButton(
+                                                    onClick = { com.example.call.CallActivity.startOutgoing(context) },
+                                                    shape = RoundedCornerShape(12.dp),
+                                                    colors = ButtonDefaults.filledTonalButtonColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+                                                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
+                                                    modifier = Modifier.fillMaxWidth().height(36.dp)
+                                                ) {
+                                                    Icon(Icons.Default.Phone, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(15.dp))
+                                                    Spacer(modifier = Modifier.width(6.dp))
+                                                    Text("Call Back", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -1582,7 +1619,7 @@ fun SharedGalleryScreen(
             1 -> if (count == 1) "voice note" else "voice notes"
             2 -> if (count == 1) "link message" else "link messages"
             3 -> if (count == 1) "starred message" else "starred messages"
-            else -> if (count == 1) "call recording" else "call recordings"
+            else -> if (count == 1) "call item" else "call items"
         }
         AlertDialog(
             onDismissRequest = { showMultiDeleteConfirmDialog = false },
@@ -1893,3 +1930,20 @@ private fun OnThisDayCard(items: List<GalleryMediaItem>, onOpen: (GalleryMediaIt
         }
     }
 }
+
+private fun isCallAudioCached(context: Context, msg: Message): Boolean {
+    val rawId = msg.callId?.trim()?.takeIf { it.isNotBlank() } ?: msg.id.removePrefix("callrec_").takeIf { it.isNotBlank() } ?: return false
+    val id = rawId.filter { it.isLetterOrDigit() || it == '-' || it == '_' }
+    val dir = java.io.File(java.io.File(context.cacheDir, "call_recordings"), id)
+    val recDir = java.io.File(context.cacheDir, "callrec")
+    return listOf(
+        java.io.File(dir, "part_0.mp4"),
+        java.io.File(dir, "part_0.aac"),
+        java.io.File(dir, "part_0.wav"),
+        java.io.File(dir, "recording.mp4"),
+        java.io.File(dir, "recording.aac"),
+        java.io.File(recDir, "rec_${id}.aac"),
+        java.io.File(recDir, "rec_${id}.wav")
+    ).any { it.exists() && it.length() > 0 }
+}
+

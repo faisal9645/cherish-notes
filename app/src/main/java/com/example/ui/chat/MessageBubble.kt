@@ -1136,13 +1136,45 @@ fun MessageBubble(
                 if (message.text.isNotEmpty() && message.getTypedType() != MessageType.AUDIO && message.getTypedType() != MessageType.IMAGE &&
                     message.getTypedType() != MessageType.CALL_RECORDING
                 ) {
-                    val isMissedCall = remember(message.text) {
+                    val isCallEvent = remember(message.text, message.callId) {
+                        !message.callId.isNullOrBlank() ||
                         message.text.contains("Missed voice call", ignoreCase = true) ||
                         message.text.contains("Missed call", ignoreCase = true) ||
-                        message.text.contains("Call declined", ignoreCase = true)
+                        message.text.contains("Call declined", ignoreCase = true) ||
+                        message.text.contains("Cancelled call", ignoreCase = true) ||
+                        message.text.contains("Voice call", ignoreCase = true)
                     }
 
-                    if (isMissedCall) {
+                    if (isCallEvent) {
+                        val isDeclined = message.text.contains("declined", ignoreCase = true)
+                        val isCancelled = message.text.contains("cancelled", ignoreCase = true)
+                        val isMissed = message.text.contains("missed", ignoreCase = true)
+                        val isCompleted = !isDeclined && !isCancelled && !isMissed
+                        val iconColor = when {
+                            isFromMe -> Color.White
+                            isCompleted -> Color(0xFF10B981)
+                            isCancelled -> Color(0xFFF59E0B)
+                            else -> Color(0xFFEF4444)
+                        }
+                        val iconBg = when {
+                            isFromMe -> Color.White.copy(alpha = 0.22f)
+                            isCompleted -> Color(0xFF10B981).copy(alpha = 0.15f)
+                            isCancelled -> Color(0xFFF59E0B).copy(alpha = 0.15f)
+                            else -> Color(0xFFEF4444).copy(alpha = 0.15f)
+                        }
+                        val icon = when {
+                            isDeclined || isCancelled -> Icons.Default.CallEnd
+                            isMissed -> Icons.Default.PhoneMissed
+                            else -> Icons.Default.Call
+                        }
+                        val subtitleText = when {
+                            isDeclined -> "Call declined"
+                            isCancelled -> "Cancelled call"
+                            isMissed -> "Missed voice call"
+                            message.durationSeconds > 0 -> "Duration • ${message.durationSeconds / 60}m ${message.durationSeconds % 60}s"
+                            else -> "Voice call completed"
+                        }
+
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier.padding(vertical = 4.dp, horizontal = 2.dp)
@@ -1151,29 +1183,26 @@ fun MessageBubble(
                                 modifier = Modifier
                                     .size(36.dp)
                                     .clip(CircleShape)
-                                    .background(
-                                        if (isFromMe) Color.White.copy(alpha = 0.22f)
-                                        else Color(0xFFEF4444).copy(alpha = 0.15f)
-                                    ),
+                                    .background(iconBg),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
-                                    imageVector = if (message.text.contains("declined", ignoreCase = true)) Icons.Default.CallEnd else Icons.Default.PhoneMissed,
+                                    imageVector = icon,
                                     contentDescription = null,
-                                    tint = if (isFromMe) Color.White else Color(0xFFEF4444),
+                                    tint = iconColor,
                                     modifier = Modifier.size(20.dp)
                                 )
                             }
                             Spacer(modifier = Modifier.width(10.dp))
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = message.text,
+                                    text = message.text.removePrefix("📞 ").trim(),
                                     fontSize = 14.sp,
                                     fontWeight = FontWeight.SemiBold,
                                     color = textColor
                                 )
                                 Text(
-                                    text = "Voice call",
+                                    text = subtitleText,
                                     fontSize = 11.sp,
                                     color = textColor.copy(alpha = 0.75f)
                                 )
