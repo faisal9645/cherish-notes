@@ -473,7 +473,7 @@ fun ProfileScreen(
                 ListItem(
                     headlineContent = { Text("Disguise as Notes App", fontSize = 15.sp, fontWeight = FontWeight.SemiBold) },
                     supportingContent = { Text("Opens as functional notes app with secret unlock gesture", fontSize = 13.sp) },
-                    leadingContent = { Icon(Icons.Filled.Favorite, contentDescription = null, tint = HeartRed) },
+                    leadingContent = { Icon(Icons.Filled.EditNote, contentDescription = null, tint = primaryAccent) },
                     trailingContent = {
                         Switch(
                             checked = uiState.isDisguiseModeEnabled,

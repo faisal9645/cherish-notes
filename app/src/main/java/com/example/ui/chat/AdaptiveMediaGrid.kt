@@ -48,7 +48,7 @@ private const val MAX_PHOTO_RATIO = 1.9f
 @Composable
 fun AdaptiveMediaGrid(
     urls: List<String>,
-    gallerySize: String = "large",
+    gallerySize: String = "small",
     onImageClick: (index: Int, url: String) -> Unit,
     onLongClick: (() -> Unit)? = null,
     onDoubleClick: (() -> Unit)? = null,

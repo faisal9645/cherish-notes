@@ -83,7 +83,8 @@ class SecurityPreferences(context: Context) {
 
     fun reDisguise() {
         if (!isDisguiseModeEnabled()) return
-        if (ignoreNextPause || isTheaterModeActive || isMediaViewerActive || isExternalPickerActive) return
+        if (ignoreNextPause || isTheaterModeActive || isExternalPickerActive) return
+        isMediaViewerActive = false
         _hasRevealedSecretAppInSession.value = false
         _isDisguiseActive.value = true
     }
@@ -443,12 +444,12 @@ class SecurityPreferences(context: Context) {
 
     // --- MEDIA & GALLERY PREFERENCES ---
 
-    fun getImageGallerySize(): String = prefs.getString(KEY_IMAGE_GALLERY_SIZE, "large") ?: "large"
+    fun getImageGallerySize(): String = prefs.getString(KEY_IMAGE_GALLERY_SIZE, "small") ?: "small"
 
     fun setImageGallerySize(size: String) {
         val validSize = when (size.lowercase()) {
-            "small", "large" -> size.lowercase()
-            else -> "medium"
+            "medium", "large" -> size.lowercase()
+            else -> "small"
         }
         prefs.edit().putString(KEY_IMAGE_GALLERY_SIZE, validSize).apply()
         _imageGallerySize.value = validSize
@@ -456,6 +457,53 @@ class SecurityPreferences(context: Context) {
 
     private val _imageGallerySize = MutableStateFlow(getImageGallerySize())
     val imageGallerySize: StateFlow<String> = _imageGallerySize.asStateFlow()
+
+    // --- DAILY FREE CALL MINUTES ---
+
+    fun getTodayLogicalDate(): String {
+        val cal = java.util.Calendar.getInstance()
+        if (cal.get(java.util.Calendar.HOUR_OF_DAY) < 6) {
+            cal.add(java.util.Calendar.DAY_OF_YEAR, -1)
+        }
+        return "%04d_%02d_%02d".format(cal.get(java.util.Calendar.YEAR), cal.get(java.util.Calendar.MONTH) + 1, cal.get(java.util.Calendar.DAY_OF_MONTH))
+    }
+
+    fun getTodayCallDurationSeconds(): Int {
+        val dateKey = "call_secs_" + getTodayLogicalDate()
+        return prefs.getInt(dateKey, 0)
+    }
+
+    fun addCallDurationSeconds(seconds: Int) {
+        if (seconds <= 0) return
+        val dateKey = "call_secs_" + getTodayLogicalDate()
+        val current = prefs.getInt(dateKey, 0)
+        prefs.edit().putInt(dateKey, current + seconds).apply()
+        _dailyFreeCallMinutesRemaining.value = getDailyFreeCallMinutesRemaining()
+    }
+
+    fun getDailyFreeCallMinutesTotal(): Int = prefs.getInt(KEY_DAILY_FREE_CALL_MINUTES, 60)
+
+    fun getDailyFreeCallMinutesRemaining(): Int {
+        val total = getDailyFreeCallMinutesTotal()
+        val usedSeconds = getTodayCallDurationSeconds()
+        val usedMinutes = (usedSeconds + 59) / 60
+        return (total - usedMinutes).coerceAtLeast(0)
+    }
+
+    private val _dailyFreeCallMinutesRemaining = MutableStateFlow(getDailyFreeCallMinutesRemaining())
+    val dailyFreeCallMinutesRemaining: StateFlow<Int> = _dailyFreeCallMinutesRemaining.asStateFlow()
+
+    fun refreshDailyCallMinutes() {
+        _dailyFreeCallMinutesRemaining.value = getDailyFreeCallMinutesRemaining()
+    }
+
+    fun ensurePreferencesMigrated(currentVersionCode: Int) {
+        val lastSeenVersion = prefs.getInt(KEY_LAST_SEEN_APP_VERSION, 0)
+        if (lastSeenVersion < currentVersionCode) {
+            // New version APK update: ensure previous settings are preserved safely
+            prefs.edit().putInt(KEY_LAST_SEEN_APP_VERSION, currentVersionCode).apply()
+        }
+    }
 
     fun isHapticFeedbackEnabled(): Boolean = prefs.getBoolean(KEY_HAPTIC_FEEDBACK_ENABLED, true)
 
@@ -716,6 +764,7 @@ class SecurityPreferences(context: Context) {
         private const val KEY_PARTNER_CUSTOM_TIMEZONE = "partner_custom_timezone"
         private const val KEY_SEEN_CALL_RECORDING_NOTICE = "seen_call_recording_notice"
         private const val KEY_LAST_SEEN_APP_VERSION = "last_seen_app_version_code"
+        private const val KEY_DAILY_FREE_CALL_MINUTES = "daily_free_call_minutes"
 
         @Volatile
         private var INSTANCE: SecurityPreferences? = null

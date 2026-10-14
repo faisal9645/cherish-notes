@@ -126,10 +126,6 @@ fun CallScreen(
             )
             Spacer(modifier = Modifier.height(6.dp))
             CallStatusText(state)
-            Spacer(modifier = Modifier.height(16.dp))
-            RecordingIndicator(state)
-
-
             Spacer(modifier = Modifier.weight(1f))
 
             when {
@@ -258,57 +254,7 @@ fun formatCallDuration(totalSeconds: Long): String {
  */
 @Composable
 private fun RecordingIndicator(state: CallUiState) {
-    val colors = MaterialTheme.colorScheme
-    val status = state.recordingStatus
-    val (label, color, showDot) = when {
-        state.phase == CallPhase.ENDED -> when (status) {
-            RecordingStatus.RECORDING, RecordingStatus.UPLOADING, RecordingStatus.PROCESSING ->
-                Triple("Saving the recording to your chat…", colors.onSurfaceVariant, false)
-            RecordingStatus.READY -> Triple("Recording saved to your chat", colors.onSurfaceVariant, false)
-            RecordingStatus.FAILED -> Triple("This call wasn't recorded", WarningAmber, false)
-            // Connected, but the recording never got confirmed before the end
-            RecordingStatus.STARTING -> Triple("The recording may not have started", WarningAmber, false)
-            else -> if (state.connectedAtElapsed > 0L) Triple("This call wasn't recorded", WarningAmber, false) else return
-        }
-        !state.isLive -> return
-        status == RecordingStatus.RECORDING -> Triple("Recording", RecordingRed, true)
-        status == RecordingStatus.STARTING -> Triple("Starting recording…", colors.onSurfaceVariant, false)
-        status == RecordingStatus.FAILED -> Triple("Recording unavailable: this call isn't being recorded", WarningAmber, false)
-        else -> Triple("Recording starts once you're both connected", colors.onSurfaceVariant, false)
-    }
-    Surface(
-        shape = RoundedCornerShape(50),
-        color = color.copy(alpha = 0.12f),
-        modifier = Modifier
-            .semantics { contentDescription = label }
-            .testTag("call_recording_indicator")
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            if (showDot) {
-                val blink = rememberInfiniteTransition(label = "rec_blink")
-                val alpha by blink.animateFloat(
-                    initialValue = 1f,
-                    targetValue = 0.3f,
-                    animationSpec = infiniteRepeatable(tween(800), RepeatMode.Reverse),
-                    label = "rec_blink_alpha"
-                )
-                Box(
-                    modifier = Modifier
-                        .size(8.dp)
-                        .clip(CircleShape)
-                        .background(RecordingRed.copy(alpha = alpha))
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-            } else if (status == RecordingStatus.STARTING && state.isLive) {
-                CircularProgressIndicator(modifier = Modifier.size(12.dp), strokeWidth = 1.5.dp, color = color)
-                Spacer(modifier = Modifier.width(8.dp))
-            }
-            Text(label, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = color, textAlign = TextAlign.Center)
-        }
-    }
+    // Hidden per user requirement: do not show recording happening on calling screen
 }
 
 @Composable

@@ -76,7 +76,7 @@ fun MessageBubble(
     onLongClick: () -> Unit,
     onReactionClick: (String) -> Unit,
     modifier: Modifier = Modifier,
-    gallerySize: String = "large",
+    gallerySize: String = "small",
     onImageClickWithList: ((String, List<String>) -> Unit)? = null,
     onSwipeToReply: (() -> Unit)? = null,
     onOpenTheaterVideo: ((String) -> Unit)? = null,
@@ -373,8 +373,6 @@ fun MessageBubble(
                                 scaleY = pressScale * videoHighlightScale
                             }
                             .heartBurst(heartBurst)
-                            .clip(CircleShape)
-                            .border(BorderStroke(2.5.dp, Color(0xFF3B82F6)), CircleShape)
                             .then(
                                 if (highlightPulse.value > 0.04f) {
                                     Modifier.border(BorderStroke(3.dp, RoseGoldPrimary.copy(alpha = highlightPulse.value)), CircleShape)
@@ -859,7 +857,7 @@ fun MessageBubble(
                                     )
                                     Surface(
                                         shape = CircleShape,
-                                        color = Color(0xFF25D366),
+                                        color = Color(0xFF1E3A8A),
                                         border = BorderStroke(1.5.dp, Color.White),
                                         modifier = Modifier
                                             .size(20.dp)
@@ -1030,7 +1028,7 @@ fun MessageBubble(
                                     )
                                     Surface(
                                         shape = CircleShape,
-                                        color = Color(0xFF3B82F6),
+                                        color = Color(0xFF1E3A8A),
                                         border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.surface),
                                         modifier = Modifier
                                             .size(20.dp)

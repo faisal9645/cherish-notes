@@ -1588,7 +1588,7 @@ fun SharedGalleryScreen(
                         deleteSelectedItems()
                         showMultiDeleteConfirmDialog = false
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                     modifier = Modifier.testTag("gallery_confirm_delete_selected")
                 ) {
                     Text("Delete ($count)")
@@ -1619,7 +1619,7 @@ fun SharedGalleryScreen(
                         }
                         messageToDelete = null
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                 ) {
                     Text("Delete")
                 }
@@ -1648,7 +1648,7 @@ fun SharedGalleryScreen(
                         }
                         mediaItemToDelete = null
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                 ) {
                     Text("Delete")
                 }

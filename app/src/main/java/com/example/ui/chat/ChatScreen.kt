@@ -1126,7 +1126,7 @@ fun ChatScreen(
                                 .size(42.dp)
                                 .testTag("chat_back_button")
                         ) {
-                            TwoLineMenuIcon(tint = if (isDark) Color(0xFFECECEC) else Color(0xFF0D0D0D))
+                            TwoLineMenuIcon(tint = if (isDark) Color(0xFF9CA3AF) else Color(0xFF71717A))
                         }
                     } else {
                         CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides androidx.compose.ui.unit.Dp.Unspecified) {
@@ -1163,7 +1163,7 @@ fun ChatScreen(
                         }
                     } else {
                         val isPrivateChat = uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE
-                        val iconTint = if (isPrivateChat) (if (isDark) Color(0xFFECECEC) else Color(0xFF0D0D0D)) else MaterialTheme.colorScheme.onSurface
+                        val iconTint = if (isPrivateChat) (if (isDark) Color(0xFF9CA3AF) else Color(0xFF71717A)) else MaterialTheme.colorScheme.onSurface
                         if (isPrivateChat) {
                             // ChatGPT style: clean new chat and overflow icons without distracting heavy borders
                             Box(modifier = Modifier.padding(end = 6.dp)) {
@@ -1922,7 +1922,7 @@ fun ChatScreen(
             val lastShownDate = remember { arrayOf("") }
             topVisibleDate?.let { lastShownDate[0] = it }
             androidx.compose.animation.AnimatedVisibility(
-                visible = showDateChip && topVisibleDate != null,
+                visible = showDateChip && topVisibleDate != null && (uiState.chatExperienceMode != com.example.ui.chat.ChatExperienceMode.PRIVATE),
                 enter = fadeIn(tween(150)) + slideInVertically(spring(dampingRatio = 0.8f, stiffness = 600f)) { -it / 2 },
                 exit = fadeOut(tween(250)),
                 modifier = Modifier
@@ -2693,7 +2693,7 @@ fun ChatScreen(
                         viewModel.deleteMessage(msg.id)
                         showDeleteConfirmDialog = null
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                 ) {
                     Text("Delete")
                 }
@@ -2724,7 +2724,7 @@ fun ChatScreen(
                         exitSelection()
                     },
                     enabled = count > 0,
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                     modifier = Modifier.testTag("chat_confirm_delete_selected")
                 ) {
                     Text(if (count == 1) "Delete" else "Delete ($count)")

@@ -51,7 +51,7 @@ class HomeViewModel(
                 _uiState.update {
                     it.copy(
                         partnerUser = partner,
-                        isPartnerOnline = partner?.isEffectivelyOnline() ?: false,
+                        isPartnerOnline = (partner?.isEffectivelyOnline() ?: false) || com.example.call.CallManager.hasActiveCall(),
                         isPartnerTyping = partner?.isEffectivelyTyping() ?: false
                     )
                 }
@@ -97,7 +97,7 @@ class HomeViewModel(
                 kotlinx.coroutines.delay(2500L)
                 _uiState.update { state ->
                     val partner = state.partnerUser
-                    val newOnline = partner?.isEffectivelyOnline() ?: false
+                    val newOnline = (partner?.isEffectivelyOnline() ?: false) || com.example.call.CallManager.hasActiveCall()
                     val newTyping = partner?.isEffectivelyTyping() ?: false
                     if (state.isPartnerOnline == newOnline && state.isPartnerTyping == newTyping) {
                         state

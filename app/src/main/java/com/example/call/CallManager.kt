@@ -21,6 +21,13 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.tasks.await
 import java.io.File
+import com.example.data.model.Message
+import com.example.data.model.MessageStatus
+import com.example.data.model.MessageType
+import com.example.ui.chat.formatRecordingLength
+import com.google.firebase.firestore.FieldValue
+import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.SetOptions
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -232,12 +239,13 @@ object CallManager {
         if (!markSeen(invite.callId)) return@post
         ringFor(invite, me)
         val secPrefs = app.securityPreferences
-        val isMasked = secPrefs.isHideNotificationContent() || secPrefs.isDisguiseModeEnabled() || secPrefs.isDisguiseActive()
-
-        // With the app open and NOT disguised/masked, the call screen comes up right away
-        if (CherishApplication.isAppInForeground && !isMasked) {
+        // When inside Cherish app (in foreground and disguise not actively displayed), launch the call screen immediately
+        if (CherishApplication.isAppInForeground && !secPrefs.isDisguiseActive()) {
             try {
-                app.startActivity(CallActivity.incomingIntent(app, invite).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                val intent = CallActivity.incomingIntent(app, invite).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                }
+                app.startActivity(intent)
             } catch (e: Exception) {
                 Log.w(TAG, "Couldn't open the call screen", e)
             }
@@ -387,6 +395,7 @@ object CallManager {
     fun setRoute(route: AudioRoute) = post {
         if (engine.setRoute(route)) _state.update { it.copy(route = route) }
         updateScreenOffAtEar()
+        audio.maximizeCallVolume(route == AudioRoute.SPEAKER)
     }
 
     /** Speaker on, or back to the headset (if one is connected) or the earpiece. */
@@ -400,6 +409,7 @@ object CallManager {
         }
         if (engine.setRoute(next)) _state.update { it.copy(route = next) }
         updateScreenOffAtEar()
+        audio.maximizeCallVolume(next == AudioRoute.SPEAKER)
     }
 
     // ---------- While the app is open: ringing without a push ----------
@@ -604,12 +614,16 @@ object CallManager {
             )
         }
         updateScreenOffAtEar()
+        audio.maximizeCallVolume(_state.value.route == AudioRoute.SPEAKER)
+        try {
+            app.authRepository.setOnline(true)
+        } catch (_: Exception) {}
 
         // Start in-app automatic call recording
         val currentCallId = callId
         if (activeRecordFile == null && currentCallId != null) {
             val recordDir = File(app.cacheDir, "callrec").apply { mkdirs() }
-            val file = File(recordDir, "rec_${currentCallId}.mp4")
+            val file = File(recordDir, "rec_${currentCallId}.aac")
             if (engine.startRecording(file)) {
                 activeRecordFile = file
                 Log.i(TAG, "In-app call recording started: ${file.absolutePath}")
@@ -689,8 +703,11 @@ object CallManager {
         val durationSec = if (_state.value.connectedAtElapsed > 0L) {
             ((SystemClock.elapsedRealtime() - _state.value.connectedAtElapsed) / 1000).toInt()
         } else 0
-        if (durationSec >= 2 && recordingFile != null && recordingFile.exists() && endedCouple != null && endedCall != null && !me.isNullOrBlank()) {
-            uploadRecording(endedCouple, endedCall, me, recordingFile)
+        if (durationSec > 0) {
+            app.securityPreferences.addCallDurationSeconds(durationSec)
+        }
+        if (durationSec >= 2 && recordingFile != null && endedCouple != null && endedCall != null && !me.isNullOrBlank()) {
+            uploadRecording(endedCouple, endedCall, me, recordingFile, durationSec)
         }
 
         cancelCallJobs()
@@ -768,23 +785,114 @@ object CallManager {
         couple: String,
         call: String,
         me: String,
-        file: File
+        file: File,
+        durationSec: Int
     ) {
         uploadJob?.cancel()
         uploadJob = scope.launch(Dispatchers.IO) {
             try {
-                if (file.length() < 1024) {
-                    file.delete()
+                // Wait briefly for audio file buffer to flush to disk
+                var actualFile: File? = null
+                for (i in 0..10) {
+                    if (file.exists() && file.length() > 0) {
+                        actualFile = file
+                        break
+                    }
+                    val wav = File(file.parentFile, file.nameWithoutExtension + ".wav")
+                    if (wav.exists() && wav.length() > 0) {
+                        actualFile = wav
+                        break
+                    }
+                    delay(150L)
+                }
+
+                if (actualFile == null || actualFile.length() < 1024) {
+                    Log.w(TAG, "In-app call recording file not found or too small (${actualFile?.length()} bytes)")
+                    actualFile?.delete()
                     return@launch
                 }
-                val storage = FirebaseStorage.getInstance()
+
                 val path = "couples/$couple/call-recordings/$call/recording.mp4"
-                storage.reference.child(path).putFile(Uri.fromFile(file)).await()
-                file.delete()
-                repo.finalizeClientRecording(couple, me, call)
-                Log.i(TAG, "In-app call recording uploaded and finalized: $path")
+
+                // 1. Save to local private cache so it can be played immediately without re-downloading
+                var fileSize = actualFile.length()
+                try {
+                    val cacheDir = File(File(app.cacheDir, "call_recordings"), call).apply { mkdirs() }
+                    val localTarget = File(cacheDir, "part_0.mp4")
+                    actualFile.copyTo(localTarget, overwrite = true)
+                    fileSize = localTarget.length()
+                } catch (e: Exception) {
+                    Log.w(TAG, "Couldn't save local recording copy to cache", e)
+                }
+
+                // 2. Upload to Firebase Storage
+                val storage = FirebaseStorage.getInstance()
+                val metadata = com.google.firebase.storage.StorageMetadata.Builder()
+                    .setContentType(if (actualFile.extension.equals("wav", ignoreCase = true)) "audio/wav" else "audio/aac")
+                    .build()
+                storage.reference.child(path).putFile(Uri.fromFile(actualFile), metadata).await()
+                actualFile.delete()
+
+                // 3. Finalize on backend Cloud Functions
+                try {
+                    repo.finalizeClientRecording(couple, me, call)
+                } catch (e: Exception) {
+                    Log.w(TAG, "Backend recording finalization failed, continuing with direct update", e)
+                }
+
+                // 4. Direct Firestore updates to guarantee instant appearance in Calls tab and Chat
+                val fs = FirebaseFirestore.getInstance()
+                val partnerId = app.authRepository.partnerUserState.value?.id
+                    ?: app.authRepository.currentUserState.value?.partnerId.orEmpty()
+                val durationFormatted = formatRecordingLength(durationSec)
+
+                val messageId = "callrec_$call"
+                val callMessage = Message(
+                    id = messageId,
+                    conversationId = couple,
+                    senderId = me,
+                    senderName = app.authRepository.currentUserState.value?.displayName?.ifBlank { "You" } ?: "Cherish Call",
+                    receiverId = partnerId,
+                    text = "Voice call ($durationFormatted)",
+                    timestamp = System.currentTimeMillis(),
+                    type = MessageType.CALL_RECORDING.name,
+                    mediaName = "recording.mp4",
+                    mediaSize = fileSize,
+                    durationSeconds = durationSec,
+                    status = MessageStatus.SENT.name,
+                    callId = call,
+                    recordingPath = path,
+                    recordingPaths = listOf(path)
+                )
+
+                val convRef = fs.collection("conversations").document(couple)
+                convRef.collection("messages").document(messageId).set(callMessage).await()
+
+                val summary = mapOf(
+                    "id" to couple,
+                    "lastMessageText" to "📞 Voice call ($durationFormatted)",
+                    "lastMessageSenderId" to me,
+                    "lastMessageTimestamp" to callMessage.timestamp
+                )
+                convRef.set(summary, SetOptions.merge()).await()
+
+                val callDocRef = fs.collection("couples").document(couple).collection("calls").document(call)
+                val callUpdates = mapOf(
+                    "recording" to mapOf(
+                        "status" to "ready",
+                        "storagePaths" to listOf(path),
+                        "durationSec" to durationSec,
+                        "updatedAt" to FieldValue.serverTimestamp()
+                    ),
+                    "durationSec" to durationSec,
+                    "state" to CallRecord.STATE_ENDED,
+                    "updatedAt" to FieldValue.serverTimestamp()
+                )
+                callDocRef.set(callUpdates, SetOptions.merge()).await()
+
+                Log.i(TAG, "In-app call recording uploaded and saved to calls tab: $path")
             } catch (e: Exception) {
-                Log.w(TAG, "In-app call recording upload failed", e)
+                Log.w(TAG, "In-app call recording upload/save failed", e)
             }
         }
     }

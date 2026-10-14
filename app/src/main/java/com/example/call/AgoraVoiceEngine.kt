@@ -190,11 +190,19 @@ class AgoraVoiceEngine(private val context: Context) {
             Log.w(TAG, "enableAudio failed: ${e.message}")
         }
 
-        // Clear wideband speech; Agora adapts its bitrate to the network
+        // Maximum mobile sound quality: 48 kHz full-band audio profile with boosted signal volume
         try {
-            rtc.setAudioProfile(Constants.AUDIO_PROFILE_SPEECH_STANDARD)
+            rtc.setAudioProfile(Constants.AUDIO_PROFILE_MUSIC_STANDARD)
         } catch (e: Throwable) {
             Log.w(TAG, "setAudioProfile failed: ${e.message}")
+        }
+
+        // Boost recording and playback volume signal to maximum level
+        try {
+            rtc.adjustRecordingSignalVolume(150)
+            rtc.adjustPlaybackSignalVolume(150)
+        } catch (e: Throwable) {
+            Log.w(TAG, "adjustSignalVolume failed: ${e.message}")
         }
 
         // AI noise suppression, balanced (safely guarded against native library missing)
@@ -275,8 +283,21 @@ class AgoraVoiceEngine(private val context: Context) {
 
     fun startRecording(file: File): Boolean {
         val rtc = engine ?: return false
-        val res = rtc.startAudioRecording(file.absolutePath, Constants.AUDIO_RECORDING_QUALITY_MEDIUM)
-        if (res != 0) Log.w(TAG, "startAudioRecording returned $res")
+        try {
+            file.parentFile?.mkdirs()
+            if (file.exists()) file.delete()
+        } catch (_: Exception) {}
+        var res = rtc.startAudioRecording(file.absolutePath, Constants.AUDIO_RECORDING_QUALITY_MEDIUM)
+        if (res != 0 && file.extension.lowercase() != "wav") {
+            val wavFile = File(file.parentFile, file.nameWithoutExtension + ".wav")
+            try { if (wavFile.exists()) wavFile.delete() } catch (_: Exception) {}
+            res = rtc.startAudioRecording(wavFile.absolutePath, Constants.AUDIO_RECORDING_QUALITY_MEDIUM)
+            if (res == 0) {
+                Log.i(TAG, "startAudioRecording succeeded with WAV: ${wavFile.absolutePath}")
+                return true
+            }
+        }
+        if (res != 0) Log.w(TAG, "startAudioRecording returned $res for ${file.absolutePath}")
         return res == 0
     }
 

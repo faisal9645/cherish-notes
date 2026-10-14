@@ -542,6 +542,88 @@ fun HomeScreen(
                 }
             }
 
+            // Free Daily Voice Call Minutes Card
+            val freeCallMinutesRemaining by homeApp.securityPreferences.dailyFreeCallMinutesRemaining.collectAsState()
+            val hasActiveCall = com.example.call.CallManager.hasActiveCall()
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onNavigateToChat() }
+                    .testTag("free_call_minutes_card"),
+                shape = RoundedCornerShape(18.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFF1E3A8A).copy(alpha = 0.12f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = if (hasActiveCall) Icons.Filled.PhoneInTalk else Icons.Filled.Call,
+                                contentDescription = "Daily Call Minutes",
+                                tint = Color(0xFF1E3A8A),
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.width(12.dp))
+
+                        Column(modifier = Modifier.weight(1f)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "Free Voice Calls",
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = "$freeCallMinutesRemaining mins left",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = if (freeCallMinutesRemaining > 10) Color(0xFF1E3A8A) else MaterialTheme.colorScheme.error
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = if (hasActiveCall) "Active call in progress • Free daily limit" else "Resets daily at 6 AM • 60 mins/day",
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    val callProgress = (freeCallMinutesRemaining / 60f).coerceIn(0f, 1f)
+                    LinearProgressIndicator(
+                        progress = { callProgress },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(6.dp)
+                            .clip(CircleShape),
+                        color = Color(0xFF1E3A8A),
+                        trackColor = Color(0xFF1E3A8A).copy(alpha = 0.15f)
+                    )
+                }
+            }
+
             // 3. Lifetime Story Card
             Card(
                 modifier = Modifier

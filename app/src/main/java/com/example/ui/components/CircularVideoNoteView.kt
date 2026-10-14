@@ -7,6 +7,7 @@ import android.net.Uri
 import android.util.Log
 import android.view.Surface
 import android.view.TextureView
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -622,14 +623,17 @@ fun CircularVideoNoteView(
         Row(
             modifier = Modifier
                 .align(Alignment.TopEnd)
-                .padding(10.dp),
+                .padding(top = 4.dp, end = 4.dp)
+                .offset(x = 6.dp, y = (-4).dp),
             horizontalArrangement = Arrangement.spacedBy(6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             // Continuous loop toggle button
             Surface(
                 shape = CircleShape,
-                color = if (isLooping) Color(0xFF3B82F6).copy(alpha = 0.85f) else Color.Black.copy(alpha = 0.6f),
+                color = if (isLooping) Color(0xFF1E3A8A) else Color.Black.copy(alpha = 0.65f),
+                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.7f)),
+                shadowElevation = 3.dp,
                 modifier = Modifier
                     .size(32.dp)
                     .clickable {

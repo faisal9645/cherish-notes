@@ -489,7 +489,6 @@ class MainActivity : FragmentActivity() {
         if (com.example.call.CallManager.hasActiveCall() || com.example.call.CallManager.isCallScreenVisible) return
         if (!app.securityPreferences.ignoreNextPause &&
             !app.securityPreferences.isTheaterModeActive &&
-            !app.securityPreferences.isMediaViewerActive &&
             !app.securityPreferences.isExternalPickerActive &&
             app.securityPreferences.isDisguiseModeEnabled()) {
             app.securityPreferences.reDisguise()
@@ -510,7 +509,6 @@ class MainActivity : FragmentActivity() {
         // (going home from the call screen is: the whole app stops then, see CherishApplication).
         if (!app.securityPreferences.ignoreNextPause &&
             !app.securityPreferences.isTheaterModeActive &&
-            !app.securityPreferences.isMediaViewerActive &&
             !app.securityPreferences.isExternalPickerActive &&
             !com.example.call.CallManager.isCallScreenVisible &&
             !com.example.call.CallManager.hasActiveCall() &&

@@ -25,7 +25,7 @@ data class ProfileUiState(
     val isKeywordTriggerEnabled: Boolean = true,
     val plusHoldDurationSec: Int = 5,
     val isRequirePhoneLockAfterHold: Boolean = false,
-    val gallerySize: String = "medium",
+    val gallerySize: String = "small",
     val isHapticEnabled: Boolean = true,
     val isDoubleTapZoomEnabled: Boolean = true,
     val isCheckAfterReminderEnabled: Boolean = true,

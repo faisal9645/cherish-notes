@@ -108,7 +108,7 @@ class CallRepository(private val context: Context) {
 
     suspend fun finalizeClientRecording(coupleId: String, userId: String, callId: String): CallResponse {
         return try {
-            withTimeoutOrNull(2_500L) {
+            withTimeoutOrNull(15_000L) {
                 callFunction("callFinalizeClientRecording", coupleId, mapOf("coupleId" to coupleId, "userId" to userId, "callId" to callId))
             } ?: CallResponse(status = "ok", callId = callId, callerId = null, join = null)
         } catch (_: Exception) {

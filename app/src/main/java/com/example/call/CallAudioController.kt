@@ -94,6 +94,23 @@ class CallAudioController(private val context: Context) {
         }
     }
 
+    /** Elevates the mobile device's call sound stream to maximum volume for clear, loud audio. */
+    fun maximizeCallVolume(isSpeaker: Boolean = false) {
+        try {
+            val am = audioManager ?: return
+            val stream = if (isSpeaker) AudioManager.STREAM_MUSIC else AudioManager.STREAM_VOICE_CALL
+            val maxVol = am.getStreamMaxVolume(stream)
+            val currentVol = am.getStreamVolume(stream)
+            if (currentVol < maxVol) {
+                am.setStreamVolume(stream, maxVol, 0)
+            }
+            val voiceMax = am.getStreamMaxVolume(AudioManager.STREAM_VOICE_CALL)
+            am.setStreamVolume(AudioManager.STREAM_VOICE_CALL, voiceMax, 0)
+        } catch (e: Exception) {
+            Log.w(TAG, "Couldn't maximize call volume", e)
+        }
+    }
+
     fun hasBluetoothHeadset(): Boolean = outputs().any { it.type in BLUETOOTH_TYPES || isBleHeadset(it) }
 
     fun hasWiredHeadset(): Boolean = outputs().any { it.type in WIRED_TYPES }

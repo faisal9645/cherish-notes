@@ -205,7 +205,6 @@ object CallNotifications {
             state.phase == CallPhase.OUTGOING_RINGING || state.phase == CallPhase.STARTING -> "Calling…"
             state.phase == CallPhase.CONNECTING -> "Connecting…"
             state.phase == CallPhase.RECONNECTING -> "Reconnecting…"
-            state.recordingStatus == RecordingStatus.RECORDING -> "Recording"
             else -> "Voice call"
         }
         val person = Person.Builder().setName(title).build()

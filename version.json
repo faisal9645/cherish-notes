@@ -1,9 +1,9 @@
 {
-  "versionCode": 155,
-  "versionName": "1.7.83",
-  "tagName": "v1.7.83-155",
-  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.7.83-155/app_update_155.apk",
-  "assetSize": 32859175,
-  "releaseNotes": "Notes v1.7.83 (Build 155):\n• Fixed voice call audio engine startup when both users are online\n• Theme 1 Doodle Wallpaper fixed with adaptive Day & Dark mode visibility\n• Partner notification settings live status card in settings\n• Notes app multi-select card height fix & back gesture unselect\n• Top chat bar spacing, deep blue voice mic, and Watch Together card fixes\n• Synchronized Privacy & Security audit counts & disguise back navigation",
-  "releaseDate": "2026-10-14T08:25:11Z"
+  "versionCode": 156,
+  "versionName": "1.7.84",
+  "tagName": "v1.7.84-156",
+  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.7.84-156/app_update_156.apk",
+  "assetSize": 32862055,
+  "releaseNotes": "Notes v1.7.84 (Build 156):\nHigh quality call audio, dark blue mic icons, daily free call minutes in Love & Us tab, online presence during calls, small photo thumbnail default, private mode grey icons, unclipped circle video loop icon, notes disguise icon, themed delete button",
+  "releaseDate": "2026-10-14T10:43:41Z"
 }

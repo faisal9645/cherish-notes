@@ -55,7 +55,7 @@ data class ChatUiState(
     val fullScreenMediaType: MessageType? = null,
     val isFullScreenVideoNote: Boolean = false,
     val allMediaUrlsForViewer: List<String> = emptyList(),
-    val gallerySize: String = "large",
+    val gallerySize: String = "small",
     val isUploadingMedia: Boolean = false,
     val uploadProgress: Float = 0f,
     // What's uploading ("photo", "3 photos", "voice message"…), and the last send that didn't go out
@@ -266,8 +266,9 @@ class ChatViewModel(
         viewModelScope.launch {
             authRepository.partnerUserState.collect { partner ->
                 val partnerTouching = partner?.heartbeatTouchingTimestamp?.let { it > 0L && (System.currentTimeMillis() - it < 4500L) } ?: false
+                val isCallActive = com.example.call.CallManager.hasActiveCall()
                 _partnerPresence.value = PartnerPresenceState(
-                    isOnline = partner?.isEffectivelyOnline() ?: false,
+                    isOnline = (partner?.isEffectivelyOnline() ?: false) || isCallActive,
                     isTyping = partner?.isEffectivelyTyping() ?: false,
                     isRecordingAudio = partner?.isEffectivelyRecording() ?: false,
                     isHeartTouching = partnerTouching,
@@ -400,7 +401,7 @@ class ChatViewModel(
                 kotlinx.coroutines.delay(delayMs)
                 val partner = authRepository.partnerUserState.value
                 val partnerTouching = partner?.heartbeatTouchingTimestamp?.let { it > 0L && (System.currentTimeMillis() - it < 4500L) } ?: false
-                val newOnline = partner?.isEffectivelyOnline() ?: false
+                val newOnline = (partner?.isEffectivelyOnline() ?: false) || com.example.call.CallManager.hasActiveCall()
                 val newTyping = partner?.isEffectivelyTyping() ?: false
                 val newRecording = partner?.isEffectivelyRecording() ?: false
 

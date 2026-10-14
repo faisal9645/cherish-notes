@@ -120,10 +120,28 @@ fun CherishNavGraph(
                 try {
                     context.startActivity(
                         com.example.call.CallActivity.incomingIntent(context, invite)
-                            .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                            .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP)
                     )
                 } catch (e: Exception) {
                     android.util.Log.w("NavGraph", "Could not open incoming call after unlocking Cherish", e)
+                }
+            }
+        }
+    }
+
+    // While inside Cherish app, whenever an incoming call starts ringing, bring up the calling screen immediately
+    val navCallState by com.example.call.CallManager.state.collectAsState()
+    LaunchedEffect(navCallState.phase, isDisguiseActive) {
+        if (!isDisguiseActive && navCallState.phase == com.example.call.CallPhase.INCOMING_RINGING && !com.example.call.CallManager.isCallScreenVisible) {
+            val invite = com.example.call.CallManager.currentInvite
+            if (invite != null) {
+                try {
+                    context.startActivity(
+                        com.example.call.CallActivity.incomingIntent(context, invite)
+                            .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                    )
+                } catch (e: Exception) {
+                    android.util.Log.w("NavGraph", "Could not open incoming call screen in Cherish", e)
                 }
             }
         }

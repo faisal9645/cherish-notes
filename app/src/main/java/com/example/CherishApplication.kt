@@ -151,6 +151,7 @@ class CherishApplication : Application(), coil.ImageLoaderFactory {
         NotificationHelper.createNotificationChannels(this)
 
         securityPreferences = SecurityPreferences.getInstance(this)
+        securityPreferences.ensurePreferencesMigrated(BuildConfig.VERSION_CODE)
         notesRepository = NotesRepository.getInstance(this)
         authRepository = AuthRepository(this)
         chatRepository = ChatRepository(this, authRepository)
@@ -205,7 +206,6 @@ class CherishApplication : Application(), coil.ImageLoaderFactory {
                     val leftForReal = !securityPreferences.ignoreNextPause &&
                         !securityPreferences.ignoreChatNavigation &&
                         !securityPreferences.isExternalPickerActive &&
-                        !securityPreferences.isMediaViewerActive &&
                         !securityPreferences.isTheaterModeActive
                     if (securityPreferences.isDisguiseModeEnabled() && leftForReal) {
                         securityPreferences.reDisguise()
