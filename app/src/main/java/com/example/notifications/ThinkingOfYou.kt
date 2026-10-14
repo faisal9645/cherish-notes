@@ -70,13 +70,6 @@ object ThinkingOfYou {
 
         val isAppInForeground = NotificationHelper.isAppOpenOnScreen(context)
 
-        // If Cherish app is closed or in background, and a notification is already sitting in tray (not cleared),
-        // suppress both vibration and notification so duplicate alerts/sounds do not happen.
-        if (!isAppInForeground && NotificationHelper.isAlertAlreadyTriggered()) {
-            Log.d("ThinkingOfYou", "Prior notification not yet opened/cleared; suppressing duplicate heartbeat alert")
-            return false
-        }
-
         // If app is currently open on screen, play gentle heartbeat and emit pulse to chat
         if (isAppInForeground) {
             playHeartbeat(context)
@@ -84,13 +77,13 @@ object ThinkingOfYou {
             return true
         }
 
-        // Cherish is closed/in background and no prior notification is waiting:
-        // Alert once according to preferences
+        // Cherish is closed/in background:
+        // Always play intimate heartbeat haptic and post notification according to preferences
         if (secPrefs.isNotificationsEnabled()) {
             val powerManager = context.getSystemService(Context.POWER_SERVICE) as? PowerManager
             val wakeLock = powerManager?.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "Cherish::HeartbeatWakeLock")
             try {
-                wakeLock?.acquire(2000L)
+                wakeLock?.acquire(3000L)
                 playHeartbeat(context)
                 Log.d("ThinkingOfYou", "Heartbeat vibration played successfully for $signalId")
             } finally {
@@ -123,14 +116,27 @@ object ThinkingOfYou {
         val secPrefs = SecurityPreferences.getInstance(context)
         if (!secPrefs.isHeartbeatTriggerEnabled()) return false
 
-        // Gentle reciprocal flutter haptic so the sender physically feels partner's acknowledgment
-        playReciprocalFeltHaptic(context)
+        val isAppInForeground = NotificationHelper.isAppOpenOnScreen(context)
+
+        if (!isAppInForeground) {
+            val powerManager = context.getSystemService(Context.POWER_SERVICE) as? PowerManager
+            val wakeLock = powerManager?.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "Cherish::HeartbeatFeltWakeLock")
+            try {
+                wakeLock?.acquire(3000L)
+                playReciprocalFeltHaptic(context)
+            } finally {
+                if (wakeLock?.isHeld == true) {
+                    try { wakeLock.release() } catch (_: Exception) {}
+                }
+            }
+        } else {
+            playReciprocalFeltHaptic(context)
+        }
 
         val event = HeartbeatFeltEvent(signalId, feltAt)
         _partnerFelt.tryEmit(event)
         Log.d("ThinkingOfYou", "Partner felt our heartbeat trigger for signal $signalId")
 
-        val isAppInForeground = NotificationHelper.isAppOpenOnScreen(context)
         if (!isAppInForeground && secPrefs.isNotificationsEnabled()) {
             if (NotificationManagerCompat.from(context).areNotificationsEnabled()) {
                 NotificationHelper.showHeartbeatFeltNotification(context)

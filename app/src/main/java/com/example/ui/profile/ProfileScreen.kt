@@ -36,6 +36,7 @@ import androidx.compose.runtime.*
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.example.notifications.NotificationHelper
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -125,11 +126,14 @@ fun ProfileScreen(
     val partner = uiState.partnerUser
     val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
     
+    var isBatteryOptimizationIgnored by remember { mutableStateOf(NotificationHelper.isBatteryOptimizationIgnored(context)) }
+
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
                 viewModel.reloadSettings()
+                isBatteryOptimizationIgnored = NotificationHelper.isBatteryOptimizationIgnored(context)
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -1018,6 +1022,56 @@ fun ProfileScreen(
                             onCheckedChange = { viewModel.setCallRingingEnabled(it) },
                             modifier = Modifier.testTag("call_ringing_switch")
                         )
+                    }
+                )
+
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), thickness = 0.6.dp)
+
+                // --- SUBSECTION 5: KEEP CONNECTED WHEN CLOSED ---
+                ListItem(
+                    headlineContent = { Text("Keep Connected When Closed", fontSize = 15.sp, fontWeight = FontWeight.SemiBold) },
+                    supportingContent = {
+                        Text(
+                            if (isBatteryOptimizationIgnored) "Unrestricted background activity. Instant notifications, calls, and heartbeat triggers stay active when Cherish is closed."
+                            else "Android battery optimization may freeze background sync when Cherish is closed. Tap to allow Unrestricted activity so you never miss messages or heartbeats.",
+                            fontSize = 13.sp
+                        )
+                    },
+                    leadingContent = {
+                        Icon(
+                            Icons.Filled.Sync,
+                            contentDescription = null,
+                            tint = if (isBatteryOptimizationIgnored) primaryAccent else MaterialTheme.colorScheme.error
+                        )
+                    },
+                    trailingContent = {
+                        if (isBatteryOptimizationIgnored) {
+                            Surface(
+                                shape = RoundedCornerShape(16.dp),
+                                color = primaryAccent.copy(alpha = 0.15f)
+                            ) {
+                                Text(
+                                    "Active",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = primaryAccent,
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                                )
+                            }
+                        } else {
+                            FilledTonalButton(
+                                onClick = { NotificationHelper.requestIgnoreBatteryOptimization(context) },
+                                shape = RoundedCornerShape(16.dp),
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 2.dp)
+                            ) {
+                                Text("Allow", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    },
+                    modifier = Modifier.clickable {
+                        if (!isBatteryOptimizationIgnored) {
+                            NotificationHelper.requestIgnoreBatteryOptimization(context)
+                        }
                     }
                 )
 

@@ -1,13 +1,16 @@
 package com.example.sync
 
+import android.app.AlarmManager
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
+import android.os.SystemClock
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
@@ -73,6 +76,30 @@ class CherishSyncService : Service() {
         return START_STICKY
     }
 
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        super.onTaskRemoved(rootIntent)
+        // Ensure CherishSyncService is immediately resurrected if swiped away from Recents
+        try {
+            val restartServiceIntent = Intent(applicationContext, CherishSyncService::class.java).also {
+                it.setPackage(packageName)
+            }
+            val restartServicePendingIntent = PendingIntent.getService(
+                applicationContext,
+                1005,
+                restartServiceIntent,
+                PendingIntent.FLAG_ONE_SHOT or PendingIntent.FLAG_IMMUTABLE
+            )
+            val alarmService = getSystemService(Context.ALARM_SERVICE) as? AlarmManager
+            alarmService?.set(
+                AlarmManager.ELAPSED_REALTIME,
+                SystemClock.elapsedRealtime() + 1000L,
+                restartServicePendingIntent
+            )
+        } catch (e: Exception) {
+            Log.w(TAG, "onTaskRemoved alarm schedule failed: ${e.message}")
+        }
+    }
+
     override fun onDestroy() {
         detachListeners()
         scope.cancel()
@@ -85,17 +112,30 @@ class CherishSyncService : Service() {
 
     private fun observeAccount() {
         val app = applicationContext as? CherishApplication ?: return
+
+        // 1. Immediately attach from persisted session credentials on startup
+        val savedUid = app.authRepository.getCurrentUserId().trim().ifBlank { null }
+        val savedCoupleId = app.authRepository.getSavedCoupleId().trim().ifBlank { null }
+        if (!savedCoupleId.isNullOrBlank() && !savedUid.isNullOrBlank()) {
+            currentAttachedCoupleId = savedCoupleId
+            currentAttachedUid = savedUid
+            attachListeners(savedCoupleId, savedUid)
+        }
+
+        // 2. React to dynamic account switches / updates
         scope.launch {
             app.authRepository.currentUserState.collectLatest { user ->
                 val coupleId = user?.coupleId?.trim()?.ifBlank { null }
+                    ?: app.authRepository.getSavedCoupleId().trim().ifBlank { null }
                 val myUid = user?.id?.trim()?.ifBlank { null }
+                    ?: app.authRepository.getCurrentUserId().trim().ifBlank { null }
                 if (!coupleId.isNullOrBlank() && !myUid.isNullOrBlank()) {
                     if (coupleId != currentAttachedCoupleId || myUid != currentAttachedUid) {
                         currentAttachedCoupleId = coupleId
                         currentAttachedUid = myUid
                         attachListeners(coupleId, myUid)
                     }
-                } else {
+                } else if (app.authRepository.getSavedCoupleId().isBlank()) {
                     currentAttachedCoupleId = null
                     currentAttachedUid = null
                     detachListeners()
@@ -190,11 +230,14 @@ class CherishSyncService : Service() {
                 }
             }
 
-        // 3. Listen for heartbeat ("thinking of you") signals
+        // 3. Listen for heartbeat ("thinking of you") signals and reciprocal felt acknowledgments
+        var isInitialCoupleDoc = true
         coupleDocListener = fs.collection("couples")
             .document(coupleId)
             .addSnapshotListener { snapshot, error ->
                 if (error != null || snapshot == null || !snapshot.exists()) return@addSnapshotListener
+
+                // A. Partner sent a heartbeat trigger to us
                 (snapshot.get("signal") as? Map<*, *>)?.let { signal ->
                     val type = signal["type"] as? String
                     val signalId = signal["id"] as? String ?: ""
@@ -202,9 +245,30 @@ class CherishSyncService : Service() {
                     val cleanSender = senderId.removePrefix("user_").lowercase()
                     if (type == "heartbeat" && cleanSender.isNotBlank() && cleanSender != cleanMyUid) {
                         val sentAt = (signal["at"] as? com.google.firebase.Timestamp)?.toDate()?.time ?: System.currentTimeMillis()
-                        ThinkingOfYou.onSignal(this, signalId, sentAt)
+                        if (!isInitialCoupleDoc || (System.currentTimeMillis() - sentAt < 90_000L)) {
+                            val played = ThinkingOfYou.onSignal(this, signalId, sentAt)
+                            if (played) {
+                                (applicationContext as? CherishApplication)?.authRepository?.acknowledgeHeartbeatFelt(signalId)
+                            }
+                        }
                     }
                 }
+
+                // B. Partner felt our heartbeat trigger
+                (snapshot.get("signalFelt") as? Map<*, *>)?.let { felt ->
+                    val type = felt["type"] as? String
+                    val signalId = felt["id"] as? String ?: ""
+                    val senderId = felt["senderId"] as? String ?: ""
+                    val cleanSender = senderId.removePrefix("user_").lowercase()
+                    if (type == "heartbeat_felt" && cleanSender.isNotBlank() && cleanSender != cleanMyUid) {
+                        val feltAt = (felt["at"] as? com.google.firebase.Timestamp)?.toDate()?.time ?: System.currentTimeMillis()
+                        if (!isInitialCoupleDoc || (System.currentTimeMillis() - feltAt < 90_000L)) {
+                            ThinkingOfYou.onPartnerFeltHeartbeat(this, signalId, feltAt)
+                        }
+                    }
+                }
+
+                isInitialCoupleDoc = false
             }
     }
 
@@ -249,8 +313,8 @@ class CherishSyncService : Service() {
             .setContentText("Syncing notes & checklists")
             .setPriority(NotificationCompat.PRIORITY_MIN)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
-            .setOngoing(false)
-            .setAutoCancel(true)
+            .setOngoing(true)
+            .setAutoCancel(false)
             .setShowWhen(false)
             .build()
     }

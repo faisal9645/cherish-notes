@@ -20,6 +20,7 @@
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <!-- Voice calls: keep a call going in the background (a phone call that uses the microphone),
          ring over the lock screen where allowed, and use Bluetooth headsets -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
@@ -169,6 +170,10 @@
         <!-- Sends a scheduled message at its time -->
         <receiver
             android:name=".notifications.ScheduledMessageReceiver"
+            android:exported="false" />
+
+        <receiver
+            android:name=".notifications.NotificationDismissedReceiver"
             android:exported="false" />
 
         <receiver

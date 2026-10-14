@@ -8,7 +8,10 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.drawable.BitmapDrawable
+import android.net.Uri
 import android.os.Build
+import android.os.PowerManager
+import android.provider.Settings
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
@@ -105,6 +108,48 @@ object NotificationHelper {
 
     fun isAlertAlreadyTriggered(): Boolean = isNotificationAlertTriggered.get()
 
+    fun onNotificationDismissed(context: Context) {
+        isNotificationAlertTriggered.set(false)
+        pendingUnreadCount.set(0)
+    }
+
+    private fun getDismissIntent(context: Context): PendingIntent {
+        val intent = Intent(context, NotificationDismissedReceiver::class.java)
+        return PendingIntent.getBroadcast(
+            context,
+            999,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+    }
+
+    fun isBatteryOptimizationIgnored(context: Context): Boolean {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            val pm = context.getSystemService(Context.POWER_SERVICE) as? PowerManager
+            return pm?.isIgnoringBatteryOptimizations(context.packageName) == true
+        }
+        return true
+    }
+
+    fun requestIgnoreBatteryOptimization(context: Context) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            try {
+                val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                    data = Uri.parse("package:${context.packageName}")
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                }
+                context.startActivity(intent)
+            } catch (e: Exception) {
+                try {
+                    val fallback = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS).apply {
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                    }
+                    context.startActivity(fallback)
+                } catch (_: Exception) {}
+            }
+        }
+    }
+
     /**
      * Show a stealth disguised notification that others will never suspect,
      * consolidated into a single notification without duplicates.
@@ -120,12 +165,6 @@ object NotificationHelper {
     ) {
         // Don't show notification if user is actively inside the Cherish app or viewing the chat
         if (isUserActivelyViewingChat(context) || isAppOpenOnScreen(context)) {
-            return
-        }
-
-        // If a notification has already been received and Cherish app has not been opened yet,
-        // do not send/alert subsequent notifications until user opens Cherish chat and closes it
-        if (isNotificationAlertTriggered.get()) {
             return
         }
 
@@ -238,6 +277,7 @@ object NotificationHelper {
             .setOngoing(false)
             .setOnlyAlertOnce(true)
             .setContentIntent(pendingIntent)
+            .setDeleteIntent(getDismissIntent(context))
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setDefaults(NotificationCompat.DEFAULT_ALL)
             .setCategory(NotificationCompat.CATEGORY_MESSAGE)
@@ -270,9 +310,6 @@ object NotificationHelper {
         val prefs = SecurityPreferences.getInstance(context)
         if (!prefs.isNotificationsEnabled()) return
         if (!prefs.isHeartbeatTriggerEnabled()) return
-
-        // If a notification has already been sent and app hasn't been opened yet, do not send again
-        if (isNotificationAlertTriggered.get()) return
 
         val isDiscreet = prefs.isHideNotificationContent() || prefs.isDisguiseModeEnabled()
 
@@ -335,6 +372,7 @@ object NotificationHelper {
             .setOngoing(false)
             .setOnlyAlertOnce(true)
             .setContentIntent(pendingIntent)
+            .setDeleteIntent(getDismissIntent(context))
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(NotificationCompat.CATEGORY_SOCIAL)
             .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
@@ -389,7 +427,9 @@ object NotificationHelper {
             .setContentText(displayText)
             .setSubText(subText)
             .setAutoCancel(true)
+            .setOnlyAlertOnce(true)
             .setContentIntent(pendingIntent)
+            .setDeleteIntent(getDismissIntent(context))
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(NotificationCompat.CATEGORY_SOCIAL)
             .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
