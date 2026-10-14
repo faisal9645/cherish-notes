@@ -94,6 +94,7 @@ fun NotesDisguiseScreen(
     LaunchedEffect(Unit) {
         focusManager.clearFocus(force = true)
         keyboardController?.hide()
+        com.example.notifications.NotificationHelper.clearNotifications(context)
     }
 
     var showEditorDialog by remember { mutableStateOf(false) }
@@ -113,6 +114,8 @@ fun NotesDisguiseScreen(
     val pendingNoteId by CherishApplication.instance.pendingNoteIdFlow.collectAsStateWithLifecycle()
     LaunchedEffect(pendingNoteId) {
         val noteId = pendingNoteId ?: return@LaunchedEffect
+        com.example.notifications.NotificationHelper.cancelNoteReminderNotification(context, noteId)
+        com.example.notifications.NotificationHelper.clearNotifications(context)
         CherishApplication.instance.pendingNoteIdFlow.value = null
         viewModel.loadNoteForEdit(noteId) { note ->
             selectedNoteForEdit = note
@@ -153,7 +156,7 @@ fun NotesDisguiseScreen(
         if (showEditorDialog) {
             showEditorDialog = false
             selectedNoteForEdit = null
-        } else if (uiState.isSelectionMode) {
+        } else if (uiState.isSelectionMode || uiState.selectedNoteIds.isNotEmpty()) {
             viewModel.clearSelection()
         } else if (showBatchDeleteDialog) {
             showBatchDeleteDialog = false
@@ -392,14 +395,14 @@ fun NotesDisguiseScreen(
                                         bitmap = appLauncherIcon,
                                         contentDescription = "Notes",
                                         modifier = Modifier
-                                            .size(38.dp)
-                                            .clip(RoundedCornerShape(9.dp))
+                                            .size(31.dp)
+                                            .clip(RoundedCornerShape(8.dp))
                                     )
                                 } else {
                                     Box(
                                         modifier = Modifier
-                                            .size(38.dp)
-                                            .clip(RoundedCornerShape(9.dp))
+                                            .size(31.dp)
+                                            .clip(RoundedCornerShape(8.dp))
                                             .background(
                                                 Brush.linearGradient(
                                                     listOf(
@@ -418,10 +421,10 @@ fun NotesDisguiseScreen(
                                         )
                                     }
                                 }
-                                Spacer(modifier = Modifier.width(10.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
                                 Text(
                                     text = "Notes",
-                                    fontSize = 24.sp,
+                                    fontSize = 22.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.onBackground
                                 )
@@ -816,6 +819,7 @@ fun NotesDisguiseScreen(
                                     }
                                 },
                                 onClick = {
+                                    com.example.notifications.NotificationHelper.cancelNoteReminderNotification(context, note.id)
                                     selectedNoteForEdit = note
                                     showEditorDialog = true
                                 },
@@ -852,6 +856,7 @@ fun NotesDisguiseScreen(
                                     }
                                 },
                                 onClick = {
+                                    com.example.notifications.NotificationHelper.cancelNoteReminderNotification(context, note.id)
                                     selectedNoteForEdit = note
                                     showEditorDialog = true
                                 },

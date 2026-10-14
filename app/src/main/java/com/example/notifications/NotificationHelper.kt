@@ -33,6 +33,7 @@ object NotificationHelper {
 
     private val pendingUnreadCount = AtomicInteger(0)
     private val notifiedMessageIds = java.util.Collections.synchronizedSet(LinkedHashSet<String>())
+    private val activeNoteReminderIds = java.util.Collections.synchronizedSet(LinkedHashSet<Int>())
 
     fun getAppIconBitmap(context: Context): Bitmap? {
         return try {
@@ -108,9 +109,13 @@ object NotificationHelper {
 
     fun isAlertAlreadyTriggered(): Boolean = isNotificationAlertTriggered.get()
 
-    fun onNotificationDismissed(context: Context) {
+    fun onNotificationDismissed(context: Context, noteId: String? = null) {
         isNotificationAlertTriggered.set(false)
         pendingUnreadCount.set(0)
+        if (!noteId.isNullOrBlank()) {
+            activeNoteReminderIds.remove(noteId.hashCode())
+        }
+        updateLauncherBadge(context, 0)
     }
 
     private fun getDismissIntent(context: Context): PendingIntent {
@@ -118,6 +123,18 @@ object NotificationHelper {
         return PendingIntent.getBroadcast(
             context,
             999,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+    }
+
+    private fun getNoteDismissIntent(context: Context, noteId: String): PendingIntent {
+        val intent = Intent(context, NotificationDismissedReceiver::class.java).apply {
+            putExtra(NotificationDismissedReceiver.EXTRA_NOTE_ID, noteId)
+        }
+        return PendingIntent.getBroadcast(
+            context,
+            noteId.hashCode(),
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
@@ -288,9 +305,15 @@ object NotificationHelper {
 
         try {
             createNotificationChannels(context)
+            if (isAppOpenOnScreen(context) || isUserActivelyViewingChat(context)) {
+                return
+            }
             // Cancel legacy separate heartbeat notification from older builds so only 1 notification is ever visible
-            NotificationManagerCompat.from(context).cancel(1003)
-            NotificationManagerCompat.from(context).notify(NOTIFICATION_ID_MESSAGE, notification)
+            val nmCompat = NotificationManagerCompat.from(context)
+            val nmSystem = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
+            nmCompat.cancel(1003)
+            nmSystem?.cancel(1003)
+            nmCompat.notify(NOTIFICATION_ID_MESSAGE, notification)
             android.util.Log.d("NotificationHelper", "Message notification posted successfully (badge 1)")
         } catch (e: SecurityException) {
             android.util.Log.w("NotificationHelper", "POST_NOTIFICATIONS runtime permission not granted: ${e.message}")
@@ -383,9 +406,14 @@ object NotificationHelper {
             .build()
 
         try {
-            NotificationManagerCompat.from(context).cancel(1003)
-            NotificationManagerCompat.from(context).notify(NOTIFICATION_ID_MESSAGE, notification)
-        } catch (_: SecurityException) {}
+            createNotificationChannels(context)
+            if (isAppOpenOnScreen(context)) return
+            val nmCompat = NotificationManagerCompat.from(context)
+            val nmSystem = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
+            nmCompat.cancel(1003)
+            nmSystem?.cancel(1003)
+            nmCompat.notify(NOTIFICATION_ID_MESSAGE, notification)
+        } catch (_: SecurityException) {} catch (_: Exception) {}
     }
 
     /**
@@ -430,6 +458,7 @@ object NotificationHelper {
             .setContentText(displayText)
             .setSubText(subText)
             .setAutoCancel(true)
+            .setOngoing(false)
             .setOnlyAlertOnce(true)
             .setContentIntent(pendingIntent)
             .setDeleteIntent(getDismissIntent(context))
@@ -439,8 +468,11 @@ object NotificationHelper {
             .build()
 
         try {
-            NotificationManagerCompat.from(context).notify(NOTIFICATION_ID_HEARTBEAT, notification)
-        } catch (_: SecurityException) {}
+            createNotificationChannels(context)
+            if (isAppOpenOnScreen(context)) return
+            val nmCompat = NotificationManagerCompat.from(context)
+            nmCompat.notify(NOTIFICATION_ID_HEARTBEAT, notification)
+        } catch (_: SecurityException) {} catch (_: Exception) {}
     }
 
     /**
@@ -448,11 +480,29 @@ object NotificationHelper {
      */
     fun cancelStatusBarNotifications(context: Context) {
         try {
-            val nm = NotificationManagerCompat.from(context)
-            nm.cancel(NOTIFICATION_ID_MESSAGE)
-            nm.cancel(NOTIFICATION_ID_CHECK_AFTER)
-            nm.cancel(NOTIFICATION_ID_HEARTBEAT)
-            nm.cancel(1003)
+            val nmCompat = NotificationManagerCompat.from(context)
+            val nmSystem = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
+
+            nmCompat.cancel(NOTIFICATION_ID_MESSAGE)
+            nmCompat.cancel(NOTIFICATION_ID_CHECK_AFTER)
+            nmCompat.cancel(NOTIFICATION_ID_HEARTBEAT)
+            nmCompat.cancel(1003)
+
+            nmSystem?.cancel(NOTIFICATION_ID_MESSAGE)
+            nmSystem?.cancel(NOTIFICATION_ID_CHECK_AFTER)
+            nmSystem?.cancel(NOTIFICATION_ID_HEARTBEAT)
+            nmSystem?.cancel(1003)
+
+            synchronized(activeNoteReminderIds) {
+                for (id in activeNoteReminderIds) {
+                    nmCompat.cancel(id)
+                    nmSystem?.cancel(id)
+                }
+                activeNoteReminderIds.clear()
+            }
+
+            nmCompat.cancelAll()
+            nmSystem?.cancelAll()
         } catch (_: Exception) {}
     }
 
@@ -463,14 +513,20 @@ object NotificationHelper {
         isNotificationAlertTriggered.set(false)
         pendingUnreadCount.set(0)
         notifiedMessageIds.clear()
-        try {
-            val nm = NotificationManagerCompat.from(context)
-            nm.cancel(NOTIFICATION_ID_MESSAGE)
-            nm.cancel(NOTIFICATION_ID_CHECK_AFTER)
-            nm.cancel(NOTIFICATION_ID_HEARTBEAT)
-            nm.cancel(1003)
-        } catch (_: Exception) {}
+
+        cancelStatusBarNotifications(context)
         updateLauncherBadge(context, 0)
+
+        // Delayed safety sweep: if an in-flight background worker (FCM/Firestore/alarm)
+        // posts right as the app is transitioning to foreground, this cleans it up cleanly.
+        try {
+            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                if (isAppOpenOnScreen(context)) {
+                    cancelStatusBarNotifications(context)
+                    updateLauncherBadge(context, 0)
+                }
+            }, 400L)
+        } catch (_: Exception) {}
     }
 
     /**
@@ -564,17 +620,22 @@ object NotificationHelper {
             .setContentText(displayText)
             .setSubText(if (isDisguised) prefs.getMaskedNotificationTitle() else "Cherish")
             .setAutoCancel(true)
+            .setOngoing(false)
             .setContentIntent(pendingIntent)
+            .setDeleteIntent(getDismissIntent(context))
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
             .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
             .build()
 
         try {
-            NotificationManagerCompat.from(context).notify(NOTIFICATION_ID_CHECK_AFTER, notification)
+            createNotificationChannels(context)
+            if (isAppOpenOnScreen(context)) return
+            val nmCompat = NotificationManagerCompat.from(context)
+            nmCompat.notify(NOTIFICATION_ID_CHECK_AFTER, notification)
         } catch (_: SecurityException) {
             // Handled if POST_NOTIFICATIONS runtime permission not yet prompted
-        }
+        } catch (_: Exception) {}
     }
 
     /**
@@ -587,10 +648,15 @@ object NotificationHelper {
         title: String,
         content: String
     ) {
+        if (isAppOpenOnScreen(context)) return
+
         // The Notes app's own reminders: only its reminder switch counts (not the chat's
         // notifications switch)
         val prefs = SecurityPreferences.getInstance(context)
         if (!prefs.isNoteRemindersEnabled()) return
+
+        val notifId = noteId.hashCode()
+        activeNoteReminderIds.add(notifId)
 
         val intent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
@@ -600,7 +666,7 @@ object NotificationHelper {
 
         val pendingIntent = PendingIntent.getActivity(
             context,
-            noteId.hashCode(),
+            notifId,
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
@@ -620,7 +686,9 @@ object NotificationHelper {
             .setStyle(NotificationCompat.BigTextStyle().bigText(displayText))
             .setSubText("Notes")
             .setAutoCancel(true)
+            .setOngoing(false)
             .setContentIntent(pendingIntent)
+            .setDeleteIntent(getNoteDismissIntent(context, noteId))
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setDefaults(NotificationCompat.DEFAULT_ALL)
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
@@ -628,15 +696,23 @@ object NotificationHelper {
             .build()
 
         try {
-            NotificationManagerCompat.from(context).notify(noteId.hashCode(), notification)
+            createNotificationChannels(context)
+            if (isAppOpenOnScreen(context)) return
+            val nmCompat = NotificationManagerCompat.from(context)
+            nmCompat.notify(notifId, notification)
         } catch (_: SecurityException) {
             // Handled if POST_NOTIFICATIONS runtime permission not yet prompted
-        }
+        } catch (_: Exception) {}
     }
 
     fun cancelNoteReminderNotification(context: Context, noteId: String) {
         try {
-            NotificationManagerCompat.from(context).cancel(noteId.hashCode())
+            val notifId = noteId.hashCode()
+            activeNoteReminderIds.remove(notifId)
+            val nmCompat = NotificationManagerCompat.from(context)
+            val nmSystem = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
+            nmCompat.cancel(notifId)
+            nmSystem?.cancel(notifId)
         } catch (_: Exception) {}
     }
 }

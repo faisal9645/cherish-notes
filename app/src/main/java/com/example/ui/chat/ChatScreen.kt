@@ -1237,8 +1237,8 @@ fun ChatScreen(
                         CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides androidx.compose.ui.unit.Dp.Unspecified) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                modifier = Modifier.padding(end = 4.dp)
+                                horizontalArrangement = Arrangement.spacedBy(2.dp),
+                                modifier = Modifier.padding(end = 2.dp)
                             ) {
                                 IconButton(
                                     onClick = startVoiceCall,
@@ -1281,9 +1281,9 @@ fun ChatScreen(
                                 Box {
                                     IconButton(
                                         onClick = { showChatMenu = true },
-                                        modifier = Modifier.size(40.dp)
+                                        modifier = Modifier.size(36.dp)
                                     ) {
-                                        Icon(Icons.Default.MoreVert, contentDescription = "More options", tint = iconTint, modifier = Modifier.size(26.dp))
+                                        Icon(Icons.Default.MoreVert, contentDescription = "More options", tint = iconTint, modifier = Modifier.size(24.dp))
                                     }
                                     DropdownMenu(
                                         expanded = showChatMenu,

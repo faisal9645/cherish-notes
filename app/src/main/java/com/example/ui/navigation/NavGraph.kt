@@ -372,10 +372,7 @@ fun CherishNavGraph(
             ChatScreen(
                 viewModel = sharedChatViewModel,
                 onNavigateBack = {
-                    val popped = navController.popBackStack(Screen.Home.route, inclusive = false)
-                    if (!popped) {
-                        navController.navigate(Screen.Home.route) { launchSingleTop = true }
-                    }
+                    app.securityPreferences.forceDisguise()
                 },
                 onNavigateToGallery = {
                     app.securityPreferences.ignoreChatNavigation = true

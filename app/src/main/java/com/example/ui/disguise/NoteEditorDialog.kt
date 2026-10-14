@@ -77,6 +77,12 @@ fun NoteEditorScreen(
     val context = LocalContext.current
     val isDark = isAppInDark()
 
+    LaunchedEffect(initialNote?.id) {
+        initialNote?.id?.let { id ->
+            com.example.notifications.NotificationHelper.cancelNoteReminderNotification(context, id)
+        }
+    }
+
     var title by remember { mutableStateOf(initialNote?.title ?: "") }
     var content by remember { mutableStateOf(initialNote?.content ?: "") }
     var category by remember { mutableStateOf(initialNote?.category ?: "Personal") }

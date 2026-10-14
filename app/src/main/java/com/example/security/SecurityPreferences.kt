@@ -408,7 +408,7 @@ class SecurityPreferences(context: Context) {
         val screenshot = isScreenshotProtectionEnabled()
         val recentApps = true
         val keyword = isKeywordTriggerEnabled()
-        val hold = isRequirePhoneLockAfterHold()
+        val hold = isRequirePhoneLockAfterHold() || getPlusIconHoldDuration() > 0
 
         val passed = listOf(disguise, appLock, biometric, notif, screenshot, recentApps, keyword, hold).count { it }
         return SecurityAuditScore(

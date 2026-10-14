@@ -136,60 +136,45 @@ fun DoodleWallpaper(
     isDark: Boolean,
     modifier: Modifier = Modifier
 ) {
-    // Pure white for day mode, true AMOLED black for night mode
-    val bgColor = if (isDark) Color(0xFF000000) else Color(0xFFFFFFFF)
-    
-    // Crisp theme-matching strokes & accents
-    val strokeColor = if (isDark) {
-        Color(0xFF60A5FA).copy(alpha = 0.14f)
-    } else {
-        Color(0xFF2563EB).copy(alpha = 0.085f)
+    val isAmoled = com.example.ui.theme.LocalAmoledBlack.current
+    val fallbackBg = when {
+        isAmoled -> Color(0xFF000000)
+        isDark -> Color(0xFF0B132B)
+        else -> Color(0xFFFFFFFF)
     }
-    val dotColor = if (isDark) {
-        Color(0xFF93C5FD).copy(alpha = 0.24f)
-    } else {
-        Color(0xFF3B82F6).copy(alpha = 0.20f)
+
+    // In dark/amoled mode, invert colors so background is pitch black and doodle artwork is luminous theme blue
+    val colorFilter = when {
+        isDark || isAmoled -> {
+            androidx.compose.ui.graphics.ColorFilter.colorMatrix(
+                androidx.compose.ui.graphics.ColorMatrix(
+                    floatArrayOf(
+                        -0.65f, 0f, 0f, 0f, 175f,
+                        -0.78f, 0f, 0f, 0f, 210f,
+                        -0.95f, 0f, 0f, 0f, 255f,
+                        0f, 0f, 0f, 1f, 0f
+                    )
+                )
+            )
+        }
+        else -> null
     }
 
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(bgColor)
+            .background(fallbackBg)
             .clipToBounds()
     ) {
-        Canvas(
+        androidx.compose.foundation.Image(
+            painter = androidx.compose.ui.res.painterResource(id = com.example.R.drawable.chat_bg_theme_1),
+            contentDescription = "Theme 1 Doodle Wallpaper",
+            contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+            colorFilter = colorFilter,
             modifier = Modifier
                 .fillMaxSize()
                 .tiltParallax()
-        ) {
-            val tileSize = 135.dp.toPx()
-            val cols = (size.width / tileSize).toInt() + 3
-            val rows = (size.height / tileSize).toInt() + 3
-            val stroke = Stroke(
-                width = 1.35f,
-                cap = StrokeCap.Round,
-                join = StrokeJoin.Round
-            )
-
-            for (r in -1 until rows) {
-                // Stagger alternate rows for organic distribution
-                val rowOffset = if ((r % 2 + 2) % 2 == 1) tileSize * 0.5f else 0f
-                for (c in -1 until cols) {
-                    val ox = c * tileSize + rowOffset
-                    val oy = r * tileSize
-                    val variant = ((r + 10) * 3 + (c + 10)) % 8
-                    drawDoodleTile(
-                        originX = ox,
-                        originY = oy,
-                        tileSize = tileSize,
-                        strokeColor = strokeColor,
-                        dotColor = dotColor,
-                        stroke = stroke,
-                        variant = variant
-                    )
-                }
-            }
-        }
+        )
     }
 }
 

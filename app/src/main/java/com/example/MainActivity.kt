@@ -183,13 +183,15 @@ class MainActivity : FragmentActivity() {
 
     private fun handleNotificationIntent(intent: android.content.Intent?) {
         if (intent == null) return
-        com.example.notifications.NotificationHelper.clearNotifications(this)
         val openNoteId = intent.getStringExtra("open_note_id")
         if (!openNoteId.isNullOrBlank()) {
+            com.example.notifications.NotificationHelper.cancelNoteReminderNotification(this, openNoteId)
+            com.example.notifications.NotificationHelper.clearNotifications(this)
             app.securityPreferences.reDisguise()
             app.pendingNoteIdFlow.value = openNoteId
             return
         }
+        com.example.notifications.NotificationHelper.clearNotifications(this)
         val isFromNotification = intent.getBooleanExtra("from_notification", false) ||
                 intent.getBooleanExtra("open_chat", false) ||
                 intent.hasExtra("conversationId")
@@ -452,6 +454,7 @@ class MainActivity : FragmentActivity() {
         // Only the privacy cover reacts: the moment focus leaves for the system (recent apps,
         // notification shade) the chat is covered, and uncovered when it's back.
         if (hasFocus) {
+            com.example.notifications.NotificationHelper.clearNotifications(this)
             PrivacyShield.lower()
             // Back in the app on Notes: no keyboard left over from the chat's message box underneath
             // (only after coming back from outside, not when an in-app dialog closes)

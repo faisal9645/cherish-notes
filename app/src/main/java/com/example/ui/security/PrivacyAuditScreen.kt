@@ -47,7 +47,7 @@ fun PrivacyAuditScreen(
     onNavigateToBackup: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    val appLockOn = securityPreferences.isAppLockEnabled() && securityPreferences.hasPin()
+    val auditScore = securityPreferences.getSecurityAuditScore()
     val lockAfter = when (val seconds = securityPreferences.getAutoLockTimeoutSeconds()) {
         0 -> "right away"
         in 1..59 -> "after $seconds sec"
@@ -60,47 +60,47 @@ fun PrivacyAuditScreen(
             id = "disguise",
             title = "Disguise as Notes",
             description = "The app opens as a Notes app; the chat needs your secret unlock",
-            isPassed = securityPreferences.isDisguiseModeEnabled(),
-            actionText = if (securityPreferences.isDisguiseModeEnabled()) "On" else "Off",
+            isPassed = auditScore.isDisguiseOn,
+            actionText = if (auditScore.isDisguiseOn) "On" else "Off",
             icon = Icons.Filled.EditNote
         ),
         PrivacyCheckItem(
             id = "app_lock",
             title = "App PIN Lock",
             description = "Protected with master passcode: locks $lockAfter",
-            isPassed = appLockOn,
-            actionText = if (appLockOn) "On" else "Off",
+            isPassed = auditScore.isAppLockOn,
+            actionText = if (auditScore.isAppLockOn) "On" else "Off",
             icon = Icons.Filled.Lock
         ),
         PrivacyCheckItem(
             id = "biometric",
             title = "Fingerprint / Face Unlock",
             description = "Instant biometric verification when opening secret chat",
-            isPassed = securityPreferences.isBiometricEnabled(),
-            actionText = if (securityPreferences.isBiometricEnabled()) "On" else "Off",
+            isPassed = auditScore.isBiometricOn,
+            actionText = if (auditScore.isBiometricOn) "On" else "Off",
             icon = Icons.Filled.Fingerprint
         ),
         PrivacyCheckItem(
             id = "notification",
             title = "Notification Masking",
             description = "Notifications display masked disguise content instead of private messages",
-            isPassed = securityPreferences.isHideNotificationContent(),
-            actionText = if (securityPreferences.isHideNotificationContent()) "On" else "Off",
+            isPassed = auditScore.isNotificationMaskingOn,
+            actionText = if (auditScore.isNotificationMaskingOn) "On" else "Off",
             icon = Icons.Filled.NotificationsOff
         ),
         PrivacyCheckItem(
             id = "screenshot",
             title = "Screenshot & Recording Blocking",
             description = "Prevents screenshots, mirroring, and background recording (FLAG_SECURE)",
-            isPassed = securityPreferences.isScreenshotProtectionEnabled(),
-            actionText = if (securityPreferences.isScreenshotProtectionEnabled()) "On" else "Off",
+            isPassed = auditScore.isScreenshotBlockingOn,
+            actionText = if (auditScore.isScreenshotBlockingOn) "On" else "Off",
             icon = Icons.Filled.Shield
         ),
         PrivacyCheckItem(
             id = "recent_apps",
             title = "Recent-Apps Cover",
             description = "Android app switcher preview is blurred and covered automatically",
-            isPassed = true,
+            isPassed = auditScore.isRecentAppsCoverOn,
             actionText = "Always on",
             icon = Icons.Filled.VisibilityOff
         ),
@@ -108,21 +108,21 @@ fun PrivacyAuditScreen(
             id = "keyword_trigger",
             title = "Emergency Keyword Trigger",
             description = "Typing panic code instantly disguises the app to safe Notes screen",
-            isPassed = securityPreferences.isKeywordTriggerEnabled(),
-            actionText = if (securityPreferences.isKeywordTriggerEnabled()) "On" else "Off",
+            isPassed = auditScore.isKeywordTriggerOn,
+            actionText = if (auditScore.isKeywordTriggerOn) "On" else "Off",
             icon = Icons.Filled.Key
         ),
         PrivacyCheckItem(
             id = "hold_protection",
             title = "Plus-Icon Hold Protection",
             description = "Secret chat requires long-holding the disguise icon or device lock",
-            isPassed = securityPreferences.isRequirePhoneLockAfterHold() || securityPreferences.getPlusIconHoldDuration() > 0,
-            actionText = if (securityPreferences.isRequirePhoneLockAfterHold() || securityPreferences.getPlusIconHoldDuration() > 0) "On" else "Off",
+            isPassed = auditScore.isPhoneLockHoldOn,
+            actionText = if (auditScore.isPhoneLockHoldOn) "On" else "Off",
             icon = Icons.Filled.TouchApp
         )
     )
-    val passedCount = checks.count { it.isPassed }
-    val allOn = passedCount == checks.size
+    val passedCount = auditScore.passedCount
+    val allOn = passedCount == auditScore.totalCount
     val accent = MaterialTheme.colorScheme.primary
 
     Scaffold(

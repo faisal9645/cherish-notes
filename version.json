@@ -1,9 +1,9 @@
 {
-  "versionCode": 154,
-  "versionName": "1.7.82",
-  "tagName": "v1.7.82-154",
-  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.7.82-154/app_update_154.apk",
-  "assetSize": 32732810,
-  "releaseNotes": "Notes v1.7.82 (Build 154):\n• Fixed DNS host resolution issue on mobile carriers for Check for Updates\n• Added resilient Anycast CDN mirrors (jsDelivr, Statically) & Firestore fallback for instant update availability\n• Added resilient download mirrors to ensure zero download failures\n• New Theme 2 Romantic Couple Love Doodles Wallpaper (adaptive Day, Dark, & AMOLED)",
-  "releaseDate": "2026-10-14T06:49:06Z"
+  "versionCode": 155,
+  "versionName": "1.7.83",
+  "tagName": "v1.7.83-155",
+  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.7.83-155/app_update_155.apk",
+  "assetSize": 32859175,
+  "releaseNotes": "Notes v1.7.83 (Build 155):\n• Fixed voice call audio engine startup when both users are online\n• Theme 1 Doodle Wallpaper fixed with adaptive Day & Dark mode visibility\n• Partner notification settings live status card in settings\n• Notes app multi-select card height fix & back gesture unselect\n• Top chat bar spacing, deep blue voice mic, and Watch Together card fixes\n• Synchronized Privacy & Security audit counts & disguise back navigation",
+  "releaseDate": "2026-10-14T08:25:11Z"
 }

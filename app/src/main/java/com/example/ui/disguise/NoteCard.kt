@@ -286,7 +286,9 @@ fun NoteCard(
         ) {
             // Header Row: Category Badge & Selection Checkbox + Pin & More Menu
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 36.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -305,29 +307,37 @@ fun NoteCard(
                     )
                 }
 
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    modifier = Modifier.height(36.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     if (isSelectionMode) {
-                        // Multi-selection checkbox
+                        // Multi-selection checkbox wrapped in matching 36dp container
                         Box(
-                            modifier = Modifier
-                                .size(26.dp)
-                                .clip(CircleShape)
-                                .background(if (isSelected) themeColors.accentPrimary else if (isDark) darkTone(Color(0xFF0F172A)) else Color.White)
-                                .border(
-                                    width = if (isSelected) 0.dp else 2.dp,
-                                    color = if (isSelected) themeColors.accentPrimary else themeColors.borderColor,
-                                    shape = CircleShape
-                                )
-                                .clickable { onToggleSelect() },
+                            modifier = Modifier.size(36.dp),
                             contentAlignment = Alignment.Center
                         ) {
-                            if (isSelected) {
-                                Icon(
-                                    imageVector = Icons.Default.Check,
-                                    contentDescription = "Selected",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(16.dp)
-                                )
+                            Box(
+                                modifier = Modifier
+                                    .size(26.dp)
+                                    .clip(CircleShape)
+                                    .background(if (isSelected) themeColors.accentPrimary else if (isDark) darkTone(Color(0xFF0F172A)) else Color.White)
+                                    .border(
+                                        width = if (isSelected) 0.dp else 2.dp,
+                                        color = if (isSelected) themeColors.accentPrimary else themeColors.borderColor,
+                                        shape = CircleShape
+                                    )
+                                    .clickable { onToggleSelect() },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                if (isSelected) {
+                                    Icon(
+                                        imageVector = Icons.Default.Check,
+                                        contentDescription = "Selected",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
                             }
                         }
                     } else {
@@ -352,9 +362,7 @@ fun NoteCard(
                         Box {
                             IconButton(
                                 onClick = { showMenu = true },
-                                modifier = Modifier
-                                    .size(36.dp)
-                                    .minimumInteractiveComponentSize()
+                                modifier = Modifier.size(36.dp)
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.MoreVert,

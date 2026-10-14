@@ -1082,68 +1082,155 @@ fun ProfileScreen(
                     val partnerNotifStatus = partner.notificationStatus ?: "OPEN"
                     val isPermBlocked = !partnerNotifPerm
                     val isAlertClosed = partnerNotifStatus.uppercase() in listOf("CLOSED", "OFF", "MUTED")
+                    val isSafeDisguised = partnerNotifStatus.uppercase() in listOf("SAFE", "HIDDEN")
 
-                    // Alert card based on partner mobile notification permission & settings
-                    if (isPermBlocked || isAlertClosed) {
-                        Surface(
-                            shape = RoundedCornerShape(12.dp),
-                            color = if (isPermBlocked) Color(0xFFEF4444).copy(alpha = 0.12f) else Color(0xFFF59E0B).copy(alpha = 0.12f),
-                            border = BorderStroke(1.dp, if (isPermBlocked) Color(0xFFEF4444).copy(alpha = 0.45f) else Color(0xFFF59E0B).copy(alpha = 0.45f)),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 6.dp)
-                        ) {
+                    // Partner's Complete Notification Settings Status Card
+                    Surface(
+                        shape = RoundedCornerShape(16.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 14.dp, vertical = 8.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(14.dp)) {
                             Row(
-                                modifier = Modifier.padding(12.dp),
-                                verticalAlignment = Alignment.CenterVertically
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                modifier = Modifier.fillMaxWidth()
                             ) {
-                                Text(if (isPermBlocked) "⚠️" else "🔕", fontSize = 22.sp)
-                                Spacer(modifier = Modifier.width(10.dp))
-                                Column {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
                                     Text(
-                                        text = if (isPermBlocked) 
-                                            "$partnerNameDisplay's Notification Permission is OFF!"
-                                        else 
-                                            "$partnerNameDisplay's Notifications are Muted!",
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 13.5.sp,
-                                        color = if (isPermBlocked) (if (isDark) Color(0xFFFCA5A5) else Color(0xFFDC2626)) else (if (isDark) Color(0xFFFDE68A) else Color(0xFFD97706))
+                                        text = if (isPermBlocked) "⚠️" else if (isAlertClosed) "🔕" else if (isSafeDisguised) "🛡️" else "🔔",
+                                        fontSize = 18.sp
                                     )
+                                    Spacer(modifier = Modifier.width(8.dp))
                                     Text(
-                                        text = if (isPermBlocked)
-                                            "System notification permission is turned OFF on their mobile device. They will not receive incoming message or call ring alerts until allowed in Android settings."
-                                        else
-                                            "In-app notifications are silenced on their phone.",
-                                        fontSize = 12.sp,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        text = "$partnerNameDisplay's Notification Status",
+                                        fontSize = 14.5.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                }
+                                Surface(
+                                    shape = RoundedCornerShape(10.dp),
+                                    color = if (isPermBlocked || isAlertClosed) Color(0xFFEF4444).copy(alpha = 0.15f) else Color(0xFF10B981).copy(alpha = 0.15f)
+                                ) {
+                                    Text(
+                                        text = if (isPermBlocked) "Blocked" else if (isAlertClosed) "Muted" else if (isSafeDisguised) "Disguised" else "Active",
+                                        color = if (isPermBlocked || isAlertClosed) Color(0xFFEF4444) else Color(0xFF10B981),
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 11.sp,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
                                     )
                                 }
                             }
+
+                            if (isPermBlocked) {
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    text = "System notification permission is OFF on their device. Ringtone and message alerts are silenced.",
+                                    fontSize = 11.5.sp,
+                                    color = MaterialTheme.colorScheme.error
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.height(10.dp))
+                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f), thickness = 0.5.dp)
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            // Rows of all notification types
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                                    Icon(Icons.Default.Notifications, contentDescription = null, tint = if (partnerNotifPerm) primaryAccent else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("System Notification Bar", fontSize = 12.5.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f))
+                                }
+                                Text(if (partnerNotifPerm) "Allowed ✅" else "Blocked ❌", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = if (partnerNotifPerm) Color(0xFF10B981) else Color(0xFFEF4444))
+                            }
+
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                                    Icon(Icons.Default.Security, contentDescription = null, tint = if (!isAlertClosed) primaryAccent else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("Message Content Privacy", fontSize = 12.5.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f))
+                                }
+                                Text(if (isSafeDisguised) "Disguised (Notes) 🛡️" else if (isAlertClosed) "Muted / Off 🔕" else "Full Preview 🔔", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = if (!isAlertClosed) Color(0xFF10B981) else Color(0xFFEF4444))
+                            }
+
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                                    Icon(Icons.Default.PhoneInTalk, contentDescription = null, tint = if (!isPermBlocked && !isAlertClosed) primaryAccent else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("Incoming Call Ringing", fontSize = 12.5.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f))
+                                }
+                                Text(if (!isPermBlocked && !isAlertClosed) "Ringing Active 📞" else "Silenced 🔕", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = if (!isPermBlocked && !isAlertClosed) Color(0xFF10B981) else Color(0xFFEF4444))
+                            }
+
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                                    Icon(Icons.Default.Favorite, contentDescription = null, tint = if (!isAlertClosed) HeartRed else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("Heartbeat Tactile Alerts", fontSize = 12.5.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f))
+                                }
+                                Text(if (!isAlertClosed) "Active (Pulse) ❤️" else "Muted 🤍", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = if (!isAlertClosed) Color(0xFF10B981) else Color(0xFFEF4444))
+                            }
+
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                                    Icon(Icons.Default.MarkChatUnread, contentDescription = null, tint = if (!isPermBlocked) primaryAccent else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("App Icon Badge", fontSize = 12.5.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f))
+                                }
+                                Text(if (!isPermBlocked) "Active 🔴" else "Disabled", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = if (!isPermBlocked) Color(0xFF10B981) else Color(0xFFEF4444))
+                            }
+
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                                    Icon(Icons.Default.Sync, contentDescription = null, tint = primaryAccent, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("Keep Connected / Sync", fontSize = 12.5.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f))
+                                }
+                                Text(if (partner.isEffectivelyOnline()) "Online & Active ⚡" else "Connected 🔋", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF10B981))
+                            }
                         }
                     }
-
-                    val (partnerLabel, partnerIcon, partnerDesc) = when {
-                        isPermBlocked -> Triple("Permission Blocked", "⚠️", "Notification permission is turned OFF")
-                        partnerNotifStatus.uppercase() in listOf("SAFE", "HIDDEN") -> Triple("Safe", "🛡️", "Disguised as Notes for privacy")
-                        isAlertClosed -> Triple("Closed", "🔕", "Notifications turned off or muted in app")
-                        else -> Triple("Open", "🔔", "Notifications active & alerts enabled")
-                    }
-
-                    ListItem(
-                        headlineContent = { Text("$partnerNameDisplay's Alerts: $partnerLabel", fontSize = 15.sp, fontWeight = FontWeight.SemiBold) },
-                        supportingContent = {
-                            Column {
-                                Text(
-                                    text = "Notification: " + if (partnerNotifPerm) "ON ✅" else "OFF ❌",
-                                    fontSize = 12.5.sp,
-                                    fontWeight = FontWeight.Medium,
-                                    color = if (partnerNotifPerm) Color(0xFF10B981) else Color(0xFFEF4444)
-                                )
-                                Text(partnerDesc, fontSize = 12.sp)
-                            }
-                        },
-                        leadingContent = { Text(partnerIcon, fontSize = 20.sp) }
-                    )
                 }
 
             }

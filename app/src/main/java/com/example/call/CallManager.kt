@@ -501,7 +501,14 @@ object CallManager {
         myUid = info.uid
         peerUid = if (info.uid == CALLER_UID) CALLEE_UID else CALLER_UID
         val effectiveAppId = if (info.appId.isNotBlank()) info.appId else AgoraTokenBuilder.DEFAULT_APP_ID
-        if (!engine.start(effectiveAppId, engineListener)) {
+        var started = engine.start(effectiveAppId, engineListener)
+        if (!started) {
+            Log.w(TAG, "Agora engine start attempt 1 failed, retrying in 250ms...")
+            delay(250)
+            if (callId != id || !hasActiveCall()) return
+            started = engine.start(effectiveAppId, engineListener)
+        }
+        if (!started) {
             Log.e(TAG, "Agora engine failed to start on this device (appId=$effectiveAppId)")
             if (callId == id) {
                 finish(CallEndReason.FAILED, serverReason = "error", errorMessage = "Audio engine could not start")
