@@ -1072,6 +1072,42 @@ fun ChatScreen(
                 } else {
                     Modifier.fillMaxWidth()
                 }
+                val screenWidthDp = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp
+                val fontScale = androidx.compose.ui.platform.LocalDensity.current.fontScale
+
+                // Responsive TopBar metrics: dynamically optimizes width & touch targets so
+                // compact 6.2" screens (e.g., Galaxy S24 at 360-384dp) showcase the full last seen
+                // timestamp and partner local time without ellipsis or clipping, while scaling gracefully
+                // on medium and larger 6.7"+ devices.
+                val isCompactTopBar = screenWidthDp < 370 || (screenWidthDp < 390 && fontScale > 1.05f)
+                val isMediumTopBar = screenWidthDp in 370..405 && fontScale <= 1.05f
+
+                val topBarActionBtnSize = when {
+                    isCompactTopBar -> 29.5.dp
+                    isMediumTopBar -> 32.dp
+                    else -> 36.dp
+                }
+                val topBarActionIconSize = when {
+                    isCompactTopBar -> 19.5.dp
+                    isMediumTopBar -> 21.dp
+                    else -> 23.dp
+                }
+                val topBarActionSpacing = when {
+                    isCompactTopBar -> 0.dp
+                    isMediumTopBar -> 0.5.dp
+                    else -> 2.dp
+                }
+                val topBarNavBtnSize = when {
+                    isCompactTopBar -> 31.dp
+                    isMediumTopBar -> 34.dp
+                    else -> 38.dp
+                }
+                val topBarNavIconSize = when {
+                    isCompactTopBar -> 20.dp
+                    isMediumTopBar -> 22.dp
+                    else -> 24.dp
+                }
+
                 Column(modifier = topBarBackgroundModifier) {
                 TopAppBar(
                     title = {
@@ -1140,14 +1176,14 @@ fun ChatScreen(
                                 },
                                 modifier = Modifier
                                     .padding(start = 0.dp)
-                                    .size(34.dp)
+                                    .size(topBarNavBtnSize)
                                     .testTag("chat_back_button")
                             ) {
                                 Icon(
                                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                                     contentDescription = "Back",
                                     tint = MaterialTheme.colorScheme.onSurface,
-                                    modifier = Modifier.size(22.dp)
+                                    modifier = Modifier.size(topBarNavIconSize)
                                 )
                             }
                         }
@@ -1237,53 +1273,53 @@ fun ChatScreen(
                         CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides androidx.compose.ui.unit.Dp.Unspecified) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(0.5.dp),
-                                modifier = Modifier.padding(end = 1.dp)
+                                horizontalArrangement = Arrangement.spacedBy(topBarActionSpacing),
+                                modifier = Modifier.padding(end = if (isCompactTopBar) 0.dp else 1.dp)
                             ) {
                                 IconButton(
                                     onClick = startVoiceCall,
                                     modifier = Modifier
-                                        .size(32.dp)
+                                        .size(topBarActionBtnSize)
                                         .testTag("chat_call_button")
                                 ) {
-                                    Icon(Icons.Outlined.Call, contentDescription = "Voice call", tint = iconTint, modifier = Modifier.size(21.dp))
+                                    Icon(Icons.Outlined.Call, contentDescription = "Voice call", tint = iconTint, modifier = Modifier.size(topBarActionIconSize))
                                 }
                                 IconButton(
                                     onClick = { viewModel.setSearching(true) },
                                     modifier = Modifier
-                                        .size(32.dp)
+                                        .size(topBarActionBtnSize)
                                         .testTag("chat_search_button")
                                 ) {
-                                    Icon(Icons.Default.Search, contentDescription = "Search messages", tint = iconTint, modifier = Modifier.size(21.dp))
+                                    Icon(Icons.Default.Search, contentDescription = "Search messages", tint = iconTint, modifier = Modifier.size(topBarActionIconSize))
                                 }
                                 IconButton(
                                     onClick = onNavigateToGallery,
                                     modifier = Modifier
-                                        .size(32.dp)
+                                        .size(topBarActionBtnSize)
                                         .testTag("chat_gallery_button")
                                 ) {
-                                    Icon(Icons.Outlined.PhotoLibrary, contentDescription = "Couple Media Gallery", tint = iconTint, modifier = Modifier.size(21.dp))
+                                    Icon(Icons.Outlined.PhotoLibrary, contentDescription = "Couple Media Gallery", tint = iconTint, modifier = Modifier.size(topBarActionIconSize))
                                 }
                                 IconButton(
                                     onClick = { viewModel.openCheckAfterSheet() },
                                     modifier = Modifier
-                                        .size(32.dp)
+                                        .size(topBarActionBtnSize)
                                         .testTag("chat_check_after_button")
                                 ) {
                                     Icon(
                                         imageVector = if (partnerHasCheckAfter || iHaveCheckAfter) Icons.Filled.HourglassTop else Icons.Outlined.HourglassTop,
                                         contentDescription = "Check After Timer",
                                         tint = if (partnerHasCheckAfter || iHaveCheckAfter) MaterialTheme.colorScheme.primary else iconTint,
-                                        modifier = Modifier.size(21.dp)
+                                        modifier = Modifier.size(topBarActionIconSize)
                                     )
                                 }
 
                                 Box {
                                     IconButton(
                                         onClick = { showChatMenu = true },
-                                        modifier = Modifier.size(32.dp)
+                                        modifier = Modifier.size(topBarActionBtnSize)
                                     ) {
-                                        Icon(Icons.Default.MoreVert, contentDescription = "More options", tint = iconTint, modifier = Modifier.size(22.dp))
+                                        Icon(Icons.Default.MoreVert, contentDescription = "More options", tint = iconTint, modifier = Modifier.size(topBarActionIconSize + 1.dp))
                                     }
                                     DropdownMenu(
                                         expanded = showChatMenu,
@@ -3899,6 +3935,42 @@ private fun ChatPartnerHeaderContent(
 
     val partnerName = presence.displayName.ifBlank { fallbackPartnerName }
 
+    val screenWidthDp = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp
+    val fontScale = androidx.compose.ui.platform.LocalDensity.current.fontScale
+    val isCompact = screenWidthDp < 370 || (screenWidthDp < 390 && fontScale > 1.05f)
+    val isMedium = screenWidthDp in 370..405 && fontScale <= 1.05f
+
+    val avatarSize = when {
+        isCompact -> 35.dp
+        isMedium -> 38.dp
+        else -> 42.dp
+    }
+    val avatarSpacer = when {
+        isCompact -> 3.dp
+        isMedium -> 4.dp
+        else -> 6.dp
+    }
+    val nameFontSize = when {
+        isCompact -> 15.sp
+        isMedium -> 16.sp
+        else -> 17.sp
+    }
+    val nameLineHeight = when {
+        isCompact -> 17.5.sp
+        isMedium -> 18.5.sp
+        else -> 19.5.sp
+    }
+    val statusFontSize = when {
+        isCompact -> 11.sp
+        isMedium -> 11.5.sp
+        else -> 12.sp
+    }
+    val statusLineHeight = when {
+        isCompact -> 13.sp
+        isMedium -> 13.5.sp
+        else -> 14.sp
+    }
+
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier.padding(start = 0.dp, end = 2.dp, top = 2.dp, bottom = 2.dp)
@@ -3913,12 +3985,12 @@ private fun ChatPartnerHeaderContent(
             AvatarView(
                 photoUrl = presence.photoUrl,
                 name = partnerName,
-                size = 38.dp,
+                size = avatarSize,
                 isOnline = isPartnerOnline,
                 showOnlineBadge = !partnerHasCheckAfter
             )
         }
-        Spacer(modifier = Modifier.width(4.dp))
+        Spacer(modifier = Modifier.width(avatarSpacer))
         Column(
             modifier = Modifier.weight(1f, fill = false),
             verticalArrangement = Arrangement.Center
@@ -3929,8 +4001,8 @@ private fun ChatPartnerHeaderContent(
             ) {
                 Text(
                     text = partnerName,
-                    fontSize = 16.5.sp,
-                    lineHeight = 19.sp,
+                    fontSize = nameFontSize,
+                    lineHeight = nameLineHeight,
                     fontWeight = FontWeight.Bold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -4007,8 +4079,8 @@ private fun ChatPartnerHeaderContent(
             val fullStatusText = if (partnerLocalTimeText != null) "$statusText · $partnerLocalTimeText" else statusText
             Text(
                 text = fullStatusText,
-                fontSize = 11.5.sp,
-                lineHeight = 13.5.sp,
+                fontSize = statusFontSize,
+                lineHeight = statusLineHeight,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 color = if (partnerHasCheckAfter) {
