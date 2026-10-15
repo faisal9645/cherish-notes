@@ -540,8 +540,12 @@ object NotificationHelper {
                 activeNoteReminderIds.clear()
             }
 
-            nmCompat.cancelAll()
-            nmSystem?.cancelAll()
+            // Everything else too, except a ringing or ongoing call's: those go when the call does
+            // (opening the app while it rings mustn't silence it)
+            val callIds = setOf(com.example.call.CallNotifications.ID_INCOMING, com.example.call.CallNotifications.ID_ONGOING)
+            nmSystem?.activeNotifications?.forEach { shown ->
+                if (shown.id !in callIds) nmSystem?.cancel(shown.tag, shown.id)
+            }
         } catch (_: Exception) {}
     }
 

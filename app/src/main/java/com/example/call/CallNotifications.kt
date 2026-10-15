@@ -104,25 +104,42 @@ object CallNotifications {
             .setContentText(text)
             .build()
 
+    /** The call whose ringing notification is up, and the call that was quietened (a volume key). */
+    @Volatile private var shownCallId: String? = null
+    @Volatile private var silencedCallId: String? = null
+
     /**
-     * The ringing notification, with Answer and Decline. Full screen only where Android allows it.
-     * With Call Ringing on it rings (the phone's ringtone) until answered, called off or timed out,
-     * masked or not; off, it vibrates once, without the ringtone (the silent channel).
+     * The ringing call's notification, out of its call screen: a call with Answer and Decline (and
+     * the call screen over the lock screen, where Android allows it), or the disguised alert when
+     * Incoming Call Privacy is Discreet. With Call Notification Ringing on it rings, the phone's
+     * ringtone over and over, until it's answered, declined, called off or rings out; off, it
+     * vibrates the same way, without the ringtone. The phone's Silent and Vibrate modes apply.
+     * Already up for this call: it just goes on ringing.
      */
     fun showIncoming(context: Context, invite: CallInvite) {
+        // From here the notification rings, not the call screen
+        CallRinger.stop(context)
+        if (shownCallId == invite.callId && isIncomingShown(context)) return
         createChannels(context)
         val prefs = SecurityPreferences.getInstance(context)
-        val isMasked = prefs.isHideNotificationContent() || prefs.isDisguiseModeEnabled() ||
-            prefs.getCallMaskingStyle().equals("discreet", ignoreCase = true)
-        val isRinging = prefs.isCallRingingEnabled()
-        val channelId = if (isRinging) CHANNEL_INCOMING else CHANNEL_INCOMING_SILENT
+        val isMasked = prefs.getCallMaskingStyle().equals("discreet", ignoreCase = true)
+        // Quietened: still there to answer, without sound or vibration (and no full screen, which
+        // would turn the screen back on)
+        val silenced = silencedCallId == invite.callId
+        val channelId = if (prefs.isCallRingingEnabled() && !silenced) CHANNEL_INCOMING else CHANNEL_INCOMING_SILENT
         val remaining = invite.ringUntil - System.currentTimeMillis()
         val ringFor = if (remaining < 25_000L) 75_000L else remaining.coerceAtMost(90_000L)
         val appIcon = com.example.notifications.NotificationHelper.getAppIconBitmap(context)
+        val answer = PendingIntent.getActivity(
+            context, REQUEST_ANSWER, CallActivity.answerIntent(context, invite), immutableFlags()
+        )
+        val decline = PendingIntent.getBroadcast(
+            context, REQUEST_DECLINE, CallActionReceiver.declineIntent(context, invite), immutableFlags()
+        )
 
-        // When masked/hidden notification content is enabled, display discreet reminder notification
-        // No full-screen takeover and no answer/decline action buttons
-        if (isMasked) {
+        val notification = if (isMasked) {
+            // Discreet: the disguised alert. It opens Notes; the call screen shows once Cherish is
+            // unlocked, and answering from it asks to unlock the phone first
             val maskedTitle = prefs.getMaskedNotificationTitle()
             val maskedText = prefs.getMaskedNotificationText()
             val openNotesIntent = PendingIntent.getActivity(
@@ -136,8 +153,7 @@ object CallNotifications {
                 },
                 immutableFlags()
             )
-
-            val builder = NotificationCompat.Builder(context, channelId)
+            NotificationCompat.Builder(context, channelId)
                 .setSmallIcon(R.drawable.ic_stat_notes)
                 .apply {
                     if (appIcon != null) setLargeIcon(appIcon)
@@ -150,75 +166,102 @@ object CallNotifications {
                 .setPriority(NotificationCompat.PRIORITY_HIGH)
                 .setOngoing(true)
                 .setAutoCancel(false)
-                .setOnlyAlertOnce(!isRinging)
+                .setSilent(silenced)
                 .setTimeoutAfter(ringFor)
                 .setContentIntent(openNotesIntent)
-                .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
-                .setPublicVersion(lockScreenVersion(context, channelId, maskedTitle, maskedText))
-
-            val notification = builder.build()
-            if (isRinging) {
-                // Rings like a call, not one ringtone and then quiet (a closed or locked phone)
-                notification.flags = notification.flags or Notification.FLAG_INSISTENT
-            }
-            notify(context, ID_INCOMING, notification)
-            return
-        }
-
-        val showIdentity = CallPrivacy.showIdentity(context)
-        val title = if (showIdentity) invite.callerName.ifBlank { "Your partner" } else NEUTRAL_INCOMING
-        val text = if (showIdentity) "Incoming voice call" else "Tap to answer"
-        val person = Person.Builder().setName(title).setImportant(true).build()
-        val fullScreen = PendingIntent.getActivity(
-            context, REQUEST_FULL_SCREEN, CallActivity.incomingIntent(context, invite), immutableFlags()
-        )
-        val answer = PendingIntent.getActivity(
-            context, REQUEST_ANSWER, CallActivity.answerIntent(context, invite), immutableFlags()
-        )
-        val decline = PendingIntent.getBroadcast(
-            context, REQUEST_DECLINE, CallActionReceiver.declineIntent(context, invite), immutableFlags()
-        )
-
-        val builder = NotificationCompat.Builder(context, channelId)
-            .setSmallIcon(R.drawable.ic_stat_notes)
-            .apply {
-                if (appIcon != null) setLargeIcon(appIcon)
-            }
-            .setColor(ACCENT)
-            .setContentTitle(title)
-            .setContentText(text)
-            .setCategory(NotificationCompat.CATEGORY_CALL)
-            .setPriority(NotificationCompat.PRIORITY_MAX)
-            .setOngoing(true)
-            .setAutoCancel(false)
-            .setOnlyAlertOnce(!isRinging)
-            .setTimeoutAfter(ringFor)
-            .setContentIntent(fullScreen)
-            .setFullScreenIntent(fullScreen, true)
-            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
-            .setPublicVersion(lockScreenVersion(context, channelId, NEUTRAL_INCOMING, "Tap to answer"))
-            .addPerson(person)
-
-        val notification = try {
-            builder.setStyle(NotificationCompat.CallStyle.forIncomingCall(person, decline, answer)).build()
-        } catch (e: Exception) {
-            Log.w(TAG, "Call style unavailable, using plain actions", e)
-            builder.setStyle(null)
                 .addAction(0, "Decline", decline)
                 .addAction(0, "Answer", answer)
+                .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+                .setPublicVersion(lockScreenVersion(context, channelId, maskedTitle, maskedText))
                 .build()
+        } else {
+            val showIdentity = CallPrivacy.showIdentity(context)
+            val title = if (showIdentity) invite.callerName.ifBlank { "Your partner" } else NEUTRAL_INCOMING
+            val text = if (showIdentity) "Incoming voice call" else "Tap to answer"
+            val person = Person.Builder().setName(title).setImportant(true).build()
+            val fullScreen = PendingIntent.getActivity(
+                context, REQUEST_FULL_SCREEN, CallActivity.incomingIntent(context, invite), immutableFlags()
+            )
+            val builder = NotificationCompat.Builder(context, channelId)
+                .setSmallIcon(R.drawable.ic_stat_notes)
+                .apply {
+                    if (appIcon != null) setLargeIcon(appIcon)
+                }
+                .setColor(ACCENT)
+                .setContentTitle(title)
+                .setContentText(text)
+                .setCategory(NotificationCompat.CATEGORY_CALL)
+                .setPriority(NotificationCompat.PRIORITY_MAX)
+                .setOngoing(true)
+                .setAutoCancel(false)
+                .setSilent(silenced)
+                .setTimeoutAfter(ringFor)
+                .setContentIntent(fullScreen)
+                .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+                .setPublicVersion(lockScreenVersion(context, channelId, NEUTRAL_INCOMING, "Tap to answer"))
+                .addPerson(person)
+            if (silenced) {
+                // Android only takes a call-style notification with a full screen (or a call service)
+                builder.addAction(0, "Decline", decline).addAction(0, "Answer", answer).build()
+            } else {
+                builder.setFullScreenIntent(fullScreen, true)
+                try {
+                    builder.setStyle(NotificationCompat.CallStyle.forIncomingCall(person, decline, answer)).build()
+                } catch (e: Exception) {
+                    Log.w(TAG, "Call style unavailable, using plain actions", e)
+                    builder.setStyle(null)
+                        .addAction(0, "Decline", decline)
+                        .addAction(0, "Answer", answer)
+                        .build()
+                }
+            }
         }
-        if (isRinging) {
-            // Keeps ringing until answered, declined or timed out
+        if (!silenced) {
+            // Rings (or vibrates) like a call until it's answered, declined, called off or rings out
             notification.flags = notification.flags or Notification.FLAG_INSISTENT
         }
+        shownCallId = invite.callId
         notify(context, ID_INCOMING, notification)
     }
 
+    /** The ringing call is on its call screen in Cherish (no notification then): the screen rings. */
+    fun ringOnCallScreen(context: Context, invite: CallInvite) {
+        if (silencedCallId == invite.callId) return
+        CallRinger.start(context, withRingtone = SecurityPreferences.getInstance(context).isCallRingingEnabled())
+    }
+
+    /**
+     * A volume key on the call screen while it rings: quiet, like a phone call. The call stays on
+     * screen and in its notification, silently, until it's answered, declined, called off or rings out.
+     */
+    fun silence(context: Context, invite: CallInvite) {
+        if (silencedCallId == invite.callId) return
+        silencedCallId = invite.callId
+        CallRinger.stop(context)
+        if (shownCallId == invite.callId && isIncomingShown(context)) {
+            // Up again without sound: Android stops a notification's sound when it goes
+            try {
+                NotificationManagerCompat.from(context).cancel(ID_INCOMING)
+            } catch (_: Exception) {}
+            shownCallId = null
+            showIncoming(context, invite)
+        }
+    }
+
+    /** The call stopped ringing here (answered, declined, called off, missed): its ringing stops. */
     fun cancelIncoming(context: Context) {
+        CallRinger.stop(context)
+        shownCallId = null
         try {
             NotificationManagerCompat.from(context).cancel(ID_INCOMING)
         } catch (_: Exception) {}
+    }
+
+    private fun isIncomingShown(context: Context): Boolean = try {
+        (context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager)
+            ?.activeNotifications?.any { it.id == ID_INCOMING } == true
+    } catch (_: Exception) {
+        false
     }
 
     /** Shown while a call is on; it belongs to the call's foreground service. */

@@ -10,6 +10,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.PowerManager
 import android.util.Log
+import android.view.KeyEvent
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -144,21 +145,18 @@ class CallActivity : ComponentActivity() {
 
     override fun onStart() {
         super.onStart()
+        // A ringing call keeps ringing while this screen shows it (its notification stays up)
         CallManager.isCallScreenVisible = true
-        CallNotifications.cancelIncoming(this)
-    }
-
-    override fun onResume() {
-        super.onResume()
-        CallNotifications.cancelIncoming(this)
     }
 
     override fun onStop() {
         super.onStop()
         CallManager.isCallScreenVisible = false
         val current = CallManager.state.value
-        val inv = pendingOrCurrentInvite()
+        val inv = pendingOrCurrentInvite() ?: CallManager.currentInvite
         if (current.phase == CallPhase.INCOMING_RINGING && inv != null) {
+            // Left the call screen while it rings (or the screen went off, also in a pocket): its
+            // notification rings from here
             CallNotifications.showIncoming(this, inv)
         }
         val power = getSystemService(Context.POWER_SERVICE) as? PowerManager
@@ -183,13 +181,27 @@ class CallActivity : ComponentActivity() {
 
     private fun pendingOrCurrentInvite(): CallInvite? = inviteFrom(intent)
 
+    /** A volume key while it rings: quiet, like a phone call (the call stays on screen to answer). */
+    override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
+        val isVolumeKey = keyCode == KeyEvent.KEYCODE_VOLUME_UP || keyCode == KeyEvent.KEYCODE_VOLUME_DOWN
+        if (isVolumeKey && CallManager.state.value.phase == CallPhase.INCOMING_RINGING) {
+            val invite = pendingOrCurrentInvite() ?: CallManager.currentInvite
+            if (invite != null) {
+                CallNotifications.silence(this, invite)
+                return true
+            }
+        }
+        return super.onKeyDown(keyCode, event)
+    }
+
     /**
-     * Answering from the lock screen with hidden notifications asks to unlock first, so nobody
-     * else holding the phone can take the call.
+     * Answering from the lock screen with hidden notifications (or a Discreet incoming call) asks
+     * to unlock first, so nobody else holding the phone can take the call.
      */
     private fun answer(invite: CallInvite?) {
         val keyguard = getSystemService(Context.KEYGUARD_SERVICE) as? KeyguardManager
-        if (keyguard != null && keyguard.isKeyguardLocked && !CallPrivacy.showIdentity(this) &&
+        val discreet = app.securityPreferences.getCallMaskingStyle().equals("discreet", ignoreCase = true)
+        if (keyguard != null && keyguard.isKeyguardLocked && (!CallPrivacy.showIdentity(this) || discreet) &&
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
         ) {
             keyguard.requestDismissKeyguard(this, object : KeyguardManager.KeyguardDismissCallback() {

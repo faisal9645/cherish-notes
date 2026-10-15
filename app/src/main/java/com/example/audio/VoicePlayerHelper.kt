@@ -145,7 +145,9 @@ class VoicePlayerHelper(private val context: Context) {
     private fun resolveSource(messageId: String, audioUriOrUrl: String): String {
         if (!audioUriOrUrl.startsWith("data:") && !audioUriOrUrl.contains(";base64,")) return audioUriOrUrl
         val cacheDir = File(context.cacheDir, "voice_cache").apply { mkdirs() }
-        val cachedFile = File(cacheDir, "voice_" + Math.abs(messageId.hashCode()).toString() + ".m4a")
+        // Named for its kind: newer voice notes are Opus in Ogg, older ones AAC (.m4a)
+        val extension = if (audioUriOrUrl.startsWith("data:audio/ogg")) "ogg" else "m4a"
+        val cachedFile = File(cacheDir, "voice_" + Math.abs(messageId.hashCode()).toString() + "." + extension)
         if (!cachedFile.exists() || cachedFile.length() == 0L) {
             val base64Part = if (audioUriOrUrl.contains(",")) audioUriOrUrl.substringAfter(",") else audioUriOrUrl
             cachedFile.writeBytes(Base64.decode(base64Part, Base64.DEFAULT))

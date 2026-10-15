@@ -6,11 +6,13 @@ import android.graphics.BitmapFactory
 import android.graphics.Matrix
 import android.media.ExifInterface
 import android.net.Uri
+import android.os.Build
 import android.util.Log
 import com.example.data.model.MessageType
 import com.google.firebase.FirebaseApp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.storage.FirebaseStorage
+import com.google.firebase.storage.StorageMetadata
 import android.webkit.MimeTypeMap
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -78,12 +80,15 @@ class MediaRepository(private val context: Context) {
         avatarFile
     }
 
+    /**
+     * A photo ready to send: WebP at quality 70 with its longest side at most 1280 px, about 50-90 KB
+     * instead of a camera's 3-5 MB. Turned upright, and without the camera's EXIF data (where and on
+     * which phone it was taken). A busy photo that still comes out large goes smaller again; one
+     * that's small already is sent as it is.
+     */
     suspend fun compressAndPrepareImage(uri: Uri): File = withContext(Dispatchers.IO) {
         val cacheDir = File(context.cacheDir, "compressed_media").apply { mkdirs() }
-        val compressedFile = File(cacheDir, "img_${UUID.randomUUID()}.jpg")
-
         try {
-            // Check if file is already very compact (< 150KB) to skip redundant lossy re-encoding
             val originalSize = runCatching {
                 context.contentResolver.openFileDescriptor(uri, "r")?.use { it.statSize } ?: 0L
             }.getOrDefault(0L)
@@ -93,70 +98,84 @@ class MediaRepository(private val context: Context) {
                 BitmapFactory.decodeStream(input, null, bounds)
             }
 
-            if (originalSize in 1L..(150L * 1024L) && bounds.outWidth in 1..1440 && bounds.outHeight in 1..1440) {
-                context.contentResolver.openInputStream(uri)?.use { input ->
-                    FileOutputStream(compressedFile).use { output -> input.copyTo(output) }
-                }
-                return@withContext compressedFile
+            // Small already (a sent photo saved back, a screenshot): re-encoding would only lose quality
+            if (originalSize in 1L..PHOTO_TARGET_BYTES && bounds.outWidth in 1..PHOTO_MAX_DIM && bounds.outHeight in 1..PHOTO_MAX_DIM) {
+                return@withContext copyAsIs(uri, cacheDir)
             }
 
-            val bitmap = decodeSampledBitmapFromUri(uri, 1440, 1440)
-            if (bitmap != null) {
-                val rotatedBitmap = rotateBitmapIfRequired(uri, bitmap)
-                val maxDim = 1440
-                val ratio = (rotatedBitmap.width.toFloat() / rotatedBitmap.height.toFloat())
-                val targetWidth: Int
-                val targetHeight: Int
-                if (rotatedBitmap.width > rotatedBitmap.height) {
-                    targetWidth = if (rotatedBitmap.width > maxDim) maxDim else rotatedBitmap.width
-                    targetHeight = (targetWidth / ratio).toInt().coerceAtLeast(1)
-                } else {
-                    targetHeight = if (rotatedBitmap.height > maxDim) maxDim else rotatedBitmap.height
-                    targetWidth = (targetHeight * ratio).toInt().coerceAtLeast(1)
-                }
+            val bitmap = decodeSampledBitmapFromUri(uri, PHOTO_MAX_DIM, PHOTO_MAX_DIM)
+                ?: return@withContext copyAsIs(uri, cacheDir)
+            val upright = rotateBitmapIfRequired(uri, bitmap)
+            val photo = scaledDown(upright, PHOTO_MAX_DIM)
+            val compressedFile = File(cacheDir, "img_${UUID.randomUUID()}.webp")
+            writeWebp(photo, PHOTO_QUALITY, compressedFile)
+            // A busy photo (leaves, a crowd) comes out bigger: lower quality, then a little smaller
+            if (compressedFile.length() > PHOTO_TARGET_BYTES) writeWebp(photo, PHOTO_QUALITY_BUSY, compressedFile)
+            if (compressedFile.length() > PHOTO_LIMIT_BYTES) {
+                val smaller = scaledDown(photo, PHOTO_BUSY_MAX_DIM)
+                writeWebp(smaller, PHOTO_QUALITY_BUSY, compressedFile)
+                if (smaller !== photo) smaller.recycle()
+            }
+            if (photo !== upright) photo.recycle()
+            if (upright !== bitmap) upright.recycle()
+            bitmap.recycle()
+            compressedFile
+        } catch (e: Exception) {
+            Log.e("MediaRepository", "compressAndPrepareImage failed, sending the photo as it is", e)
+            copyAsIs(uri, cacheDir)
+        }
+    }
 
-                val resized = if (targetWidth != rotatedBitmap.width || targetHeight != rotatedBitmap.height) {
-                    Bitmap.createScaledBitmap(rotatedBitmap, targetWidth, targetHeight, true)
-                } else {
-                    rotatedBitmap
-                }
-
-                // High-efficiency JPEG compression: quality 80 delivers crisp clarity while cutting 80-90% file size
-                FileOutputStream(compressedFile).use { out ->
-                    resized.compress(Bitmap.CompressFormat.JPEG, 80, out)
-                    out.flush()
-                }
-
-                // If still above 320KB, compress to 70% quality for optimal cellular upload speed
-                if (compressedFile.length() > 320 * 1024) {
-                    FileOutputStream(compressedFile).use { out ->
-                        resized.compress(Bitmap.CompressFormat.JPEG, 70, out)
-                        out.flush()
-                    }
-                }
-
-                if (resized !== rotatedBitmap && resized !== bitmap) resized.recycle()
-                if (rotatedBitmap !== bitmap) rotatedBitmap.recycle()
-                bitmap.recycle()
-            } else {
-                context.contentResolver.openInputStream(uri)?.use { input ->
-                    FileOutputStream(compressedFile).use { output ->
-                        input.copyTo(output)
-                    }
-                }
+    /** The picked file unchanged, named for its own kind (so a small GIF still moves). */
+    private fun copyAsIs(uri: Uri, dir: File): File {
+        val extension = runCatching { context.contentResolver.getType(uri) }.getOrNull()
+            ?.let { MimeTypeMap.getSingleton().getExtensionFromMimeType(it) }
+            ?: uri.path?.substringAfterLast('.', "")?.takeIf { it.isNotBlank() && it.length <= 5 }
+            ?: "jpg"
+        val target = File(dir, "img_${UUID.randomUUID()}.$extension")
+        try {
+            context.contentResolver.openInputStream(uri)?.use { input ->
+                FileOutputStream(target).use { output -> input.copyTo(output) }
             }
         } catch (e: Exception) {
-            Log.e("MediaRepository", "compressAndPrepareImage failed, copying stream directly", e)
-            try {
-                context.contentResolver.openInputStream(uri)?.use { input ->
-                    FileOutputStream(compressedFile).use { output ->
-                        input.copyTo(output)
-                    }
-                }
-            } catch (_: Exception) {}
+            Log.e("MediaRepository", "Couldn't copy the photo", e)
         }
+        return target
+    }
 
-        compressedFile
+    /** [bitmap] with its longest side at most [maxDim] px (itself when it's that small already). */
+    private fun scaledDown(bitmap: Bitmap, maxDim: Int): Bitmap {
+        val longest = maxOf(bitmap.width, bitmap.height)
+        if (longest <= maxDim) return bitmap
+        val scale = maxDim.toFloat() / longest
+        return Bitmap.createScaledBitmap(
+            bitmap,
+            (bitmap.width * scale).toInt().coerceAtLeast(1),
+            (bitmap.height * scale).toInt().coerceAtLeast(1),
+            true
+        )
+    }
+
+    /** Lossy WebP: about a third smaller than a JPEG that looks the same. */
+    private fun writeWebp(bitmap: Bitmap, quality: Int, file: File) {
+        val format = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            Bitmap.CompressFormat.WEBP_LOSSY
+        } else {
+            @Suppress("DEPRECATION")
+            Bitmap.CompressFormat.WEBP
+        }
+        FileOutputStream(file).use { out ->
+            bitmap.compress(format, quality, out)
+            out.flush()
+        }
+    }
+
+    /** [file]'s type from its extension (webp, ogg, m4a...), or null when that doesn't say. */
+    private fun mimeTypeOf(file: File): String? = when (val extension = file.extension.lowercase()) {
+        "webp" -> "image/webp"
+        "ogg", "opus" -> "audio/ogg"
+        "m4a" -> "audio/mp4"
+        else -> MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension)
     }
 
     /**
@@ -305,7 +324,10 @@ class MediaRepository(private val context: Context) {
                     .child(folder)
                     .child("${System.currentTimeMillis()}_${file.name}")
 
-                val uploadTask = storageRef.putFile(Uri.fromFile(file))
+                // Its type said outright (image/webp, audio/ogg...), so it's served and saved as what it is
+                val uploadTask = mimeTypeOf(file)?.let { mime ->
+                    storageRef.putFile(Uri.fromFile(file), StorageMetadata.Builder().setContentType(mime).build())
+                } ?: storageRef.putFile(Uri.fromFile(file))
 
                 uploadTask.addOnProgressListener { taskSnapshot ->
                     val total = taskSnapshot.totalByteCount
@@ -342,28 +364,25 @@ class MediaRepository(private val context: Context) {
                 // High compression voice note: encode as base64 data URI so recipient receives it directly through Firestore
                 val bytes = file.readBytes()
                 val base64 = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
-                Result.success("data:audio/m4a;base64,$base64")
+                Result.success("data:${mimeTypeOf(file) ?: "audio/mp4"};base64,$base64")
             } else if (type == MessageType.IMAGE && file.exists() && file.length() < 500 * 1024) {
                 // Small compressed image: encode as base64 data URI
                 val bytes = file.readBytes()
                 val base64 = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
-                Result.success("data:image/jpeg;base64,$base64")
+                Result.success("data:${mimeTypeOf(file) ?: "image/jpeg"};base64,$base64")
             } else if (type == MessageType.IMAGE && file.exists()) {
-                // Guaranteed fallback: scale down to 1080px JPEG 65% quality so it is strictly < 400KB and always deliverable
+                // Guaranteed fallback: down to 1080 px WebP so it's small enough to always be delivered
                 val bmp = BitmapFactory.decodeFile(file.absolutePath)
                 if (bmp != null) {
-                    val maxDim = 1080
-                    val scale = maxDim.toFloat() / maxOf(bmp.width, bmp.height).coerceAtLeast(1)
-                    val scaled = if (scale < 1f) {
-                        Bitmap.createScaledBitmap(bmp, (bmp.width * scale).toInt().coerceAtLeast(1), (bmp.height * scale).toInt().coerceAtLeast(1), true)
-                    } else bmp
-                    val stream = java.io.ByteArrayOutputStream()
-                    scaled.compress(Bitmap.CompressFormat.JPEG, 65, stream)
+                    val scaled = scaledDown(bmp, PHOTO_BUSY_MAX_DIM)
+                    val small = File(file.parentFile ?: context.cacheDir, "inline_${file.nameWithoutExtension}.webp")
+                    writeWebp(scaled, PHOTO_QUALITY_BUSY, small)
                     if (scaled !== bmp) scaled.recycle()
                     bmp.recycle()
-                    val bytes = stream.toByteArray()
+                    val bytes = small.readBytes()
+                    small.delete()
                     val base64 = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
-                    Result.success("data:image/jpeg;base64,$base64")
+                    Result.success("data:image/webp;base64,$base64")
                 } else {
                     Result.success(Uri.fromFile(file).toString())
                 }
@@ -374,5 +393,18 @@ class MediaRepository(private val context: Context) {
             Log.e("MediaRepository", "Fallback encoding failed", e)
             Result.success(Uri.fromFile(file).toString())
         }
+    }
+
+    private companion object {
+        /** A sent photo's longest side, in px: plenty for a phone screen. */
+        const val PHOTO_MAX_DIM = 1280
+        const val PHOTO_QUALITY = 70
+        /** What most photos come to (about 50-90 KB); a photo this small already is sent as it is. */
+        const val PHOTO_TARGET_BYTES = 100L * 1024L
+        /** A busy photo above [PHOTO_TARGET_BYTES] is written again at this quality... */
+        const val PHOTO_QUALITY_BUSY = 60
+        /** ...and if it's still above this, its longest side goes down to [PHOTO_BUSY_MAX_DIM]. */
+        const val PHOTO_LIMIT_BYTES = 140L * 1024L
+        const val PHOTO_BUSY_MAX_DIM = 1080
     }
 }

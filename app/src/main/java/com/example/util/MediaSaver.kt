@@ -9,6 +9,7 @@ import android.os.Environment
 import android.provider.MediaStore
 import android.util.Base64
 import android.util.Log
+import android.webkit.MimeTypeMap
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayInputStream
@@ -83,14 +84,23 @@ object MediaSaver {
                 } ?: fallbackMime
                 connection.inputStream to mime
             }
-            url.startsWith("content://") -> (context.contentResolver.openInputStream(Uri.parse(url)) ?: return null) to fallbackMime
+            url.startsWith("content://") -> {
+                val uri = Uri.parse(url)
+                val mime = galleryType(runCatching { context.contentResolver.getType(uri) }.getOrNull()) ?: fallbackMime
+                (context.contentResolver.openInputStream(uri) ?: return null) to mime
+            }
             else -> {
                 val file = File(url.removePrefix("file://"))
                 if (!file.exists()) return null
-                FileInputStream(file) to fallbackMime
+                // A sent photo here is WebP now, saved as such
+                val mime = galleryType(MimeTypeMap.getSingleton().getMimeTypeFromExtension(file.extension.lowercase())) ?: fallbackMime
+                FileInputStream(file) to mime
             }
         }
     }
+
+    /** [mime] when the gallery takes it (a photo or a video), else null. */
+    private fun galleryType(mime: String?): String? = mime?.takeIf { it.startsWith("image/") || it.startsWith("video/") }
 
     /** Android 10+: written as "pending", so the gallery only shows it once it's complete. */
     private fun saveWithMediaStore(context: Context, source: InputStream, name: String, mime: String, isVideo: Boolean): Boolean {

@@ -325,7 +325,7 @@ object CallManager {
         if (!markSeen(invite.callId)) return@post
         val secPrefs = app.securityPreferences
         val isForegroundAndUndisguised = CherishApplication.isAppInForeground && !secPrefs.isDisguiseActive()
-        ringFor(invite, me, showNotification = !isForegroundAndUndisguised)
+        ringFor(invite, me, if (isForegroundAndUndisguised) RingAt.CALL_SCREEN else RingAt.NOTIFICATION)
         // When inside Cherish app (in foreground and disguise not actively displayed), launch the call screen immediately
         if (isForegroundAndUndisguised) {
             try {
@@ -335,18 +335,25 @@ object CallManager {
                 app.startActivity(intent)
             } catch (e: Exception) {
                 Log.w(TAG, "Couldn't open the call screen", e)
+                // Rings in its notification instead, with Answer and Decline
+                CallNotifications.showIncoming(app, invite)
             }
         }
     }
 
-    private fun ringFor(invite: CallInvite, me: String, showNotification: Boolean = true) {
+    /** Where a ringing call rings: its notification, its call screen in Cherish, or nowhere (answered now). */
+    private enum class RingAt { NOTIFICATION, CALL_SCREEN, NOWHERE }
+
+    private fun ringFor(invite: CallInvite, me: String, ringAt: RingAt = RingAt.NOTIFICATION) {
         beginCall(invite.coupleId, me, invite.callId, outgoing = false)
         this.invite = invite
         callerNameHint = invite.callerName
         _state.value = freshState(invite.callId, outgoing = false).copy(phase = CallPhase.INCOMING_RINGING)
         // Rings first: on a phone its push just woke, starting the call engine takes a moment
-        if (showNotification) {
-            CallNotifications.showIncoming(app, invite)
+        when (ringAt) {
+            RingAt.NOTIFICATION -> CallNotifications.showIncoming(app, invite)
+            RingAt.CALL_SCREEN -> CallNotifications.ringOnCallScreen(app, invite)
+            RingAt.NOWHERE -> Unit
         }
         // Pre-warm the native Agora engine while it rings, to reduce answer-to-audio connection
         // delay to <200ms
@@ -374,7 +381,7 @@ object CallManager {
             val me = app.authRepository.getCurrentUserId()
             if (me.isBlank() || fromNotification.coupleId != currentCoupleId()) return@post
             seenCalls += fromNotification.callId
-            ringFor(fromNotification, me)
+            ringFor(fromNotification, me, RingAt.NOWHERE)
         }
         if (_state.value.phase != CallPhase.INCOMING_RINGING) return@post
         val couple = coupleId ?: return@post

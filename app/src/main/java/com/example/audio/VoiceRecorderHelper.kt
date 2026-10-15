@@ -30,24 +30,11 @@ class VoiceRecorderHelper(private val context: Context) {
             cancelRecording() // Clean up any previous session
 
             val audioDir = File(context.cacheDir, "voice_notes").apply { mkdirs() }
-            val outputFile = File(audioDir, "voice_${System.currentTimeMillis()}.m4a")
-            currentOutputFile = outputFile
-
-            recorder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                MediaRecorder(context)
-            } else {
-                @Suppress("DEPRECATION")
-                MediaRecorder()
-            }.apply {
-                setAudioSource(MediaRecorder.AudioSource.MIC)
-                setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
-                setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
-                setAudioEncodingBitRate(64000)
-                setAudioSamplingRate(44100)
-                setOutputFile(outputFile.absolutePath)
-                prepare()
-                start()
+            val outputFile = startRecorder(audioDir) ?: run {
+                cancelRecording()
+                return null
             }
+            currentOutputFile = outputFile
 
             startTimeMillis = System.currentTimeMillis()
             _isRecording.value = true
@@ -86,6 +73,53 @@ class VoiceRecorderHelper(private val context: Context) {
             cancelRecording()
             return null
         }
+    }
+
+    /**
+     * Starts recording into a new file in [dir]: Opus (the codec made for speech) in Ogg at 12 kbps,
+     * about 90 KB a minute, where the phone can record it (Android 10+); AAC at 32 kbps otherwise,
+     * or if Opus won't start. Mono at a voice's own sample rate either way. The file, or null.
+     */
+    private fun startRecorder(dir: File): File? {
+        val tryOpus = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q
+        for (opus in listOf(tryOpus, false).distinct()) {
+            val file = File(dir, "voice_${System.currentTimeMillis()}.${if (opus) "ogg" else "m4a"}")
+            val mediaRecorder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                MediaRecorder(context)
+            } else {
+                @Suppress("DEPRECATION")
+                MediaRecorder()
+            }
+            try {
+                mediaRecorder.apply {
+                    setAudioSource(MediaRecorder.AudioSource.MIC)
+                    if (opus && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                        setOutputFormat(MediaRecorder.OutputFormat.OGG)
+                        setAudioEncoder(MediaRecorder.AudioEncoder.OPUS)
+                        setAudioEncodingBitRate(OPUS_BIT_RATE)
+                        setAudioSamplingRate(OPUS_SAMPLE_RATE)
+                    } else {
+                        setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
+                        setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
+                        setAudioEncodingBitRate(AAC_BIT_RATE)
+                        setAudioSamplingRate(AAC_SAMPLE_RATE)
+                    }
+                    setAudioChannels(1)
+                    setOutputFile(file.absolutePath)
+                    prepare()
+                    start()
+                }
+                recorder = mediaRecorder
+                return file
+            } catch (e: Exception) {
+                Log.w("VoiceRecorderHelper", "Couldn't start ${if (opus) "Opus" else "AAC"} recording", e)
+                try {
+                    mediaRecorder.release()
+                } catch (_: Exception) {}
+                file.delete()
+            }
+        }
+        return null
     }
 
     fun stopRecording(): Pair<File?, Int> {
@@ -152,5 +186,13 @@ class VoiceRecorderHelper(private val context: Context) {
     fun safeStopForBackground(): Pair<File?, Int> {
         if (!_isRecording.value) return Pair(null, 0)
         return stopRecording()
+    }
+
+    private companion object {
+        /** Opus at 12 kbps is clear wideband speech: about 90 KB a minute (AAC at 64 kbps was 480 KB). */
+        const val OPUS_BIT_RATE = 12_000
+        const val OPUS_SAMPLE_RATE = 16_000
+        const val AAC_BIT_RATE = 32_000
+        const val AAC_SAMPLE_RATE = 22_050
     }
 }
