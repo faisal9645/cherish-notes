@@ -261,8 +261,8 @@ def release_notes(version_name: str, version_code: int, custom_notes: str = None
         return f"Notes v{version_name} (Build {version_code}):\n{custom_notes}"
     return (
         f"Notes v{version_name} (Build {version_code}):\n"
-        "\u2022 Much smaller download\n"
-        "\u2022 Faster to update\n"
+        "\u2022 Notifications arrive when the app is closed\n"
+        "\u2022 Notifications follow your notification settings\n"
         "\u2022 Bug fixes and improvements"
     )
 
