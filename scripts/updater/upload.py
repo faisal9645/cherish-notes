@@ -220,15 +220,9 @@ def upload_single_asset(token: str, repo: str, release: dict, apk_path: str, ass
 
 
 def upload_apk_to_release(token: str, repo: str, release: dict, apk_path: str, version_code: int) -> str:
-    tag = release.get("tag_name", f"v{version_code}")
-    primary_asset = f"app_update_{version_code}.apk"
-    primary_url = upload_single_asset(token, repo, release, apk_path, primary_asset)
-    for alt_name in [f"cherish-notes-{tag}.apk", "app-release.apk"]:
-        try:
-            upload_single_asset(token, repo, release, apk_path, alt_name)
-        except Exception as e:
-            print(f"Warning: Non-fatal error uploading alternate asset {alt_name}: {e}")
-    return primary_url
+    # One copy only (the user's choice): the app finds this name on every path (version.json's
+    # downloadUrl, the release's only .apk, and the first name it tries when downloading)
+    return upload_single_asset(token, repo, release, apk_path, f"app_update_{version_code}.apk")
 
 
 def sync_git_and_push(project_root: str, token: str, version_code: int, version_name: str):
