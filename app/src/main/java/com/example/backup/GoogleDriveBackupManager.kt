@@ -28,10 +28,10 @@ import okio.buffer
 import okio.sink
 import okio.source
 
-/** Quiet time after the last change before the automatic backup runs. */
-private const val BACKUP_QUIET_PERIOD_MS = 5_000L
+/** Weekly auto-backup interval: 7 days. Automatic backups only run once a week. */
+private const val WEEKLY_BACKUP_INTERVAL_MS = 7L * 24 * 60 * 60 * 1000L
 
-/** The first backup after opening the app waits this long, so the chat loads without competition. */
+/** The first backup check after opening the app waits this long, so the chat loads without competition. */
 private const val STARTUP_BACKUP_DELAY_MS = 8_000L
 
 @JsonClass(generateAdapter = true)
@@ -73,7 +73,7 @@ data class BackupState(
     val lastBackupTimestamp: Long = 0L,
     val backupSizeBytes: Long = 0L,
     val totalItemsBackedUp: Int = 0,
-    val statusMessage: String = "Ready to backup or restore"
+    val statusMessage: String = "Ready to backup or restore (Weekly & on-demand)"
 )
 
 @OptIn(FlowPreview::class)
@@ -91,73 +91,53 @@ class GoogleDriveBackupManager(
 
     private val _backupState = MutableStateFlow(
         BackupState(
-            lastBackupDate = prefs.getString("last_backup_date", "Today, 12:45 PM") ?: "Today, 12:45 PM",
-            lastBackupTimestamp = prefs.getLong("last_backup_timestamp", System.currentTimeMillis() - 3600000),
-            backupSizeBytes = prefs.getLong("last_backup_size", 142800L),
-            totalItemsBackedUp = prefs.getInt("last_backup_items", 48)
+            lastBackupDate = prefs.getString("last_backup_date", "Never") ?: "Never",
+            lastBackupTimestamp = prefs.getLong("last_backup_timestamp", 0L),
+            backupSizeBytes = prefs.getLong("last_backup_size", 0L),
+            totalItemsBackedUp = prefs.getInt("last_backup_items", 0),
+            statusMessage = "Ready to backup or restore (Weekly schedule & on-demand)"
         )
     )
     val backupState: StateFlow<BackupState> = _backupState.asStateFlow()
 
     private val autoBackupScope = kotlinx.coroutines.CoroutineScope(Dispatchers.IO + kotlinx.coroutines.SupervisorJob())
 
-    // Change notifications. A backup runs once things have been quiet for a moment, so a burst of
-    // updates (new messages, read ticks, reactions) costs one backup instead of one each.
-    private val backupRequests = Channel<Unit>(Channel.CONFLATED)
-    @Volatile private var hasUnsavedChanges = false
     // One backup at a time, so two writers never interleave in the same file
     private val backupMutex = Mutex()
 
     private val started = java.util.concurrent.atomic.AtomicBoolean(false)
 
     /**
-     * Continuous auto-backup: a backup shortly after the app is opened, then one after each burst of
-     * changes to chat messages, memories, shared notes, dates or the bucket list.
-     *
-     * Started by the app once its first screen is up (not when the process starts), so opening the
-     * app is never slowed down by packaging a backup, and a phone woken in the background by a
-     * push or an alarm doesn't run one. Calling it again does nothing.
+     * Startup check: Runs an automatic backup ONLY if at least 1 week (7 days) has passed
+     * since the last backup. No continuous or background auto-backups on chat/feature events.
      */
     fun start() {
         if (!started.compareAndSet(false, true)) return
         autoBackupScope.launch {
             kotlinx.coroutines.delay(STARTUP_BACKUP_DELAY_MS) // Let the chat load first
-            performBackupToGoogleDrive()
-
-            launch {
-                kotlinx.coroutines.flow.combine(
-                    chatRepository.messagesFlow,
-                    coupleFeaturesRepository.memoriesFlow,
-                    coupleFeaturesRepository.notesFlow,
-                    coupleFeaturesRepository.datesFlow,
-                    coupleFeaturesRepository.bucketListFlow
-                ) { m, mem, n, d, b ->
-                    m.size + mem.size + n.size + d.size + b.size
-                }
-                    .drop(1) // The startup backup above already covers the current data
-                    .collect { totalItems -> if (totalItems > 0) requestBackup() }
+            val lastBackupTimestamp = prefs.getLong("last_backup_timestamp", 0L)
+            val now = System.currentTimeMillis()
+            // Only auto-backup if at least 7 days have passed since the previous backup
+            if (lastBackupTimestamp > 0L && (now - lastBackupTimestamp >= WEEKLY_BACKUP_INTERVAL_MS)) {
+                Log.d("GoogleDriveBackup", "Weekly backup threshold (7+ days) elapsed. Performing weekly backup...")
+                performBackupToGoogleDrive()
             }
-
-            backupRequests.receiveAsFlow()
-                .debounce(BACKUP_QUIET_PERIOD_MS)
-                .collect {
-                    if (!_backupState.value.isRestoring) performBackupToGoogleDrive()
-                }
         }
     }
 
-    private fun requestBackup() {
-        hasUnsavedChanges = true
-        backupRequests.trySend(Unit)
+    /**
+     * Automatic backup on every chat message or note change is disabled per user preference.
+     * Backups only run weekly once or when manually triggered via performBackupToGoogleDrive().
+     */
+    fun triggerImmediateAutoBackup() {
+        // Intentionally no-op: user requested only manual backups and weekly once
     }
 
-    /** Backs up shortly after a change; calls close together collapse into a single backup. */
-    fun triggerImmediateAutoBackup() = requestBackup()
-
-    /** Writes a pending backup right away, e.g. when the app goes to the background. */
+    /**
+     * App background flush is disabled to prevent unnecessary I/O on app close.
+     */
     fun flushPendingBackup() {
-        if (!hasUnsavedChanges) return
-        autoBackupScope.launch { performBackupToGoogleDrive() }
+        // Intentionally no-op: user requested only manual backups and weekly once
     }
 
     suspend fun performBackupToGoogleDrive(): Result<String> = withContext(Dispatchers.IO) {
@@ -165,7 +145,6 @@ class GoogleDriveBackupManager(
     }
 
     private fun writeBackup(): Result<String> {
-        hasUnsavedChanges = false
         _backupState.value = _backupState.value.copy(
             isBackingUp = true,
             statusMessage = "Packaging chats, media, gallery, and lifetime memories..."

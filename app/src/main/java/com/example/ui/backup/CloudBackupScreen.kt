@@ -328,7 +328,7 @@ fun CloudBackupScreen(
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
-                                    text = "Auto-Backup is live: changes sync immediately in background",
+                                    text = "Scheduled: Backs up weekly once or whenever you tap 'Backup Everything Now'",
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Medium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant

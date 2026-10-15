@@ -1,9 +1,9 @@
 {
-  "versionCode": 162,
-  "versionName": "1.7.90",
-  "tagName": "v1.7.90-162",
-  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.7.90-162/app_update_162.apk",
-  "assetSize": 28928909,
-  "releaseNotes": "Notes v1.7.90 (Build 162):\n• Smaller download\n• Videos and recordings take less space\n• Notifications arrive more reliably, also on the lock screen\n• Bug fixes and improvements",
-  "releaseDate": "2026-10-15T05:51:49Z"
+  "versionCode": 164,
+  "versionName": "1.7.92",
+  "tagName": "v1.7.92-164",
+  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.7.92-164/app_update_164.apk",
+  "assetSize": 18141530,
+  "releaseNotes": "Notes v1.7.92 (Build 164):\n• Much smaller download\n• Faster to update\n• Bug fixes and improvements",
+  "releaseDate": "2026-10-15T06:35:59Z"
 }
