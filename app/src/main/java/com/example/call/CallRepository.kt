@@ -8,27 +8,20 @@ import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
-import com.google.firebase.functions.FirebaseFunctions
-import com.google.firebase.functions.FirebaseFunctionsException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withTimeoutOrNull
-import java.util.concurrent.TimeUnit
 
 /**
- * Talks to the call backend (Cloud Functions in functions/calls.js) and reads the call records it
- * keeps. Everything that changes a call goes through the backend; this phone only reads.
+ * Talks to the call backend and reads the call records it keeps.
  */
 class CallRepository(private val context: Context) {
 
     private val firestore: FirebaseFirestore? by lazy {
         if (FirebaseApp.getApps(context).isNotEmpty()) FirebaseFirestore.getInstance() else null
-    }
-    private val functions: FirebaseFunctions? by lazy {
-        if (FirebaseApp.getApps(context).isNotEmpty()) FirebaseFunctions.getInstance() else null
     }
     private val auth: FirebaseAuth? by lazy {
         if (FirebaseApp.getApps(context).isNotEmpty()) FirebaseAuth.getInstance() else null
@@ -104,16 +97,6 @@ class CallRepository(private val context: Context) {
 
     /** A fresh token for this phone's own place in the call ([uid]: the caller's or the callee's). */
     fun renewToken(callId: String, uid: Int): CallResponse = directRenewToken(callId, uid)
-
-    suspend fun finalizeClientRecording(coupleId: String, userId: String, callId: String): CallResponse {
-        return try {
-            withTimeoutOrNull(15_000L) {
-                callFunction("callFinalizeClientRecording", coupleId, mapOf("coupleId" to coupleId, "userId" to userId, "callId" to callId))
-            } ?: CallResponse(status = "ok", callId = callId, callerId = null, join = null)
-        } catch (_: Exception) {
-            CallResponse(status = "ok", callId = callId, callerId = null, join = null)
-        }
-    }
 
     private suspend fun directStart(coupleId: String, userId: String, callId: String): CallResponse {
         val fs = firestore ?: throw CallActionException(CallActionException.Kind.SERVICE, "Firestore unavailable")
@@ -364,85 +347,6 @@ class CallRepository(private val context: Context) {
     private fun isSameId(a: String, b: String): Boolean =
         a.removePrefix("user_").trim().equals(b.removePrefix("user_").trim(), ignoreCase = true)
 
-    private suspend fun callFunction(name: String, coupleId: String, data: Map<String, Any>): CallResponse {
-        val fns = functions ?: throw CallActionException(CallActionException.Kind.SERVICE, "Calls aren't available on this phone")
-        try {
-            ensureMember(coupleId)
-        } catch (e: Exception) {
-            Log.w(TAG, "ensureMember pre-check failed: ${e.message}")
-        }
-        var lastError: Exception? = null
-        repeat(2) { attempt ->
-            try {
-                val result = fns.getHttpsCallable(name)
-                    .withTimeout(CALL_TIMEOUT_SECONDS, TimeUnit.SECONDS)
-                    .call(data)
-                    .await()
-                return parseResponse(result.getData() as? Map<*, *>)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: FirebaseFunctionsException) {
-                lastError = e
-                // This sign-in isn't on the couple's member list yet (e.g. a new sign-in): add it once and retry
-                if (e.code == FirebaseFunctionsException.Code.PERMISSION_DENIED && attempt == 0) {
-                    forgetMember(coupleId)
-                    try { ensureMember(coupleId) } catch (_: Exception) {}
-                    return@repeat
-                }
-                throw toActionException(e)
-            } catch (e: Exception) {
-                lastError = e
-                throw CallActionException(CallActionException.Kind.NETWORK, "Couldn't reach the server", e)
-            }
-        }
-        throw CallActionException(CallActionException.Kind.OTHER, "The call couldn't be set up", lastError)
-    }
-
-    private fun toActionException(e: FirebaseFunctionsException): CallActionException {
-        val msg = e.message?.takeIf { it.isNotBlank() } ?: "Call failed"
-        Log.w(TAG, "Call function failed: ${e.code} ($msg)")
-        val kind = when (e.code) {
-            FirebaseFunctionsException.Code.PERMISSION_DENIED,
-            FirebaseFunctionsException.Code.UNAUTHENTICATED -> CallActionException.Kind.NOT_ALLOWED
-            FirebaseFunctionsException.Code.FAILED_PRECONDITION -> {
-                if (msg.contains("partner", ignoreCase = true) || msg.contains("join", ignoreCase = true) || msg.contains("pair", ignoreCase = true)) {
-                    CallActionException.Kind.NOT_PAIRED
-                } else {
-                    CallActionException.Kind.SERVICE
-                }
-            }
-            FirebaseFunctionsException.Code.UNAVAILABLE,
-            FirebaseFunctionsException.Code.DEADLINE_EXCEEDED -> CallActionException.Kind.NETWORK
-            FirebaseFunctionsException.Code.NOT_FOUND,
-            FirebaseFunctionsException.Code.INTERNAL,
-            FirebaseFunctionsException.Code.UNIMPLEMENTED -> CallActionException.Kind.SERVICE
-            else -> CallActionException.Kind.OTHER
-        }
-        return CallActionException(kind, msg, e)
-    }
-
-    private fun parseResponse(map: Map<*, *>?): CallResponse {
-        val status = map?.get("status") as? String ?: ""
-        val token = map?.get("token") as? String
-        val appId = (map?.get("appId") as? String)?.ifBlank { null } ?: AgoraTokenBuilder.DEFAULT_APP_ID
-        val channel = map?.get("channel") as? String
-        val uid = (map?.get("uid") as? Number)?.toInt()
-        val join = if (!token.isNullOrBlank() && !channel.isNullOrBlank() && uid != null) {
-            JoinInfo(
-                appId = appId,
-                channel = channel,
-                uid = uid,
-                token = token,
-                tokenExpiresAt = (map["tokenExpiresAt"] as? Number)?.toLong() ?: 0L
-            )
-        } else null
-        return CallResponse(
-            status = status,
-            callId = map?.get("callId") as? String,
-            callerId = map?.get("callerId") as? String,
-            join = join
-        )
-    }
 
     /** The call's record, live. Nothing is sent while it can't be read (e.g. not yet allowed). */
     fun observeCall(coupleId: String, callId: String): Flow<CallRecord> = callbackFlow {
@@ -575,7 +479,6 @@ class CallRepository(private val context: Context) {
     companion object {
         private const val TAG = "CallRepository"
         private const val PREFS = "cherish_calls"
-        private const val CALL_TIMEOUT_SECONDS = 20L
         private const val SERVER_WAIT_MS = 6_000L
 
         /** A new call id: 20 letters and digits, like a Firestore id (also the call's audio channel). */
