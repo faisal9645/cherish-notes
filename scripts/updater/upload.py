@@ -255,8 +255,8 @@ def release_notes(version_name: str, version_code: int, custom_notes: str = None
         return f"Notes v{version_name} (Build {version_code}):\n{custom_notes}"
     return (
         f"Notes v{version_name} (Build {version_code}):\n"
-        "\u2022 More reliable notifications while the app is closed or the phone is locked\n"
-        "\u2022 Quick scrolling through long lists, with dates as you go\n"
+        "\u2022 Lighter on data and battery: fewer background requests\n"
+        "\u2022 Top bar fits smaller screens better\n"
         "\u2022 Bug fixes and improvements"
     )
 

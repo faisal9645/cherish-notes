@@ -1,9 +1,9 @@
 {
-  "versionCode": 172,
-  "versionName": "1.8.0",
-  "tagName": "v1.8.0-172",
-  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.8.0-172/app_update_172.apk",
-  "assetSize": 18169720,
-  "releaseNotes": "Notes v1.8.0 (Build 172):\n• More reliable notifications while the app is closed or the phone is locked\n• Quick scrolling through long lists, with dates as you go\n• Bug fixes and improvements",
-  "releaseDate": "2026-10-15T16:27:11Z"
+  "versionCode": 173,
+  "versionName": "1.8.1",
+  "tagName": "v1.8.1-173",
+  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.8.1-173/app_update_173.apk",
+  "assetSize": 18171772,
+  "releaseNotes": "Notes v1.8.1 (Build 173):\n• Lighter on data and battery: fewer background requests\n• Top bar fits smaller screens better\n• Bug fixes and improvements",
+  "releaseDate": "2026-10-15T17:00:11Z"
 }
