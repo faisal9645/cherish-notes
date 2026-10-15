@@ -30,7 +30,7 @@ class CherishApplication : Application(), coil.ImageLoaderFactory {
             .diskCache {
                 coil.disk.DiskCache.Builder()
                     .directory(cacheDir.resolve("image_cache"))
-                    .maxSizePercent(0.03)
+                    .maxSizeBytes(40L * 1024 * 1024)
                     .build()
             }
             // A chat photo's address never changes, so it's kept on disk even when the server says
@@ -217,6 +217,11 @@ class CherishApplication : Application(), coil.ImageLoaderFactory {
                         securityPreferences.reDisguise()
                     }
                     leftAppAt = if (leftForReal) android.os.SystemClock.elapsedRealtime() else 0L
+                    if (leftForReal) {
+                        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                            com.example.util.StorageOptimizer.pruneStaleCaches(this@CherishApplication)
+                        }
+                    }
                 } else if (event == androidx.lifecycle.Lifecycle.Event.ON_START) {
                     // App lock: asks for the PIN again once away longer than the chosen time
                     val left = leftAppAt

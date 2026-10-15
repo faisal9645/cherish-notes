@@ -1069,6 +1069,9 @@ class ChatRepository(
         deletedMessageIds.addAll(ids)
         // A deleted call recording's audio leaves this phone too (the server deletes the original)
         com.example.call.CallRecordingPlayer.forget(context, ids)
+        for (id in ids) {
+            com.example.util.StorageOptimizer.deleteMessageMediaCache(context, id)
+        }
 
         // Remove from every in-memory source at once, so the messages leave chat and gallery immediately
         // and can't be merged back from a stale list before Firestore confirms

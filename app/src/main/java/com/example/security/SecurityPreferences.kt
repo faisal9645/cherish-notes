@@ -6,6 +6,7 @@ import android.os.Build
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import java.security.MessageDigest
 
 class SecurityPreferences(private val context: Context) {
@@ -119,6 +120,9 @@ class SecurityPreferences(private val context: Context) {
         try {
             val app = context.applicationContext as? com.example.CherishApplication
             app?.authRepository?.updatePresence()
+            kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                com.example.util.StorageOptimizer.pruneStaleCaches(context)
+            }
         } catch (_: Exception) {}
     }
 
@@ -138,6 +142,9 @@ class SecurityPreferences(private val context: Context) {
         try {
             val app = context.applicationContext as? com.example.CherishApplication
             app?.authRepository?.updatePresence()
+            kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                com.example.util.StorageOptimizer.pruneStaleCaches(context)
+            }
         } catch (_: Exception) {}
     }
 

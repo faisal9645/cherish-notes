@@ -104,7 +104,7 @@ object PartnerPush {
     private suspend fun shouldPushMessage(context: Context, messageId: String): Boolean {
         val app = context as? com.example.CherishApplication ?: return true
         val auth = app.authRepository
-        if (auth.isPartnerNotificationsOff() || isAlertUnseen(auth)) return false
+        if (auth.isPartnerNotificationsOff()) return false
         if (auth.isPartnerInCherish()) {
             val shown = withTimeoutOrNull(LIVE_DELIVERY_WAIT_MS) {
                 app.chatRepository.listenToMessages("").first { messages ->
@@ -113,7 +113,7 @@ object PartnerPush {
             }
             if (shown != null) return false
         }
-        return !isAlertUnseen(auth)
+        return true
     }
 
     /** The partner's phone was alerted about a message and they haven't been in Cherish since. */

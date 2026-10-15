@@ -677,6 +677,14 @@ class ChatViewModel(
                 thumbnailUrls = emptyList()
             )
             _uiState.update { it.copy(replyingToMessage = null) }
+            runCatching {
+                if (preparedFile.parentFile?.name in listOf("compressed_media", "outgoing_media")) {
+                    preparedFile.delete()
+                }
+                if (uri.path?.contains("camera_snaps") == true) {
+                    File(uri.path!!).takeIf { it.exists() }?.delete()
+                }
+            }
             null
         }
     }
@@ -694,38 +702,44 @@ class ChatViewModel(
             val coupleId = chatRepository.getConversationId()
             val uploadedUrls = mutableListOf<String>()
             val notSent = mutableListOf<Uri>()
-            for ((index, uri) in uris.withIndex()) {
-                val url = try {
-                    val preparedFile = mediaRepository.compressAndPrepareImage(uri)
-                    val uploaded = mediaRepository.uploadFile(
-                        file = preparedFile,
-                        type = MessageType.IMAGE,
-                        coupleId = coupleId,
-                        onProgress = { p -> reportUploadProgress((index + p) / uris.size.toFloat()) }
-                    ).getOrNull()
-                    if (uploaded != null && isDeliverable(uploaded)) {
-                        uploaded
-                    } else {
+            val tempFiles = mutableListOf<File>()
+            try {
+                for ((index, uri) in uris.withIndex()) {
+                    val url = try {
+                        val preparedFile = mediaRepository.compressAndPrepareImage(uri)
+                        tempFiles.add(preparedFile)
+                        val uploaded = mediaRepository.uploadFile(
+                            file = preparedFile,
+                            type = MessageType.IMAGE,
+                            coupleId = coupleId,
+                            onProgress = { p -> reportUploadProgress((index + p) / uris.size.toFloat()) }
+                        ).getOrNull()
+                        if (uploaded != null && isDeliverable(uploaded)) {
+                            uploaded
+                        } else {
+                            null
+                        }
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        Log.w("ChatViewModel", "Photo ${index + 1} of ${uris.size} failed", e)
                         null
                     }
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (e: Exception) {
-                    Log.w("ChatViewModel", "Photo ${index + 1} of ${uris.size} failed", e)
-                    null
+                    if (url != null) uploadedUrls.add(url) else notSent.add(uri)
                 }
-                if (url != null) uploadedUrls.add(url) else notSent.add(uri)
-            }
-            if (uploadedUrls.isNotEmpty()) {
-                chatRepository.sendMessage(
-                    text = if (uploadedUrls.size == 1) "Sent a photo" else "Sent ${uploadedUrls.size} photos",
-                    type = MessageType.IMAGE,
-                    mediaUrl = uploadedUrls.firstOrNull(),
-                    mediaUrls = uploadedUrls,
-                    replyTo = _uiState.value.replyingToMessage,
-                    thumbnailUrls = emptyList()
-                )
-                _uiState.update { it.copy(replyingToMessage = null) }
+                if (uploadedUrls.isNotEmpty()) {
+                    chatRepository.sendMessage(
+                        text = if (uploadedUrls.size == 1) "Sent a photo" else "Sent ${uploadedUrls.size} photos",
+                        type = MessageType.IMAGE,
+                        mediaUrl = uploadedUrls.firstOrNull(),
+                        mediaUrls = uploadedUrls,
+                        replyTo = _uiState.value.replyingToMessage,
+                        thumbnailUrls = emptyList()
+                    )
+                    _uiState.update { it.copy(replyingToMessage = null) }
+                }
+            } finally {
+                tempFiles.forEach { runCatching { it.delete() } }
             }
             // Only the photos that didn't go out are offered for retry
             if (notSent.isEmpty()) null else FailedUpload(labelFor(notSent.size)) { sendMultipleImages(notSent) }
