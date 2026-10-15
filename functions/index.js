@@ -7,13 +7,13 @@
  * - heartbeatPartnerOnUpdate: a "thinking of you" heartbeat (a vibration, only if delivered right away).
  * - pushPartner: the sending phone asks for those pushes (and a call's) directly, right after
  *   saving what they're about, so they don't depend on the database triggers alone.
- * - Voice calls and their recordings: see calls.js.
+ * - Voice calls: see calls.js.
  */
 const { onDocumentCreated, onDocumentUpdated } = require("firebase-functions/v2/firestore");
 const logger = require("firebase-functions/logger");
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const { initializeApp } = require("firebase-admin/app");
-const { getFirestore, FieldValue } = require("firebase-admin/firestore");
+const { getFirestore } = require("firebase-admin/firestore");
 const logic = require("./lib/callLogic");
 const { pushToMember, displayNameOf, callInviteData, callCancelData } = require("./lib/push");
 
@@ -263,124 +263,6 @@ exports.pushPartner = onCall(async (request) => {
   }
   if (status !== "sent") logger.info("Partner push not sent", { kind: data.kind, coupleId, status });
   return { status };
-});
-
-/**
- * Verifies the couple secret code on the server before letting a phone join.
- * Adds the phone's auth UID to the couple's memberUids list.
- * Security rules then enforce that ONLY memberUids can read/write that couple's data.
- */
-exports.coupleJoin = onCall(async (request) => {
-  if (!request.auth) {
-    throw new HttpsError("unauthenticated", "You must be signed in.");
-  }
-  const { secretCode, username, partnerName } = request.data || {};
-  const cleanCode = String(secretCode || "").trim().toLowerCase().replace(/[^a-z0-9_]/g, "");
-  const cleanUser = String(username || "").trim().toLowerCase().replace(/[^a-z0-9_]/g, "");
-  const cleanPartner = String(partnerName || "").trim().toLowerCase().replace(/[^a-z0-9_]/g, "");
-
-  if (!cleanCode) throw new HttpsError("invalid-argument", "Secret code is required.");
-  if (!cleanUser) throw new HttpsError("invalid-argument", "Username is required.");
-
-  const coupleId = `couple_${cleanCode}`;
-  const uid = `user_${cleanUser}`;
-  const fallbackPartnerId = cleanPartner ? `user_${cleanPartner}` : "";
-  const authUid = request.auth.uid;
-  const displayName = String(username || "").trim() || cleanUser;
-  const partnerDisplayName = String(partnerName || "").trim() || cleanPartner;
-
-  const db = getFirestore();
-  const coupleRef = db.collection("couples").doc(coupleId);
-  const userRef = db.collection("users").doc(uid);
-
-  return await db.runTransaction(async (tx) => {
-    const coupleSnap = await tx.get(coupleRef);
-    let finalPartnerId = fallbackPartnerId;
-
-    if (!coupleSnap.exists) {
-      // New couple space: register Partner 1
-      const newCouple = {
-        id: coupleId,
-        secretCode: cleanCode,
-        partner1Id: uid,
-        partner1Name: displayName,
-        partner2Name: partnerDisplayName,
-        memberUids: [authUid],
-        createdAt: FieldValue.serverTimestamp(),
-        updatedAt: FieldValue.serverTimestamp(),
-      };
-      tx.set(coupleRef, newCouple);
-    } else {
-      const existing = coupleSnap.data() || {};
-      const p1Id = existing.partner1Id;
-      const p2Id = existing.partner2Id;
-
-      const isP1 = p1Id === uid ||
-        (p1Id && p1Id.replace(/^user_/, "").toLowerCase() === cleanUser) ||
-        (existing.partner1Name && existing.partner1Name.trim().toLowerCase() === cleanUser) ||
-        (existing.partner1Name && existing.partner1Name.trim().toLowerCase() === displayName.toLowerCase());
-
-      const isP2 = p2Id === uid ||
-        (p2Id && p2Id.replace(/^user_/, "").toLowerCase() === cleanUser) ||
-        (existing.partner2Name && existing.partner2Name.trim().toLowerCase() === cleanUser) ||
-        (existing.partner2Name && existing.partner2Name.trim().toLowerCase() === displayName.toLowerCase());
-
-      if (isP1) {
-        // Partner 1 logging back in
-        finalPartnerId = p2Id || fallbackPartnerId;
-      } else if (isP2) {
-        // Partner 2 logging back in
-        finalPartnerId = p1Id || fallbackPartnerId;
-      } else if (!p2Id && !isP1) {
-        // Partner 2 joining for the first time
-        finalPartnerId = p1Id || fallbackPartnerId;
-        tx.update(coupleRef, {
-          partner2Id: uid,
-          partner2Name: displayName,
-          updatedAt: FieldValue.serverTimestamp(),
-        });
-      } else if (!p1Id) {
-        finalPartnerId = p2Id || fallbackPartnerId;
-        tx.update(coupleRef, {
-          partner1Id: uid,
-          partner1Name: displayName,
-          updatedAt: FieldValue.serverTimestamp(),
-        });
-      } else {
-        // Both slots taken by other users
-        throw new HttpsError("permission-denied", "This Couple Secret Code is already in use by two registered partners.");
-      }
-
-      // Add auth UID to memberUids
-      const currentMembers = Array.isArray(existing.memberUids) ? existing.memberUids : [];
-      if (!currentMembers.includes(authUid)) {
-        tx.update(coupleRef, {
-          memberUids: FieldValue.arrayUnion(authUid),
-          updatedAt: FieldValue.serverTimestamp(),
-        });
-      }
-    }
-
-    // Set/update user document with coupleId and authUid
-    tx.set(userRef, {
-      id: uid,
-      displayName: displayName,
-      coupleId: coupleId,
-      partnerId: finalPartnerId,
-      partnerName: partnerDisplayName,
-      authUid: authUid,
-      isOnline: true,
-      lastSeen: Date.now(),
-      updatedAt: FieldValue.serverTimestamp(),
-    }, { merge: true });
-
-    return {
-      success: true,
-      coupleId,
-      uid,
-      partnerId: finalPartnerId,
-    };
-  });
 });
 
 // Voice calls and their recordings

@@ -16,14 +16,14 @@ android {
     applicationId = "com.cherish.notes"
     minSdk = 24
     targetSdk = 35
-    versionCode = 162
-    versionName = "1.7.90"
+    versionCode = 163
+    versionName = "1.7.91"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     resourceConfigurations += listOf("en")
-    // Phones only: the call audio engine's native code is large, and emulator (x86) copies of it
-    // would roughly double the update download
-    ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
+    // 64-bit phones only (both phones, a Galaxy S24 and a Vivo V29 Pro, are): the call audio
+    // engine's native code is large, and a 32-bit copy of it added 8 MB to every update
+    ndk { abiFilters += listOf("arm64-v8a") }
   }
 
   // Native code compressed in the APK (unpacked at install), so updates download less
@@ -127,7 +127,6 @@ dependencies {
   implementation(libs.androidx.room.runtime)
   implementation(libs.coil.compose)
   implementation(libs.coil.video)
-  implementation(libs.converter.moshi)
   implementation(libs.firebase.firestore)
   implementation(libs.firebase.auth)
   implementation(libs.firebase.storage)
@@ -143,15 +142,13 @@ dependencies {
   implementation(libs.androidx.credentials)
   implementation(libs.androidx.credentials.play.services)
   implementation(libs.googleid)
-  implementation(libs.firebase.appcheck.recaptcha)
-  implementation(libs.firebase.appcheck.debug)
   implementation(libs.kotlinx.coroutines.android)
   implementation(libs.kotlinx.coroutines.core)
-  implementation(libs.logging.interceptor)
-  implementation(libs.moshi.kotlin)
-  implementation(libs.okhttp)
+  // JSON for backups and the chat's offline copy: adapters generated at build time (ksp below),
+  // so no kotlin-reflect (about 1,800 classes) in the app. Retrofit, OkHttp's logger and App Check
+  // were never used and are gone (Coil brings its own OkHttp).
+  implementation(libs.moshi)
   // implementation(libs.play.services.location)
-  implementation(libs.retrofit)
   testImplementation(libs.androidx.compose.ui.test.junit4)
   testImplementation(libs.androidx.core)
   testImplementation(libs.androidx.junit)

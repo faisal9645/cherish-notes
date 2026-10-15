@@ -122,7 +122,6 @@ class ChatRepository(
         return try {
             if (!chatCacheFile.exists()) return emptyList()
             val moshi = com.squareup.moshi.Moshi.Builder()
-                .add(com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory())
                 .build()
             val listType = com.squareup.moshi.Types.newParameterizedType(List::class.java, Message::class.java)
             val adapter = moshi.adapter<List<Message>>(listType)
@@ -142,7 +141,6 @@ class ChatRepository(
                 // Keep the most recent 200 messages for instantaneous cold start
                 val recent = if (messages.size > 200) messages.takeLast(200) else messages
                 val moshi = com.squareup.moshi.Moshi.Builder()
-                    .add(com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory())
                     .build()
                 val listType = com.squareup.moshi.Types.newParameterizedType(List::class.java, Message::class.java)
                 val adapter = moshi.adapter<List<Message>>(listType)
@@ -565,7 +563,7 @@ class ChatRepository(
         return try {
             val backupFile = java.io.File(context.filesDir, "gdrive_appdata_cherish_vault_backup.json")
             if (!backupFile.exists()) return emptyList()
-            val moshi = com.squareup.moshi.Moshi.Builder().add(com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory()).build()
+            val moshi = com.squareup.moshi.Moshi.Builder().build()
             val adapter = moshi.adapter(com.example.backup.FullAppBackupPayload::class.java)
             backupFile.source().buffer().use { source ->
                 adapter.fromJson(source)?.messages.orEmpty()

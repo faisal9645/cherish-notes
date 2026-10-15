@@ -8,7 +8,6 @@ import com.example.data.repository.ChatRepository
 import com.example.data.repository.CoupleFeaturesRepository
 import com.squareup.moshi.JsonClass
 import com.squareup.moshi.Moshi
-import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.channels.Channel
@@ -84,11 +83,9 @@ class GoogleDriveBackupManager(
     private val chatRepository: ChatRepository,
     private val coupleFeaturesRepository: CoupleFeaturesRepository
 ) {
-    // The payload classes have generated adapters (@JsonClass); the reflective factory only
-    // covers anything that might lack one
-    private val moshi = Moshi.Builder()
-        .add(KotlinJsonAdapterFactory())
-        .build()
+    // Every payload class has a generated adapter (@JsonClass), so no reflection (and no
+    // kotlin-reflect) is needed; BackupJsonTest fails the build's tests if one goes missing
+    private val moshi = Moshi.Builder().build()
 
     private val prefs = context.getSharedPreferences("cherish_gdrive_backup_prefs", Context.MODE_PRIVATE)
 

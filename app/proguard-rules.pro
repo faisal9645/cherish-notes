@@ -1,5 +1,5 @@
 # ==============================================================================
-# Cherish Notes - R8 / ProGuard Configuration
+# Cherish Notes - R8 configuration
 # ==============================================================================
 
 # Shrinking (unused code and resources out) and renaming only, which is where the size goes.
@@ -11,11 +11,18 @@
 -keepattributes SourceFile,LineNumberTable
 -keepattributes *Annotation*,Signature,InnerClasses,EnclosingMethod
 
-# ------------------------------------------------------------------------------
-# Kotlin & Coroutines
-# ------------------------------------------------------------------------------
+# Libraries (Firebase, Google Play services, Compose, coroutines, Room, Moshi, Coil, Media3, OkHttp)
+# ship their own rules and aren't kept whole here, so R8 leaves out what the app doesn't use.
+# (Keeping them whole made the minified app barely smaller than an unminified one.)
 -dontwarn kotlinx.coroutines.**
--keep class kotlinx.coroutines.** { *; }
+-dontwarn com.google.firebase.**
+-dontwarn com.google.android.gms.**
+-dontwarn androidx.compose.**
+-dontwarn coil.**
+-dontwarn androidx.room.**
+-dontwarn com.squareup.moshi.**
+-dontwarn okhttp3.**
+-dontwarn okio.**
 
 # ------------------------------------------------------------------------------
 # App Data Models & Call Models (Firestore reflection & JSON serialization)
@@ -32,13 +39,6 @@
 -keepclassmembers class com.example.update.** { *; }
 -keep class com.example.security.** { *; }
 -keepclassmembers class com.example.security.** { *; }
-
-# ------------------------------------------------------------------------------
-# Firebase (Firestore, Auth, Storage, Messaging, Functions, AppCheck)
-# ------------------------------------------------------------------------------
--dontwarn com.google.firebase.**
--keep class com.google.firebase.** { *; }
--keepclassmembers class com.google.firebase.** { *; }
 -keepclassmembers class * {
     @com.google.firebase.firestore.PropertyName <fields>;
     @com.google.firebase.firestore.PropertyName <methods>;
@@ -47,6 +47,16 @@
     @com.google.firebase.firestore.IgnoreExtraProperties <fields>;
     @com.google.firebase.firestore.IgnoreExtraProperties <methods>;
 }
+
+# Backups and the chat's offline copy: Moshi finds each generated adapter by its class's name
+# (the rules Moshi generates per class keep both; this is a backstop. BackupJsonTest checks every
+# class has an adapter)
+-keepclassmembers class * {
+    @com.squareup.moshi.Json <fields>;
+    @com.squareup.moshi.Json <methods>;
+}
+-keepnames @com.squareup.moshi.JsonClass class **
+-keep class **JsonAdapter { <init>(...); }
 
 # ------------------------------------------------------------------------------
 # Agora Voice RTC SDK
@@ -61,57 +71,21 @@
 -keepclassmembers class io.agora.base.** { *; }
 
 # ------------------------------------------------------------------------------
-# Google Play Services, Credentials & Biometric
+# Google sign-in (Credential Manager) & Biometric
 # ------------------------------------------------------------------------------
--dontwarn com.google.android.gms.**
--keep class com.google.android.gms.** { *; }
--keep class androidx.credentials.** { *; }
+# Credential Manager loads its Google Play provider by class name
+-if class androidx.credentials.CredentialManager
+-keep class androidx.credentials.playservices.** { *; }
+-keep class com.google.android.libraries.identity.googleid.** { *; }
 -keep class androidx.biometric.** { *; }
 
 # ------------------------------------------------------------------------------
-# Room Database
+# Room Database (the app's own database, entities and DAOs)
 # ------------------------------------------------------------------------------
--dontwarn androidx.room.**
--keep class androidx.room.** { *; }
 -keep class * extends androidx.room.RoomDatabase
 -keepclassmembers class * extends androidx.room.RoomDatabase { *; }
 -keep @androidx.room.Dao interface * { *; }
 -keep @androidx.room.Entity class * { *; }
-
-# ------------------------------------------------------------------------------
-# Moshi (JSON Serialization)
-# ------------------------------------------------------------------------------
--dontwarn com.squareup.moshi.**
--keep class com.squareup.moshi.** { *; }
--keepclassmembers class * {
-    @com.squareup.moshi.JsonClass <fields>;
-    @com.squareup.moshi.JsonClass <methods>;
-    @com.squareup.moshi.Json <fields>;
-    @com.squareup.moshi.Json <methods>;
-}
--keep class *JsonAdapter { *; }
--keep class **$$JsonAdapter { *; }
-
-# ------------------------------------------------------------------------------
-# Retrofit, OkHttp & Okio
-# ------------------------------------------------------------------------------
--dontwarn retrofit2.**
--keep class retrofit2.** { *; }
--keepclasseswithmembers interface * {
-    @retrofit2.http.* <methods>;
-}
--dontwarn okhttp3.**
--keep class okhttp3.** { *; }
--dontwarn okio.**
--keep class okio.** { *; }
-
-# ------------------------------------------------------------------------------
-# Jetpack Compose & Coil
-# ------------------------------------------------------------------------------
-# Both ship their own rules. Keeping all of Compose kept every Material icon (thousands,
-# the app uses a few dozen), so the R8 builds were barely smaller than unminified ones.
--dontwarn androidx.compose.**
--dontwarn coil.**
 
 # ------------------------------------------------------------------------------
 # Android Components & Receivers
