@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.material3.*
@@ -98,6 +99,26 @@ fun CherishNavGraph(
     }
 
     val context = androidx.compose.ui.platform.LocalContext.current
+
+    val currentNavBackStackEntry by navController.currentBackStackEntryAsState()
+    val currentNavRoute = currentNavBackStackEntry?.destination?.route
+
+    // Disconnect Watch Party, Entertainment, and DailyUs listeners on Chat and Notes screens to prevent background Firestore reads
+    LaunchedEffect(currentNavRoute, isDisguiseActive) {
+        val isFeatureScreen = !isDisguiseActive && (
+            currentNavRoute == Screen.Home.route ||
+            currentNavRoute == Screen.SharedGallery.route ||
+            currentNavRoute == Screen.Memories.route ||
+            currentNavRoute == Screen.LifetimeJourney.route ||
+            currentNavRoute == Screen.SharedNotes.route ||
+            currentNavRoute == Screen.ImportantDates.route
+        )
+        if (isFeatureScreen) {
+            app.coupleFeaturesRepository.startFeatureListeners()
+        } else {
+            app.coupleFeaturesRepository.stopFeatureListeners()
+        }
+    }
 
     // Whenever opening secret app, it should go to chat tab only
     LaunchedEffect(isDisguiseActive) {

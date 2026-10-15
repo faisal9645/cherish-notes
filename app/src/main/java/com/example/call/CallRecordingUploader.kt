@@ -208,7 +208,14 @@ internal object CallRecordingUploader {
             }
         }
 
-        // 4. Uploaded for the partner; the call record says once it's ready to play
+        // 4. Uploaded for the partner only if call is not a short test call (<15s) and cloud upload is enabled
+        val shouldUpload = job.durationSec >= 15 && app.securityPreferences.isAutoUploadCallRecordingsEnabled()
+        if (!shouldUpload) {
+            Log.i(TAG, "Call recording preserved locally for zero-billing playback (duration: ${job.durationSec}s, cloud upload: ${app.securityPreferences.isAutoUploadCallRecordingsEnabled()})")
+            finish(app, job, wav, compressed)
+            return
+        }
+
         val uploaded = try {
             val metadata = StorageMetadata.Builder()
                 .setContentType(if (ext == "m4a") "audio/mp4" else "audio/wav")

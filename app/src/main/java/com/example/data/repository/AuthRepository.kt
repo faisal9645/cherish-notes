@@ -1246,13 +1246,14 @@ class AuthRepository(private val context: Context) {
         }
     }
 
+    @Volatile private var lastFirestoreOnlineWritten: Boolean? = null
+
     private fun startHeartbeat() {
         heartbeatJob?.cancel()
         heartbeatJob = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
             while (isAppInForeground) {
                 val isDisguised = securityPrefs.isDisguiseActive.value
                 val shouldBeOnline = isAppInForeground && !isDisguised
-                val uid = getCurrentUserId()
                 if (shouldBeOnline) {
                     _currentUserState.value = _currentUserState.value?.copy(
                         isOnline = true,
@@ -1264,30 +1265,12 @@ class AuthRepository(private val context: Context) {
                             _partnerUserState.value = partner.copy(lastSeen = System.currentTimeMillis())
                         }
                     }
-                    if (uid.isNotBlank()) {
-                        val currentNotif = getComputedNotificationStatus()
-                        val currentSysPerm = try {
-                            androidx.core.app.NotificationManagerCompat.from(context).areNotificationsEnabled()
-                        } catch (_: Exception) { true }
-                        val updates = mapOf<String, Any>(
-                            "isOnline" to true,
-                            "online" to true,
-                            "lastSeen" to System.currentTimeMillis(),
-                            "timeZone" to TimeZone.getDefault().id,
-                            "notificationStatus" to currentNotif,
-                            "notificationPermission" to currentSysPerm
-                        )
-                        if (_currentUserState.value?.notificationStatus != currentNotif || _currentUserState.value?.notificationPermission != currentSysPerm) {
-                            _currentUserState.value = _currentUserState.value?.copy(notificationStatus = currentNotif)?.apply { notificationPermission = currentSysPerm }
-                        }
-                        try {
-                            userDocument(uid)?.set(
-                                updates,
-                                com.google.firebase.firestore.SetOptions.merge()
-                            )
-                        } catch (_: Exception) {}
+                    // Only write to Firestore when isOnline actually changes (entering or leaving the app)
+                    // rather than constantly refreshing lastSeen every few seconds
+                    if (lastFirestoreOnlineWritten != true) {
+                        setOnline(true)
                     }
-                } else if (_currentUserState.value?.isOnline != false) {
+                } else if (lastFirestoreOnlineWritten != false) {
                     // Disguised as Notes: offline is written once, not on every beat
                     setOnline(false)
                 }
@@ -1312,6 +1295,8 @@ class AuthRepository(private val context: Context) {
         )?.apply {
             notificationPermission = currentSysPerm
         }
+        if (lastFirestoreOnlineWritten == online) return
+        lastFirestoreOnlineWritten = online
         try {
             val updates = mutableMapOf<String, Any>(
                 "isOnline" to online,
@@ -1355,19 +1340,9 @@ class AuthRepository(private val context: Context) {
     // Last typing pace written per user (only changes are written)
     @Volatile private var typingPaceWritten: Pair<String, Int>? = null
 
-    /** How fast I'm typing (0 paused, 1 slow, 2 fast), so the partner's typing dots follow it. */
+    /** How fast I'm typing: disabled writing to Firestore to minimize billing costs. */
     fun setTypingPace(pace: Int) {
-        val uid = getCurrentUserId()
-        if (uid.isBlank() || typingPaceWritten == uid to pace) return
-        typingPaceWritten = uid to pace
-        try {
-            userDocument(uid)?.set(
-                mapOf("typingPace" to pace),
-                com.google.firebase.firestore.SetOptions.merge()
-            )
-        } catch (e: Exception) {
-            // ignore
-        }
+        // No-op: only isTyping boolean is written to Firestore to save costs
     }
 
     fun setRecordingAudio(recording: Boolean) {
@@ -1658,22 +1633,7 @@ class AuthRepository(private val context: Context) {
                 }
                 if (!doc.metadata.isFromCache) {
                     val now = System.currentTimeMillis()
-                    val previous = partnerServerLastSeen
-                    val step = if (previous != null && previous.first == doc.id) docLastSeen - previous.second else -1L
-                    val clockDiff = kotlin.math.abs(now - docLastSeen)
-
-                    if (!boolOnline) {
-                        partnerPresenceReceivedAt = 0L
-                    } else if (step in 1L..LIVE_HEARTBEAT_MAX_STEP_MS) {
-                        partnerPresenceReceivedAt = now
-                    } else if (step == 0L && partnerPresenceReceivedAt > 0L && (now - partnerPresenceReceivedAt) <= User.ONLINE_WINDOW_MS) {
-                        partnerPresenceReceivedAt = now
-                    } else if (clockDiff <= 300_000L) {
-                        // Live snapshot received from server with recent lastSeen within 5 minutes (covers new logins & cross-country clock drift)
-                        partnerPresenceReceivedAt = now
-                    } else {
-                        partnerPresenceReceivedAt = 0L
-                    }
+                    partnerPresenceReceivedAt = if (boolOnline) now else 0L
                     partnerServerLastSeen = doc.id to docLastSeen
                 }
                 if (partnerServerLastSeen?.first == doc.id) partner.presenceReceivedAt = partnerPresenceReceivedAt
@@ -1815,7 +1775,8 @@ class AuthRepository(private val context: Context) {
                 userDocument(uid)?.set(update, merge)
                 val altUid = if (uid.startsWith("user_")) uid.removePrefix("user_") else "user_$uid"
                 userDocument(altUid)?.set(update, merge)
-                getCoupleDocRef(_currentUserState.value?.coupleId)?.get()?.addOnSuccessListener { snap ->
+                val targetCoupleId = _currentUserState.value?.coupleId?.trim()?.ifBlank { null } ?: getSavedCoupleId().trim().ifBlank { null }
+                getCoupleDocRef(targetCoupleId)?.get()?.addOnSuccessListener { snap ->
                     if (snap == null || !snap.exists()) return@addOnSuccessListener
                     // Only once the record says which partner this phone is: a guess could put this
                     // address in the partner's slot, and their pushes would come here

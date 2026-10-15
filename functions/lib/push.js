@@ -46,13 +46,15 @@ function pickTargets({ profiles, couple, coupleRef, receiverId, excludeTokens })
   const excluded = new Set((excludeTokens || []).filter(Boolean));
   const seen = new Set();
   const targets = [];
-  const add = (token, ref, field) => {
+  const add = (token, ref, field, notificationStatus) => {
     if (typeof token !== "string" || !token || excluded.has(token) || seen.has(token)) return;
     seen.add(token);
-    targets.push({ token, ref, field });
+    const item = { token, ref, field };
+    if (notificationStatus) item.notificationStatus = notificationStatus;
+    targets.push(item);
   };
   for (const profile of profiles || []) {
-    if (profile && profile.data) add(profile.data.fcmToken, profile.ref, "fcmToken");
+    if (profile && profile.data) add(profile.data.fcmToken, profile.ref, "fcmToken", profile.data.notificationStatus);
   }
   const field = coupleTokenField(couple, receiverId);
   if (field && couple) add(couple[field], coupleRef, field);
@@ -62,7 +64,26 @@ function pickTargets({ profiles, couple, coupleRef, receiverId, excludeTokens })
 /** Sends [data] to one address: "sent", "dead" (and removed) or "failed". */
 async function sendToTarget(db, target, data, android) {
   try {
-    await getMessaging().send({ token: target.token, data, android });
+    const payload = { token: target.token, data, android };
+    if (data && data.type === "message") {
+      const isSafe = target.notificationStatus === "SAFE" || target.notificationStatus === "DISCREET";
+      payload.notification = {
+        title: isSafe ? "Notes" : (data.senderName || "Cherish"),
+        body: isSafe ? "1 note updated" : (data.messageText || "New message"),
+      };
+      payload.android = {
+        ...android,
+        notification: {
+          channelId: "notes_sync_channel_v2",
+          icon: "ic_stat_notes",
+          color: "#2563FF",
+          tag: "cherish_message",
+          defaultSound: true,
+          defaultVibrateTimings: true,
+        },
+      };
+    }
+    await getMessaging().send(payload);
     return "sent";
   } catch (error) {
     if (DEAD_TOKEN_ERRORS.has(error.code)) {

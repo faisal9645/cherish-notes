@@ -99,12 +99,7 @@ data class User(
     var notificationPermission: Boolean = true
 
     fun isEffectivelyOnline(): Boolean {
-        if (!isOnline) return false
-        val now = System.currentTimeMillis()
-        // A live update measured on this phone's clock, so a wrong clock on either phone can't matter
-        if (presenceReceivedAt > 0L) return now - presenceReceivedAt <= ONLINE_WINDOW_MS
-        // Otherwise compare clocks; either way, no heartbeat for a few beats means the app is gone
-        return kotlin.math.abs(now - lastSeen) <= ONLINE_WINDOW_MS
+        return isOnline
     }
 
     fun isEffectivelyTyping(): Boolean {
@@ -126,11 +121,11 @@ data class User(
     }
 
     companion object {
-        /** How often an open app refreshes its "online" heartbeat. */
-        const val PRESENCE_HEARTBEAT_MS = 10_000L
+        /** How often an open app refreshes its "online" heartbeat (throttled to 60s to minimize Firestore billing). */
+        const val PRESENCE_HEARTBEAT_MS = 60_000L
 
-        /** Online grace window for heartbeats: 60s allows network handovers without false offline flickering. */
-        const val ONLINE_WINDOW_MS = 60_000L
+        /** Online grace window for heartbeats: 180s allows network handovers without false offline flickering. */
+        const val ONLINE_WINDOW_MS = 180_000L
     }
 
     fun getEffectivePresenceStatus(): String {

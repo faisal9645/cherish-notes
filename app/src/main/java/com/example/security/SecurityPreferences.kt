@@ -851,6 +851,20 @@ class SecurityPreferences(private val context: Context) {
         prefs.edit().putBoolean(KEY_SEEN_CALL_RECORDING_NOTICE, true).apply()
     }
 
+    // --- CALL RECORDINGS CLOUD UPLOAD (default false to save Firebase Storage and mobile data) ---
+    fun isAutoUploadCallRecordingsEnabled(): Boolean = prefs.getBoolean(KEY_CALL_RECORDINGS_AUTO_UPLOAD, false)
+
+    fun setAutoUploadCallRecordingsEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_CALL_RECORDINGS_AUTO_UPLOAD, enabled).apply()
+    }
+
+    // --- NOTIFICATION ALERT ONCE PER APP SESSION ---
+    fun hasAlertedSinceLastAppOpen(): Boolean = prefs.getBoolean(KEY_HAS_ALERTED_SINCE_LAST_OPEN, false)
+
+    fun setAlertedSinceLastAppOpen(alerted: Boolean) {
+        prefs.edit().putBoolean(KEY_HAS_ALERTED_SINCE_LAST_OPEN, alerted).apply()
+    }
+
     // --- PARTNER CUSTOM TIME ZONE ---
     fun getPartnerCustomTimeZone(): String? = prefs.getString(KEY_PARTNER_CUSTOM_TIMEZONE, null)?.takeIf { it.isNotBlank() }
 
@@ -977,6 +991,8 @@ class SecurityPreferences(private val context: Context) {
         private const val KEY_CALL_MASKING_STYLE = "call_masking_style"
         private const val KEY_CALL_VIBRATE_CONNECTED = "call_vibrate_connected"
         private const val KEY_CALL_VIBRATE_MUTE = "call_vibrate_mute"
+        private const val KEY_CALL_RECORDINGS_AUTO_UPLOAD = "call_recordings_auto_upload"
+        private const val KEY_HAS_ALERTED_SINCE_LAST_OPEN = "has_alerted_since_last_open"
 
         @Volatile
         private var INSTANCE: SecurityPreferences? = null

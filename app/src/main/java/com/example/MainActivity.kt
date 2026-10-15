@@ -429,6 +429,10 @@ class MainActivity : FragmentActivity() {
         // Do NOT re-call setDecorFitsSystemWindows here — already set in onCreate.
         // Re-calling it causes a layout recalculation that shifts content after minimize/reopen.
         app.authRepository.onAppForegroundStateChanged(true)
+        val currentUid = app.authRepository.getCurrentUserId()
+        if (currentUid.isNotBlank()) {
+            app.authRepository.updateFcmToken(currentUid)
+        }
         app.securityPreferences.ignoreNextPause = false
         if (app.securityPreferences.wasInCallRecently()) {
             app.securityPreferences.revealSecretApp()
@@ -539,6 +543,7 @@ class MainActivity : FragmentActivity() {
             app.securityPreferences.ignoreNextPause = false
         }
         app.googleDriveBackupManager.flushPendingBackup()
+        app.coupleFeaturesRepository.stopFeatureListeners()
     }
 
     override fun onDestroy() {

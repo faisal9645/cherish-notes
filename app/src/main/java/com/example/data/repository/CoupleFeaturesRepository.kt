@@ -73,15 +73,63 @@ class CoupleFeaturesRepository(
         }
     }
 
-    fun stopListeners() {
-        coupleDocListener?.remove()
-        coupleDocListener = null
+    fun startFeatureListeners() {
+        val coupleId = authRepository.currentUserState.value?.coupleId?.trim()?.ifBlank { null } ?: return
+        val fs = firestore ?: return
+
+        if (watchPartyListener == null) {
+            watchPartyListener = fs.collection("couples").document(coupleId)
+                .collection("features").document("watchParty")
+                .addSnapshotListener { snapshot, error ->
+                    if (error != null) {
+                        Log.w("CoupleFeaturesRepo", "WatchParty listen error", error)
+                        return@addSnapshotListener
+                    }
+                    watchPartyDocData = snapshot?.data ?: emptyMap()
+                    parseWatchParty()
+                }
+        }
+
+        if (entertainmentListener == null) {
+            entertainmentListener = fs.collection("couples").document(coupleId)
+                .collection("features").document("entertainment")
+                .addSnapshotListener { snapshot, error ->
+                    if (error != null) {
+                        Log.w("CoupleFeaturesRepo", "Entertainment listen error", error)
+                        return@addSnapshotListener
+                    }
+                    entertainmentDocData = snapshot?.data ?: emptyMap()
+                    parseEntertainment()
+                }
+        }
+
+        if (dailyUsListener == null) {
+            dailyUsListener = fs.collection("couples").document(coupleId)
+                .collection("features").document("dailyUs")
+                .addSnapshotListener { snapshot, error ->
+                    if (error != null) {
+                        Log.w("CoupleFeaturesRepo", "DailyUs listen error", error)
+                        return@addSnapshotListener
+                    }
+                    dailyUsDocData = snapshot?.data ?: emptyMap()
+                    parseDailyUs()
+                }
+        }
+    }
+
+    fun stopFeatureListeners() {
         watchPartyListener?.remove()
         watchPartyListener = null
         entertainmentListener?.remove()
         entertainmentListener = null
         dailyUsListener?.remove()
         dailyUsListener = null
+    }
+
+    fun stopListeners() {
+        coupleDocListener?.remove()
+        coupleDocListener = null
+        stopFeatureListeners()
         loveListeningCoupleId = null
         coupleDocData = emptyMap()
         watchPartyDocData = emptyMap()
@@ -1216,7 +1264,7 @@ class CoupleFeaturesRepository(
     private fun dayKey(now: Long = System.currentTimeMillis()): String =
         com.example.security.SecurityPreferences.getInstance(context).logicalDayKey(now)
 
-    /** Listens to the couple's document and split feature records once a couple is known (again if it changes). */
+    /** Listens to the couple's document once a couple is known (feature sub-documents are attached on screen entry). */
     fun ensureLoveUsListener() {
         val coupleId = authRepository.currentUserState.value?.coupleId?.trim()?.ifBlank { null }
         if (coupleId.isNullOrBlank()) {
@@ -1226,9 +1274,6 @@ class CoupleFeaturesRepository(
         if (loveListeningCoupleId == coupleId) return
         val fs = firestore ?: return
         coupleDocListener?.remove()
-        watchPartyListener?.remove()
-        entertainmentListener?.remove()
-        dailyUsListener?.remove()
         loveListeningCoupleId = coupleId
 
         coupleDocListener = fs.collection("couples").document(coupleId).addSnapshotListener { snapshot, error ->
@@ -1236,39 +1281,6 @@ class CoupleFeaturesRepository(
             coupleDocData = snapshot.data ?: emptyMap()
             rebuildLoveUs()
         }
-
-        watchPartyListener = fs.collection("couples").document(coupleId)
-            .collection("features").document("watchParty")
-            .addSnapshotListener { snapshot, error ->
-                if (error != null) {
-                    Log.w("CoupleFeaturesRepo", "WatchParty listen error", error)
-                    return@addSnapshotListener
-                }
-                watchPartyDocData = snapshot?.data ?: emptyMap()
-                parseWatchParty()
-            }
-
-        entertainmentListener = fs.collection("couples").document(coupleId)
-            .collection("features").document("entertainment")
-            .addSnapshotListener { snapshot, error ->
-                if (error != null) {
-                    Log.w("CoupleFeaturesRepo", "Entertainment listen error", error)
-                    return@addSnapshotListener
-                }
-                entertainmentDocData = snapshot?.data ?: emptyMap()
-                parseEntertainment()
-            }
-
-        dailyUsListener = fs.collection("couples").document(coupleId)
-            .collection("features").document("dailyUs")
-            .addSnapshotListener { snapshot, error ->
-                if (error != null) {
-                    Log.w("CoupleFeaturesRepo", "DailyUs listen error", error)
-                    return@addSnapshotListener
-                }
-                dailyUsDocData = snapshot?.data ?: emptyMap()
-                parseDailyUs()
-            }
     }
 
     private fun parseDailyUs(data: Map<String, Any?>? = dailyUsDocData) {

@@ -248,12 +248,13 @@ object NotificationHelper {
             return
         }
 
-        // Phone locked and not in use: it alerts ONE time until Cherish is opened; later messages
-        // only update that notification silently. (Every push still shows something: Android
-        // starts delivering an app's pushes late when they don't.)
-        val isLocked = isDeviceLockedOrSleeping(context)
-        val silentUpdate = isLocked && hasAlertedWhileLocked.get()
-        hasAlertedWhileLocked.set(isLocked)
+        // Alert (sound/vibrate) ONLY ONCE until partner opens the Cherish app.
+        // Subsequent messages while unopened update the notification silently without beeping or vibrating.
+        val hasAlertedSinceLastOpen = prefs.hasAlertedSinceLastAppOpen()
+        val isFirstAlert = !hasAlertedSinceLastOpen
+        if (isFirstAlert) {
+            prefs.setAlertedSinceLastAppOpen(true)
+        }
 
         // Launcher icon badge always shows 1 only, even for multiple notifications
         if (isBadgeEnabled) {
@@ -302,6 +303,9 @@ object NotificationHelper {
 
         val appIcon = getAppIconBitmap(context)
 
+        // Ensure channel is created before building the notification so it never drops
+        createNotificationChannels(context)
+
         val notificationBuilder = NotificationCompat.Builder(context, CHANNEL_MESSAGES_ID)
             .setSmallIcon(R.drawable.ic_stat_notes)
             .apply {
@@ -324,12 +328,20 @@ object NotificationHelper {
             .setContentIntent(pendingIntent)
             .setDeleteIntent(getDismissIntent(context))
             .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setDefaults(NotificationCompat.DEFAULT_ALL)
-            .setSilent(silentUpdate)
             .setCategory(NotificationCompat.CATEGORY_MESSAGE)
             // On the lock screen too (masked there when the phone hides notification content)
             .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
             .setPublicVersion(lockScreenVersion(context, CHANNEL_MESSAGES_ID, prefs))
+
+        if (isFirstAlert) {
+            notificationBuilder.setDefaults(NotificationCompat.DEFAULT_ALL)
+            notificationBuilder.setSilent(false)
+        } else {
+            notificationBuilder.setDefaults(0)
+            notificationBuilder.setSound(null)
+            notificationBuilder.setVibrate(null)
+            notificationBuilder.setSilent(true)
+        }
 
         val notification = notificationBuilder.build()
 
@@ -531,6 +543,7 @@ object NotificationHelper {
      * Clears notifications and resets the counter and badge when the user views the app
      */
     fun clearNotifications(context: Context) {
+        SecurityPreferences.getInstance(context).setAlertedSinceLastAppOpen(false)
         isNotificationAlertTriggered.set(false)
         hasAlertedWhileLocked.set(false)
         pendingUnreadCount.set(0)
