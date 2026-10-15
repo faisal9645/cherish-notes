@@ -1,8 +1,9 @@
 {
-  "versionCode": 171,
-  "versionName": "1.7.99",
-  "tagName": "v1.7.99-171",
-  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.7.99-171/cherish-notes-v1.7.99-171.apk",
-  "assetSize": 18147226,
-  "releaseNotes": "Notes v1.7.99 (Build 171):\n\u2022 Fixed incoming call ringing & continuous ringtone playback when Call Notification Ringing is on\n\u2022 Fixed incoming call pickup & connection from notifications and lock screen\n\u2022 Reliable background call listeners with wakelock support\n\u2022 Stability and performance improvements"
+  "versionCode": 172,
+  "versionName": "1.8.0",
+  "tagName": "v1.8.0-172",
+  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.8.0-172/app_update_172.apk",
+  "assetSize": 18169720,
+  "releaseNotes": "Notes v1.8.0 (Build 172):\n• More reliable notifications while the app is closed or the phone is locked\n• Quick scrolling through long lists, with dates as you go\n• Bug fixes and improvements",
+  "releaseDate": "2026-10-15T16:27:11Z"
 }
