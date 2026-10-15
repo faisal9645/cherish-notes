@@ -7,10 +7,11 @@
  * an address FCM rejects for good is removed from where it was found. The sender's own addresses
  * are never used, so a mixed-up couple slot can't send the push back to the sender's phone.
  *
- * Pushes carry data only: the receiving app shows what its own settings say (off, hidden content,
- * one alert until it's opened). Each push goes out once although the sending phone and a database
- * trigger both ask for it (pushOnce), and one that would show nothing goes at normal priority: FCM
- * holds back an app's high-priority pushes until the phone wakes up when many of them show nothing.
+ * Pushes carry data only: the receiving app shows what its own settings say (hidden content, one
+ * alert until it's opened). None go to a phone whose notifications are off, a message alerts once
+ * until the receiver has been back in Cherish (claimMessageAlert), and a call's push goes out once
+ * although the calling phone and a database trigger both ask for it (pushOnce). FCM holds back an
+ * app's high-priority pushes until the phone wakes up when many of them show nothing.
  */
 const { FieldValue, Timestamp } = require("firebase-admin/firestore");
 const { getMessaging } = require("firebase-admin/messaging");
@@ -112,11 +113,11 @@ async function sendToTarget(db, target, data, android) {
 
 /**
  * Sends [data] (data only: the app builds what's shown) to [receiverId]'s phone (one id, or a list
- * when it's not sure which is current), never to [senderId]'s. With [quietWhenOff], a receiver who
- * switched notifications off gets it at normal priority: their phone shows nothing for it.
+ * when it's not sure which is current), never to [senderId]'s. With [skipWhenOff], nothing goes to
+ * a receiver who switched notifications off ("notifications_off"): their phone would show nothing.
  * Returns "sent", "no_push_token", "dead_push_token" or "push_failed".
  */
-async function pushToMember(db, { receiverId, senderId, coupleId, data, android, quietWhenOff = false }) {
+async function pushToMember(db, { receiverId, senderId, coupleId, data, android, skipWhenOff = false }) {
   const receivers = receiverList(receiverId).filter((id) => !logic.isSameUser(id, senderId));
   if (receivers.length === 0) return "no_push_token";
   const users = db.collection("users");
@@ -137,10 +138,95 @@ async function pushToMember(db, { receiverId, senderId, coupleId, data, android,
     logger.info("Receiver has no push token yet", { receiverIds: receivers, coupleId });
     return "no_push_token";
   }
-  const sendAs = quietWhenOff && notificationsOff(profiles) ? { ...android, priority: "normal" } : android;
-  const outcomes = await Promise.all(targets.map((target) => sendToTarget(db, target, data, sendAs)));
+  if (skipWhenOff && notificationsOff(profiles)) return "notifications_off";
+  const outcomes = await Promise.all(targets.map((target) => sendToTarget(db, target, data, android)));
   if (outcomes.includes("sent")) return "sent";
   return outcomes.every((outcome) => outcome === "dead") ? "dead_push_token" : "push_failed";
+}
+
+// ---------- One message alert until the receiver is back in Cherish ----------
+
+/**
+ * "alert" when a message may alert the receiver's phone, "already_notified" when one did and they
+ * haven't been in Cherish since. [seenMs]: when their phone was last in Cherish (it saves
+ * chatSeenAt while it's open there and when it leaves; 0 from an app before this, which then
+ * alerts for every message as it used to); [notifiedMs]: the last alert.
+ */
+function alertDecision(seenMs, notifiedMs) {
+  if (!seenMs || !notifiedMs) return "alert";
+  return notifiedMs > seenMs ? "already_notified" : "alert";
+}
+
+/** The last message alert to [receiverId]'s phone (only these functions use it). */
+function alertRef(db, coupleId, receiverId) {
+  return db.collection("couples").doc(coupleId).collection("alerts").doc(cleanId(receiverId) || "receiver");
+}
+
+/**
+ * Claims the message alert for whichever of [receiverIds] is the receiver: { status: "claimed",
+ * token, profileRef, ... } with the push address on their own profile (the one their phone keeps
+ * current), or "already_notified" (with notifiedAt), "notifications_off", "no_profile", and
+ * "unchecked" when the record couldn't be read (then it alerts, as a push twice beats none).
+ */
+async function claimMessageAlert(db, coupleId, receiverIds) {
+  const users = db.collection("users");
+  const ids = [...new Set(receiverList(receiverIds).flatMap((id) => [id, alternateId(id)]).filter(Boolean))];
+  try {
+    return await db.runTransaction(async (tx) => {
+      let own = null;
+      let other = null;
+      for (const id of ids) {
+        const snap = await tx.get(users.doc(id));
+        if (!snap.exists) continue;
+        if (snap.get("chatSeenAt")) {
+          own = snap;
+          break;
+        }
+        if (!other) other = snap;
+      }
+      own = own || other;
+      if (!own) return { status: "no_profile" };
+      const profile = own.data();
+      if (notificationsOff([{ data: profile }])) return { status: "notifications_off" };
+      const ref = alertRef(db, coupleId, own.id);
+      const record = await tx.get(ref);
+      const previous = record.exists ? record.get("notifiedAt") : null;
+      if (alertDecision(logic.toMillis(profile.chatSeenAt), logic.toMillis(previous)) === "already_notified") {
+        return { status: "already_notified", notifiedAt: logic.toMillis(previous) };
+      }
+      const at = Timestamp.now();
+      tx.set(ref, { notifiedAt: at, receiverId: own.id });
+      return {
+        status: "claimed",
+        ref,
+        at,
+        previous,
+        profileRef: own.ref,
+        token: typeof profile.fcmToken === "string" ? profile.fcmToken : "",
+        notifiedAt: at.toMillis(),
+      };
+    });
+  } catch (error) {
+    logger.warn("Couldn't check the receiver's last alert", { coupleId, message: String(error && error.message) });
+    return { status: "unchecked" };
+  }
+}
+
+/** Undoes [claim] when its push reached no phone, so the next message alerts. */
+async function releaseMessageAlert(db, claim) {
+  if (!claim || claim.status !== "claimed") return;
+  try {
+    await db.runTransaction(async (tx) => {
+      const record = await tx.get(claim.ref);
+      const current = record.exists ? record.get("notifiedAt") : null;
+      // Unless a later alert went out meanwhile
+      if (!current || typeof current.isEqual !== "function" || !current.isEqual(claim.at)) return;
+      if (claim.previous) tx.set(claim.ref, { notifiedAt: claim.previous }, { merge: true });
+      else tx.delete(claim.ref);
+    });
+  } catch (error) {
+    logger.warn("Couldn't undo a message alert", { message: String(error && error.message) });
+  }
 }
 
 // ---------- Each push once ----------
@@ -237,7 +323,11 @@ module.exports = {
   coupleTokenField,
   pickTargets,
   notificationsOff,
+  sendToTarget,
   pushToMember,
+  alertDecision,
+  claimMessageAlert,
+  releaseMessageAlert,
   pushOnce,
   displayNameOf,
   callInviteData,

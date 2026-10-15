@@ -166,6 +166,9 @@ class CherishApplication : Application(), coil.ImageLoaderFactory {
             coupleFeaturesRepository
         )
 
+        // Messages saved only after the app closed last time: their push is asked for now
+        com.example.notifications.PartnerPush.resumePending(this)
+
         // Voice calls: ring while the app runs, even before (or without) a push
         try {
             com.example.call.CallManager.init(this)

@@ -1,6 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
+const { Timestamp } = require("firebase-admin/firestore");
 const push = require("../lib/push");
 const logic = require("../lib/callLogic");
 
@@ -194,6 +195,99 @@ test("pushOnce lets the other path try when nothing reached the phone, not when 
 
   assert.equal(await push.pushOnce(db, "c1", "message:m2", async () => "seen_in_app"), "seen_in_app");
   assert.equal(await push.pushOnce(db, "c1", "message:m2", async () => "sent"), "already_sent");
+});
+
+test("alertDecision: one alert until the receiver has been in Cherish since; old apps alert every time", () => {
+  assert.equal(push.alertDecision(0, 0), "alert");
+  assert.equal(push.alertDecision(1000, 0), "alert");
+  assert.equal(push.alertDecision(0, 2000), "alert");
+  assert.equal(push.alertDecision(1000, 2000), "already_notified");
+  assert.equal(push.alertDecision(3000, 2000), "alert");
+  assert.equal(push.alertDecision(2000, 2000), "alert");
+});
+
+/** Just enough Firestore for the message alert: documents by path, and transactions. */
+function fakeTxDb(initial = {}, { failTransactions = false } = {}) {
+  const store = new Map(Object.entries(initial));
+  const docRef = (path) => ({
+    path,
+    id: path.split("/").pop(),
+    collection: (name) => ({ doc: (id) => docRef(`${path}/${name}/${id}`) }),
+  });
+  const snapshot = (ref) => {
+    const data = store.get(ref.path);
+    return { exists: data !== undefined, id: ref.id, ref, data: () => data, get: (field) => (data ? data[field] : undefined) };
+  };
+  return {
+    store,
+    collection: (name) => ({ doc: (id) => docRef(`${name}/${id}`) }),
+    runTransaction: async (fn) => {
+      if (failTransactions) throw new Error("unavailable");
+      return fn({
+        get: async (ref) => snapshot(ref),
+        set: (ref, data, options) =>
+          store.set(ref.path, options && options.merge ? { ...(store.get(ref.path) || {}), ...data } : data),
+        delete: (ref) => store.delete(ref.path),
+      });
+    },
+  };
+}
+
+const minuteAgo = () => Timestamp.fromMillis(Date.now() - 60 * 1000);
+
+test("claimMessageAlert alerts once until the receiver has been back in Cherish", async () => {
+  const db = fakeTxDb({ "users/user_ayesha": { fcmToken: "token-ayesha", chatSeenAt: minuteAgo() } });
+  const first = await push.claimMessageAlert(db, "c1", ["user_ayesha"]);
+  assert.equal(first.status, "claimed");
+  assert.equal(first.token, "token-ayesha");
+  assert.equal(first.profileRef.path, "users/user_ayesha");
+  assert.ok(db.store.get("couples/c1/alerts/ayesha").notifiedAt);
+
+  const second = await push.claimMessageAlert(db, "c1", ["user_ayesha"]);
+  assert.equal(second.status, "already_notified");
+  assert.equal(second.notifiedAt, first.notifiedAt);
+
+  // Their phone was in Cherish after that alert
+  db.store.get("users/user_ayesha").chatSeenAt = Timestamp.fromMillis(first.notifiedAt + 1000);
+  assert.equal((await push.claimMessageAlert(db, "c1", ["user_ayesha"])).status, "claimed");
+});
+
+test("claimMessageAlert: none with notifications off, every message for an app from before", async () => {
+  const off = fakeTxDb({ "users/user_ayesha": { fcmToken: "t", chatSeenAt: minuteAgo(), notificationStatus: "CLOSED" } });
+  assert.equal((await push.claimMessageAlert(off, "c1", ["user_ayesha"])).status, "notifications_off");
+  assert.equal(off.store.has("couples/c1/alerts/ayesha"), false);
+
+  const before = fakeTxDb({ "users/user_ayesha": { fcmToken: "t" } });
+  assert.equal((await push.claimMessageAlert(before, "c1", ["user_ayesha"])).status, "claimed");
+  assert.equal((await push.claimMessageAlert(before, "c1", ["user_ayesha"])).status, "claimed");
+});
+
+test("claimMessageAlert uses the profile the receiver's phone keeps, under either id", async () => {
+  const db = fakeTxDb({
+    "users/user_ayesha": { fcmToken: "token-old" },
+    "users/ayesha": { fcmToken: "token-new", chatSeenAt: minuteAgo() },
+  });
+  const claim = await push.claimMessageAlert(db, "c1", ["user_ayesha_old", "user_ayesha"]);
+  assert.equal(claim.status, "claimed");
+  assert.equal(claim.token, "token-new");
+  assert.equal(claim.profileRef.path, "users/ayesha");
+  assert.equal((await push.claimMessageAlert(fakeTxDb(), "c1", ["user_nobody"])).status, "no_profile");
+  assert.equal((await push.claimMessageAlert(fakeTxDb({}, { failTransactions: true }), "c1", ["user_ayesha"])).status, "unchecked");
+});
+
+test("releaseMessageAlert undoes an alert that reached no phone, never a later one", async () => {
+  const db = fakeTxDb({ "users/user_ayesha": { fcmToken: "t", chatSeenAt: minuteAgo() } });
+  const claim = await push.claimMessageAlert(db, "c1", ["user_ayesha"]);
+  await push.releaseMessageAlert(db, claim);
+  assert.equal(db.store.has("couples/c1/alerts/ayesha"), false);
+
+  const again = await push.claimMessageAlert(db, "c1", ["user_ayesha"]);
+  assert.equal(again.status, "claimed");
+  const later = Timestamp.fromMillis(again.notifiedAt + 5000);
+  db.store.set("couples/c1/alerts/ayesha", { notifiedAt: later });
+  await push.releaseMessageAlert(db, again);
+  assert.equal(db.store.get("couples/c1/alerts/ayesha").notifiedAt, later);
+  await push.releaseMessageAlert(db, { status: "already_notified" });
 });
 
 test("pushOnce still sends when the record can't be checked, or there's no couple", async () => {

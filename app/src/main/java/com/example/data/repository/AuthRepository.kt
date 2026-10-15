@@ -467,8 +467,13 @@ class AuthRepository(private val context: Context) {
         ensureFirebaseAuth {
             try {
                 coupleRef.set(mapOf("signal" to signal), com.google.firebase.firestore.SetOptions.merge())
-                    // Felt now even with the app closed on the partner's phone
-                    .addOnSuccessListener { com.example.notifications.PartnerPush.heartbeat(coupleRef.id, signalId) }
+                    // Felt now even with the app closed on the partner's phone. In Cherish it gets
+                    // there by itself, and with notifications off a closed app doesn't play it
+                    .addOnSuccessListener {
+                        if (!isPartnerInCherish() && !isPartnerNotificationsOff()) {
+                            com.example.notifications.PartnerPush.heartbeat(coupleRef.id, signalId)
+                        }
+                    }
                 Log.d("AuthRepository", "Heartbeat signal dispatched for couple $coupleId")
             } catch (e: Exception) {
                 Log.w("AuthRepository", "Failed to dispatch heartbeat signal: ${e.message}")
@@ -496,7 +501,10 @@ class AuthRepository(private val context: Context) {
         ensureFirebaseAuth {
             try {
                 coupleRef.set(mapOf("signalFelt" to feltData), com.google.firebase.firestore.SetOptions.merge())
-                    .addOnSuccessListener { com.example.notifications.PartnerPush.heartbeatFelt(coupleRef.id, signalId) }
+                    // In Cherish, their phone gets it by itself
+                    .addOnSuccessListener {
+                        if (!isPartnerInCherish()) com.example.notifications.PartnerPush.heartbeatFelt(coupleRef.id, signalId)
+                    }
                 Log.d("AuthRepository", "Heartbeat felt acknowledgment dispatched for $signalId")
             } catch (e: Exception) {
                 Log.w("AuthRepository", "Failed to dispatch heartbeat felt: ${e.message}")
@@ -1265,10 +1273,35 @@ class AuthRepository(private val context: Context) {
                             _partnerUserState.value = partner.copy(lastSeen = System.currentTimeMillis())
                         }
                     }
-                    // Only write to Firestore when isOnline actually changes (entering or leaving the app)
-                    // rather than constantly refreshing lastSeen every few seconds
-                    if (lastFirestoreOnlineWritten != true) {
-                        setOnline(true)
+                    // Every beat: the partner's phone shows this one online only while beats keep
+                    // coming (User.ONLINE_WINDOW_MS), so an app that's killed or loses its network
+                    // shows offline within a minute, last seen at its last beat
+                    val uid = getCurrentUserId()
+                    if (uid.isNotBlank()) {
+                        val currentNotif = getComputedNotificationStatus()
+                        val currentSysPerm = try {
+                            androidx.core.app.NotificationManagerCompat.from(context).areNotificationsEnabled()
+                        } catch (_: Exception) { true }
+                        val updates = mapOf<String, Any>(
+                            "isOnline" to true,
+                            "online" to true,
+                            "lastSeen" to System.currentTimeMillis(),
+                            "timeZone" to TimeZone.getDefault().id,
+                            "notificationStatus" to currentNotif,
+                            "notificationPermission" to currentSysPerm,
+                            // In Cherish: the partner's next message may alert this phone once it's left
+                            "chatSeenAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+                        )
+                        if (_currentUserState.value?.notificationStatus != currentNotif || _currentUserState.value?.notificationPermission != currentSysPerm) {
+                            _currentUserState.value = _currentUserState.value?.copy(notificationStatus = currentNotif)?.apply { notificationPermission = currentSysPerm }
+                        }
+                        lastFirestoreOnlineWritten = true
+                        try {
+                            userDocument(uid)?.set(
+                                updates,
+                                com.google.firebase.firestore.SetOptions.merge()
+                            )
+                        } catch (_: Exception) {}
                     }
                 } else if (lastFirestoreOnlineWritten != false) {
                     // Disguised as Notes: offline is written once, not on every beat
@@ -1296,6 +1329,7 @@ class AuthRepository(private val context: Context) {
             notificationPermission = currentSysPerm
         }
         if (lastFirestoreOnlineWritten == online) return
+        val wasInCherish = lastFirestoreOnlineWritten == true
         lastFirestoreOnlineWritten = online
         try {
             val updates = mutableMapOf<String, Any>(
@@ -1306,6 +1340,11 @@ class AuthRepository(private val context: Context) {
                 "notificationStatus" to currentNotif,
                 "notificationPermission" to currentSysPerm
             )
+            // Entering Cherish, or leaving it (opening only Notes doesn't count): the partner's next
+            // message may alert this phone again (one alert until then, see the pushPartner function)
+            if (online || wasInCherish) {
+                updates["chatSeenAt"] = com.google.firebase.firestore.FieldValue.serverTimestamp()
+            }
             if (!online) {
                 updates["typingInChat"] = false
                 updates["recordingAudioInChat"] = false
@@ -1598,6 +1637,18 @@ class AuthRepository(private val context: Context) {
     private var partnerServerLastSeen: Pair<String, Long>? = null
     private var partnerPresenceReceivedAt = 0L
 
+    /** When the partner was last in Cherish (server time, their profile's chatSeenAt); 0 when not known. */
+    @Volatile private var partnerChatSeenAt = 0L
+
+    fun partnerChatSeenAt(): Long = partnerChatSeenAt
+
+    /** The partner is in Cherish right now: their presence beats keep coming. */
+    fun isPartnerInCherish(): Boolean = _partnerUserState.value?.isEffectivelyOnline() == true
+
+    /** The partner switched notifications off (in Cherish or for it in Android): nothing is pushed to them. */
+    fun isPartnerNotificationsOff(): Boolean =
+        _partnerUserState.value?.notificationStatus?.trim()?.uppercase()?.let { it in NOTIFICATIONS_OFF } == true
+
     /**
      * Publishes the partner's document from any of the partner listeners. A heartbeat that arrives
      * while listening (a small step on from the previous one) is timed on this phone's own clock, so
@@ -1633,10 +1684,32 @@ class AuthRepository(private val context: Context) {
                 }
                 if (!doc.metadata.isFromCache) {
                     val now = System.currentTimeMillis()
-                    partnerPresenceReceivedAt = if (boolOnline) now else 0L
+                    val previous = partnerServerLastSeen
+                    val step = if (previous != null && previous.first == doc.id) docLastSeen - previous.second else -1L
+                    val clockDiff = kotlin.math.abs(now - docLastSeen)
+
+                    if (!boolOnline) {
+                        partnerPresenceReceivedAt = 0L
+                    } else if (step in 1L..LIVE_HEARTBEAT_MAX_STEP_MS) {
+                        partnerPresenceReceivedAt = now
+                    } else if (step == 0L && partnerPresenceReceivedAt > 0L && (now - partnerPresenceReceivedAt) <= User.ONLINE_WINDOW_MS) {
+                        partnerPresenceReceivedAt = now
+                    } else if (step != 0L && clockDiff <= 300_000L) {
+                        // A first copy, or a new lastSeen after a while (just came online), within 5
+                        // minutes of this phone's clock (covers new logins & cross-country clock drift).
+                        // Not some other field changing on a profile whose beats stopped: that's no
+                        // sign of life
+                        partnerPresenceReceivedAt = now
+                    } else {
+                        partnerPresenceReceivedAt = 0L
+                    }
                     partnerServerLastSeen = doc.id to docLastSeen
                 }
                 if (partnerServerLastSeen?.first == doc.id) partner.presenceReceivedAt = partnerPresenceReceivedAt
+                // When they were last in Cherish (one message alert until they're back, see PartnerPush)
+                (doc.get("chatSeenAt") as? com.google.firebase.Timestamp)?.toDate()?.time?.let { seenAt ->
+                    if (seenAt > partnerChatSeenAt) partnerChatSeenAt = seenAt
+                }
             }
             _partnerUserState.value = partner
             handlePartnerCheckAfterReminder(partner)
@@ -1821,6 +1894,7 @@ class AuthRepository(private val context: Context) {
         discoverySetupForCoupleId = null
         partnerServerLastSeen = null
         partnerPresenceReceivedAt = 0L
+        partnerChatSeenAt = 0L
 
         // Clear FCM push token from Firestore and delete locally so next login starts clean
         if (oldUid.isNotBlank()) {
@@ -1949,5 +2023,7 @@ class AuthRepository(private val context: Context) {
 
         /** Partner heartbeats ~10 s apart; a bigger jump is a catch-up after a disconnect, not a live beat. */
         const val LIVE_HEARTBEAT_MAX_STEP_MS = 60_000L
+        /** notificationStatus values meaning a phone shows no notifications (the Profile screen's list). */
+        val NOTIFICATIONS_OFF = setOf("CLOSED", "OFF", "MUTED")
     }
 }

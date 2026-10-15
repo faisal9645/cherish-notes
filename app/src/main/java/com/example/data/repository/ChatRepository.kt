@@ -878,11 +878,13 @@ class ChatRepository(
             val fs = firestore
             if (fs != null) {
                 val convRef = fs.collection("conversations").document(convId)
-                convRef.collection("messages").document(messageId).set(newMessage).await()
+                val write = convRef.collection("messages").document(messageId).set(newMessage)
+                // The partner's phone hears about it once it's saved (when it needs to), even if
+                // this screen or the app is gone by then
+                com.example.notifications.PartnerPush.messageSaving(context, convId, messageId, write)
+                write.await()
 
                 acknowledgedSentIds.add(messageId)
-                // The partner's phone hears about it now, even with the app closed there
-                com.example.notifications.PartnerPush.message(convId, messageId)
 
                 // Instantly update local state so single tick appears immediately!
                 _messagesFlow.update { list ->

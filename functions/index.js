@@ -1,32 +1,35 @@
 /**
  * Pushes to the partner's phone, so things arrive even with the app closed. Pushes carry data only
  * (no visible notification of their own); the app decides what to show from that phone's settings
- * (off, hidden content, Notes disguise).
+ * (hidden content, Notes disguise).
  *
- * - notifyPartnerOnMessage: a new message.
- * - heartbeatPartnerOnUpdate: a "thinking of you" heartbeat (a vibration, only if delivered right away).
- * - pushPartner: the sending phone asks for those pushes (and a call's) directly, right after
- *   saving what they're about, so they don't depend on the database triggers alone.
- * - Voice calls: see calls.js.
+ * - pushPartner: the sending phone asks for a push right after saving what it's about (a message,
+ *   a heartbeat or its "felt it", a call ringing or called off), and only when the partner needs
+ *   one: not while they're in Cherish (it shows there by itself), not with their notifications
+ *   off, and for messages one alert until they're back in Cherish (checked here again). Nothing
+ *   runs on its own for messages or heartbeats, so a function only runs when a push is due.
+ * - Voice calls: see calls.js (a trigger rings the called phone too, as a backup).
  */
-const { onDocumentCreated, onDocumentUpdated } = require("firebase-functions/v2/firestore");
 const logger = require("firebase-functions/logger");
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const { initializeApp } = require("firebase-admin/app");
 const { getFirestore } = require("firebase-admin/firestore");
 const logic = require("./lib/callLogic");
-const { pushToMember, pushOnce, displayNameOf, callInviteData, callCancelData } = require("./lib/push");
+const {
+  sendToTarget,
+  pushToMember,
+  claimMessageAlert,
+  releaseMessageAlert,
+  pushOnce,
+  displayNameOf,
+  callInviteData,
+  callCancelData,
+} = require("./lib/push");
 
 initializeApp();
 
 /** A message is pushed when its phone asks only this soon after it was written (a queued one still counts). */
 const MESSAGE_PUSH_WINDOW_MS = 24 * 60 * 60 * 1000;
-/**
- * How long a new message has to reach the other phone's open chat, which marks it delivered,
- * before it's pushed. A push to an open app shows nothing (no notifications inside the app), and
- * FCM holds back an app's pushes until the phone wakes up when many of them show nothing.
- */
-const SEEN_IN_APP_WAIT_MS = 2500;
 /** A message with one of these statuses is on the other phone's screen already. */
 const SEEN_STATUSES = new Set(["DELIVERED", "READ"]);
 /** A heartbeat older than this isn't felt any more, so it isn't pushed. */
@@ -42,8 +45,6 @@ const HEARTBEAT_ANDROID = { priority: "high", ttl: 60 * 1000 };
 const HEARTBEAT_FELT_ANDROID = { priority: "normal", ttl: 60 * 1000 };
 /** Long enough for a phone that's briefly offline to still stop ringing and show the missed call. */
 const CALL_CANCEL_TTL_MS = 5 * 60 * 1000;
-
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /** Same wording as the app's own notifications. */
 function previewText(message) {
@@ -113,113 +114,87 @@ function isCallLogMessage(message) {
   return String(message.type || "").toUpperCase() === "CALL_RECORDING" || Boolean(String(message.callId || "").trim());
 }
 
-/** When the server got a document (ms), or now when it doesn't say. */
-function createdMillis(snap) {
-  return snap && snap.createTime ? snap.createTime.toMillis() : Date.now();
-}
-
 /**
- * Pushes the message [messageId] to whoever it's for, once (the sending phone and the trigger both
- * ask), unless the other phone has it on screen already: its open chat marks a message delivered
- * the moment it arrives. [createdAtMs] is when the server got the message.
+ * Pushes [message] to whoever it's for: their phone alerts once, then not again until they've been
+ * back in Cherish (claimMessageAlert); nothing goes with their notifications off. Answers
+ * { status, notifiedAt }: notifiedAt is when the alert that counts went out (server time), so
+ * the sending phone knows not to ask again until the partner has been in Cherish since.
  */
-async function pushMessage(db, conversationId, messageId, createdAtMs) {
-  return pushOnce(db, conversationId, `message:${messageId}`, async () => {
-    const waitMs = Math.min(SEEN_IN_APP_WAIT_MS, Math.max(0, createdAtMs + SEEN_IN_APP_WAIT_MS - Date.now()));
-    if (waitMs > 0) await sleep(waitMs);
-    const snap = await db.collection("conversations").doc(conversationId).collection("messages").doc(messageId).get();
-    const message = snap.exists ? snap.data() : null;
-    if (!message || isDeletedMessage(message) || isCallLogMessage(message)) return "skipped";
-    if (SEEN_STATUSES.has(String(message.status || "").toUpperCase())) return "seen_in_app";
-    const receiverIds = await receiversOf(db, message, conversationId);
-    if (receiverIds.length === 0) {
-      logger.info("No receiver for message", { conversationId, messageId });
-      return "no_receiver";
-    }
-    // Data only: the app builds the notification itself, as that phone's settings say (off,
-    // masked, one alert until it's opened)
-    return pushToMember(db, {
+async function pushMessage(db, conversationId, messageId, message) {
+  const senderId = String(message.senderId || "");
+  const receiverIds = await receiversOf(db, message, conversationId);
+  if (receiverIds.length === 0) {
+    logger.info("No receiver for message", { conversationId, messageId });
+    return { status: "no_receiver" };
+  }
+  const alert = await claimMessageAlert(db, conversationId, receiverIds);
+  if (alert.status === "already_notified" || alert.status === "notifications_off") return alert;
+
+  // Data only: the app builds the notification itself, as that phone's settings say (masked,
+  // one alert until it's opened)
+  const data = {
+    type: "message",
+    messageId: String(message.id || messageId),
+    conversationId,
+    senderId,
+    senderName: String(message.senderName || ""),
+    messageText: previewText(message),
+  };
+  // Their own profile's address first; every address the couple knows for them only if that fails
+  let status = "no_push_token";
+  if (alert.token) {
+    const target = { token: alert.token, ref: alert.profileRef, field: "fcmToken" };
+    if ((await sendToTarget(db, target, data, MESSAGE_ANDROID)) === "sent") status = "sent";
+  }
+  if (status !== "sent") {
+    status = await pushToMember(db, {
       receiverId: receiverIds,
-      senderId: String(message.senderId || ""),
+      senderId,
       coupleId: conversationId,
-      data: {
-        type: "message",
-        messageId: String(message.id || messageId),
-        conversationId,
-        senderId: String(message.senderId || ""),
-        senderName: String(message.senderName || ""),
-        messageText: previewText(message),
-      },
+      data,
       android: MESSAGE_ANDROID,
-      quietWhenOff: true,
+      skipWhenOff: true,
     });
-  });
+  }
+  if (status !== "sent") await releaseMessageAlert(db, alert);
+  return { status, notifiedAt: status === "sent" ? alert.notifiedAt || 0 : 0 };
 }
 
-/** A heartbeat ([type] "heartbeat") or its "felt it" answer ("heartbeat_felt"), to the other member, once. */
+/** A heartbeat ([type] "heartbeat") or its "felt it" answer ("heartbeat_felt"), to the other member. */
 async function pushSignal(db, coupleId, couple, signal, type) {
   const senderId = String(signal.senderId || "");
   const receiverId = otherMember(couple, senderId);
   if (!receiverId) return "no_receiver";
   const felt = type === "heartbeat_felt";
-  return pushOnce(db, coupleId, `${type}:${signal.id}`, () =>
-    pushToMember(db, {
-      receiverId,
+  return pushToMember(db, {
+    receiverId,
+    senderId,
+    coupleId,
+    data: {
+      type,
+      signalId: String(signal.id),
       senderId,
-      coupleId,
-      data: {
-        type,
-        signalId: String(signal.id),
-        senderId,
-        sentAt: String(logic.toMillis(signal.at) || Date.now()),
-      },
-      android: felt ? HEARTBEAT_FELT_ANDROID : HEARTBEAT_ANDROID,
-      // With notifications off, a closed app doesn't play heartbeats either
-      quietWhenOff: !felt,
-    })
-  );
+      sentAt: String(logic.toMillis(signal.at) || Date.now()),
+    },
+    android: felt ? HEARTBEAT_FELT_ANDROID : HEARTBEAT_ANDROID,
+    // With notifications off, a closed app doesn't play heartbeats ("felt it" still vibrates)
+    skipWhenOff: !felt,
+  });
 }
-
-exports.notifyPartnerOnMessage = onDocumentCreated(
-  "conversations/{conversationId}/messages/{messageId}",
-  async (event) => {
-    const message = event.data && event.data.data();
-    if (!message || isDeletedMessage(message) || isCallLogMessage(message)) return;
-    const { conversationId, messageId } = event.params;
-    await pushMessage(getFirestore(), conversationId, messageId, createdMillis(event.data));
-  }
-);
-
-exports.heartbeatPartnerOnUpdate = onDocumentUpdated("couples/{coupleId}", async (event) => {
-  const before = (event.data && event.data.before.data()) || {};
-  const after = (event.data && event.data.after.data()) || {};
-  const db = getFirestore();
-  const { coupleId } = event.params;
-
-  // 1. A heartbeat, to the partner
-  const signal = after.signal;
-  if (signal && signal.type === "heartbeat" && signal.id && (!before.signal || before.signal.id !== signal.id)) {
-    await pushSignal(db, coupleId, after, signal, "heartbeat");
-  }
-
-  // 2. "Felt it", back to whoever sent the heartbeat
-  const felt = after.signalFelt;
-  if (felt && felt.type === "heartbeat_felt" && felt.id && (!before.signalFelt || before.signalFelt.id !== felt.id)) {
-    await pushSignal(db, coupleId, after, felt, "heartbeat_felt");
-  }
-});
 
 // ---------- Pushes the sending phone asks for ----------
 
 async function pushMessageById(db, conversationId, messageId, nowMs) {
   if (!logic.isSafeId(messageId)) throw new HttpsError("invalid-argument", "Bad message id.");
   const snap = await db.collection("conversations").doc(conversationId).collection("messages").doc(messageId).get();
-  if (!snap.exists) return "not_found";
+  if (!snap.exists) return { status: "not_found" };
   const message = snap.data();
-  if (isDeletedMessage(message) || isCallLogMessage(message)) return "skipped";
+  if (isDeletedMessage(message) || isCallLogMessage(message)) return { status: "skipped" };
+  // The partner's open chat has it already
+  if (SEEN_STATUSES.has(String(message.status || "").toUpperCase())) return { status: "seen_in_app" };
   const writtenAt = Number(message.timestamp || 0);
-  if (!writtenAt || Math.abs(nowMs - writtenAt) > MESSAGE_PUSH_WINDOW_MS) return "stale";
-  return pushMessage(db, conversationId, messageId, createdMillis(snap));
+  if (!writtenAt || Math.abs(nowMs - writtenAt) > MESSAGE_PUSH_WINDOW_MS) return { status: "stale" };
+  return pushMessage(db, conversationId, messageId, message);
 }
 
 async function pushCallInvite(db, coupleId, callId, nowMs) {
@@ -284,11 +259,14 @@ async function pushHeartbeat(db, coupleId, signalId, kind, nowMs) {
   return pushSignal(db, coupleId, couple, signal, kind);
 }
 
+/** Answers that mean nothing went wrong although no push went out. */
+const FINE_WITHOUT_PUSH = new Set(["already_sent", "already_notified", "seen_in_app", "notifications_off"]);
+
 /**
  * The sending phone asks for its partner's push right after saving what it's about: a message,
- * a call ringing or called off, a heartbeat. This direct path doesn't depend on the database
- * triggers; whichever of the two asks first sends the push (pushOnce). Only what's saved is
- * pushed, to the couple member it's for, while it's still current.
+ * a call ringing or called off, a heartbeat or its "felt it" (for a call, the trigger in calls.js
+ * asks too; whichever is first sends it, see pushOnce). Only what's saved is pushed, to the couple
+ * member it's for, while it's still current.
  */
 exports.pushPartner = onCall(async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Sign in first.");
@@ -297,29 +275,28 @@ exports.pushPartner = onCall(async (request) => {
   if (!logic.isSafeId(coupleId)) throw new HttpsError("invalid-argument", "Bad couple id.");
   const db = getFirestore();
   const nowMs = Date.now();
-  let status;
+  let result;
   switch (data.kind) {
     case "message":
-      status = await pushMessageById(db, coupleId, data.messageId, nowMs);
+      result = await pushMessageById(db, coupleId, data.messageId, nowMs);
       break;
     case "call_invite":
-      status = await pushCallInvite(db, coupleId, data.callId, nowMs);
+      result = { status: await pushCallInvite(db, coupleId, data.callId, nowMs) };
       break;
     case "call_cancel":
-      status = await pushCallCancel(db, coupleId, data.callId);
+      result = { status: await pushCallCancel(db, coupleId, data.callId) };
       break;
     case "heartbeat":
     case "heartbeat_felt":
-      status = await pushHeartbeat(db, coupleId, data.signalId, data.kind, nowMs);
+      result = { status: await pushHeartbeat(db, coupleId, data.signalId, data.kind, nowMs) };
       break;
     default:
       throw new HttpsError("invalid-argument", "Unknown push.");
   }
-  // "already_sent" (the trigger sent it) and "seen_in_app" (open on the other phone) are fine
-  if (!["sent", "already_sent", "seen_in_app"].includes(status)) {
-    logger.info("Partner push not sent", { kind: data.kind, coupleId, status });
+  if (result.status !== "sent" && !FINE_WITHOUT_PUSH.has(result.status)) {
+    logger.info("Partner push not sent", { kind: data.kind, coupleId, status: result.status });
   }
-  return { status };
+  return { status: result.status, notifiedAt: result.notifiedAt || 0 };
 });
 
 // Voice calls and their recordings
