@@ -39,6 +39,12 @@ const MESSAGE_ANDROID = { priority: "high", ttl: 24 * 60 * 60 * 1000 };
 /** A heartbeat only counts if it arrives right away. */
 const HEARTBEAT_ANDROID = { priority: "high", ttl: 60 * 1000 };
 /**
+ * A heartbeat to a partner who looks like they're in Cherish: it gets there by itself, and the
+ * push is only for a phone that was just locked (awake, so it doesn't need high priority). An
+ * urgent push that shows nothing makes FCM hold back the app's urgent pushes, calls included.
+ */
+const HEARTBEAT_IN_CHERISH_ANDROID = { priority: "normal", ttl: 60 * 1000 };
+/**
  * "Felt it" mostly reaches a phone that's still open on the heartbeat it just sent (where the app
  * shows it without a notification), so it doesn't wake a sleeping phone.
  */
@@ -160,8 +166,11 @@ async function pushMessage(db, conversationId, messageId, message) {
   return { status, notifiedAt: status === "sent" ? alert.notifiedAt || 0 : 0 };
 }
 
-/** A heartbeat ([type] "heartbeat") or its "felt it" answer ("heartbeat_felt"), to the other member. */
-async function pushSignal(db, coupleId, couple, signal, type) {
+/**
+ * A heartbeat ([type] "heartbeat") or its "felt it" answer ("heartbeat_felt"), to the other member;
+ * [inCherish]: the sending phone sees them in Cherish.
+ */
+async function pushSignal(db, coupleId, couple, signal, type, inCherish = false) {
   const senderId = String(signal.senderId || "");
   const receiverId = otherMember(couple, senderId);
   if (!receiverId) return "no_receiver";
@@ -176,7 +185,7 @@ async function pushSignal(db, coupleId, couple, signal, type) {
       senderId,
       sentAt: String(logic.toMillis(signal.at) || Date.now()),
     },
-    android: felt ? HEARTBEAT_FELT_ANDROID : HEARTBEAT_ANDROID,
+    android: felt ? HEARTBEAT_FELT_ANDROID : inCherish ? HEARTBEAT_IN_CHERISH_ANDROID : HEARTBEAT_ANDROID,
     // With notifications off, a closed app doesn't play heartbeats ("felt it" still vibrates)
     skipWhenOff: !felt,
   });
@@ -249,14 +258,14 @@ async function pushCallCancel(db, coupleId, callId) {
   );
 }
 
-async function pushHeartbeat(db, coupleId, signalId, kind, nowMs) {
+async function pushHeartbeat(db, coupleId, signalId, kind, nowMs, inCherish = false) {
   if (!logic.isSafeId(signalId)) throw new HttpsError("invalid-argument", "Bad heartbeat id.");
   const couple = (await db.collection("couples").doc(coupleId).get()).data();
   const signal = couple && (kind === "heartbeat" ? couple.signal : couple.signalFelt);
   if (!signal || signal.id !== signalId || signal.type !== kind) return "not_found";
   const sentAt = logic.toMillis(signal.at);
   if (sentAt && nowMs - sentAt > HEARTBEAT_PUSH_WINDOW_MS) return "stale";
-  return pushSignal(db, coupleId, couple, signal, kind);
+  return pushSignal(db, coupleId, couple, signal, kind, inCherish);
 }
 
 /** Answers that mean nothing went wrong although no push went out. */
@@ -288,7 +297,7 @@ exports.pushPartner = onCall(async (request) => {
       break;
     case "heartbeat":
     case "heartbeat_felt":
-      result = { status: await pushHeartbeat(db, coupleId, data.signalId, data.kind, nowMs) };
+      result = { status: await pushHeartbeat(db, coupleId, data.signalId, data.kind, nowMs, data.inCherish === true) };
       break;
     default:
       throw new HttpsError("invalid-argument", "Unknown push.");

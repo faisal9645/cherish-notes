@@ -609,7 +609,7 @@ fun HomeScreen(
                                 } else if (hasActiveCall) {
                                     "Active call in progress • Free daily limit"
                                 } else {
-                                    "Resets daily at 6 AM • 60 mins/day • ${10000 - monthlyFreeCallMinutesRemaining}/10k monthly"
+                                    "Resets daily at 6 AM • 60 mins/day"
                                 },
                                 fontSize = 12.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant

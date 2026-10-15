@@ -27,6 +27,8 @@ object CallNotifications {
     // app can't change that on a channel that already exists
     const val CHANNEL_INCOMING = "calls_incoming_v2"
     const val CHANNEL_INCOMING_SILENT = "calls_incoming_silent_v2"
+    /** Shows the call without a sound or vibration of its own: the app rings (CallRinger). */
+    const val CHANNEL_INCOMING_QUIET = "calls_ringing_v3"
     const val CHANNEL_ONGOING = "calls_ongoing_v2"
     const val CHANNEL_MISSED = "calls_missed_v2"
     private val OLD_CHANNEL_IDS = listOf("calls_incoming", "calls_incoming_silent", "calls_ongoing", "calls_missed")
@@ -77,6 +79,13 @@ object CallNotifications {
             lockscreenVisibility = Notification.VISIBILITY_PRIVATE
             setShowBadge(false)
         }
+        val incomingQuiet = NotificationChannel(CHANNEL_INCOMING_QUIET, "Incoming calls", NotificationManager.IMPORTANCE_HIGH).apply {
+            description = "Shows who's calling while the app rings"
+            setSound(null, null)
+            enableVibration(false)
+            lockscreenVisibility = Notification.VISIBILITY_PRIVATE
+            setShowBadge(false)
+        }
         val ongoing = NotificationChannel(CHANNEL_ONGOING, "Call in progress", NotificationManager.IMPORTANCE_LOW).apply {
             description = "Shown while a call is on"
             setSound(null, null)
@@ -88,7 +97,7 @@ object CallNotifications {
             description = "Calls you didn't answer"
             lockscreenVisibility = Notification.VISIBILITY_PRIVATE
         }
-        manager.createNotificationChannels(listOf(incoming, incomingSilent, ongoing, missed))
+        manager.createNotificationChannels(listOf(incoming, incomingSilent, incomingQuiet, ongoing, missed))
         if (!oldChannelsRemoved) {
             oldChannelsRemoved = true
             OLD_CHANNEL_IDS.forEach { id -> runCatching { manager.deleteNotificationChannel(id) } }
@@ -108,28 +117,55 @@ object CallNotifications {
     @Volatile private var shownCallId: String? = null
     @Volatile private var silencedCallId: String? = null
 
+    /** What makes a ringing call's notification heard. */
+    internal enum class Ringing {
+        /** The app rings (CallRinger, kept running by CallService): the notification makes no sound. */
+        APP,
+        /** The notification rings by itself, the ringtone (or vibration) over and over. */
+        NOTIFICATION,
+        /** Quietened: no sound or vibration, and no full screen (it would turn the screen back on). */
+        QUIET
+    }
+
     /**
      * The ringing call's notification, out of its call screen: a call with Answer and Decline (and
      * the call screen over the lock screen, where Android allows it), or the disguised alert when
      * Incoming Call Privacy is Discreet. With Call Notification Ringing on it rings, the phone's
      * ringtone over and over, until it's answered, declined, called off or rings out; off, it
      * vibrates the same way, without the ringtone. The phone's Silent and Vibrate modes apply.
-     * Already up for this call: it just goes on ringing.
+     *
+     * The app rings itself, from a short foreground service (a phone call) that keeps it awake and
+     * running while it rings, also on a locked or idle phone and when the push started the app;
+     * the notification is that service's own. Where Android doesn't allow the service just then,
+     * the notification rings by itself instead. Already up for this call: it just goes on ringing.
      */
     fun showIncoming(context: Context, invite: CallInvite) {
         createChannels(context)
+        if (shownCallId == invite.callId && (CallService.isRingingFor(invite.callId) || isIncomingShown(context))) return
+        shownCallId = invite.callId
+        val silenced = silencedCallId == invite.callId
+        if (!silenced && CallService.startRinging(context, invite)) return
+        showRingingNotification(context, invite)
+    }
+
+    /** The notification shows the call and rings by itself (the app's ringing service isn't up). */
+    internal fun showRingingNotification(context: Context, invite: CallInvite) {
+        CallRinger.stop(context)
+        shownCallId = invite.callId
+        val ringing = if (silencedCallId == invite.callId) Ringing.QUIET else Ringing.NOTIFICATION
+        notify(context, ID_INCOMING, buildIncoming(context, invite, ringing))
+    }
+
+    /** The ringing call's notification (see showIncoming); [ringing] says what's heard. */
+    internal fun buildIncoming(context: Context, invite: CallInvite, ringing: Ringing): Notification {
+        createChannels(context)
         val prefs = SecurityPreferences.getInstance(context)
         val isMasked = prefs.getCallMaskingStyle().equals("discreet", ignoreCase = true)
-        // Quietened: still there to answer, without sound or vibration (and no full screen, which
-        // would turn the screen back on)
-        val silenced = silencedCallId == invite.callId
-        if (!silenced) {
-            CallRinger.start(context, withRingtone = prefs.isCallRingingEnabled())
-        } else {
-            CallRinger.stop(context)
+        val silenced = ringing == Ringing.QUIET
+        val channelId = when (ringing) {
+            Ringing.NOTIFICATION -> if (prefs.isCallRingingEnabled()) CHANNEL_INCOMING else CHANNEL_INCOMING_SILENT
+            Ringing.APP, Ringing.QUIET -> CHANNEL_INCOMING_QUIET
         }
-        if (shownCallId == invite.callId && isIncomingShown(context)) return
-        val channelId = if (prefs.isCallRingingEnabled() && !silenced) CHANNEL_INCOMING else CHANNEL_INCOMING_SILENT
         val remaining = invite.ringUntil - System.currentTimeMillis()
         val ringFor = if (remaining < 25_000L) 75_000L else remaining.coerceAtMost(90_000L)
         val appIcon = com.example.notifications.NotificationHelper.getAppIconBitmap(context)
@@ -219,16 +255,18 @@ object CallNotifications {
                 }
             }
         }
-        if (!silenced) {
+        if (ringing == Ringing.NOTIFICATION) {
             // Rings (or vibrates) like a call until it's answered, declined, called off or rings out
             notification.flags = notification.flags or Notification.FLAG_INSISTENT
         }
-        shownCallId = invite.callId
-        notify(context, ID_INCOMING, notification)
+        return notification
     }
 
-    /** The ringing call is on its call screen in Cherish (no notification then): the screen rings. */
-    fun ringOnCallScreen(context: Context, invite: CallInvite) {
+    /**
+     * The app rings for the ringing call: on its call screen in Cherish (no notification then), or
+     * from the ringing service. Not once it was quietened.
+     */
+    fun ringFromApp(context: Context, invite: CallInvite) {
         if (silencedCallId == invite.callId) return
         CallRinger.start(context, withRingtone = SecurityPreferences.getInstance(context).isCallRingingEnabled())
     }
@@ -241,20 +279,25 @@ object CallNotifications {
         if (silencedCallId == invite.callId) return
         silencedCallId = invite.callId
         CallRinger.stop(context)
+        // The ringing service's notification makes no sound of its own: stopping the app's ringing is enough
+        if (CallService.isRingingFor(invite.callId)) return
         if (shownCallId == invite.callId && isIncomingShown(context)) {
             // Up again without sound: Android stops a notification's sound when it goes
             try {
                 NotificationManagerCompat.from(context).cancel(ID_INCOMING)
             } catch (_: Exception) {}
-            shownCallId = null
-            showIncoming(context, invite)
+            showRingingNotification(context, invite)
         }
     }
 
-    /** The call stopped ringing here (answered, declined, called off, missed): its ringing stops. */
-    fun cancelIncoming(context: Context) {
+    /**
+     * The call stopped ringing here (answered, declined, called off, missed): its ringing stops,
+     * and the ringing service with it unless [keepService] (an answered call keeps it, as the call's).
+     */
+    fun cancelIncoming(context: Context, keepService: Boolean = false) {
         CallRinger.stop(context)
         shownCallId = null
+        if (!keepService) CallService.stopRinging(context)
         try {
             NotificationManagerCompat.from(context).cancel(ID_INCOMING)
         } catch (_: Exception) {}

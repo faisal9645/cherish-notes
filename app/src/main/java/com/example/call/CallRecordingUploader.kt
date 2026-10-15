@@ -58,9 +58,12 @@ internal object CallRecordingUploader {
         val endedAt: Long,
         val sourcePath: String,
         val attempts: Int = 0,
-        val createdAt: Long = System.currentTimeMillis()
+        val createdAt: Long = System.currentTimeMillis(),
+        /** Measured from the WAV before it was made small (it can't be measured after). */
+        val waveform: List<Double> = emptyList()
     ) {
         fun toJson(): String = JSONObject()
+            .put("waveform", waveform.joinToString(","))
             .put("coupleId", coupleId)
             .put("callId", callId)
             .put("userId", userId)
@@ -86,7 +89,8 @@ internal object CallRecordingUploader {
                     endedAt = json.optLong("endedAt", System.currentTimeMillis()),
                     sourcePath = json.getString("sourcePath"),
                     attempts = json.optInt("attempts", 0),
-                    createdAt = json.optLong("createdAt", System.currentTimeMillis())
+                    createdAt = json.optLong("createdAt", System.currentTimeMillis()),
+                    waveform = json.optString("waveform").split(",").mapNotNull { it.trim().toDoubleOrNull() }
                 ).takeIf { it.coupleId.isNotBlank() && it.callId.isNotBlank() && it.userId.isNotBlank() }
             } catch (e: Exception) {
                 null
@@ -138,6 +142,7 @@ internal object CallRecordingUploader {
         val compressed = File(wav.parentFile ?: File(app.cacheDir, RECORD_DIR), "rec_${job.callId}.m4a")
 
         // 1. Small: AAC (.m4a) instead of the WAV; the WAV itself if this phone can't encode it
+        var waveform = job.waveform
         val file: File = if (compressed.length() >= MIN_BYTES) {
             compressed
         } else {
@@ -148,6 +153,12 @@ internal object CallRecordingUploader {
                 finish(app, job, wav, compressed)
                 onNoRecording()
                 return
+            }
+            // Its waveform for the player, while it's still a WAV (kept with the job in case
+            // the app closes before the message is written)
+            if (waveform.isEmpty() && source.extension.equals("wav", ignoreCase = true)) {
+                waveform = CallRecordingWave.fromWav(source)
+                if (waveform.isNotEmpty()) writeJob(app, job.copy(waveform = waveform))
             }
             if (MediaCompressor.compressRecording(app, source, compressed)) {
                 source.delete()
@@ -182,6 +193,7 @@ internal object CallRecordingUploader {
             mediaName = "recording.$ext",
             mediaSize = file.length(),
             durationSeconds = job.durationSec,
+            waveform = waveform,
             status = MessageStatus.SENT.name,
             callId = job.callId,
             recordingPath = path,
@@ -251,7 +263,7 @@ internal object CallRecordingUploader {
         }
 
         // Tried again the next time the app starts, a few times; then the partner is told it won't come
-        val next = job.copy(attempts = job.attempts + 1)
+        val next = job.copy(attempts = job.attempts + 1, waveform = waveform)
         val tooOld = System.currentTimeMillis() - job.createdAt > GIVE_UP_AFTER_MS
         if (next.attempts < MAX_ATTEMPTS && !tooOld) {
             writeJob(app, next)

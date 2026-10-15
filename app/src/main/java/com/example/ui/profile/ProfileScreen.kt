@@ -127,6 +127,7 @@ fun ProfileScreen(
     val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
     
     var isBatteryOptimizationIgnored by remember { mutableStateOf(NotificationHelper.isBatteryOptimizationIgnored(context)) }
+    var isCallScreenAllowed by remember { mutableStateOf(com.example.notifications.BackgroundDelivery.isCallScreenAllowed(context)) }
 
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
@@ -135,6 +136,7 @@ fun ProfileScreen(
                 viewModel.reloadSettings()
                 viewModel.checkDigitalWellbeingStatus(context)
                 isBatteryOptimizationIgnored = NotificationHelper.isBatteryOptimizationIgnored(context)
+                isCallScreenAllowed = com.example.notifications.BackgroundDelivery.isCallScreenAllowed(context)
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -654,19 +656,36 @@ fun ProfileScreen(
                             // Live preview of the stealth edge toggle at current opacity!
                             Surface(
                                 shape = RoundedCornerShape(topStart = 10.dp, bottomStart = 10.dp, topEnd = 0.dp, bottomEnd = 0.dp),
-                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = uiState.sideEmergencyExitOpacity),
-                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = (uiState.sideEmergencyExitOpacity * 0.7f).coerceIn(0.05f, 0.9f))),
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(
+                                    alpha = com.example.ui.security.EmergencyExitLook.background(uiState.sideEmergencyExitOpacity)
+                                ),
+                                border = BorderStroke(
+                                    1.dp,
+                                    MaterialTheme.colorScheme.outline.copy(
+                                        alpha = com.example.ui.security.EmergencyExitLook.border(uiState.sideEmergencyExitOpacity)
+                                    )
+                                ),
                                 modifier = Modifier
                                     .width(26.dp)
-                                    .height(34.dp)
+                                    .height(44.dp)
                             ) {
-                                Box(contentAlignment = Alignment.Center) {
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.Center
+                                ) {
+                                    val arrowTint = MaterialTheme.colorScheme.onSurfaceVariant.copy(
+                                        alpha = com.example.ui.security.EmergencyExitLook.arrows(uiState.sideEmergencyExitOpacity)
+                                    )
+                                    Icon(Icons.Default.KeyboardArrowUp, contentDescription = null, tint = arrowTint, modifier = Modifier.size(9.dp))
                                     Icon(
                                         imageVector = Icons.Default.ExitToApp,
                                         contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = uiState.sideEmergencyExitOpacity.coerceAtLeast(0.55f)),
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(
+                                            alpha = com.example.ui.security.EmergencyExitLook.icon(uiState.sideEmergencyExitOpacity)
+                                        ),
                                         modifier = Modifier.size(13.dp)
                                     )
+                                    Icon(Icons.Default.KeyboardArrowDown, contentDescription = null, tint = arrowTint, modifier = Modifier.size(9.dp))
                                 }
                             }
                         }
@@ -1248,6 +1267,41 @@ fun ProfileScreen(
                             modifier = Modifier.testTag("call_ringing_switch_voice")
                         )
                     }
+                )
+
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), thickness = 0.6.dp)
+
+                // Incoming Call Screen: the phone's permissions for the full call screen (only from here, when tapped)
+                ListItem(
+                    headlineContent = { Text("Incoming Call Screen", fontSize = 15.sp, fontWeight = FontWeight.SemiBold) },
+                    supportingContent = {
+                        Text(
+                            if (isCallScreenAllowed) "The call screen comes up when your partner calls, also over other apps and on the lock screen"
+                            else "Only a call notification comes up when your partner calls: tap Allow for the full call screen",
+                            fontSize = 13.sp
+                        )
+                    },
+                    leadingContent = {
+                        Icon(
+                            Icons.Default.PhoneInTalk,
+                            contentDescription = null,
+                            tint = if (isCallScreenAllowed) primaryAccent else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    },
+                    trailingContent = {
+                        if (!isCallScreenAllowed) {
+                            FilledTonalButton(
+                                onClick = { com.example.notifications.BackgroundDelivery.openCallScreenSettings(context) },
+                                shape = RoundedCornerShape(16.dp),
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 2.dp)
+                            ) {
+                                Text("Allow", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            }
+                        } else {
+                            Icon(Icons.Default.CheckCircle, contentDescription = "Allowed", tint = Color(0xFF10B981))
+                        }
+                    },
+                    modifier = Modifier.testTag("incoming_call_screen")
                 )
 
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), thickness = 0.6.dp)

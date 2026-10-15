@@ -1,5 +1,6 @@
 package com.example.notifications
 
+import android.app.NotificationManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
@@ -51,6 +52,52 @@ object BackgroundDelivery {
     fun requestUnrestricted(context: Context) {
         leavingForSettings(context)
         NotificationHelper.requestIgnoreBatteryOptimization(context)
+    }
+
+    /** Android lets the call screen come up by itself, over other apps ("Display over other apps"). */
+    fun canOpenCallScreen(context: Context): Boolean =
+        Build.VERSION.SDK_INT < Build.VERSION_CODES.M || Settings.canDrawOverlays(context)
+
+    /** A ringing call may take over a locked phone's screen (Android 14 lets an app be denied that). */
+    fun canUseFullScreen(context: Context): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) return true
+        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager ?: return true
+        return manager.canUseFullScreenIntent()
+    }
+
+    /** Both of those: an incoming call shows its full call screen wherever the phone is. */
+    fun isCallScreenAllowed(context: Context): Boolean = canOpenCallScreen(context) && canUseFullScreen(context)
+
+    /**
+     * An incoming call opens its call screen by itself when the app isn't open: allowed by the
+     * phone, and not when Incoming Call Privacy is Discreet (that one shows the disguised alert).
+     */
+    fun mayOpenCallScreen(context: Context): Boolean =
+        !SecurityPreferences.getInstance(context).getCallMaskingStyle().equals("discreet", ignoreCase = true) &&
+            canOpenCallScreen(context)
+
+    /** The phone's page for what's still missing for the call screen (see isCallScreenAllowed). */
+    fun openCallScreenSettings(context: Context) {
+        leavingForSettings(context)
+        val app = Uri.parse("package:${context.packageName}")
+        val page = when {
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE && !canUseFullScreen(context) ->
+                Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT, app)
+            !canOpenCallScreen(context) -> Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, app)
+            else -> Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, app)
+        }
+        try {
+            context.startActivity(page.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        } catch (e: Exception) {
+            try {
+                context.startActivity(
+                    Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, app).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                )
+            } catch (e2: Exception) {
+                Log.w(TAG, "No settings screen to open", e2)
+                onAppResumed(context)
+            }
+        }
     }
 
     /** The maker's Auto-start screen, else the app's own settings page (battery is there too). */

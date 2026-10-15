@@ -6,7 +6,9 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
@@ -16,6 +18,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -54,6 +58,18 @@ private object EmergencyExitDock {
 }
 
 /**
+ * How visible the exit handle is at a Toggle Visibility setting (0.05 to 1): kept faint, everything
+ * on it (icon and drag arrows too) as faint as the setting. Settings' preview uses the same.
+ */
+object EmergencyExitLook {
+    fun background(visibility: Float): Float = visibility.coerceIn(0.05f, 1f) * 0.6f
+    fun border(visibility: Float): Float = (visibility.coerceIn(0.05f, 1f) * 0.45f).coerceIn(0.03f, 0.6f)
+    fun icon(visibility: Float): Float = (visibility.coerceIn(0.05f, 1f) * 1.3f).coerceIn(0.1f, 0.85f)
+    /** The up and down arrows saying it can be moved: a little fainter than the icon. */
+    fun arrows(visibility: Float): Float = icon(visibility) * 0.7f
+}
+
+/**
  * The draggable side handle that hides the secret app behind Notes in one tap. It shows while the
  * secret app is open (and the setting is on), and is placed in the main window and inside every
  * full-screen secret window (photo viewer, theatre, video note recorder) that would cover it.
@@ -69,7 +85,7 @@ fun EmergencyExitHandle(modifier: Modifier = Modifier) {
     val opacitySetting by prefs.sideEmergencyExitOpacity.collectAsState()
     if (isDisguiseActive || !hasRevealedSecretApp || isAppLocked || !isEnabled) return
 
-    val exitOpacity = opacitySetting.coerceIn(0.1f, 1.0f)
+    val exitOpacity = opacitySetting.coerceIn(0.05f, 1.0f)
     val haptic = LocalHapticFeedback.current
     val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
     val onLeft = EmergencyExitDock.onLeft
@@ -85,10 +101,10 @@ fun EmergencyExitHandle(modifier: Modifier = Modifier) {
     Box(modifier = modifier.fillMaxSize()) {
         Surface(
             shape = handleShape,
-            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = exitOpacity),
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = EmergencyExitLook.background(exitOpacity)),
             border = BorderStroke(
                 1.dp,
-                MaterialTheme.colorScheme.outline.copy(alpha = (exitOpacity * 0.7f).coerceIn(0.1f, 0.9f))
+                MaterialTheme.colorScheme.outline.copy(alpha = EmergencyExitLook.border(exitOpacity))
             ),
             modifier = Modifier
                 .align(if (onLeft) Alignment.CenterStart else Alignment.CenterEnd)
@@ -127,19 +143,35 @@ fun EmergencyExitHandle(modifier: Modifier = Modifier) {
                 }
                 .testTag("side_emergency_exit_toggle")
         ) {
-            Box(
+            Column(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(start = if (onLeft) 4.dp else 0.dp, end = if (!onLeft) 4.dp else 0.dp),
-                contentAlignment = Alignment.Center
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
             ) {
+                // Up and down arrows: it can be dragged along the edge
+                val arrowTint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = EmergencyExitLook.arrows(exitOpacity))
+                Icon(
+                    imageVector = Icons.Filled.KeyboardArrowUp,
+                    contentDescription = null,
+                    tint = arrowTint,
+                    modifier = Modifier.size(16.dp)
+                )
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.ExitToApp,
-                    contentDescription = "Emergency Exit to Notes",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = exitOpacity.coerceAtLeast(0.55f)),
+                    contentDescription = "Emergency Exit to Notes (drag to move)",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = EmergencyExitLook.icon(exitOpacity)),
                     modifier = Modifier
-                        .size(24.dp)
+                        .padding(vertical = 4.dp)
+                        .size(22.dp)
                         .graphicsLayer { if (onLeft) scaleX = -1f }
+                )
+                Icon(
+                    imageVector = Icons.Filled.KeyboardArrowDown,
+                    contentDescription = null,
+                    tint = arrowTint,
+                    modifier = Modifier.size(16.dp)
                 )
             }
         }

@@ -395,22 +395,7 @@ private fun CallControls(
             Spacer(modifier = Modifier.height(28.dp))
             RoundAction(Icons.Default.CallEnd, "Hang up", HangUpRed, onHangUp, "call_hang_up")
         }
-        CallPhase.ENDED -> Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceEvenly
-        ) {
-            if (state.isOutgoing || state.endReason == CallEndReason.MISSED || state.endReason == CallEndReason.FAILED) {
-                RoundAction(Icons.Default.Call, "Call again", AnswerGreen, onRetry, "call_retry")
-            }
-            RoundAction(
-                icon = Icons.Default.Close,
-                label = "Close",
-                color = MaterialTheme.colorScheme.surfaceVariant,
-                onClick = onDismiss,
-                tag = "call_close",
-                iconTint = MaterialTheme.colorScheme.onSurface
-            )
-        }
+        // Over: the screen closes by itself (no Call again or Close to tap)
         else -> Unit
     }
 }

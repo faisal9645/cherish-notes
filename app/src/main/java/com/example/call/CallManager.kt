@@ -17,6 +17,7 @@ import android.net.Uri
 import android.util.Log
 import com.example.CherishApplication
 import com.example.audio.VoicePlayerHelper
+import com.example.notifications.BackgroundDelivery
 import com.google.firebase.storage.FirebaseStorage
 import io.agora.rtc2.Constants
 import kotlinx.coroutines.CancellationException
@@ -57,7 +58,17 @@ object CallManager {
     private const val RING_TIMEOUT_MS = 75_000L
     private const val RECONNECT_GIVE_UP_MS = 60_000L
     private const val PEER_LOST_GIVE_UP_MS = 45_000L
+    /** How long the call screen says why a call couldn't go through (other calls close at once). */
     private const val ENDED_SCREEN_MS = 2_500L
+    private val SAYS_WHY = setOf(
+        CallEndReason.FAILED,
+        CallEndReason.NETWORK,
+        CallEndReason.PEER_LOST,
+        CallEndReason.UNAVAILABLE,
+        CallEndReason.PERMISSION_DENIED,
+        CallEndReason.NOT_PAIRED,
+        CallEndReason.NOT_ALLOWED
+    )
     private const val CALLER_UID = 1001
     private const val CALLEE_UID = 1002
 
@@ -306,8 +317,9 @@ object CallManager {
             CallNotifications.showMissed(app, cancelledId, peerName(callerNameHint))
             finish(if (reason == CallRecord.STATE_MISSED) CallEndReason.MISSED else CallEndReason.CANCELLED, serverReason = null)
         } else if (callId != cancelledId) {
-            // Rang while the app wasn't running: make sure it stops, and say it was missed
-            CallNotifications.cancelIncoming(app)
+            // Rang while the app wasn't running: make sure it stops, and say it was missed (a call
+            // that rings here now has the ringing notification, and keeps it)
+            if (!hasActiveCall()) CallNotifications.cancelIncoming(app)
             if (reason == CallRecord.STATE_MISSED || reason == CallRecord.STATE_CANCELLED) {
                 CallNotifications.showMissed(app, cancelledId, peerName(null))
             }
@@ -338,6 +350,15 @@ object CallManager {
                 // Rings in its notification instead, with Answer and Decline
                 CallNotifications.showIncoming(app, invite)
             }
+        } else if (!CherishApplication.isAppInForeground && BackgroundDelivery.mayOpenCallScreen(app)) {
+            // Out of the app: the call screen comes up by itself, over other apps and the lock
+            // screen, where the phone allows it ("Incoming Call Screen" in Settings). It rings in
+            // its notification all the same (that's also how a locked phone shows it otherwise)
+            try {
+                app.startActivity(CallActivity.incomingIntent(app, invite))
+            } catch (e: Exception) {
+                Log.w(TAG, "Couldn't open the call screen over other apps", e)
+            }
         }
     }
 
@@ -352,7 +373,7 @@ object CallManager {
         // Rings first: on a phone its push just woke, starting the call engine takes a moment
         when (ringAt) {
             RingAt.NOTIFICATION -> CallNotifications.showIncoming(app, invite)
-            RingAt.CALL_SCREEN -> CallNotifications.ringOnCallScreen(app, invite)
+            RingAt.CALL_SCREEN -> CallNotifications.ringFromApp(app, invite)
             RingAt.NOWHERE -> Unit
         }
         // Pre-warm the native Agora engine while it rings, to reduce answer-to-audio connection
@@ -389,9 +410,10 @@ object CallManager {
         val me = myUserId ?: return@post
         val id = callId ?: return@post
         ringTimeoutJob?.cancel()
-        CallNotifications.cancelIncoming(app)
+        // The ringing stops; the service it rang from (if any) goes on as the call's
+        CallNotifications.cancelIncoming(app, keepService = true)
         setPhase(CallPhase.CONNECTING)
-        CallService.start(app)
+        if (!CallService.start(app)) CallService.stopRinging(app)
         audio.start(audioListener)
         scope.launch {
             val response = try {
@@ -559,8 +581,13 @@ object CallManager {
                                 )
                             )
                         } else if (control.state != CallRecord.STATE_RINGING && callId == control.callId && _state.value.phase == CallPhase.INCOMING_RINGING) {
-                            CallNotifications.cancelIncoming(app)
-                            finish(CallEndReason.CANCELLED, serverReason = null)
+                            // Stopped ringing before it was answered here (called off or rang out,
+                            // e.g. a call the app only saw from its cache when it opened): missed
+                            val missed = control.state == CallRecord.STATE_MISSED
+                            if (missed || control.state == CallRecord.STATE_CANCELLED) {
+                                CallNotifications.showMissed(app, control.callId, peerName(callerNameHint))
+                            }
+                            finish(if (missed) CallEndReason.MISSED else CallEndReason.CANCELLED, serverReason = null)
                         }
                     }
                 }
@@ -983,11 +1010,9 @@ object CallManager {
                 }
             }
         }
-        val dismissDelay = if (reason == CallEndReason.HANGUP || reason == CallEndReason.REMOTE_HANGUP) {
-            ENDED_SCREEN_MS
-        } else {
-            4_000L
-        }
+        // The call screen closes as soon as the call is over (the chat's call line says how it went);
+        // only a call that couldn't go through says why for a moment, then closes by itself
+        val dismissDelay = if (reason in SAYS_WHY) ENDED_SCREEN_MS else 0L
         endResetJob = scope.launch {
             delay(dismissDelay)
             if (_state.value.phase == CallPhase.ENDED && callId == endedCall) reset()
@@ -1006,7 +1031,7 @@ object CallManager {
         )
         endResetJob?.cancel()
         endResetJob = scope.launch {
-            delay(4_000L)
+            delay(ENDED_SCREEN_MS)
             if (_state.value.phase == CallPhase.ENDED) reset()
         }
     }

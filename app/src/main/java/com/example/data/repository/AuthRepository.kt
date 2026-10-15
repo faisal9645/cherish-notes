@@ -468,8 +468,9 @@ class AuthRepository(private val context: Context) {
             try {
                 coupleRef.set(mapOf("signal" to signal), com.google.firebase.firestore.SetOptions.merge())
                     // Always dispatch push notification so partner receives heartbeat when locked, off, or app closed
+                    // (at normal priority while they look like they're in Cherish: see PartnerPush.heartbeat)
                     .addOnSuccessListener {
-                        com.example.notifications.PartnerPush.heartbeat(coupleRef.id, signalId)
+                        com.example.notifications.PartnerPush.heartbeat(coupleRef.id, signalId, partnerInCherish = isPartnerInCherish())
                     }
                 Log.d("AuthRepository", "Heartbeat signal dispatched for couple $coupleId")
             } catch (e: Exception) {

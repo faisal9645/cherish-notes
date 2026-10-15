@@ -18,7 +18,15 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.grid.LazyGridState
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.horizontalScroll
@@ -208,9 +216,11 @@ fun SharedGalleryScreen(
             Pair(cal.get(Calendar.YEAR), cal.get(Calendar.DAY_OF_YEAR))
         }
 
-        // Calendar Date Search rule (searches full selected day)
+        // Calendar Date Search rule (searches full selected day: from its 6 AM to the next morning's).
+        // The picked date itself, not the day its midnight belongs to (the day before)
         if (selectedDateMillis != null) {
-            val selLogicalDay = shiftToLogicalDay(selectedDateMillis!!)
+            val picked = Calendar.getInstance().apply { timeInMillis = selectedDateMillis!! }
+            val selLogicalDay = Pair(picked.get(Calendar.YEAR), picked.get(Calendar.DAY_OF_YEAR))
             list = list.filter { msg ->
                 shiftToLogicalDay(msg.timestamp) == selLogicalDay
             }
@@ -695,8 +705,25 @@ fun SharedGalleryScreen(
                             // The grid fades in as it opens instead of popping in
                             val gridEntrance = remember { androidx.compose.animation.core.Animatable(0f) }
                             LaunchedEffect(Unit) { gridEntrance.animateTo(1f, tween(320)) }
+                            val gridState = rememberLazyGridState()
+                            val onThisDayItems = remember(galleryMediaItems, selectedDateMillis, isSelectionMode) {
+                                if (selectedDateMillis == null && !isSelectionMode) galleryOnThisDay(galleryMediaItems) else emptyList()
+                            }
+                            val monthGroups = remember(galleryMediaItems) { galleryByMonth(galleryMediaItems) }
+                            // Each grid entry's date, in grid order (the card and month headers too), for the scrollbar
+                            val gridDates = remember(onThisDayItems, monthGroups) {
+                                buildList<Long> {
+                                    if (onThisDayItems.isNotEmpty()) add(monthGroups.first().second.first().timestamp)
+                                    monthGroups.forEach { (_, monthItems) ->
+                                        add(monthItems.first().timestamp)
+                                        monthItems.forEach { add(it.timestamp) }
+                                    }
+                                }
+                            }
+                            Box(modifier = Modifier.fillMaxSize()) {
                             LazyVerticalGrid(
                                 columns = GridCells.Fixed(gridColumnCount),
+                                state = gridState,
                                 modifier = Modifier
                                     .fillMaxSize()
                                     .graphicsLayer { alpha = gridEntrance.value }
@@ -733,22 +760,19 @@ fun SharedGalleryScreen(
                                 verticalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
                                 // A card of photos from this date in earlier years, above the newest month
-                                if (selectedDateMillis == null && !isSelectionMode) {
-                                    val memories = galleryOnThisDay(galleryMediaItems)
-                                    if (memories.isNotEmpty()) {
-                                        item(key = "on_this_day", span = { GridItemSpan(maxLineSpan) }) {
-                                            OnThisDayCard(
-                                                items = memories,
-                                                onOpen = { picked ->
-                                                    selectedMediaUrl = picked.mediaUrl
-                                                    selectedMessageIdForViewer = picked.messageId
-                                                }
-                                            )
-                                        }
+                                if (onThisDayItems.isNotEmpty()) {
+                                    item(key = "on_this_day", span = { GridItemSpan(maxLineSpan) }) {
+                                        OnThisDayCard(
+                                            items = onThisDayItems,
+                                            onOpen = { picked ->
+                                                selectedMediaUrl = picked.mediaUrl
+                                                selectedMessageIdForViewer = picked.messageId
+                                            }
+                                        )
                                     }
                                 }
                                 // Month by month, newest first: an "October 2026" header over each month's photos
-                                galleryByMonth(galleryMediaItems).forEach { (month, monthItems) ->
+                                monthGroups.forEach { (month, monthItems) ->
                                     item(key = "month_$month", span = { GridItemSpan(maxLineSpan) }) {
                                         GalleryMonthHeader(month = month, count = monthItems.size)
                                     }
@@ -919,6 +943,12 @@ fun SharedGalleryScreen(
                                 }
                                 }
                             }
+                            GalleryScrollbar(
+                                position = rememberGalleryScrollPosition(gridState),
+                                dateAt = { gridDates.getOrNull(it) },
+                                modifier = Modifier.fillMaxSize().padding(vertical = 6.dp)
+                            )
+                            }
                         }
                     }
 
@@ -933,7 +963,8 @@ fun SharedGalleryScreen(
                             }
                             EmptyGalleryNotice(emptyText, isLoading = isGalleryLoading)
                         } else {
-                            LazyColumn(
+                            GalleryLazyColumn(
+                                dateAt = { voiceMessages.getOrNull(it)?.timestamp },
                                 modifier = Modifier
                                     .fillMaxSize()
                                     .padding(horizontal = 14.dp, vertical = 10.dp),
@@ -1123,7 +1154,8 @@ fun SharedGalleryScreen(
                             }
                             EmptyGalleryNotice(emptyText, isLoading = isGalleryLoading)
                         } else {
-                            LazyColumn(
+                            GalleryLazyColumn(
+                                dateAt = { extractedLinks.getOrNull(it)?.timestamp },
                                 modifier = Modifier
                                     .fillMaxSize()
                                     .padding(horizontal = 14.dp, vertical = 10.dp),
@@ -1324,7 +1356,8 @@ fun SharedGalleryScreen(
                             }
                             EmptyGalleryNotice(emptyText, isLoading = isGalleryLoading)
                         } else {
-                            LazyColumn(
+                            GalleryLazyColumn(
+                                dateAt = { starredMessages.getOrNull(it)?.timestamp },
                                 modifier = Modifier
                                     .fillMaxSize()
                                     .padding(horizontal = 14.dp, vertical = 10.dp),
@@ -1470,7 +1503,8 @@ fun SharedGalleryScreen(
                             }
                             EmptyGalleryNotice(emptyText, isLoading = isGalleryLoading)
                         } else {
-                            LazyColumn(
+                            GalleryLazyColumn(
+                                dateAt = { callHistoryItems.getOrNull(it)?.timestamp },
                                 modifier = Modifier
                                     .fillMaxSize()
                                     .padding(horizontal = 14.dp, vertical = 10.dp),
@@ -1950,5 +1984,172 @@ private fun isCallAudioCached(context: Context, msg: Message): Boolean {
         java.io.File(recDir, "rec_${id}.wav"),
         java.io.File(recDir, "rec_${id}.aac")
     ).any { it.exists() && it.length() > 0 }
+}
+
+// ---------- Scrollbar ----------
+
+/** Where a gallery list is, read when needed (so scrolling doesn't recompose the screen), and how to go elsewhere. */
+private class GalleryScrollPosition(
+    val firstVisible: () -> Int,
+    val visibleCount: () -> Int,
+    val totalCount: () -> Int,
+    val atEnd: () -> Boolean,
+    val isScrolling: () -> Boolean,
+    val scrollTo: suspend (Int) -> Unit
+)
+
+@Composable
+private fun rememberGalleryScrollPosition(state: LazyGridState) = remember(state) {
+    GalleryScrollPosition(
+        firstVisible = { state.firstVisibleItemIndex },
+        visibleCount = { state.layoutInfo.visibleItemsInfo.size },
+        totalCount = { state.layoutInfo.totalItemsCount },
+        atEnd = { !state.canScrollForward },
+        isScrolling = { state.isScrollInProgress },
+        scrollTo = { state.scrollToItem(it) }
+    )
+}
+
+@Composable
+private fun rememberGalleryScrollPosition(state: LazyListState) = remember(state) {
+    GalleryScrollPosition(
+        firstVisible = { state.firstVisibleItemIndex },
+        visibleCount = { state.layoutInfo.visibleItemsInfo.size },
+        totalCount = { state.layoutInfo.totalItemsCount },
+        atEnd = { !state.canScrollForward },
+        isScrolling = { state.isScrollInProgress },
+        scrollTo = { state.scrollToItem(it) }
+    )
+}
+
+/** A gallery tab's list with its scrollbar (see GalleryScrollbar); [dateAt] is the date of the item at an index. */
+@Composable
+private fun GalleryLazyColumn(
+    dateAt: (Int) -> Long?,
+    modifier: Modifier = Modifier,
+    verticalArrangement: Arrangement.Vertical = Arrangement.Top,
+    content: LazyListScope.() -> Unit
+) {
+    val state = rememberLazyListState()
+    Box(modifier = Modifier.fillMaxSize()) {
+        LazyColumn(state = state, modifier = modifier, verticalArrangement = verticalArrangement, content = content)
+        GalleryScrollbar(
+            position = rememberGalleryScrollPosition(state),
+            dateAt = dateAt,
+            modifier = Modifier.fillMaxSize().padding(vertical = 6.dp)
+        )
+    }
+}
+
+/**
+ * The scrollbar along the right edge of a long gallery list: it shows where you are, top to
+ * bottom, and its thumb can be dragged to go anywhere quickly, with the date there beside it.
+ * Only the thumb takes touches; the list scrolls and taps as usual everywhere else.
+ */
+@Composable
+private fun GalleryScrollbar(
+    position: GalleryScrollPosition,
+    dateAt: (Int) -> Long?,
+    modifier: Modifier = Modifier
+) {
+    val scrollable by remember(position) {
+        derivedStateOf { position.visibleCount() in 1 until position.totalCount() }
+    }
+    if (!scrollable) return
+
+    val scope = rememberCoroutineScope()
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val thumbHeight = 52.dp
+    val thumbWidth = 28.dp
+    val thumbHeightPx = with(density) { thumbHeight.toPx() }
+    var trackHeightPx by remember { mutableFloatStateOf(0f) }
+    var dragging by remember { mutableStateOf(false) }
+    /** Where the dragged thumb is: 0 at the top, 1 at the bottom. */
+    var dragFraction by remember { mutableFloatStateOf(0f) }
+    var lastTarget by remember { mutableIntStateOf(-1) }
+
+    // The first index the list can be scrolled to: the thumb's range maps onto 0 to this
+    val lastFirstIndex = { (position.totalCount() - position.visibleCount()).coerceAtLeast(1) }
+    val listFraction by remember(position) {
+        derivedStateOf {
+            if (position.atEnd()) 1f else (position.firstVisible().toFloat() / lastFirstIndex()).coerceIn(0f, 1f)
+        }
+    }
+    val active = dragging || position.isScrolling()
+    val alpha by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = if (active) 1f else 0.45f,
+        animationSpec = tween(250),
+        label = "gallery_scrollbar_alpha"
+    )
+    val thumbY = { ((trackHeightPx - thumbHeightPx).coerceAtLeast(0f) * (if (dragging) dragFraction else listFraction)).roundToInt() }
+
+    Box(modifier = modifier.onSizeChanged { trackHeightPx = it.height.toFloat() }) {
+        // The date where the thumb is, while it's dragged
+        if (dragging) {
+            val label = remember(lastTarget) {
+                dateAt(lastTarget.coerceAtLeast(0))?.let { SimpleDateFormat("MMM d, yyyy", Locale.getDefault()).format(Date(it)) }
+            }
+            if (label != null) {
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = RoseGoldPrimary,
+                    shadowElevation = 4.dp,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .offset {
+                            IntOffset(
+                                x = -(thumbWidth + 6.dp).roundToPx(),
+                                y = thumbY() + ((thumbHeight - 32.dp) / 2).roundToPx()
+                            )
+                        }
+                        .height(32.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 14.dp)) {
+                        Text(label, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                    }
+                }
+            }
+        }
+        Box(
+            contentAlignment = Alignment.CenterEnd,
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .offset { IntOffset(0, thumbY()) }
+                .size(width = thumbWidth, height = thumbHeight)
+                .testTag("gallery_scrollbar_thumb")
+                .pointerInput(position) {
+                    detectVerticalDragGestures(
+                        onDragStart = {
+                            dragFraction = listFraction
+                            lastTarget = position.firstVisible()
+                            dragging = true
+                        },
+                        onDragEnd = { dragging = false },
+                        onDragCancel = { dragging = false },
+                        onVerticalDrag = { change, dragAmount ->
+                            change.consume()
+                            val range = (trackHeightPx - thumbHeightPx).coerceAtLeast(1f)
+                            dragFraction = (dragFraction + dragAmount / range).coerceIn(0f, 1f)
+                            val target = (dragFraction * lastFirstIndex()).roundToInt()
+                                .coerceIn(0, (position.totalCount() - 1).coerceAtLeast(0))
+                            if (target != lastTarget) {
+                                lastTarget = target
+                                // A newer jump cancels the one still going
+                                scope.launch { position.scrollTo(target) }
+                            }
+                        }
+                    )
+                }
+        ) {
+            Box(
+                modifier = Modifier
+                    .padding(end = 3.dp)
+                    .width(if (dragging) 8.dp else 5.dp)
+                    .fillMaxHeight()
+                    .clip(CircleShape)
+                    .background(RoseGoldPrimary.copy(alpha = alpha))
+            )
+        }
+    }
 }
 

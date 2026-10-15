@@ -2,12 +2,10 @@ package com.example.ui.chat
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -31,7 +29,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
@@ -41,8 +38,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.runtime.Immutable
 import com.example.CherishApplication
+import androidx.compose.runtime.remember
 import com.example.call.CallRecordingPlayer
+import com.example.call.CallRecordingWave
 import com.example.data.model.Message
+import com.example.ui.components.WaveformView
 import com.example.util.formatRecordingLength
 
 /** The recording player's colours. */
@@ -137,33 +137,18 @@ fun CallRecordingPlayerRow(
                 }
             }
             Spacer(modifier = Modifier.height(6.dp))
-            // The bar: tap anywhere on it to jump there while it plays (generous 32dp tap target)
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(32.dp)
-                    .pointerInput(isActive) {
-                        detectTapGestures { offset ->
-                            if (isActive && size.width > 0) player.seekTo(offset.x / size.width)
-                        }
-                    },
-                contentAlignment = Alignment.CenterStart
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(4.dp)
-                        .clip(RoundedCornerShape(2.dp))
-                        .background(trackColor)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth(if (isActive) progress.coerceIn(0f, 1f) else 0f)
-                            .fillMaxHeight()
-                            .background(progressColor)
-                    )
-                }
-            }
+            // Its waveform, like a voice note's: tap or drag on it to jump there while it plays
+            val wave = remember(message.id, message.waveform) { CallRecordingWave.of(message) }
+            WaveformView(
+                amplitudes = wave,
+                progress = if (isActive) progress.coerceIn(0f, 1f) else 0f,
+                isPlaying = playingNow,
+                activeColor = progressColor,
+                inactiveColor = progressColor.copy(alpha = maxOf(trackColor.alpha, 0.35f)),
+                onSeek = if (isActive) { fraction -> player.seekTo(fraction) } else null,
+                height = 32.dp,
+                modifier = Modifier.testTag("call_recording_wave_${message.id}")
+            )
             Spacer(modifier = Modifier.height(4.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 val total = formatRecordingLength(message.durationSeconds)

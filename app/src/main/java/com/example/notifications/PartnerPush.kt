@@ -54,7 +54,13 @@ object PartnerPush {
 
     fun callCancel(coupleId: String, callId: String) = send("call_cancel", coupleId, "callId" to callId)
 
-    fun heartbeat(coupleId: String, signalId: String) = send("heartbeat", coupleId, "signalId" to signalId)
+    /**
+     * A heartbeat. When the partner looks like they're in Cherish it gets there by itself, and the
+     * push (for a phone that was just locked) goes at normal priority: an urgent push that shows
+     * nothing makes Firebase hold back this app's urgent pushes, calls included, on a sleeping phone.
+     */
+    fun heartbeat(coupleId: String, signalId: String, partnerInCherish: Boolean = false) =
+        send("heartbeat", coupleId, "signalId" to signalId, if (partnerInCherish) mapOf("inCherish" to true) else emptyMap())
 
     fun heartbeatFelt(coupleId: String, signalId: String) = send("heartbeat_felt", coupleId, "signalId" to signalId)
 
@@ -124,18 +130,24 @@ object PartnerPush {
         return alertedAt > 0L && seenAt > 0L && alertedAt > seenAt
     }
 
-    private fun send(kind: String, coupleId: String, item: Pair<String, String>) {
-        scope.launch { request(kind, coupleId, item) }
+    private fun send(kind: String, coupleId: String, item: Pair<String, String>, extras: Map<String, Any> = emptyMap()) {
+        scope.launch { request(kind, coupleId, item, extras) }
     }
 
     /**
      * Asks the server for the push. Its answer (the status; for a message, when the alert that
      * counts went out), or null when the server couldn't be reached, after a few tries.
      */
-    private suspend fun request(kind: String, coupleId: String, item: Pair<String, String>): Map<*, *>? {
+    private suspend fun request(
+        kind: String,
+        coupleId: String,
+        item: Pair<String, String>,
+        extras: Map<String, Any> = emptyMap()
+    ): Map<*, *>? {
         val couple = coupleId.trim()
         if (couple.isBlank() || couple == "couple_default" || item.second.isBlank()) return emptyMap<String, Any>()
-        val data = hashMapOf("kind" to kind, "coupleId" to couple, item.first to item.second)
+        val data = hashMapOf<String, Any>("kind" to kind, "coupleId" to couple, item.first to item.second)
+        data.putAll(extras)
         repeat(ATTEMPTS) { attempt ->
             try {
                 val auth = FirebaseAuth.getInstance()
