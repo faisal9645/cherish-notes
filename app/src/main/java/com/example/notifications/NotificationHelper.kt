@@ -1,5 +1,6 @@
 package com.example.notifications
 
+import android.app.KeyguardManager
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -121,6 +122,11 @@ object NotificationHelper {
      * while the user is using the app.
      */
     fun isAppOpenOnScreen(context: Context): Boolean {
+        val pm = context.getSystemService(Context.POWER_SERVICE) as? PowerManager
+        if (pm?.isInteractive == false) return false
+        val km = context.getSystemService(Context.KEYGUARD_SERVICE) as? KeyguardManager
+        if (km?.isKeyguardLocked == true) return false
+
         if (com.example.CherishApplication.isAppInForeground) return true
         val app = context.applicationContext as? com.example.CherishApplication
         if (app?.authRepository?.isAppOpenOnScreen() == true) return true
@@ -130,6 +136,10 @@ object NotificationHelper {
     }
 
     fun isUserActivelyViewingChat(context: Context): Boolean {
+        val pm = context.getSystemService(Context.POWER_SERVICE) as? PowerManager
+        if (pm?.isInteractive == false) return false
+        val km = context.getSystemService(Context.KEYGUARD_SERVICE) as? KeyguardManager
+        if (km?.isKeyguardLocked == true) return false
         return try {
             val app = context.applicationContext as? com.example.CherishApplication
             app?.authRepository?.isUserActivelyInChat() ?: false
@@ -433,12 +443,13 @@ object NotificationHelper {
             .setNumber(if (isBadgeEnabled) 1 else 0)
             .setAutoCancel(true)
             .setOngoing(false)
-            .setOnlyAlertOnce(true)
+            .setOnlyAlertOnce(false)
             .setContentIntent(pendingIntent)
             .setDeleteIntent(getDismissIntent(context))
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setSilent(silentUpdate)
-            .setCategory(NotificationCompat.CATEGORY_SOCIAL)
+            .setPriority(NotificationCompat.PRIORITY_MAX)
+            .setDefaults(NotificationCompat.DEFAULT_ALL)
+            .setVibrate(longArrayOf(0, 100, 150, 100, 450, 100, 150, 100))
+            .setCategory(NotificationCompat.CATEGORY_EVENT)
             .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
             .setPublicVersion(lockScreenVersion(context, CHANNEL_MESSAGES_ID, prefs))
             .build()

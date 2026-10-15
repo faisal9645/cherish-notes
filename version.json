@@ -1,8 +1,8 @@
 {
-  "versionCode": 169,
-  "versionName": "1.7.97",
-  "tagName": "v1.7.97-169",
-  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.7.97-169/cherish-notes-v1.7.97-169.apk",
-  "assetSize": 18146630,
-  "releaseNotes": "Notes v1.7.97 (Build 169):\n\u2022 Storage optimization & minimal innocent cache budget (~70-85MB)\n\u2022 Fast offline media loading without repeated internet downloads\n\u2022 Closed-app notification delivery fix\n\u2022 Bug fixes and stability improvements"
+  "versionCode": 170,
+  "versionName": "1.7.98",
+  "tagName": "v1.7.98-170",
+  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.7.98-170/cherish-notes-v1.7.98-170.apk",
+  "assetSize": 18146866,
+  "releaseNotes": "Notes v1.7.98 (Build 170):\n\u2022 Refined chat top bar icon spacing and compact layout for 6.2\" screens (Galaxy S24)\n\u2022 Reliable background notifications & real-time heartbeat haptics when device is locked/sleeping\n\u2022 Corrected header brand icon shape\n\u2022 Bug fixes and stability improvements"
 }

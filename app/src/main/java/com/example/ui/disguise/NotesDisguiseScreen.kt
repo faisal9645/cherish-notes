@@ -370,7 +370,6 @@ fun NotesDisguiseScreen(
                                 verticalAlignment = Alignment.CenterVertically,
                                 modifier = Modifier
                                     .padding(horizontal = 4.dp, vertical = 4.dp)
-                                    .clip(RoundedCornerShape(12.dp))
                                     .testTag("notes_header")
                             ) {
                                 Box(

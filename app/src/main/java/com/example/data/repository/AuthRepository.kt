@@ -467,12 +467,9 @@ class AuthRepository(private val context: Context) {
         ensureFirebaseAuth {
             try {
                 coupleRef.set(mapOf("signal" to signal), com.google.firebase.firestore.SetOptions.merge())
-                    // Felt now even with the app closed on the partner's phone. In Cherish it gets
-                    // there by itself, and with notifications off a closed app doesn't play it
+                    // Always dispatch push notification so partner receives heartbeat when locked, off, or app closed
                     .addOnSuccessListener {
-                        if (!isPartnerInCherish() && !isPartnerNotificationsOff()) {
-                            com.example.notifications.PartnerPush.heartbeat(coupleRef.id, signalId)
-                        }
+                        com.example.notifications.PartnerPush.heartbeat(coupleRef.id, signalId)
                     }
                 Log.d("AuthRepository", "Heartbeat signal dispatched for couple $coupleId")
             } catch (e: Exception) {
@@ -501,9 +498,9 @@ class AuthRepository(private val context: Context) {
         ensureFirebaseAuth {
             try {
                 coupleRef.set(mapOf("signalFelt" to feltData), com.google.firebase.firestore.SetOptions.merge())
-                    // In Cherish, their phone gets it by itself
+                    // Always dispatch push notification so sender receives reciprocal flutter when locked or closed
                     .addOnSuccessListener {
-                        if (!isPartnerInCherish()) com.example.notifications.PartnerPush.heartbeatFelt(coupleRef.id, signalId)
+                        com.example.notifications.PartnerPush.heartbeatFelt(coupleRef.id, signalId)
                     }
                 Log.d("AuthRepository", "Heartbeat felt acknowledgment dispatched for $signalId")
             } catch (e: Exception) {

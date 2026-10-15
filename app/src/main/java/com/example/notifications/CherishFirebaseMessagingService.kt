@@ -81,10 +81,12 @@ class CherishFirebaseMessagingService : FirebaseMessagingService() {
             )
             val isScreenOn = ThinkingOfYou.isScreenInteractive(applicationContext)
             val isAppOpen = NotificationHelper.isAppOpenOnScreen(applicationContext)
-            if (handled && signalId.isNotBlank() && isScreenOn && isAppOpen) {
-                app.authRepository.acknowledgeHeartbeatFelt(signalId)
-            } else if (handled && signalId.isNotBlank() && isScreenOn) {
-                ThinkingOfYou.setPendingHeartbeatFelt(applicationContext, signalId, sentAt)
+            if (handled && signalId.isNotBlank()) {
+                if (isScreenOn && isAppOpen) {
+                    app.authRepository.acknowledgeHeartbeatFelt(signalId)
+                } else {
+                    ThinkingOfYou.setPendingHeartbeatFelt(applicationContext, signalId, sentAt)
+                }
             }
             return
         }

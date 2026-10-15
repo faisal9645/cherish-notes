@@ -1139,15 +1139,15 @@ fun ChatScreen(
                                     }
                                 },
                                 modifier = Modifier
-                                    .padding(start = 2.dp)
-                                    .size(38.dp)
+                                    .padding(start = 0.dp)
+                                    .size(34.dp)
                                     .testTag("chat_back_button")
                             ) {
                                 Icon(
                                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                                     contentDescription = "Back",
                                     tint = MaterialTheme.colorScheme.onSurface,
-                                    modifier = Modifier.size(24.dp)
+                                    modifier = Modifier.size(22.dp)
                                 )
                             }
                         }
@@ -1237,53 +1237,53 @@ fun ChatScreen(
                         CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides androidx.compose.ui.unit.Dp.Unspecified) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(2.dp),
-                                modifier = Modifier.padding(end = 2.dp)
+                                horizontalArrangement = Arrangement.spacedBy(0.5.dp),
+                                modifier = Modifier.padding(end = 1.dp)
                             ) {
                                 IconButton(
                                     onClick = startVoiceCall,
                                     modifier = Modifier
-                                        .size(36.dp)
+                                        .size(32.dp)
                                         .testTag("chat_call_button")
                                 ) {
-                                    Icon(Icons.Outlined.Call, contentDescription = "Voice call", tint = iconTint, modifier = Modifier.size(23.dp))
+                                    Icon(Icons.Outlined.Call, contentDescription = "Voice call", tint = iconTint, modifier = Modifier.size(21.dp))
                                 }
                                 IconButton(
                                     onClick = { viewModel.setSearching(true) },
                                     modifier = Modifier
-                                        .size(36.dp)
+                                        .size(32.dp)
                                         .testTag("chat_search_button")
                                 ) {
-                                    Icon(Icons.Default.Search, contentDescription = "Search messages", tint = iconTint, modifier = Modifier.size(23.dp))
+                                    Icon(Icons.Default.Search, contentDescription = "Search messages", tint = iconTint, modifier = Modifier.size(21.dp))
                                 }
                                 IconButton(
                                     onClick = onNavigateToGallery,
                                     modifier = Modifier
-                                        .size(36.dp)
+                                        .size(32.dp)
                                         .testTag("chat_gallery_button")
                                 ) {
-                                    Icon(Icons.Outlined.PhotoLibrary, contentDescription = "Couple Media Gallery", tint = iconTint, modifier = Modifier.size(23.dp))
+                                    Icon(Icons.Outlined.PhotoLibrary, contentDescription = "Couple Media Gallery", tint = iconTint, modifier = Modifier.size(21.dp))
                                 }
                                 IconButton(
                                     onClick = { viewModel.openCheckAfterSheet() },
                                     modifier = Modifier
-                                        .size(36.dp)
+                                        .size(32.dp)
                                         .testTag("chat_check_after_button")
                                 ) {
                                     Icon(
                                         imageVector = if (partnerHasCheckAfter || iHaveCheckAfter) Icons.Filled.HourglassTop else Icons.Outlined.HourglassTop,
                                         contentDescription = "Check After Timer",
                                         tint = if (partnerHasCheckAfter || iHaveCheckAfter) MaterialTheme.colorScheme.primary else iconTint,
-                                        modifier = Modifier.size(23.dp)
+                                        modifier = Modifier.size(21.dp)
                                     )
                                 }
 
                                 Box {
                                     IconButton(
                                         onClick = { showChatMenu = true },
-                                        modifier = Modifier.size(36.dp)
+                                        modifier = Modifier.size(32.dp)
                                     ) {
-                                        Icon(Icons.Default.MoreVert, contentDescription = "More options", tint = iconTint, modifier = Modifier.size(24.dp))
+                                        Icon(Icons.Default.MoreVert, contentDescription = "More options", tint = iconTint, modifier = Modifier.size(22.dp))
                                     }
                                     DropdownMenu(
                                         expanded = showChatMenu,
@@ -3913,12 +3913,12 @@ private fun ChatPartnerHeaderContent(
             AvatarView(
                 photoUrl = presence.photoUrl,
                 name = partnerName,
-                size = 42.dp,
+                size = 38.dp,
                 isOnline = isPartnerOnline,
                 showOnlineBadge = !partnerHasCheckAfter
             )
         }
-        Spacer(modifier = Modifier.width(5.dp))
+        Spacer(modifier = Modifier.width(4.dp))
         Column(
             modifier = Modifier.weight(1f, fill = false),
             verticalArrangement = Arrangement.Center
@@ -4007,8 +4007,8 @@ private fun ChatPartnerHeaderContent(
             val fullStatusText = if (partnerLocalTimeText != null) "$statusText · $partnerLocalTimeText" else statusText
             Text(
                 text = fullStatusText,
-                fontSize = 12.sp,
-                lineHeight = 14.sp,
+                fontSize = 11.5.sp,
+                lineHeight = 13.5.sp,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 color = if (partnerHasCheckAfter) {

@@ -124,13 +124,11 @@ object ThinkingOfYou {
             val powerManager = context.getSystemService(Context.POWER_SERVICE) as? PowerManager
             val wakeLock = powerManager?.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "Cherish::HeartbeatWakeLock")
             try {
-                wakeLock?.acquire(3000L)
+                wakeLock?.acquire(3500L)
                 playHeartbeat(context)
                 Log.d("ThinkingOfYou", "Heartbeat vibration played successfully for $signalId")
-            } finally {
-                if (wakeLock?.isHeld == true) {
-                    try { wakeLock.release() } catch (_: Exception) {}
-                }
+            } catch (e: Exception) {
+                Log.w("ThinkingOfYou", "Heartbeat vibration error: ${e.message}")
             }
 
             _received.tryEmit(System.currentTimeMillis())
@@ -234,7 +232,7 @@ object ThinkingOfYou {
             // Gentle, intimate heartbeat: thump-thump ... thump-thump (reduced slightly from jarring 255)
             val timings = longArrayOf(0, 42, 120, 65, 560, 42, 120, 65)
             val attributes = AudioAttributes.Builder()
-                .setUsage(AudioAttributes.USAGE_NOTIFICATION)
+                .setUsage(AudioAttributes.USAGE_ALARM)
                 .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
                 .build()
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
