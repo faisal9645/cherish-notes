@@ -1,9 +1,9 @@
 {
-  "versionCode": 167,
-  "versionName": "1.7.95",
-  "tagName": "v1.7.95-167",
-  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.7.95-167/app_update_167.apk",
-  "assetSize": 18139046,
-  "releaseNotes": "Notes v1.7.95 (Build 167):\n• Notifications arrive when the app is closed\n• Notifications follow your notification settings\n• Bug fixes and improvements",
-  "releaseDate": "2026-10-15T11:26:50Z"
+  "versionCode": 168,
+  "versionName": "1.7.96",
+  "tagName": "v1.7.96-168",
+  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.7.96-168/app_update_168.apk",
+  "assetSize": 18145398,
+  "releaseNotes": "Notes v1.7.96 (Build 168):\n• One notification until you open the app\n• More accurate sync status\n• Bug fixes and improvements",
+  "releaseDate": "2026-10-15T12:15:49Z"
 }
