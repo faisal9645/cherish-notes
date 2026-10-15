@@ -49,6 +49,10 @@ object PartnerPush {
 
     /** When the partner's phone was last alerted about a message (server time, from the server's answer). */
     @Volatile private var partnerAlertedAt = 0L
+    /** When the server last told this phone about that alert (this phone's clock). */
+    @Volatile private var partnerAlertCheckedAt = 0L
+    /** After this long the server is asked again (it still sends nothing while the alert is unseen). */
+    private const val RECHECK_UNSEEN_AFTER_MS = 30 * 60 * 1000L
 
     fun callInvite(coupleId: String, callId: String) = send("call_invite", coupleId, "callId" to callId)
 
@@ -95,6 +99,7 @@ object PartnerPush {
                 val answer = request("message", coupleId, "messageId" to messageId) ?: return@launch
                 val notifiedAt = (answer["notifiedAt"] as? Number)?.toLong() ?: 0L
                 if (notifiedAt > partnerAlertedAt) partnerAlertedAt = notifiedAt
+                if (notifiedAt > 0L) partnerAlertCheckedAt = System.currentTimeMillis()
             }
             forgetPending(context, messageId)
         }
@@ -110,7 +115,9 @@ object PartnerPush {
     private suspend fun shouldPushMessage(context: Context, messageId: String): Boolean {
         val app = context as? com.example.CherishApplication ?: return true
         val auth = app.authRepository
-        if (auth.isPartnerNotificationsOff()) return false
+        // Not while the last alert is unseen: the server would only answer "already notified",
+        // and every ask runs the function
+        if (auth.isPartnerNotificationsOff() || isAlertUnseen(auth)) return false
         if (auth.isPartnerInCherish()) {
             val shown = withTimeoutOrNull(LIVE_DELIVERY_WAIT_MS) {
                 app.chatRepository.listenToMessages("").first { messages ->
@@ -119,15 +126,18 @@ object PartnerPush {
             }
             if (shown != null) return false
         }
-        return true
+        // The partner may have been alerted meanwhile (by another message of this phone's)
+        return !isAlertUnseen(auth)
     }
 
     /** The partner's phone was alerted about a message and they haven't been in Cherish since. */
     private fun isAlertUnseen(auth: AuthRepository): Boolean {
         val alertedAt = partnerAlertedAt
         val seenAt = auth.partnerChatSeenAt()
-        // A partner whose app doesn't say when it was in Cherish yet: the server decides
-        return alertedAt > 0L && seenAt > 0L && alertedAt > seenAt
+        // A partner whose app doesn't say when it was in Cherish yet: the server decides. So does
+        // an alert the server last confirmed a while ago, in case this phone missed them opening Cherish
+        return alertedAt > 0L && seenAt > 0L && alertedAt > seenAt &&
+            System.currentTimeMillis() - partnerAlertCheckedAt < RECHECK_UNSEEN_AFTER_MS
     }
 
     private fun send(kind: String, coupleId: String, item: Pair<String, String>, extras: Map<String, Any> = emptyMap()) {

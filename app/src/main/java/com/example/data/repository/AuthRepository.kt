@@ -499,9 +499,10 @@ class AuthRepository(private val context: Context) {
         ensureFirebaseAuth {
             try {
                 coupleRef.set(mapOf("signalFelt" to feltData), com.google.firebase.firestore.SetOptions.merge())
-                    // Always dispatch push notification so sender receives reciprocal flutter when locked or closed
+                    // Pushed so the sender feels it when locked or closed; still in Cherish, their
+                    // phone gets it by itself (each push runs a server function)
                     .addOnSuccessListener {
-                        com.example.notifications.PartnerPush.heartbeatFelt(coupleRef.id, signalId)
+                        if (!isPartnerInCherish()) com.example.notifications.PartnerPush.heartbeatFelt(coupleRef.id, signalId)
                     }
                 Log.d("AuthRepository", "Heartbeat felt acknowledgment dispatched for $signalId")
             } catch (e: Exception) {

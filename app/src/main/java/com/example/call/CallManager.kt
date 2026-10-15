@@ -998,10 +998,16 @@ object CallManager {
                 peerReconnecting = false
             )
         }
-        if (serverReason != null && endedCouple != null && endedCall != null && !me.isNullOrBlank()) {
+        // A call of ours that was never answered ends as called off on the other phone, whatever went
+        // wrong here: that's what stops it ringing there (and says it was missed)
+        val reasonForServer = if (
+            serverReason != null && serverReason != "no_answer" && isOutgoing &&
+            (phase == CallPhase.STARTING || phase == CallPhase.OUTGOING_RINGING)
+        ) "cancelled" else serverReason
+        if (reasonForServer != null && endedCouple != null && endedCall != null && !me.isNullOrBlank()) {
             scope.launch {
                 try {
-                    repo.end(endedCouple, me, endedCall, serverReason)
+                    repo.end(endedCouple, me, endedCall, reasonForServer)
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {

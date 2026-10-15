@@ -10,7 +10,7 @@
  * Pushes carry data only: the receiving app shows what its own settings say (hidden content, one
  * alert until it's opened). None go to a phone whose notifications are off, a message alerts once
  * until the receiver has been back in Cherish (claimMessageAlert), and a call's push goes out once
- * although the calling phone and a database trigger both ask for it (pushOnce). FCM holds back an
+ * even when the calling phone asks again after a timeout (pushOnce). FCM holds back an
  * app's high-priority pushes until the phone wakes up when many of them show nothing.
  */
 const { FieldValue, Timestamp } = require("firebase-admin/firestore");
@@ -271,10 +271,10 @@ async function releasePush(db, coupleId, key) {
 }
 
 /**
- * Runs [send] (it pushes and returns the outcome) only for the first to ask for [key]: the sending
- * phone and a database trigger both ask for every push, and the second copy would show nothing on
- * the other phone (see the top of this file). "already_sent" for the second; when [send] reached no
- * phone, the key is given back so the other one may still try.
+ * Runs [send] (it pushes and returns the outcome) only for the first to ask for [key]: a phone that
+ * asks again (its first ask timed out but went through) must not ring the other phone twice.
+ * "already_sent" for the second; when [send] reached no phone, the key is given back so a later
+ * ask may still try.
  */
 async function pushOnce(db, coupleId, key, send) {
   if (coupleId && !(await claimPush(db, coupleId, key))) return "already_sent";

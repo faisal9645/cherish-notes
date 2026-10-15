@@ -8,7 +8,8 @@
  *   one: not while they're in Cherish (it shows there by itself), not with their notifications
  *   off, and for messages one alert until they're back in Cherish (checked here again). Nothing
  *   runs on its own for messages or heartbeats, so a function only runs when a push is due.
- * - Voice calls: see calls.js (a trigger rings the called phone too, as a backup).
+ * - Voice calls ring and stop ringing through pushPartner too; calls.js deletes a recording's audio
+ *   with its message.
  */
 const logger = require("firebase-functions/logger");
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
@@ -273,8 +274,8 @@ const FINE_WITHOUT_PUSH = new Set(["already_sent", "already_notified", "seen_in_
 
 /**
  * The sending phone asks for its partner's push right after saving what it's about: a message,
- * a call ringing or called off, a heartbeat or its "felt it" (for a call, the trigger in calls.js
- * asks too; whichever is first sends it, see pushOnce). Only what's saved is pushed, to the couple
+ * a call ringing or called off, a heartbeat or its "felt it" (a call's push goes once even if the
+ * phone asks again after a timeout, see pushOnce). Only what's saved is pushed, to the couple
  * member it's for, while it's still current.
  */
 exports.pushPartner = onCall(async (request) => {
