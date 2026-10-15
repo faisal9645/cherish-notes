@@ -6,8 +6,13 @@
  * out of date, so every distinct address is tried (a stale one never hides the current one), and
  * an address FCM rejects for good is removed from where it was found. The sender's own addresses
  * are never used, so a mixed-up couple slot can't send the push back to the sender's phone.
+ *
+ * Pushes carry data only: the receiving app shows what its own settings say (off, hidden content,
+ * one alert until it's opened). Each push goes out once although the sending phone and a database
+ * trigger both ask for it (pushOnce), and one that would show nothing goes at normal priority: FCM
+ * holds back an app's high-priority pushes until the phone wakes up when many of them show nothing.
  */
-const { FieldValue } = require("firebase-admin/firestore");
+const { FieldValue, Timestamp } = require("firebase-admin/firestore");
 const { getMessaging } = require("firebase-admin/messaging");
 const logger = require("firebase-functions/logger");
 const logic = require("./callLogic");
@@ -38,52 +43,52 @@ function coupleTokenField(couple, userId) {
   return null;
 }
 
+/** [receiverId] (one id or a list) as a list of distinct ids, without blanks. */
+function receiverList(receiverId) {
+  return [...new Set([].concat(receiverId || []).map((id) => String(id || "").trim()).filter(Boolean))];
+}
+
 /**
- * Where a push to [receiverId] goes: each distinct address in [profiles] (the receiver's profile
- * snapshots, as { ref, data }) and in their couple slot, except [excludeTokens].
+ * Where a push to [receiverId] (one id, or a list when it's not sure which is current) goes: each
+ * distinct address in [profiles] (the receiver's profile snapshots, as { ref, data }) and in their
+ * couple slot, except [excludeTokens].
  */
 function pickTargets({ profiles, couple, coupleRef, receiverId, excludeTokens }) {
   const excluded = new Set((excludeTokens || []).filter(Boolean));
   const seen = new Set();
   const targets = [];
-  const add = (token, ref, field, notificationStatus) => {
+  const add = (token, ref, field) => {
     if (typeof token !== "string" || !token || excluded.has(token) || seen.has(token)) return;
     seen.add(token);
-    const item = { token, ref, field };
-    if (notificationStatus) item.notificationStatus = notificationStatus;
-    targets.push(item);
+    targets.push({ token, ref, field });
   };
   for (const profile of profiles || []) {
-    if (profile && profile.data) add(profile.data.fcmToken, profile.ref, "fcmToken", profile.data.notificationStatus);
+    if (profile && profile.data) add(profile.data.fcmToken, profile.ref, "fcmToken");
   }
-  const field = coupleTokenField(couple, receiverId);
-  if (field && couple) add(couple[field], coupleRef, field);
+  for (const receiver of receiverList(receiverId)) {
+    const field = coupleTokenField(couple, receiver);
+    if (field && couple) add(couple[field], coupleRef, field);
+  }
   return targets;
+}
+
+/**
+ * The receiver switched notifications off, in the app or for it in Android: their phone saves
+ * "CLOSED" as its notificationStatus. Only when no profile of theirs says otherwise, so an old
+ * copy can't silence a phone that shows notifications.
+ */
+function notificationsOff(profiles) {
+  const statuses = (profiles || [])
+    .map((profile) => String((profile && profile.data && profile.data.notificationStatus) || "").trim().toUpperCase())
+    .filter(Boolean);
+  return statuses.length > 0 && statuses.every((status) => status === "CLOSED");
 }
 
 /** Sends [data] to one address: "sent", "dead" (and removed) or "failed". */
 async function sendToTarget(db, target, data, android) {
   try {
-    const payload = { token: target.token, data, android };
-    if (data && data.type === "message") {
-      const isSafe = target.notificationStatus === "SAFE" || target.notificationStatus === "DISCREET";
-      payload.notification = {
-        title: isSafe ? "Notes" : (data.senderName || "Cherish"),
-        body: isSafe ? "1 note updated" : (data.messageText || "New message"),
-      };
-      payload.android = {
-        ...android,
-        notification: {
-          channelId: "notes_sync_channel_v3",
-          icon: "ic_stat_notes",
-          color: "#2563FF",
-          tag: "cherish_message",
-          defaultSound: true,
-          defaultVibrateTimings: true,
-        },
-      };
-    }
-    await getMessaging().send(payload);
+    // Data only: the app shows it as that phone's settings say (see the top of this file)
+    await getMessaging().send({ token: target.token, data, android });
     return "sent";
   } catch (error) {
     if (DEAD_TOKEN_ERRORS.has(error.code)) {
@@ -106,15 +111,17 @@ async function sendToTarget(db, target, data, android) {
 }
 
 /**
- * Sends [data] (data only: the app builds what's shown) to [receiverId]'s phone, never to
- * [senderId]'s. Returns "sent", "no_push_token", "dead_push_token" or "push_failed".
+ * Sends [data] (data only: the app builds what's shown) to [receiverId]'s phone (one id, or a list
+ * when it's not sure which is current), never to [senderId]'s. With [quietWhenOff], a receiver who
+ * switched notifications off gets it at normal priority: their phone shows nothing for it.
+ * Returns "sent", "no_push_token", "dead_push_token" or "push_failed".
  */
-async function pushToMember(db, { receiverId, senderId, coupleId, data, android }) {
-  const receiver = String(receiverId || "").trim();
-  if (!receiver) return "no_push_token";
+async function pushToMember(db, { receiverId, senderId, coupleId, data, android, quietWhenOff = false }) {
+  const receivers = receiverList(receiverId).filter((id) => !logic.isSameUser(id, senderId));
+  if (receivers.length === 0) return "no_push_token";
   const users = db.collection("users");
   const idsOf = (id) => [...new Set([String(id || "").trim(), alternateId(id)].filter(Boolean))];
-  const receiverRefs = idsOf(receiver).map((id) => users.doc(id));
+  const receiverRefs = [...new Set(receivers.flatMap(idsOf))].map((id) => users.doc(id));
   const senderRefs = senderId ? idsOf(senderId).map((id) => users.doc(id)) : [];
   const coupleRef = coupleId ? db.collection("couples").doc(coupleId) : null;
   const [receiverSnaps, senderSnaps, coupleSnap] = await Promise.all([
@@ -125,14 +132,69 @@ async function pushToMember(db, { receiverId, senderId, coupleId, data, android 
   const profiles = receiverSnaps.filter((snap) => snap.exists).map((snap) => ({ ref: snap.ref, data: snap.data() }));
   const senderTokens = senderSnaps.filter((snap) => snap.exists).map((snap) => snap.get("fcmToken"));
   const couple = coupleSnap && coupleSnap.exists ? coupleSnap.data() : null;
-  const targets = pickTargets({ profiles, couple, coupleRef, receiverId: receiver, excludeTokens: senderTokens });
+  const targets = pickTargets({ profiles, couple, coupleRef, receiverId: receivers, excludeTokens: senderTokens });
   if (targets.length === 0) {
-    logger.info("Receiver has no push token yet", { receiverId: receiver, coupleId });
+    logger.info("Receiver has no push token yet", { receiverIds: receivers, coupleId });
     return "no_push_token";
   }
-  const outcomes = await Promise.all(targets.map((target) => sendToTarget(db, target, data, android)));
+  const sendAs = quietWhenOff && notificationsOff(profiles) ? { ...android, priority: "normal" } : android;
+  const outcomes = await Promise.all(targets.map((target) => sendToTarget(db, target, data, sendAs)));
   if (outcomes.includes("sent")) return "sent";
   return outcomes.every((outcome) => outcome === "dead") ? "dead_push_token" : "push_failed";
+}
+
+// ---------- Each push once ----------
+
+/** Outcomes where nothing reached the phone, so the other path asking for the same push may try. */
+const NOT_DELIVERED = new Set(["no_push_token", "dead_push_token", "push_failed"]);
+
+/** Firestore's "already exists" (what creating a document that's there already fails with). */
+const ALREADY_EXISTS = 6;
+
+/** How long a push's record is kept: a TTL policy on pushes.expireAt (in the console) may delete it after. */
+const PUSH_RECORD_KEEP_MS = 7 * 24 * 60 * 60 * 1000;
+
+/** The record that [key] (e.g. "message:<id>") was pushed for [coupleId]; only these functions use it. */
+function pushRef(db, coupleId, key) {
+  return db.collection("couples").doc(coupleId).collection("pushes").doc(key);
+}
+
+/** True for the first to ask to push [key]; true too when that can't be checked. */
+async function claimPush(db, coupleId, key) {
+  try {
+    await pushRef(db, coupleId, key).create({
+      at: FieldValue.serverTimestamp(),
+      expireAt: Timestamp.fromMillis(Date.now() + PUSH_RECORD_KEEP_MS),
+    });
+    return true;
+  } catch (error) {
+    if (error && error.code === ALREADY_EXISTS) return false;
+    // A push twice is better than none
+    logger.warn("Couldn't check whether a push went out already", { key, message: String(error && error.message) });
+    return true;
+  }
+}
+
+/** Gives [key] back, so the other path can still push it. */
+async function releasePush(db, coupleId, key) {
+  try {
+    await pushRef(db, coupleId, key).delete();
+  } catch (error) {
+    logger.warn("Couldn't give a push back", { key, message: String(error && error.message) });
+  }
+}
+
+/**
+ * Runs [send] (it pushes and returns the outcome) only for the first to ask for [key]: the sending
+ * phone and a database trigger both ask for every push, and the second copy would show nothing on
+ * the other phone (see the top of this file). "already_sent" for the second; when [send] reached no
+ * phone, the key is given back so the other one may still try.
+ */
+async function pushOnce(db, coupleId, key, send) {
+  if (coupleId && !(await claimPush(db, coupleId, key))) return "already_sent";
+  const outcome = await send();
+  if (coupleId && NOT_DELIVERED.has(outcome)) await releasePush(db, coupleId, key);
+  return outcome;
 }
 
 /** [userId]'s name as their profile shows it, else as the couple was set up with. */
@@ -174,7 +236,9 @@ module.exports = {
   alternateId,
   coupleTokenField,
   pickTargets,
+  notificationsOff,
   pushToMember,
+  pushOnce,
   displayNameOf,
   callInviteData,
   callCancelData,

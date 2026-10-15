@@ -172,6 +172,18 @@ function calleeFor(call, couple) {
 }
 
 /**
+ * Everyone a call's pushes go to: its callee and the caller's partner on the couple record. The
+ * same person, unless the calling phone had an old id for them. Never the caller.
+ */
+function calleesFor(call, couple) {
+  if (!call) return [];
+  const ids = [calleeFor(call, couple), partnerOf(couple, call.callerId)]
+    .map((id) => String(id || "").trim())
+    .filter((id) => id && !isPlaceholderId(id) && !isSameUser(id, call.callerId));
+  return [...new Set(ids)];
+}
+
+/**
  * What the called phone is told when a call stops ringing in [state]: "missed" (nobody answered
  * in time) or "cancelled" (the caller stopped, or it couldn't go through); null when it was
  * answered or declined there, so there's nothing to tell it.
@@ -362,6 +374,7 @@ module.exports = {
   isPlaceholderId,
   ringUntilMs,
   calleeFor,
+  calleesFor,
   cancelReasonFor,
   controlPushChange,
   isConnectTimedOut,

@@ -26,9 +26,14 @@ const db = () => getFirestore();
 const coupleRef = (coupleId) => db().collection("couples").doc(coupleId);
 const callRef = (coupleId, callId) => coupleRef(coupleId).collection("calls").doc(callId);
 
-/** Sends a call push to [receiverId]'s phone (never to [senderId]'s); says whether it went out. */
-async function sendCallPush(receiverId, data, ttlMs, coupleId, senderId) {
-  return push.pushToMember(db(), { receiverId, senderId, coupleId, data, android: { priority: "high", ttl: ttlMs } });
+/**
+ * Sends a call push to the phone of [receiverIds] (the callee, see logic.calleesFor), never to
+ * [senderId]'s, once: the calling phone asks for the same push (pushPartner). Says how it went.
+ */
+async function sendCallPush(key, receiverIds, data, ttlMs, coupleId, senderId) {
+  return push.pushOnce(db(), coupleId, key, () =>
+    push.pushToMember(db(), { receiverId: receiverIds, senderId, coupleId, data, android: { priority: "high", ttl: ttlMs } })
+  );
 }
 
 // ---------- Ringing the other phone ----------
@@ -37,7 +42,7 @@ async function sendCallPush(receiverId, data, ttlMs, coupleId, senderId) {
  * The app writes the couple's current call itself (couples/{coupleId}/callControl/active), so the
  * called phone rings from here: a push when a call starts ringing (also with the app closed
  * there), and one when it's called off or rings out, so that phone stops and shows it was missed.
- * The app asks for the same pushes directly (pushPartner); the called phone acts on each once.
+ * The app asks for the same pushes directly (pushPartner); whichever asks first sends each one.
  */
 exports.callPushOnControlChange = onDocumentWritten("couples/{coupleId}/callControl/{docId}", async (event) => {
   const before = event.data && event.data.before && event.data.before.exists ? event.data.before.data() : null;
@@ -48,8 +53,8 @@ exports.callPushOnControlChange = onDocumentWritten("couples/{coupleId}/callCont
   const nowMs = Date.now();
   const couple = (await coupleRef(coupleId).get()).data() || {};
   const callerId = String(after.callerId || "");
-  const calleeId = logic.calleeFor(after, couple);
-  if (!calleeId || logic.isSameUser(calleeId, callerId)) return;
+  const calleeIds = logic.calleesFor(after, couple);
+  if (calleeIds.length === 0) return;
 
   if (change.kind === "invite") {
     const ringUntil = logic.ringUntilMs(after) || nowMs + RING_TIMEOUT_MS;
@@ -62,12 +67,12 @@ exports.callPushOnControlChange = onDocumentWritten("couples/{coupleId}/callCont
       ringUntilMs: ringUntil,
       nowMs,
     });
-    const outcome = await sendCallPush(calleeId, data, ringUntil - nowMs, coupleId, callerId);
+    const outcome = await sendCallPush(`call_invite:${after.callId}`, calleeIds, data, ringUntil - nowMs, coupleId, callerId);
     logger.info("Call ringing push", { callId: after.callId, outcome });
     return;
   }
   const data = push.callCancelData({ callId: after.callId, coupleId, reason: change.reason });
-  await sendCallPush(calleeId, data, STOP_RINGING_TTL_MS, coupleId, callerId);
+  await sendCallPush(`call_cancel:${after.callId}`, calleeIds, data, STOP_RINGING_TTL_MS, coupleId, callerId);
 });
 
 // ---------- Deleting a recording ----------

@@ -118,3 +118,88 @@ test("cancelReasonFor tells the called phone only about calls it missed", () => 
   assert.equal(logic.cancelReasonFor("declined"), null);
   assert.equal(logic.cancelReasonFor("connected"), null);
 });
+
+test("calleesFor rings the callee and the caller's partner on the couple record, never the caller", () => {
+  assert.deepEqual(logic.calleesFor({ callerId: "user_faisal", calleeId: "user_ayesha" }, couple), ["user_ayesha"]);
+  // The calling phone had an old id for the partner: the couple record's partner gets it too
+  assert.deepEqual(logic.calleesFor({ callerId: "user_faisal", calleeId: "user_ayesha_old" }, couple), ["user_ayesha_old", "user_ayesha"]);
+  assert.deepEqual(logic.calleesFor({ callerId: "user_faisal", calleeId: "partner" }, couple), ["user_ayesha"]);
+  assert.deepEqual(logic.calleesFor({ callerId: "user_faisal", calleeId: "faisal" }, couple), ["user_ayesha"]);
+  assert.deepEqual(logic.calleesFor({ callerId: "user_faisal", calleeId: "" }, null), []);
+  assert.deepEqual(logic.calleesFor(null, couple), []);
+});
+
+test("pickTargets with several receiver ids tries each one's couple slot", () => {
+  const targets = push.pickTargets({
+    profiles: [{ ref: "users/user_ayesha_old", data: { fcmToken: "token-old" } }],
+    couple,
+    coupleRef: "couples/c1",
+    receiverId: ["user_ayesha_old", "user_ayesha"],
+    excludeTokens: ["token-faisal-slot"],
+  });
+  assert.deepEqual(targets.map((t) => t.token), ["token-old", "token-ayesha-slot"]);
+});
+
+test("notificationsOff only when every profile that says so says CLOSED", () => {
+  assert.equal(push.notificationsOff([{ data: { notificationStatus: "CLOSED" } }]), true);
+  assert.equal(push.notificationsOff([{ data: { notificationStatus: "CLOSED" } }, { data: {} }]), true);
+  assert.equal(push.notificationsOff([{ data: { notificationStatus: "CLOSED" } }, { data: { notificationStatus: "OPEN" } }]), false);
+  assert.equal(push.notificationsOff([{ data: { notificationStatus: "SAFE" } }]), false);
+  assert.equal(push.notificationsOff([{ data: {} }]), false);
+  assert.equal(push.notificationsOff([]), false);
+});
+
+/** Just enough Firestore for pushOnce: documents by path that can be created once and deleted. */
+function fakeDb({ unavailable = false } = {}) {
+  const store = new Map();
+  const docRef = (path) => ({
+    path,
+    collection: (name) => ({ doc: (id) => docRef(`${path}/${name}/${id}`) }),
+    create: async (data) => {
+      if (unavailable) throw Object.assign(new Error("14 UNAVAILABLE"), { code: 14 });
+      if (store.has(path)) throw Object.assign(new Error("6 ALREADY_EXISTS"), { code: 6 });
+      store.set(path, data);
+    },
+    delete: async () => {
+      store.delete(path);
+    },
+  });
+  return { store, collection: (name) => ({ doc: (id) => docRef(`${name}/${id}`) }) };
+}
+
+test("pushOnce sends each push once, whichever path asks first", async () => {
+  const db = fakeDb();
+  let sends = 0;
+  const send = async () => {
+    sends += 1;
+    return "sent";
+  };
+  assert.equal(await push.pushOnce(db, "c1", "message:m1", send), "sent");
+  assert.equal(await push.pushOnce(db, "c1", "message:m1", send), "already_sent");
+  assert.equal(await push.pushOnce(db, "c1", "call_invite:k1", send), "sent");
+  assert.equal(await push.pushOnce(db, "c2", "message:m1", send), "sent");
+  assert.equal(sends, 3);
+  assert.deepEqual([...db.store.keys()], [
+    "couples/c1/pushes/message:m1",
+    "couples/c1/pushes/call_invite:k1",
+    "couples/c2/pushes/message:m1",
+  ]);
+  assert.ok(db.store.get("couples/c1/pushes/message:m1").expireAt);
+});
+
+test("pushOnce lets the other path try when nothing reached the phone, not when it was skipped", async () => {
+  const db = fakeDb();
+  assert.equal(await push.pushOnce(db, "c1", "message:m1", async () => "no_push_token"), "no_push_token");
+  assert.equal(await push.pushOnce(db, "c1", "message:m1", async () => "sent"), "sent");
+
+  assert.equal(await push.pushOnce(db, "c1", "message:m2", async () => "seen_in_app"), "seen_in_app");
+  assert.equal(await push.pushOnce(db, "c1", "message:m2", async () => "sent"), "already_sent");
+});
+
+test("pushOnce still sends when the record can't be checked, or there's no couple", async () => {
+  const send = async () => "sent";
+  assert.equal(await push.pushOnce(fakeDb({ unavailable: true }), "c1", "message:m1", send), "sent");
+  const db = fakeDb();
+  assert.equal(await push.pushOnce(db, "", "message:m1", send), "sent");
+  assert.equal(await push.pushOnce(db, "", "message:m1", send), "sent");
+});

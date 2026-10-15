@@ -343,13 +343,14 @@ object CallManager {
         beginCall(invite.coupleId, me, invite.callId, outgoing = false)
         this.invite = invite
         callerNameHint = invite.callerName
-        // Pre-warm the native Agora engine in the background as soon as the incoming call screen appears
-        // to reduce answer-to-audio connection delay to <200ms
-        engine.prewarm(AgoraTokenBuilder.DEFAULT_APP_ID)
         _state.value = freshState(invite.callId, outgoing = false).copy(phase = CallPhase.INCOMING_RINGING)
+        // Rings first: on a phone its push just woke, starting the call engine takes a moment
         if (showNotification) {
             CallNotifications.showIncoming(app, invite)
         }
+        // Pre-warm the native Agora engine while it rings, to reduce answer-to-audio connection
+        // delay to <200ms
+        engine.prewarm(AgoraTokenBuilder.DEFAULT_APP_ID)
         observeCallRecord()
         val remaining = invite.ringUntil - System.currentTimeMillis()
         // Ensure the callee has ample time to attend (at least 75 seconds) rather than premature timeout

@@ -104,7 +104,11 @@ object CallNotifications {
             .setContentText(text)
             .build()
 
-    /** The ringing notification, with Answer and Decline. Full screen only where Android allows it. */
+    /**
+     * The ringing notification, with Answer and Decline. Full screen only where Android allows it.
+     * With Call Ringing on it rings (the phone's ringtone) until answered, called off or timed out,
+     * masked or not; off, it vibrates once, without the ringtone (the silent channel).
+     */
     fun showIncoming(context: Context, invite: CallInvite) {
         createChannels(context)
         val prefs = SecurityPreferences.getInstance(context)
@@ -146,14 +150,17 @@ object CallNotifications {
                 .setPriority(NotificationCompat.PRIORITY_HIGH)
                 .setOngoing(true)
                 .setAutoCancel(false)
-                .setOnlyAlertOnce(true)
-                .setSilent(!isRinging)
+                .setOnlyAlertOnce(!isRinging)
                 .setTimeoutAfter(ringFor)
                 .setContentIntent(openNotesIntent)
                 .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
                 .setPublicVersion(lockScreenVersion(context, channelId, maskedTitle, maskedText))
 
             val notification = builder.build()
+            if (isRinging) {
+                // Rings like a call, not one ringtone and then quiet (a closed or locked phone)
+                notification.flags = notification.flags or Notification.FLAG_INSISTENT
+            }
             notify(context, ID_INCOMING, notification)
             return
         }
@@ -185,7 +192,6 @@ object CallNotifications {
             .setOngoing(true)
             .setAutoCancel(false)
             .setOnlyAlertOnce(!isRinging)
-            .setSilent(!isRinging)
             .setTimeoutAfter(ringFor)
             .setContentIntent(fullScreen)
             .setFullScreenIntent(fullScreen, true)
