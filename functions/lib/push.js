@@ -74,7 +74,7 @@ async function sendToTarget(db, target, data, android) {
       payload.android = {
         ...android,
         notification: {
-          channelId: "notes_sync_channel_v2",
+          channelId: "notes_sync_channel_v3",
           icon: "ic_stat_notes",
           color: "#2563FF",
           tag: "cherish_message",

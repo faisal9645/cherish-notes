@@ -25,13 +25,27 @@ class CherishFirebaseMessagingService : FirebaseMessagingService() {
         super.onMessageReceived(remoteMessage)
         Log.d("CherishFCM", "Push received: data=${remoteMessage.data}, notification=${remoteMessage.notification?.title}")
 
+        // Acquire a 3-second wakelock to ensure the CPU stays awake while processing the incoming message
+        try {
+            val pm = applicationContext.getSystemService(android.content.Context.POWER_SERVICE) as? android.os.PowerManager
+            pm?.newWakeLock(android.os.PowerManager.PARTIAL_WAKE_LOCK, "cherish:fcm_receive_wake")?.acquire(3000L)
+        } catch (_: Exception) {}
+
         val app = applicationContext as? com.example.CherishApplication ?: run {
             Log.w("CherishFCM", "applicationContext is not CherishApplication")
             return
         }
 
-        if (!app.authRepository.isUserLoggedIn()) {
-            Log.w("CherishFCM", "User is not logged in, skipping message notification")
+        val hasSession = try {
+            app.authRepository.isUserLoggedIn() ||
+                app.securityPreferences.getCoupleSecretKey().isNotBlank() ||
+                app.authRepository.getSavedCoupleId().isNotBlank()
+        } catch (_: Exception) {
+            true // Fail open so incoming push is never dropped
+        }
+
+        if (!hasSession) {
+            Log.w("CherishFCM", "No active user or couple session, skipping message notification")
             return
         }
 

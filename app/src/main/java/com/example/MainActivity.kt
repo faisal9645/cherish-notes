@@ -163,7 +163,7 @@ class MainActivity : FragmentActivity() {
                                 context,
                                 android.Manifest.permission.POST_NOTIFICATIONS
                             ) != PackageManager.PERMISSION_GRANTED
-                            if (notifUngranted && !app.securityPreferences.hasRequestedInitialNotificationPermission()) {
+                            if (notifUngranted) {
                                 notifPermissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
                             }
                         }

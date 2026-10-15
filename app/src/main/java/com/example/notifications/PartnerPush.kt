@@ -47,7 +47,7 @@ object PartnerPush {
                 try {
                     val auth = FirebaseAuth.getInstance()
                     if (auth.currentUser == null) auth.signInAnonymously().await()
-                    FirebaseFunctions.getInstance()
+                    FirebaseFunctions.getInstance("us-central1")
                         .getHttpsCallable(FUNCTION)
                         .withTimeout(TIMEOUT_SECONDS, TimeUnit.SECONDS)
                         .call(data)

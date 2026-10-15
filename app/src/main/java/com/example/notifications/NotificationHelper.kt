@@ -25,13 +25,12 @@ import java.util.concurrent.atomic.AtomicInteger
  * and single-notification consolidation (prevents multiple spam notifications).
  */
 object NotificationHelper {
-    // New ids in 1.7.90: earlier channels could have been made hidden on the lock screen, and an
-    // app can't change that on a channel that already exists
-    const val CHANNEL_MESSAGES_ID = "notes_sync_channel_v2"
-    private const val CHANNEL_MESSAGES_NAME = "Notes & Reminders"
+    // New id notes_sync_channel_v3 ensures clean channel creation with high importance, sound and vibration
+    const val CHANNEL_MESSAGES_ID = "notes_sync_channel_v3"
+    private const val CHANNEL_MESSAGES_NAME = "Notes & Messages"
     const val CHANNEL_REMINDERS_ID = "notes_reminders_channel_v2"
     private const val CHANNEL_REMINDERS_NAME = "Note Reminders"
-    private val OLD_CHANNEL_IDS = listOf("notes_sync_channel", "notes_reminders_channel")
+    private val OLD_CHANNEL_IDS = listOf("notes_sync_channel", "notes_reminders_channel", "notes_sync_channel_v2")
     @Volatile private var oldChannelsRemoved = false
     const val NOTIFICATION_ID_MESSAGE = 1001
 
@@ -62,6 +61,12 @@ object NotificationHelper {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             // Shown on the lock screen; when the phone hides notification content there, each
             // notification's masked public version is what shows (see lockScreenVersion)
+            val soundUri = android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_NOTIFICATION)
+            val audioAttributes = android.media.AudioAttributes.Builder()
+                .setUsage(android.media.AudioAttributes.USAGE_NOTIFICATION_COMMUNICATION_INSTANT)
+                .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                .build()
+
             val messagesChannel = NotificationChannel(
                 CHANNEL_MESSAGES_ID,
                 CHANNEL_MESSAGES_NAME,
@@ -69,7 +74,10 @@ object NotificationHelper {
             ).apply {
                 description = "Discreet sync and reminder notifications"
                 enableVibration(true)
+                vibrationPattern = longArrayOf(0, 250, 200, 250)
+                enableLights(true)
                 setShowBadge(true)
+                setSound(soundUri, audioAttributes)
                 lockscreenVisibility = android.app.Notification.VISIBILITY_PRIVATE
             }
 
@@ -82,6 +90,7 @@ object NotificationHelper {
                 enableVibration(true)
                 setShowBadge(true)
                 enableLights(true)
+                setSound(soundUri, audioAttributes)
                 lockscreenVisibility = android.app.Notification.VISIBILITY_PUBLIC
             }
 
@@ -147,6 +156,7 @@ object NotificationHelper {
     fun isAlertAlreadyTriggered(): Boolean = isNotificationAlertTriggered.get()
 
     fun onNotificationDismissed(context: Context, noteId: String? = null) {
+        SecurityPreferences.getInstance(context).setAlertedSinceLastAppOpen(false)
         isNotificationAlertTriggered.set(false)
         hasAlertedWhileLocked.set(false)
         pendingUnreadCount.set(0)
@@ -248,13 +258,12 @@ object NotificationHelper {
             return
         }
 
-        // Alert (sound/vibrate) ONLY ONCE until partner opens the Cherish app.
-        // Subsequent messages while unopened update the notification silently without beeping or vibrating.
-        val hasAlertedSinceLastOpen = prefs.hasAlertedSinceLastAppOpen()
-        val isFirstAlert = !hasAlertedSinceLastOpen
-        if (isFirstAlert) {
-            prefs.setAlertedSinceLastAppOpen(true)
-        }
+        // WakeLock for 3s to guarantee CPU stays active during screen-off notification delivery
+        try {
+            val pm = context.getSystemService(Context.POWER_SERVICE) as? PowerManager
+            val wl = pm?.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "cherish:msg_notif_wake")
+            wl?.acquire(3000L)
+        } catch (_: Exception) {}
 
         // Launcher icon badge always shows 1 only, even for multiple notifications
         if (isBadgeEnabled) {
@@ -306,6 +315,8 @@ object NotificationHelper {
         // Ensure channel is created before building the notification so it never drops
         createNotificationChannels(context)
 
+        val soundUri = android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_NOTIFICATION)
+
         val notificationBuilder = NotificationCompat.Builder(context, CHANNEL_MESSAGES_ID)
             .setSmallIcon(R.drawable.ic_stat_notes)
             .apply {
@@ -324,24 +335,19 @@ object NotificationHelper {
             .setNumber(if (isBadgeEnabled) 1 else 0)
             .setAutoCancel(true)
             .setOngoing(false)
+            // setOnlyAlertOnce(true) ensures Android alerts (vibrates/sounds) ONCE on first arrival,
+            // and quietly updates the text for subsequent messages until the user opens or clears the notification!
             .setOnlyAlertOnce(true)
             .setContentIntent(pendingIntent)
             .setDeleteIntent(getDismissIntent(context))
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(NotificationCompat.CATEGORY_MESSAGE)
+            .setDefaults(NotificationCompat.DEFAULT_ALL)
+            .setSound(soundUri)
+            .setVibrate(longArrayOf(0, 250, 200, 250))
             // On the lock screen too (masked there when the phone hides notification content)
             .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
             .setPublicVersion(lockScreenVersion(context, CHANNEL_MESSAGES_ID, prefs))
-
-        if (isFirstAlert) {
-            notificationBuilder.setDefaults(NotificationCompat.DEFAULT_ALL)
-            notificationBuilder.setSilent(false)
-        } else {
-            notificationBuilder.setDefaults(0)
-            notificationBuilder.setSound(null)
-            notificationBuilder.setVibrate(null)
-            notificationBuilder.setSilent(true)
-        }
 
         val notification = notificationBuilder.build()
 
