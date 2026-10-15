@@ -33,8 +33,9 @@ internal object CallRinger {
     private val handler = Handler(Looper.getMainLooper())
     private var ringtone: Ringtone? = null
     private var vibrating = false
+    private var wakeLock: android.os.PowerManager.WakeLock? = null
 
-    /** Plays the ringtone again when it ends, where it can't loop by itself (before Android 9). */
+    /** Plays the ringtone again when it ends, where it can't loop by itself or when looped playback stalls. */
     private val replay = object : Runnable {
         override fun run() {
             val current = ringtone ?: return
@@ -51,14 +52,28 @@ internal object CallRinger {
         val mode = (context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager)?.ringerMode
             ?: AudioManager.RINGER_MODE_NORMAL
         if (mode == AudioManager.RINGER_MODE_SILENT) return
+
+        // Hold partial wakelock so CPU stays awake to ring and vibrate while screen is off/locked
+        try {
+            val pm = context.getSystemService(Context.POWER_SERVICE) as? android.os.PowerManager
+            wakeLock = pm?.newWakeLock(android.os.PowerManager.PARTIAL_WAKE_LOCK, "cherish:call_ringer_wake")?.apply {
+                setReferenceCounted(false)
+                acquire(80_000L)
+            }
+        } catch (_: Exception) {}
+
         if (withRingtone && mode == AudioManager.RINGER_MODE_NORMAL) {
             try {
-                ringtone = RingtoneManager.getRingtone(context, RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE))?.apply {
+                val uri = RingtoneManager.getActualDefaultRingtoneUri(context, RingtoneManager.TYPE_RINGTONE)
+                    ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
+                    ?: android.provider.Settings.System.DEFAULT_RINGTONE_URI
+                ringtone = RingtoneManager.getRingtone(context, uri)?.apply {
                     audioAttributes = ATTRIBUTES
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) isLooping = true
                     play()
                 }
-                if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) handler.postDelayed(replay, 1_000L)
+                // Watchdog replay ensuring continuous ringing even across OEMs that stop after 1 track cycle
+                handler.postDelayed(replay, 1_000L)
             } catch (e: Exception) {
                 Log.w(TAG, "Ringtone unavailable", e)
             }
@@ -94,6 +109,10 @@ internal object CallRinger {
                 vibrator(context)?.cancel()
             } catch (_: Exception) {}
         }
+        try {
+            wakeLock?.takeIf { it.isHeld }?.release()
+        } catch (_: Exception) {}
+        wakeLock = null
     }
 
     private fun vibrator(context: Context): Vibrator? =

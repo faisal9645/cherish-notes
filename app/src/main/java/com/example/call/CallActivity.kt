@@ -201,7 +201,7 @@ class CallActivity : ComponentActivity() {
     private fun answer(invite: CallInvite?) {
         val keyguard = getSystemService(Context.KEYGUARD_SERVICE) as? KeyguardManager
         val discreet = app.securityPreferences.getCallMaskingStyle().equals("discreet", ignoreCase = true)
-        if (keyguard != null && keyguard.isKeyguardLocked && (!CallPrivacy.showIdentity(this) || discreet) &&
+        if (keyguard != null && keyguard.isKeyguardLocked && discreet &&
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
         ) {
             keyguard.requestDismissKeyguard(this, object : KeyguardManager.KeyguardDismissCallback() {
@@ -290,14 +290,15 @@ class CallActivity : ComponentActivity() {
 
         fun incomingIntent(context: Context, invite: CallInvite): Intent =
             putInvite(Intent(context, CallActivity::class.java).setAction(ACTION_INCOMING), invite)
-                .addFlags(Intent.FLAG_ACTIVITY_NO_USER_ACTION)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NO_USER_ACTION)
 
         fun answerIntent(context: Context, invite: CallInvite): Intent =
             putInvite(Intent(context, CallActivity::class.java).setAction(ACTION_ANSWER), invite)
-                .addFlags(Intent.FLAG_ACTIVITY_NO_USER_ACTION)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NO_USER_ACTION)
 
         fun showIntent(context: Context): Intent =
-            Intent(context, CallActivity::class.java).setAction(ACTION_SHOW).addFlags(Intent.FLAG_ACTIVITY_NO_USER_ACTION)
+            Intent(context, CallActivity::class.java).setAction(ACTION_SHOW)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_NO_USER_ACTION)
 
         fun putInvite(intent: Intent, invite: CallInvite): Intent = intent
             .putExtra(EXTRA_CALL_ID, invite.callId)

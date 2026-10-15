@@ -117,15 +117,18 @@ object CallNotifications {
      * Already up for this call: it just goes on ringing.
      */
     fun showIncoming(context: Context, invite: CallInvite) {
-        // From here the notification rings, not the call screen
-        CallRinger.stop(context)
-        if (shownCallId == invite.callId && isIncomingShown(context)) return
         createChannels(context)
         val prefs = SecurityPreferences.getInstance(context)
         val isMasked = prefs.getCallMaskingStyle().equals("discreet", ignoreCase = true)
         // Quietened: still there to answer, without sound or vibration (and no full screen, which
         // would turn the screen back on)
         val silenced = silencedCallId == invite.callId
+        if (!silenced) {
+            CallRinger.start(context, withRingtone = prefs.isCallRingingEnabled())
+        } else {
+            CallRinger.stop(context)
+        }
+        if (shownCallId == invite.callId && isIncomingShown(context)) return
         val channelId = if (prefs.isCallRingingEnabled() && !silenced) CHANNEL_INCOMING else CHANNEL_INCOMING_SILENT
         val remaining = invite.ringUntil - System.currentTimeMillis()
         val ringFor = if (remaining < 25_000L) 75_000L else remaining.coerceAtMost(90_000L)

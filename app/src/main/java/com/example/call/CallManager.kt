@@ -320,7 +320,7 @@ object CallManager {
         if (invite.ringUntil > 0 && invite.ringUntil < (now - 60_000L)) return@post
         val me = app.authRepository.getCurrentUserId()
         val myCouple = currentCoupleId()
-        if (me.isBlank() || myCouple == null || invite.coupleId != myCouple || isSameUser(invite.callerId, me)) return@post
+        if (me.isBlank() || myCouple == null || !isSameCouple(invite.coupleId, myCouple) || isSameUser(invite.callerId, me)) return@post
         if (hasActiveCall()) return@post
         if (!markSeen(invite.callId)) return@post
         val secPrefs = app.securityPreferences
@@ -379,7 +379,8 @@ object CallManager {
     fun accept(fromNotification: CallInvite? = null) = post {
         if (_state.value.phase != CallPhase.INCOMING_RINGING && fromNotification != null && !hasActiveCall()) {
             val me = app.authRepository.getCurrentUserId()
-            if (me.isBlank() || fromNotification.coupleId != currentCoupleId()) return@post
+            val myCouple = currentCoupleId()
+            if (me.isBlank() || (myCouple != null && !isSameCouple(fromNotification.coupleId, myCouple))) return@post
             seenCalls += fromNotification.callId
             ringFor(fromNotification, me, RingAt.NOWHERE)
         }
@@ -528,19 +529,26 @@ object CallManager {
         watchingIncoming = true
         scope.launch {
             app.authRepository.currentUserState
-                .map { user -> cleanCoupleId(user?.coupleId) to user?.id?.trim()?.ifBlank { null } }
+                .map { user ->
+                    val c = cleanCoupleId(user?.coupleId) ?: currentCoupleId()
+                    val m = user?.id?.trim()?.ifBlank { null } ?: app.authRepository.getCurrentUserId().ifBlank { null }
+                    c to m
+                }
                 .distinctUntilChanged()
                 .collectLatest { (couple, me) ->
                     if (couple == null || me == null) {
                         if (hasActiveCall()) finish(CallEndReason.HANGUP, serverReason = "hangup")
                         return@collectLatest
                     }
-                    if (!repo.ensureMember(couple)) return@collectLatest
+                    scope.launch {
+                        try { repo.ensureMember(couple) } catch (_: Exception) {}
+                    }
                     repo.observeControl(couple).collect { control ->
                         val now = System.currentTimeMillis()
-                        val isCallee = control != null && (isSameUser(control.calleeId, me) || control.calleeId.isBlank() || (!isSameUser(control.callerId, me) && control.callerId.isNotBlank()))
-                        val notExpired = control != null && (control.ringExpiresAt > (now - 15_000L) || control.ringExpiresAt == 0L)
-                        if (control != null && control.state == CallRecord.STATE_RINGING && isCallee && notExpired) {
+                        if (control == null) return@collect
+                        val isCallee = isSameUser(control.calleeId, me) || control.calleeId.isBlank() || (!isSameUser(control.callerId, me) && control.callerId.isNotBlank())
+                        val notExpired = control.ringExpiresAt > (now - 15_000L) || control.ringExpiresAt == 0L
+                        if (control.state == CallRecord.STATE_RINGING && isCallee && notExpired) {
                             onIncomingInvite(
                                 CallInvite(
                                     callId = control.callId,
@@ -550,6 +558,9 @@ object CallManager {
                                     ringUntil = if (control.ringExpiresAt > now) control.ringExpiresAt else (now + RING_TIMEOUT_MS)
                                 )
                             )
+                        } else if (control.state != CallRecord.STATE_RINGING && callId == control.callId && _state.value.phase == CallPhase.INCOMING_RINGING) {
+                            CallNotifications.cancelIncoming(app)
+                            finish(CallEndReason.CANCELLED, serverReason = null)
                         }
                     }
                 }
@@ -1148,6 +1159,13 @@ object CallManager {
 
     private fun cleanCoupleId(raw: String?): String? =
         raw?.trim()?.ifBlank { null }?.takeIf { it != "couple_default" }
+
+    private fun isSameCouple(a: String?, b: String?): Boolean {
+        if (a.isNullOrBlank() || b.isNullOrBlank()) return false
+        val ca = a.trim().removePrefix("couple_").lowercase()
+        val cb = b.trim().removePrefix("couple_").lowercase()
+        return ca == cb || a.trim().equals(b.trim(), ignoreCase = true)
+    }
 
     /** The partner's name, unless calls must not show who it is. */
     private fun peerName(fallback: String?): String? {
