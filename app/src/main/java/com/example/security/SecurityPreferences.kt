@@ -40,6 +40,19 @@ class SecurityPreferences(private val context: Context) {
      * so that Activity transitions and pause/stop events never trigger disguise mode.
      */
     var isExternalPickerActive: Boolean = false
+        set(value) {
+            field = value
+            externalPickerSince = if (value) android.os.SystemClock.elapsedRealtime() else 0L
+        }
+
+    @Volatile private var externalPickerSince = 0L
+
+    /**
+     * A picker, the camera or a chooser opened from the app is on screen: the user is still in the
+     * app (no notification pops up over it). Only for a while, in case they left from there.
+     */
+    fun isInExternalPicker(): Boolean = isExternalPickerActive &&
+        android.os.SystemClock.elapsedRealtime() - externalPickerSince < EXTERNAL_PICKER_IN_APP_MS
 
     /**
      * Timestamp of the most recent call termination. Prevents app from accidentally
@@ -898,6 +911,7 @@ class SecurityPreferences(private val context: Context) {
     }
 
     companion object {
+        private const val EXTERNAL_PICKER_IN_APP_MS = 2L * 60 * 1000
         private const val KEY_DISGUISE_ENABLED = "disguise_enabled"
         private const val KEY_DISGUISE_PASSCODE = "disguise_passcode"
         private const val KEY_APP_LOCK_ENABLED = "app_lock_enabled"

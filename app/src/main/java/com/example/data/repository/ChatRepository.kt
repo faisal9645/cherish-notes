@@ -883,6 +883,8 @@ class ChatRepository(
                 convRef.collection("messages").document(messageId).set(newMessage).await()
 
                 acknowledgedSentIds.add(messageId)
+                // The partner's phone hears about it now, even with the app closed there
+                com.example.notifications.PartnerPush.message(convId, messageId)
 
                 // Instantly update local state so single tick appears immediately!
                 _messagesFlow.update { list ->

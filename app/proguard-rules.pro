@@ -2,6 +2,11 @@
 # Cherish Notes - R8 / ProGuard Configuration
 # ==============================================================================
 
+# Shrinking (unused code and resources out) and renaming only, which is where the size goes.
+# R8's optimizer once wrote bytecode Android refused to load (VerifyError in CallRecordingViews:
+# the app crashed at the end of every call, in 1.7.59 to 1.7.89), so it stays off.
+-dontoptimize
+
 # Keep line numbers and file names for readable crash stack traces
 -keepattributes SourceFile,LineNumberTable
 -keepattributes *Annotation*,Signature,InnerClasses,EnclosingMethod
@@ -103,10 +108,10 @@
 # ------------------------------------------------------------------------------
 # Jetpack Compose & Coil
 # ------------------------------------------------------------------------------
+# Both ship their own rules. Keeping all of Compose kept every Material icon (thousands,
+# the app uses a few dozen), so the R8 builds were barely smaller than unminified ones.
 -dontwarn androidx.compose.**
--keep class androidx.compose.** { *; }
 -dontwarn coil.**
--keep class coil.** { *; }
 
 # ------------------------------------------------------------------------------
 # Android Components & Receivers

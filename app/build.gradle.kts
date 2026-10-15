@@ -16,8 +16,8 @@ android {
     applicationId = "com.cherish.notes"
     minSdk = 24
     targetSdk = 35
-    versionCode = 161
-    versionName = "1.7.89"
+    versionCode = 162
+    versionName = "1.7.90"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     resourceConfigurations += listOf("en")
@@ -55,6 +55,7 @@ android {
   buildTypes {
     release {
       isCrunchPngs = true
+      // R8 shrinks and renames for a smaller app; it doesn't optimize (see proguard-rules.pro)
       isMinifyEnabled = true
       isShrinkResources = true
       proguardFiles(
@@ -134,6 +135,10 @@ dependencies {
   implementation(libs.firebase.functions)
   implementation(libs.agora.voice.rtc.basic)
   implementation(libs.agora.ains)
+  // Makes videos and call recordings smaller before they upload (the phone's own encoders)
+  implementation(libs.androidx.media3.transformer)
+  implementation(libs.androidx.media3.effect)
+  implementation(libs.androidx.media3.common)
   implementation(libs.androidx.biometric)
   implementation(libs.androidx.credentials)
   implementation(libs.androidx.credentials.play.services)

@@ -23,10 +23,14 @@ import com.example.security.SecurityPreferences
  * hide who's calling too: no name, no photo, nothing about the relationship.
  */
 object CallNotifications {
-    const val CHANNEL_INCOMING = "calls_incoming"
-    const val CHANNEL_INCOMING_SILENT = "calls_incoming_silent"
-    const val CHANNEL_ONGOING = "calls_ongoing"
-    const val CHANNEL_MISSED = "calls_missed"
+    // New ids in 1.7.90: earlier channels could have been made hidden on the lock screen, and an
+    // app can't change that on a channel that already exists
+    const val CHANNEL_INCOMING = "calls_incoming_v2"
+    const val CHANNEL_INCOMING_SILENT = "calls_incoming_silent_v2"
+    const val CHANNEL_ONGOING = "calls_ongoing_v2"
+    const val CHANNEL_MISSED = "calls_missed_v2"
+    private val OLD_CHANNEL_IDS = listOf("calls_incoming", "calls_incoming_silent", "calls_ongoing", "calls_missed")
+    @Volatile private var oldChannelsRemoved = false
 
     const val ID_INCOMING = 2001
     const val ID_ONGOING = 2002
@@ -62,7 +66,7 @@ object CallNotifications {
             )
             enableVibration(true)
             vibrationPattern = longArrayOf(0, 900, 700, 900, 700)
-            lockscreenVisibility = Notification.VISIBILITY_SECRET
+            lockscreenVisibility = Notification.VISIBILITY_PRIVATE
             setShowBadge(false)
         }
         val incomingSilent = NotificationChannel(CHANNEL_INCOMING_SILENT, "Silent calls", NotificationManager.IMPORTANCE_HIGH).apply {
@@ -70,22 +74,35 @@ object CallNotifications {
             setSound(null, null)
             enableVibration(true)
             vibrationPattern = longArrayOf(0, 900, 700, 900, 700)
-            lockscreenVisibility = Notification.VISIBILITY_SECRET
+            lockscreenVisibility = Notification.VISIBILITY_PRIVATE
             setShowBadge(false)
         }
         val ongoing = NotificationChannel(CHANNEL_ONGOING, "Call in progress", NotificationManager.IMPORTANCE_LOW).apply {
             description = "Shown while a call is on"
             setSound(null, null)
             enableVibration(false)
-            lockscreenVisibility = Notification.VISIBILITY_SECRET
+            lockscreenVisibility = Notification.VISIBILITY_PRIVATE
             setShowBadge(false)
         }
         val missed = NotificationChannel(CHANNEL_MISSED, "Missed calls", NotificationManager.IMPORTANCE_DEFAULT).apply {
             description = "Calls you didn't answer"
-            lockscreenVisibility = Notification.VISIBILITY_SECRET
+            lockscreenVisibility = Notification.VISIBILITY_PRIVATE
         }
         manager.createNotificationChannels(listOf(incoming, incomingSilent, ongoing, missed))
+        if (!oldChannelsRemoved) {
+            oldChannelsRemoved = true
+            OLD_CHANNEL_IDS.forEach { id -> runCatching { manager.deleteNotificationChannel(id) } }
+        }
     }
+
+    /** What a locked phone shows instead when the phone hides notification content there: no name. */
+    private fun lockScreenVersion(context: Context, channelId: String, title: String, text: String): Notification =
+        NotificationCompat.Builder(context, channelId)
+            .setSmallIcon(R.drawable.ic_stat_notes)
+            .setColor(ACCENT)
+            .setContentTitle(title)
+            .setContentText(text)
+            .build()
 
     /** The ringing notification, with Answer and Decline. Full screen only where Android allows it. */
     fun showIncoming(context: Context, invite: CallInvite) {
@@ -133,7 +150,8 @@ object CallNotifications {
                 .setSilent(!isRinging)
                 .setTimeoutAfter(ringFor)
                 .setContentIntent(openNotesIntent)
-                .setVisibility(NotificationCompat.VISIBILITY_SECRET)
+                .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+                .setPublicVersion(lockScreenVersion(context, channelId, maskedTitle, maskedText))
 
             val notification = builder.build()
             notify(context, ID_INCOMING, notification)
@@ -171,7 +189,8 @@ object CallNotifications {
             .setTimeoutAfter(ringFor)
             .setContentIntent(fullScreen)
             .setFullScreenIntent(fullScreen, true)
-            .setVisibility(NotificationCompat.VISIBILITY_SECRET)
+            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+            .setPublicVersion(lockScreenVersion(context, channelId, NEUTRAL_INCOMING, "Tap to answer"))
             .addPerson(person)
 
         val notification = try {
@@ -219,7 +238,8 @@ object CallNotifications {
             .setOnlyAlertOnce(true)
             .setSilent(true)
             .setContentIntent(show)
-            .setVisibility(NotificationCompat.VISIBILITY_SECRET)
+            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+            .setPublicVersion(lockScreenVersion(context, CHANNEL_ONGOING, NEUTRAL_ONGOING, "Voice call"))
             .addPerson(person)
         if (state.connectedAtElapsed > 0L) {
             val connectedAtWall = System.currentTimeMillis() -
@@ -239,6 +259,8 @@ object CallNotifications {
 
     /** A call nobody answered on this phone. Opens the chat like a message notification does. */
     fun showMissed(context: Context, callId: String, callerName: String?) {
+        // Inside the app it's on the call screen and in the chat already: nothing pops up
+        if (com.example.notifications.NotificationHelper.isAppOpenOnScreen(context)) return
         synchronized(missedShown) {
             if (!missedShown.add(callId)) return
             if (missedShown.size > 50) missedShown.remove(missedShown.first())
@@ -273,7 +295,15 @@ object CallNotifications {
             .setAutoCancel(true)
             .setSilent(!isRinging)
             .setContentIntent(open)
-            .setVisibility(NotificationCompat.VISIBILITY_SECRET)
+            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+            .setPublicVersion(
+                lockScreenVersion(
+                    context,
+                    CHANNEL_MISSED,
+                    if (isMasked) prefs.getMaskedNotificationTitle() else NEUTRAL_MISSED,
+                    if (isMasked) prefs.getMaskedNotificationText() else "Tap to open"
+                )
+            )
             .build()
         notify(context, ID_MISSED, notification)
     }

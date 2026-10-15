@@ -456,6 +456,8 @@ class AuthRepository(private val context: Context) {
         val coupleId = _currentUserState.value?.coupleId?.trim()?.ifBlank { null } ?: getSavedCoupleId()
         val coupleRef = getCoupleDocRef(coupleId) ?: return false
         val signalId = java.util.UUID.randomUUID().toString()
+        // Only this phone is told when it's felt
+        com.example.notifications.ThinkingOfYou.rememberSent(context, signalId)
         val signal = mapOf(
             "id" to signalId,
             "type" to "heartbeat",
@@ -465,6 +467,8 @@ class AuthRepository(private val context: Context) {
         ensureFirebaseAuth {
             try {
                 coupleRef.set(mapOf("signal" to signal), com.google.firebase.firestore.SetOptions.merge())
+                    // Felt now even with the app closed on the partner's phone
+                    .addOnSuccessListener { com.example.notifications.PartnerPush.heartbeat(coupleRef.id, signalId) }
                 Log.d("AuthRepository", "Heartbeat signal dispatched for couple $coupleId")
             } catch (e: Exception) {
                 Log.w("AuthRepository", "Failed to dispatch heartbeat signal: ${e.message}")
@@ -492,6 +496,7 @@ class AuthRepository(private val context: Context) {
         ensureFirebaseAuth {
             try {
                 coupleRef.set(mapOf("signalFelt" to feltData), com.google.firebase.firestore.SetOptions.merge())
+                    .addOnSuccessListener { com.example.notifications.PartnerPush.heartbeatFelt(coupleRef.id, signalId) }
                 Log.d("AuthRepository", "Heartbeat felt acknowledgment dispatched for $signalId")
             } catch (e: Exception) {
                 Log.w("AuthRepository", "Failed to dispatch heartbeat felt: ${e.message}")
@@ -1776,33 +1781,7 @@ class AuthRepository(private val context: Context) {
     fun saveFcmToken(token: String) {
         val uid = getCurrentUserId()
         if (uid.isBlank() || token.isBlank()) return
-        context.getSharedPreferences("cherish_user_session", Context.MODE_PRIVATE)
-            .edit()
-            .putString("fcmToken", token)
-            .apply()
-        ensureFirebaseAuth {
-            try {
-                userDocument(uid)?.set(mapOf("fcmToken" to token), com.google.firebase.firestore.SetOptions.merge())
-                val altUid = if (uid.startsWith("user_")) uid.removePrefix("user_") else "user_$uid"
-                userDocument(altUid)?.set(mapOf("fcmToken" to token), com.google.firebase.firestore.SetOptions.merge())
-                val coupleId = _currentUserState.value?.coupleId
-                if (!coupleId.isNullOrBlank()) {
-                    val cleanUid = uid.removePrefix("user_").lowercase()
-                    firestore?.collection("couples")?.document(coupleId)
-                        ?.get()?.addOnSuccessListener { snap ->
-                            if (snap != null && snap.exists()) {
-                                val p1Id = snap.getString("partner1Id")?.removePrefix("user_")?.lowercase()
-                                val isP1 = p1Id == cleanUid || snap.getString("partner1Name")?.trim()?.lowercase() == cleanUid
-                                val tokenField = if (isP1) "partner1FcmToken" else "partner2FcmToken"
-                                snap.reference.set(mapOf(tokenField to token), com.google.firebase.firestore.SetOptions.merge())
-                            }
-                        }
-                }
-                Log.i("AuthRepository", "FCM token saved successfully for user $uid and couple")
-            } catch (e: Exception) {
-                Log.w("AuthRepository", "Failed saving FCM token: ${e.message}")
-            }
-        }
+        storeFcmToken(uid, token)
     }
 
     fun updateFcmToken(uid: String) {
@@ -1811,38 +1790,56 @@ class AuthRepository(private val context: Context) {
             val messaging = FirebaseMessaging.getInstance()
             messaging.isAutoInitEnabled = true
             messaging.token
-                .addOnSuccessListener { token ->
-                    if (!token.isNullOrBlank()) {
-                        context.getSharedPreferences("cherish_user_session", Context.MODE_PRIVATE)
-                            .edit()
-                            .putString("fcmToken", token)
-                            .apply()
-                        ensureFirebaseAuth {
-                            userDocument(uid)?.set(mapOf("fcmToken" to token), com.google.firebase.firestore.SetOptions.merge())
-                            val altUid = if (uid.startsWith("user_")) uid.removePrefix("user_") else "user_$uid"
-                            userDocument(altUid)?.set(mapOf("fcmToken" to token), com.google.firebase.firestore.SetOptions.merge())
-                            val coupleId = _currentUserState.value?.coupleId
-                            if (!coupleId.isNullOrBlank()) {
-                                val cleanUid = uid.removePrefix("user_").lowercase()
-                                firestore?.collection("couples")?.document(coupleId)
-                                    ?.get()?.addOnSuccessListener { snap ->
-                                        if (snap != null && snap.exists()) {
-                                            val p1Id = snap.getString("partner1Id")?.removePrefix("user_")?.lowercase()
-                                            val isP1 = p1Id == cleanUid || snap.getString("partner1Name")?.trim()?.lowercase() == cleanUid
-                                            val tokenField = if (isP1) "partner1FcmToken" else "partner2FcmToken"
-                                            snap.reference.set(mapOf(tokenField to token), com.google.firebase.firestore.SetOptions.merge())
-                                        }
-                                    }
-                            }
-                            Log.i("AuthRepository", "FCM token updated successfully for user $uid and couple")
-                        }
-                    }
-                }
+                .addOnSuccessListener { token -> if (!token.isNullOrBlank()) storeFcmToken(uid, token) }
                 .addOnFailureListener { e ->
                     Log.w("AuthRepository", "FCM token registration failed gracefully: ${e.message}")
                 }
         } catch (e: Throwable) {
             Log.w("AuthRepository", "FCM token registration skipped", e)
+        }
+    }
+
+    /**
+     * Saves [token] (this phone's push address) everywhere the server looks for [uid]'s: the
+     * profile, the same id with or without "user_", and this partner's slot on the couple record.
+     */
+    private fun storeFcmToken(uid: String, token: String) {
+        context.getSharedPreferences("cherish_user_session", Context.MODE_PRIVATE)
+            .edit()
+            .putString("fcmToken", token)
+            .apply()
+        ensureFirebaseAuth {
+            try {
+                val update = mapOf("fcmToken" to token)
+                val merge = com.google.firebase.firestore.SetOptions.merge()
+                userDocument(uid)?.set(update, merge)
+                val altUid = if (uid.startsWith("user_")) uid.removePrefix("user_") else "user_$uid"
+                userDocument(altUid)?.set(update, merge)
+                getCoupleDocRef(_currentUserState.value?.coupleId)?.get()?.addOnSuccessListener { snap ->
+                    if (snap == null || !snap.exists()) return@addOnSuccessListener
+                    // Only once the record says which partner this phone is: a guess could put this
+                    // address in the partner's slot, and their pushes would come here
+                    val field = coupleTokenField(snap, uid) ?: return@addOnSuccessListener
+                    if (snap.getString(field) != token) snap.reference.set(mapOf(field to token), merge)
+                }
+                Log.i("AuthRepository", "FCM token saved for user $uid")
+            } catch (e: Exception) {
+                Log.w("AuthRepository", "Failed saving FCM token: ${e.message}")
+            }
+        }
+    }
+
+    /** [uid]'s push-address field on the couple record, when the record says which partner they are. */
+    private fun coupleTokenField(couple: com.google.firebase.firestore.DocumentSnapshot, uid: String): String? {
+        val me = uid.removePrefix("user_").trim().lowercase()
+        if (me.isBlank()) return null
+        fun isMe(id: String?, name: String?): Boolean =
+            id?.removePrefix("user_")?.trim()?.lowercase() == me ||
+                name?.trim()?.lowercase()?.replace(Regex("[^a-z0-9_]"), "") == me
+        return when {
+            isMe(couple.getString("partner1Id"), couple.getString("partner1Name")) -> "partner1FcmToken"
+            isMe(couple.getString("partner2Id"), couple.getString("partner2Name")) -> "partner2FcmToken"
+            else -> null
         }
     }
 

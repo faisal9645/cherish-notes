@@ -4,6 +4,8 @@
  * - callStart / callAnswer / callEnd / callJoined / callRenewToken: called by the app. Each checks
  *   the caller's sign-in is one of the couple's (memberUids) and that the user is in the call.
  * - agoraRecordingWebhook: Agora's recording events, accepted only with a valid signature.
+ * - callPushOnControlChange: rings the called phone when a call starts ringing, and stops it when
+ *   the call is called off or rings out (the app writes the couple's current call itself).
  * - onCallRecordingMessageDeleted: deleting the recording's chat message deletes the audio too.
  * - callSweeper: every few minutes, ends calls nobody hung up and finishes stuck recordings.
  *
@@ -12,15 +14,15 @@
  * The audio itself is in Storage at couples/{coupleId}/call-recordings/{callId}/recording.mp4.
  */
 const { onCall, onRequest, HttpsError } = require("firebase-functions/v2/https");
-const { onDocumentDeleted } = require("firebase-functions/v2/firestore");
+const { onDocumentDeleted, onDocumentWritten } = require("firebase-functions/v2/firestore");
 const { onSchedule } = require("firebase-functions/v2/scheduler");
 const logger = require("firebase-functions/logger");
 const { getFirestore, FieldValue, Timestamp } = require("firebase-admin/firestore");
-const { getMessaging } = require("firebase-admin/messaging");
 const { getStorage } = require("firebase-admin/storage");
 
 const logic = require("./lib/callLogic");
 const { buildRtcToken } = require("./lib/agora");
+const push = require("./lib/push");
 
 const {
   CALL_STATE,
@@ -48,11 +50,8 @@ const UPLOAD_GIVE_UP_MS = 6 * 60 * 60 * 1000;
 const START_GIVE_UP_MS = 2 * 60 * 1000;
 /** Someone who used the app this recently may get the call even without a push. */
 const ONLINE_WINDOW_MS = 5 * 60 * 1000;
-
-const DEAD_TOKEN_ERRORS = new Set([
-  "messaging/registration-token-not-registered",
-  "messaging/invalid-registration-token",
-]);
+/** Long enough for a phone that's briefly offline to still stop ringing and show the missed call. */
+const STOP_RINGING_TTL_MS = 5 * 60 * 1000;
 
 const db = () => getFirestore();
 const coupleRef = (coupleId) => db().collection("couples").doc(coupleId);
@@ -153,72 +152,19 @@ async function requireParticipantCall(coupleId, callId, userId) {
 
 // ---------- Pushes ----------
 
-/** Sends a call push to [receiverId]'s phone; says whether it went out. */
-async function sendCallPush(receiverId, data, ttlMs, coupleId) {
-  let token = null;
-  let targetRef = null;
-
-  // 1. Direct receiverId
-  const receiverRef = db().collection("users").doc(receiverId);
-  const receiver = await receiverRef.get();
-  if (receiver.exists && receiver.get("fcmToken")) {
-    token = receiver.get("fcmToken");
-    targetRef = receiverRef;
-  }
-
-  // 2. Check alternate prefix (with/without user_)
-  if (!token) {
-    const altId = receiverId.startsWith("user_") ? receiverId.replace(/^user_/, "") : `user_${receiverId}`;
-    const altRef = db().collection("users").doc(altId);
-    const altSnap = await altRef.get();
-    if (altSnap.exists && altSnap.get("fcmToken")) {
-      token = altSnap.get("fcmToken");
-      targetRef = altRef;
-    }
-  }
-
-  // 3. Fallback: Check couple document for partner FCM token
-  if (!token && coupleId) {
-    const coupleSnap = await coupleRef(coupleId).get();
-    if (coupleSnap.exists) {
-      const c = coupleSnap.data() || {};
-      const cleanReceiver = String(receiverId || "").replace(/^user_/, "").toLowerCase();
-      const p1Match = (c.partner1Id && String(c.partner1Id).replace(/^user_/, "").toLowerCase() === cleanReceiver) ||
-                      (c.partner1Name && String(c.partner1Name).trim().toLowerCase() === cleanReceiver);
-      const p2Match = (c.partner2Id && String(c.partner2Id).replace(/^user_/, "").toLowerCase() === cleanReceiver) ||
-                      (c.partner2Name && String(c.partner2Name).trim().toLowerCase() === cleanReceiver);
-      if (p1Match && c.partner1FcmToken) token = c.partner1FcmToken;
-      else if (p2Match && c.partner2FcmToken) token = c.partner2FcmToken;
-      else if (c.partner1FcmToken && !p2Match) token = c.partner1FcmToken;
-      else if (c.partner2FcmToken) token = c.partner2FcmToken;
-    }
-  }
-
-  if (!token) return "no_push_token";
-  try {
-    await getMessaging().send({ token, data, android: { priority: "high", ttl: ttlMs } });
-    return "sent";
-  } catch (error) {
-    if (DEAD_TOKEN_ERRORS.has(error.code) && targetRef) {
-      await db().runTransaction(async (tx) => {
-        const fresh = await tx.get(targetRef);
-        // Only if the phone hasn't already saved a new one meanwhile
-        if (fresh.get("fcmToken") === token) tx.update(targetRef, { fcmToken: FieldValue.delete() });
-      });
-      return "dead_push_token";
-    }
-    logger.error("Call push failed", { receiverId, code: error.code, message: error.message });
-    return "push_failed";
-  }
+/** Sends a call push to [receiverId]'s phone (never to [senderId]'s); says whether it went out. */
+async function sendCallPush(receiverId, data, ttlMs, coupleId, senderId) {
+  return push.pushToMember(db(), { receiverId, senderId, coupleId, data, android: { priority: "high", ttl: ttlMs } });
 }
 
 /** Tells the called phone to stop ringing (cancelled, missed, or answered). */
 async function sendStopRinging(call, reason) {
   await sendCallPush(
     call.calleeId,
-    { type: "call_cancel", callId: call.callId, coupleId: call.coupleId, reason },
-    5 * 60 * 1000,
-    call.coupleId
+    push.callCancelData({ callId: call.callId, coupleId: call.coupleId, reason }),
+    STOP_RINGING_TTL_MS,
+    call.coupleId,
+    call.callerId
   );
 }
 
@@ -236,18 +182,7 @@ async function isRecentlyOnline(userId, nowMs) {
 }
 
 async function displayNameOf(userId, couple) {
-  let snap = await db().collection("users").doc(userId).get();
-  if (!snap.exists) {
-    const altId = userId.startsWith("user_") ? userId.replace(/^user_/, "") : `user_${userId}`;
-    snap = await db().collection("users").doc(altId).get();
-  }
-  const name = snap.exists ? String(snap.get("displayName") || "").trim() : "";
-  if (name) return name;
-  if (couple) {
-    if (logic.isSameUser(logic.memberId(couple.partner1Id, couple.partner1Name), userId)) return String(couple.partner1Name || "");
-    if (logic.isSameUser(logic.memberId(couple.partner2Id, couple.partner2Name), userId)) return String(couple.partner2Name || "");
-  }
-  return "";
+  return push.displayNameOf(db(), userId, couple);
 }
 
 // ---------- Ending calls ----------
@@ -574,17 +509,17 @@ exports.callStart = onCall(async (request) => {
   if (outcome.isNew) {
     const pushed = await sendCallPush(
       calleeId,
-      {
-        type: "call_invite",
+      push.callInviteData({
         callId,
         coupleId,
         callerId: userId,
         callerName: await displayNameOf(userId, couple),
-        sentAt: String(nowMs),
-        ringUntil: String(ringExpiresAt),
-      },
+        ringUntilMs: ringExpiresAt,
+        nowMs,
+      }),
       RING_TIMEOUT_MS,
-      coupleId
+      coupleId,
+      userId
     );
     // No way to reach the other phone, and the app isn't open there either
     if (pushed !== "sent" && !(await isRecentlyOnline(calleeId, nowMs))) {
@@ -744,6 +679,45 @@ exports.callFinalizeClientRecording = onCall(async (request) => {
   return { status, callId };
 });
 
+// ---------- Ringing the other phone ----------
+
+/**
+ * The app writes the couple's current call itself (couples/{coupleId}/callControl/active), so the
+ * called phone rings from here: a push when a call starts ringing (also with the app closed
+ * there), and one when it's called off or rings out, so that phone stops and shows it was missed.
+ * The app asks for the same pushes directly (pushPartner); the called phone acts on each once.
+ */
+exports.callPushOnControlChange = onDocumentWritten("couples/{coupleId}/callControl/{docId}", async (event) => {
+  const before = event.data && event.data.before && event.data.before.exists ? event.data.before.data() : null;
+  const after = event.data && event.data.after && event.data.after.exists ? event.data.after.data() : null;
+  const change = logic.controlPushChange(before, after);
+  if (!change || !logic.isValidCallId(after.callId)) return;
+  const { coupleId } = event.params;
+  const nowMs = Date.now();
+  const couple = (await coupleRef(coupleId).get()).data() || {};
+  const callerId = String(after.callerId || "");
+  const calleeId = logic.calleeFor(after, couple);
+  if (!calleeId || logic.isSameUser(calleeId, callerId)) return;
+
+  if (change.kind === "invite") {
+    const ringUntil = logic.ringUntilMs(after) || nowMs + RING_TIMEOUT_MS;
+    if (ringUntil <= nowMs) return;
+    const data = push.callInviteData({
+      callId: after.callId,
+      coupleId,
+      callerId,
+      callerName: await displayNameOf(callerId, couple),
+      ringUntilMs: ringUntil,
+      nowMs,
+    });
+    const outcome = await sendCallPush(calleeId, data, ringUntil - nowMs, coupleId, callerId);
+    logger.info("Call ringing push", { callId: after.callId, outcome });
+    return;
+  }
+  const data = push.callCancelData({ callId: after.callId, coupleId, reason: change.reason });
+  await sendCallPush(calleeId, data, STOP_RINGING_TTL_MS, coupleId, callerId);
+});
+
 // ---------- Deleting a recording ----------
 
 exports.onCallRecordingMessageDeleted = onDocumentDeleted(
@@ -799,6 +773,7 @@ async function sweepCall(job, nowMs) {
   if (logic.isActive(call)) return;
 
   // The call is over
+  const recordingStatus = (call.recording && call.recording.status) || RECORDING.WAITING;
   if (recordingStatus === RECORDING.STARTING || recordingStatus === RECORDING.RECORDING) {
     await stopRecording(coupleId, callId);
   }

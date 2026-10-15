@@ -63,32 +63,16 @@ class OtaUpdateManager private constructor(private val appContext: Context) {
     suspend fun checkForUpdates(silent: Boolean = false): UpdateInfo? = withContext(Dispatchers.IO) {
         if (!silent) _updateState.value = UpdateState.Checking
         try {
-            // Tier 1: Static version.json via resilient Anycast CDN mirrors (jsDelivr, Statically) + raw GitHub
-            var info = fetchFromVersionJson()
-
-            // Tier 2: Cloud Firestore app_config/version fallback (Google infrastructure, immune to GitHub DNS blocks)
-            if (info == null || !info.hasUpdate) {
-                val firestoreInfo = fetchFromFirestore()
-                if (firestoreInfo != null && (info == null || firestoreInfo.hasUpdate)) {
-                    info = firestoreInfo
-                }
-            }
-
-            // Tier 3: GitHub Releases API (checked if Tier 1 & 2 failed or didn't report an update)
-            if (info == null || !info.hasUpdate) {
-                val apiInfo = fetchFromApi()
-                if (apiInfo != null && (info == null || apiInfo.hasUpdate)) {
-                    info = apiInfo
-                }
-            }
-
-            // Tier 4: GitHub Web Releases 302 redirect fallback (checked if still no update found)
-            if (info == null || !info.hasUpdate) {
-                val webInfo = fetchFromWebRedirect()
-                if (webInfo != null && (info == null || webInfo.hasUpdate)) {
-                    info = webInfo
-                }
-            }
+            // Any one source can lag behind (CDN copies of version.json are kept for hours), so
+            // the latest is the newest build any of them knows: version.json (GitHub's own copy
+            // first) and the GitHub Releases API always; Firestore and the web page when those
+            // don't know of an update
+            val found = mutableListOf<UpdateInfo>()
+            fetchFromVersionJson()?.let { found += it }
+            fetchFromApi()?.let { found += it }
+            if (found.none { it.hasUpdate }) fetchFromFirestore()?.let { found += it }
+            if (found.none { it.hasUpdate }) fetchFromWebRedirect()?.let { found += it }
+            val info = found.maxByOrNull { it.latestVersionCode }
 
             if (info != null) {
                 _latestUpdateInfo.value = info
@@ -109,67 +93,76 @@ class OtaUpdateManager private constructor(private val appContext: Context) {
         }
     }
 
+    /**
+     * version.json from GitHub's own copy (current within minutes) and a CDN copy (can be hours
+     * old), the newest of the two; the other mirrors only when those can't be reached.
+     */
     private fun fetchFromVersionJson(): UpdateInfo? {
         val mirrors = listOf(
+            "https://raw.githubusercontent.com/faisal9645/cherish-notes/main/version.json",
             "https://cdn.jsdelivr.net/gh/faisal9645/cherish-notes@main/version.json",
             "https://fastly.jsdelivr.net/gh/faisal9645/cherish-notes@main/version.json",
-            "https://raw.githubusercontent.com/faisal9645/cherish-notes/main/version.json",
             "https://cdn.statically.io/gh/faisal9645/cherish-notes/main/version.json"
         )
+        var best: UpdateInfo? = null
+        var answers = 0
         for (mirrorUrl in mirrors) {
-            var conn: HttpURLConnection? = null
-            try {
-                val url = URL("$mirrorUrl?t=${System.currentTimeMillis()}")
-                conn = (url.openConnection() as HttpURLConnection).apply {
-                    requestMethod = "GET"
-                    setRequestProperty("User-Agent", "CherishApp/${BuildConfig.VERSION_NAME}")
-                    setRequestProperty("Cache-Control", "no-cache")
-                    setRequestProperty("Pragma", "no-cache")
-                    connectTimeout = 7000
-                    readTimeout = 7000
-                }
-
-                if (conn.responseCode != 200) {
-                    conn.disconnect()
-                    continue
-                }
-
-                val text = conn.inputStream.bufferedReader().use { it.readText() }
-                conn.disconnect()
-                val json = JSONObject(text)
-
-                val remoteVersionCode = json.optInt("versionCode", -1)
-                val remoteVersionName = json.optString("versionName", "")
-                val downloadUrl = json.optString("downloadUrl", "")
-                val releaseNotes = json.optString("releaseNotes", "Performance improvements and bug fixes.")
-                val assetSize = json.optLong("assetSize", 0L)
-                val releaseDate = json.optString("releaseDate", "")
-
-                val currentCode = BuildConfig.VERSION_CODE
-                val isNewer = if (remoteVersionCode > 0) {
-                    remoteVersionCode > currentCode
-                } else {
-                    isSemanticVersionNewer(remoteVersionName, BuildConfig.VERSION_NAME)
-                }
-
-                if (downloadUrl.isBlank()) continue
-
-                return UpdateInfo(
-                    hasUpdate = isNewer,
-                    latestVersionName = remoteVersionName.ifBlank { "v$remoteVersionName" },
-                    latestVersionCode = remoteVersionCode,
-                    releaseNotes = releaseNotes,
-                    downloadUrl = downloadUrl,
-                    assetSize = assetSize,
-                    releaseDate = releaseDate
-                )
-            } catch (e: Exception) {
-                android.util.Log.w("OtaUpdateManager", "Mirror $mirrorUrl failed: ${e.message}")
-            } finally {
-                try { conn?.disconnect() } catch (_: Exception) {}
-            }
+            if (answers >= 2) break
+            val info = fetchVersionJsonFrom(mirrorUrl) ?: continue
+            answers++
+            if (best == null || info.latestVersionCode > best.latestVersionCode) best = info
         }
-        return null
+        return best
+    }
+
+    /** version.json from one mirror; null when it can't be read or doesn't name a download. */
+    private fun fetchVersionJsonFrom(mirrorUrl: String): UpdateInfo? {
+        var conn: HttpURLConnection? = null
+        try {
+            val url = URL("$mirrorUrl?t=${System.currentTimeMillis()}")
+            conn = (url.openConnection() as HttpURLConnection).apply {
+                requestMethod = "GET"
+                setRequestProperty("User-Agent", "CherishApp/${BuildConfig.VERSION_NAME}")
+                setRequestProperty("Cache-Control", "no-cache")
+                setRequestProperty("Pragma", "no-cache")
+                connectTimeout = 7000
+                readTimeout = 7000
+            }
+            if (conn.responseCode != 200) return null
+
+            val text = conn.inputStream.bufferedReader().use { it.readText() }
+            val json = JSONObject(text)
+
+            val remoteVersionCode = json.optInt("versionCode", -1)
+            val remoteVersionName = json.optString("versionName", "")
+            val downloadUrl = json.optString("downloadUrl", "")
+            val releaseNotes = json.optString("releaseNotes", "Performance improvements and bug fixes.")
+            val assetSize = json.optLong("assetSize", 0L)
+            val releaseDate = json.optString("releaseDate", "")
+
+            val currentCode = BuildConfig.VERSION_CODE
+            val isNewer = if (remoteVersionCode > 0) {
+                remoteVersionCode > currentCode
+            } else {
+                isSemanticVersionNewer(remoteVersionName, BuildConfig.VERSION_NAME)
+            }
+            if (downloadUrl.isBlank()) return null
+
+            return UpdateInfo(
+                hasUpdate = isNewer,
+                latestVersionName = remoteVersionName.ifBlank { "v$remoteVersionName" },
+                latestVersionCode = remoteVersionCode,
+                releaseNotes = releaseNotes,
+                downloadUrl = downloadUrl,
+                assetSize = assetSize,
+                releaseDate = releaseDate
+            )
+        } catch (e: Exception) {
+            android.util.Log.w("OtaUpdateManager", "Mirror $mirrorUrl failed: ${e.message}")
+            return null
+        } finally {
+            try { conn?.disconnect() } catch (_: Exception) {}
+        }
     }
 
     private suspend fun fetchFromFirestore(): UpdateInfo? {

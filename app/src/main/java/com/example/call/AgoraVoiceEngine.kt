@@ -40,6 +40,8 @@ class AgoraVoiceEngine(private val context: Context) {
     @Volatile private var activeListener: Listener? = null
     @Volatile private var currentAudioMode: String = "balanced"
     @Volatile private var isLowDataMode: Boolean = false
+    /** This call moved to the speech profile for a bad network (until the next call joins). */
+    @Volatile private var downgradedForNetwork = false
 
     private val eventHandler = object : IRtcEngineEventHandler() {
         override fun onJoinChannelSuccess(channel: String?, uid: Int, elapsed: Int) {
@@ -80,14 +82,15 @@ class AgoraVoiceEngine(private val context: Context) {
 
         override fun onNetworkQuality(uid: Int, txQuality: Int, rxQuality: Int) {
             activeListener?.onNetworkQuality(uid, txQuality, rxQuality)
-            // If network quality drops to POOR (4), BAD (5), or VERY_BAD (6), dynamically downgrade audio profile to prevent dropped packets
-            if (!isLowDataMode && (txQuality >= 4 || rxQuality >= 4)) {
+            // This phone's own link (uid 0) gone bad: the lighter speech profile, for the rest of
+            // the call. Switching back and forth would break up the audio each time the network wobbles.
+            val bad = txQuality in Constants.QUALITY_BAD..Constants.QUALITY_DOWN ||
+                rxQuality in Constants.QUALITY_BAD..Constants.QUALITY_DOWN
+            if (uid == 0 && bad && !isLowDataMode && !downgradedForNetwork) {
+                downgradedForNetwork = true
                 try {
                     engine?.setAudioProfile(Constants.AUDIO_PROFILE_SPEECH_STANDARD)
-                } catch (_: Throwable) {}
-            } else if (!isLowDataMode && txQuality <= 2 && rxQuality <= 2) {
-                try {
-                    engine?.setAudioProfile(Constants.AUDIO_PROFILE_MUSIC_STANDARD)
+                    Log.i(TAG, "Weak network: speech audio profile for the rest of the call")
                 } catch (_: Throwable) {}
             }
         }
@@ -300,6 +303,8 @@ class AgoraVoiceEngine(private val context: Context) {
     /** Joins the call's channel as [uid], talking and listening. */
     fun join(token: String, channel: String, uid: Int): Boolean {
         val rtc = engine ?: return false
+        // A new call starts on the profile its settings chose (see setLowDataMode)
+        downgradedForNetwork = false
         val options = ChannelMediaOptions().apply {
             channelProfile = Constants.CHANNEL_PROFILE_COMMUNICATION
             clientRoleType = Constants.CLIENT_ROLE_BROADCASTER

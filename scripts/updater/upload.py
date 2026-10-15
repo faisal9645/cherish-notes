@@ -255,9 +255,9 @@ def release_notes(version_name: str, version_code: int, custom_notes: str = None
         return f"Notes v{version_name} (Build {version_code}):\n{custom_notes}"
     return (
         f"Notes v{version_name} (Build {version_code}):\n"
-        "\u2022 Cleaner, simpler layout\n"
-        "\u2022 Voice typing and read aloud\n"
-        "\u2022 Settings open with a swipe\n"
+        "\u2022 Smaller download\n"
+        "\u2022 Videos and recordings take less space\n"
+        "\u2022 Notifications arrive more reliably, also on the lock screen\n"
         "\u2022 Bug fixes and improvements"
     )
 

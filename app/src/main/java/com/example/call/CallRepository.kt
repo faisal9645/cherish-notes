@@ -102,9 +102,8 @@ class CallRepository(private val context: Context) {
         return CallResponse(status = CallRecord.STATE_CONNECTED, callId = callId, callerId = null, join = null)
     }
 
-    suspend fun renewToken(coupleId: String, userId: String, callId: String): CallResponse {
-        return directRenewToken(coupleId, userId, callId)
-    }
+    /** A fresh token for this phone's own place in the call ([uid]: the caller's or the callee's). */
+    fun renewToken(callId: String, uid: Int): CallResponse = directRenewToken(callId, uid)
 
     suspend fun finalizeClientRecording(coupleId: String, userId: String, callId: String): CallResponse {
         return try {
@@ -212,6 +211,8 @@ class CallRepository(private val context: Context) {
         )
         try {
             controlRef.set(controlDoc).await()
+            // Rings the partner's phone even when the app is closed there
+            com.example.notifications.PartnerPush.callInvite(coupleId, callId)
         } catch (e: Exception) {
             Log.w(TAG, "directStart writing callControl failed: ${e.message}")
         }
@@ -308,6 +309,11 @@ class CallRepository(private val context: Context) {
             ).await()
         } catch (_: Exception) {}
 
+        // Called off or rang out before an answer: the partner's phone stops ringing and shows it as missed
+        if (endState == CallRecord.STATE_CANCELLED || endState == CallRecord.STATE_MISSED) {
+            com.example.notifications.PartnerPush.callCancel(coupleId, callId)
+        }
+
         return CallResponse(
             status = endState,
             callId = callId,
@@ -316,8 +322,7 @@ class CallRepository(private val context: Context) {
         )
     }
 
-    private fun directRenewToken(coupleId: String, userId: String, callId: String): CallResponse {
-        val uid = 1001
+    private fun directRenewToken(callId: String, uid: Int): CallResponse {
         val token = AgoraTokenBuilder.buildToken(channelName = callId, uid = uid)
         return CallResponse(
             status = "ok",
@@ -542,6 +547,7 @@ class CallRepository(private val context: Context) {
             endReason = getString("endReason"),
             endedBy = getString("endedBy"),
             recordingStatus = RecordingStatus.fromKey(recording?.get("status") as? String),
+            recordingBy = (recording?.get("recorders") as? List<*>)?.filterIsInstance<String>().orEmpty(),
             recordingFailure = recording?.get("failureCode") as? String,
             recordingPaths = (recording?.get("storagePaths") as? List<*>)?.filterIsInstance<String>().orEmpty(),
             recordingDurationSec = (recording?.get("durationSec") as? Number)?.toInt() ?: 0,

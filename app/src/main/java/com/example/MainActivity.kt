@@ -435,6 +435,8 @@ class MainActivity : FragmentActivity() {
         }
         // Ends an installer trip, or continues an update install that waited for permission
         com.example.update.OtaUpdateManager.getInstance(this).onAppResumed(this)
+        // Back from the battery or Auto-start settings
+        com.example.notifications.BackgroundDelivery.onAppResumed(this)
         if (!app.securityPreferences.isDisguiseActive()) {
             val callPhase = com.example.call.CallManager.state.value.phase
             val invite = com.example.call.CallManager.currentInvite

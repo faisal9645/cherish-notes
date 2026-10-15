@@ -39,35 +39,42 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.runtime.Immutable
 import com.example.CherishApplication
 import com.example.call.CallRecordingPlayer
 import com.example.data.model.Message
+import com.example.util.formatRecordingLength
 
-/** "12:05" / "1:02:05" for a recording's length. */
-fun formatRecordingLength(totalSeconds: Int): String {
-    val seconds = totalSeconds.coerceAtLeast(0)
-    val hours = seconds / 3600
-    val minutes = (seconds % 3600) / 60
-    val rest = seconds % 60
-    return if (hours > 0) "%d:%02d:%02d".format(hours, minutes, rest) else "%d:%02d".format(minutes, rest)
-}
+/** The recording player's colours. */
+@Immutable
+data class CallRecordingColors(
+    val content: Color,
+    val button: Color,
+    val buttonIcon: Color,
+    val track: Color,
+    val progress: Color
+)
 
 /**
  * A call recording's player: play/pause, how far along it is (tap the bar to jump), its length,
  * and plainly when it's loading, gone, or couldn't load (tap to try again). Used in the chat bubble
  * and on the Shared Gallery's Calls tab, so both play the same recording the same way.
+ *
+ * Its colours come as one value: with five separate colour arguments R8 once compiled this
+ * function into bytecode Android refused to load, and the app crashed at the end of every call.
  */
 @Composable
 fun CallRecordingPlayerRow(
     message: Message,
-    contentColor: Color,
-    buttonColor: Color,
-    buttonIconColor: Color,
-    trackColor: Color,
-    progressColor: Color,
+    colors: CallRecordingColors,
     modifier: Modifier = Modifier,
     trailing: (@Composable () -> Unit)? = null
 ) {
+    val contentColor = colors.content
+    val buttonColor = colors.button
+    val buttonIconColor = colors.buttonIcon
+    val trackColor = colors.track
+    val progressColor = colors.progress
     val context = LocalContext.current
     val app = context.applicationContext as? CherishApplication ?: return
     val player = app.voicePlayerHelper

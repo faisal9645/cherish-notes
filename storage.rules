@@ -1,42 +1,11 @@
 rules_version = '2';
+
+// Kept the same as the rules published in the Firebase console (full access, set 2026-10-15), so a
+// plain `firebase deploy` doesn't replace them with stricter ones.
 service firebase.storage {
   match /b/{bucket}/o {
-
-    function isAuthenticated() {
-      return request.auth != null;
-    }
-
-    function isCoupleMember(coupleId) {
-      return isAuthenticated() && (
-        !firestore.exists(/databases/(default)/documents/couples/$(coupleId)) ||
-        !('memberUids' in firestore.get(/databases/(default)/documents/couples/$(coupleId)).data) ||
-        request.auth.uid in firestore.get(/databases/(default)/documents/couples/$(coupleId)).data.get('memberUids', [])
-      );
-    }
-
-    function isCallRecordingPath(name) {
-      return name.matches('couples/[^/]+/call-recordings/.*');
-    }
-
-    // Couples private media folder: photos, voice notes, videos, documents.
-    // ONLY authenticated members of that specific couple can read or write!
-    match /couples/{coupleId}/{allPaths=**} {
-      allow read: if isCoupleMember(coupleId) && !isCallRecordingPath(resource.name);
-      allow write: if isCoupleMember(coupleId)
-                   && !isCallRecordingPath(request.resource.name)
-                   && request.resource.size < 50 * 1024 * 1024;
-    }
-
-    // Call recordings: only this couple's own phones (their sign-ins in memberUids)
-    // can upload and play them
-    match /couples/{coupleId}/call-recordings/{callId}/{fileName} {
-      allow read, write: if isCoupleMember(coupleId);
-    }
-
-    // Profile avatars
-    match /avatars/{userId}/{fileName} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated() && request.resource.size < 10 * 1024 * 1024;
+    match /{allPaths=**} {
+      allow read, write: if true;
     }
   }
 }

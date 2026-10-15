@@ -25,10 +25,14 @@ import java.util.concurrent.atomic.AtomicInteger
  * and single-notification consolidation (prevents multiple spam notifications).
  */
 object NotificationHelper {
-    const val CHANNEL_MESSAGES_ID = "notes_sync_channel"
+    // New ids in 1.7.90: earlier channels could have been made hidden on the lock screen, and an
+    // app can't change that on a channel that already exists
+    const val CHANNEL_MESSAGES_ID = "notes_sync_channel_v2"
     private const val CHANNEL_MESSAGES_NAME = "Notes & Reminders"
-    const val CHANNEL_REMINDERS_ID = "notes_reminders_channel"
+    const val CHANNEL_REMINDERS_ID = "notes_reminders_channel_v2"
     private const val CHANNEL_REMINDERS_NAME = "Note Reminders"
+    private val OLD_CHANNEL_IDS = listOf("notes_sync_channel", "notes_reminders_channel")
+    @Volatile private var oldChannelsRemoved = false
     const val NOTIFICATION_ID_MESSAGE = 1001
 
     private val pendingUnreadCount = AtomicInteger(0)
@@ -56,6 +60,8 @@ object NotificationHelper {
 
     fun createNotificationChannels(context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            // Shown on the lock screen; when the phone hides notification content there, each
+            // notification's masked public version is what shows (see lockScreenVersion)
             val messagesChannel = NotificationChannel(
                 CHANNEL_MESSAGES_ID,
                 CHANNEL_MESSAGES_NAME,
@@ -64,7 +70,7 @@ object NotificationHelper {
                 description = "Discreet sync and reminder notifications"
                 enableVibration(true)
                 setShowBadge(true)
-                lockscreenVisibility = android.app.Notification.VISIBILITY_SECRET
+                lockscreenVisibility = android.app.Notification.VISIBILITY_PRIVATE
             }
 
             val remindersChannel = NotificationChannel(
@@ -76,14 +82,30 @@ object NotificationHelper {
                 enableVibration(true)
                 setShowBadge(true)
                 enableLights(true)
-                lockscreenVisibility = android.app.Notification.VISIBILITY_SECRET
+                lockscreenVisibility = android.app.Notification.VISIBILITY_PUBLIC
             }
 
             val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
             manager?.createNotificationChannel(messagesChannel)
             manager?.createNotificationChannel(remindersChannel)
+            if (!oldChannelsRemoved) {
+                oldChannelsRemoved = true
+                OLD_CHANNEL_IDS.forEach { id -> runCatching { manager?.deleteNotificationChannel(id) } }
+            }
         }
     }
+
+    /**
+     * What a locked phone shows instead of [channelId]'s notification when the phone hides
+     * notification content on the lock screen: the app's own masked words, never who or what.
+     */
+    private fun lockScreenVersion(context: Context, channelId: String, prefs: SecurityPreferences): android.app.Notification =
+        NotificationCompat.Builder(context, channelId)
+            .setSmallIcon(R.drawable.ic_stat_notes)
+            .setColor(0xFF2563FF.toInt())
+            .setContentTitle(prefs.getMaskedNotificationTitle())
+            .setContentText(prefs.getMaskedNotificationText())
+            .build()
 
     /**
      * Check if user is actively inside the Cherish app so notifications never show
@@ -93,6 +115,8 @@ object NotificationHelper {
         if (com.example.CherishApplication.isAppInForeground) return true
         val app = context.applicationContext as? com.example.CherishApplication
         if (app?.authRepository?.isAppOpenOnScreen() == true) return true
+        // A photo picker, the camera or a file chooser opened from the app: still using the app
+        if (SecurityPreferences.getInstance(context).isInExternalPicker()) return true
         return false
     }
 
@@ -224,16 +248,12 @@ object NotificationHelper {
             return
         }
 
+        // Phone locked and not in use: it alerts ONE time until Cherish is opened; later messages
+        // only update that notification silently. (Every push still shows something: Android
+        // starts delivering an app's pushes late when they don't.)
         val isLocked = isDeviceLockedOrSleeping(context)
-        if (isLocked) {
-            if (hasAlertedWhileLocked.get()) {
-                // Partner locked screen and not using phone: show only ONE time until opening Cherish app
-                return
-            }
-            hasAlertedWhileLocked.set(true)
-        } else {
-            hasAlertedWhileLocked.set(false)
-        }
+        val silentUpdate = isLocked && hasAlertedWhileLocked.get()
+        hasAlertedWhileLocked.set(isLocked)
 
         // Launcher icon badge always shows 1 only, even for multiple notifications
         if (isBadgeEnabled) {
@@ -305,8 +325,11 @@ object NotificationHelper {
             .setDeleteIntent(getDismissIntent(context))
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setDefaults(NotificationCompat.DEFAULT_ALL)
+            .setSilent(silentUpdate)
             .setCategory(NotificationCompat.CATEGORY_MESSAGE)
-            .setVisibility(NotificationCompat.VISIBILITY_SECRET)
+            // On the lock screen too (masked there when the phone hides notification content)
+            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+            .setPublicVersion(lockScreenVersion(context, CHANNEL_MESSAGES_ID, prefs))
 
         val notification = notificationBuilder.build()
 
@@ -369,13 +392,10 @@ object NotificationHelper {
         val isBadgeEnabled = prefs.isBadgeNotificationEnabled()
         val appIcon = getAppIconBitmap(context)
 
+        // Locked: one alert, then silent updates (as for messages)
         val isLocked = isDeviceLockedOrSleeping(context)
-        if (isLocked) {
-            if (hasAlertedWhileLocked.get()) return
-            hasAlertedWhileLocked.set(true)
-        } else {
-            hasAlertedWhileLocked.set(false)
-        }
+        val silentUpdate = isLocked && hasAlertedWhileLocked.get()
+        hasAlertedWhileLocked.set(isLocked)
 
         if (isBadgeEnabled) {
             updateLauncherBadge(context, 1)
@@ -399,8 +419,10 @@ object NotificationHelper {
             .setContentIntent(pendingIntent)
             .setDeleteIntent(getDismissIntent(context))
             .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setSilent(silentUpdate)
             .setCategory(NotificationCompat.CATEGORY_SOCIAL)
-            .setVisibility(NotificationCompat.VISIBILITY_SECRET)
+            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+            .setPublicVersion(lockScreenVersion(context, CHANNEL_MESSAGES_ID, prefs))
             .build()
 
         try {
@@ -462,7 +484,8 @@ object NotificationHelper {
             .setDeleteIntent(getDismissIntent(context))
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(NotificationCompat.CATEGORY_SOCIAL)
-            .setVisibility(NotificationCompat.VISIBILITY_SECRET)
+            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+            .setPublicVersion(lockScreenVersion(context, CHANNEL_MESSAGES_ID, prefs))
             .build()
 
         try {
@@ -624,7 +647,8 @@ object NotificationHelper {
             .setDeleteIntent(getDismissIntent(context))
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
-            .setVisibility(NotificationCompat.VISIBILITY_SECRET)
+            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+            .setPublicVersion(lockScreenVersion(context, CHANNEL_MESSAGES_ID, prefs))
             .build()
 
         try {
@@ -691,7 +715,8 @@ object NotificationHelper {
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setDefaults(NotificationCompat.DEFAULT_ALL)
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
-            .setVisibility(NotificationCompat.VISIBILITY_SECRET)
+            // A note's own reminder: shown in full on the lock screen, like any notes app's
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .build()
 
         try {

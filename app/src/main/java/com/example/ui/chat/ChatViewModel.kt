@@ -626,18 +626,34 @@ class ChatViewModel(
         val retry = { sendMediaFile(uri, type, mediaName) }
         runUpload(label, retry) {
             val coupleId = chatRepository.getConversationId()
-            val preparedFile = if (type == MessageType.IMAGE) {
-                mediaRepository.compressAndPrepareImage(uri)
-            } else {
+            // A video goes out smaller (720p) when that helps: the first part of the bar while
+            // that's done, the rest while it uploads
+            val compressedVideo = if (type == MessageType.VIDEO) {
+                com.example.util.MediaCompressor.compressVideo(CherishApplication.instance, uri) { p ->
+                    reportUploadProgress(p * VIDEO_COMPRESS_SHARE)
+                }
+            } else null
+            val preparedFile = when {
+                type == MessageType.IMAGE -> mediaRepository.compressAndPrepareImage(uri)
+                compressedVideo != null -> compressedVideo
                 // Picked videos and files arrive as content links: copy them so they can upload
-                mediaRepository.copyToCache(uri, mediaName)
+                else -> mediaRepository.copyToCache(uri, mediaName)
             }
+            val sentName = if (compressedVideo != null) {
+                mediaName?.substringBeforeLast('.')?.ifBlank { null }?.let { "$it.mp4" }
+            } else mediaName
 
             val url = mediaRepository.uploadFile(
                 file = preparedFile,
                 type = type,
                 coupleId = coupleId,
-                onProgress = ::reportUploadProgress
+                onProgress = { p ->
+                    if (compressedVideo != null) {
+                        reportUploadProgress(VIDEO_COMPRESS_SHARE + p * (1f - VIDEO_COMPRESS_SHARE))
+                    } else {
+                        reportUploadProgress(p)
+                    }
+                }
             ).getOrNull()
             if (url == null || !isDeliverable(url)) {
                 return@runUpload FailedUpload(label, retry)
@@ -655,7 +671,7 @@ class ChatViewModel(
                 },
                 type = type,
                 mediaUrl = url,
-                mediaName = mediaName ?: preparedFile.name,
+                mediaName = sentName ?: preparedFile.name,
                 mediaSize = preparedFile.length(),
                 replyTo = _uiState.value.replyingToMessage,
                 thumbnailUrls = emptyList()
@@ -1244,5 +1260,7 @@ class ChatViewModel(
     private companion object {
         const val TYPING_IDLE_TIMEOUT_MS = 5_000L
         const val MAX_PAGES_TO_FIND_MESSAGE = 20
+        /** How much of a video's progress bar is making it smaller (the rest is uploading). */
+        const val VIDEO_COMPRESS_SHARE = 0.4f
     }
 }

@@ -770,8 +770,12 @@ private fun choosePreviewSize(sizes: List<Camera.Size>, videoW: Int, videoH: Int
         ?: candidates.maxByOrNull { it.width * it.height }
 }
 
-/** High-efficiency compression for round video note messages (approx 6-7 MB per minute, fast upload). */
-private const val VIDEO_NOTE_BIT_RATE = 950_000
+/**
+ * A round video note is shown small, so it's recorded light: about 5 MB a minute (it was about
+ * 8 MB with the camera's own sound settings), which uploads quickly on mobile data.
+ */
+private const val VIDEO_NOTE_BIT_RATE = 650_000
+private const val VIDEO_NOTE_AUDIO_BIT_RATE = 64_000
 
 private fun startVideoRecording(
     context: Context,
@@ -790,6 +794,7 @@ private fun startVideoRecording(
         if (profile != null) {
             recorder.setProfile(profile)
             recorder.setVideoEncodingBitRate(minOf(profile.videoBitRate, VIDEO_NOTE_BIT_RATE))
+            recorder.setAudioEncodingBitRate(minOf(profile.audioBitRate, VIDEO_NOTE_AUDIO_BIT_RATE))
         } else {
             recorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
             recorder.setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
@@ -797,7 +802,7 @@ private fun startVideoRecording(
             recorder.setVideoSize(640, 480)
             recorder.setVideoFrameRate(30)
             recorder.setVideoEncodingBitRate(VIDEO_NOTE_BIT_RATE)
-            recorder.setAudioEncodingBitRate(64_000)
+            recorder.setAudioEncodingBitRate(VIDEO_NOTE_AUDIO_BIT_RATE)
         }
         recorder.setOutputFile(outputFile.absolutePath)
         recorder.setOrientationHint(orientationHint)

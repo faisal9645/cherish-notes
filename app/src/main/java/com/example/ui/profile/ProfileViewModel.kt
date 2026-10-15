@@ -66,6 +66,9 @@ data class UpdateCheckState(
     val apkFile: java.io.File? = null,
     val currentVersion: String = com.example.BuildConfig.VERSION_NAME,
     val latestVersion: String = com.example.BuildConfig.VERSION_NAME,
+    /** Build numbers (versionCode) of the installed app and the latest release. */
+    val currentBuild: Int = com.example.BuildConfig.VERSION_CODE,
+    val latestBuild: Int = com.example.BuildConfig.VERSION_CODE,
     val downloadUrl: String? = null,
     val releaseNotes: String = "",
     val errorMessage: String? = null
@@ -607,6 +610,7 @@ class ProfileViewModel(
             }
 
             if (info != null) {
+                val currentBuild = com.example.BuildConfig.VERSION_CODE
                 if (info.hasUpdate) {
                     _updateState.value = UpdateCheckState(
                         isChecking = false,
@@ -614,6 +618,7 @@ class ProfileViewModel(
                         isUpdateAvailable = true,
                         currentVersion = currentVer,
                         latestVersion = info.latestVersionName.ifBlank { "v$currentVer" },
+                        latestBuild = info.latestVersionCode,
                         downloadUrl = info.downloadUrl,
                         releaseNotes = info.releaseNotes
                     )
@@ -624,8 +629,9 @@ class ProfileViewModel(
                         isUpdateAvailable = false,
                         currentVersion = currentVer,
                         latestVersion = info.latestVersionName.ifBlank { currentVer },
+                        latestBuild = info.latestVersionCode.takeIf { it > 0 } ?: currentBuild,
                         downloadUrl = info.downloadUrl,
-                        releaseNotes = "You are on the latest version of Cherish ($currentVer). All features and OTA updates are active ✨"
+                        releaseNotes = "You are on the latest version of Cherish: $currentVer (build $currentBuild). All features and OTA updates are active ✨"
                     )
                 }
             } else {
@@ -661,6 +667,7 @@ class ProfileViewModel(
                         isUpdateAvailable = true,
                         currentVersion = currentVer,
                         latestVersion = info.latestVersionName.ifBlank { "v$currentVer" },
+                        latestBuild = info.latestVersionCode,
                         downloadUrl = info.downloadUrl,
                         releaseNotes = info.releaseNotes
                     )

@@ -33,10 +33,46 @@ data class HeartbeatFeltEvent(
  * the app in Android) mean no heartbeat either.
  */
 object ThinkingOfYou {
-    /** A heartbeat older than this (or this far in the future, for clock differences) is dropped. */
-    private const val FRESH_WINDOW_MS = 120_000L
+    /**
+     * A heartbeat, or its "felt it", older than this (or this far in the future, for phone clocks
+     * that are off) is dropped: e.g. the last one still on the couple record when the app starts.
+     */
+    private const val FRESH_WINDOW_MS = 10L * 60 * 1000
     private const val PREFS = "cherish_love"
     private const val KEY_LAST_SIGNAL = "last_heartbeat_signal"
+    /** Heartbeats this phone sent and hasn't been told were felt: "id:sentAt", newest last. */
+    private const val KEY_SENT_SIGNALS = "sent_heartbeat_signals"
+    private const val MAX_SENT_SIGNALS = 20
+
+    private fun isFresh(at: Long): Boolean = at <= 0L || kotlin.math.abs(System.currentTimeMillis() - at) <= FRESH_WINDOW_MS
+
+    /** Remembers a heartbeat this phone is sending, so only this phone is told it was felt. */
+    @Synchronized
+    fun rememberSent(context: Context, signalId: String) {
+        if (signalId.isBlank()) return
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val now = System.currentTimeMillis()
+        val kept = sentSignals(prefs).filter { (id, at) -> id != signalId && now - at < 24 * 60 * 60 * 1000L }
+        val updated = (kept + (signalId to now)).takeLast(MAX_SENT_SIGNALS)
+        prefs.edit().putString(KEY_SENT_SIGNALS, updated.joinToString(",") { (id, at) -> "$id:$at" }).apply()
+    }
+
+    /** True once for a heartbeat this phone sent (it's then forgotten, so it's never shown twice). */
+    @Synchronized
+    private fun takeSent(context: Context, signalId: String): Boolean {
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val sent = sentSignals(prefs)
+        val match = sent.firstOrNull { it.first == signalId } ?: return false
+        prefs.edit().putString(KEY_SENT_SIGNALS, (sent - match).joinToString(",") { (id, at) -> "$id:$at" }).apply()
+        return true
+    }
+
+    private fun sentSignals(prefs: android.content.SharedPreferences): List<Pair<String, Long>> =
+        prefs.getString(KEY_SENT_SIGNALS, null).orEmpty().split(",").mapNotNull { entry ->
+            val id = entry.substringBeforeLast(":", "")
+            val at = entry.substringAfterLast(":", "").toLongOrNull()
+            if (id.isBlank() || at == null) null else id to at
+        }
 
     private val _received = MutableSharedFlow<Long>(extraBufferCapacity = 4)
     /** A heartbeat just played on this phone, for the chat's heart pulse. */
@@ -61,6 +97,11 @@ object ThinkingOfYou {
         // Each heartbeat is decided once: one that was dropped is never played later
         if (prefs.getString(KEY_LAST_SIGNAL, null) == signalId) return false
         prefs.edit().putString(KEY_LAST_SIGNAL, signalId).apply()
+        // A moment, not a message: one that arrives late isn't played (nor answered "felt")
+        if (!isFresh(sentAt)) {
+            Log.d("ThinkingOfYou", "Heartbeat $signalId arrived too late, dropped")
+            return false
+        }
 
         val secPrefs = SecurityPreferences.getInstance(context)
         if (!secPrefs.isHeartbeatTriggerEnabled()) {
@@ -135,12 +176,14 @@ object ThinkingOfYou {
     }
 
     /**
-     * Called when the partner acknowledges receiving and feeling our heartbeat trigger.
+     * Called when the partner acknowledges receiving and feeling our heartbeat trigger. Only the
+     * phone that sent that heartbeat is told, once, and only while it's fresh.
      */
     @Synchronized
     fun onPartnerFeltHeartbeat(context: Context, signalId: String, feltAt: Long): Boolean {
         if (signalId.isBlank() || !seenFelt.add(signalId)) return false
         if (seenFelt.size > 50) seenFelt.remove(seenFelt.first())
+        if (!isFresh(feltAt) || !takeSent(context, signalId)) return false
 
         val secPrefs = SecurityPreferences.getInstance(context)
         if (!secPrefs.isHeartbeatTriggerEnabled()) return false

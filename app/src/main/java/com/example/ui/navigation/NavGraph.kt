@@ -722,11 +722,22 @@ fun CherishNavGraph(
                     Spacer(modifier = Modifier.height(6.dp))
 
                     Text(
-                        text = "Version ${if (updateState.isUpdateAvailable) updateState.latestVersion else updateState.currentVersion}",
+                        text = if (updateState.isUpdateAvailable) {
+                            "Version ${updateState.latestVersion} (build ${updateState.latestBuild})"
+                        } else {
+                            "Version ${updateState.currentVersion} (build ${updateState.currentBuild})"
+                        },
                         fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.primary
                     )
+                    if (updateState.isUpdateAvailable) {
+                        Text(
+                            text = "Installed: ${updateState.currentVersion} (build ${updateState.currentBuild})",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
 
                     Spacer(modifier = Modifier.height(14.dp))
 

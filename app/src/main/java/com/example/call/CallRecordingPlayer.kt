@@ -79,12 +79,14 @@ object CallRecordingPlayer {
             val dir = File(File(app.cacheDir, CACHE_DIR), callId)
             val recDir = File(app.cacheDir, "callrec")
             val candidateFiles = listOf(
+                File(dir, "part_0.m4a"),
                 File(dir, "part_0.mp4"),
                 File(dir, "part_0.aac"),
                 File(dir, "part_0.wav"),
                 File(dir, "recording.mp4"),
                 File(dir, "recording.aac"),
                 File(dir, "recording.wav"),
+                File(recDir, "rec_${callId}.m4a"),
                 File(recDir, "rec_${callId}.aac"),
                 File(recDir, "rec_${callId}.wav")
             )
@@ -139,6 +141,7 @@ object CallRecordingPlayer {
                 val safeId = id.filter { it.isLetterOrDigit() || it == '-' || it == '_' }
                 if (safeId.isNotBlank()) {
                     File(root, safeId).deleteRecursively()
+                    File(recDir, "rec_${safeId}.m4a").delete()
                     File(recDir, "rec_${safeId}.aac").delete()
                     File(recDir, "rec_${safeId}.wav").delete()
                 }
@@ -177,6 +180,7 @@ object CallRecordingPlayer {
         record?.recordingPaths?.filter { it.startsWith(prefix) }?.let { candidatePaths.addAll(it) }
         message.recordingPaths.filter { it.startsWith(prefix) }.let { candidatePaths.addAll(it) }
         message.recordingPath?.takeIf { it.startsWith(prefix) }?.let { candidatePaths.add(it) }
+        candidatePaths.add("${prefix}recording.m4a")
         candidatePaths.add("${prefix}recording.aac")
         candidatePaths.add("${prefix}recording.mp4")
         candidatePaths.add("${prefix}recording.wav")
@@ -187,7 +191,7 @@ object CallRecordingPlayer {
 
         return withContext(Dispatchers.IO) {
             val dir = File(File(app.cacheDir, CACHE_DIR), callId).apply { mkdirs() }
-            val existing = listOf("part_0.mp4", "part_0.aac", "part_0.wav", "recording.mp4", "recording.aac")
+            val existing = listOf("part_0.m4a", "part_0.mp4", "part_0.aac", "part_0.wav", "recording.mp4", "recording.aac")
                 .map { File(dir, it) }
                 .firstOrNull { it.exists() && it.length() > 0L }
             if (existing != null) {
@@ -208,12 +212,6 @@ object CallRecordingPlayer {
                             partial.copyTo(destFile, overwrite = true)
                             partial.delete()
                         }
-                        val targetMp4 = File(dir, "part_0.mp4")
-                        if (destFile != targetMp4 && (!targetMp4.exists() || targetMp4.length() == 0L)) {
-                            try {
-                                destFile.copyTo(targetMp4, overwrite = true)
-                            } catch (_: Exception) {}
-                        }
                         downloadedFile = destFile
                         break
                     }
@@ -232,7 +230,8 @@ object CallRecordingPlayer {
                 if (record?.recordingStatus == RecordingStatus.FAILED) {
                     throw Unavailable("This call wasn't recorded")
                 }
-                if (record?.recordingStatus == RecordingStatus.RECORDING) {
+                // The phone that recorded it is still uploading it (tap again in a moment)
+                if (record?.recordingStatus in STILL_SAVING) {
                     throw Unavailable("This recording is still being saved")
                 }
                 if (lastStorageException?.errorCode == StorageException.ERROR_OBJECT_NOT_FOUND) {
@@ -265,5 +264,11 @@ object CallRecordingPlayer {
     }
 
     private const val MESSAGE_PREFIX = "callrec_"
+    private val STILL_SAVING = setOf(
+        RecordingStatus.STARTING,
+        RecordingStatus.RECORDING,
+        RecordingStatus.UPLOADING,
+        RecordingStatus.PROCESSING
+    )
     private val CALL_ID = Regex("^[A-Za-z0-9_-]{4,128}$")
 }

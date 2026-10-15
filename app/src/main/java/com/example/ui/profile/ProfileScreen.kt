@@ -1028,6 +1028,50 @@ fun ProfileScreen(
                     }
                 )
 
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), thickness = 0.6.dp)
+
+                // --- SUBSECTION 4: NOTIFICATIONS WHEN CLOSED (battery and Auto-start; nothing runs in the background) ---
+                val hasAutoStart = remember { com.example.notifications.BackgroundDelivery.hasAutoStartSetting() }
+                ListItem(
+                    headlineContent = { Text("Notifications When Closed", fontSize = 15.sp, fontWeight = FontWeight.SemiBold) },
+                    supportingContent = {
+                        Text(
+                            when {
+                                !isBatteryOptimizationIgnored ->
+                                    "Messages and calls come as push notifications, like WhatsApp: nothing keeps running. If they don't arrive while Cherish is closed, this phone is holding them back: tap Allow."
+                                hasAutoStart ->
+                                    "Messages and calls come as push notifications, like WhatsApp: nothing keeps running. If they still don't arrive while Cherish is closed, turn on Auto-start for it too."
+                                else -> "Messages and calls come as push notifications, like WhatsApp: nothing keeps running."
+                            },
+                            fontSize = 13.sp
+                        )
+                    },
+                    leadingContent = {
+                        Icon(Icons.Filled.NotificationsActive, contentDescription = null, tint = primaryAccent)
+                    },
+                    trailingContent = {
+                        Column(horizontalAlignment = Alignment.End) {
+                            if (!isBatteryOptimizationIgnored) {
+                                FilledTonalButton(
+                                    onClick = { com.example.notifications.BackgroundDelivery.requestUnrestricted(context) },
+                                    shape = RoundedCornerShape(16.dp),
+                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 2.dp)
+                                ) {
+                                    Text("Allow", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                            if (hasAutoStart) {
+                                TextButton(
+                                    onClick = { com.example.notifications.BackgroundDelivery.openAutoStart(context) },
+                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                                ) {
+                                    Text("Auto-start", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                                }
+                            }
+                        }
+                    },
+                    modifier = Modifier.testTag("notifications_when_closed")
+                )
 
                 if (partner != null) {
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), thickness = 0.6.dp)
@@ -2085,6 +2129,13 @@ fun ProfileScreen(
                 Spacer(modifier = Modifier.width(8.dp))
                 Text("Check for Updates", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
             }
+            Text(
+                text = "Installed: ${com.example.BuildConfig.VERSION_NAME} (build ${com.example.BuildConfig.VERSION_CODE})",
+                fontSize = 11.5.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth()
+            )
 
             Button(
                 onClick = {

@@ -150,6 +150,53 @@ function isRingExpired(call, nowMs) {
   return nowMs > until;
 }
 
+/** Ids that don't name anyone: what an older app wrote before it knew the partner. */
+function isPlaceholderId(id) {
+  const value = String(id || "").trim();
+  return PLACEHOLDER_IDS.has(value) || value === "partner";
+}
+
+/** When a ringing call stops ringing (ms; 0 when it doesn't say), however the app wrote it. */
+function ringUntilMs(doc) {
+  if (!doc) return 0;
+  const created = toMillis(doc.createdAt);
+  return toMillis(doc.ringExpiresAtMs) || toMillis(doc.ringExpiresAt) || (created ? created + RING_TIMEOUT_MS : 0);
+}
+
+/** Who a call rings: its callee, or (when the calling phone didn't know yet) the caller's partner. */
+function calleeFor(call, couple) {
+  if (!call) return null;
+  const callee = String(call.calleeId || "").trim();
+  if (callee && !isPlaceholderId(callee)) return callee;
+  return partnerOf(couple, call.callerId);
+}
+
+/**
+ * What the called phone is told when a call stops ringing in [state]: "missed" (nobody answered
+ * in time) or "cancelled" (the caller stopped, or it couldn't go through); null when it was
+ * answered or declined there, so there's nothing to tell it.
+ */
+function cancelReasonFor(state) {
+  if (state === CALL_STATE.MISSED) return CALL_STATE.MISSED;
+  const calledOff = [CALL_STATE.CANCELLED, CALL_STATE.ENDED, CALL_STATE.BUSY, CALL_STATE.UNAVAILABLE, CALL_STATE.FAILED];
+  return calledOff.includes(state) ? CALL_STATE.CANCELLED : null;
+}
+
+/**
+ * What a change to the couple's current call (callControl/active) means for the called phone:
+ * { kind: "invite" } when a call starts ringing, { kind: "cancel", reason } when a ringing call
+ * stops without being answered, null otherwise (answered, declined, or another update of a call
+ * that was already ringing).
+ */
+function controlPushChange(before, after) {
+  if (!after || !after.callId) return null;
+  const wasRinging = Boolean(before && before.callId === after.callId && before.state === CALL_STATE.RINGING);
+  if (after.state === CALL_STATE.RINGING) return wasRinging ? null : { kind: "invite" };
+  if (!wasRinging) return null;
+  const reason = cancelReasonFor(after.state);
+  return reason ? { kind: "cancel", reason } : null;
+}
+
 /** An answered call that never got both phones into the channel. */
 function isConnectTimedOut(call, nowMs) {
   if (!call || call.state !== CALL_STATE.CONNECTING) return false;
@@ -312,6 +359,11 @@ module.exports = {
   isActive,
   toMillis,
   isRingExpired,
+  isPlaceholderId,
+  ringUntilMs,
+  calleeFor,
+  cancelReasonFor,
+  controlPushChange,
   isConnectTimedOut,
   agoraUidFor,
   endTransition,

@@ -1432,11 +1432,13 @@ fun SharedGalleryScreen(
                                             } else if (msg.getTypedType() == MessageType.CALL_RECORDING) {
                                                 com.example.ui.chat.CallRecordingPlayerRow(
                                                     message = msg,
-                                                    contentColor = MaterialTheme.colorScheme.onSurface,
-                                                    buttonColor = RoseGoldPrimary,
-                                                    buttonIconColor = Color.White,
-                                                    trackColor = RoseGoldPrimary.copy(alpha = 0.25f),
-                                                    progressColor = RoseGoldPrimary,
+                                                    colors = com.example.ui.chat.CallRecordingColors(
+                                                        content = MaterialTheme.colorScheme.onSurface,
+                                                        button = RoseGoldPrimary,
+                                                        buttonIcon = Color.White,
+                                                        track = RoseGoldPrimary.copy(alpha = 0.25f),
+                                                        progress = RoseGoldPrimary
+                                                    ),
                                                     modifier = Modifier.fillMaxWidth()
                                                 )
                                             } else {
@@ -1579,11 +1581,13 @@ fun SharedGalleryScreen(
                                                 Spacer(modifier = Modifier.height(10.dp))
                                                 com.example.ui.chat.CallRecordingPlayerRow(
                                                     message = msg,
-                                                    contentColor = MaterialTheme.colorScheme.onSurface,
-                                                    buttonColor = RoseGoldPrimary,
-                                                    buttonIconColor = Color.White,
-                                                    trackColor = RoseGoldPrimary.copy(alpha = 0.25f),
-                                                    progressColor = RoseGoldPrimary,
+                                                    colors = com.example.ui.chat.CallRecordingColors(
+                                                        content = MaterialTheme.colorScheme.onSurface,
+                                                        button = RoseGoldPrimary,
+                                                        buttonIcon = Color.White,
+                                                        track = RoseGoldPrimary.copy(alpha = 0.25f),
+                                                        progress = RoseGoldPrimary
+                                                    ),
                                                     modifier = Modifier.fillMaxWidth()
                                                 )
                                             } else {

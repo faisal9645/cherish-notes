@@ -1051,15 +1051,17 @@ fun MessageBubble(
                     MessageType.CALL_RECORDING -> {
                         CallRecordingPlayerRow(
                             message = message,
-                            contentColor = textColor,
-                            buttonColor = when {
-                                isPrivateMode -> (if (isDark) darkTone(Color(0xFFECECEC)) else Color(0xFF1F2937)).copy(alpha = 0.2f)
-                                isFromMe -> Color.White.copy(alpha = 0.25f)
-                                else -> MaterialTheme.colorScheme.primary
-                            },
-                            buttonIconColor = if (isPrivateMode) textColor else Color.White,
-                            trackColor = textColor.copy(alpha = 0.25f),
-                            progressColor = if (isPrivateMode || isFromMe) textColor else MaterialTheme.colorScheme.primary,
+                            colors = CallRecordingColors(
+                                content = textColor,
+                                button = when {
+                                    isPrivateMode -> (if (isDark) darkTone(Color(0xFFECECEC)) else Color(0xFF1F2937)).copy(alpha = 0.2f)
+                                    isFromMe -> Color.White.copy(alpha = 0.25f)
+                                    else -> MaterialTheme.colorScheme.primary
+                                },
+                                buttonIcon = if (isPrivateMode) textColor else Color.White,
+                                track = textColor.copy(alpha = 0.25f),
+                                progress = if (isPrivateMode || isFromMe) textColor else MaterialTheme.colorScheme.primary
+                            ),
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(vertical = 4.dp, horizontal = 2.dp),

@@ -72,6 +72,8 @@ data class CallRecord(
     /** Who ended it (the app user id), when someone did. */
     val endedBy: String?,
     val recordingStatus: RecordingStatus,
+    /** The phones (app user ids) recording this call; each records it whole, both voices. */
+    val recordingBy: List<String> = emptyList(),
     val recordingFailure: String?,
     val recordingPaths: List<String>,
     val recordingDurationSec: Int,

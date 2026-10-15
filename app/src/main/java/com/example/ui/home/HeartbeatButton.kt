@@ -53,6 +53,11 @@ import kotlinx.coroutines.delay
 val HeartbeatPink = Color(0xFFFF4F9A) // neon rose
 val HeartbeatBlue = com.example.ui.theme.DayBluePrimary
 
+private const val SENT_STATUS = "Heartbeat sent... 💓"
+private const val NOT_FELT_STATUS = "Not felt yet"
+/** The partner's phone answers "felt" right away when it's in use; past this, it wasn't (yet). */
+private const val NOT_FELT_AFTER_MS = 60_000L
+
 /**
  * The heart at the bottom of Love & Us: a tap opens Heartbeat Touch; a long press sends a
  * "thinking of you" heartbeat to the partner's phone (a small heart floats up when it's sent).
@@ -85,9 +90,13 @@ fun HeartbeatButton(
         }
     }
 
-    // React to partner receiving and feeling our heartbeat trigger
+    // After sending: "not felt yet" if no "felt it" comes back in a while (it can still come later)
+    var awaitingFelt by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+
+    // React to partner receiving and feeling our heartbeat trigger (only this phone's own heartbeats)
     LaunchedEffect(Unit) {
         com.example.notifications.ThinkingOfYou.partnerFelt.collect {
+            awaitingFelt?.cancel()
             feltStatus = "Partner felt your heartbeat 💓"
             scope.launch {
                 // Lively joyful double heartbeat flutter on the button
@@ -191,13 +200,20 @@ fun HeartbeatButton(
                     // The heartbeat itself is the feedback (no extra click buzz before it)
                     hapticFeedbackEnabled = false,
                     onLongClick = {
-                        feltStatus = "Heartbeat sent... 💓"
                         // Sending also plays the thump-thump on this phone
                         if (onSendThinkingOfYou()) {
+                            feltStatus = SENT_STATUS
                             scope.launch {
                                 sent.snapTo(0f)
                                 sent.animateTo(1f, tween(1_600, easing = FastOutSlowInEasing))
                                 sent.snapTo(0f)
+                            }
+                            awaitingFelt?.cancel()
+                            awaitingFelt = scope.launch {
+                                delay(NOT_FELT_AFTER_MS)
+                                if (feltStatus == SENT_STATUS) feltStatus = NOT_FELT_STATUS
+                                delay(4_000)
+                                if (feltStatus == NOT_FELT_STATUS) feltStatus = null
                             }
                         }
                     }
