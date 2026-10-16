@@ -17,9 +17,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ExitToApp
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.automirrored.rounded.ExitToApp
+import androidx.compose.material.icons.rounded.KeyboardArrowDown
+import androidx.compose.material.icons.rounded.KeyboardArrowUp
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -153,13 +153,13 @@ fun EmergencyExitHandle(modifier: Modifier = Modifier) {
                 // Up and down arrows: it can be dragged along the edge
                 val arrowTint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = EmergencyExitLook.arrows(exitOpacity))
                 Icon(
-                    imageVector = Icons.Filled.KeyboardArrowUp,
+                    imageVector = Icons.Rounded.KeyboardArrowUp,
                     contentDescription = null,
                     tint = arrowTint,
                     modifier = Modifier.size(16.dp)
                 )
                 Icon(
-                    imageVector = Icons.AutoMirrored.Filled.ExitToApp,
+                    imageVector = Icons.AutoMirrored.Rounded.ExitToApp,
                     contentDescription = "Emergency Exit to Notes (drag to move)",
                     tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = EmergencyExitLook.icon(exitOpacity)),
                     modifier = Modifier
@@ -168,7 +168,7 @@ fun EmergencyExitHandle(modifier: Modifier = Modifier) {
                         .graphicsLayer { if (onLeft) scaleX = -1f }
                 )
                 Icon(
-                    imageVector = Icons.Filled.KeyboardArrowDown,
+                    imageVector = Icons.Rounded.KeyboardArrowDown,
                     contentDescription = null,
                     tint = arrowTint,
                     modifier = Modifier.size(16.dp)

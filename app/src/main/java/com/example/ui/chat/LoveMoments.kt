@@ -30,8 +30,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -69,6 +69,11 @@ import kotlin.math.PI
 import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.random.Random
+import com.example.ui.theme.Indigo950
+import com.example.ui.theme.Lavender200
+import com.example.ui.theme.LovePink
+import com.example.ui.components.pressScaleTarget
+import com.example.ui.components.springClickable
 
 /** Message effect: a goodnight that dims the partner's screen with stars when they see it. */
 const val EFFECT_GOODNIGHT = "goodnight"
@@ -313,7 +318,7 @@ fun GoodnightCard(partnerName: String, onSendGoodnight: () -> Unit, onDismiss: (
                 .shadow(20.dp, RoundedCornerShape(28.dp))
                 .clip(RoundedCornerShape(28.dp))
                 .background(
-                    Brush.verticalGradient(listOf(Color(0xFF141833), Color(0xFF231F48), Color(0xFF3A2A5C)))
+                    Brush.verticalGradient(listOf(Color(0xFF141833), Indigo950, Color(0xFF3A2A5C)))
                 )
                 // Taps on the card itself don't close it
                 .pointerInput(Unit) { detectTapGestures { } }
@@ -343,7 +348,7 @@ fun GoodnightCard(partnerName: String, onSendGoodnight: () -> Unit, onDismiss: (
                 Spacer(modifier = Modifier.height(6.dp))
                 Text(
                     text = "Sleep well, my love",
-                    fontSize = 23.sp,
+                    fontSize = 22.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color(0xFFF5EEDC),
                     textAlign = TextAlign.Center
@@ -352,7 +357,7 @@ fun GoodnightCard(partnerName: String, onSendGoodnight: () -> Unit, onDismiss: (
                 Text(
                     text = if (sent) "Goodnight sent to $partnerName 💛" else "Say goodnight to $partnerName?",
                     fontSize = 14.sp,
-                    color = Color(0xFFCFC6E6),
+                    color = Lavender200,
                     textAlign = TextAlign.Center
                 )
                 Spacer(modifier = Modifier.height(18.dp))
@@ -360,8 +365,9 @@ fun GoodnightCard(partnerName: String, onSendGoodnight: () -> Unit, onDismiss: (
                     shape = RoundedCornerShape(50),
                     color = if (sent) Color(0xFFFFE8A3).copy(alpha = 0.35f) else Color(0xFFFFE8A3),
                     modifier = Modifier
+                        .pressScaleTarget()
                         .clip(RoundedCornerShape(50))
-                        .clickable(enabled = !sent) {
+                        .springClickable(enabled = !sent) {
                             sent = true
                             onSendGoodnight()
                         }
@@ -382,8 +388,9 @@ fun GoodnightCard(partnerName: String, onSendGoodnight: () -> Unit, onDismiss: (
                         fontSize = 13.sp,
                         color = Color(0xFFA79FC2),
                         modifier = Modifier
+                            .pressScaleTarget()
                             .clip(RoundedCornerShape(50))
-                            .clickable { onDismiss() }
+                            .springClickable { onDismiss() }
                             .padding(horizontal = 14.dp, vertical = 8.dp)
                     )
                 }
@@ -416,7 +423,7 @@ fun GoodnightStarsOverlay(partnerName: String, onDismiss: () -> Unit) {
             .graphicsLayer { alpha = dim.value }
             .background(
                 Brush.verticalGradient(
-                    listOf(Color(0xFF02030A).copy(alpha = 0.86f), Color(0xFF0B0A1F).copy(alpha = 0.72f))
+                    listOf(Color(0xFF05060F).copy(alpha = 0.86f), Color(0xFF0B0A1F).copy(alpha = 0.72f))
                 )
             )
             .pointerInput(Unit) { detectTapGestures { onDismiss() } }
@@ -434,7 +441,7 @@ fun GoodnightStarsOverlay(partnerName: String, onDismiss: () -> Unit) {
                             scaleY = glowScale
                         }
                         .background(
-                            Brush.radialGradient(listOf(Color(0x44FFF1C1), Color(0x00FFF1C1))),
+                            Brush.radialGradient(listOf(Color(0x44FFF1C1), Color(0x00FFF3C4))),
                             CircleShape
                         )
                 )
@@ -443,7 +450,7 @@ fun GoodnightStarsOverlay(partnerName: String, onDismiss: () -> Unit) {
             Spacer(modifier = Modifier.height(10.dp))
             Text(
                 text = "Goodnight",
-                fontSize = 26.sp,
+                fontSize = 24.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color(0xFFF5EEDC)
             )
@@ -451,7 +458,7 @@ fun GoodnightStarsOverlay(partnerName: String, onDismiss: () -> Unit) {
             Text(
                 text = "from $partnerName 💛",
                 fontSize = 14.sp,
-                color = Color(0xFFCFC6E6)
+                color = Lavender200
             )
         }
     }
@@ -539,7 +546,7 @@ fun LoveCelebration(title: String, subtitle: String?, onDismiss: () -> Unit) {
                 }
                 .shadow(18.dp, RoundedCornerShape(28.dp))
                 .clip(RoundedCornerShape(28.dp))
-                .background(Brush.verticalGradient(listOf(Color(0xFFFFE3EA), Color(0xFFFFC2D1), Color(0xFFFF9DB5))))
+                .background(Brush.verticalGradient(listOf(Color(0xFFFFE3EA), Color(0xFFFFC2D1), Color(0xFFFF9EB5))))
                 .padding(horizontal = 28.dp, vertical = 24.dp)
         ) {
             Text(
@@ -553,7 +560,7 @@ fun LoveCelebration(title: String, subtitle: String?, onDismiss: () -> Unit) {
             Spacer(modifier = Modifier.height(8.dp))
             Text(
                 text = title,
-                fontSize = 23.sp,
+                fontSize = 22.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color(0xFF4A1F2E),
                 textAlign = TextAlign.Center
@@ -598,7 +605,7 @@ fun HeartbeatReceivedPulse(onDone: () -> Unit) {
                 .background(Brush.radialGradient(listOf(HeartRed.copy(alpha = 0.32f), Color.Transparent)), CircleShape)
         )
         Icon(
-            imageVector = Icons.Default.Favorite,
+            imageVector = Icons.Rounded.Favorite,
             contentDescription = null,
             tint = HeartRed,
             modifier = Modifier
@@ -637,8 +644,8 @@ fun PartnerFeltOverlay(partnerName: String, onDone: () -> Unit) {
     ) {
         Surface(
             shape = CircleShape,
-            color = Color(0xFF1E1B4B).copy(alpha = 0.94f),
-            border = BorderStroke(1.2.dp, Brush.horizontalGradient(listOf(Color(0xFFFFD700), Color(0xFFFF4F9A)))),
+            color = Indigo950.copy(alpha = 0.94f),
+            border = BorderStroke(1.2.dp, Brush.horizontalGradient(listOf(Color(0xFFFFD700), LovePink))),
             shadowElevation = 10.dp,
             modifier = Modifier.graphicsLayer {
                 this.alpha = alpha.value
@@ -686,7 +693,7 @@ fun HugNudgeCard(partnerName: String, mood: String, onSendHug: () -> Unit, onDis
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.padding(start = 14.dp, end = 4.dp, top = 10.dp, bottom = 10.dp)
             ) {
-                Text(text = "🤗", fontSize = 26.sp)
+                Text(text = "🤗", fontSize = 24.sp)
                 Spacer(modifier = Modifier.width(10.dp))
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
@@ -699,7 +706,7 @@ fun HugNudgeCard(partnerName: String, mood: String, onSendHug: () -> Unit, onDis
                     )
                     Text(
                         text = "A hug might help",
-                        fontSize = 12.5.sp,
+                        fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
@@ -707,8 +714,9 @@ fun HugNudgeCard(partnerName: String, mood: String, onSendHug: () -> Unit, onDis
                     shape = RoundedCornerShape(50),
                     color = HeartRed,
                     modifier = Modifier
+                        .pressScaleTarget()
                         .clip(RoundedCornerShape(50))
-                        .clickable { onSendHug() }
+                        .springClickable { onSendHug() }
                         .testTag("hug_nudge_send")
                 ) {
                     Text(
@@ -721,7 +729,7 @@ fun HugNudgeCard(partnerName: String, mood: String, onSendHug: () -> Unit, onDis
                 }
                 IconButton(onClick = onDismiss, modifier = Modifier.size(36.dp)) {
                     Icon(
-                        Icons.Default.Close,
+                        Icons.Rounded.Close,
                         contentDescription = "Close",
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(18.dp)

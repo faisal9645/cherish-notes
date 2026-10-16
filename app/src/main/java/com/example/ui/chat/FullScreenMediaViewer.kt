@@ -25,8 +25,14 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.outlined.*
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.ArrowForward
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.Download
+import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.ZoomIn
+import androidx.compose.material.icons.rounded.ZoomOut
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import com.example.ui.security.SecretWindowGuard
@@ -52,8 +58,6 @@ import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -79,6 +83,14 @@ import java.io.FileOutputStream
 import java.io.OutputStream
 import kotlin.math.abs
 import kotlin.math.roundToInt
+import com.example.ui.theme.Blue500
+import com.example.ui.theme.Gray400
+import com.example.ui.theme.Slate900
+import com.example.ui.components.CherishAlertDialog
+import com.example.ui.components.CherishButton
+import com.example.ui.components.pressScaleTarget
+import com.example.ui.components.springClickable
+import androidx.compose.material.icons.automirrored.rounded.Chat
 
 /**
  * Interactive media viewer:
@@ -565,8 +577,8 @@ fun FullScreenMediaViewer(
                             modifier = Modifier
                                 .size(playerDiameter)
                                 .clip(CircleShape)
-                                .background(Color(0xFF0F172A))
-                                .border(3.dp, Color(0xFF3B82F6).copy(alpha = 0.65f), CircleShape),
+                                .background(Slate900)
+                                .border(3.dp, Blue500.copy(alpha = 0.65f), CircleShape),
                             contentAlignment = Alignment.Center
                         ) {
                             com.example.ui.components.CircularVideoNoteView(
@@ -651,7 +663,7 @@ fun FullScreenMediaViewer(
                     ) {
                         Box(contentAlignment = Alignment.Center) {
                             Icon(
-                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
                                 contentDescription = "Previous photo",
                                 tint = Color.White,
                                 modifier = Modifier.size(24.dp)
@@ -682,7 +694,7 @@ fun FullScreenMediaViewer(
                     ) {
                         Box(contentAlignment = Alignment.Center) {
                             Icon(
-                                imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                                imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
                                 contentDescription = "Next photo",
                                 tint = Color.White,
                                 modifier = Modifier.size(24.dp)
@@ -714,14 +726,15 @@ fun FullScreenMediaViewer(
                             Box(
                                 modifier = Modifier
                                     .size(38.dp)
+                                    .pressScaleTarget()
                                     .clip(CircleShape)
                                     .background(Color.Black.copy(alpha = 0.50f))
-                                    .clickable { closeAnimated() }
+                                    .springClickable { closeAnimated() }
                                     .testTag("full_screen_media_close"),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
-                                    imageVector = Icons.Default.Close,
+                                    imageVector = Icons.Rounded.Close,
                                     contentDescription = "Close",
                                     tint = Color.White,
                                     modifier = Modifier.size(20.dp)
@@ -750,9 +763,10 @@ fun FullScreenMediaViewer(
                                 Box(
                                     modifier = Modifier
                                         .size(38.dp)
+                                        .pressScaleTarget()
                                         .clip(CircleShape)
                                         .background(Color.Black.copy(alpha = 0.50f))
-                                        .clickable {
+                                        .springClickable {
                                             onShowInChat(currentUrl)
                                             onDismiss()
                                         }
@@ -760,7 +774,7 @@ fun FullScreenMediaViewer(
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Icon(
-                                        imageVector = Icons.Default.Chat,
+                                        imageVector = Icons.AutoMirrored.Rounded.Chat,
                                         contentDescription = "Show in chat",
                                         tint = Color.White,
                                         modifier = Modifier.size(18.dp)
@@ -773,14 +787,15 @@ fun FullScreenMediaViewer(
                             Box(
                                 modifier = Modifier
                                     .size(38.dp)
+                                    .pressScaleTarget()
                                     .clip(CircleShape)
                                     .background(Color.Black.copy(alpha = 0.50f))
-                                    .clickable { saveImageToGallery() }
+                                    .springClickable { saveImageToGallery() }
                                     .testTag("full_screen_media_download"),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
-                                    imageVector = Icons.Default.Download,
+                                    imageVector = Icons.Rounded.Download,
                                     contentDescription = "Save to gallery",
                                     tint = Color.White,
                                     modifier = Modifier.size(19.dp)
@@ -792,16 +807,17 @@ fun FullScreenMediaViewer(
                                 Box(
                                     modifier = Modifier
                                         .size(38.dp)
+                                        .pressScaleTarget()
                                         .clip(CircleShape)
                                         .background(Color.Black.copy(alpha = 0.50f))
-                                        .clickable { showDeleteConfirmDialog = true }
+                                        .springClickable { showDeleteConfirmDialog = true }
                                         .testTag("full_screen_media_delete"),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Icon(
-                                        imageVector = Icons.Default.Delete,
+                                        imageVector = Icons.Rounded.Delete,
                                         contentDescription = "Delete",
-                                        tint = Color(0xFF9CA3AF),
+                                        tint = Gray400,
                                         modifier = Modifier.size(19.dp)
                                     )
                                 }
@@ -813,12 +829,12 @@ fun FullScreenMediaViewer(
 
             // Delete Confirmation Dialog
             if (showDeleteConfirmDialog) {
-                AlertDialog(
+                CherishAlertDialog(
                     onDismissRequest = { showDeleteConfirmDialog = false },
                     title = { Text("Delete photo?") },
                     text = { Text("This photo will be permanently deleted from the gallery and chat.") },
                     confirmButton = {
-                        Button(
+                        CherishButton(
                             onClick = {
                                 showDeleteConfirmDialog = false
                                 onDeleteMedia?.invoke(currentUrl)
@@ -886,7 +902,7 @@ fun FullScreenMediaViewer(
                                     }
                                 }
                                 Surface(
-                                    shape = RoundedCornerShape(10.dp),
+                                    shape = RoundedCornerShape(12.dp),
                                     color = Color.Black.copy(alpha = 0.65f),
                                     border = androidx.compose.foundation.BorderStroke(
                                         if (isSelected) 2.5.dp else 1.dp,
@@ -894,8 +910,9 @@ fun FullScreenMediaViewer(
                                     ),
                                     modifier = Modifier
                                         .size(52.dp)
-                                        .clip(RoundedCornerShape(10.dp))
-                                        .clickable {
+                                        .pressScaleTarget()
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .springClickable {
                                             if (currentIndex != idx) {
                                                 scope.launch {
                                                     resetZoom()
@@ -916,7 +933,7 @@ fun FullScreenMediaViewer(
                                         )
                                         if (isVid) {
                                             Icon(
-                                                imageVector = Icons.Default.PlayArrow,
+                                                imageVector = Icons.Rounded.PlayArrow,
                                                 contentDescription = "Video",
                                                 tint = Color.White,
                                                 modifier = Modifier.size(18.dp)
@@ -945,7 +962,7 @@ fun FullScreenMediaViewer(
                                 modifier = Modifier.size(36.dp)
                             ) {
                                 Icon(
-                                    imageVector = Icons.Default.ZoomOut,
+                                    imageVector = Icons.Rounded.ZoomOut,
                                     contentDescription = "Zoom Out (Min Size)",
                                     tint = if (scale > 1.05f) Color.White else Color.White.copy(alpha = 0.4f),
                                     modifier = Modifier.size(20.dp)
@@ -955,8 +972,9 @@ fun FullScreenMediaViewer(
                             // Current Zoom percentage & quick reset
                             Box(
                                 modifier = Modifier
+                                    .pressScaleTarget()
                                     .clip(RoundedCornerShape(12.dp))
-                                    .clickable { resetZoom() }
+                                    .springClickable { resetZoom() }
                                     .padding(horizontal = 10.dp, vertical = 6.dp)
                             ) {
                                 val percent = (scale * 100).roundToInt()
@@ -974,7 +992,7 @@ fun FullScreenMediaViewer(
                                 modifier = Modifier.size(36.dp)
                             ) {
                                 Icon(
-                                    imageVector = Icons.Default.ZoomIn,
+                                    imageVector = Icons.Rounded.ZoomIn,
                                     contentDescription = "Zoom In (Max Size)",
                                     tint = if (scale < 4.95f) Color.White else Color.White.copy(alpha = 0.4f),
                                     modifier = Modifier.size(20.dp)

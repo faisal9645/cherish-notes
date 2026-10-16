@@ -12,8 +12,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.outlined.*
+import androidx.compose.material.icons.rounded.Favorite
+import androidx.compose.material.icons.rounded.Lock
+import androidx.compose.material.icons.rounded.Person
+import androidx.compose.material.icons.rounded.Shield
+import androidx.compose.material.icons.rounded.Visibility
+import androidx.compose.material.icons.rounded.VisibilityOff
+import androidx.compose.material.icons.rounded.VpnKey
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -38,6 +43,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 import com.example.ui.theme.*
+import com.example.ui.components.CherishButton
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -98,7 +104,7 @@ fun AuthScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Favorite,
+                            imageVector = Icons.Rounded.Favorite,
                             contentDescription = "Cherish Heart Logo",
                             tint = Color.White,
                             modifier = Modifier.size(42.dp)
@@ -129,7 +135,7 @@ fun AuthScreen(
                     // Card Container
                     Card(
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(26.dp),
+                        shape = RoundedCornerShape(28.dp),
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
@@ -150,7 +156,7 @@ fun AuthScreen(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Icon(
-                                    imageVector = Icons.Default.Lock,
+                                    imageVector = Icons.Rounded.Lock,
                                     contentDescription = null,
                                     tint = MaterialTheme.colorScheme.primary,
                                     modifier = Modifier.size(20.dp)
@@ -180,10 +186,10 @@ fun AuthScreen(
                                 label = { Text("Username") },
                                 placeholder = { Text("Your name or nickname") },
                                 leadingIcon = {
-                                    Icon(Icons.Default.Person, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                                    Icon(Icons.Rounded.Person, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                                 },
                                 singleLine = true,
-                                shape = RoundedCornerShape(14.dp),
+                                shape = RoundedCornerShape(16.dp),
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .testTag("input_username")
@@ -198,10 +204,10 @@ fun AuthScreen(
                                 label = { Text("Partner Name") },
                                 placeholder = { Text("Your partner's name") },
                                 leadingIcon = {
-                                    Icon(Icons.Default.Favorite, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                                    Icon(Icons.Rounded.Favorite, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                                 },
                                 singleLine = true,
-                                shape = RoundedCornerShape(14.dp),
+                                shape = RoundedCornerShape(16.dp),
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .testTag("input_partner_username")
@@ -216,21 +222,21 @@ fun AuthScreen(
                                 label = { Text("Couple Secret Code") },
                                 supportingText = { Text("Enter the same shared code on both phones") },
                                 leadingIcon = {
-                                    Icon(Icons.Default.VpnKey, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                                    Icon(Icons.Rounded.VpnKey, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                                 },
                                 // Hidden as dots, like a password; the eye shows it while typing
                                 visualTransformation = if (showSecretCode) VisualTransformation.None else PasswordVisualTransformation(),
                                 trailingIcon = {
                                     IconButton(onClick = { showSecretCode = !showSecretCode }) {
                                         Icon(
-                                            imageVector = if (showSecretCode) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                            imageVector = if (showSecretCode) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility,
                                             contentDescription = if (showSecretCode) "Hide code" else "Show code",
                                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
                                     }
                                 },
                                 singleLine = true,
-                                shape = RoundedCornerShape(14.dp),
+                                shape = RoundedCornerShape(16.dp),
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .testTag("input_couple_passcode")
@@ -244,7 +250,7 @@ fun AuthScreen(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .padding(bottom = 14.dp)
-                                        .background(MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.2f), RoundedCornerShape(10.dp))
+                                        .background(MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.2f), RoundedCornerShape(12.dp))
                                         .padding(12.dp),
                                     contentAlignment = Alignment.Center
                                 ) {
@@ -258,7 +264,7 @@ fun AuthScreen(
                             }
 
                             // Connect & Enter Chat Button
-                            Button(
+                            CherishButton(
                                 onClick = {
                                     viewModel.loginCouple(
                                         username = myUsername,
@@ -267,7 +273,7 @@ fun AuthScreen(
                                     )
                                 },
                                 enabled = uiState !is AuthUiState.Loading,
-                                shape = RoundedCornerShape(14.dp),
+                                shape = RoundedCornerShape(16.dp),
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = MaterialTheme.colorScheme.primary,
                                     disabledContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
@@ -286,7 +292,7 @@ fun AuthScreen(
                                     )
                                 } else {
                                     Icon(
-                                        imageVector = Icons.Default.Favorite,
+                                        imageVector = Icons.Rounded.Favorite,
                                         contentDescription = null,
                                         tint = Color.White,
                                         modifier = Modifier.size(20.dp)
@@ -316,7 +322,7 @@ fun AuthScreen(
                             .padding(horizontal = 16.dp, vertical = 10.dp)
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Shield,
+                            imageVector = Icons.Rounded.Shield,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(18.dp)
@@ -344,14 +350,14 @@ fun GoogleBrandIcon(modifier: Modifier = Modifier) {
             .size(24.dp)
             .clip(CircleShape)
             .background(MaterialTheme.colorScheme.surface)
-            .border(BorderStroke(1.dp, Color(0xFFE2E4E9)), CircleShape),
+            .border(BorderStroke(1.dp, Gray200), CircleShape),
         contentAlignment = Alignment.Center
     ) {
         Text(
             text = "G",
             fontWeight = FontWeight.Black,
             fontSize = 15.sp,
-            color = Color(0xFF4285F4)
+            color = Blue500
         )
     }
 }

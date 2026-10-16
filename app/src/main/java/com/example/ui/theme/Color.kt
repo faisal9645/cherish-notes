@@ -196,4 +196,66 @@ val BubbleSent: Color
 val BubbleReceived: Color
     @Composable
     @ReadOnlyComposable
-    get() = if (LocalAmoledBlack.current) Color(0xFF141414) else if (isAppInDark()) Color(0xFF131A2A) else Color(0xFFF1F5FB)
+    get() = if (LocalAmoledBlack.current) Color(0xFF141414) else if (isAppInDark()) Color(0xFF131A2A) else MistBlue
+
+// The secret app's shared palette. Screens use these names instead of their own hex codes, so the
+// same grey, green or pink is the same everywhere (colours that only looked alike were merged).
+// A screen's own one-off accent can stay a hex code; a colour used in several places gets a name.
+
+// Neutral greys (the private chat's ink and paper)
+val InkBlack = Color(0xFF0D0D0D)
+val Neutral900 = Color(0xFF171717)
+val Neutral800 = Color(0xFF262626)
+val Neutral750 = Color(0xFF2F2F2F)
+val Neutral700 = Color(0xFF3A3A3A)
+val Neutral300 = Color(0xFFE0E0E0)
+val Neutral200 = Color(0xFFECECEC)
+
+// Cool greys: secondary text, dividers, quiet icons
+val Gray200 = Color(0xFFE5E7EB)
+val Gray400 = Color(0xFF9CA3AF)
+val Gray500 = Color(0xFF6B7280)
+val Gray600 = Color(0xFF4B5563)
+val Gray700 = Color(0xFF374151)
+val Gray800 = Color(0xFF1F2937)
+
+// Slate: text and borders with a hint of blue
+val Slate300 = Color(0xFFCBD5E1)
+val Slate400 = Color(0xFF94A3B8)
+val Slate500 = Color(0xFF64748B)
+val Slate900 = Color(0xFF0F172A)
+
+// Night surfaces: navy for the Dark theme, graphite for overlays
+val NavyDeep = Color(0xFF0B1233)
+val NavyCard = Color(0xFF1E2638)
+val NavyRaised = Color(0xFF263049)
+val Graphite850 = Color(0xFF1E2024)
+val Graphite800 = Color(0xFF222228)
+val Graphite700 = Color(0xFF2E2F33)
+
+// Blues and indigo
+val MistBlue = Color(0xFFF1F5FB)
+val Blue300 = Color(0xFF93C5FD)
+val Blue500 = Color(0xFF3B82F6)
+val Blue600 = Color(0xFF2563EB)
+val Blue900 = Color(0xFF1E3A8A)
+val Indigo950 = Color(0xFF1E1B4B)
+
+// Success, errors and highlights
+val Emerald500 = Color(0xFF10B981)
+val Green800 = Color(0xFF2E7D32)
+val Green50 = Color(0xFFE8F5E9)
+val Red500 = Color(0xFFEF4444)
+val Red700 = Color(0xFFD32F2F)
+val Amber500 = Color(0xFFF59E0B)
+val Amber600 = Color(0xFFFFB300)
+val Butter = Color(0xFFFFF3C4)
+
+// Love accents: pinks and purples
+val HeartPink = Color(0xFFFF2D55)
+val LovePink = Color(0xFFFF4F9A)
+val Pink500 = Color(0xFFEC4899)
+val Rose600 = Color(0xFFE11D48)
+val Lavender50 = Color(0xFFF1EEF8)
+val Lavender200 = Color(0xFFCFC6E6)
+val Violet600 = Color(0xFF8E2DE2)

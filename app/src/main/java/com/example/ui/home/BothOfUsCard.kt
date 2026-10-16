@@ -27,22 +27,22 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AccessTime
-import androidx.compose.material.icons.filled.AllInclusive
-import androidx.compose.material.icons.filled.Battery3Bar
-import androidx.compose.material.icons.filled.Battery4Bar
-import androidx.compose.material.icons.filled.Battery5Bar
-import androidx.compose.material.icons.filled.Battery6Bar
-import androidx.compose.material.icons.filled.BatteryAlert
-import androidx.compose.material.icons.filled.BatteryChargingFull
-import androidx.compose.material.icons.filled.BatteryFull
-import androidx.compose.material.icons.filled.CalendarMonth
-import androidx.compose.material.icons.filled.ChevronRight
-import androidx.compose.material.icons.filled.EditNote
-import androidx.compose.material.icons.filled.EventAvailable
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.FavoriteBorder
-import androidx.compose.material.icons.filled.PhotoLibrary
+import androidx.compose.material.icons.rounded.AccessTime
+import androidx.compose.material.icons.rounded.AllInclusive
+import androidx.compose.material.icons.rounded.Battery3Bar
+import androidx.compose.material.icons.rounded.Battery4Bar
+import androidx.compose.material.icons.rounded.Battery5Bar
+import androidx.compose.material.icons.rounded.Battery6Bar
+import androidx.compose.material.icons.rounded.BatteryAlert
+import androidx.compose.material.icons.rounded.BatteryChargingFull
+import androidx.compose.material.icons.rounded.BatteryFull
+import androidx.compose.material.icons.rounded.CalendarMonth
+import androidx.compose.material.icons.rounded.ChevronRight
+import androidx.compose.material.icons.rounded.EditNote
+import androidx.compose.material.icons.rounded.EventAvailable
+import androidx.compose.material.icons.rounded.Favorite
+import androidx.compose.material.icons.rounded.FavoriteBorder
+import androidx.compose.material.icons.rounded.PhotoLibrary
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -109,6 +109,12 @@ import java.util.TimeZone
 import kotlin.math.PI
 import kotlin.math.roundToInt
 import kotlin.math.sin
+import com.example.ui.theme.Gray500
+import com.example.ui.theme.Indigo950
+import com.example.ui.theme.NavyDeep
+import com.example.ui.components.CherishToast
+import com.example.ui.components.pressScaleTarget
+import com.example.ui.components.springClickable
 
 /**
  * One of us on the Love & Us tab.
@@ -229,11 +235,11 @@ private val DayCard = CardColors(
     isLight = true,
     background = SolidColor(Color(0xFFFEFEFF)),
     border = HeartbeatBlue.copy(alpha = 0.12f),
-    ink = Color(0xFF1E1B4B),
+    ink = Indigo950,
     softInk = Color(0xFF5B5F7E),
     pill = Color.White,
-    dimInk = Color(0xFF6B7280),
-    hairline = Color(0xFF1E1B4B).copy(alpha = 0.10f),
+    dimInk = Gray500,
+    hairline = Indigo950.copy(alpha = 0.10f),
     blueInk = HeartbeatBlue
 )
 
@@ -241,7 +247,7 @@ private val DayCard = CardColors(
 // decorations stay the same pink and blue as by day
 private val NightCard = CardColors(
     isLight = false,
-    background = Brush.verticalGradient(listOf(Color(0xFF111B45), Color(0xFF0B1233))),
+    background = Brush.verticalGradient(listOf(Color(0xFF111B45), NavyDeep)),
     border = HeartbeatBlue.copy(alpha = 0.28f),
     ink = Color(0xFFF3F4FA),
     softInk = Color(0xFFBAC2E8),
@@ -476,16 +482,16 @@ fun BothOfUsCard(
                         .padding(horizontal = 14.dp, vertical = 6.dp)
                         .testTag("both_of_us_today")
                 ) {
-                    Icon(Icons.Filled.CalendarMonth, contentDescription = null, tint = cardColors.softInk, modifier = Modifier.size(14.dp))
+                    Icon(Icons.Rounded.CalendarMonth, contentDescription = null, tint = cardColors.softInk, modifier = Modifier.size(14.dp))
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text(text = today, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, color = cardColors.ink, maxLines = 1)
+                    Text(text = today, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = cardColors.ink, maxLines = 1)
                 }
 
                 Spacer(modifier = Modifier.height(6.dp))
 
                 // Our names, a handwritten signature: "shali & faisal" in pink and blue
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
-                    Icon(Icons.Filled.FavoriteBorder, contentDescription = null, tint = pink, modifier = Modifier.size(15.dp))
+                    Icon(Icons.Rounded.FavoriteBorder, contentDescription = null, tint = pink, modifier = Modifier.size(15.dp))
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
                         text = buildAnnotatedString {
@@ -495,7 +501,7 @@ fun BothOfUsCard(
                         },
                         style = TextStyle(
                             fontFamily = SignatureFont,
-                            fontSize = 34.sp,
+                            fontSize = 32.sp,
                             fontWeight = FontWeight.Normal,
                             color = cardColors.ink,
                             textAlign = TextAlign.Center
@@ -505,7 +511,7 @@ fun BothOfUsCard(
                         modifier = Modifier.weight(1f, fill = false)
                     )
                     Spacer(modifier = Modifier.width(6.dp))
-                    Icon(Icons.Filled.FavoriteBorder, contentDescription = null, tint = blue, modifier = Modifier.size(15.dp))
+                    Icon(Icons.Rounded.FavoriteBorder, contentDescription = null, tint = blue, modifier = Modifier.size(15.dp))
                 }
 
                 // The note, under the names
@@ -620,8 +626,9 @@ fun BothOfUsCard(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier
                             .weight(1f, fill = false)
+                            .pressScaleTarget()
                             .clip(RoundedCornerShape(12.dp))
-                            .clickable { editingTogether = true }
+                            .springClickable { editingTogether = true }
                             .padding(vertical = 6.dp, horizontal = 2.dp)
                             .testTag("days_together")
                     ) {
@@ -632,7 +639,7 @@ fun BothOfUsCard(
                                 .clip(CircleShape)
                                 .background(pink.copy(alpha = 0.14f))
                         ) {
-                            Icon(Icons.Filled.Favorite, contentDescription = null, tint = pink, modifier = Modifier.size(17.dp))
+                            Icon(Icons.Rounded.Favorite, contentDescription = null, tint = pink, modifier = Modifier.size(17.dp))
                         }
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
@@ -648,9 +655,10 @@ fun BothOfUsCard(
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier
-                            .clip(RoundedCornerShape(14.dp))
+                            .pressScaleTarget()
+                            .clip(RoundedCornerShape(16.dp))
                             .background(blue.copy(alpha = if (cardColors.isLight) 0.12f else 0.35f))
-                            .clickable { if (togetherDays != null) editingTogether = true else onOpenChat() }
+                            .springClickable { if (togetherDays != null) editingTogether = true else onOpenChat() }
                             .padding(start = 14.dp, end = if (togetherDays != null) 14.dp else 10.dp, top = 8.dp, bottom = 8.dp)
                             .testTag("both_of_us_days_count")
                     ) {
@@ -661,15 +669,15 @@ fun BothOfUsCard(
                                     1 -> "1 day together"
                                     else -> "${formatNumber(togetherDays.toLong())} days together"
                                 },
-                                fontSize = 13.5.sp,
+                                fontSize = 13.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = if (cardColors.isLight) blue else Color.White,
                                 maxLines = 1
                             )
                         } else {
-                            Text(text = "Chat Now", fontSize = 13.5.sp, fontWeight = FontWeight.SemiBold, color = if (cardColors.isLight) blue else Color.White)
+                            Text(text = "Chat Now", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = if (cardColors.isLight) blue else Color.White)
                             Spacer(modifier = Modifier.width(4.dp))
-                            Icon(Icons.Filled.ChevronRight, contentDescription = null, tint = if (cardColors.isLight) blue else Color.White, modifier = Modifier.size(18.dp))
+                            Icon(Icons.Rounded.ChevronRight, contentDescription = null, tint = if (cardColors.isLight) blue else Color.White, modifier = Modifier.size(18.dp))
                         }
                     }
                 }
@@ -925,11 +933,12 @@ private fun RingedAvatar(person: LovePerson, color: Color, onOpenPhoto: (String)
                 showOnlineBadge = false,
                 showRing = false,
                 modifier = Modifier
+                    .pressScaleTarget()
                     .clip(CircleShape)
-                    .clickable {
+                    .springClickable {
                         val url = person.photoUrl
                         if (!url.isNullOrBlank()) onOpenPhoto(url)
-                        else Toast.makeText(context, "No profile photo uploaded yet", Toast.LENGTH_SHORT).show()
+                        else CherishToast.show("No profile photo uploaded yet")
                     }
             )
         }
@@ -943,7 +952,7 @@ private fun RingedAvatar(person: LovePerson, color: Color, onOpenPhoto: (String)
                 .clip(CircleShape)
                 .background(cardColors.pill)
         ) {
-            Icon(Icons.Filled.Favorite, contentDescription = null, tint = color, modifier = Modifier.size(13.dp))
+            Icon(Icons.Rounded.Favorite, contentDescription = null, tint = color, modifier = Modifier.size(13.dp))
         }
     }
 }
@@ -1110,7 +1119,7 @@ private fun PersonDetails(
                     .testTag("partner_local_time")
             ) {
                 Icon(
-                    imageVector = Icons.Filled.AccessTime,
+                    imageVector = Icons.Rounded.AccessTime,
                     contentDescription = null,
                     tint = color,
                     modifier = Modifier.size(10.5.dp)
@@ -1176,19 +1185,20 @@ private fun PersonDetails(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier
                 .padding(top = 6.dp)
-                .clip(RoundedCornerShape(14.dp))
-                .clickable(enabled = person.id.isNotBlank()) { onEditBirthday() }
+                .pressScaleTarget()
+                .clip(RoundedCornerShape(16.dp))
+                .springClickable(enabled = person.id.isNotBlank()) { onEditBirthday() }
                 .padding(horizontal = 4.dp, vertical = 3.dp)
         ) {
             if (born == null) {
                 SoftPill(color = color) {
-                    Text(text = "+ Add birthday", fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, color = color)
+                    Text(text = "+ Add birthday", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = color)
                 }
             } else {
                 val age = ageAt(born, now)
                 Text(
                     text = "$age yrs · ${formatNumber((now - born.timeInMillis) / DAY_MS)} days",
-                    fontSize = 13.5.sp,
+                    fontSize = 13.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = cc.ink,
                     maxLines = 1
@@ -1254,10 +1264,10 @@ private fun LovePlaces(
             .testTag("love_places")
     ) {
         val places = listOf(
-            Triple(Icons.Filled.PhotoLibrary, "Our Gallery", "Photos & Videos") to onOpenGallery,
-            Triple(Icons.Filled.AllInclusive, "Our Memories", "Special Moments") to onOpenMemories,
-            Triple(Icons.Filled.EventAvailable, "Our Dates", "Important Days") to onOpenDates,
-            Triple(Icons.Filled.EditNote, "Our Notes", "Love Notes") to onOpenNotes
+            Triple(Icons.Rounded.PhotoLibrary, "Our Gallery", "Photos & Videos") to onOpenGallery,
+            Triple(Icons.Rounded.AllInclusive, "Our Memories", "Special Moments") to onOpenMemories,
+            Triple(Icons.Rounded.EventAvailable, "Our Dates", "Important Days") to onOpenDates,
+            Triple(Icons.Rounded.EditNote, "Our Notes", "Love Notes") to onOpenNotes
         )
         places.forEachIndexed { i, (place, onOpen) ->
             if (i > 0) {
@@ -1294,8 +1304,9 @@ private fun PlaceTile(
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = modifier
-            .clip(RoundedCornerShape(14.dp))
-            .clickable(onClick = onClick)
+            .pressScaleTarget()
+            .clip(RoundedCornerShape(16.dp))
+            .springClickable(onClick = onClick)
             .padding(vertical = 6.dp, horizontal = 2.dp)
             .testTag("love_place_${title.lowercase().replace(' ', '_')}")
     ) {
@@ -1304,7 +1315,7 @@ private fun PlaceTile(
             modifier = Modifier
                 .padding(2.dp)
                 .size(44.dp)
-                .clip(RoundedCornerShape(14.dp))
+                .clip(RoundedCornerShape(16.dp))
                 .background(color.copy(alpha = 0.13f))
         ) {
             Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(24.dp))
@@ -1341,13 +1352,13 @@ private fun CardBattery(level: Int?, isCharging: Boolean, showPercentage: Boolea
     Row(verticalAlignment = Alignment.CenterVertically) {
         Icon(
             imageVector = when {
-                isCharging -> Icons.Filled.BatteryChargingFull
-                isLow && level != null -> Icons.Filled.BatteryAlert
-                lvl >= 90 -> Icons.Filled.BatteryFull
-                lvl >= 70 -> Icons.Filled.Battery6Bar
-                lvl >= 50 -> Icons.Filled.Battery5Bar
-                lvl >= 35 -> Icons.Filled.Battery4Bar
-                else -> Icons.Filled.Battery3Bar
+                isCharging -> Icons.Rounded.BatteryChargingFull
+                isLow && level != null -> Icons.Rounded.BatteryAlert
+                lvl >= 90 -> Icons.Rounded.BatteryFull
+                lvl >= 70 -> Icons.Rounded.Battery6Bar
+                lvl >= 50 -> Icons.Rounded.Battery5Bar
+                lvl >= 35 -> Icons.Rounded.Battery4Bar
+                else -> Icons.Rounded.Battery3Bar
             },
             contentDescription = if (level != null) "$level% battery" else "Battery",
             tint = tint,
@@ -1355,7 +1366,7 @@ private fun CardBattery(level: Int?, isCharging: Boolean, showPercentage: Boolea
         )
         if (showPercentage && level != null && level in 0..100) {
             Spacer(modifier = Modifier.width(1.dp))
-            Text(text = "$level%", fontSize = 10.5.sp, fontWeight = FontWeight.SemiBold, color = tint, maxLines = 1, softWrap = false)
+            Text(text = "$level%", fontSize = 10.sp, fontWeight = FontWeight.SemiBold, color = tint, maxLines = 1, softWrap = false)
         }
     }
 }

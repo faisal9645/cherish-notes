@@ -12,8 +12,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -208,7 +208,7 @@ fun HeartbeatTouchDialog(
                     .size(44.dp)
                     .background(Color.White.copy(alpha = 0.15f), CircleShape)
             ) {
-                Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.White)
+                Icon(Icons.Rounded.Close, contentDescription = "Close", tint = Color.White)
             }
 
             Column(
@@ -219,7 +219,7 @@ fun HeartbeatTouchDialog(
                 Text(
                     text = "Heartbeat Touch",
                     color = Color.White,
-                    fontSize = 23.sp,
+                    fontSize = 22.sp,
                     fontWeight = FontWeight.Bold
                 )
 
@@ -243,7 +243,7 @@ fun HeartbeatTouchDialog(
                             else -> "Touch & hold your finger on the heart together"
                         },
                         color = if (isConnected) Color.White else Color.White.copy(alpha = 0.9f),
-                        fontSize = 13.5.sp,
+                        fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold,
                         textAlign = TextAlign.Center,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 9.dp)
@@ -261,7 +261,7 @@ fun HeartbeatTouchDialog(
                         modifier = Modifier.padding(top = 12.dp)
                     ) {
                         Surface(
-                            shape = RoundedCornerShape(14.dp),
+                            shape = RoundedCornerShape(16.dp),
                             color = Color(0xFF3B1028).copy(alpha = 0.75f),
                             border = androidx.compose.foundation.BorderStroke(1.dp, HeartbeatBlue.copy(alpha = 0.5f))
                         ) {
@@ -326,7 +326,7 @@ fun HeartbeatTouchDialog(
                             .border(2.dp, Color.White.copy(alpha = 0.55f), CircleShape)
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Favorite,
+                            imageVector = Icons.Rounded.Favorite,
                             contentDescription = "Heart symbol",
                             tint = Color.White,
                             modifier = Modifier

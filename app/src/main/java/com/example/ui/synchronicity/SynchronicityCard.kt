@@ -23,12 +23,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.CloudUpload
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.History
-import androidx.compose.material.icons.filled.LocalFireDepartment
+import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.AutoAwesome
+import androidx.compose.material.icons.rounded.CloudUpload
+import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.History
+import androidx.compose.material.icons.rounded.LocalFireDepartment
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -64,6 +64,10 @@ import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
+import com.example.ui.components.CherishToast
+import com.example.ui.components.CherishAlertDialog
+import com.example.ui.components.CherishButton
+import com.example.ui.components.CherishOutlinedButton
 
 /**
  * The number tiles, in the app's own blues (day and night): times go sky to royal blue, numbers
@@ -178,7 +182,7 @@ fun SynchronicityCard(
         modifier = Modifier
             .fillMaxWidth()
             .testTag("synchronicity_card"),
-        shape = RoundedCornerShape(18.dp),
+        shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
@@ -217,7 +221,7 @@ fun SynchronicityCard(
                         .clip(CircleShape)
                         .background(Brush.linearGradient(listOf(AppGradientStart, AppGradientMid)))
                 ) {
-                    Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
+                    Icon(Icons.Rounded.AutoAwesome, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
                 }
                 Spacer(modifier = Modifier.width(10.dp))
                 Column(modifier = Modifier.weight(1f)) {
@@ -234,7 +238,7 @@ fun SynchronicityCard(
                                     contentDescription = "Synchronicity streak: ${state.streak} days in a row"
                                 }
                         ) {
-                            Icon(Icons.Default.LocalFireDepartment, contentDescription = null, tint = accent, modifier = Modifier.size(15.dp))
+                            Icon(Icons.Rounded.LocalFireDepartment, contentDescription = null, tint = accent, modifier = Modifier.size(15.dp))
                             Spacer(modifier = Modifier.width(3.dp))
                             Text(
                                 "${state.streak} ${if (state.streak == 1) "day" else "days"}",
@@ -282,7 +286,7 @@ fun SynchronicityCard(
                 if (state.customPatterns.size < SyncPatterns.MAX_CUSTOM) {
                     item(key = "add") {
                         Surface(
-                            shape = RoundedCornerShape(18.dp),
+                            shape = RoundedCornerShape(20.dp),
                             color = Color.Transparent,
                             border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.outlineVariant),
                             onClick = { showAddPattern = true },
@@ -292,7 +296,7 @@ fun SynchronicityCard(
                                 .testTag("synchronicity_add_pattern")
                         ) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                                Icon(Icons.Default.Add, contentDescription = null, tint = accent)
+                                Icon(Icons.Rounded.Add, contentDescription = null, tint = accent)
                                 Text("Ours", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                         }
@@ -344,7 +348,7 @@ fun SynchronicityCard(
 
             Spacer(modifier = Modifier.height(12.dp))
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(
+                CherishButton(
                     onClick = {
                         recordPattern = null
                         showRecord = true
@@ -354,15 +358,15 @@ fun SynchronicityCard(
                         .weight(1f)
                         .testTag("synchronicity_record")
                 ) {
-                    Icon(Icons.Default.AutoAwesome, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Icon(Icons.Rounded.AutoAwesome, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(6.dp))
                     Text("Record moment", fontWeight = FontWeight.SemiBold)
                 }
-                OutlinedButton(
+                CherishOutlinedButton(
                     onClick = onOpenHistory,
                     modifier = Modifier.testTag("synchronicity_history")
                 ) {
-                    Icon(Icons.Default.History, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Icon(Icons.Rounded.History, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(6.dp))
                     Text("History")
                 }
@@ -390,7 +394,7 @@ fun SynchronicityCard(
         AddPatternDialog(viewModel = viewModel, onDismiss = { showAddPattern = false })
     }
     removePattern?.let { pattern ->
-        AlertDialog(
+        CherishAlertDialog(
             onDismissRequest = { removePattern = null },
             title = { Text("Remove $pattern?") },
             text = { Text("It leaves the tiles for both of you. Moments already recorded with it stay.") },
@@ -408,7 +412,7 @@ fun SynchronicityCard(
 @Composable
 internal fun SyncStat(label: String, value: Int, modifier: Modifier = Modifier) {
     Surface(
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(16.dp),
         color = MaterialTheme.colorScheme.primary.copy(alpha = 0.07f),
         modifier = modifier.semantics(mergeDescendants = true) { contentDescription = "$label: $value" }
     ) {
@@ -444,7 +448,7 @@ internal fun PatternTile(
         contentAlignment = Alignment.Center,
         modifier = Modifier
             .size(width = 74.dp, height = 86.dp)
-            .clip(RoundedCornerShape(18.dp))
+            .clip(RoundedCornerShape(20.dp))
             .background(brush)
             .combinedClickable(
                 role = Role.Button,
@@ -460,7 +464,7 @@ internal fun PatternTile(
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(
                 pattern,
-                fontSize = if (pattern.length > 5) 15.sp else 19.sp,
+                fontSize = if (pattern.length > 5) 15.sp else 18.sp,
                 fontWeight = FontWeight.Black,
                 color = Color.White,
                 maxLines = 1
@@ -469,7 +473,7 @@ internal fun PatternTile(
             Surface(shape = RoundedCornerShape(50), color = Color.White.copy(alpha = 0.22f)) {
                 Text(
                     if (count > 0) "×$count" else "tap",
-                    fontSize = 10.5.sp,
+                    fontSize = 10.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = Color.White,
                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
@@ -485,11 +489,12 @@ internal fun MomentRow(
     who: String,
     whenLabel: String,
     canEdit: Boolean,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
             .then(if (canEdit) Modifier.combinedClickableCompat(onClick) else Modifier)
@@ -502,7 +507,7 @@ internal fun MomentRow(
         Box(
             contentAlignment = Alignment.Center,
             modifier = Modifier
-                .clip(RoundedCornerShape(10.dp))
+                .clip(RoundedCornerShape(12.dp))
                 .background(tileBrush(moment.pattern, isCustom = moment.pattern !in SyncPatterns.defaults))
                 .padding(horizontal = 9.dp, vertical = 6.dp)
                 .widthIn(min = 40.dp)
@@ -521,7 +526,7 @@ internal fun MomentRow(
             if (moment.note.isNotBlank()) {
                 Text(
                     moment.note,
-                    fontSize = 12.5.sp,
+                    fontSize = 12.sp,
                     fontStyle = FontStyle.Italic,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 2
@@ -530,7 +535,7 @@ internal fun MomentRow(
         }
         if (moment.isPending) {
             Icon(
-                Icons.Default.CloudUpload,
+                Icons.Rounded.CloudUpload,
                 contentDescription = "Waiting to sync",
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(16.dp)
@@ -539,7 +544,7 @@ internal fun MomentRow(
         if (canEdit) {
             Spacer(modifier = Modifier.width(4.dp))
             Icon(
-                Icons.Default.Edit,
+                Icons.Rounded.Edit,
                 contentDescription = "Edit",
                 tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
                 modifier = Modifier.size(15.dp)
@@ -582,7 +587,13 @@ internal fun RecordMomentSheet(
     var pickedDateUtc by remember { mutableStateOf<Long?>(null) }
     var confirmDelete by remember { mutableStateOf(false) }
 
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        shape = com.example.ui.components.CherishDialogDefaults.sheetShape,
+        containerColor = com.example.ui.components.CherishDialogDefaults.sheetContainerColor,
+        dragHandle = { com.example.ui.components.CherishDialogDefaults.SheetDragHandle() }
+    ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -626,14 +637,14 @@ internal fun RecordMomentSheet(
             pattern?.let { chosen ->
                 Spacer(modifier = Modifier.height(12.dp))
                 Surface(
-                    shape = RoundedCornerShape(14.dp),
+                    shape = RoundedCornerShape(16.dp),
                     color = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(modifier = Modifier.padding(12.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(
-                                Icons.Default.AutoAwesome,
+                                Icons.Rounded.AutoAwesome,
                                 contentDescription = null,
                                 tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(16.dp)
@@ -708,10 +719,10 @@ internal fun RecordMomentSheet(
             }
 
             Spacer(modifier = Modifier.height(12.dp))
-            Button(
+            CherishButton(
                 onClick = {
-                    val chosen = pattern ?: return@Button
-                    if (isSaving) return@Button
+                    val chosen = pattern ?: return@CherishButton
+                    if (isSaving) return@CherishButton
                     isSaving = true
                     error = null
                     scope.launch {
@@ -727,7 +738,7 @@ internal fun RecordMomentSheet(
                                     onDismiss()
                                 }
                                 SynchronicityRepository.SaveResult.SavedOffline -> {
-                                    Toast.makeText(context, "Saved on this phone. It syncs when you're back online.", Toast.LENGTH_LONG).show()
+                                    CherishToast.show("Saved on this phone. It syncs when you're back online.", long = true)
                                     onChanged()
                                     onDismiss()
                                 }
@@ -807,7 +818,7 @@ internal fun RecordMomentSheet(
             initialMinute = start.get(Calendar.MINUTE),
             is24Hour = DateFormat.is24HourFormat(context)
         )
-        AlertDialog(
+        CherishAlertDialog(
             onDismissRequest = { pickedDateUtc = null },
             title = { Text("The time you saw it") },
             text = { TimePicker(state = timeState) },
@@ -831,7 +842,7 @@ internal fun RecordMomentSheet(
         )
     }
     if (confirmDelete && editing != null) {
-        AlertDialog(
+        CherishAlertDialog(
             onDismissRequest = { confirmDelete = false },
             title = { Text("Delete this moment?") },
             text = { Text("${editing.pattern} will be removed for both of you.") },
@@ -866,7 +877,7 @@ private fun utcMidnight(local: Calendar): Long =
 internal fun AddPatternDialog(viewModel: SynchronicityViewModel, onDismiss: () -> Unit) {
     var input by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
-    AlertDialog(
+    CherishAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Add our own number") },
         text = {

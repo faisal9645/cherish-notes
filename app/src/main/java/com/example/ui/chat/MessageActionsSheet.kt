@@ -7,9 +7,17 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Reply
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.outlined.*
+import androidx.compose.material.icons.automirrored.rounded.Reply
+import androidx.compose.material.icons.outlined.PushPin
+import androidx.compose.material.icons.rounded.CheckCircleOutline
+import androidx.compose.material.icons.rounded.ContentCopy
+import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.Favorite
+import androidx.compose.material.icons.rounded.PushPin
+import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.Star
+import androidx.compose.material.icons.rounded.StarOutline
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -23,6 +31,7 @@ import androidx.compose.ui.unit.sp
 import com.example.data.model.Message
 import com.example.ui.theme.HeartRed
 import com.example.ui.theme.RoseGoldPrimary
+import com.example.ui.theme.Amber600
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -43,8 +52,9 @@ fun MessageActionsSheet(
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
-        containerColor = MaterialTheme.colorScheme.surface
+        shape = com.example.ui.components.CherishDialogDefaults.sheetShape,
+        containerColor = com.example.ui.components.CherishDialogDefaults.sheetContainerColor,
+        dragHandle = { com.example.ui.components.CherishDialogDefaults.SheetDragHandle() }
     ) {
         Column(
             modifier = Modifier
@@ -68,7 +78,7 @@ fun MessageActionsSheet(
                 "💑", "🛌", "💍", "💌", "💖", "💘"
             )
             Surface(
-                shape = RoundedCornerShape(22.dp),
+                shape = RoundedCornerShape(24.dp),
                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
                 modifier = Modifier.fillMaxWidth()
             ) {
@@ -113,7 +123,7 @@ fun MessageActionsSheet(
             // Primary Actions Grid / List
             ListItem(
                 headlineContent = { Text("Reply", fontWeight = FontWeight.Medium) },
-                leadingContent = { Icon(Icons.AutoMirrored.Filled.Reply, contentDescription = null, tint = RoseGoldPrimary) },
+                leadingContent = { Icon(Icons.AutoMirrored.Rounded.Reply, contentDescription = null, tint = RoseGoldPrimary) },
                 modifier = Modifier
                     .clickable {
                         onReply()
@@ -125,7 +135,7 @@ fun MessageActionsSheet(
             ListItem(
                 headlineContent = { Text("Save to Our Memories ❤️", fontWeight = FontWeight.Medium) },
                 supportingContent = { Text("Preserve in couple's keepsake timeline", fontSize = 11.sp) },
-                leadingContent = { Icon(Icons.Filled.Favorite, contentDescription = null, tint = Color(0xFFE91E63)) },
+                leadingContent = { Icon(Icons.Rounded.Favorite, contentDescription = null, tint = Color(0xFFE91E63)) },
                 modifier = Modifier
                     .clickable {
                         onSaveToMemories()
@@ -136,7 +146,7 @@ fun MessageActionsSheet(
 
             ListItem(
                 headlineContent = { Text("Copy Text", fontWeight = FontWeight.Medium) },
-                leadingContent = { Icon(Icons.Default.ContentCopy, contentDescription = null) },
+                leadingContent = { Icon(Icons.Rounded.ContentCopy, contentDescription = null) },
                 modifier = Modifier
                     .clickable {
                         onCopy()
@@ -149,9 +159,9 @@ fun MessageActionsSheet(
                 headlineContent = { Text(if (message.isStarred) "Remove from Starred" else "Star Message", fontWeight = FontWeight.Medium) },
                 leadingContent = {
                     Icon(
-                        imageVector = if (message.isStarred) Icons.Filled.Star else Icons.Outlined.StarOutline,
+                        imageVector = if (message.isStarred) Icons.Rounded.Star else Icons.Rounded.StarOutline,
                         contentDescription = null,
-                        tint = if (message.isStarred) Color(0xFFFFB300) else MaterialTheme.colorScheme.onSurface
+                        tint = if (message.isStarred) Amber600 else MaterialTheme.colorScheme.onSurface
                     )
                 },
                 modifier = Modifier
@@ -166,7 +176,7 @@ fun MessageActionsSheet(
                 headlineContent = { Text(if (message.isPinned) "Unpin Message" else "Pin Message", fontWeight = FontWeight.Medium) },
                 leadingContent = {
                     Icon(
-                        imageVector = if (message.isPinned) Icons.Filled.PushPin else Icons.Outlined.PushPin,
+                        imageVector = if (message.isPinned) Icons.Rounded.PushPin else Icons.Outlined.PushPin,
                         contentDescription = null,
                         tint = if (message.isPinned) RoseGoldPrimary else MaterialTheme.colorScheme.onSurface
                     )
@@ -181,7 +191,7 @@ fun MessageActionsSheet(
 
             ListItem(
                 headlineContent = { Text("Search in Chat", fontWeight = FontWeight.Medium) },
-                leadingContent = { Icon(Icons.Default.Search, contentDescription = null) },
+                leadingContent = { Icon(Icons.Rounded.Search, contentDescription = null) },
                 modifier = Modifier
                     .clickable {
                         onSearch()
@@ -193,7 +203,7 @@ fun MessageActionsSheet(
             if (isFromMe && !message.isDeleted) {
                 ListItem(
                     headlineContent = { Text("Edit Message", fontWeight = FontWeight.Medium) },
-                    leadingContent = { Icon(Icons.Default.Edit, contentDescription = null) },
+                    leadingContent = { Icon(Icons.Rounded.Edit, contentDescription = null) },
                     modifier = Modifier
                         .clickable {
                             onEdit()
@@ -205,7 +215,7 @@ fun MessageActionsSheet(
 
             ListItem(
                 headlineContent = { Text("Select Message", fontWeight = FontWeight.Medium) },
-                leadingContent = { Icon(Icons.Default.CheckCircleOutline, contentDescription = null) },
+                leadingContent = { Icon(Icons.Rounded.CheckCircleOutline, contentDescription = null) },
                 modifier = Modifier
                     .clickable {
                         onSelect()
@@ -216,7 +226,7 @@ fun MessageActionsSheet(
 
             ListItem(
                 headlineContent = { Text("Delete Message", color = HeartRed, fontWeight = FontWeight.Medium) },
-                leadingContent = { Icon(Icons.Default.Delete, contentDescription = null, tint = HeartRed) },
+                leadingContent = { Icon(Icons.Rounded.Delete, contentDescription = null, tint = HeartRed) },
                 modifier = Modifier
                     .clickable {
                         onDelete()

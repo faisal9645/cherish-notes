@@ -14,11 +14,11 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Block
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PhoneInTalk
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.rounded.Block
+import androidx.compose.material.icons.rounded.Pause
+import androidx.compose.material.icons.rounded.PhoneInTalk
+import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -44,6 +44,8 @@ import com.example.call.CallRecordingWave
 import com.example.data.model.Message
 import com.example.ui.components.WaveformView
 import com.example.util.formatRecordingLength
+import com.example.ui.components.pressScaleTarget
+import com.example.ui.components.springClickable
 
 /** The recording player's colours. */
 @Immutable
@@ -99,9 +101,10 @@ fun CallRecordingPlayerRow(
         Box(
             modifier = Modifier
                 .size(48.dp)
+                .pressScaleTarget()
                 .clip(CircleShape)
                 .background(buttonColor)
-                .clickable(enabled = item.status != CallRecordingPlayer.Status.LOADING) {
+                .springClickable(enabled = item.status != CallRecordingPlayer.Status.LOADING) {
                     CallRecordingPlayer.toggle(context, message)
                 }
                 .semantics { contentDescription = playActionLabel }
@@ -112,13 +115,13 @@ fun CallRecordingPlayerRow(
                 item.status == CallRecordingPlayer.Status.LOADING ->
                     CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp, color = buttonIconColor)
                 item.status == CallRecordingPlayer.Status.UNAVAILABLE ->
-                    Icon(Icons.Default.Block, contentDescription = null, tint = buttonIconColor, modifier = Modifier.size(20.dp))
+                    Icon(Icons.Rounded.Block, contentDescription = null, tint = buttonIconColor, modifier = Modifier.size(20.dp))
                 item.status == CallRecordingPlayer.Status.FAILED ->
-                    Icon(Icons.Default.Refresh, contentDescription = null, tint = buttonIconColor, modifier = Modifier.size(22.dp))
+                    Icon(Icons.Rounded.Refresh, contentDescription = null, tint = buttonIconColor, modifier = Modifier.size(22.dp))
                 playingNow ->
-                    Icon(Icons.Default.Pause, contentDescription = null, tint = buttonIconColor, modifier = Modifier.size(24.dp))
+                    Icon(Icons.Rounded.Pause, contentDescription = null, tint = buttonIconColor, modifier = Modifier.size(24.dp))
                 else ->
-                    Icon(Icons.Default.PlayArrow, contentDescription = null, tint = buttonIconColor, modifier = Modifier.size(24.dp))
+                    Icon(Icons.Rounded.PlayArrow, contentDescription = null, tint = buttonIconColor, modifier = Modifier.size(24.dp))
             }
         }
 
@@ -126,7 +129,7 @@ fun CallRecordingPlayerRow(
 
         Column(modifier = Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.PhoneInTalk, contentDescription = null, tint = contentColor.copy(alpha = 0.85f), modifier = Modifier.size(14.dp))
+                Icon(Icons.Rounded.PhoneInTalk, contentDescription = null, tint = contentColor.copy(alpha = 0.85f), modifier = Modifier.size(14.dp))
                 Spacer(modifier = Modifier.width(5.dp))
                 val lengthFormatted = formatRecordingLength(message.durationSeconds)
                 Text("Voice Call ($lengthFormatted)", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = contentColor)
@@ -162,9 +165,10 @@ fun CallRecordingPlayerRow(
                     Spacer(modifier = Modifier.width(8.dp))
                     Box(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(6.dp))
+                            .pressScaleTarget()
+                            .clip(RoundedCornerShape(8.dp))
                             .background(buttonColor.copy(alpha = 0.35f))
-                            .clickable { player.togglePlaybackSpeed() }
+                            .springClickable { player.togglePlaybackSpeed() }
                             .padding(horizontal = 6.dp, vertical = 2.dp),
                         contentAlignment = Alignment.Center
                     ) {

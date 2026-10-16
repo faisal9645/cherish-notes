@@ -8,8 +8,16 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.EditNote
+import androidx.compose.material.icons.rounded.Fingerprint
+import androidx.compose.material.icons.rounded.Key
+import androidx.compose.material.icons.rounded.Lock
+import androidx.compose.material.icons.rounded.NotificationsOff
+import androidx.compose.material.icons.rounded.Shield
+import androidx.compose.material.icons.rounded.TouchApp
+import androidx.compose.material.icons.rounded.VerifiedUser
+import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -22,6 +30,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.security.SecurityPreferences
+import com.example.ui.components.CherishOutlinedButton
 
 /** One protection: what it does, whether it's on, and the short status shown for it. */
 data class PrivacyCheckItem(
@@ -62,7 +71,7 @@ fun PrivacyAuditScreen(
             description = "The app opens as a Notes app; the chat needs your secret unlock",
             isPassed = auditScore.isDisguiseOn,
             actionText = if (auditScore.isDisguiseOn) "On" else "Off",
-            icon = Icons.Filled.EditNote
+            icon = Icons.Rounded.EditNote
         ),
         PrivacyCheckItem(
             id = "app_lock",
@@ -70,7 +79,7 @@ fun PrivacyAuditScreen(
             description = "Protected with master passcode: locks $lockAfter",
             isPassed = auditScore.isAppLockOn,
             actionText = if (auditScore.isAppLockOn) "On" else "Off",
-            icon = Icons.Filled.Lock
+            icon = Icons.Rounded.Lock
         ),
         PrivacyCheckItem(
             id = "biometric",
@@ -78,7 +87,7 @@ fun PrivacyAuditScreen(
             description = "Instant biometric verification when opening secret chat",
             isPassed = auditScore.isBiometricOn,
             actionText = if (auditScore.isBiometricOn) "On" else "Off",
-            icon = Icons.Filled.Fingerprint
+            icon = Icons.Rounded.Fingerprint
         ),
         PrivacyCheckItem(
             id = "notification",
@@ -86,7 +95,7 @@ fun PrivacyAuditScreen(
             description = "Notifications display masked disguise content instead of private messages",
             isPassed = auditScore.isNotificationMaskingOn,
             actionText = if (auditScore.isNotificationMaskingOn) "On" else "Off",
-            icon = Icons.Filled.NotificationsOff
+            icon = Icons.Rounded.NotificationsOff
         ),
         PrivacyCheckItem(
             id = "screenshot",
@@ -94,7 +103,7 @@ fun PrivacyAuditScreen(
             description = "Prevents screenshots, mirroring, and background recording (FLAG_SECURE)",
             isPassed = auditScore.isScreenshotBlockingOn,
             actionText = if (auditScore.isScreenshotBlockingOn) "On" else "Off",
-            icon = Icons.Filled.Shield
+            icon = Icons.Rounded.Shield
         ),
         PrivacyCheckItem(
             id = "recent_apps",
@@ -102,7 +111,7 @@ fun PrivacyAuditScreen(
             description = "Android app switcher preview is blurred and covered automatically",
             isPassed = auditScore.isRecentAppsCoverOn,
             actionText = "Always on",
-            icon = Icons.Filled.VisibilityOff
+            icon = Icons.Rounded.VisibilityOff
         ),
         PrivacyCheckItem(
             id = "keyword_trigger",
@@ -110,7 +119,7 @@ fun PrivacyAuditScreen(
             description = "Typing panic code instantly disguises the app to safe Notes screen",
             isPassed = auditScore.isKeywordTriggerOn,
             actionText = if (auditScore.isKeywordTriggerOn) "On" else "Off",
-            icon = Icons.Filled.Key
+            icon = Icons.Rounded.Key
         ),
         PrivacyCheckItem(
             id = "hold_protection",
@@ -118,7 +127,7 @@ fun PrivacyAuditScreen(
             description = "Secret chat requires long-holding the disguise icon or device lock",
             isPassed = auditScore.isPhoneLockHoldOn,
             actionText = if (auditScore.isPhoneLockHoldOn) "On" else "Off",
-            icon = Icons.Filled.TouchApp
+            icon = Icons.Rounded.TouchApp
         )
     )
     val passedCount = auditScore.passedCount
@@ -141,7 +150,7 @@ fun PrivacyAuditScreen(
                         onClick = onNavigateBack,
                         modifier = Modifier.testTag("privacy_audit_back")
                     ) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
@@ -176,7 +185,7 @@ fun PrivacyAuditScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
-                            imageVector = if (allOn) Icons.Filled.VerifiedUser else Icons.Filled.Shield,
+                            imageVector = if (allOn) Icons.Rounded.VerifiedUser else Icons.Rounded.Shield,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.onPrimary,
                             modifier = Modifier.size(32.dp)
@@ -260,7 +269,7 @@ fun PrivacyAuditScreen(
                 }
             }
 
-            OutlinedButton(
+            CherishOutlinedButton(
                 onClick = onNavigateBack,
                 shape = RoundedCornerShape(12.dp),
                 modifier = Modifier

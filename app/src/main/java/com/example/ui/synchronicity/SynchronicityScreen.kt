@@ -10,10 +10,10 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.ChevronLeft
-import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.AutoAwesome
+import androidx.compose.material.icons.rounded.ChevronLeft
+import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -107,7 +107,7 @@ fun SynchronicityScreen(
                 title = { Text("Love Synchronicity", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back")
                     }
                 }
             )
@@ -117,7 +117,7 @@ fun SynchronicityScreen(
                 onClick = { showRecord = true },
                 containerColor = MaterialTheme.colorScheme.primary,
                 contentColor = MaterialTheme.colorScheme.onPrimary,
-                icon = { Icon(Icons.Default.AutoAwesome, contentDescription = null) },
+                icon = { Icon(Icons.Rounded.AutoAwesome, contentDescription = null) },
                 text = { Text("Record moment") },
                 modifier = Modifier.testTag("synchronicity_history_record")
             )
@@ -142,7 +142,7 @@ fun SynchronicityScreen(
 
             item(key = "calendar") {
                 Card(
-                    shape = RoundedCornerShape(18.dp),
+                    shape = RoundedCornerShape(20.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                     border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                     modifier = Modifier.fillMaxWidth()
@@ -150,7 +150,7 @@ fun SynchronicityScreen(
                     Column(modifier = Modifier.padding(12.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             IconButton(onClick = { month = shiftMonth(month, -1) }, enabled = canGoBack) {
-                                Icon(Icons.Default.ChevronLeft, contentDescription = "Previous month")
+                                Icon(Icons.Rounded.ChevronLeft, contentDescription = "Previous month")
                             }
                             Text(
                                 monthTitle(month),
@@ -160,7 +160,7 @@ fun SynchronicityScreen(
                                 textAlign = androidx.compose.ui.text.style.TextAlign.Center
                             )
                             IconButton(onClick = { month = shiftMonth(month, 1) }, enabled = canGoForward) {
-                                Icon(Icons.Default.ChevronRight, contentDescription = "Next month")
+                                Icon(Icons.Rounded.ChevronRight, contentDescription = "Next month")
                             }
                         }
                         MonthCalendar(
@@ -198,9 +198,8 @@ fun SynchronicityScreen(
 
             when {
                 isLoading -> item(key = "loading") {
-                    Box(modifier = Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
-                    }
+                    // Grey rows shaped like the moments on their way
+                    com.example.ui.components.SkeletonListRows(count = 4)
                 }
                 loadFailed -> item(key = "failed") {
                     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth().padding(16.dp)) {
@@ -235,7 +234,9 @@ fun SynchronicityScreen(
                                 who = whoSaw(moment, state.myId, partnerName, privateMode),
                                 whenLabel = timeLabel(moment.seenAt),
                                 canEdit = moment.createdBy == state.myId,
-                                onClick = { editing = moment }
+                                onClick = { editing = moment },
+                                // Moments slide into place, and fade in and out, as they're added or deleted
+                                modifier = Modifier.animateItem()
                             )
                         }
                     }
@@ -244,7 +245,7 @@ fun SynchronicityScreen(
 
             item(key = "meanings") {
                 Card(
-                    shape = RoundedCornerShape(18.dp),
+                    shape = RoundedCornerShape(20.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.06f)),
                     modifier = Modifier.fillMaxWidth()
                 ) {
@@ -252,7 +253,7 @@ fun SynchronicityScreen(
                         Text("What the numbers might whisper", fontWeight = FontWeight.Bold, fontSize = 14.sp)
                         Text(
                             "Sweet meanings, just for fun — not predictions.",
-                            fontSize = 11.5.sp,
+                            fontSize = 11.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         state.patterns.forEach { pattern ->

@@ -9,9 +9,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Backspace
-import androidx.compose.material.icons.filled.Fingerprint
-import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.rounded.Fingerprint
+import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -29,6 +28,9 @@ import com.example.ui.theme.HeartRed
 import com.example.ui.theme.RoseGoldPrimary
 import com.example.ui.theme.appGradientShadow
 import com.example.ui.theme.appHorizontalGradient
+import com.example.ui.components.pressScaleTarget
+import com.example.ui.components.springClickable
+import androidx.compose.material.icons.automirrored.rounded.Backspace
 
 @Composable
 fun AppLockScreen(
@@ -110,7 +112,7 @@ fun AppLockScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Lock,
+                        imageVector = Icons.Rounded.Lock,
                         contentDescription = "App Locked",
                         tint = androidx.compose.ui.graphics.Color.White,
                         modifier = Modifier.size(36.dp)
@@ -205,7 +207,7 @@ fun AppLockScreen(
                                             modifier = Modifier.size(68.dp)
                                         ) {
                                             Icon(
-                                                imageVector = Icons.Default.Fingerprint,
+                                                imageVector = Icons.Rounded.Fingerprint,
                                                 contentDescription = "Unlock with Biometrics",
                                                 tint = RoseGoldPrimary,
                                                 modifier = Modifier.size(36.dp)
@@ -221,7 +223,7 @@ fun AppLockScreen(
                                         modifier = Modifier.size(68.dp)
                                     ) {
                                         Icon(
-                                            imageVector = Icons.Default.Backspace,
+                                            imageVector = Icons.AutoMirrored.Rounded.Backspace,
                                             contentDescription = "Delete digit",
                                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
@@ -231,9 +233,10 @@ fun AppLockScreen(
                                     Box(
                                         modifier = Modifier
                                             .size(68.dp)
+                                            .pressScaleTarget()
                                             .clip(CircleShape)
                                             .background(MaterialTheme.colorScheme.surfaceVariant)
-                                            .clickable { handleDigit(key) },
+                                            .springClickable { handleDigit(key) },
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Text(

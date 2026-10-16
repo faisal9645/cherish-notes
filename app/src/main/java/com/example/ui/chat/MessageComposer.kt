@@ -29,8 +29,24 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.outlined.*
+import androidx.compose.material.icons.automirrored.rounded.Reply
+import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.ArrowUpward
+import androidx.compose.material.icons.rounded.AttachFile
+import androidx.compose.material.icons.rounded.CameraAlt
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.DeleteForever
+import androidx.compose.material.icons.rounded.GraphicEq
+import androidx.compose.material.icons.rounded.Keyboard
+import androidx.compose.material.icons.rounded.KeyboardArrowUp
+import androidx.compose.material.icons.rounded.Lock
+import androidx.compose.material.icons.rounded.LockOpen
+import androidx.compose.material.icons.rounded.Mic
+import androidx.compose.material.icons.rounded.Mood
+import androidx.compose.material.icons.rounded.PhotoLibrary
+import androidx.compose.material.icons.automirrored.rounded.Send
+import androidx.compose.material.icons.rounded.Videocam
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -63,8 +79,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.material.icons.automirrored.filled.ExitToApp
-import androidx.compose.material.icons.automirrored.filled.Reply
 import com.example.data.model.Message
 import com.example.ui.components.WaveformView
 import com.example.ui.theme.DarkBluePrimary
@@ -81,6 +95,30 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
+import com.example.ui.theme.Blue500
+import com.example.ui.theme.Emerald500
+import com.example.ui.theme.Graphite700
+import com.example.ui.theme.Graphite850
+import com.example.ui.theme.Gray200
+import com.example.ui.theme.Gray700
+import com.example.ui.theme.Gray800
+import com.example.ui.theme.InkBlack
+import com.example.ui.theme.NavyCard
+import com.example.ui.theme.NavyRaised
+import com.example.ui.theme.Neutral200
+import com.example.ui.theme.Neutral300
+import com.example.ui.theme.Neutral700
+import com.example.ui.theme.Neutral750
+import com.example.ui.theme.Neutral800
+import com.example.ui.theme.Neutral900
+import com.example.ui.theme.Pink500
+import com.example.ui.theme.Rose600
+import com.example.ui.theme.Slate500
+import com.example.ui.theme.Slate900
+import com.example.ui.components.CherishToast
+import com.example.ui.components.pressScaleTarget
+import com.example.ui.components.springClickable
+import androidx.compose.material.icons.automirrored.rounded.InsertDriveFile
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -248,7 +286,7 @@ fun MessageComposer(
         try {
             voiceTyping.launch(intent)
         } catch (_: ActivityNotFoundException) {
-            Toast.makeText(context, "Voice typing isn't available on this phone", Toast.LENGTH_SHORT).show()
+            CherishToast.show("Voice typing isn't available on this phone")
         }
     }
 
@@ -285,18 +323,18 @@ fun MessageComposer(
         MaterialTheme.colorScheme.surface
     }
     val pillBg = if (isPrivateMode) {
-        if (isAmoled) Color(0xFF171717)
-        else if (isDark) Color(0xFF2A2A2A)
-        else Color(0xFFF2F2F2)
+        if (isAmoled) Neutral900
+        else if (isDark) Neutral800
+        else Neutral200
     } else {
-        if (isDark) darkSurface(Color(0xFF1E2638)) else Color.White
+        if (isDark) darkSurface(NavyCard) else Color.White
     }
     val pillBorder = if (isPrivateMode) {
-        if (isAmoled) Color(0xFF262626)
-        else if (isDark) Color(0xFF353535)
-        else Color(0xFFE3E3E3)
+        if (isAmoled) Neutral800
+        else if (isDark) Neutral700
+        else Neutral300
     } else {
-        if (isDark) darkSurface(Color(0xFF2A364F), Color(0xFF262626)) else Color(0xFFE2E8F0)
+        if (isDark) darkSurface(NavyRaised, Neutral800) else Gray200
     }
 
     // Comprehensive emoji categories like WhatsApp / Telegram
@@ -474,9 +512,9 @@ fun MessageComposer(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .heightIn(min = 52.dp)
-                                .clip(RoundedCornerShape(26.dp))
-                                .background(if (isDark) darkSurface(Color(0xFF1E2638)) else Color.White)
-                                .border(BorderStroke(1.dp, pillBorder), RoundedCornerShape(26.dp))
+                                .clip(RoundedCornerShape(28.dp))
+                                .background(if (isDark) darkSurface(NavyCard) else Color.White)
+                                .border(BorderStroke(1.dp, pillBorder), RoundedCornerShape(28.dp))
                                 .padding(horizontal = 8.dp, vertical = 6.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
@@ -490,7 +528,7 @@ fun MessageComposer(
                             modifier = Modifier.size(32.dp)
                         ) {
                             Icon(
-                                imageVector = Icons.Default.Delete,
+                                imageVector = Icons.Rounded.Delete,
                                 contentDescription = "Cancel voice note",
                                 tint = MaterialTheme.colorScheme.error,
                                 modifier = Modifier.size(20.dp)
@@ -515,7 +553,7 @@ fun MessageComposer(
                             modifier = Modifier
                                 .size(9.dp)
                                 .graphicsLayer { scaleX = 1f + pulseAlpha * 0.3f; scaleY = 1f + pulseAlpha * 0.3f }
-                                .background(Color(0xFFE11D48), CircleShape)
+                                .background(Rose600, CircleShape)
                         )
 
                         Spacer(modifier = Modifier.width(6.dp))
@@ -544,7 +582,7 @@ fun MessageComposer(
 
                         // Lock icon
                         Icon(
-                            imageVector = Icons.Default.Lock,
+                            imageVector = Icons.Rounded.Lock,
                             contentDescription = "Locked recording",
                             tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(16.dp)
@@ -558,9 +596,9 @@ fun MessageComposer(
                         modifier = Modifier
                             .fillMaxWidth()
                             .heightIn(min = 52.dp)
-                            .clip(RoundedCornerShape(26.dp))
-                            .background(if (isDark) darkSurface(Color(0xFF1E2638)) else Color.White)
-                            .border(BorderStroke(1.dp, pillBorder), RoundedCornerShape(26.dp))
+                            .clip(RoundedCornerShape(28.dp))
+                            .background(if (isDark) darkSurface(NavyCard) else Color.White)
+                            .border(BorderStroke(1.dp, pillBorder), RoundedCornerShape(28.dp))
                             .padding(horizontal = 8.dp, vertical = 6.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -580,7 +618,7 @@ fun MessageComposer(
                             modifier = Modifier
                                 .size(9.dp)
                                 .graphicsLayer { scaleX = 1f + pulseAlpha * 0.3f; scaleY = 1f + pulseAlpha * 0.3f }
-                                .background(Color(0xFFE11D48).copy(alpha = 0.9f + pulseAlpha * 0.1f), CircleShape)
+                                .background(Rose600.copy(alpha = 0.9f + pulseAlpha * 0.1f), CircleShape)
                         )
 
                         Spacer(modifier = Modifier.width(5.dp))
@@ -634,7 +672,7 @@ fun MessageComposer(
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
-                                    imageVector = if (isAtTrash) Icons.Default.DeleteForever else Icons.Default.Delete,
+                                    imageVector = if (isAtTrash) Icons.Rounded.DeleteForever else Icons.Rounded.Delete,
                                     contentDescription = "Cancel recording",
                                     tint = if (isAtTrash) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier
@@ -658,7 +696,7 @@ fun MessageComposer(
                                 Spacer(modifier = Modifier.width(3.dp))
                                 Text(
                                     text = if (isNearTrash) "Release to cancel" else "Slide to cancel",
-                                    fontSize = 11.5.sp,
+                                    fontSize = 11.sp,
                                     fontWeight = if (isNearTrash) FontWeight.Bold else FontWeight.Normal,
                                     color = if (isNearTrash) MaterialTheme.colorScheme.error
                                     else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f)
@@ -666,7 +704,7 @@ fun MessageComposer(
                             } else {
                                 Text(
                                     text = "Release to delete 🗑️",
-                                    fontSize = 11.5.sp,
+                                    fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.error
                                 )
@@ -681,9 +719,9 @@ fun MessageComposer(
                         modifier = Modifier
                             .fillMaxWidth()
                             .heightIn(min = 52.dp)
-                            .clip(RoundedCornerShape(26.dp))
+                            .clip(RoundedCornerShape(28.dp))
                             .background(pillBg)
-                            .border(BorderStroke(1.dp, pillBorder), RoundedCornerShape(26.dp))
+                            .border(BorderStroke(1.dp, pillBorder), RoundedCornerShape(28.dp))
                             .padding(start = 6.dp, end = 6.dp, top = 4.dp, bottom = 4.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -702,9 +740,9 @@ fun MessageComposer(
                                 label = "plus_rotation"
                             )
                             Icon(
-                                imageVector = Icons.Default.Add,
+                                imageVector = Icons.Rounded.Add,
                                 contentDescription = "Attach file or photo",
-                                tint = if (isDark) Color(0xFFECECEC) else Color(0xFF0D0D0D),
+                                tint = if (isDark) Neutral200 else InkBlack,
                                 modifier = Modifier
                                     .size(24.dp)
                                     .graphicsLayer { rotationZ = plusRotation }
@@ -722,7 +760,7 @@ fun MessageComposer(
                             @Suppress("DEPRECATION")
                             val inputTextStyle = TextStyle(
                                 fontFamily = LocalTextStyle.current.fontFamily,
-                                color = if (isDark) Color(0xFFECECEC) else Color(0xFF0D0D0D),
+                                color = if (isDark) Neutral200 else InkBlack,
                                 fontSize = 16.sp,
                                 lineHeight = 22.sp,
                                 platformStyle = PlatformTextStyle(includeFontPadding = false)
@@ -732,7 +770,7 @@ fun MessageComposer(
                                 value = text,
                                 onValueChange = onTextChanged,
                                 textStyle = inputTextStyle,
-                                cursorBrush = SolidColor(if (isDark) Color(0xFFECECEC) else Color(0xFF0D0D0D)),
+                                cursorBrush = SolidColor(if (isDark) Neutral200 else InkBlack),
                                 maxLines = 5,
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -774,7 +812,7 @@ fun MessageComposer(
                                 .testTag("composer_voice_typing")
                         ) {
                             Icon(
-                                imageVector = Icons.Outlined.Mic,
+                                imageVector = Icons.Rounded.Mic,
                                 contentDescription = "Voice typing",
                                 tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(24.dp)
@@ -787,9 +825,9 @@ fun MessageComposer(
                         modifier = Modifier
                             .fillMaxWidth()
                             .heightIn(min = 44.dp)
-                            .clip(RoundedCornerShape(26.dp))
+                            .clip(RoundedCornerShape(28.dp))
                             .background(pillBg)
-                            .border(BorderStroke(1.dp, pillBorder), RoundedCornerShape(26.dp))
+                            .border(BorderStroke(1.dp, pillBorder), RoundedCornerShape(28.dp))
                             .padding(start = 4.dp, end = 4.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -801,7 +839,7 @@ fun MessageComposer(
                                 .testTag("composer_emoji_button")
                         ) {
                             Icon(
-                                imageVector = if (isEmojiBoardShown) Icons.Default.Keyboard else Icons.Outlined.Mood,
+                                imageVector = if (isEmojiBoardShown) Icons.Rounded.Keyboard else Icons.Rounded.Mood,
                                 contentDescription = "Toggle emoji panel",
                                 tint = if (isEmojiBoardShown) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.size(24.dp)
@@ -818,7 +856,7 @@ fun MessageComposer(
                             if (text.isEmpty()) {
                                 Text(
                                     text = placeholder,
-                                    color = Color(0xFF64748B),
+                                    color = Slate500,
                                     fontSize = 13.sp,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
@@ -829,7 +867,7 @@ fun MessageComposer(
                                 onValueChange = onTextChanged,
                                 textStyle = TextStyle(
                                     fontFamily = LocalTextStyle.current.fontFamily,
-                                    color = if (isDark) Color.White else Color(0xFF0F172A),
+                                    color = if (isDark) Color.White else Slate900,
                                     fontSize = 14.sp,
                                     lineHeight = 18.sp
                                 ),
@@ -855,7 +893,7 @@ fun MessageComposer(
                                 .testTag("composer_attach_button")
                         ) {
                             Icon(
-                                imageVector = Icons.Outlined.AttachFile,
+                                imageVector = Icons.Rounded.AttachFile,
                                 contentDescription = "Attach file or photo",
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.size(22.dp)
@@ -870,7 +908,7 @@ fun MessageComposer(
                                 .testTag("composer_camera_button")
                         ) {
                             Icon(
-                                imageVector = Icons.Default.CameraAlt,
+                                imageVector = Icons.Rounded.CameraAlt,
                                 contentDescription = "Camera",
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.size(22.dp)
@@ -896,19 +934,19 @@ fun MessageComposer(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         modifier = Modifier
                             .offset { IntOffset(0, -64.dp.roundToPx() + (dragOffsetY * 0.3f).roundToInt()) }
-                            .clip(RoundedCornerShape(14.dp))
+                            .clip(RoundedCornerShape(16.dp))
                             .background(MaterialTheme.colorScheme.surface)
-                            .border(1.dp, if (dragOffsetY < -45f) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(14.dp))
+                            .border(1.dp, if (dragOffsetY < -45f) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(16.dp))
                             .padding(horizontal = 8.dp, vertical = 6.dp)
                     ) {
                         Icon(
-                            imageVector = if (dragOffsetY < -45f) Icons.Default.LockOpen else Icons.Default.Lock,
+                            imageVector = if (dragOffsetY < -45f) Icons.Rounded.LockOpen else Icons.Rounded.Lock,
                             contentDescription = "Lock",
                             tint = if (dragOffsetY < -45f) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(16.dp)
                         )
                         Icon(
-                            imageVector = Icons.Default.KeyboardArrowUp,
+                            imageVector = Icons.Rounded.KeyboardArrowUp,
                             contentDescription = null,
                             tint = if (dragOffsetY < -45f) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(14.dp)
@@ -939,14 +977,14 @@ fun MessageComposer(
                                 if (nothingToSend) {
                                     Color(0xFF2563FF) // ChatGPT voice mode vibrant blue button
                                 } else {
-                                    if (isDark) Color.White else Color(0xFF0D0D0D)
+                                    if (isDark) Color.White else InkBlack
                                 }
                             } else null
                             val sendTint = if (isPrivateMode) {
                                 if (nothingToSend) {
                                     Color.White
                                 } else {
-                                    if (isDark) Color(0xFF0D0D0D) else Color.White
+                                    if (isDark) InkBlack else Color.White
                                 }
                             } else Color.White
 
@@ -991,8 +1029,8 @@ fun MessageComposer(
                             ) {
                                 Icon(
                                     imageVector = if (isPrivateMode) {
-                                        if (nothingToSend) Icons.Default.GraphicEq else Icons.Default.ArrowUpward
-                                    } else Icons.Default.Send,
+                                        if (nothingToSend) Icons.Rounded.GraphicEq else Icons.Rounded.ArrowUpward
+                                    } else Icons.AutoMirrored.Rounded.Send,
                                     contentDescription = if (isPrivateMode && nothingToSend) "Voice mode" else "Send",
                                     tint = sendTint,
                                     modifier = Modifier.size(if (isPrivateMode) 22.dp else 22.dp)
@@ -1001,10 +1039,10 @@ fun MessageComposer(
                         }
                         "SEND_VOICE" -> {
                             val sendBg = if (isPrivateMode) {
-                                if (isDark) darkTone(Color(0xFFECECEC)) else Color(0xFF1F2937)
+                                if (isDark) darkTone(Neutral200) else Gray800
                             } else null
                             val sendTint = if (isPrivateMode) {
-                                if (isDark) darkTone(Color(0xFF111827)) else Color.White
+                                if (isDark) darkTone(Slate900) else Color.White
                             } else Color.White
 
                             Box(
@@ -1026,7 +1064,7 @@ fun MessageComposer(
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
-                                    imageVector = if (isPrivateMode) Icons.Default.ArrowUpward else Icons.Default.Send,
+                                    imageVector = if (isPrivateMode) Icons.Rounded.ArrowUpward else Icons.AutoMirrored.Rounded.Send,
                                     contentDescription = "Send voice note",
                                     tint = sendTint,
                                     modifier = Modifier.size(22.dp)
@@ -1036,15 +1074,15 @@ fun MessageComposer(
                         "MEDIA_RECORD" -> {
                             val recordBg = if (isPrivateMode) {
                                 if (isRecordingVoice) {
-                                    if (isDark) darkTone(Color(0xFFE5E7EB)) else Color(0xFF374151)
+                                    if (isDark) darkTone(Gray200) else Gray700
                                 } else {
-                                    if (isDark) darkTone(Color(0xFF2E2F33)) else Color(0xFFE5E7EB)
+                                    if (isDark) darkTone(Graphite700) else Gray200
                                 }
-                            } else if (isRecordingVoice) Color(0xFFE11D48) else null
+                            } else if (isRecordingVoice) Rose600 else null
 
                             val recordTint = if (isPrivateMode) {
                                 if (isRecordingVoice) {
-                                    if (isDark) darkTone(Color(0xFF111827)) else Color.White
+                                    if (isDark) darkTone(Slate900) else Color.White
                                 } else {
                                     MaterialTheme.colorScheme.primary
                                 }
@@ -1189,7 +1227,7 @@ fun MessageComposer(
                                         label = "composer_media_icon"
                                     ) { inVideo ->
                                         Icon(
-                                            imageVector = if (inVideo) Icons.Default.Videocam else Icons.Default.Mic,
+                                            imageVector = if (inVideo) Icons.Rounded.Videocam else Icons.Rounded.Mic,
                                             contentDescription = if (inVideo) "Circular Video Note (tap to switch to Mic, hold to record)" else "Hold to record voice note (tap to switch to Video)",
                                             tint = recordTint,
                                             modifier = Modifier.size(23.dp)
@@ -1205,7 +1243,7 @@ fun MessageComposer(
                                             .offset(x = 1.dp, y = 1.dp)
                                             .size(18.dp)
                                             .clip(CircleShape)
-                                            .background(Color(0xFF0F172A))
+                                            .background(Slate900)
                                             .border(1.2.dp, RoseGoldPrimary, CircleShape),
                                         contentAlignment = Alignment.Center
                                     ) {
@@ -1220,7 +1258,7 @@ fun MessageComposer(
                                             label = "composer_media_badge_icon"
                                         ) { inVideo ->
                                             Icon(
-                                                imageVector = if (inVideo) Icons.Default.Mic else Icons.Default.Videocam,
+                                                imageVector = if (inVideo) Icons.Rounded.Mic else Icons.Rounded.Videocam,
                                                 contentDescription = null,
                                                 tint = Color.White,
                                                 modifier = Modifier.size(10.dp)
@@ -1251,7 +1289,7 @@ fun MessageComposer(
                     }
             ) {
                 Surface(
-                    color = if (isDark) MaterialTheme.colorScheme.surfaceVariant else Color(0xFFF8FAFC),
+                    color = if (isDark) MaterialTheme.colorScheme.surfaceVariant else Color.White,
                     border = BorderStroke(1.dp, pillBorder),
                     shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
                     modifier = Modifier.fillMaxSize()
@@ -1261,7 +1299,7 @@ fun MessageComposer(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .background(if (isDark) darkTone(Color(0xFF1A1C22)) else Color(0xFFF1F3F5))
+                                .background(if (isDark) darkTone(Graphite850) else Neutral200)
                                 .padding(horizontal = 4.dp, vertical = 2.dp),
                             horizontalArrangement = Arrangement.SpaceEvenly,
                             verticalAlignment = Alignment.CenterVertically
@@ -1286,7 +1324,7 @@ fun MessageComposer(
                                 ) {
                                     Text(
                                         text = tabEmoji,
-                                        fontSize = if (isSelected) 20.sp else 17.sp
+                                        fontSize = if (isSelected) 20.sp else 16.sp
                                     )
                                 }
                             }
@@ -1297,7 +1335,7 @@ fun MessageComposer(
                                 modifier = Modifier.size(32.dp)
                             ) {
                                 Icon(
-                                    Icons.Default.Close,
+                                    Icons.Rounded.Close,
                                     contentDescription = "Close",
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.size(16.dp)
@@ -1323,15 +1361,16 @@ fun MessageComposer(
                                 items(currentEmojis, key = { "${pageIndex}_$it" }) { emoji ->
                                     Box(
                                         modifier = Modifier
+                                            .pressScaleTarget()
                                             .clip(RoundedCornerShape(8.dp))
-                                            .clickable {
+                                            .springClickable {
                                                 haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                                 onTextChanged(text + emoji)
                                             }
                                             .padding(vertical = 4.dp),
                                         contentAlignment = Alignment.Center
                                     ) {
-                                        Text(text = emoji, fontSize = 34.sp)
+                                        Text(text = emoji, fontSize = 32.sp)
                                     }
                                 }
                             }
@@ -1361,7 +1400,7 @@ private fun EmojiAttachmentPanel(
     onPickVideo: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val panelBg = if (isDark) Color(0xFF1E1E1E) else Color(0xFFF9FAFB)
+    val panelBg = if (isDark) Neutral900 else Color.White
     val scope = rememberCoroutineScope()
 
     Surface(
@@ -1383,28 +1422,28 @@ private fun EmojiAttachmentPanel(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 PanelActionItem(
-                    icon = Icons.Default.CameraAlt,
+                    icon = Icons.Rounded.CameraAlt,
                     label = "Camera",
-                    color = Color(0xFF3B82F6),
+                    color = Blue500,
                     isDark = isDark,
                     onClick = onTakePhoto
                 )
                 PanelActionItem(
-                    icon = Icons.Outlined.PhotoLibrary,
+                    icon = Icons.Rounded.PhotoLibrary,
                     label = "Photos",
-                    color = Color(0xFF10B981),
+                    color = Emerald500,
                     isDark = isDark,
                     onClick = onPickAttachment
                 )
                 PanelActionItem(
-                    icon = Icons.Default.Videocam,
+                    icon = Icons.Rounded.Videocam,
                     label = "Video",
-                    color = Color(0xFFEC4899),
+                    color = Pink500,
                     isDark = isDark,
                     onClick = onPickVideo
                 )
                 PanelActionItem(
-                    icon = Icons.Outlined.InsertDriveFile,
+                    icon = Icons.AutoMirrored.Rounded.InsertDriveFile,
                     label = "Files",
                     color = Color(0xFF8B5CF6),
                     isDark = isDark,
@@ -1421,7 +1460,7 @@ private fun EmojiAttachmentPanel(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(if (isDark) Color(0xFF161616) else Color(0xFFF1F3F5))
+                    .background(if (isDark) Neutral900 else Neutral200)
                     .padding(horizontal = 4.dp, vertical = 2.dp),
                 horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically
@@ -1454,7 +1493,7 @@ private fun EmojiAttachmentPanel(
                     modifier = Modifier.size(28.dp)
                 ) {
                     Icon(
-                        Icons.Default.Close,
+                        Icons.Rounded.Close,
                         contentDescription = "Close",
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(16.dp)
@@ -1480,8 +1519,9 @@ private fun EmojiAttachmentPanel(
                     items(currentEmojis, key = { "${pageIndex}_$it" }) { emoji ->
                         Box(
                             modifier = Modifier
+                                .pressScaleTarget()
                                 .clip(RoundedCornerShape(8.dp))
-                                .clickable {
+                                .springClickable {
                                     haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                     onEmojiPicked(emoji)
                                 }
@@ -1508,15 +1548,16 @@ private fun PanelActionItem(
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
+            .pressScaleTarget()
             .clip(RoundedCornerShape(12.dp))
-            .clickable(onClick = onClick)
+            .springClickable(onClick = onClick)
             .padding(horizontal = 8.dp, vertical = 4.dp)
     ) {
         Box(
             modifier = Modifier
                 .size(44.dp)
                 .clip(CircleShape)
-                .background(if (isDark) Color(0xFF2A2A2A) else Color(0xFFECEFF1)),
+                .background(if (isDark) Neutral800 else Neutral200),
             contentAlignment = Alignment.Center
         ) {
             Icon(
@@ -1531,7 +1572,7 @@ private fun PanelActionItem(
             text = label,
             fontSize = 11.sp,
             fontWeight = FontWeight.Medium,
-            color = if (isDark) Color(0xFFECECEC) else Color(0xFF334155)
+            color = if (isDark) Neutral200 else Gray700
         )
     }
 }
@@ -1551,14 +1592,14 @@ fun ReplyPreviewCard(
     val isAmoled = com.example.ui.theme.LocalAmoledBlack.current
     val accent = if (isPrivateMode) Color(0xFF10A37F) else MaterialTheme.colorScheme.primary
     val cardColor = when {
-        isPrivateMode -> if (isAmoled) Color(0xFF171717) else if (isDark) Color(0xFF2F2F2F) else Color(0xFFF4F4F4)
-        isDark -> darkSurface(Color(0xFF263049), Color(0xFF181818))
+        isPrivateMode -> if (isAmoled) Neutral900 else if (isDark) Neutral750 else Neutral200
+        isDark -> darkSurface(NavyRaised, Neutral900)
         else -> androidx.compose.ui.graphics.lerp(Color.White, accent, 0.07f)
     }
     Surface(
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(16.dp),
         color = cardColor,
-        border = BorderStroke(1.dp, if (isPrivateMode) (if (isAmoled) Color(0xFF262626) else if (isDark) Color(0xFF383838) else Color(0xFFE5E5E5)) else accent.copy(alpha = if (isDark) 0.35f else 0.22f)),
+        border = BorderStroke(1.dp, if (isPrivateMode) (if (isAmoled) Neutral800 else if (isDark) Neutral700 else Neutral300) else accent.copy(alpha = if (isDark) 0.35f else 0.22f)),
         shadowElevation = 6.dp,
         modifier = modifier
     ) {
@@ -1574,7 +1615,7 @@ fun ReplyPreviewCard(
             )
             Spacer(modifier = Modifier.width(8.dp))
             Icon(
-                imageVector = Icons.AutoMirrored.Filled.Reply,
+                imageVector = Icons.AutoMirrored.Rounded.Reply,
                 contentDescription = null,
                 tint = accent,
                 modifier = Modifier.size(14.dp)
@@ -1588,13 +1629,13 @@ fun ReplyPreviewCard(
                     text = "Replying to ${if (isPrivateMode) (reply.senderName ?: "ChatGPT") else (reply.senderName ?: "Partner")}",
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
-                    color = if (isPrivateMode) (if (isDark) Color(0xFFECECEC) else Color(0xFF0D0D0D)) else accent,
+                    color = if (isPrivateMode) (if (isDark) Neutral200 else InkBlack) else accent,
                     maxLines = 1,
                     overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                 )
                 Text(
                     text = reply.text,
-                    fontSize = 11.5.sp,
+                    fontSize = 11.sp,
                     maxLines = 1,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
@@ -1607,7 +1648,7 @@ fun ReplyPreviewCard(
                     .testTag("composer_cancel_reply")
             ) {
                 Icon(
-                    Icons.Default.Close,
+                    Icons.Rounded.Close,
                     contentDescription = "Cancel reply",
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(16.dp)

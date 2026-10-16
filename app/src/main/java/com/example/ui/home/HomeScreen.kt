@@ -16,8 +16,17 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.outlined.*
+import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.AllInclusive
+import androidx.compose.material.icons.rounded.Call
+import androidx.compose.material.icons.rounded.ChatBubble
+import androidx.compose.material.icons.rounded.ChevronRight
+import androidx.compose.material.icons.rounded.CloudSync
+import androidx.compose.material.icons.rounded.Event
+import androidx.compose.material.icons.rounded.Favorite
+import androidx.compose.material.icons.rounded.MarkEmailRead
+import androidx.compose.material.icons.rounded.Person
+import androidx.compose.material.icons.rounded.PhoneInTalk
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -170,7 +179,7 @@ fun HomeScreen(
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Icon(
-                            imageVector = Icons.Default.Favorite,
+                            imageVector = Icons.Rounded.Favorite,
                             contentDescription = null,
                             tint = HeartRed,
                             modifier = Modifier
@@ -188,7 +197,7 @@ fun HomeScreen(
                         modifier = Modifier.testTag("home_cloud_backup_button")
                     ) {
                         Icon(
-                            imageVector = Icons.Outlined.CloudSync,
+                            imageVector = Icons.Rounded.CloudSync,
                             contentDescription = "Cloud Backup",
                             tint = MaterialTheme.colorScheme.primary
                         )
@@ -215,7 +224,7 @@ fun HomeScreen(
                         .background(barBg)
                         .navigationBarsPadding()
                 ) {
-                    HorizontalDivider(color = if (isDark) TrueDarkOutline else Color(0xFFE2E8F0), thickness = 0.8.dp)
+                    HorizontalDivider(color = if (isDark) TrueDarkOutline else Gray200, thickness = 0.8.dp)
                     // Streamlined 3-tab navigation focused on strictly 2-person chat, daily growth, and ironclad security
                     NavigationBar(
                         containerColor = barBg,
@@ -225,7 +234,7 @@ fun HomeScreen(
                         NavigationBarItem(
                             selected = true,
                             onClick = { },
-                            icon = { Icon(Icons.Filled.Favorite, contentDescription = "Us & Growth") },
+                            icon = { Icon(Icons.Rounded.Favorite, contentDescription = "Us & Growth") },
                             label = { 
                                 val streak = uiState.currentUser?.heartbeatStreak ?: 0
                                 if (streak > 0) {
@@ -237,9 +246,9 @@ fun HomeScreen(
                             colors = NavigationBarItemDefaults.colors(
                                 selectedIconColor = MaterialTheme.colorScheme.primary,
                                 selectedTextColor = MaterialTheme.colorScheme.primary,
-                                indicatorColor = if (isDark) MaterialTheme.colorScheme.primaryContainer else Color(0xFFEFF4FF),
-                                unselectedIconColor = if (isDark) darkTone(Color(0xFF94A3B8)) else Color(0xFF64748B),
-                                unselectedTextColor = if (isDark) darkTone(Color(0xFF94A3B8)) else Color(0xFF64748B)
+                                indicatorColor = if (isDark) MaterialTheme.colorScheme.primaryContainer else MistBlue,
+                                unselectedIconColor = if (isDark) darkTone(Slate400) else Slate500,
+                                unselectedTextColor = if (isDark) darkTone(Slate400) else Slate500
                             )
                         )
                         NavigationBarItem(
@@ -255,29 +264,29 @@ fun HomeScreen(
                                         }
                                     }
                                 ) {
-                                    Icon(Icons.Outlined.ChatBubble, contentDescription = "Chat")
+                                    Icon(Icons.Rounded.ChatBubble, contentDescription = "Chat")
                                 }
                             },
                             label = { Text("Private Chat") },
                             colors = NavigationBarItemDefaults.colors(
                                 selectedIconColor = MaterialTheme.colorScheme.primary,
                                 selectedTextColor = MaterialTheme.colorScheme.primary,
-                                indicatorColor = if (isDark) MaterialTheme.colorScheme.primaryContainer else Color(0xFFEFF4FF),
-                                unselectedIconColor = if (isDark) darkTone(Color(0xFF94A3B8)) else Color(0xFF64748B),
-                                unselectedTextColor = if (isDark) darkTone(Color(0xFF94A3B8)) else Color(0xFF64748B)
+                                indicatorColor = if (isDark) MaterialTheme.colorScheme.primaryContainer else MistBlue,
+                                unselectedIconColor = if (isDark) darkTone(Slate400) else Slate500,
+                                unselectedTextColor = if (isDark) darkTone(Slate400) else Slate500
                             )
                         )
                         NavigationBarItem(
                             selected = false,
                             onClick = onNavigateToProfile,
-                            icon = { Icon(Icons.Outlined.Person, contentDescription = "Profile") },
+                            icon = { Icon(Icons.Rounded.Person, contentDescription = "Profile") },
                             label = { Text("Profile") },
                             colors = NavigationBarItemDefaults.colors(
                                 selectedIconColor = MaterialTheme.colorScheme.primary,
                                 selectedTextColor = MaterialTheme.colorScheme.primary,
-                                indicatorColor = if (isDark) MaterialTheme.colorScheme.primaryContainer else Color(0xFFEFF4FF),
-                                unselectedIconColor = if (isDark) darkTone(Color(0xFF94A3B8)) else Color(0xFF64748B),
-                                unselectedTextColor = if (isDark) darkTone(Color(0xFF94A3B8)) else Color(0xFF64748B)
+                                indicatorColor = if (isDark) MaterialTheme.colorScheme.primaryContainer else MistBlue,
+                                unselectedIconColor = if (isDark) darkTone(Slate400) else Slate500,
+                                unselectedTextColor = if (isDark) darkTone(Slate400) else Slate500
                             )
                         )
                     }
@@ -453,7 +462,7 @@ fun HomeScreen(
                     .fillMaxWidth()
                     .clickable { onNavigateToChat() }
                     .testTag("open_chat_card"),
-                shape = RoundedCornerShape(18.dp),
+                shape = RoundedCornerShape(20.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                 elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
@@ -472,7 +481,7 @@ fun HomeScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
-                            imageVector = Icons.Outlined.ChatBubble,
+                            imageVector = Icons.Rounded.ChatBubble,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(20.dp)
@@ -556,7 +565,7 @@ fun HomeScreen(
                     .fillMaxWidth()
                     .clickable { onNavigateToChat() }
                     .testTag("free_call_minutes_card"),
-                shape = RoundedCornerShape(18.dp),
+                shape = RoundedCornerShape(20.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                 elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
@@ -578,7 +587,7 @@ fun HomeScreen(
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
-                                imageVector = if (hasActiveCall) Icons.Filled.PhoneInTalk else Icons.Filled.Call,
+                                imageVector = if (hasActiveCall) Icons.Rounded.PhoneInTalk else Icons.Rounded.Call,
                                 contentDescription = "Daily Call Minutes",
                                 tint = if (isMonthlyLimitReached) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(20.dp)
@@ -642,7 +651,7 @@ fun HomeScreen(
                     .fillMaxWidth()
                     .clickable { onNavigateToLifetimeJourney() }
                     .testTag("lifetime_journey_card"),
-                shape = RoundedCornerShape(18.dp),
+                shape = RoundedCornerShape(20.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                 elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
@@ -666,7 +675,7 @@ fun HomeScreen(
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
-                                imageVector = Icons.Default.AllInclusive,
+                                imageVector = Icons.Rounded.AllInclusive,
                                 contentDescription = null,
                                 tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(20.dp)
@@ -689,7 +698,7 @@ fun HomeScreen(
                     }
 
                     Icon(
-                        imageVector = Icons.Default.ChevronRight,
+                        imageVector = Icons.Rounded.ChevronRight,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(20.dp)
@@ -712,7 +721,7 @@ fun HomeScreen(
                     .fillMaxWidth()
                     .clickable { onNavigateToDates() }
                     .testTag("our_dates_card"),
-                shape = RoundedCornerShape(18.dp),
+                shape = RoundedCornerShape(20.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                 elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
@@ -727,7 +736,7 @@ fun HomeScreen(
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
-                                imageVector = Icons.Default.Event,
+                                imageVector = Icons.Rounded.Event,
                                 contentDescription = null,
                                 tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(20.dp)
@@ -749,7 +758,7 @@ fun HomeScreen(
                             )
                         }
                         Icon(
-                            imageVector = if (ourDates.isEmpty()) Icons.Default.Add else Icons.Default.ChevronRight,
+                            imageVector = if (ourDates.isEmpty()) Icons.Rounded.Add else Icons.Rounded.ChevronRight,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(20.dp)
@@ -770,7 +779,7 @@ fun HomeScreen(
                     .fillMaxWidth()
                     .clickable { onNavigateToOpenWhen() }
                     .testTag("open_when_card"),
-                shape = RoundedCornerShape(18.dp),
+                shape = RoundedCornerShape(20.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                 elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
@@ -794,7 +803,7 @@ fun HomeScreen(
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
-                                imageVector = Icons.Filled.MarkEmailRead,
+                                imageVector = Icons.Rounded.MarkEmailRead,
                                 contentDescription = null,
                                 tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(20.dp)
@@ -817,7 +826,7 @@ fun HomeScreen(
                     }
 
                     Icon(
-                        imageVector = Icons.Default.ChevronRight,
+                        imageVector = Icons.Rounded.ChevronRight,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(20.dp)
@@ -974,7 +983,7 @@ private fun LoveActionButton(
     val accent = MaterialTheme.colorScheme.primary
     Surface(
         onClick = onClick,
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(16.dp),
         color = if (highlighted) accent else MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f),
         border = BorderStroke(1.dp, accent.copy(alpha = if (highlighted) 0f else 0.25f)),
         modifier = modifier.testTag(tag)
@@ -997,7 +1006,7 @@ private fun LoveActionButton(
             Spacer(modifier = Modifier.width(6.dp))
             Text(
                 text = label,
-                fontSize = 12.5.sp,
+                fontSize = 12.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = if (highlighted) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onPrimaryContainer,
                 maxLines = 1

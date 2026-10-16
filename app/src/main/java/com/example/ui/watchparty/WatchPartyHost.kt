@@ -48,21 +48,20 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Chat
-import androidx.compose.material.icons.automirrored.filled.Message
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Forward10
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.OpenInFull
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material.icons.filled.Replay10
-import androidx.compose.material.icons.filled.Fullscreen
-import androidx.compose.material.icons.filled.FullscreenExit
-import androidx.compose.material.icons.filled.VideoLibrary
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.HighQuality
+import androidx.compose.material.icons.automirrored.rounded.Chat
+import androidx.compose.material.icons.automirrored.rounded.Message
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Forward10
+import androidx.compose.material.icons.rounded.Fullscreen
+import androidx.compose.material.icons.rounded.FullscreenExit
+import androidx.compose.material.icons.rounded.HighQuality
+import androidx.compose.material.icons.rounded.KeyboardArrowDown
+import androidx.compose.material.icons.rounded.OpenInFull
+import androidx.compose.material.icons.rounded.Pause
+import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Replay10
+import androidx.compose.material.icons.rounded.VideoLibrary
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledIconButton
@@ -143,6 +142,11 @@ import kotlin.math.abs
 import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.random.Random
+import com.example.ui.components.CherishToast
+import com.example.ui.components.CherishAlertDialog
+import com.example.ui.components.CherishTonalButton
+import com.example.ui.components.pressScaleTarget
+import com.example.ui.components.springClickable
 
 /** The quick reactions under the video. */
 private val ReactionEmojis = listOf("❤️", "🍿", "😂", "🥺", "💋")
@@ -211,7 +215,7 @@ fun WatchPartyHost(app: CherishApplication, allowed: Boolean) {
     LaunchedEffect(party == null) {
         if (party == null && WatchPartyUi.mode != WatchPartyMode.Hidden) {
             WatchPartyUi.close()
-            if (allowed) Toast.makeText(context, "Watch Together has ended", Toast.LENGTH_SHORT).show()
+            if (allowed) CherishToast.show("Watch Together has ended")
         }
     }
 
@@ -902,7 +906,7 @@ private fun Theater(
 
     if (showWhisperDialog) {
         var text by remember { mutableStateOf("") }
-        AlertDialog(
+        CherishAlertDialog(
             onDismissRequest = { showWhisperDialog = false },
             title = { Text("Send a whisper") },
             text = { 
@@ -1024,7 +1028,7 @@ private fun TheaterHeader(
     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onMinimize, modifier = Modifier.testTag("watch_party_minimize")) {
-                Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Make small", tint = ink)
+                Icon(Icons.Rounded.KeyboardArrowDown, contentDescription = "Make small", tint = ink)
             }
             Column(modifier = Modifier.weight(1f)) {
                 Text("Watch Together 🍿", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = ink)
@@ -1037,7 +1041,7 @@ private fun TheaterHeader(
                 )
             }
             IconButton(onClick = onWhisperClick, modifier = Modifier.testTag("watch_party_whisper")) {
-                Icon(Icons.AutoMirrored.Filled.Message, contentDescription = "Whisper", tint = ink)
+                Icon(Icons.AutoMirrored.Rounded.Message, contentDescription = "Whisper", tint = ink)
             }
             val ctx = androidx.compose.ui.platform.LocalContext.current
             val configuration = androidx.compose.ui.platform.LocalConfiguration.current
@@ -1056,13 +1060,13 @@ private fun TheaterHeader(
                 },
                 modifier = Modifier.testTag("watch_party_fullscreen")
             ) {
-                Icon(if (isLandscape) Icons.Default.FullscreenExit else Icons.Default.Fullscreen, contentDescription = "Toggle Fullscreen", tint = ink)
+                Icon(if (isLandscape) Icons.Rounded.FullscreenExit else Icons.Rounded.Fullscreen, contentDescription = "Toggle Fullscreen", tint = ink)
             }
             IconButton(onClick = onPickVideo, modifier = Modifier.testTag("watch_party_pick")) {
-                Icon(Icons.Default.VideoLibrary, contentDescription = "Pick another video", tint = accent)
+                Icon(Icons.Rounded.VideoLibrary, contentDescription = "Pick another video", tint = accent)
             }
             IconButton(onClick = onLeave, modifier = Modifier.testTag("watch_party_leave")) {
-                Icon(Icons.Default.Close, contentDescription = "Leave", tint = ink)
+                Icon(Icons.Rounded.Close, contentDescription = "Leave", tint = ink)
             }
         }
         Row(
@@ -1187,7 +1191,7 @@ private fun PlaybackDeck(
                 .padding(vertical = 6.dp)
         ) {
             IconButton(onClick = { onSeek((position - 10f).coerceAtLeast(0f)) }) {
-                Icon(Icons.Default.Replay10, contentDescription = "Back 10 seconds", tint = muted)
+                Icon(Icons.Rounded.Replay10, contentDescription = "Back 10 seconds", tint = muted)
             }
             Spacer(modifier = Modifier.width(24.dp))
             FilledIconButton(
@@ -1198,7 +1202,7 @@ private fun PlaybackDeck(
                     .testTag("watch_party_play_pause_btn")
             ) {
                 Icon(
-                    imageVector = if (party.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                    imageVector = if (party.isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
                     contentDescription = if (party.isPlaying) "Pause for both" else "Play for both",
                     tint = MaterialTheme.colorScheme.onPrimary,
                     modifier = Modifier.size(34.dp)
@@ -1206,7 +1210,7 @@ private fun PlaybackDeck(
             }
             Spacer(modifier = Modifier.width(24.dp))
             IconButton(onClick = { onSeek(position + 10f) }) {
-                Icon(Icons.Default.Forward10, contentDescription = "Forward 10 seconds", tint = muted)
+                Icon(Icons.Rounded.Forward10, contentDescription = "Forward 10 seconds", tint = muted)
             }
             Spacer(modifier = Modifier.width(16.dp))
             var speedMenu by remember { mutableStateOf(false) }
@@ -1240,7 +1244,7 @@ private fun PlaybackDeck(
                     modifier = Modifier.testTag("watch_party_quality_btn")
                 ) {
                     Icon(
-                        imageVector = Icons.Default.HighQuality,
+                        imageVector = Icons.Rounded.HighQuality,
                         contentDescription = "Quality",
                         modifier = Modifier.size(16.dp),
                         tint = muted
@@ -1265,7 +1269,7 @@ private fun PlaybackDeck(
                                         (code == "auto" && player.currentQuality.isBlank())
                                     if (isSelected) {
                                         Icon(
-                                            Icons.Default.Check,
+                                            Icons.Rounded.Check,
                                             contentDescription = null,
                                             tint = accent,
                                             modifier = Modifier.size(16.dp)
@@ -1300,15 +1304,15 @@ private fun TheaterActions(onChatWhileWatching: () -> Unit, onEndForBoth: () -> 
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 10.dp)
     ) {
-        FilledTonalButton(
+        CherishTonalButton(
             onClick = onChatWhileWatching,
-            shape = RoundedCornerShape(14.dp),
+            shape = RoundedCornerShape(16.dp),
             modifier = Modifier
                 .weight(1f)
                 .height(46.dp)
                 .testTag("watch_party_chat_while_watching")
         ) {
-            Icon(Icons.AutoMirrored.Filled.Chat, contentDescription = null, modifier = Modifier.size(18.dp))
+            Icon(Icons.AutoMirrored.Rounded.Chat, contentDescription = null, modifier = Modifier.size(18.dp))
             Spacer(modifier = Modifier.width(8.dp))
             Text("Chat while watching", fontWeight = FontWeight.SemiBold)
         }
@@ -1389,7 +1393,7 @@ private fun DockBar(
                 )
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     MiniButton(
-                        icon = if (party.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                        icon = if (party.isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
                         label = if (party.isPlaying) "Pause for both" else "Play for both",
                         tint = accent,
                         onClick = onTogglePlay
@@ -1398,11 +1402,12 @@ private fun DockBar(
                         contentAlignment = Alignment.Center,
                         modifier = Modifier
                             .size(34.dp)
+                            .pressScaleTarget()
                             .clip(CircleShape)
-                            .clickable { onReact("❤️") }
-                    ) { Text("❤️", fontSize = 17.sp) }
-                    MiniButton(Icons.Default.OpenInFull, "Full screen", ink, onExpand)
-                    MiniButton(Icons.Default.Close, "Leave", ink, onLeave)
+                            .springClickable { onReact("❤️") }
+                    ) { Text("❤️", fontSize = 16.sp) }
+                    MiniButton(Icons.Rounded.OpenInFull, "Full screen", ink, onExpand)
+                    MiniButton(Icons.Rounded.Close, "Leave", ink, onLeave)
                 }
             }
         }
@@ -1445,7 +1450,7 @@ private fun FloatingMini(
     )
     val latestAt by rememberUpdatedState(at)
     Surface(
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(16.dp),
         color = MaterialTheme.colorScheme.surface,
         border = BorderStroke(1.dp, accent.copy(alpha = 0.35f)),
         shadowElevation = 10.dp,
@@ -1479,7 +1484,7 @@ private fun FloatingMini(
                     .padding(horizontal = 2.dp)
             ) {
                 MiniButton(
-                    icon = if (party.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                    icon = if (party.isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
                     label = if (party.isPlaying) "Pause for both" else "Play for both",
                     tint = accent,
                     onClick = onTogglePlay
@@ -1498,8 +1503,8 @@ private fun FloatingMini(
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f)
                 )
-                MiniButton(Icons.Default.OpenInFull, "Full screen", ink, onExpand)
-                MiniButton(Icons.Default.Close, "Leave", ink, onLeave)
+                MiniButton(Icons.Rounded.OpenInFull, "Full screen", ink, onExpand)
+                MiniButton(Icons.Rounded.Close, "Leave", ink, onLeave)
             }
         }
     }

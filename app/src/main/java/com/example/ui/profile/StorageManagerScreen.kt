@@ -14,9 +14,11 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.outlined.*
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.CleaningServices
+import androidx.compose.material.icons.rounded.DownloadDone
+import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.Security
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -36,6 +38,14 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import com.example.ui.theme.Amber600
+import com.example.ui.theme.Blue300
+import com.example.ui.theme.Blue900
+import com.example.ui.theme.Green50
+import com.example.ui.theme.Green800
+import com.example.ui.components.CherishToast
+import com.example.ui.components.CherishButton
+import com.example.ui.components.CherishOutlinedButton
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -82,7 +92,7 @@ fun StorageManagerScreen(
                         onClick = onNavigateBack,
                         modifier = Modifier.testTag("storage_manager_back")
                     ) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back")
                     }
                 },
                 actions = {
@@ -90,11 +100,11 @@ fun StorageManagerScreen(
                         onClick = {
                             coroutineScope.launch {
                                 loadStorageStats()
-                                Toast.makeText(context, "Storage refreshed ✨", Toast.LENGTH_SHORT).show()
+                                CherishToast.show("Storage refreshed ✨")
                             }
                         }
                     ) {
-                        Icon(Icons.Default.Refresh, contentDescription = "Refresh", tint = MaterialTheme.colorScheme.primary)
+                        Icon(Icons.Rounded.Refresh, contentDescription = "Refresh", tint = MaterialTheme.colorScheme.primary)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
@@ -153,11 +163,11 @@ fun StorageManagerScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(10.dp)
-                                .clip(RoundedCornerShape(5.dp))
+                                .clip(RoundedCornerShape(8.dp))
                         ) {
                             if (photoWeight > 0f) Box(modifier = Modifier.weight(photoWeight).fillMaxHeight().background(RoseGoldPrimary))
                             if (videoWeight > 0f) Box(modifier = Modifier.weight(videoWeight).fillMaxHeight().background(Color(0xFF00ACC1)))
-                            if (voiceWeight > 0f) Box(modifier = Modifier.weight(voiceWeight).fillMaxHeight().background(Color(0xFFFFB300)))
+                            if (voiceWeight > 0f) Box(modifier = Modifier.weight(voiceWeight).fillMaxHeight().background(Amber600))
                             if (cacheWeight > 0f) Box(modifier = Modifier.weight(cacheWeight).fillMaxHeight().background(Color(0xFF9E9E9E)))
                         }
                     } else {
@@ -165,7 +175,7 @@ fun StorageManagerScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(10.dp)
-                                .clip(RoundedCornerShape(5.dp))
+                                .clip(RoundedCornerShape(8.dp))
                                 .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
                         )
                     }
@@ -178,7 +188,7 @@ fun StorageManagerScreen(
                     ) {
                         StorageLegend(color = RoseGoldPrimary, label = "Photos", size = formatSize(photoSizeBytes))
                         StorageLegend(color = Color(0xFF00ACC1), label = "Videos", size = formatSize(videoSizeBytes))
-                        StorageLegend(color = Color(0xFFFFB300), label = "Voice", size = formatSize(voiceSizeBytes))
+                        StorageLegend(color = Amber600, label = "Voice", size = formatSize(voiceSizeBytes))
                         StorageLegend(color = Color(0xFF9E9E9E), label = "Cache", size = formatSize(cacheSizeBytes))
                     }
                 }
@@ -188,7 +198,7 @@ fun StorageManagerScreen(
             Text("Manage & Optimize", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = MaterialTheme.colorScheme.onSurface)
 
             Card(
-                shape = RoundedCornerShape(18.dp),
+                shape = RoundedCornerShape(20.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                 elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
@@ -203,17 +213,17 @@ fun StorageManagerScreen(
                             modifier = Modifier
                                 .size(40.dp)
                                 .clip(CircleShape)
-                                .background(if (isDark) darkTone(Color(0xFF1E3A8A)) else Color(0xFFE8F5E9)),
+                                .background(if (isDark) darkTone(Blue900) else Green50),
                             contentAlignment = Alignment.Center
                         ) {
-                            Icon(Icons.Filled.CleaningServices, contentDescription = null, tint = if (isDark) darkTone(Color(0xFF93C5FD)) else Color(0xFF2E7D32), modifier = Modifier.size(20.dp))
+                            Icon(Icons.Rounded.CleaningServices, contentDescription = null, tint = if (isDark) darkTone(Blue300) else Green800, modifier = Modifier.size(20.dp))
                         }
                         Spacer(modifier = Modifier.width(12.dp))
                         Column(modifier = Modifier.weight(1f)) {
                             Text("Clear Cached Media", fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
                             Text("Free compressed image caches & previews without deleting chats", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
-                        Button(
+                        CherishButton(
                             onClick = {
                                 coroutineScope.launch {
                                     isCleaning = true
@@ -221,7 +231,7 @@ fun StorageManagerScreen(
                                     loadStorageStats()
                                     isCleaning = false
                                     val freedText = if (freed > 0L) "Freed ${formatSize(freed)}! ✨" else "Cache is already clean ✨"
-                                    Toast.makeText(context, freedText, Toast.LENGTH_SHORT).show()
+                                    CherishToast.show(freedText)
                                 }
                             },
                             enabled = !isCleaning,
@@ -251,14 +261,14 @@ fun StorageManagerScreen(
                                 .background(MaterialTheme.colorScheme.surfaceVariant),
                             contentAlignment = Alignment.Center
                         ) {
-                            Icon(Icons.Outlined.DownloadDone, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+                            Icon(Icons.Rounded.DownloadDone, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
                         }
                         Spacer(modifier = Modifier.width(12.dp))
                         Column(modifier = Modifier.weight(1f)) {
                             Text("Clean Update Installers", fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
                             Text("Remove saved update packages to reclaim storage", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
-                        OutlinedButton(
+                        CherishOutlinedButton(
                             onClick = {
                                 coroutineScope.launch {
                                     val updatesDir = File(context.cacheDir, "updates")
@@ -267,7 +277,7 @@ fun StorageManagerScreen(
                                         deleteDirContents(updatesDir)
                                     }
                                     loadStorageStats()
-                                    Toast.makeText(context, if (freed > 0L) "Freed ${formatSize(freed)} from updates" else "No installer files to clean", Toast.LENGTH_SHORT).show()
+                                    CherishToast.show(if (freed > 0L) "Freed ${formatSize(freed)} from updates" else "No installer files to clean")
                                 }
                             },
                             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
@@ -279,7 +289,7 @@ fun StorageManagerScreen(
             }
 
             Card(
-                shape = RoundedCornerShape(18.dp),
+                shape = RoundedCornerShape(20.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                 elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
@@ -287,7 +297,7 @@ fun StorageManagerScreen(
             ) {
                 Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.Security, contentDescription = null, tint = RoseGoldPrimary, modifier = Modifier.size(18.dp))
+                        Icon(Icons.Rounded.Security, contentDescription = null, tint = RoseGoldPrimary, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(8.dp))
                         Text("Safe Storage Guarantee", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface)
                     }

@@ -30,18 +30,16 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.VolumeUp
-import androidx.compose.material.icons.filled.BluetoothAudio
-import androidx.compose.material.icons.filled.Call
-import androidx.compose.material.icons.filled.CallEnd
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Headphones
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material.icons.filled.MicOff
-import androidx.compose.material.icons.filled.PhoneInTalk
-import androidx.compose.material.icons.filled.SignalCellularAlt1Bar
-import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.automirrored.rounded.VolumeUp
+import androidx.compose.material.icons.rounded.BluetoothAudio
+import androidx.compose.material.icons.rounded.Call
+import androidx.compose.material.icons.rounded.CallEnd
+import androidx.compose.material.icons.rounded.Headphones
+import androidx.compose.material.icons.rounded.KeyboardArrowDown
+import androidx.compose.material.icons.rounded.Mic
+import androidx.compose.material.icons.rounded.MicOff
+import androidx.compose.material.icons.rounded.PhoneInTalk
+import androidx.compose.material.icons.rounded.SignalCellularAlt1Bar
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -114,7 +112,7 @@ fun CallScreen(
                             .semantics { contentDescription = "Back to the app" }
                             .testTag("call_minimize")
                     ) {
-                        Icon(Icons.Default.KeyboardArrowDown, contentDescription = null, tint = colors.onBackground)
+                        Icon(Icons.Rounded.KeyboardArrowDown, contentDescription = null, tint = colors.onBackground)
                     }
                 }
                 Spacer(modifier = Modifier.weight(1f))
@@ -126,7 +124,7 @@ fun CallScreen(
             Spacer(modifier = Modifier.height(20.dp))
             Text(
                 text = state.peerName ?: "Voice call",
-                fontSize = 26.sp,
+                fontSize = 24.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = colors.onBackground,
                 textAlign = TextAlign.Center
@@ -160,7 +158,7 @@ fun CallScreen(
                         Text(
                             if (effectiveRemaining <= 1) "1 min free call left today"
                             else "$effectiveRemaining mins free call left today",
-                            fontSize = 12.5.sp,
+                            fontSize = 12.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = WarningAmber
                         )
@@ -242,7 +240,7 @@ private fun CallAvatar(state: CallUiState) {
                     .background(MaterialTheme.colorScheme.primary),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(Icons.Default.PhoneInTalk, contentDescription = null, tint = Color.White, modifier = Modifier.size(52.dp))
+                Icon(Icons.Rounded.PhoneInTalk, contentDescription = null, tint = Color.White, modifier = Modifier.size(52.dp))
             }
         }
     }
@@ -342,7 +340,7 @@ private fun RecordingNoticeCard() {
 private fun WeakNetworkChip() {
     Surface(shape = RoundedCornerShape(50), color = WarningAmber.copy(alpha = 0.14f)) {
         Row(modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Default.SignalCellularAlt1Bar, contentDescription = null, tint = WarningAmber, modifier = Modifier.size(14.dp))
+            Icon(Icons.Rounded.SignalCellularAlt1Bar, contentDescription = null, tint = WarningAmber, modifier = Modifier.size(14.dp))
             Spacer(modifier = Modifier.width(4.dp))
             Text("Weak connection", fontSize = 12.sp, color = WarningAmber)
         }
@@ -377,14 +375,14 @@ private fun CallControls(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceEvenly
         ) {
-            RoundAction(Icons.Default.CallEnd, "Decline", HangUpRed, onDecline, "call_decline")
-            RoundAction(Icons.Default.Call, "Answer", AnswerGreen, onAnswer, "call_answer")
+            RoundAction(Icons.Rounded.CallEnd, "Decline", HangUpRed, onDecline, "call_decline")
+            RoundAction(Icons.Rounded.Call, "Answer", AnswerGreen, onAnswer, "call_answer")
         }
         CallPhase.STARTING, CallPhase.OUTGOING_RINGING, CallPhase.CONNECTING,
         CallPhase.CONNECTED, CallPhase.RECONNECTING -> Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                 ToggleControl(
-                    icon = if (state.isMuted) Icons.Default.MicOff else Icons.Default.Mic,
+                    icon = if (state.isMuted) Icons.Rounded.MicOff else Icons.Rounded.Mic,
                     label = if (state.isMuted) "Unmute" else "Mute",
                     active = state.isMuted,
                     onClick = onToggleMute,
@@ -393,7 +391,7 @@ private fun CallControls(
                 AudioRouteControl(state, onToggleSpeaker, onSelectRoute)
             }
             Spacer(modifier = Modifier.height(28.dp))
-            RoundAction(Icons.Default.CallEnd, "Hang up", HangUpRed, onHangUp, "call_hang_up")
+            RoundAction(Icons.Rounded.CallEnd, "Hang up", HangUpRed, onHangUp, "call_hang_up")
         }
         // Over: the screen closes by itself (no Call again or Close to tap)
         else -> Unit
@@ -480,10 +478,10 @@ private fun AudioRouteControl(state: CallUiState, onToggleSpeaker: () -> Unit, o
 }
 
 private fun routeIcon(route: AudioRoute): ImageVector = when (route) {
-    AudioRoute.EARPIECE -> Icons.Default.PhoneInTalk
-    AudioRoute.SPEAKER -> Icons.AutoMirrored.Filled.VolumeUp
-    AudioRoute.BLUETOOTH -> Icons.Default.BluetoothAudio
-    AudioRoute.WIRED -> Icons.Default.Headphones
+    AudioRoute.EARPIECE -> Icons.Rounded.PhoneInTalk
+    AudioRoute.SPEAKER -> Icons.AutoMirrored.Rounded.VolumeUp
+    AudioRoute.BLUETOOTH -> Icons.Rounded.BluetoothAudio
+    AudioRoute.WIRED -> Icons.Rounded.Headphones
 }
 
 private fun routeLabel(route: AudioRoute): String = when (route) {

@@ -45,6 +45,8 @@ import android.hardware.SensorManager
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.consumeAsFlow
+import com.example.ui.theme.InkBlack
+import com.example.ui.theme.Lavender50
 
 /**
  * Premium Chat Wallpaper Composable that dynamically adapts to Day Mode (Light)
@@ -80,7 +82,7 @@ fun NormalWallpaper(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(if (isDark) darkTone(Color(0xFF000000)) else Color(0xFFFFFFFF))
+            .background(if (isDark) darkTone(InkBlack) else Color.White)
     )
 }
 
@@ -103,9 +105,9 @@ fun LoveImmersiveWallpaper(
         else -> com.example.R.drawable.chat_bg_theme_2_day
     }
     val fallbackBg = when {
-        isAmoled -> Color(0xFF000000)
+        isAmoled -> InkBlack
         isDark -> Color(0xFF011565)
-        else -> Color(0xFFFFFFFF)
+        else -> Color.White
     }
 
     Box(
@@ -138,9 +140,9 @@ fun DoodleWallpaper(
 ) {
     val isAmoled = com.example.ui.theme.LocalAmoledBlack.current
     val fallbackBg = when {
-        isAmoled -> Color(0xFF000000)
+        isAmoled -> InkBlack
         isDark -> Color(0xFF0B132B)
-        else -> Color(0xFFFFFFFF)
+        else -> Color.White
     }
 
     // In dark/amoled mode, invert colors so background is pitch black and doodle artwork is luminous theme blue
@@ -427,7 +429,7 @@ fun CosmicConstellationWallpaper(
         } else {
             Brush.verticalGradient(
                 listOf(
-                    Color(0xFFF1EEF8),
+                    Lavender50,
                     Color(0xFFE8E3F3)
                 )
             )

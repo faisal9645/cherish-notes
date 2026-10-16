@@ -28,9 +28,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AutoStories
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.PlayCircle
+import androidx.compose.material.icons.rounded.AutoStories
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.PlayCircle
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -75,20 +75,29 @@ import java.util.Locale
 import kotlin.math.PI
 import kotlin.math.roundToInt
 import kotlin.math.sin
+import com.example.ui.theme.DayBluePrimary
+import com.example.ui.theme.LovePink
+import com.example.ui.theme.NavyDeep
+import com.example.ui.theme.Violet600
+import com.example.ui.components.CherishToast
+import com.example.ui.components.CherishButton
+import com.example.ui.components.CherishOutlinedButton
+import com.example.ui.components.pressScaleTarget
+import com.example.ui.components.springClickable
 
 private val RecapFont = FontFamily(Font(R.font.great_vibes_regular))
 private val Soft = Color.White.copy(alpha = 0.78f)
 
 /** The story's pages, how long each one stays and its colours. */
 private enum class RecapSlide(val durationMs: Int, val top: Color, val bottom: Color) {
-    COVER(5_000, Color(0xFFFF4F9A), Color(0xFF3048F5)),
-    MESSAGES(7_000, Color(0xFF3048F5), Color(0xFF0B1233)),
-    LOVE(5_500, Color(0xFFFF4F9A), Color(0xFF8E2DE2)),
-    EMOJI(6_000, Color(0xFFFF8A65), Color(0xFFFF4F9A)),
-    MEDIA(6_500, Color(0xFF0B1233), Color(0xFF3048F5)),
-    STREAK(7_000, Color(0xFFFF6A3D), Color(0xFF8E2DE2)),
-    CUTEST(9_000, Color(0xFF8E2DE2), Color(0xFFFF4F9A)),
-    END(6_000, Color(0xFF3048F5), Color(0xFFFF4F9A))
+    COVER(5_000, LovePink, DayBluePrimary),
+    MESSAGES(7_000, DayBluePrimary, NavyDeep),
+    LOVE(5_500, LovePink, Violet600),
+    EMOJI(6_000, Color(0xFFFF8A65), LovePink),
+    MEDIA(6_500, NavyDeep, DayBluePrimary),
+    STREAK(7_000, Color(0xFFFF6A3D), Violet600),
+    CUTEST(9_000, Violet600, LovePink),
+    END(6_000, DayBluePrimary, LovePink)
 }
 
 private fun monthName(year: Int, month: Int, offset: Int = 0): String {
@@ -239,7 +248,7 @@ fun OurMonthStory(recap: MonthRecap, myName: String, partnerName: String, onDism
                         modifier = Modifier.weight(1f)
                     )
                     IconButton(onClick = onDismiss, modifier = Modifier.testTag("our_month_close")) {
-                        Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.White)
+                        Icon(Icons.Rounded.Close, contentDescription = "Close", tint = Color.White)
                     }
                 }
 
@@ -344,7 +353,7 @@ private fun CoverPage(month: String, year: Int, myName: String, partnerName: Str
         Text(
             "$myName ♥ $partnerName",
             color = Color.White,
-            fontSize = 17.sp,
+            fontSize = 16.sp,
             fontWeight = FontWeight.Medium,
             textAlign = TextAlign.Center
         )
@@ -356,10 +365,10 @@ private fun CoverPage(month: String, year: Int, myName: String, partnerName: Str
 @Composable
 private fun MessagesPage(recap: MonthRecap, month: String, partnerName: String) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text("This month we sent each other", color = Color.White, fontSize = 19.sp, textAlign = TextAlign.Center)
+        Text("This month we sent each other", color = Color.White, fontSize = 18.sp, textAlign = TextAlign.Center)
         Spacer(modifier = Modifier.height(10.dp))
         CountUp(recap.totalMessages, 76.sp)
-        Text("messages", color = Color.White, fontSize = 21.sp, fontWeight = FontWeight.Medium)
+        Text("messages", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Medium)
         Spacer(modifier = Modifier.height(30.dp))
         // Who wrote how much
         val share = remember { Animatable(0.5f) }
@@ -421,10 +430,10 @@ private fun LovePage(recap: MonthRecap) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text("💕", fontSize = 72.sp, modifier = Modifier.beating())
         Spacer(modifier = Modifier.height(16.dp))
-        Text("We said “I love you”", color = Color.White, fontSize = 21.sp, textAlign = TextAlign.Center)
+        Text("We said “I love you”", color = Color.White, fontSize = 20.sp, textAlign = TextAlign.Center)
         Spacer(modifier = Modifier.height(6.dp))
         CountUp(recap.loveYous, 92.sp)
-        Text(if (recap.loveYous == 1) "time" else "times", color = Color.White, fontSize = 21.sp, fontWeight = FontWeight.Medium)
+        Text(if (recap.loveYous == 1) "time" else "times", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Medium)
         Spacer(modifier = Modifier.height(22.dp))
         Text(
             if (recap.loveYous >= recap.daysInMonth) "That's more than once a day 🥹" else "and meant it every single time",
@@ -439,7 +448,7 @@ private fun LovePage(recap: MonthRecap) {
 private fun EmojiPage(recap: MonthRecap, partnerName: String) {
     val first = recap.topEmojis.first()
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text("Our favourite emoji", color = Color.White, fontSize = 21.sp, fontWeight = FontWeight.Medium)
+        Text("Our favourite emoji", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Medium)
         Spacer(modifier = Modifier.height(18.dp))
         Text(first.emoji, fontSize = 110.sp, lineHeight = 120.sp, modifier = Modifier.popIn(150))
         Text("used ${count(first.count)} times", color = Soft, fontSize = 15.sp)
@@ -492,7 +501,7 @@ private fun MediaPage(recap: MonthRecap) {
 @Composable
 private fun MediaStat(emoji: String, value: Int, label: String) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(emoji, fontSize = 26.sp)
+        Text(emoji, fontSize = 24.sp)
         CountUp(value, 28.sp)
         Text(label, color = Soft, fontSize = 12.sp)
     }
@@ -515,7 +524,7 @@ private fun PhotoCollage(previews: List<String>) {
                         }
                     }
                     Surface(
-                        shape = RoundedCornerShape(6.dp),
+                        shape = RoundedCornerShape(8.dp),
                         color = Color.White,
                         shadowElevation = 6.dp,
                         modifier = Modifier
@@ -529,7 +538,7 @@ private fun PhotoCollage(previews: List<String>) {
                             contentScale = ContentScale.Crop,
                             modifier = Modifier
                                 .padding(6.dp)
-                                .clip(RoundedCornerShape(3.dp))
+                                .clip(RoundedCornerShape(4.dp))
                                 .fillMaxSize()
                         )
                     }
@@ -546,7 +555,7 @@ private fun StreakPage(recap: MonthRecap) {
         Spacer(modifier = Modifier.height(8.dp))
         Text("Our longest streak", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Medium)
         CountUp(recap.longestStreak, 84.sp)
-        Text(if (recap.longestStreak == 1) "day" else "days in a row", color = Color.White, fontSize = 19.sp)
+        Text(if (recap.longestStreak == 1) "day" else "days in a row", color = Color.White, fontSize = 18.sp)
         Spacer(modifier = Modifier.height(24.dp))
         // The month: a dot for each day we both wrote
         Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
@@ -598,7 +607,7 @@ private fun CutestPage(recap: MonthRecap, partnerName: String) {
         Text("THE CUTEST MESSAGE", color = Soft, fontSize = 12.sp, letterSpacing = 3.sp, fontWeight = FontWeight.SemiBold)
         Spacer(modifier = Modifier.height(16.dp))
         Surface(
-            shape = RoundedCornerShape(26.dp),
+            shape = RoundedCornerShape(28.dp),
             color = Color.White.copy(alpha = 0.15f),
             border = BorderStroke(1.dp, Color.White.copy(alpha = 0.35f)),
             modifier = Modifier
@@ -649,13 +658,13 @@ private fun EndPage(nextMonth: String, onWatchAgain: () -> Unit, onClose: () -> 
         )
         Spacer(modifier = Modifier.height(34.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            OutlinedButton(
+            CherishOutlinedButton(
                 onClick = onWatchAgain,
                 border = BorderStroke(1.dp, Color.White.copy(alpha = 0.7f)),
                 colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
                 modifier = Modifier.testTag("our_month_again")
             ) { Text("Watch again") }
-            Button(
+            CherishButton(
                 onClick = onClose,
                 colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = HeartbeatPink),
                 modifier = Modifier.testTag("our_month_done")
@@ -736,7 +745,7 @@ fun OurMonthInviteCard(recap: MonthRecap, onWatch: () -> Unit, onDismiss: () -> 
                     .background(Brush.horizontalGradient(listOf(HeartbeatPink, HeartbeatBlue)))
                     .padding(start = 14.dp, end = 4.dp, top = 10.dp, bottom = 10.dp)
             ) {
-                Text("✨", fontSize = 26.sp)
+                Text("✨", fontSize = 24.sp)
                 Spacer(modifier = Modifier.width(10.dp))
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
@@ -748,7 +757,7 @@ fun OurMonthInviteCard(recap: MonthRecap, onWatch: () -> Unit, onDismiss: () -> 
                     )
                     Text(
                         "Your month together, as a little story",
-                        fontSize = 12.5.sp,
+                        fontSize = 12.sp,
                         color = Color.White.copy(alpha = 0.85f),
                         maxLines = 1
                     )
@@ -757,8 +766,9 @@ fun OurMonthInviteCard(recap: MonthRecap, onWatch: () -> Unit, onDismiss: () -> 
                     shape = RoundedCornerShape(50),
                     color = Color.White,
                     modifier = Modifier
+                        .pressScaleTarget()
                         .clip(RoundedCornerShape(50))
-                        .clickable { onWatch() }
+                        .springClickable { onWatch() }
                         .testTag("our_month_watch")
                 ) {
                     Text(
@@ -770,7 +780,7 @@ fun OurMonthInviteCard(recap: MonthRecap, onWatch: () -> Unit, onDismiss: () -> 
                     )
                 }
                 IconButton(onClick = onDismiss, modifier = Modifier.size(36.dp)) {
-                    Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.White, modifier = Modifier.size(18.dp))
+                    Icon(Icons.Rounded.Close, contentDescription = "Close", tint = Color.White, modifier = Modifier.size(18.dp))
                 }
             }
         }
@@ -792,7 +802,7 @@ fun OurMonthCard(myId: String, myName: String, partnerName: String) {
         modifier = Modifier
             .fillMaxWidth()
             .testTag("our_month_card"),
-        shape = RoundedCornerShape(18.dp),
+        shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
@@ -807,8 +817,8 @@ fun OurMonthCard(myId: String, myName: String, partnerName: String) {
                         val recap = OurMonthRecap.load(context, myId, range)
                         isLoading = false
                         when {
-                            recap == null -> Toast.makeText(context, "Couldn't load our month. Check your connection and try again.", Toast.LENGTH_LONG).show()
-                            recap.totalMessages == 0 -> Toast.makeText(context, "No messages in $month to look back on.", Toast.LENGTH_SHORT).show()
+                            recap == null -> CherishToast.show("Couldn't load our month. Check your connection and try again.", long = true)
+                            recap.totalMessages == 0 -> CherishToast.show("No messages in $month to look back on.")
                             else -> story = recap
                         }
                     }
@@ -819,10 +829,10 @@ fun OurMonthCard(myId: String, myName: String, partnerName: String) {
                 contentAlignment = Alignment.Center,
                 modifier = Modifier
                     .size(46.dp)
-                    .clip(RoundedCornerShape(14.dp))
+                    .clip(RoundedCornerShape(16.dp))
                     .background(MaterialTheme.colorScheme.primary)
             ) {
-                Icon(Icons.Default.AutoStories, contentDescription = null, tint = Color.White, modifier = Modifier.size(24.dp))
+                Icon(Icons.Rounded.AutoStories, contentDescription = null, tint = Color.White, modifier = Modifier.size(24.dp))
             }
             Spacer(modifier = Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
@@ -830,7 +840,7 @@ fun OurMonthCard(myId: String, myName: String, partnerName: String) {
                     Text("Our $month", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                     if (isNew) {
                         Spacer(modifier = Modifier.width(6.dp))
-                        Surface(shape = RoundedCornerShape(6.dp), color = HeartbeatPink) {
+                        Surface(shape = RoundedCornerShape(8.dp), color = HeartbeatPink) {
                             Text(
                                 "NEW",
                                 fontSize = 10.sp,
@@ -843,14 +853,14 @@ fun OurMonthCard(myId: String, myName: String, partnerName: String) {
                 }
                 Text(
                     "Our month together as a little story",
-                    fontSize = 12.5.sp,
+                    fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
             if (isLoading) {
                 CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.primary)
             } else {
-                Icon(Icons.Default.PlayCircle, contentDescription = "Watch", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(32.dp))
+                Icon(Icons.Rounded.PlayCircle, contentDescription = "Watch", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(32.dp))
             }
         }
     }

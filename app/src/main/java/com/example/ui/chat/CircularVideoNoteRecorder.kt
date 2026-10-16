@@ -23,9 +23,11 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.Send
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.automirrored.rounded.Send
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.FlipCameraAndroid
+import androidx.compose.material.icons.rounded.Videocam
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import com.example.ui.security.SecretWindowGuard
@@ -388,7 +390,7 @@ fun CircularVideoNoteRecorderDialog(
                     Text(
                         text = if (isRecording) "Recording Video Note..." else "Circular Video Note",
                         color = Color.White,
-                        fontSize = 17.sp,
+                        fontSize = 16.sp,
                         fontWeight = FontWeight.Bold
                     )
                 }
@@ -556,7 +558,7 @@ fun CircularVideoNoteRecorderDialog(
                                 .background(Color.White.copy(alpha = 0.15f), CircleShape)
                         ) {
                             Icon(
-                                imageVector = Icons.Default.FlipCameraAndroid,
+                                imageVector = Icons.Rounded.FlipCameraAndroid,
                                 contentDescription = "Switch Camera",
                                 tint = Color.White,
                                 modifier = Modifier.size(26.dp)
@@ -586,7 +588,7 @@ fun CircularVideoNoteRecorderDialog(
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
-                                imageVector = Icons.Default.Videocam,
+                                imageVector = Icons.Rounded.Videocam,
                                 contentDescription = "Record video note",
                                 tint = Color.White,
                                 modifier = Modifier.size(38.dp)
@@ -632,7 +634,7 @@ fun CircularVideoNoteRecorderDialog(
                                 .background(Color.White.copy(alpha = 0.15f), CircleShape)
                         ) {
                             Icon(
-                                imageVector = Icons.Default.Delete,
+                                imageVector = Icons.Rounded.Delete,
                                 contentDescription = "Discard video note",
                                 tint = HeartRed,
                                 modifier = Modifier.size(26.dp)
@@ -650,7 +652,7 @@ fun CircularVideoNoteRecorderDialog(
                                 .background(Color.White.copy(alpha = 0.15f), CircleShape)
                         ) {
                             Icon(
-                                imageVector = Icons.Default.FlipCameraAndroid,
+                                imageVector = Icons.Rounded.FlipCameraAndroid,
                                 contentDescription = "Switch Camera",
                                 tint = Color.White,
                                 modifier = Modifier.size(26.dp)
@@ -690,7 +692,7 @@ fun CircularVideoNoteRecorderDialog(
                         ) {
                             Box(contentAlignment = Alignment.Center) {
                                 Icon(
-                                    imageVector = Icons.AutoMirrored.Filled.Send,
+                                    imageVector = Icons.AutoMirrored.Rounded.Send,
                                     contentDescription = "Send Video Note",
                                     tint = Color.White,
                                     modifier = Modifier.size(34.dp)
@@ -711,7 +713,7 @@ fun CircularVideoNoteRecorderDialog(
                     .background(Color.Black.copy(alpha = 0.5f), CircleShape)
             ) {
                 Icon(
-                    imageVector = Icons.Default.Close,
+                    imageVector = Icons.Rounded.Close,
                     contentDescription = "Close",
                     tint = Color.White
                 )

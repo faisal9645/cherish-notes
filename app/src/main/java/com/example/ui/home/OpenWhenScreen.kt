@@ -14,13 +14,15 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.AddCircleOutline
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
@@ -36,6 +38,17 @@ import androidx.compose.ui.unit.sp
 import com.example.data.model.OpenWhenLetter
 import com.example.ui.theme.DarkAubergine
 import com.example.ui.theme.RoseGoldPrimary
+import com.example.ui.theme.Blue300
+import com.example.ui.theme.Blue900
+import com.example.ui.theme.Green50
+import com.example.ui.theme.Green800
+import com.example.ui.theme.Lavender200
+import com.example.ui.theme.Lavender50
+import com.example.ui.components.CherishAlertDialog
+import com.example.ui.components.CherishButton
+import com.example.ui.components.pressScale
+import com.example.ui.components.pressScaleTarget
+import com.example.ui.components.springClickable
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -76,12 +89,12 @@ fun OpenWhenScreen(
                         onClick = onNavigateBack,
                         modifier = Modifier.testTag("open_when_back")
                     ) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back")
                     }
                 },
                 actions = {
                     IconButton(onClick = { showCreateDialog = true }) {
-                        Icon(Icons.Default.AddCircleOutline, contentDescription = "Add Envelope", tint = RoseGoldPrimary)
+                        Icon(Icons.Rounded.AddCircleOutline, contentDescription = "Add Envelope", tint = RoseGoldPrimary)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
@@ -110,7 +123,7 @@ fun OpenWhenScreen(
                     textAlign = TextAlign.Center
                 )
                 Spacer(modifier = Modifier.height(16.dp))
-                Button(onClick = { showCreateDialog = true }) { Text("Write a letter") }
+                CherishButton(onClick = { showCreateDialog = true }) { Text("Write a letter") }
             }
         } else LazyVerticalGrid(
             columns = GridCells.Fixed(2),
@@ -126,7 +139,9 @@ fun OpenWhenScreen(
                     letter = letter,
                     onClick = {
                         selectedLetter = letter
-                    }
+                    },
+                    // Envelopes slide into place, and fade in and out, as they're written or opened
+                    modifier = Modifier.animateItem()
                 )
             }
         }
@@ -160,16 +175,22 @@ fun OpenWhenScreen(
 @Composable
 fun EnvelopeCard(
     letter: OpenWhenLetter,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
+    // Surface's own click keeps the ripple inside the rounded corners (and the shadow intact);
+    // the envelope shrinks a touch while held
+    val press = remember { MutableInteractionSource() }
     Surface(
+        onClick = onClick,
+        interactionSource = press,
         shape = RoundedCornerShape(20.dp),
         color = MaterialTheme.colorScheme.surface,
-        border = BorderStroke(1.dp, if (letter.isOpened) RoseGoldPrimary.copy(alpha = 0.4f) else Color(0xFFE8E5EE)),
+        border = BorderStroke(1.dp, if (letter.isOpened) RoseGoldPrimary.copy(alpha = 0.4f) else Lavender50),
         shadowElevation = 2.dp,
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
-            .clickable { onClick() }
+            .pressScale(press)
     ) {
         Column(
             modifier = Modifier.padding(16.dp),
@@ -183,7 +204,7 @@ fun EnvelopeCard(
                         if (letter.isOpened)
                             Brush.linearGradient(listOf(Color(0xFFFFEBEE), Color(0xFFFFCDD2)))
                         else
-                            Brush.linearGradient(listOf(Color(0xFFEDE7F6), Color(0xFFD1C4E9)))
+                            Brush.linearGradient(listOf(Color(0xFFE8E3F3), Lavender200))
                     ),
                 contentAlignment = Alignment.Center
             ) {
@@ -216,24 +237,24 @@ fun EnvelopeCard(
             val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
             Surface(
                 shape = RoundedCornerShape(12.dp),
-                color = if (letter.isOpened) (if (isDark) darkTone(Color(0xFF1E3A8A)) else Color(0xFFE8F5E9)) else (if (isDark) MaterialTheme.colorScheme.surfaceVariant else Color(0xFFF3F0F7))
+                color = if (letter.isOpened) (if (isDark) darkTone(Blue900) else Green50) else (if (isDark) MaterialTheme.colorScheme.surfaceVariant else Lavender50)
             ) {
                 Row(
                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
-                        imageVector = if (letter.isOpened) Icons.Filled.Check else Icons.Outlined.Lock,
+                        imageVector = if (letter.isOpened) Icons.Rounded.Check else Icons.Rounded.Lock,
                         contentDescription = null,
                         modifier = Modifier.size(11.dp),
-                        tint = if (letter.isOpened) (if (isDark) darkTone(Color(0xFF93C5FD)) else Color(0xFF2E7D32)) else RoseGoldPrimary
+                        tint = if (letter.isOpened) (if (isDark) darkTone(Blue300) else Green800) else RoseGoldPrimary
                     )
                     Spacer(modifier = Modifier.width(3.dp))
                     Text(
                         text = if (letter.isOpened) "Opened" else "Locked",
                         fontSize = 10.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = if (letter.isOpened) (if (isDark) darkTone(Color(0xFF93C5FD)) else Color(0xFF2E7D32)) else RoseGoldPrimary
+                        color = if (letter.isOpened) (if (isDark) darkTone(Blue300) else Green800) else RoseGoldPrimary
                     )
                 }
             }
@@ -248,7 +269,7 @@ fun LetterModalDialog(
     onMarkOpened: () -> Unit
 ) {
     val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
-    AlertDialog(
+    CherishAlertDialog(
         onDismissRequest = onDismiss,
         title = {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -291,7 +312,7 @@ fun LetterModalDialog(
             }
         },
         confirmButton = {
-            Button(
+            CherishButton(
                 onClick = {
                     onMarkOpened()
                     onDismiss()
@@ -321,7 +342,7 @@ fun CreateEnvelopeDialog(
 
     val emojis = listOf("💌", "🌙", "🌧️", "✈️", "☕", "💍", "🔥", "🧸")
 
-    AlertDialog(
+    CherishAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Seal a New 'Open When' Envelope", fontWeight = FontWeight.Bold, fontSize = 16.sp) },
         text = {
@@ -335,9 +356,10 @@ fun CreateEnvelopeDialog(
                         Box(
                             modifier = Modifier
                                 .size(34.dp)
+                                .pressScaleTarget()
                                 .clip(CircleShape)
                                 .background(if (emoji == e) RoseGoldPrimary.copy(alpha = 0.2f) else Color.Transparent)
-                                .clickable { emoji = e },
+                                .springClickable { emoji = e },
                             contentAlignment = Alignment.Center
                         ) {
                             Text(e, fontSize = 18.sp)
@@ -371,7 +393,7 @@ fun CreateEnvelopeDialog(
             }
         },
         confirmButton = {
-            Button(
+            CherishButton(
                 onClick = {
                     if (title.isNotBlank() && text.isNotBlank()) {
                         onCreate(title, condition, text, emoji)

@@ -19,9 +19,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material.icons.filled.MicOff
-import androidx.compose.material.icons.filled.PhoneInTalk
+import androidx.compose.material.icons.rounded.Mic
+import androidx.compose.material.icons.rounded.MicOff
+import androidx.compose.material.icons.rounded.PhoneInTalk
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -50,6 +50,8 @@ import androidx.compose.ui.unit.sp
 import com.example.ui.components.AvatarView
 import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
+import com.example.ui.components.pressScaleTarget
+import com.example.ui.components.springClickable
 
 /**
  * Draggable Floating Mini Call Bubble (Picture-in-Picture)
@@ -119,9 +121,10 @@ fun FloatingCallBubble(
                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.95f),
                 shadowElevation = 10.dp,
                 modifier = Modifier
+                    .pressScaleTarget()
                     .shadow(12.dp, RoundedCornerShape(28.dp))
                     .clip(RoundedCornerShape(28.dp))
-                    .clickable {
+                    .springClickable {
                         CallActivity.startOutgoing(context)
                     }
             ) {
@@ -148,7 +151,7 @@ fun FloatingCallBubble(
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
-                                Icons.Default.PhoneInTalk,
+                                Icons.Rounded.PhoneInTalk,
                                 contentDescription = null,
                                 tint = Color.White,
                                 modifier = Modifier.size(18.dp)
@@ -161,7 +164,7 @@ fun FloatingCallBubble(
                     // Duration / Status
                     Text(
                         text = durationFormatted,
-                        fontSize = 13.5.sp,
+                        fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -181,7 +184,7 @@ fun FloatingCallBubble(
                         ) {
                             Box(contentAlignment = Alignment.Center) {
                                 Icon(
-                                    imageVector = if (callState.isMuted) Icons.Default.MicOff else Icons.Default.Mic,
+                                    imageVector = if (callState.isMuted) Icons.Rounded.MicOff else Icons.Rounded.Mic,
                                     contentDescription = if (callState.isMuted) "Unmute" else "Mute",
                                     tint = if (callState.isMuted) Color(0xFFE53935) else MaterialTheme.colorScheme.primary,
                                     modifier = Modifier.size(16.dp)

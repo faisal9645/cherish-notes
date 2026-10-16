@@ -27,10 +27,56 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.core.content.FileProvider
 import java.io.File
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.Logout
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.outlined.*
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.Logout
+import androidx.compose.material.icons.rounded.AccountCircle
+import androidx.compose.material.icons.rounded.BrightnessMedium
+import androidx.compose.material.icons.rounded.CameraAlt
+import androidx.compose.material.icons.rounded.ChatBubble
+import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.ChevronRight
+import androidx.compose.material.icons.rounded.CleaningServices
+import androidx.compose.material.icons.rounded.Clear
+import androidx.compose.material.icons.rounded.CloudDone
+import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.Devices
+import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.EditNote
+import androidx.compose.material.icons.automirrored.rounded.ExitToApp
+import androidx.compose.material.icons.rounded.Favorite
+import androidx.compose.material.icons.rounded.Fingerprint
+import androidx.compose.material.icons.rounded.GraphicEq
+import androidx.compose.material.icons.rounded.HourglassTop
+import androidx.compose.material.icons.rounded.Key
+import androidx.compose.material.icons.rounded.KeyboardArrowDown
+import androidx.compose.material.icons.rounded.KeyboardArrowUp
+import androidx.compose.material.icons.rounded.Lock
+import androidx.compose.material.icons.rounded.MarkChatUnread
+import androidx.compose.material.icons.rounded.Mic
+import androidx.compose.material.icons.rounded.NetworkCheck
+import androidx.compose.material.icons.rounded.Notifications
+import androidx.compose.material.icons.rounded.NotificationsActive
+import androidx.compose.material.icons.rounded.NotificationsOff
+import androidx.compose.material.icons.rounded.Palette
+import androidx.compose.material.icons.rounded.Password
+import androidx.compose.material.icons.rounded.Person
+import androidx.compose.material.icons.rounded.PhoneInTalk
+import androidx.compose.material.icons.rounded.PhonelinkRing
+import androidx.compose.material.icons.rounded.PhotoLibrary
+import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.Restore
+import androidx.compose.material.icons.rounded.Schedule
+import androidx.compose.material.icons.rounded.Security
+import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material.icons.rounded.Shield
+import androidx.compose.material.icons.rounded.SystemUpdate
+import androidx.compose.material.icons.rounded.TouchApp
+import androidx.compose.material.icons.rounded.VerifiedUser
+import androidx.compose.material.icons.rounded.Vibration
+import androidx.compose.material.icons.rounded.Visibility
+import androidx.compose.material.icons.rounded.VisibilityOff
+import androidx.compose.material.icons.automirrored.rounded.VolumeOff
+import androidx.compose.material.icons.rounded.Wallpaper
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.lifecycle.Lifecycle
@@ -57,6 +103,14 @@ import com.example.ui.components.AvatarView
 import com.example.ui.chat.CheckAfterBottomSheet
 import com.example.ui.chat.CheckAfterHelper
 import com.example.ui.theme.*
+import com.example.ui.components.CherishToast
+import com.example.ui.components.CherishAlertDialog
+import com.example.ui.components.CherishButton
+import com.example.ui.components.CherishOutlinedButton
+import com.example.ui.components.CherishTonalButton
+import com.example.ui.components.pressScaleTarget
+import com.example.ui.components.springClickable
+import androidx.compose.material.icons.automirrored.rounded.VolumeUp
 
 @Composable
 private fun SettingsSection(
@@ -89,7 +143,7 @@ private fun SettingsSection(
         Spacer(modifier = Modifier.height(4.dp))
         Card(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(18.dp),
+            shape = RoundedCornerShape(20.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
             elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
@@ -164,7 +218,7 @@ fun ProfileScreen(
         if (success) {
             tempCameraUri?.let { uri ->
                 viewModel.updateAvatar(uri) {
-                    Toast.makeText(context, "Profile photo updated ✨", Toast.LENGTH_SHORT).show()
+                    CherishToast.show("Profile photo updated ✨")
                 }
             }
         }
@@ -193,10 +247,10 @@ fun ProfileScreen(
                 val prefs = com.example.security.SecurityPreferences.getInstance(context)
                 prefs.isExternalPickerActive = false
                 prefs.ignoreNextPause = false
-                Toast.makeText(context, "Could not open camera: ${e.message}", Toast.LENGTH_SHORT).show()
+                CherishToast.show("Could not open camera: ${e.message}")
             }
         } else {
-            Toast.makeText(context, "Camera permission needed to take photo", Toast.LENGTH_SHORT).show()
+            CherishToast.show("Camera permission needed to take photo")
         }
     }
 
@@ -215,7 +269,7 @@ fun ProfileScreen(
         prefs.ignoreNextPause = false
         if (uri != null) {
             viewModel.updateAvatar(uri) {
-                Toast.makeText(context, "Profile photo updated ✨", Toast.LENGTH_SHORT).show()
+                CherishToast.show("Profile photo updated ✨")
             }
         }
     }
@@ -278,7 +332,7 @@ fun ProfileScreen(
                         onClick = onNavigateToChat,
                         modifier = Modifier.testTag("profile_back_button")
                     ) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -304,7 +358,7 @@ fun ProfileScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .testTag("profile_header_card"),
-                shape = RoundedCornerShape(18.dp),
+                shape = RoundedCornerShape(20.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
                 elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
@@ -323,8 +377,9 @@ fun ProfileScreen(
                             size = 68.dp,
                             showOnlineBadge = false,
                             modifier = Modifier
+                                .pressScaleTarget()
                                 .clip(CircleShape)
-                                .clickable { showAvatarOptionsDialog = true }
+                                .springClickable { showAvatarOptionsDialog = true }
                                 .testTag("change_photo_button")
                         )
                         if (uiState.isUpdating) {
@@ -354,7 +409,7 @@ fun ProfileScreen(
                         ) {
                             Box(contentAlignment = Alignment.Center) {
                                 Icon(
-                                    imageVector = Icons.Default.CameraAlt,
+                                    imageVector = Icons.Rounded.CameraAlt,
                                     contentDescription = "Change profile photo",
                                     tint = Color.White,
                                     modifier = Modifier.size(12.dp)
@@ -377,7 +432,7 @@ fun ProfileScreen(
                         if (!user?.email.isNullOrBlank()) {
                             Text(
                                 text = user.email,
-                                fontSize = 12.5.sp,
+                                fontSize = 12.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
@@ -398,7 +453,7 @@ fun ProfileScreen(
                         modifier = Modifier.testTag("edit_profile_button")
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Edit,
+                            imageVector = Icons.Rounded.Edit,
                             contentDescription = "Edit profile",
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -409,7 +464,7 @@ fun ProfileScreen(
             // 2. Couple Connection & Credentials Section
             SettingsSection(
                 title = "Couple Connection",
-                icon = Icons.Default.Favorite
+                icon = Icons.Rounded.Favorite
             ) {
                 ListItem(
                     headlineContent = { Text("My Username", fontSize = 15.sp, fontWeight = FontWeight.SemiBold) },
@@ -417,7 +472,7 @@ fun ProfileScreen(
                         Text(user?.displayName?.ifBlank { "Me" } ?: "Me", fontSize = 13.sp)
                     },
                     leadingContent = {
-                        Icon(Icons.Default.Person, contentDescription = null, tint = primaryAccent)
+                        Icon(Icons.Rounded.Person, contentDescription = null, tint = primaryAccent)
                     }
                 )
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), thickness = 0.6.dp)
@@ -430,7 +485,7 @@ fun ProfileScreen(
                         Text(partnerDisplay, fontSize = 13.sp)
                     },
                     leadingContent = {
-                        Icon(Icons.Default.Favorite, contentDescription = null, tint = HeartRed)
+                        Icon(Icons.Rounded.Favorite, contentDescription = null, tint = HeartRed)
                     }
                 )
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), thickness = 0.6.dp)
@@ -438,7 +493,7 @@ fun ProfileScreen(
                     headlineContent = { Text("Shared Couple Passcode", fontSize = 15.sp, fontWeight = FontWeight.SemiBold) },
                     supportingContent = { Text(uiState.coupleKey.ifBlank { "CHERISH-FOREVER" }, fontSize = 13.sp) },
                     leadingContent = {
-                        Icon(Icons.Default.Key, contentDescription = null, tint = primaryAccent)
+                        Icon(Icons.Rounded.Key, contentDescription = null, tint = primaryAccent)
                     }
                 )
             }
@@ -448,23 +503,23 @@ fun ProfileScreen(
             // 3. Privacy, Stealth Disguise & Vault
             SettingsSection(
                 title = "Privacy & Stealth Vault",
-                icon = Icons.Default.Security
+                icon = Icons.Rounded.Security
             ) {
                 ListItem(
                     headlineContent = { Text("Recover All Chats & Gallery", fontSize = 15.sp, fontWeight = FontWeight.SemiBold) },
                     supportingContent = { Text("Restore all older & cleared messages and all gallery items immediately", fontSize = 13.sp) },
-                    leadingContent = { Icon(Icons.Filled.Restore, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+                    leadingContent = { Icon(Icons.Rounded.Restore, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
                     trailingContent = {
-                        FilledTonalButton(
+                        CherishTonalButton(
                             onClick = {
                                 viewModel.recoverAllChatsAndGallery()
-                                Toast.makeText(context, "All chats & gallery recovered ✨", Toast.LENGTH_SHORT).show()
+                                CherishToast.show("All chats & gallery recovered ✨")
                                 onNavigateToChat()
                             },
                             shape = RoundedCornerShape(12.dp),
                             contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
                         ) {
-                            Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Icon(Icons.Rounded.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(4.dp))
                             Text("Recover All", fontSize = 13.sp, fontWeight = FontWeight.Bold)
                         }
@@ -476,7 +531,7 @@ fun ProfileScreen(
                 ListItem(
                     headlineContent = { Text("Disguise as Notes App", fontSize = 15.sp, fontWeight = FontWeight.SemiBold) },
                     supportingContent = { Text("Opens as functional notes app with secret unlock gesture", fontSize = 13.sp) },
-                    leadingContent = { Icon(Icons.Filled.EditNote, contentDescription = null, tint = primaryAccent) },
+                    leadingContent = { Icon(Icons.Rounded.EditNote, contentDescription = null, tint = primaryAccent) },
                     trailingContent = {
                         Switch(
                             checked = uiState.isDisguiseModeEnabled,
@@ -491,7 +546,7 @@ fun ProfileScreen(
                     ListItem(
                         headlineContent = { Text("Search Bar Trigger Word", fontSize = 15.sp, fontWeight = FontWeight.SemiBold) },
                         supportingContent = { Text("Type secret word in Notes search to reveal chat", fontSize = 13.sp) },
-                        leadingContent = { Icon(Icons.Default.Password, contentDescription = null, tint = primaryAccent) },
+                        leadingContent = { Icon(Icons.Rounded.Password, contentDescription = null, tint = primaryAccent) },
                         trailingContent = {
                             Switch(
                                 checked = uiState.isKeywordTriggerEnabled,
@@ -513,7 +568,7 @@ fun ProfileScreen(
                             leadingContent = {
                                 IconButton(onClick = { isPasscodeRevealed = !isPasscodeRevealed }) {
                                     Icon(
-                                        imageVector = if (isPasscodeRevealed) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                        imageVector = if (isPasscodeRevealed) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility,
                                         contentDescription = if (isPasscodeRevealed) "Hide trigger word" else "Reveal trigger word",
                                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
@@ -544,7 +599,7 @@ fun ProfileScreen(
                                 fontSize = 13.sp
                             )
                         },
-                        leadingContent = { Icon(Icons.Default.TouchApp, contentDescription = null, tint = primaryAccent) }
+                        leadingContent = { Icon(Icons.Rounded.TouchApp, contentDescription = null, tint = primaryAccent) }
                     )
 
                     Row(
@@ -567,9 +622,10 @@ fun ProfileScreen(
                             Box(
                                 modifier = Modifier
                                     .weight(1f)
+                                    .pressScaleTarget()
                                     .clip(RoundedCornerShape(8.dp))
                                     .background(if (isSelected) primaryAccent else Color.Transparent)
-                                    .clickable { viewModel.setPlusHoldDuration(duration) }
+                                    .springClickable { viewModel.setPlusHoldDuration(duration) }
                                     .padding(vertical = 8.dp),
                                 contentAlignment = Alignment.Center
                             ) {
@@ -593,7 +649,7 @@ fun ProfileScreen(
                             Text("Require phone PIN/fingerprint before revealing chat", fontSize = 13.sp)
                         },
                         leadingContent = {
-                            Icon(Icons.Default.Security, contentDescription = null, tint = primaryAccent)
+                            Icon(Icons.Rounded.Security, contentDescription = null, tint = primaryAccent)
                         },
                         trailingContent = {
                             Switch(
@@ -609,12 +665,12 @@ fun ProfileScreen(
                             .padding(horizontal = 14.dp, vertical = 6.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        OutlinedButton(
+                        CherishOutlinedButton(
                             onClick = { onQuickDisguise() },
                             modifier = Modifier.fillMaxWidth().height(38.dp),
-                            shape = RoundedCornerShape(10.dp)
+                            shape = RoundedCornerShape(12.dp)
                         ) {
-                            Icon(Icons.Outlined.VisibilityOff, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Icon(Icons.Rounded.VisibilityOff, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(6.dp))
                             Text("Lock Disguise", fontSize = 12.sp)
                         }
@@ -627,7 +683,7 @@ fun ProfileScreen(
                 ListItem(
                     headlineContent = { Text("Side Floating Exit Toggle", fontSize = 15.sp, fontWeight = FontWeight.SemiBold) },
                     supportingContent = { Text("Discreet full-thumb switch on center-right screen edge for instant 1-tap Notes disguise", fontSize = 13.sp) },
-                    leadingContent = { Icon(Icons.Default.ExitToApp, contentDescription = null, tint = HeartRed) },
+                    leadingContent = { Icon(Icons.AutoMirrored.Rounded.ExitToApp, contentDescription = null, tint = HeartRed) },
                     trailingContent = {
                         Switch(
                             checked = uiState.isSideEmergencyExitEnabled,
@@ -676,16 +732,16 @@ fun ProfileScreen(
                                     val arrowTint = MaterialTheme.colorScheme.onSurfaceVariant.copy(
                                         alpha = com.example.ui.security.EmergencyExitLook.arrows(uiState.sideEmergencyExitOpacity)
                                     )
-                                    Icon(Icons.Default.KeyboardArrowUp, contentDescription = null, tint = arrowTint, modifier = Modifier.size(9.dp))
+                                    Icon(Icons.Rounded.KeyboardArrowUp, contentDescription = null, tint = arrowTint, modifier = Modifier.size(9.dp))
                                     Icon(
-                                        imageVector = Icons.Default.ExitToApp,
+                                        imageVector = Icons.AutoMirrored.Rounded.ExitToApp,
                                         contentDescription = null,
                                         tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(
                                             alpha = com.example.ui.security.EmergencyExitLook.icon(uiState.sideEmergencyExitOpacity)
                                         ),
                                         modifier = Modifier.size(13.dp)
                                     )
-                                    Icon(Icons.Default.KeyboardArrowDown, contentDescription = null, tint = arrowTint, modifier = Modifier.size(9.dp))
+                                    Icon(Icons.Rounded.KeyboardArrowDown, contentDescription = null, tint = arrowTint, modifier = Modifier.size(9.dp))
                                 }
                             }
                         }
@@ -719,7 +775,7 @@ fun ProfileScreen(
                 ListItem(
                     headlineContent = { Text("4-Digit Secret App Lock", fontSize = 15.sp, fontWeight = FontWeight.SemiBold) },
                     supportingContent = { Text("Locks the app whenever you leave it", fontSize = 13.sp) },
-                    leadingContent = { Icon(Icons.Default.Lock, contentDescription = null, tint = primaryAccent) },
+                    leadingContent = { Icon(Icons.Rounded.Lock, contentDescription = null, tint = primaryAccent) },
                     trailingContent = {
                         Switch(
                             checked = uiState.isAppLockEnabled,
@@ -758,9 +814,10 @@ fun ProfileScreen(
                                 Box(
                                     modifier = Modifier
                                         .weight(1f)
+                                        .pressScaleTarget()
                                         .clip(RoundedCornerShape(8.dp))
                                         .background(if (isSelected) primaryAccent else Color.Transparent)
-                                        .clickable {
+                                        .springClickable {
                                             lockAfter = seconds
                                             lockPrefs.setAutoLockTimeoutSeconds(seconds)
                                         }
@@ -793,7 +850,7 @@ fun ProfileScreen(
                             fontSize = 13.sp
                         )
                     },
-                    leadingContent = { Icon(Icons.Default.Fingerprint, contentDescription = null, tint = primaryAccent) },
+                    leadingContent = { Icon(Icons.Rounded.Fingerprint, contentDescription = null, tint = primaryAccent) },
                     trailingContent = {
                         Switch(
                             checked = uiState.isBiometricEnabled && uiState.isAppLockEnabled,
@@ -809,7 +866,7 @@ fun ProfileScreen(
                 ListItem(
                     headlineContent = { Text("Screenshot Protection", fontSize = 15.sp, fontWeight = FontWeight.SemiBold) },
                     supportingContent = { Text("Block screenshots and screen recording in app", fontSize = 13.sp) },
-                    leadingContent = { Icon(Icons.Default.Shield, contentDescription = null, tint = primaryAccent) },
+                    leadingContent = { Icon(Icons.Rounded.Shield, contentDescription = null, tint = primaryAccent) },
                     trailingContent = {
                         Switch(
                             checked = uiState.isScreenshotProtectionEnabled,
@@ -845,7 +902,7 @@ fun ProfileScreen(
                     },
                     leadingContent = {
                         Icon(
-                            if (uiState.isDigitalWellbeingBlocked) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                            if (uiState.isDigitalWellbeingBlocked) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility,
                             contentDescription = null,
                             tint = if (uiState.isDigitalWellbeingBlocked) primaryAccent else MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -866,7 +923,7 @@ fun ProfileScreen(
             // 4. Notification Settings Section (Separated Notification Bar & App Badge)
             SettingsSection(
                 title = "Notification Settings",
-                icon = Icons.Default.Notifications
+                icon = Icons.Rounded.Notifications
             ) {
                 // --- SUBSECTION 1: NOTIFICATION BAR & SYSTEM ALERTS ---
                 ListItem(
@@ -880,7 +937,7 @@ fun ProfileScreen(
                     },
                     leadingContent = {
                         Icon(
-                            if (uiState.isNotificationsEnabled) Icons.Default.NotificationsActive else Icons.Default.NotificationsOff,
+                            if (uiState.isNotificationsEnabled) Icons.Rounded.NotificationsActive else Icons.Rounded.NotificationsOff,
                             contentDescription = null,
                             tint = if (uiState.isNotificationsEnabled) primaryAccent else MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -901,7 +958,7 @@ fun ProfileScreen(
                     ListItem(
                         headlineContent = { Text("Hide Notification Content", fontSize = 14.sp, fontWeight = FontWeight.Medium) },
                         supportingContent = { Text("Disguise private messages on notification bar and lock screen", fontSize = 12.sp) },
-                        leadingContent = { Icon(Icons.Default.Security, contentDescription = null, tint = primaryAccent, modifier = Modifier.size(20.dp)) },
+                        leadingContent = { Icon(Icons.Rounded.Security, contentDescription = null, tint = primaryAccent, modifier = Modifier.size(20.dp)) },
                         trailingContent = {
                             Switch(
                                 checked = uiState.isHideNotificationContent,
@@ -918,7 +975,7 @@ fun ProfileScreen(
                     ListItem(
                         headlineContent = { Text("Custom Disguise Text", fontSize = 14.sp, fontWeight = FontWeight.Medium) },
                         supportingContent = { Text("$maskedTitle \u00B7 $maskedText", fontSize = 12.sp, maxLines = 1) },
-                        leadingContent = { Icon(Icons.Default.Edit, contentDescription = null, tint = primaryAccent, modifier = Modifier.size(20.dp)) },
+                        leadingContent = { Icon(Icons.Rounded.Edit, contentDescription = null, tint = primaryAccent, modifier = Modifier.size(20.dp)) },
                         modifier = Modifier
                             .clickable { showMaskedEditor = true }
                             .testTag("masked_notification_text")
@@ -926,7 +983,7 @@ fun ProfileScreen(
                     if (showMaskedEditor) {
                         var titleInput by remember { mutableStateOf(maskedTitle) }
                         var textInput by remember { mutableStateOf(maskedText) }
-                        AlertDialog(
+                        CherishAlertDialog(
                             onDismissRequest = { showMaskedEditor = false },
                             title = { Text("Disguised Notification") },
                             text = {
@@ -1005,7 +1062,7 @@ fun ProfileScreen(
                     },
                     leadingContent = {
                         Icon(
-                            Icons.Default.MarkChatUnread,
+                            Icons.Rounded.MarkChatUnread,
                             contentDescription = null,
                             tint = if (uiState.isBadgeNotificationEnabled) primaryAccent else MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -1033,7 +1090,7 @@ fun ProfileScreen(
                     },
                     leadingContent = {
                         Icon(
-                            Icons.Filled.Favorite,
+                            Icons.Rounded.Favorite,
                             contentDescription = null,
                             tint = if (uiState.isHeartbeatTriggerEnabled) HeartRed else MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -1066,12 +1123,12 @@ fun ProfileScreen(
                         )
                     },
                     leadingContent = {
-                        Icon(Icons.Filled.NotificationsActive, contentDescription = null, tint = primaryAccent)
+                        Icon(Icons.Rounded.NotificationsActive, contentDescription = null, tint = primaryAccent)
                     },
                     trailingContent = {
                         Column(horizontalAlignment = Alignment.End) {
                             if (!isBatteryOptimizationIgnored) {
-                                FilledTonalButton(
+                                CherishTonalButton(
                                     onClick = { com.example.notifications.BackgroundDelivery.requestUnrestricted(context) },
                                     shape = RoundedCornerShape(16.dp),
                                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 2.dp)
@@ -1124,18 +1181,18 @@ fun ProfileScreen(
                                     Spacer(modifier = Modifier.width(8.dp))
                                     Text(
                                         text = "$partnerNameDisplay's Notification Status",
-                                        fontSize = 14.5.sp,
+                                        fontSize = 14.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = MaterialTheme.colorScheme.onSurface
                                     )
                                 }
                                 Surface(
-                                    shape = RoundedCornerShape(10.dp),
-                                    color = if (isPermBlocked || isAlertClosed) Color(0xFFEF4444).copy(alpha = 0.15f) else Color(0xFF10B981).copy(alpha = 0.15f)
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = if (isPermBlocked || isAlertClosed) Red500.copy(alpha = 0.15f) else Emerald500.copy(alpha = 0.15f)
                                 ) {
                                     Text(
                                         text = if (isPermBlocked) "Blocked" else if (isAlertClosed) "Muted" else if (isSafeDisguised) "Disguised" else "Active",
-                                        color = if (isPermBlocked || isAlertClosed) Color(0xFFEF4444) else Color(0xFF10B981),
+                                        color = if (isPermBlocked || isAlertClosed) Red500 else Emerald500,
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 11.sp,
                                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
@@ -1147,7 +1204,7 @@ fun ProfileScreen(
                                 Spacer(modifier = Modifier.height(8.dp))
                                 Text(
                                     text = "System notification permission is OFF on their device. Ringtone and message alerts are silenced.",
-                                    fontSize = 11.5.sp,
+                                    fontSize = 11.sp,
                                     color = MaterialTheme.colorScheme.error
                                 )
                             }
@@ -1165,11 +1222,11 @@ fun ProfileScreen(
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
                                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
-                                    Icon(Icons.Default.Notifications, contentDescription = null, tint = if (partnerNotifPerm) primaryAccent else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(16.dp))
+                                    Icon(Icons.Rounded.Notifications, contentDescription = null, tint = if (partnerNotifPerm) primaryAccent else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(16.dp))
                                     Spacer(modifier = Modifier.width(8.dp))
-                                    Text("System Notification Bar", fontSize = 12.5.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f))
+                                    Text("System Notification Bar", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f))
                                 }
-                                Text(if (partnerNotifPerm) "Allowed ✅" else "Blocked ❌", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = if (partnerNotifPerm) Color(0xFF10B981) else Color(0xFFEF4444))
+                                Text(if (partnerNotifPerm) "Allowed ✅" else "Blocked ❌", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = if (partnerNotifPerm) Emerald500 else Red500)
                             }
 
                             Row(
@@ -1180,11 +1237,11 @@ fun ProfileScreen(
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
                                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
-                                    Icon(Icons.Default.Security, contentDescription = null, tint = if (!isAlertClosed) primaryAccent else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(16.dp))
+                                    Icon(Icons.Rounded.Security, contentDescription = null, tint = if (!isAlertClosed) primaryAccent else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(16.dp))
                                     Spacer(modifier = Modifier.width(8.dp))
-                                    Text("Message Content Privacy", fontSize = 12.5.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f))
+                                    Text("Message Content Privacy", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f))
                                 }
-                                Text(if (isSafeDisguised) "Disguised (Notes) 🛡️" else if (isAlertClosed) "Muted / Off 🔕" else "Full Preview 🔔", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = if (!isAlertClosed) Color(0xFF10B981) else Color(0xFFEF4444))
+                                Text(if (isSafeDisguised) "Disguised (Notes) 🛡️" else if (isAlertClosed) "Muted / Off 🔕" else "Full Preview 🔔", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = if (!isAlertClosed) Emerald500 else Red500)
                             }
 
                             Row(
@@ -1195,11 +1252,11 @@ fun ProfileScreen(
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
                                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
-                                    Icon(Icons.Default.PhoneInTalk, contentDescription = null, tint = if (!isPermBlocked && !isAlertClosed) primaryAccent else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(16.dp))
+                                    Icon(Icons.Rounded.PhoneInTalk, contentDescription = null, tint = if (!isPermBlocked && !isAlertClosed) primaryAccent else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(16.dp))
                                     Spacer(modifier = Modifier.width(8.dp))
-                                    Text("Incoming Call Ringing", fontSize = 12.5.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f))
+                                    Text("Incoming Call Ringing", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f))
                                 }
-                                Text(if (!isPermBlocked && !isAlertClosed) "Ringing Active 📞" else "Silenced 🔕", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = if (!isPermBlocked && !isAlertClosed) Color(0xFF10B981) else Color(0xFFEF4444))
+                                Text(if (!isPermBlocked && !isAlertClosed) "Ringing Active 📞" else "Silenced 🔕", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = if (!isPermBlocked && !isAlertClosed) Emerald500 else Red500)
                             }
 
                             Row(
@@ -1210,11 +1267,11 @@ fun ProfileScreen(
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
                                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
-                                    Icon(Icons.Default.Favorite, contentDescription = null, tint = if (!isAlertClosed) HeartRed else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(16.dp))
+                                    Icon(Icons.Rounded.Favorite, contentDescription = null, tint = if (!isAlertClosed) HeartRed else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(16.dp))
                                     Spacer(modifier = Modifier.width(8.dp))
-                                    Text("Heartbeat Tactile Alerts", fontSize = 12.5.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f))
+                                    Text("Heartbeat Tactile Alerts", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f))
                                 }
-                                Text(if (!isAlertClosed) "Active (Pulse) ❤️" else "Muted 🤍", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = if (!isAlertClosed) Color(0xFF10B981) else Color(0xFFEF4444))
+                                Text(if (!isAlertClosed) "Active (Pulse) ❤️" else "Muted 🤍", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = if (!isAlertClosed) Emerald500 else Red500)
                             }
 
                             Row(
@@ -1225,11 +1282,11 @@ fun ProfileScreen(
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
                                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
-                                    Icon(Icons.Default.MarkChatUnread, contentDescription = null, tint = if (!isPermBlocked) primaryAccent else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(16.dp))
+                                    Icon(Icons.Rounded.MarkChatUnread, contentDescription = null, tint = if (!isPermBlocked) primaryAccent else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(16.dp))
                                     Spacer(modifier = Modifier.width(8.dp))
-                                    Text("App Icon Badge", fontSize = 12.5.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f))
+                                    Text("App Icon Badge", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f))
                                 }
-                                Text(if (!isPermBlocked) "Active 🔴" else "Disabled", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = if (!isPermBlocked) Color(0xFF10B981) else Color(0xFFEF4444))
+                                Text(if (!isPermBlocked) "Active 🔴" else "Disabled", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = if (!isPermBlocked) Emerald500 else Red500)
                             }
 
                         }
@@ -1241,7 +1298,7 @@ fun ProfileScreen(
             // 4. Voice Calls Settings Section
             SettingsSection(
                 title = "Voice Calls",
-                icon = Icons.Default.PhoneInTalk
+                icon = Icons.Rounded.PhoneInTalk
             ) {
                 // Incoming Call Ringing
                 ListItem(
@@ -1255,7 +1312,7 @@ fun ProfileScreen(
                     },
                     leadingContent = {
                         Icon(
-                            Icons.Default.PhoneInTalk,
+                            Icons.Rounded.PhoneInTalk,
                             contentDescription = null,
                             tint = if (uiState.isCallRingingEnabled) primaryAccent else MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -1283,14 +1340,14 @@ fun ProfileScreen(
                     },
                     leadingContent = {
                         Icon(
-                            Icons.Default.PhonelinkRing,
+                            Icons.Rounded.PhonelinkRing,
                             contentDescription = null,
                             tint = if (isCallScreenAllowed) primaryAccent else MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     },
                     trailingContent = {
                         if (!isCallScreenAllowed) {
-                            FilledTonalButton(
+                            CherishTonalButton(
                                 onClick = { com.example.notifications.BackgroundDelivery.openCallScreenSettings(context) },
                                 shape = RoundedCornerShape(16.dp),
                                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 2.dp)
@@ -1298,7 +1355,7 @@ fun ProfileScreen(
                                 Text("Allow", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                             }
                         } else {
-                            Icon(Icons.Default.CheckCircle, contentDescription = "Allowed", tint = Color(0xFF10B981))
+                            Icon(Icons.Rounded.CheckCircle, contentDescription = "Allowed", tint = Emerald500)
                         }
                     },
                     modifier = Modifier.testTag("incoming_call_screen")
@@ -1316,7 +1373,7 @@ fun ProfileScreen(
                             fontSize = 13.sp
                         )
                     },
-                    leadingContent = { Icon(Icons.Default.GraphicEq, contentDescription = null, tint = primaryAccent) }
+                    leadingContent = { Icon(Icons.Rounded.GraphicEq, contentDescription = null, tint = primaryAccent) }
                 )
                 Row(
                     modifier = Modifier
@@ -1335,9 +1392,10 @@ fun ProfileScreen(
                         Box(
                             modifier = Modifier
                                 .weight(1f)
+                                .pressScaleTarget()
                                 .clip(RoundedCornerShape(8.dp))
                                 .background(if (isSelected) primaryAccent else Color.Transparent)
-                                .clickable { viewModel.setCallAiNoiseMode(mode) }
+                                .springClickable { viewModel.setCallAiNoiseMode(mode) }
                                 .padding(vertical = 8.dp),
                             contentAlignment = Alignment.Center
                         ) {
@@ -1366,7 +1424,7 @@ fun ProfileScreen(
                     },
                     leadingContent = {
                         Icon(
-                            Icons.Default.NetworkCheck,
+                            Icons.Rounded.NetworkCheck,
                             contentDescription = null,
                             tint = if (uiState.isCallLowDataMode) primaryAccent else MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -1392,7 +1450,7 @@ fun ProfileScreen(
                     },
                     leadingContent = {
                         Icon(
-                            Icons.Default.Mic,
+                            Icons.Rounded.Mic,
                             contentDescription = null,
                             tint = if (uiState.isCallAutoRecordEnabled) primaryAccent else MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -1417,7 +1475,7 @@ fun ProfileScreen(
                             fontSize = 13.sp
                         )
                     },
-                    leadingContent = { Icon(Icons.Default.Security, contentDescription = null, tint = primaryAccent) }
+                    leadingContent = { Icon(Icons.Rounded.Security, contentDescription = null, tint = primaryAccent) }
                 )
                 Row(
                     modifier = Modifier
@@ -1436,9 +1494,10 @@ fun ProfileScreen(
                         Box(
                             modifier = Modifier
                                 .weight(1f)
+                                .pressScaleTarget()
                                 .clip(RoundedCornerShape(8.dp))
                                 .background(if (isSelected) primaryAccent else Color.Transparent)
-                                .clickable { viewModel.setCallMaskingStyle(style) }
+                                .springClickable { viewModel.setCallMaskingStyle(style) }
                                 .padding(vertical = 8.dp),
                             contentAlignment = Alignment.Center
                         ) {
@@ -1462,7 +1521,7 @@ fun ProfileScreen(
                     supportingContent = { Text("Short gentle haptic pulse when partner answers the call", fontSize = 13.sp) },
                     leadingContent = {
                         Icon(
-                            Icons.Default.Vibration,
+                            Icons.Rounded.Vibration,
                             contentDescription = null,
                             tint = if (uiState.isCallVibrateConnected) primaryAccent else MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -1483,7 +1542,7 @@ fun ProfileScreen(
                     supportingContent = { Text("Haptic confirmation when tapping microphone mute button", fontSize = 13.sp) },
                     leadingContent = {
                         Icon(
-                            Icons.Default.Vibration,
+                            Icons.Rounded.Vibration,
                             contentDescription = null,
                             tint = if (uiState.isCallVibrateMute) primaryAccent else MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -1500,12 +1559,12 @@ fun ProfileScreen(
             // 5. Appearance & Experience Section
             SettingsSection(
                 title = "Appearance & Experience",
-                icon = Icons.Default.Palette
+                icon = Icons.Rounded.Palette
             ) {
                 ListItem(
                     headlineContent = { Text("App Theme", fontSize = 15.sp, fontWeight = FontWeight.SemiBold) },
                     supportingContent = { Text("System, Day, or Dark mode", fontSize = 13.sp) },
-                    leadingContent = { Icon(Icons.Default.BrightnessMedium, contentDescription = null, tint = primaryAccent) }
+                    leadingContent = { Icon(Icons.Rounded.BrightnessMedium, contentDescription = null, tint = primaryAccent) }
                 )
                 Row(
                     modifier = Modifier
@@ -1527,9 +1586,10 @@ fun ProfileScreen(
                         Box(
                             modifier = Modifier
                                 .weight(1f)
+                                .pressScaleTarget()
                                 .clip(RoundedCornerShape(8.dp))
                                 .background(if (isSelected) primaryAccent else Color.Transparent)
-                                .clickable { viewModel.setThemeMode(mode) }
+                                .springClickable { viewModel.setThemeMode(mode) }
                                 .padding(vertical = 8.dp),
                             contentAlignment = Alignment.Center
                         ) {
@@ -1550,7 +1610,7 @@ fun ProfileScreen(
                 ListItem(
                     headlineContent = { Text("Chat Wallpaper Style", fontSize = 15.sp, fontWeight = FontWeight.SemiBold) },
                     supportingContent = { Text("Select wallpaper background pattern", fontSize = 13.sp) },
-                    leadingContent = { Icon(Icons.Default.Wallpaper, contentDescription = null, tint = primaryAccent) }
+                    leadingContent = { Icon(Icons.Rounded.Wallpaper, contentDescription = null, tint = primaryAccent) }
                 )
                 Row(
                     modifier = Modifier
@@ -1570,9 +1630,10 @@ fun ProfileScreen(
                         Box(
                             modifier = Modifier
                                 .weight(1f)
+                                .pressScaleTarget()
                                 .clip(RoundedCornerShape(8.dp))
                                 .background(if (isSelected) primaryAccent else Color.Transparent)
-                                .clickable { viewModel.setChatBgTheme(theme) }
+                                .springClickable { viewModel.setChatBgTheme(theme) }
                                 .padding(vertical = 8.dp),
                             contentAlignment = Alignment.Center
                         ) {
@@ -1593,7 +1654,7 @@ fun ProfileScreen(
                 ListItem(
                     headlineContent = { Text("Photo Thumbnail Size", fontSize = 15.sp, fontWeight = FontWeight.SemiBold) },
                     supportingContent = { Text("Grid sizing in chat photo gallery", fontSize = 13.sp) },
-                    leadingContent = { Icon(Icons.Outlined.PhotoLibrary, contentDescription = null, tint = primaryAccent) }
+                    leadingContent = { Icon(Icons.Rounded.PhotoLibrary, contentDescription = null, tint = primaryAccent) }
                 )
                 Row(
                     modifier = Modifier
@@ -1609,9 +1670,10 @@ fun ProfileScreen(
                         Box(
                             modifier = Modifier
                                 .weight(1f)
+                                .pressScaleTarget()
                                 .clip(RoundedCornerShape(8.dp))
                                 .background(if (isSelected) primaryAccent else Color.Transparent)
-                                .clickable { viewModel.setImageGallerySize(key) }
+                                .springClickable { viewModel.setImageGallerySize(key) }
                                 .padding(vertical = 8.dp),
                             contentAlignment = Alignment.Center
                         ) {
@@ -1675,7 +1737,7 @@ fun ProfileScreen(
                 }
             }
             // Chat Experience Mode Selector
-            SettingsSection(title = "Chat Experience", icon = Icons.Default.ChatBubble) {
+            SettingsSection(title = "Chat Experience", icon = Icons.Rounded.ChatBubble) {
                 val currentMode = uiState.chatExperienceMode
 
                 Column(
@@ -1686,7 +1748,7 @@ fun ProfileScreen(
                 ) {
                     // ❤️ Normal Mode option
                     Surface(
-                        shape = RoundedCornerShape(14.dp),
+                        shape = RoundedCornerShape(16.dp),
                         color = if (currentMode == com.example.ui.chat.ChatExperienceMode.NORMAL)
                             RoseGoldPrimary.copy(alpha = 0.12f) 
                         else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
@@ -1724,7 +1786,7 @@ fun ProfileScreen(
 
                     // 🔒 Private Mode option
                     Surface(
-                        shape = RoundedCornerShape(14.dp),
+                        shape = RoundedCornerShape(16.dp),
                         color = if (currentMode == com.example.ui.chat.ChatExperienceMode.PRIVATE)
                             MaterialTheme.colorScheme.primary.copy(alpha = 0.12f) 
                         else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
@@ -1764,7 +1826,7 @@ fun ProfileScreen(
 
                     // 🎵 In-Chat Sound Effects Toggle
                     Surface(
-                        shape = RoundedCornerShape(14.dp),
+                        shape = RoundedCornerShape(16.dp),
                         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
                         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
                         modifier = Modifier.fillMaxWidth()
@@ -1788,7 +1850,7 @@ fun ProfileScreen(
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Icon(
-                                        imageVector = if (uiState.isChatSoundsEnabled) Icons.Default.VolumeUp else Icons.Default.VolumeOff,
+                                        imageVector = if (uiState.isChatSoundsEnabled) Icons.AutoMirrored.Rounded.VolumeUp else Icons.AutoMirrored.Rounded.VolumeOff,
                                         contentDescription = null,
                                         tint = RoseGoldPrimary,
                                         modifier = Modifier.size(20.dp)
@@ -1804,7 +1866,7 @@ fun ProfileScreen(
                                     )
                                     Text(
                                         text = "Warm acoustic chimes for sent, received, reaction & voice notes",
-                                        fontSize = 11.5.sp,
+                                        fontSize = 11.sp,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         lineHeight = 15.sp
                                     )
@@ -1827,7 +1889,7 @@ fun ProfileScreen(
                     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                             Icon(
-                                imageVector = if (soundVolume <= 0f) Icons.Default.VolumeOff else Icons.Default.VolumeUp,
+                                imageVector = if (soundVolume <= 0f) Icons.AutoMirrored.Rounded.VolumeOff else Icons.AutoMirrored.Rounded.VolumeUp,
                                 contentDescription = null,
                                 tint = primaryAccent,
                                 modifier = Modifier.size(20.dp)
@@ -1855,7 +1917,7 @@ fun ProfileScreen(
             // 5. Check-After & Shared Presence Section
             SettingsSection(
                 title = "Check-After & Presence",
-                icon = Icons.Filled.HourglassTop
+                icon = Icons.Rounded.HourglassTop
             ) {
                 val myActiveCheckAfter = user?.hasActiveCheckAfter() == true
                 val partnerActiveCheckAfter = partner?.hasActiveCheckAfter() == true
@@ -1876,21 +1938,21 @@ fun ProfileScreen(
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            FilledTonalButton(
+                            CherishTonalButton(
                                 onClick = { viewModel.extendCheckAfter(30 * 60 * 1000L) },
                                 contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
                                 modifier = Modifier.height(30.dp)
                             ) {
                                 Text("+30m", fontSize = 12.sp)
                             }
-                            FilledTonalButton(
+                            CherishTonalButton(
                                 onClick = { viewModel.extendCheckAfter(60 * 60 * 1000L) },
                                 contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
                                 modifier = Modifier.height(30.dp)
                             ) {
                                 Text("+1h", fontSize = 12.sp)
                             }
-                            OutlinedButton(
+                            CherishOutlinedButton(
                                 onClick = { showCheckAfterSheet = true },
                                 contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
                                 modifier = Modifier.height(30.dp)
@@ -1902,7 +1964,7 @@ fun ProfileScreen(
                                 contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
                                 modifier = Modifier.height(30.dp)
                             ) {
-                                Text("Cancel", fontSize = 12.sp, color = Color(0xFFD32F2F))
+                                Text("Cancel", fontSize = 12.sp, color = Red700)
                             }
                         }
                     }
@@ -1924,18 +1986,18 @@ fun ProfileScreen(
                         Text(
                             text = if (isExpired) "✨ You can check now" else "⏳ $remaining",
                             fontSize = 13.sp,
-                            color = if (isExpired) (if (isDark) darkTone(Color(0xFF86EFAC)) else Color(0xFF2E7D32)) else MaterialTheme.colorScheme.onSurfaceVariant
+                            color = if (isExpired) (if (isDark) darkTone(Color(0xFF86EFAC)) else Green800) else MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 } else {
                     Box(modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)) {
-                        Button(
+                        CherishButton(
                             onClick = { showCheckAfterSheet = true },
-                            shape = RoundedCornerShape(10.dp),
+                            shape = RoundedCornerShape(12.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = primaryAccent),
                             modifier = Modifier.fillMaxWidth().height(42.dp)
                         ) {
-                            Icon(Icons.Filled.HourglassTop, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Icon(Icons.Rounded.HourglassTop, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(6.dp))
                             Text("Set Check-After Time", fontSize = 13.sp, fontWeight = FontWeight.Bold)
                         }
@@ -1974,7 +2036,7 @@ fun ProfileScreen(
                         }
                         Text("Auto-synced: $displayCity", fontSize = 13.sp)
                     },
-                    leadingContent = { Icon(Icons.Default.Schedule, contentDescription = null, tint = primaryAccent) }
+                    leadingContent = { Icon(Icons.Rounded.Schedule, contentDescription = null, tint = primaryAccent) }
                 )
             }
 
@@ -1984,7 +2046,7 @@ fun ProfileScreen(
 
             SettingsSection(
                 title = "Security & Tools",
-                icon = Icons.Default.VerifiedUser
+                icon = Icons.Rounded.VerifiedUser
             ) {
                 ListItem(
                     headlineContent = { Text("Privacy & Security Audit", fontSize = 15.sp, fontWeight = FontWeight.SemiBold) },
@@ -1996,24 +2058,24 @@ fun ProfileScreen(
                         )
                     },
                     leadingContent = {
-                        Icon(Icons.Filled.VerifiedUser, contentDescription = null, tint = primaryAccent)
+                        Icon(Icons.Rounded.VerifiedUser, contentDescription = null, tint = primaryAccent)
                     },
                     trailingContent = {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Surface(
-                                shape = RoundedCornerShape(10.dp),
-                                color = if (securityScore.passedCount >= 6) Color(0xFF10B981).copy(alpha = 0.15f) else Color(0xFFF59E0B).copy(alpha = 0.15f)
+                                shape = RoundedCornerShape(12.dp),
+                                color = if (securityScore.passedCount >= 6) Emerald500.copy(alpha = 0.15f) else Amber500.copy(alpha = 0.15f)
                             ) {
                                 Text(
                                     text = "${securityScore.passedCount}/${securityScore.totalCount} Active 🛡️",
                                     color = if (securityScore.passedCount >= 6) Color(0xFF059669) else Color(0xFFD97706),
-                                    fontSize = 11.5.sp,
+                                    fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold,
                                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.5.dp)
                                 )
                             }
                             Spacer(modifier = Modifier.width(6.dp))
-                            Icon(Icons.Default.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Icon(Icons.Rounded.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     },
                     modifier = Modifier.clickable { onNavigateToPrivacyAudit() }.testTag("privacy_security_audit_item")
@@ -2024,10 +2086,10 @@ fun ProfileScreen(
                     headlineContent = { Text("Authorized Devices & Sessions", fontSize = 15.sp, fontWeight = FontWeight.SemiBold) },
                     supportingContent = { Text("View active logins, manage pairing & remote logout", fontSize = 13.sp) },
                     leadingContent = {
-                        Icon(Icons.Default.Devices, contentDescription = null, tint = primaryAccent)
+                        Icon(Icons.Rounded.Devices, contentDescription = null, tint = primaryAccent)
                     },
                     trailingContent = {
-                        Icon(Icons.Default.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Icon(Icons.Rounded.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
                     },
                     modifier = Modifier.clickable { onNavigateToDeviceSessions() }
                 )
@@ -2036,10 +2098,10 @@ fun ProfileScreen(
                     headlineContent = { Text("Storage & Cache Manager", fontSize = 15.sp, fontWeight = FontWeight.SemiBold) },
                     supportingContent = { Text("Clear temporary media cache without deleting chats", fontSize = 13.sp) },
                     leadingContent = {
-                        Icon(Icons.Default.CleaningServices, contentDescription = null, tint = primaryAccent)
+                        Icon(Icons.Rounded.CleaningServices, contentDescription = null, tint = primaryAccent)
                     },
                     trailingContent = {
-                        Icon(Icons.Default.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Icon(Icons.Rounded.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
                     },
                     modifier = Modifier.clickable { onNavigateToStorageManager() }
                 )
@@ -2048,7 +2110,7 @@ fun ProfileScreen(
             // 7. Backup & Recovery Section
             SettingsSection(
                 title = "Backup & Recovery",
-                icon = Icons.Default.CloudDone
+                icon = Icons.Rounded.CloudDone
             ) {
                 Column(modifier = Modifier.padding(14.dp)) {
                     Row(
@@ -2064,13 +2126,13 @@ fun ProfileScreen(
                         )
                         Surface(
                             shape = RoundedCornerShape(8.dp),
-                            color = Color(0xFFE8F5E9)
+                            color = Green50
                         ) {
                             Text(
                                 text = "Always Active",
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = Color(0xFF2E7D32),
+                                color = Green800,
                                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
                             )
                         }
@@ -2090,7 +2152,7 @@ fun ProfileScreen(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(10.dp))
+                            .clip(RoundedCornerShape(12.dp))
                             .background(MaterialTheme.colorScheme.surfaceVariant)
                             .padding(horizontal = 12.dp, vertical = 8.dp),
                         horizontalArrangement = Arrangement.SpaceBetween
@@ -2111,7 +2173,7 @@ fun ProfileScreen(
                         onClick = onNavigateToCloudBackup,
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Icon(Icons.Default.Settings, contentDescription = null, modifier = Modifier.size(15.dp), tint = primaryAccent)
+                        Icon(Icons.Rounded.Settings, contentDescription = null, modifier = Modifier.size(15.dp), tint = primaryAccent)
                         Spacer(modifier = Modifier.width(6.dp))
                         Text("Google Drive Transfer & Details", fontSize = 12.sp, color = primaryAccent, fontWeight = FontWeight.SemiBold)
                     }
@@ -2119,7 +2181,7 @@ fun ProfileScreen(
             }
 
             // 8. Updates & Logout Actions
-            Button(
+            CherishButton(
                 onClick = { viewModel.checkForUpdates(context) },
                 modifier = Modifier
                     .fillMaxWidth()
@@ -2132,7 +2194,7 @@ fun ProfileScreen(
                 shape = RoundedCornerShape(12.dp)
             ) {
                 Icon(
-                    imageVector = Icons.Default.SystemUpdate,
+                    imageVector = Icons.Rounded.SystemUpdate,
                     contentDescription = "Check for Updates",
                     tint = primaryAccent,
                     modifier = Modifier.size(18.dp)
@@ -2142,13 +2204,13 @@ fun ProfileScreen(
             }
             Text(
                 text = "Installed: ${com.example.BuildConfig.VERSION_NAME} (build ${com.example.BuildConfig.VERSION_CODE})",
-                fontSize = 11.5.sp,
+                fontSize = 11.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
                 modifier = Modifier.fillMaxWidth()
             )
 
-            Button(
+            CherishButton(
                 onClick = {
                     viewModel.logout()
                     onLoggedOut()
@@ -2163,7 +2225,7 @@ fun ProfileScreen(
                 ),
                 shape = RoundedCornerShape(12.dp)
             ) {
-                Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null, modifier = Modifier.size(18.dp))
+                Icon(Icons.AutoMirrored.Rounded.Logout, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(8.dp))
                 Text("Log Out", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
             }
@@ -2176,12 +2238,12 @@ fun ProfileScreen(
 
     // Avatar Options Dialog (Camera, Gallery, Remove)
     if (showAvatarOptionsDialog) {
-        AlertDialog(
+        CherishAlertDialog(
             onDismissRequest = { showAvatarOptionsDialog = false },
             title = {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
-                        Icons.Default.CameraAlt,
+                        Icons.Rounded.CameraAlt,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(22.dp)
@@ -2217,7 +2279,7 @@ fun ProfileScreen(
                             modifier = Modifier.padding(14.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(Icons.Default.CameraAlt, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                            Icon(Icons.Rounded.CameraAlt, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                             Spacer(modifier = Modifier.width(14.dp))
                             Column {
                                 Text("Take Photo", fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
@@ -2246,7 +2308,7 @@ fun ProfileScreen(
                             modifier = Modifier.padding(14.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(Icons.Default.PhotoLibrary, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                            Icon(Icons.Rounded.PhotoLibrary, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                             Spacer(modifier = Modifier.width(14.dp))
                             Column {
                                 Text("Choose from Gallery", fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
@@ -2265,7 +2327,7 @@ fun ProfileScreen(
                                 .clickable {
                                     showAvatarOptionsDialog = false
                                     viewModel.removeAvatar {
-                                        Toast.makeText(context, "Profile photo removed", Toast.LENGTH_SHORT).show()
+                                        CherishToast.show("Profile photo removed")
                                     }
                                 }
                         ) {
@@ -2273,7 +2335,7 @@ fun ProfileScreen(
                                 modifier = Modifier.padding(14.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error)
+                                Icon(Icons.Rounded.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error)
                                 Spacer(modifier = Modifier.width(14.dp))
                                 Column {
                                     Text("Remove Photo", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
@@ -2307,13 +2369,13 @@ fun ProfileScreen(
             "Together forever & always 💍"
         )
 
-        AlertDialog(
+        CherishAlertDialog(
             onDismissRequest = {
                 if (!uiState.isUpdating) showEditProfileDialog = false
             },
             title = {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Edit, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+                    Icon(Icons.Rounded.Edit, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
                     Spacer(modifier = Modifier.width(8.dp))
                     Text("Edit Profile", fontWeight = FontWeight.Bold)
                 }
@@ -2338,21 +2400,23 @@ fun ProfileScreen(
                             isOnline = true,
                             showOnlineBadge = false,
                             modifier = Modifier
+                                .pressScaleTarget()
                                 .clip(CircleShape)
-                                .clickable {
+                                .springClickable {
                                     showAvatarOptionsDialog = true
                                 }
                         )
                         Box(
                             modifier = Modifier
                                 .size(26.dp)
+                                .pressScaleTarget()
                                 .clip(CircleShape)
                                 .background(MaterialTheme.colorScheme.primary)
-                                .clickable { showAvatarOptionsDialog = true },
+                                .springClickable { showAvatarOptionsDialog = true },
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
-                                Icons.Default.CameraAlt,
+                                Icons.Rounded.CameraAlt,
                                 contentDescription = "Change photo",
                                 tint = Color.White,
                                 modifier = Modifier.size(14.dp)
@@ -2372,12 +2436,12 @@ fun ProfileScreen(
                         label = { Text("Display Name") },
                         placeholder = { Text("Your name") },
                         leadingIcon = {
-                            Icon(Icons.Default.Person, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                            Icon(Icons.Rounded.Person, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                         },
                         trailingIcon = {
                             if (nameInput.isNotBlank()) {
                                 IconButton(onClick = { nameInput = "" }) {
-                                    Icon(Icons.Default.Clear, contentDescription = "Clear", modifier = Modifier.size(18.dp))
+                                    Icon(Icons.Rounded.Clear, contentDescription = "Clear", modifier = Modifier.size(18.dp))
                                 }
                             }
                         },
@@ -2392,7 +2456,7 @@ fun ProfileScreen(
                         label = { Text("Status / Sweet Note") },
                         placeholder = { Text("Loving every moment with you ✨") },
                         leadingIcon = {
-                            Icon(Icons.Default.Favorite, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                            Icon(Icons.Rounded.Favorite, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                         },
                         supportingText = {
                             Text("${statusInput.length}/80", style = MaterialTheme.typography.labelSmall)
@@ -2429,7 +2493,7 @@ fun ProfileScreen(
                 }
             },
             confirmButton = {
-                Button(
+                CherishButton(
                     onClick = {
                         val finalName = nameInput.trim().ifBlank { user?.displayName ?: "Me" }
                         val finalStatus = statusInput.trim().ifBlank { "Loving every moment with you ✨" }
@@ -2439,7 +2503,7 @@ fun ProfileScreen(
                             newPhotoUri = null,
                             removePhoto = false
                         ) {
-                            Toast.makeText(context, "Profile updated successfully ✨", Toast.LENGTH_SHORT).show()
+                            CherishToast.show("Profile updated successfully ✨")
                             showEditProfileDialog = false
                         }
                     },
@@ -2474,7 +2538,7 @@ fun ProfileScreen(
 
     // Set PIN Dialog
     if (showSetPinDialog) {
-        AlertDialog(
+        CherishAlertDialog(
             onDismissRequest = { showSetPinDialog = false },
             title = { Text("Set 4-Digit Secret PIN") },
             text = {
@@ -2491,7 +2555,7 @@ fun ProfileScreen(
                 }
             },
             confirmButton = {
-                Button(
+                CherishButton(
                     onClick = {
                         if (newPinText.length == 4) {
                             viewModel.setAppLock(true, newPinText)
@@ -2514,7 +2578,7 @@ fun ProfileScreen(
 
     // Set Passcode Dialog for Notes Disguise (Hidden input with reveal toggle)
     if (showSetPasscodeDialog) {
-        AlertDialog(
+        CherishAlertDialog(
             onDismissRequest = { showSetPasscodeDialog = false },
             title = { Text("Set Secret Trigger Word") },
             text = {
@@ -2536,7 +2600,7 @@ fun ProfileScreen(
                         trailingIcon = {
                             IconButton(onClick = { isDialogPasscodeRevealed = !isDialogPasscodeRevealed }) {
                                 Icon(
-                                    imageVector = if (isDialogPasscodeRevealed) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                    imageVector = if (isDialogPasscodeRevealed) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility,
                                     contentDescription = if (isDialogPasscodeRevealed) "Hide" else "Show"
                                 )
                             }
@@ -2547,7 +2611,7 @@ fun ProfileScreen(
                 }
             },
             confirmButton = {
-                Button(
+                CherishButton(
                     onClick = {
                         if (newPasscodeText.isNotBlank()) {
                             viewModel.setDisguisePasscode(newPasscodeText)
@@ -2573,11 +2637,11 @@ fun ProfileScreen(
         var partnerEmailInput by remember { mutableStateOf(user?.partnerEmail ?: partner?.displayName ?: "") }
         var coupleKeyInput by remember { mutableStateOf(uiState.coupleKey) }
 
-        AlertDialog(
+        CherishAlertDialog(
             onDismissRequest = { showPairDialog = false },
             title = {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.AccountCircle, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(24.dp))
+                    Icon(Icons.Rounded.AccountCircle, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(24.dp))
                     Spacer(modifier = Modifier.width(8.dp))
                     Text("User Login Settings", fontWeight = FontWeight.Bold)
                 }
@@ -2619,14 +2683,14 @@ fun ProfileScreen(
                 }
             },
             confirmButton = {
-                Button(
+                CherishButton(
                     onClick = {
                         viewModel.updateLoginCredentials(usernameInput, partnerEmailInput, coupleKeyInput) { success ->
-                            Toast.makeText(context, if (success) "Login settings updated successfully! ✨" else "Update failed", Toast.LENGTH_SHORT).show()
+                            CherishToast.show(if (success) "Login settings updated successfully! ✨" else "Update failed")
                         }
                         showPairDialog = false
                     },
-                    shape = RoundedCornerShape(10.dp)
+                    shape = RoundedCornerShape(12.dp)
                 ) {
                     Text("Save & Sync")
                 }
@@ -2661,11 +2725,7 @@ fun ProfileScreen(
         },
         onRequestSpace = { target, note ->
             val asked = viewModel.requestSpace(target, note)
-            android.widget.Toast.makeText(
-                context,
-                if (asked) "Asked your partner. It starts when they accept." else "Couldn't send the request. Try again.",
-                android.widget.Toast.LENGTH_LONG
-            ).show()
+            CherishToast.show(if (asked) "Asked your partner. It starts when they accept." else "Couldn't send the request. Try again.", long = true)
         }
     )
 }

@@ -22,8 +22,13 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.outlined.*
+import androidx.compose.material.icons.rounded.BookmarkBorder
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Fullscreen
+import androidx.compose.material.icons.rounded.Info
+import androidx.compose.material.icons.rounded.Link
+import androidx.compose.material.icons.automirrored.rounded.OpenInNew
+import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import com.example.ui.security.SecretWindowGuard
@@ -45,6 +50,15 @@ import androidx.compose.ui.window.DialogProperties
 import coil.compose.AsyncImage
 import com.example.ui.theme.DarkAubergine
 import com.example.ui.theme.RoseGoldPrimary
+import com.example.ui.theme.Graphite700
+import com.example.ui.theme.Graphite800
+import com.example.ui.theme.Graphite850
+import com.example.ui.theme.Pink500
+import com.example.ui.components.CherishToast
+import com.example.ui.components.CherishButton
+import com.example.ui.components.CherishTonalButton
+import com.example.ui.components.pressScaleTarget
+import com.example.ui.components.springClickable
 
 object YouTubeHelper {
     private val YOUTUBE_REGEX = Regex(
@@ -289,7 +303,7 @@ fun YouTubeWebView(
                     verticalArrangement = Arrangement.Center
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Info,
+                        imageVector = Icons.Rounded.Info,
                         contentDescription = null,
                         tint = Color(0xFFA1A1AA),
                         modifier = Modifier.size(24.dp)
@@ -302,13 +316,13 @@ fun YouTubeWebView(
                         fontWeight = FontWeight.Medium
                     )
                     Spacer(modifier = Modifier.height(10.dp))
-                    Button(
+                    CherishButton(
                         onClick = { YouTubeHelper.openInYouTube(context, videoId) },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF0000)),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color.Red),
                         shape = RoundedCornerShape(8.dp),
                         contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
                     ) {
-                        Icon(Icons.Default.OpenInNew, contentDescription = null, modifier = Modifier.size(15.dp), tint = Color.White)
+                        Icon(Icons.AutoMirrored.Rounded.OpenInNew, contentDescription = null, modifier = Modifier.size(15.dp), tint = Color.White)
                         Spacer(modifier = Modifier.width(6.dp))
                         Text("Watch in YouTube App", fontSize = 12.sp, color = Color.White)
                     }
@@ -331,9 +345,10 @@ private fun CardHeaderButton(
         contentAlignment = Alignment.Center,
         modifier = modifier
             .size(32.dp)
+            .pressScaleTarget()
             .clip(CircleShape)
             .background(Color.White.copy(alpha = 0.12f))
-            .clickable(
+            .springClickable(
                 onClickLabel = contentDescription,
                 role = androidx.compose.ui.semantics.Role.Button,
                 onClick = onClick
@@ -375,10 +390,10 @@ fun InlineYouTubeCard(
 
     Surface(
         shape = RoundedCornerShape(16.dp),
-        color = Color(0xFF1E1E24),
+        color = Graphite800,
         border = BorderStroke(
             width = 1.dp,
-            color = Color(0xFF2E2E34)
+            color = Graphite700
         ),
         modifier = modifier
             .fillMaxWidth()
@@ -390,7 +405,7 @@ fun InlineYouTubeCard(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(Color(0xFF202024))
+                    .background(Graphite850)
                     .padding(horizontal = 12.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -399,12 +414,12 @@ fun InlineYouTubeCard(
                     Box(
                         modifier = Modifier
                             .size(22.dp)
-                            .clip(RoundedCornerShape(5.dp))
-                            .background(Color(0xFFFF0000)),
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(Color.Red),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
-                            imageVector = Icons.Filled.PlayArrow,
+                            imageVector = Icons.Rounded.PlayArrow,
                             contentDescription = null,
                             tint = Color.White,
                             modifier = Modifier.size(15.dp)
@@ -430,7 +445,7 @@ fun InlineYouTubeCard(
                 ) {
                     // Open the video in the YouTube app (or the browser without it)
                     CardHeaderButton(
-                        icon = Icons.Default.OpenInNew,
+                        icon = Icons.AutoMirrored.Rounded.OpenInNew,
                         contentDescription = "Open in YouTube app",
                         iconSize = 16.dp,
                         modifier = Modifier.testTag("youtube_open_in_app"),
@@ -440,18 +455,18 @@ fun InlineYouTubeCard(
                         }
                     )
                     CardHeaderButton(
-                        icon = Icons.Default.BookmarkBorder,
+                        icon = Icons.Rounded.BookmarkBorder,
                         contentDescription = "Save to Watch Later",
                         modifier = Modifier.testTag("youtube_watch_later"),
                         onClick = {
                             val app = context.applicationContext as com.example.CherishApplication
                             app.coupleFeaturesRepository.addWatchLaterVideo(videoId, "Saved from chat")
-                            android.widget.Toast.makeText(context, "Saved to Watch Later list", android.widget.Toast.LENGTH_SHORT).show()
+                            CherishToast.show("Saved to Watch Later list")
                         }
                     )
                     if (isPlayingInline) {
                         CardHeaderButton(
-                            icon = Icons.Default.Close,
+                            icon = Icons.Rounded.Close,
                             contentDescription = "Close player",
                             iconSize = 16.dp,
                             modifier = Modifier.testTag("youtube_close_inline"),
@@ -505,7 +520,7 @@ fun InlineYouTubeCard(
                         // Soft outer pulse ring (strictly anti-aliased Canvas drawCircle - zero corner glitch)
                         Canvas(modifier = Modifier.size(64.dp)) {
                             drawCircle(
-                                color = Color(0xFFFF0000).copy(alpha = 0.25f),
+                                color = Color.Red.copy(alpha = 0.25f),
                                 radius = (size.minDimension / 2f) * pulse.value
                             )
                         }
@@ -515,12 +530,12 @@ fun InlineYouTubeCard(
                             modifier = Modifier
                                 .size(52.dp)
                                 .clip(CircleShape)
-                                .background(Color(0xFFFF0000))
+                                .background(Color.Red)
                                 .border(1.5.dp, Color.White.copy(alpha = 0.7f), CircleShape),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
-                                imageVector = Icons.Filled.PlayArrow,
+                                imageVector = Icons.Rounded.PlayArrow,
                                 contentDescription = "Play inline",
                                 tint = Color.White,
                                 modifier = Modifier.size(28.dp)
@@ -541,12 +556,12 @@ fun InlineYouTubeCard(
                         Text(
                             text = "▶ Tap to play inline",
                             color = Color.White.copy(alpha = 0.9f),
-                            fontSize = 11.5.sp,
+                            fontSize = 11.sp,
                             fontWeight = FontWeight.Medium
                         )
 
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            FilledTonalButton(
+                            CherishTonalButton(
                                 onClick = {
                                     // Watched together instead: the party's theater opens, this card stops
                                     val cherishApp = context.applicationContext as? com.example.CherishApplication
@@ -557,14 +572,14 @@ fun InlineYouTubeCard(
                                 contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
                                 modifier = Modifier.height(28.dp).testTag("watch_party_sync_btn"),
                                 colors = ButtonDefaults.filledTonalButtonColors(
-                                    containerColor = Color(0xFFEC4899),
+                                    containerColor = Pink500,
                                     contentColor = Color.White
                                 )
                             ) {
                                 Text("Sync 🍿", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                             }
                             Spacer(modifier = Modifier.width(6.dp))
-                            FilledTonalButton(
+                            CherishTonalButton(
                                 onClick = { onOpenTheater(videoId) },
                                 contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
                                 modifier = Modifier
@@ -575,7 +590,7 @@ fun InlineYouTubeCard(
                                     contentColor = Color.White
                                 )
                             ) {
-                                Icon(Icons.Default.Fullscreen, contentDescription = null, modifier = Modifier.size(15.dp))
+                                Icon(Icons.Rounded.Fullscreen, contentDescription = null, modifier = Modifier.size(15.dp))
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Text("Theater", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                             }
@@ -691,7 +706,7 @@ fun InlineVideoTheaterModal(
                             .testTag("theater_open_in_youtube")
                     ) {
                         Icon(
-                            imageVector = Icons.Default.OpenInNew,
+                            imageVector = Icons.AutoMirrored.Rounded.OpenInNew,
                             contentDescription = "Open in YouTube app",
                             tint = Color.White,
                             modifier = Modifier.size(20.dp)
@@ -707,7 +722,7 @@ fun InlineVideoTheaterModal(
                             .border(1.dp, Color.White.copy(alpha = 0.35f), CircleShape)
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Close,
+                            imageVector = Icons.Rounded.Close,
                             contentDescription = "Close Theater View",
                             tint = Color.White,
                             modifier = Modifier.size(22.dp)
@@ -753,7 +768,7 @@ fun LinkPreviewCard(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
-                imageVector = Icons.Default.Link,
+                imageVector = Icons.Rounded.Link,
                 contentDescription = null,
                 tint = textColor.copy(alpha = 0.8f),
                 modifier = Modifier.size(18.dp)
@@ -775,7 +790,7 @@ fun LinkPreviewCard(
                 )
             }
             Icon(
-                imageVector = Icons.Default.OpenInNew,
+                imageVector = Icons.AutoMirrored.Rounded.OpenInNew,
                 contentDescription = "Open link",
                 tint = textColor.copy(alpha = 0.7f),
                 modifier = Modifier.size(14.dp)

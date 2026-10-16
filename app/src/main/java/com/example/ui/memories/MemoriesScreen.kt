@@ -14,9 +14,12 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.outlined.Place
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.PhotoAlbum
+import androidx.compose.material.icons.rounded.PhotoCamera
+import androidx.compose.material.icons.rounded.Place
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -37,6 +40,11 @@ import com.example.ui.theme.appHorizontalGradient
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import com.example.ui.components.CherishAlertDialog
+import com.example.ui.components.CherishButton
+import com.example.ui.components.SkeletonCards
+import com.example.ui.components.pressScaleTarget
+import com.example.ui.components.springClickable
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -62,7 +70,7 @@ fun MemoriesScreen(
                         onClick = onNavigateBack,
                         modifier = Modifier.testTag("memories_back_button")
                     ) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -73,16 +81,17 @@ fun MemoriesScreen(
         floatingActionButton = {
             Box(
                 modifier = Modifier
+                    .pressScaleTarget()
                     .appGradientShadow(CircleShape)
                     .clip(CircleShape)
                     .background(appHorizontalGradient())
                     .size(56.dp)
-                    .clickable { showAddDialog = true }
+                    .springClickable { showAddDialog = true }
                     .testTag("add_memory_fab"),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    imageVector = Icons.Default.Add,
+                    imageVector = Icons.Rounded.Add,
                     contentDescription = "Add Memory",
                     tint = Color.White,
                     modifier = Modifier.size(24.dp)
@@ -91,7 +100,21 @@ fun MemoriesScreen(
         },
         containerColor = MaterialTheme.colorScheme.surface
     ) { paddingValues ->
-        if (uiState.memories.isEmpty()) {
+        // Grey cards until the memories first arrive; if they haven't after a few seconds (offline,
+        // or none could be read), the empty state shows instead
+        var waitedLong by remember { mutableStateOf(false) }
+        LaunchedEffect(Unit) {
+            kotlinx.coroutines.delay(2_500)
+            waitedLong = true
+        }
+        if (!uiState.isLoaded && !waitedLong) {
+            SkeletonCards(
+                count = 3,
+                modifier = Modifier
+                    .padding(paddingValues)
+                    .padding(16.dp)
+            )
+        } else if (uiState.memories.isEmpty()) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -109,7 +132,7 @@ fun MemoriesScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
-                            Icons.Default.PhotoAlbum,
+                            Icons.Rounded.PhotoAlbum,
                             contentDescription = null,
                             tint = RoseGoldPrimary,
                             modifier = Modifier.size(36.dp)
@@ -141,7 +164,9 @@ fun MemoriesScreen(
                 items(uiState.memories, key = { it.id }) { memory ->
                     MemoryCard(
                         memory = memory,
-                        onDelete = { viewModel.deleteMemory(memory.id) }
+                        onDelete = { viewModel.deleteMemory(memory.id) },
+                        // Memories slide into place, and fade in and out, as they're added or deleted
+                        modifier = Modifier.animateItem()
                     )
                 }
                 item {
@@ -178,10 +203,11 @@ fun MemoriesScreen(
 @Composable
 fun MemoryCard(
     memory: Memory,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
@@ -212,7 +238,7 @@ fun MemoryCard(
                     )
                     IconButton(onClick = onDelete, modifier = Modifier.size(32.dp)) {
                         Icon(
-                            Icons.Default.Delete,
+                            Icons.Rounded.Delete,
                             contentDescription = "Delete memory",
                             tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
                             modifier = Modifier.size(18.dp)
@@ -235,7 +261,7 @@ fun MemoryCard(
                     if (!memory.location.isNullOrEmpty()) {
                         Text(" • ", color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Icon(
-                            Icons.Outlined.Place,
+                            Icons.Rounded.Place,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(12.dp)
@@ -283,7 +309,7 @@ fun AddMemoryDialog(
         selectedImageUri = uri 
     }
 
-    AlertDialog(
+    CherishAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Add Shared Memory") },
         text = {
@@ -316,7 +342,7 @@ fun AddMemoryDialog(
                     modifier = Modifier.fillMaxWidth()
                 )
 
-                Button(
+                CherishButton(
                     onClick = {
                         val prefs = com.example.security.SecurityPreferences.getInstance(context)
                         prefs.isExternalPickerActive = true
@@ -327,7 +353,7 @@ fun AddMemoryDialog(
                     },
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Icon(Icons.Default.PhotoCamera, contentDescription = null)
+                    Icon(Icons.Rounded.PhotoCamera, contentDescription = null)
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(if (selectedImageUri != null) "Photo Selected ✓" else "Choose Photo")
                 }
@@ -343,14 +369,14 @@ fun AddMemoryDialog(
                 if (error != null && !isUploading) {
                     Text(
                         text = error,
-                        fontSize = 12.5.sp,
+                        fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.error
                     )
                 }
             }
         },
         confirmButton = {
-            Button(
+            CherishButton(
                 onClick = {
                     if (title.isNotBlank()) {
                         onAdd(title, description, System.currentTimeMillis(), selectedImageUri, location.ifBlank { null })

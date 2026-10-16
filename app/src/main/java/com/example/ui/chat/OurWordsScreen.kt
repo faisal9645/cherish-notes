@@ -14,10 +14,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.MenuBook
-import androidx.compose.material.icons.outlined.ChatBubbleOutline
-import androidx.compose.material.icons.outlined.StarOutline
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.MenuBook
+import androidx.compose.material.icons.rounded.ChatBubbleOutline
+import androidx.compose.material.icons.rounded.StarOutline
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -49,6 +49,10 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import kotlin.math.abs
+import com.example.ui.theme.Indigo950
+import com.example.ui.theme.MistBlue
+import com.example.ui.theme.NavyDeep
+import com.example.ui.components.CherishToast
 
 private val OurWordsFont = FontFamily(Font(R.font.great_vibes_regular))
 
@@ -98,7 +102,7 @@ fun OurWordsScreen(
             TopAppBar(
                 title = {
                     Column {
-                        Text("Our Words", fontFamily = OurWordsFont, fontSize = 30.sp, color = MaterialTheme.colorScheme.primary)
+                        Text("Our Words", fontFamily = OurWordsFont, fontSize = 28.sp, color = MaterialTheme.colorScheme.primary)
                         if (words.isNotEmpty()) {
                             Text(
                                 if (words.size == 1) "1 favourite message" else "${words.size} favourite messages",
@@ -110,7 +114,7 @@ fun OurWordsScreen(
                 },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back")
                     }
                 }
             )
@@ -194,18 +198,18 @@ fun OurWordsScreen(
                                 onClick = { onShowInChat(message.id) },
                                 modifier = Modifier.testTag("our_words_show_in_chat")
                             ) {
-                                Icon(Icons.Outlined.ChatBubbleOutline, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Icon(Icons.Rounded.ChatBubbleOutline, contentDescription = null, modifier = Modifier.size(18.dp))
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text("Show in chat")
                             }
                             TextButton(
                                 onClick = {
                                     chatViewModel.toggleStar(message.id)
-                                    Toast.makeText(context, "Taken out of Our Words", Toast.LENGTH_SHORT).show()
+                                    CherishToast.show("Taken out of Our Words")
                                 },
                                 modifier = Modifier.testTag("our_words_unstar")
                             ) {
-                                Icon(Icons.Outlined.StarOutline, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Icon(Icons.Rounded.StarOutline, contentDescription = null, modifier = Modifier.size(18.dp))
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text("Unstar")
                             }
@@ -243,11 +247,11 @@ private class PaperColors(
 )
 
 private val DayPaper = PaperColors(
-    top = Color(0xFFFFFFFF),
-    bottom = Color(0xFFF1F5FF),
+    top = Color.White,
+    bottom = MistBlue,
     line = Color(0xFFB9C7E6).copy(alpha = 0.35f),
     margin = BookBlue.copy(alpha = 0.28f),
-    ink = Color(0xFF1E1B4B),
+    ink = Indigo950,
     faint = Color(0xFF5B6B8F),
     edge = Color(0xFFDDE6FA),
     accent = BookBlue
@@ -255,12 +259,12 @@ private val DayPaper = PaperColors(
 
 private val NightPaper = PaperColors(
     top = Color(0xFF141C45),
-    bottom = Color(0xFF0D1333),
+    bottom = NavyDeep,
     line = Color.White.copy(alpha = 0.06f),
     margin = Color(0xFF7D98FF).copy(alpha = 0.35f),
     ink = Color(0xFFF1F4FF),
     faint = Color(0xFFA9B4D8),
-    edge = Color(0xFF0E1638),
+    edge = NavyDeep,
     // A lighter blue so it reads on the navy page
     accent = Color(0xFF7D98FF)
 )
@@ -268,7 +272,7 @@ private val NightPaper = PaperColors(
 /** The paper itself: soft gradient, ruled lines and a blue margin, like a notebook page. */
 @Composable
 private fun PaperSheet(paper: PaperColors, modifier: Modifier = Modifier, content: @Composable BoxScope.() -> Unit) {
-    val shape = RoundedCornerShape(22.dp)
+    val shape = RoundedCornerShape(24.dp)
     Surface(
         shape = shape,
         color = Color.Transparent,
@@ -315,7 +319,7 @@ private fun OurWordsCover(words: List<Message>, paper: PaperColors) {
                 if (words.size == 1) "one little thing we said" else "${words.size} little things we said",
                 fontFamily = FontFamily.Serif,
                 fontStyle = FontStyle.Italic,
-                fontSize = 17.sp,
+                fontSize = 16.sp,
                 color = paper.faint,
                 textAlign = TextAlign.Center
             )
@@ -371,7 +375,7 @@ private fun OurWordsPage(message: Message, signedBy: String, paper: PaperColors)
             Text(
                 "— $signedBy",
                 fontFamily = OurWordsFont,
-                fontSize = 30.sp,
+                fontSize = 28.sp,
                 color = paper.accent,
                 modifier = Modifier.align(Alignment.End)
             )
@@ -402,9 +406,9 @@ private fun OurWordsEmpty(paper: PaperColors) {
                     .padding(start = 44.dp, end = 22.dp)
                     .testTag("our_words_empty")
             ) {
-                Icon(Icons.AutoMirrored.Filled.MenuBook, contentDescription = null, tint = paper.accent, modifier = Modifier.size(44.dp))
+                Icon(Icons.AutoMirrored.Rounded.MenuBook, contentDescription = null, tint = paper.accent, modifier = Modifier.size(44.dp))
                 Spacer(modifier = Modifier.height(12.dp))
-                Text("No words saved yet", fontFamily = OurWordsFont, fontSize = 34.sp, color = paper.ink, textAlign = TextAlign.Center)
+                Text("No words saved yet", fontFamily = OurWordsFont, fontSize = 32.sp, color = paper.ink, textAlign = TextAlign.Center)
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
                     "Long-press a message you love and star it. It becomes a page in this book.",

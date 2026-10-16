@@ -13,10 +13,14 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.outlined.Devices
-import androidx.compose.material.icons.outlined.Shield
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.DeleteOutline
+import androidx.compose.material.icons.rounded.Devices
+import androidx.compose.material.icons.rounded.Info
+import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.Shield
+import androidx.compose.material.icons.rounded.Smartphone
+import androidx.compose.material.icons.rounded.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -33,6 +37,16 @@ import com.example.CherishApplication
 import com.example.data.model.DeviceSession
 import com.example.ui.theme.DarkAubergine
 import com.example.ui.theme.RoseGoldPrimary
+import com.example.ui.theme.Blue300
+import com.example.ui.theme.Blue900
+import com.example.ui.theme.Green50
+import com.example.ui.theme.Green800
+import com.example.ui.theme.Red700
+import com.example.ui.components.CherishToast
+import com.example.ui.components.CherishAlertDialog
+import com.example.ui.components.CherishButton
+import com.example.ui.components.pressScale
+import androidx.compose.foundation.interaction.MutableInteractionSource
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -96,10 +110,10 @@ fun DeviceSessionsScreen(
     var selectedSessionForDetails by remember { mutableStateOf<DeviceSession?>(null) }
 
     if (sessionToRevoke != null) {
-        AlertDialog(
+        CherishAlertDialog(
             onDismissRequest = { sessionToRevoke = null },
             icon = {
-                Icon(Icons.Default.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.error)
+                Icon(Icons.Rounded.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.error)
             },
             title = {
                 Text("Revoke Authorized Session?", fontWeight = FontWeight.Bold)
@@ -112,13 +126,13 @@ fun DeviceSessionsScreen(
                 )
             },
             confirmButton = {
-                Button(
+                CherishButton(
                     onClick = {
                         val toRemove = sessionToRevoke
                         sessionToRevoke = null
                         if (toRemove != null) {
                             sessions = sessions.filter { it.id != toRemove.id }
-                            Toast.makeText(context, "Session revoked successfully", Toast.LENGTH_SHORT).show()
+                            CherishToast.show("Session revoked successfully")
                         }
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
@@ -136,7 +150,7 @@ fun DeviceSessionsScreen(
 
     if (selectedSessionForDetails != null) {
         val detailSession = selectedSessionForDetails!!
-        AlertDialog(
+        CherishAlertDialog(
             onDismissRequest = { selectedSessionForDetails = null },
             icon = {
                 Box(
@@ -147,7 +161,7 @@ fun DeviceSessionsScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        imageVector = if (detailSession.isCurrent) Icons.Default.Smartphone else Icons.Default.Devices,
+                        imageVector = if (detailSession.isCurrent) Icons.Rounded.Smartphone else Icons.Rounded.Devices,
                         contentDescription = null,
                         tint = if (detailSession.isCurrent) RoseGoldPrimary else MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(28.dp)
@@ -169,7 +183,7 @@ fun DeviceSessionsScreen(
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     Surface(
-                        shape = RoundedCornerShape(14.dp),
+                        shape = RoundedCornerShape(16.dp),
                         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
                         modifier = Modifier.fillMaxWidth()
                     ) {
@@ -200,23 +214,23 @@ fun DeviceSessionsScreen(
             },
             confirmButton = {
                 if (!detailSession.isCurrent) {
-                    Button(
+                    CherishButton(
                         onClick = {
                             val toRevoke = detailSession
                             selectedSessionForDetails = null
                             sessionToRevoke = toRevoke
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
-                        shape = RoundedCornerShape(10.dp)
+                        shape = RoundedCornerShape(12.dp)
                     ) {
-                        Icon(Icons.Default.DeleteOutline, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Icon(Icons.Rounded.DeleteOutline, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(6.dp))
                         Text("Revoke Session")
                     }
                 } else {
-                    Button(
+                    CherishButton(
                         onClick = { selectedSessionForDetails = null },
-                        shape = RoundedCornerShape(10.dp)
+                        shape = RoundedCornerShape(12.dp)
                     ) {
                         Text("Done")
                     }
@@ -248,16 +262,16 @@ fun DeviceSessionsScreen(
                         onClick = onNavigateBack,
                         modifier = Modifier.testTag("device_sessions_back")
                     ) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back")
                     }
                 },
                 actions = {
                     IconButton(
                         onClick = {
-                            Toast.makeText(context, "Sessions up to date ✨", Toast.LENGTH_SHORT).show()
+                            CherishToast.show("Sessions up to date ✨")
                         }
                     ) {
-                        Icon(Icons.Default.Refresh, contentDescription = "Refresh", tint = MaterialTheme.colorScheme.primary)
+                        Icon(Icons.Rounded.Refresh, contentDescription = "Refresh", tint = MaterialTheme.colorScheme.primary)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
@@ -274,7 +288,7 @@ fun DeviceSessionsScreen(
         ) {
             item {
                 Surface(
-                    shape = RoundedCornerShape(18.dp),
+                    shape = RoundedCornerShape(20.dp),
                     color = MaterialTheme.colorScheme.surfaceVariant,
                     border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                     modifier = Modifier.fillMaxWidth()
@@ -283,7 +297,7 @@ fun DeviceSessionsScreen(
                         modifier = Modifier.padding(16.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(Icons.Outlined.Devices, contentDescription = null, tint = RoseGoldPrimary, modifier = Modifier.size(28.dp))
+                        Icon(Icons.Rounded.Devices, contentDescription = null, tint = RoseGoldPrimary, modifier = Modifier.size(28.dp))
                         Spacer(modifier = Modifier.width(12.dp))
                         Column {
                             Text("Two-Person Exclusive Pairing", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface)
@@ -306,15 +320,15 @@ fun DeviceSessionsScreen(
                     Text("Active Sessions (${sessions.size})", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = MaterialTheme.colorScheme.onSurface)
                     Surface(
                         shape = RoundedCornerShape(8.dp),
-                        color = Color(0xFFE8F5E9)
+                        color = Green50
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
                         ) {
-                            Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(Color(0xFF2E7D32)))
+                            Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(Green800))
                             Spacer(modifier = Modifier.width(4.dp))
-                            Text("Protected", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFF2E7D32))
+                            Text("Protected", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Green800)
                         }
                     }
                 }
@@ -322,14 +336,20 @@ fun DeviceSessionsScreen(
 
             items(sessions, key = { it.id }) { session ->
                 val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+                // Card's own click keeps the ripple inside the rounded corners; it shrinks a touch
+                // while held, and slides into place as sessions come and go
+                val press = remember { MutableInteractionSource() }
                 Card(
+                    onClick = { selectedSessionForDetails = session },
+                    interactionSource = press,
                     shape = RoundedCornerShape(20.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                     border = BorderStroke(1.dp, if (session.isCurrent) RoseGoldPrimary.copy(alpha = 0.4f) else MaterialTheme.colorScheme.outlineVariant),
                     elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
                     modifier = Modifier
+                        .animateItem()
                         .fillMaxWidth()
-                        .clickable { selectedSessionForDetails = session }
+                        .pressScale(press)
                 ) {
                     Row(
                         modifier = Modifier.padding(16.dp),
@@ -339,13 +359,13 @@ fun DeviceSessionsScreen(
                             modifier = Modifier
                                 .size(44.dp)
                                 .clip(CircleShape)
-                                .background(if (session.isCurrent) (if (isDark) darkTone(Color(0xFF1E3A8A)) else Color(0xFFE8F5E9)) else MaterialTheme.colorScheme.surfaceVariant),
+                                .background(if (session.isCurrent) (if (isDark) darkTone(Blue900) else Green50) else MaterialTheme.colorScheme.surfaceVariant),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
-                                imageVector = if (session.isCurrent) Icons.Default.Smartphone else Icons.Default.Devices,
+                                imageVector = if (session.isCurrent) Icons.Rounded.Smartphone else Icons.Rounded.Devices,
                                 contentDescription = null,
-                                tint = if (session.isCurrent) (if (isDark) darkTone(Color(0xFF93C5FD)) else Color(0xFF2E7D32)) else RoseGoldPrimary,
+                                tint = if (session.isCurrent) (if (isDark) darkTone(Blue300) else Green800) else RoseGoldPrimary,
                                 modifier = Modifier.size(24.dp)
                             )
                         }
@@ -363,8 +383,8 @@ fun DeviceSessionsScreen(
                                 if (session.isCurrent) {
                                     Spacer(modifier = Modifier.width(6.dp))
                                     Surface(
-                                        shape = RoundedCornerShape(6.dp),
-                                        color = if (isDark) darkTone(Color(0xFF1E3A8A)) else Color(0xFF2E7D32)
+                                        shape = RoundedCornerShape(8.dp),
+                                        color = if (isDark) darkTone(Blue900) else Green800
                                     ) {
                                         Text(
                                             "This Phone",
@@ -381,14 +401,14 @@ fun DeviceSessionsScreen(
                             Text(
                                 session.ipOrLocation,
                                 fontSize = 11.sp,
-                                color = if (session.isCurrent) (if (isDark) darkTone(Color(0xFF93C5FD)) else Color(0xFF2E7D32)) else MaterialTheme.colorScheme.onSurfaceVariant
+                                color = if (session.isCurrent) (if (isDark) darkTone(Blue300) else Green800) else MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
 
                         IconButton(
                             onClick = { selectedSessionForDetails = session }
                         ) {
-                            Icon(Icons.Default.Info, contentDescription = "Details", tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f), modifier = Modifier.size(20.dp))
+                            Icon(Icons.Rounded.Info, contentDescription = "Details", tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f), modifier = Modifier.size(20.dp))
                         }
 
                         if (!session.isCurrent) {
@@ -397,7 +417,7 @@ fun DeviceSessionsScreen(
                                     sessionToRevoke = session
                                 }
                             ) {
-                                Icon(Icons.Default.DeleteOutline, contentDescription = "Revoke", tint = Color(0xFFD32F2F))
+                                Icon(Icons.Rounded.DeleteOutline, contentDescription = "Revoke", tint = Red700)
                             }
                         }
                     }
@@ -416,7 +436,7 @@ fun DeviceSessionsScreen(
                             modifier = Modifier.padding(16.dp),
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
-                            Icon(Icons.Outlined.Shield, contentDescription = null, tint = RoseGoldPrimary, modifier = Modifier.size(24.dp))
+                            Icon(Icons.Rounded.Shield, contentDescription = null, tint = RoseGoldPrimary, modifier = Modifier.size(24.dp))
                             Spacer(modifier = Modifier.height(6.dp))
                             Text(
                                 "No Other Sessions Connected",

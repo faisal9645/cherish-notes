@@ -40,6 +40,8 @@ import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 import kotlin.math.roundToInt
+import com.example.ui.components.pressScaleTarget
+import com.example.ui.components.springClickable
 
 /** One date's next time: in [daysUntil] days (0 = today), its [years]th time (null if unknown or first). */
 data class UpcomingDate(val date: ImportantDate, val daysUntil: Int, val years: Int?)
@@ -249,12 +251,12 @@ fun DatesReminderCard(
         contentAlignment = Alignment.Center
     ) {
         Surface(
-            shape = RoundedCornerShape(26.dp),
+            shape = RoundedCornerShape(28.dp),
             color = MaterialTheme.colorScheme.surface,
             modifier = Modifier
                 .padding(horizontal = 26.dp)
                 .fillMaxWidth()
-                .shadow(16.dp, RoundedCornerShape(26.dp))
+                .shadow(16.dp, RoundedCornerShape(28.dp))
                 // Taps on the card don't close it
                 .pointerInput(Unit) { detectTapGestures { } }
         ) {
@@ -295,8 +297,9 @@ fun DatesReminderCard(
                         fontWeight = FontWeight.SemiBold,
                         color = RoseGoldPrimary,
                         modifier = Modifier
+                            .pressScaleTarget()
                             .clip(RoundedCornerShape(50))
-                            .clickable { onSeeAll() }
+                            .springClickable { onSeeAll() }
                             .padding(horizontal = 12.dp, vertical = 8.dp)
                     )
                     Spacer(modifier = Modifier.width(6.dp))
@@ -304,8 +307,9 @@ fun DatesReminderCard(
                         shape = RoundedCornerShape(50),
                         color = RoseGoldPrimary,
                         modifier = Modifier
+                            .pressScaleTarget()
                             .clip(RoundedCornerShape(50))
-                            .clickable { onDismiss() }
+                            .springClickable { onDismiss() }
                             .testTag("dates_reminder_ok")
                     ) {
                         Text(

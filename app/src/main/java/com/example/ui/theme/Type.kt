@@ -37,6 +37,10 @@ val Typography =
     */
   )
 
+// The secret app's text sizes come from one scale: 9, 10, 11, 12, 13, 14, 15, 16, 18, 20, 22, 24, 28
+// and 32 sp (bigger only for emoji and big numbers), with no half sizes. Its corners likewise use
+// 4, 8, 12, 16, 20, 24 and 28 dp, or fully round.
+
 /** The secret app's typeface (Plus Jakarta Sans). The Notes disguise keeps the phone's plain font. */
 val CherishFontFamily =
   FontFamily(

@@ -54,8 +54,9 @@ fun MoodPickerSheet(
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
-        containerColor = MaterialTheme.colorScheme.surface
+        shape = com.example.ui.components.CherishDialogDefaults.sheetShape,
+        containerColor = com.example.ui.components.CherishDialogDefaults.sheetContainerColor,
+        dragHandle = { com.example.ui.components.CherishDialogDefaults.SheetDragHandle() }
     ) {
         Column(
             modifier = Modifier
@@ -72,7 +73,7 @@ fun MoodPickerSheet(
             Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = "Your partner sees it softly next to your name in chat.",
-                fontSize = 12.5.sp,
+                fontSize = 12.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
@@ -92,7 +93,7 @@ fun MoodPickerSheet(
                     Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
                         Text(
                             text = "Your mood now",
-                            fontSize = 11.5.sp,
+                            fontSize = 11.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = RoseGoldPrimary
                         )
@@ -130,7 +131,7 @@ fun MoodPickerSheet(
                 quickMoods.forEach { mood ->
                     val isSelected = mood == currentMood
                     Surface(
-                        shape = RoundedCornerShape(18.dp),
+                        shape = RoundedCornerShape(20.dp),
                         color = if (isSelected) RoseGoldPrimary.copy(alpha = 0.18f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
                         border = androidx.compose.foundation.BorderStroke(
                             1.dp,
@@ -151,7 +152,7 @@ fun MoodPickerSheet(
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
                                 text = mood.substringBeforeLast(' '),
-                                fontSize = 11.5.sp,
+                                fontSize = 11.sp,
                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                                 color = if (isSelected) RoseGoldPrimary else MaterialTheme.colorScheme.onSurface,
                                 maxLines = 1
@@ -173,7 +174,7 @@ fun MoodPickerSheet(
                 items(presets) { mood ->
                     val isSelected = mood == currentMood
                     Surface(
-                        shape = RoundedCornerShape(14.dp),
+                        shape = RoundedCornerShape(16.dp),
                         color = if (isSelected) RoseGoldPrimary.copy(alpha = 0.18f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
                         border = androidx.compose.foundation.BorderStroke(
                             1.dp,
@@ -209,7 +210,7 @@ fun MoodPickerSheet(
                     { Text("Your custom mood") }
                 } else null,
                 singleLine = true,
-                shape = RoundedCornerShape(14.dp),
+                shape = RoundedCornerShape(16.dp),
                 modifier = Modifier
                     .fillMaxWidth()
                     .testTag("custom_mood_field"),

@@ -8,9 +8,11 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.outlined.*
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.CloudDone
+import androidx.compose.material.icons.rounded.CloudDownload
+import androidx.compose.material.icons.rounded.CloudUpload
+import androidx.compose.material.icons.rounded.PhoneAndroid
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -22,6 +24,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.theme.*
+import com.example.ui.components.CherishAlertDialog
+import com.example.ui.components.CherishButton
+import com.example.ui.components.CherishOutlinedButton
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -56,7 +61,7 @@ fun CloudBackupScreen(
                         modifier = Modifier.testTag("backup_back_button")
                     ) {
                         Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
                             contentDescription = "Back"
                         )
                     }
@@ -79,7 +84,7 @@ fun CloudBackupScreen(
             item {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(22.dp),
+                    shape = RoundedCornerShape(24.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
                     border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
                 ) {
@@ -97,7 +102,7 @@ fun CloudBackupScreen(
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
-                                    imageVector = Icons.Default.CloudDone,
+                                    imageVector = Icons.Rounded.CloudDone,
                                     contentDescription = null,
                                     tint = RoseGoldPrimary,
                                     modifier = Modifier.size(20.dp)
@@ -138,7 +143,7 @@ fun CloudBackupScreen(
             item {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(22.dp),
+                    shape = RoundedCornerShape(24.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                     border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                     elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
@@ -161,13 +166,13 @@ fun CloudBackupScreen(
                             )
                             Surface(
                                 shape = RoundedCornerShape(8.dp),
-                                color = Color(0xFFE8F5E9)
+                                color = Green50
                             ) {
                                 Text(
                                     text = "Active & Authorized",
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = Color(0xFF2E7D32),
+                                    color = Green800,
                                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                                 )
                             }
@@ -216,7 +221,7 @@ fun CloudBackupScreen(
             item {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(22.dp),
+                    shape = RoundedCornerShape(24.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                     border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                     elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
@@ -241,10 +246,10 @@ fun CloudBackupScreen(
                         Spacer(modifier = Modifier.height(16.dp))
 
                         // Backup Everything Now Button
-                        Button(
+                        CherishButton(
                             onClick = { viewModel.backupNow() },
                             enabled = !uiState.isBackingUp && !uiState.isRestoring,
-                            shape = RoundedCornerShape(14.dp),
+                            shape = RoundedCornerShape(16.dp),
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = RoseGoldPrimary,
                                 contentColor = Color.White
@@ -264,7 +269,7 @@ fun CloudBackupScreen(
                                 Text("Backing up immediately...", fontWeight = FontWeight.SemiBold)
                             } else {
                                 Icon(
-                                    imageVector = Icons.Default.CloudUpload,
+                                    imageVector = Icons.Rounded.CloudUpload,
                                     contentDescription = null,
                                     modifier = Modifier.size(20.dp)
                                 )
@@ -276,10 +281,10 @@ fun CloudBackupScreen(
                         Spacer(modifier = Modifier.height(10.dp))
 
                         // Restore From Google Drive Button
-                        OutlinedButton(
+                        CherishOutlinedButton(
                             onClick = { showRestoreConfirmDialog = true },
                             enabled = !uiState.isBackingUp && !uiState.isRestoring,
-                            shape = RoundedCornerShape(14.dp),
+                            shape = RoundedCornerShape(16.dp),
                             border = BorderStroke(1.dp, RoseGoldPrimary),
                             colors = ButtonDefaults.outlinedButtonColors(
                                 contentColor = RoseGoldPrimary
@@ -299,7 +304,7 @@ fun CloudBackupScreen(
                                 Text("Restoring data...", fontWeight = FontWeight.SemiBold)
                             } else {
                                 Icon(
-                                    imageVector = Icons.Default.CloudDownload,
+                                    imageVector = Icons.Rounded.CloudDownload,
                                     contentDescription = null,
                                     modifier = Modifier.size(20.dp)
                                 )
@@ -311,7 +316,7 @@ fun CloudBackupScreen(
                         Spacer(modifier = Modifier.height(12.dp))
 
                         Surface(
-                            shape = RoundedCornerShape(10.dp),
+                            shape = RoundedCornerShape(12.dp),
                             color = MaterialTheme.colorScheme.surfaceVariant
                         ) {
                             Row(
@@ -324,7 +329,7 @@ fun CloudBackupScreen(
                                     modifier = Modifier
                                         .size(8.dp)
                                         .clip(CircleShape)
-                                        .background(Color(0xFF2E7D32))
+                                        .background(Green800)
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
@@ -343,7 +348,7 @@ fun CloudBackupScreen(
             item {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(22.dp),
+                    shape = RoundedCornerShape(24.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                     border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                     elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
@@ -355,7 +360,7 @@ fun CloudBackupScreen(
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(
-                                imageVector = Icons.Default.PhoneAndroid,
+                                imageVector = Icons.Rounded.PhoneAndroid,
                                 contentDescription = null,
                                 tint = RoseGoldPrimary,
                                 modifier = Modifier.size(20.dp)
@@ -413,14 +418,14 @@ fun CloudBackupScreen(
 
     // Confirmation dialog before restore
     if (showRestoreConfirmDialog) {
-        AlertDialog(
+        CherishAlertDialog(
             onDismissRequest = { showRestoreConfirmDialog = false },
             title = { Text("Restore From Google Drive?", fontWeight = FontWeight.Bold) },
             text = {
                 Text("This will download and merge your chat messages, photo gallery, and lifetime memories from your Google Drive backup onto this mobile device.")
             },
             confirmButton = {
-                Button(
+                CherishButton(
                     onClick = {
                         showRestoreConfirmDialog = false
                         viewModel.restoreNow()

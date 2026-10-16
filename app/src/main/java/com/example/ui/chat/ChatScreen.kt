@@ -38,12 +38,42 @@ import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.draw.shadow
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.Logout
-import androidx.compose.material.icons.automirrored.filled.MenuBook
-import androidx.compose.material.icons.automirrored.filled.Reply
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.outlined.*
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.Logout
+import androidx.compose.material.icons.automirrored.rounded.MenuBook
+import androidx.compose.material.icons.automirrored.rounded.Reply
+import androidx.compose.material.icons.outlined.HourglassTop
+import androidx.compose.material.icons.outlined.PushPin
+import androidx.compose.material.icons.rounded.ArrowDownward
+import androidx.compose.material.icons.rounded.AutoAwesome
+import androidx.compose.material.icons.rounded.Call
+import androidx.compose.material.icons.rounded.CheckBox
+import androidx.compose.material.icons.rounded.CheckBoxOutlineBlank
+import androidx.compose.material.icons.rounded.CheckCircleOutline
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.ContentCopy
+import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.DeleteSweep
+import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.ErrorOutline
+import androidx.compose.material.icons.rounded.Favorite
+import androidx.compose.material.icons.rounded.FavoriteBorder
+import androidx.compose.material.icons.rounded.HourglassTop
+import androidx.compose.material.icons.rounded.KeyboardArrowDown
+import androidx.compose.material.icons.rounded.KeyboardArrowUp
+import androidx.compose.material.icons.rounded.Lock
+import androidx.compose.material.icons.rounded.Mic
+import androidx.compose.material.icons.rounded.Mood
+import androidx.compose.material.icons.rounded.MoreVert
+import androidx.compose.material.icons.rounded.PhotoLibrary
+import androidx.compose.material.icons.rounded.PlayCircle
+import androidx.compose.material.icons.rounded.PushPin
+import androidx.compose.material.icons.rounded.Schedule
+import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.Star
+import androidx.compose.material.icons.rounded.StarOutline
+import androidx.compose.material.icons.rounded.Videocam
+import androidx.compose.material.icons.rounded.WarningAmber
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -104,6 +134,14 @@ import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import com.example.ui.components.CherishToast
+import com.example.ui.components.CherishAlertDialog
+import com.example.ui.components.CherishButton
+import com.example.ui.components.CherishOutlinedButton
+import com.example.ui.components.CherishTonalButton
+import com.example.ui.components.pressScaleTarget
+import com.example.ui.components.springClickable
+import androidx.compose.material.icons.automirrored.rounded.InsertDriveFile
 
 @Stable
 class ComposerState(initialText: String = "") {
@@ -295,9 +333,9 @@ fun ChatScreen(
         contract = ActivityResultContracts.RequestPermission()
     ) { isGranted ->
         if (isGranted) {
-            Toast.makeText(context, "Microphone enabled! Hold mic to record", Toast.LENGTH_SHORT).show()
+            CherishToast.show("Microphone enabled! Hold mic to record")
         } else {
-            Toast.makeText(context, "Microphone permission is required for voice notes", Toast.LENGTH_LONG).show()
+            CherishToast.show("Microphone permission is required for voice notes", long = true)
         }
     }
 
@@ -339,7 +377,7 @@ fun ChatScreen(
             val prefs = com.example.security.SecurityPreferences.getInstance(context)
             prefs.isExternalPickerActive = false
             prefs.ignoreNextPause = false
-            Toast.makeText(context, "Could not open camera: ${e.message}", Toast.LENGTH_SHORT).show()
+            CherishToast.show("Could not open camera: ${e.message}")
         }
     }
 
@@ -352,7 +390,7 @@ fun ChatScreen(
         if (isGranted) {
             launchRealtimeCameraSnap()
         } else {
-            Toast.makeText(context, "Camera permission needed to snap photos", Toast.LENGTH_SHORT).show()
+            CherishToast.show("Camera permission needed to snap photos")
         }
     }
 
@@ -366,7 +404,7 @@ fun ChatScreen(
         if (results.isNotEmpty() && results.values.all { it }) {
             showVideoNoteRecorder = true
         } else {
-            Toast.makeText(context, "Camera and microphone are needed for video notes", Toast.LENGTH_LONG).show()
+            CherishToast.show("Camera and microphone are needed for video notes", long = true)
         }
     }
 
@@ -1062,7 +1100,7 @@ fun ChatScreen(
                     }
                 }
                 val topBarBackgroundModifier = if (isPrivate) {
-                    val topBg = if (isDark) Color(0xFF212121) else Color.White
+                    val topBg = if (isDark) Neutral800 else Color.White
                     Modifier
                         .fillMaxWidth()
                         .background(
@@ -1167,7 +1205,7 @@ fun ChatScreen(
                                 .size(42.dp)
                                 .testTag("chat_back_button")
                         ) {
-                            TwoLineMenuIcon(tint = if (isDark) Color(0xFF9CA3AF) else Color(0xFF71717A))
+                            TwoLineMenuIcon(tint = if (isDark) Gray400 else Color(0xFF71717A))
                         }
                     } else {
                         CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides androidx.compose.ui.unit.Dp.Unspecified) {
@@ -1185,7 +1223,7 @@ fun ChatScreen(
                                     .testTag("chat_back_button")
                             ) {
                                 Icon(
-                                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                    imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
                                     contentDescription = "Back",
                                     tint = MaterialTheme.colorScheme.onSurface,
                                     modifier = Modifier.size(topBarNavIconSize)
@@ -1200,11 +1238,11 @@ fun ChatScreen(
                             onClick = { viewModel.setSearching(false) },
                             modifier = Modifier.size(40.dp)
                         ) {
-                            Icon(Icons.Default.Close, contentDescription = "Close search", modifier = Modifier.size(24.dp))
+                            Icon(Icons.Rounded.Close, contentDescription = "Close search", modifier = Modifier.size(24.dp))
                         }
                     } else {
                         val isPrivateChat = uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE
-                        val iconTint = if (isPrivateChat) (if (isDark) Color(0xFF9CA3AF) else Color(0xFF71717A)) else MaterialTheme.colorScheme.onSurface
+                        val iconTint = if (isPrivateChat) (if (isDark) Gray400 else Color(0xFF71717A)) else MaterialTheme.colorScheme.onSurface
                         if (isPrivateChat) {
                             // ChatGPT style: clean new chat and overflow icons without distracting heavy borders
                             Box(modifier = Modifier.padding(end = 6.dp)) {
@@ -1224,7 +1262,7 @@ fun ChatScreen(
                                         onClick = { showChatMenu = true },
                                         modifier = Modifier.size(44.dp)
                                     ) {
-                                        Icon(Icons.Default.MoreVert, contentDescription = "More options", tint = iconTint, modifier = Modifier.size(26.dp))
+                                        Icon(Icons.Rounded.MoreVert, contentDescription = "More options", tint = iconTint, modifier = Modifier.size(26.dp))
                                     }
                                 }
                                 DropdownMenu(
@@ -1237,7 +1275,7 @@ fun ChatScreen(
                                             showChatMenu = false
                                             startVoiceCall()
                                         },
-                                        leadingIcon = { Icon(Icons.Outlined.Call, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface) },
+                                        leadingIcon = { Icon(Icons.Rounded.Call, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface) },
                                         modifier = Modifier.testTag("chat_menu_voice_call")
                                     )
                                     DropdownMenuItem(
@@ -1246,7 +1284,7 @@ fun ChatScreen(
                                             showChatMenu = false
                                             viewModel.setSearching(true)
                                         },
-                                        leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface) }
+                                        leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface) }
                                     )
                                     DropdownMenuItem(
                                         text = { Text("Starred messages") },
@@ -1254,7 +1292,7 @@ fun ChatScreen(
                                             showChatMenu = false
                                             viewModel.toggleFilterStarred()
                                         },
-                                        leadingIcon = { Icon(Icons.Outlined.Star, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface) }
+                                        leadingIcon = { Icon(Icons.Rounded.Star, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface) }
                                     )
                                     DropdownMenuItem(
                                         text = { Text("Our Words") },
@@ -1262,7 +1300,7 @@ fun ChatScreen(
                                             showChatMenu = false
                                             onNavigateToOurWords()
                                         },
-                                        leadingIcon = { Icon(Icons.AutoMirrored.Filled.MenuBook, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface) }
+                                        leadingIcon = { Icon(Icons.AutoMirrored.Rounded.MenuBook, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface) }
                                     )
                                     DropdownMenuItem(
                                         text = { Text("Normal mode") },
@@ -1270,7 +1308,7 @@ fun ChatScreen(
                                             showChatMenu = false
                                             viewModel.toggleChatExperienceMode()
                                         },
-                                        leadingIcon = { Icon(Icons.Outlined.FavoriteBorder, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface) }
+                                        leadingIcon = { Icon(Icons.Rounded.FavoriteBorder, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface) }
                                     )
                                 }
                             }
@@ -1287,7 +1325,7 @@ fun ChatScreen(
                                         .size(topBarActionBtnSize)
                                         .testTag("chat_call_button")
                                 ) {
-                                    Icon(Icons.Outlined.Call, contentDescription = "Voice call", tint = iconTint, modifier = Modifier.size(topBarActionIconSize))
+                                    Icon(Icons.Rounded.Call, contentDescription = "Voice call", tint = iconTint, modifier = Modifier.size(topBarActionIconSize))
                                 }
                                 IconButton(
                                     onClick = { viewModel.setSearching(true) },
@@ -1295,7 +1333,7 @@ fun ChatScreen(
                                         .size(topBarActionBtnSize)
                                         .testTag("chat_search_button")
                                 ) {
-                                    Icon(Icons.Default.Search, contentDescription = "Search messages", tint = iconTint, modifier = Modifier.size(topBarActionIconSize))
+                                    Icon(Icons.Rounded.Search, contentDescription = "Search messages", tint = iconTint, modifier = Modifier.size(topBarActionIconSize))
                                 }
                                 IconButton(
                                     onClick = onNavigateToGallery,
@@ -1303,7 +1341,7 @@ fun ChatScreen(
                                         .size(topBarActionBtnSize)
                                         .testTag("chat_gallery_button")
                                 ) {
-                                    Icon(Icons.Outlined.PhotoLibrary, contentDescription = "Couple Media Gallery", tint = iconTint, modifier = Modifier.size(topBarActionIconSize))
+                                    Icon(Icons.Rounded.PhotoLibrary, contentDescription = "Couple Media Gallery", tint = iconTint, modifier = Modifier.size(topBarActionIconSize))
                                 }
                                 IconButton(
                                     onClick = { viewModel.openCheckAfterSheet() },
@@ -1312,7 +1350,7 @@ fun ChatScreen(
                                         .testTag("chat_check_after_button")
                                 ) {
                                     Icon(
-                                        imageVector = if (partnerHasCheckAfter || iHaveCheckAfter) Icons.Filled.HourglassTop else Icons.Outlined.HourglassTop,
+                                        imageVector = if (partnerHasCheckAfter || iHaveCheckAfter) Icons.Rounded.HourglassTop else Icons.Outlined.HourglassTop,
                                         contentDescription = "Check After Timer",
                                         tint = if (partnerHasCheckAfter || iHaveCheckAfter) MaterialTheme.colorScheme.primary else iconTint,
                                         modifier = Modifier.size(topBarActionIconSize)
@@ -1324,7 +1362,7 @@ fun ChatScreen(
                                         onClick = { showChatMenu = true },
                                         modifier = Modifier.size(topBarActionBtnSize)
                                     ) {
-                                        Icon(Icons.Default.MoreVert, contentDescription = "More options", tint = iconTint, modifier = Modifier.size(topBarActionIconSize + 1.dp))
+                                        Icon(Icons.Rounded.MoreVert, contentDescription = "More options", tint = iconTint, modifier = Modifier.size(topBarActionIconSize + 1.dp))
                                     }
                                     DropdownMenu(
                                         expanded = showChatMenu,
@@ -1345,7 +1383,7 @@ fun ChatScreen(
                                             showChatMenu = false
                                             showMoodPicker = true
                                         },
-                                        leadingIcon = { Icon(Icons.Outlined.Mood, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface) }
+                                        leadingIcon = { Icon(Icons.Rounded.Mood, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface) }
                                     )
                                     DropdownMenuItem(
                                         text = { Text("Starred Messages") },
@@ -1353,7 +1391,7 @@ fun ChatScreen(
                                             showChatMenu = false
                                             viewModel.toggleFilterStarred()
                                         },
-                                        leadingIcon = { Icon(Icons.Outlined.Star, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface) }
+                                        leadingIcon = { Icon(Icons.Rounded.Star, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface) }
                                     )
                                     DropdownMenuItem(
                                         text = { Text("Our Words") },
@@ -1361,7 +1399,7 @@ fun ChatScreen(
                                             showChatMenu = false
                                             onNavigateToOurWords()
                                         },
-                                        leadingIcon = { Icon(Icons.AutoMirrored.Filled.MenuBook, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface) },
+                                        leadingIcon = { Icon(Icons.AutoMirrored.Rounded.MenuBook, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface) },
                                         modifier = Modifier.testTag("chat_menu_our_words")
                                     )
                                     DropdownMenuItem(
@@ -1370,7 +1408,7 @@ fun ChatScreen(
                                             showChatMenu = false
                                             showClearChatDialog = true
                                         },
-                                        leadingIcon = { Icon(Icons.Outlined.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface) }
+                                        leadingIcon = { Icon(Icons.Rounded.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface) }
                                     )
                                     DropdownMenuItem(
                                         text = { Text("Logout") },
@@ -1379,7 +1417,7 @@ fun ChatScreen(
                                             viewModel.logout()
                                             onLoggedOut()
                                         },
-                                        leadingIcon = { Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface) }
+                                        leadingIcon = { Icon(Icons.AutoMirrored.Rounded.Logout, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface) }
                                     )
                                 }
                             }
@@ -1415,7 +1453,7 @@ fun ChatScreen(
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(Icons.Outlined.Call, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+                        Icon(Icons.Rounded.Call, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(8.dp))
                         Text("Call in progress \u00b7 tap to return", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Medium)
                     }
@@ -1534,7 +1572,7 @@ fun ChatScreen(
             }
     },
         containerColor = if (showWallpaper) Color.Transparent else if (uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE) {
-            if (isDark) Color(0xFF212121) else Color.White
+            if (isDark) Neutral800 else Color.White
         } else MaterialTheme.colorScheme.background
     ) { paddingValues ->
         Column(
@@ -1562,7 +1600,7 @@ fun ChatScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
-                            imageVector = Icons.Filled.Star,
+                            imageVector = Icons.Rounded.Star,
                             contentDescription = null,
                             tint = GoldMilestone,
                             modifier = Modifier.size(16.dp)
@@ -1600,7 +1638,7 @@ fun ChatScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Favorite,
+                            imageVector = Icons.Rounded.Favorite,
                             contentDescription = null,
                             tint = HeartRed,
                             modifier = Modifier.size(20.dp)
@@ -1613,7 +1651,7 @@ fun ChatScreen(
                             color = HeartRed,
                             modifier = Modifier.weight(1f)
                         )
-                        FilledTonalButton(
+                        CherishTonalButton(
                             onClick = { showHeartbeatTouch = true },
                             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
                             shape = RoundedCornerShape(8.dp)
@@ -1801,7 +1839,7 @@ fun ChatScreen(
                                         text = "What can I help with?",
                                         fontSize = 24.sp,
                                         fontWeight = FontWeight.Medium,
-                                        color = if (isDark) Color(0xFFECECEC) else Color(0xFF0D0D0D)
+                                        color = if (isDark) Neutral200 else InkBlack
                                     )
                                 }
                             }
@@ -1870,7 +1908,7 @@ fun ChatScreen(
                             ) {
                                 Surface(
                                     shape = RoundedCornerShape(20.dp),
-                                    color = if (isDark) darkTone(Color(0xFF1E2430)).copy(alpha = 0.95f) else Color.White.copy(alpha = 0.95f),
+                                    color = if (isDark) darkTone(Gray800).copy(alpha = 0.95f) else Color.White.copy(alpha = 0.95f),
                                     border = BorderStroke(
                                         1.dp,
                                         if (isDark) Color.White.copy(alpha = 0.12f) else Color.Black.copy(alpha = 0.08f)
@@ -1891,7 +1929,7 @@ fun ChatScreen(
                                             text = "Reliving earlier memories...",
                                             fontSize = 12.sp,
                                             fontWeight = FontWeight.Medium,
-                                            color = if (isDark) Color.White else Color(0xFF1E293B)
+                                            color = if (isDark) Color.White else NavyCard
                                         )
                                     }
                                 }
@@ -2047,8 +2085,8 @@ fun ChatScreen(
                         }
                     },
                     shape = CircleShape,
-                    color = if (isPrivate) (if (isDark) darkTone(Color(0xFF2E2F33)) else Color(0xFFE5E7EB)) else MaterialTheme.colorScheme.primary,
-                    contentColor = if (isPrivate) (if (isDark) darkTone(Color(0xFFECECEC)) else Color(0xFF1F2937)) else MaterialTheme.colorScheme.onPrimary,
+                    color = if (isPrivate) (if (isDark) darkTone(Graphite700) else Gray200) else MaterialTheme.colorScheme.primary,
+                    contentColor = if (isPrivate) (if (isDark) darkTone(Neutral200) else Gray800) else MaterialTheme.colorScheme.onPrimary,
                     shadowElevation = 4.dp,
                     modifier = Modifier.testTag("jump_to_unread")
                 ) {
@@ -2057,7 +2095,7 @@ fun ChatScreen(
                         modifier = Modifier.padding(start = 10.dp, end = 14.dp, top = 7.dp, bottom = 7.dp)
                     ) {
                         Icon(
-                            imageVector = if (unreadJumpUp[0]) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                            imageVector = if (unreadJumpUp[0]) Icons.Rounded.KeyboardArrowUp else Icons.Rounded.KeyboardArrowDown,
                             contentDescription = null,
                             modifier = Modifier.size(18.dp)
                         )
@@ -2153,14 +2191,14 @@ fun ChatScreen(
                         },
                         containerColor = if (isPrivate) {
                             if (isDark) {
-                                if (com.example.ui.theme.LocalAmoledBlack.current) Color(0xFF171717) else PrivateChromeDark
+                                if (com.example.ui.theme.LocalAmoledBlack.current) Neutral900 else PrivateChromeDark
                             } else PrivateChromeLight
                         } else MaterialTheme.colorScheme.primaryContainer,
-                        contentColor = if (isPrivate) (if (isDark) Color(0xFFECECEC) else Color(0xFF0D0D0D)) else MaterialTheme.colorScheme.onPrimaryContainer,
+                        contentColor = if (isPrivate) (if (isDark) Neutral200 else InkBlack) else MaterialTheme.colorScheme.onPrimaryContainer,
                         shape = CircleShape
                     ) {
                         Icon(
-                            imageVector = if (isPrivate) Icons.Default.ArrowDownward else Icons.Default.KeyboardArrowDown,
+                            imageVector = if (isPrivate) Icons.Rounded.ArrowDownward else Icons.Rounded.KeyboardArrowDown,
                             contentDescription = "Scroll to bottom",
                             modifier = Modifier.size(if (isPrivate) 21.dp else 24.dp)
                         )
@@ -2182,7 +2220,7 @@ fun ChatScreen(
                                 }
                                 .defaultMinSize(minWidth = 18.dp, minHeight = 18.dp)
                                 .background(
-                                    if (isPrivate) (if (isDark) darkTone(Color(0xFFECECEC)) else Color(0xFF1F2937)) else HeartRed,
+                                    if (isPrivate) (if (isDark) darkTone(Neutral200) else Gray800) else HeartRed,
                                     CircleShape
                                 )
                                 .padding(horizontal = 4.dp)
@@ -2191,7 +2229,7 @@ fun ChatScreen(
                         ) {
                             Text(
                                 text = if (unseenIncomingCount > 99) "99+" else unseenIncomingCount.toString(),
-                                color = if (isPrivate && isDark) Color(0xFF111827) else Color.White,
+                                color = if (isPrivate && isDark) Slate900 else Color.White,
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold
                             )
@@ -2202,7 +2240,7 @@ fun ChatScreen(
 
             val isPrivateChat = uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE
             if (isPrivateChat) {
-                val fadeColor = if (isDark) Color(0xFF212121) else Color.White
+                val fadeColor = if (isDark) Neutral800 else Color.White
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -2295,7 +2333,7 @@ fun ChatScreen(
             ) {
                 Surface(
                     shape = RoundedCornerShape(20.dp),
-                    color = Color(0xFF222228).copy(alpha = 0.95f),
+                    color = Graphite800.copy(alpha = 0.95f),
                     shadowElevation = 8.dp,
                     modifier = Modifier.clickable { viewModel.clearStealthToast() }
                 ) {
@@ -2446,39 +2484,39 @@ fun ChatScreen(
         val focusedIsFromMe = live.senderId == currentUserId
         val isPrivate = uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE
         val focusActions = buildList {
-            add(FocusAction("Reply", Icons.AutoMirrored.Filled.Reply) { viewModel.setReplyingTo(live) })
+            add(FocusAction("Reply", Icons.AutoMirrored.Rounded.Reply) { viewModel.setReplyingTo(live) })
             add(
                 FocusAction(
                     label = if (live.isStarred) "Unstar" else "Star",
-                    icon = if (live.isStarred) Icons.Filled.Star else Icons.Outlined.StarOutline
+                    icon = if (live.isStarred) Icons.Rounded.Star else Icons.Rounded.StarOutline
                 ) { viewModel.toggleStar(live.id) }
             )
             add(
                 FocusAction(
                     label = if (live.isPinned) "Unpin" else "Pin",
-                    icon = if (live.isPinned) Icons.Filled.PushPin else Icons.Outlined.PushPin
+                    icon = if (live.isPinned) Icons.Rounded.PushPin else Icons.Outlined.PushPin
                 ) { viewModel.togglePin(live.id) }
             )
             if (live.getTypedType() == MessageType.TEXT && live.text.isNotBlank()) {
-                add(FocusAction("Copy", Icons.Default.ContentCopy) {
+                add(FocusAction("Copy", Icons.Rounded.ContentCopy) {
                     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                     clipboard.setPrimaryClip(ClipData.newPlainText("Cherish Message", live.text))
                 })
             }
             if (focusedIsFromMe && !live.isDeleted) {
-                add(FocusAction("Edit", Icons.Default.Edit) {
+                add(FocusAction("Edit", Icons.Rounded.Edit) {
                     editingMessage = live
                     editDialogText = live.text
                 })
             }
-            add(FocusAction("Select", Icons.Default.CheckCircleOutline) {
+            add(FocusAction("Select", Icons.Rounded.CheckCircleOutline) {
                 isSelectionMode = true
                 selectedItemIds = setOf(live.id)
             })
-            add(FocusAction("Save to Memories", Icons.Outlined.FavoriteBorder) {
-                Toast.makeText(context, "Saved to Our Memories ❤️", Toast.LENGTH_SHORT).show()
+            add(FocusAction("Save to Memories", Icons.Rounded.FavoriteBorder) {
+                CherishToast.show("Saved to Our Memories ❤️")
             })
-            add(FocusAction("Delete", Icons.Outlined.Delete, isDestructive = true) { showDeleteConfirmDialog = live })
+            add(FocusAction("Delete", Icons.Rounded.Delete, isDestructive = true) { showDeleteConfirmDialog = live })
         }
         MessageFocusOverlay(
             isFromMe = focusedIsFromMe,
@@ -2540,7 +2578,7 @@ fun ChatScreen(
                 viewModel.setSearching(true)
             },
             onSaveToMemories = {
-                Toast.makeText(context, "Saved to Our Memories ❤️", Toast.LENGTH_SHORT).show()
+                CherishToast.show("Saved to Our Memories ❤️")
             }
         )
     }
@@ -2555,7 +2593,7 @@ fun ChatScreen(
                 textToSchedule = ""
                 viewModel.onTypingChanged(false)
                 showScheduleSheet = false
-                Toast.makeText(context, "Scheduled for " + formatScheduleTime(sendAt), Toast.LENGTH_SHORT).show()
+                CherishToast.show("Scheduled for " + formatScheduleTime(sendAt))
             },
             onDismiss = { showScheduleSheet = false }
         )
@@ -2611,8 +2649,9 @@ fun ChatScreen(
         ModalBottomSheet(
             onDismissRequest = { showAttachmentSheet = false },
             sheetState = attachmentSheetState,
-            containerColor = MaterialTheme.colorScheme.surface,
-            shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+            containerColor = com.example.ui.components.CherishDialogDefaults.sheetContainerColor,
+            shape = com.example.ui.components.CherishDialogDefaults.sheetShape,
+            dragHandle = { com.example.ui.components.CherishDialogDefaults.SheetDragHandle() }
         ) {
             Column(
                 modifier = Modifier
@@ -2622,7 +2661,7 @@ fun ChatScreen(
             ) {
                 Text(
                     text = "Share with your love",
-                    fontSize = 17.sp,
+                    fontSize = 16.sp,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.padding(bottom = 20.dp)
@@ -2633,7 +2672,7 @@ fun ChatScreen(
                     horizontalArrangement = Arrangement.SpaceAround
                 ) {
                     AttachmentOptionItem(
-                        icon = Icons.Outlined.PhotoLibrary,
+                        icon = Icons.Rounded.PhotoLibrary,
                         label = "Gallery",
                         color = Color(0xFF6C5CE7),
                         onClick = {
@@ -2648,7 +2687,7 @@ fun ChatScreen(
                     )
 
                     AttachmentOptionItem(
-                        icon = Icons.Default.Videocam,
+                        icon = Icons.Rounded.Videocam,
                         label = "Video",
                         color = RoseGoldPrimary,
                         onClick = {
@@ -2663,7 +2702,7 @@ fun ChatScreen(
                     )
                     
                     AttachmentOptionItem(
-                        icon = Icons.Outlined.InsertDriveFile,
+                        icon = Icons.AutoMirrored.Rounded.InsertDriveFile,
                         label = "Document",
                         color = Color(0xFF00BFA5),
                         onClick = {
@@ -2676,7 +2715,7 @@ fun ChatScreen(
                     )
 
                     AttachmentOptionItem(
-                        icon = Icons.Default.PlayCircle,
+                        icon = Icons.Rounded.PlayCircle,
                         label = "Watch Together",
                         color = Color(0xFFE53935),
                         onClick = {
@@ -2704,7 +2743,7 @@ fun ChatScreen(
 
     // Edit Message Dialog
     editingMessage?.let { msg ->
-        AlertDialog(
+        CherishAlertDialog(
             onDismissRequest = { editingMessage = null },
             title = { Text("Edit Message") },
             text = {
@@ -2715,7 +2754,7 @@ fun ChatScreen(
                 )
             },
             confirmButton = {
-                Button(
+                CherishButton(
                     onClick = {
                         viewModel.editMessage(msg.id, editDialogText)
                         editingMessage = null
@@ -2734,12 +2773,12 @@ fun ChatScreen(
 
     // Delete Confirmation Dialog
     showDeleteConfirmDialog?.let { msg ->
-        AlertDialog(
+        CherishAlertDialog(
             onDismissRequest = { showDeleteConfirmDialog = null },
             title = { Text("Delete message?") },
             text = { Text("This message will be removed from your private chat.") },
             confirmButton = {
-                Button(
+                CherishButton(
                     onClick = {
                         view.chatHaptic(ChatHaptic.Delete)
                         viewModel.deleteMessage(msg.id)
@@ -2761,14 +2800,14 @@ fun ChatScreen(
     // Multi-select Delete Confirmation Dialog
     if (showMultiDeleteConfirmDialog) {
         val count = selectedItemIds.size
-        AlertDialog(
+        CherishAlertDialog(
             onDismissRequest = { showMultiDeleteConfirmDialog = false },
             title = { Text(if (count == 1) "Delete message?" else "Delete $count messages?") },
             text = {
                 Text(if (count == 1) "This message will be removed from your private chat." else "These $count messages will be removed from your private chat.")
             },
             confirmButton = {
-                Button(
+                CherishButton(
                     onClick = {
                         view.chatHaptic(ChatHaptic.Delete)
                         viewModel.deleteMessages(selectedItemIds)
@@ -2809,7 +2848,7 @@ fun ChatScreen(
             onShowInChat = { clickedUrl ->
                 val targetMsg = uiState.messages.find { it.mediaUrl == clickedUrl || it.getAllMediaUrls().contains(clickedUrl) }
                 if (targetMsg != null && !viewModel.navigateToMessageInChat(targetMsg.id)) {
-                    Toast.makeText(context, "Older chat is hidden. Use Recover All in settings to see it.", Toast.LENGTH_LONG).show()
+                    CherishToast.show("Older chat is hidden. Use Recover All in settings to see it.", long = true)
                 }
             },
             onDeleteMedia = { clickedUrl ->
@@ -2833,11 +2872,11 @@ fun ChatScreen(
 
     // Clear Chat Dialog (clears temporary screen only, recoverable from settings)
     if (showClearChatDialog) {
-        AlertDialog(
+        CherishAlertDialog(
             onDismissRequest = { showClearChatDialog = false },
             title = {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.DeleteSweep, contentDescription = null, tint = MaterialTheme.colorScheme.error)
+                    Icon(Icons.Rounded.DeleteSweep, contentDescription = null, tint = MaterialTheme.colorScheme.error)
                     Spacer(modifier = Modifier.width(8.dp))
                     Text("Clear Chat from Screen", fontWeight = FontWeight.Bold)
                 }
@@ -2849,7 +2888,7 @@ fun ChatScreen(
                 )
             },
             confirmButton = {
-                Button(
+                CherishButton(
                     onClick = {
                         viewModel.clearChatScreenTemporarily()
                         showClearChatDialog = false
@@ -2935,7 +2974,7 @@ fun ChatScreen(
                             color = if (isPartnerOnline) OnlineGreen else MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Spacer(modifier = Modifier.height(20.dp))
-                        Button(
+                        CherishButton(
                             onClick = {
                                 val app = context.applicationContext as? com.example.CherishApplication
                                 app?.securityPreferences?.isMediaViewerActive = false
@@ -2974,9 +3013,9 @@ fun ChatScreen(
         },
         onRequestSpace = { target, note ->
             if (viewModel.requestSpace(target, note)) {
-                Toast.makeText(context, "Asked $partnerName. It starts when they accept.", Toast.LENGTH_LONG).show()
+                CherishToast.show("Asked $partnerName. It starts when they accept.", long = true)
             } else {
-                Toast.makeText(context, "Couldn't send the request. Try again.", Toast.LENGTH_SHORT).show()
+                CherishToast.show("Couldn't send the request. Try again.")
             }
         }
     )
@@ -2995,7 +3034,7 @@ private fun ChatSelectionTopBar(
                 Text(
                     text = "$selectedCount selected",
                     fontWeight = FontWeight.Bold,
-                    fontSize = 17.sp,
+                    fontSize = 16.sp,
                     color = MaterialTheme.colorScheme.onSurface
                 )
             },
@@ -3004,7 +3043,7 @@ private fun ChatSelectionTopBar(
                     onClick = onClose,
                     modifier = Modifier.testTag("chat_selection_close")
                 ) {
-                    Icon(Icons.Default.Close, contentDescription = "Cancel selection")
+                    Icon(Icons.Rounded.Close, contentDescription = "Cancel selection")
                 }
             },
             actions = {
@@ -3014,7 +3053,7 @@ private fun ChatSelectionTopBar(
                     modifier = Modifier.testTag("chat_delete_selected")
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Delete,
+                        imageVector = Icons.Rounded.Delete,
                         contentDescription = "Delete selected messages",
                         tint = if (selectedCount > 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
                     )
@@ -3042,10 +3081,10 @@ private fun UploadStatusPill(
     onDismiss: () -> Unit
 ) {
     val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
-    val accent = if (isPrivateMode) (if (isDark) darkTone(Color(0xFF9CA3AF)) else Color(0xFF6B7280)) else MaterialTheme.colorScheme.primary
+    val accent = if (isPrivateMode) (if (isDark) darkTone(Gray400) else Gray500) else MaterialTheme.colorScheme.primary
     Surface(
         shape = RoundedCornerShape(20.dp),
-        color = if (isDark) darkSurface(Color(0xFF263049), Color(0xFF181818)) else Color.White,
+        color = if (isDark) darkSurface(NavyRaised, Neutral900) else Color.White,
         border = BorderStroke(1.dp, accent.copy(alpha = if (isDark) 0.35f else 0.22f)),
         shadowElevation = 6.dp
     ) {
@@ -3069,10 +3108,10 @@ private fun UploadStatusPill(
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 IconButton(onClick = onCancel, modifier = Modifier.size(36.dp).testTag("upload_cancel")) {
-                    Icon(Icons.Default.Close, contentDescription = "Cancel sending", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(16.dp))
+                    Icon(Icons.Rounded.Close, contentDescription = "Cancel sending", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(16.dp))
                 }
             } else {
-                Icon(Icons.Default.ErrorOutline, contentDescription = null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(16.dp))
+                Icon(Icons.Rounded.ErrorOutline, contentDescription = null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(16.dp))
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
                     text = label.replaceFirstChar { it.uppercase() } + " not sent",
@@ -3088,7 +3127,7 @@ private fun UploadStatusPill(
                     Text("Retry", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = accent)
                 }
                 IconButton(onClick = onDismiss, modifier = Modifier.size(36.dp)) {
-                    Icon(Icons.Default.Close, contentDescription = "Dismiss", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(16.dp))
+                    Icon(Icons.Rounded.Close, contentDescription = "Dismiss", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(16.dp))
                 }
             }
         }
@@ -3196,7 +3235,7 @@ private fun GoodMorningGreeting(
                                 alpha = rise.value * 0.55f
                             }
                             .background(
-                                Brush.radialGradient(listOf(Color(0xFFFFF3C4), Color(0x00FFF3C4))),
+                                Brush.radialGradient(listOf(Butter, Color(0x00FFF3C4))),
                                 CircleShape
                             )
                     )
@@ -3231,12 +3270,13 @@ private fun GoodMorningGreeting(
                 Spacer(modifier = Modifier.height(16.dp))
                 Surface(
                     shape = RoundedCornerShape(50),
-                    color = if (sent) Color(0xFFFFF3C4).copy(alpha = 0.9f) else Color(0xFFFFF3C4),
+                    color = if (sent) Butter.copy(alpha = 0.9f) else Butter,
                     border = BorderStroke(1.dp, Color(0xFFE6A756).copy(alpha = 0.45f)),
                     shadowElevation = 3.dp,
                     modifier = Modifier
+                        .pressScaleTarget()
                         .clip(RoundedCornerShape(50))
-                        .clickable {
+                        .springClickable {
                             if (!sent) {
                                 sent = true
                                 onSendGoodMorning()
@@ -3306,7 +3346,7 @@ private fun ScheduleMessageDialog(text: String, onSchedule: (Long) -> Unit, onDi
             System.currentTimeMillis() + 60 * 60 * 1000L
         )
     }
-    AlertDialog(
+    CherishAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Send later", fontWeight = FontWeight.Bold) },
         text = {
@@ -3320,7 +3360,7 @@ private fun ScheduleMessageDialog(text: String, onSchedule: (Long) -> Unit, onDi
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 choices.forEachIndexed { i, at ->
-                    OutlinedButton(
+                    CherishOutlinedButton(
                         onClick = { onSchedule(at) },
                         shape = RoundedCornerShape(12.dp),
                         modifier = Modifier.fillMaxWidth()
@@ -3328,7 +3368,7 @@ private fun ScheduleMessageDialog(text: String, onSchedule: (Long) -> Unit, onDi
                         Text(if (i == 2) "In 1 hour" else formatScheduleTime(at))
                     }
                 }
-                OutlinedButton(
+                CherishOutlinedButton(
                     onClick = {
                         val now = java.util.Calendar.getInstance()
                         android.app.TimePickerDialog(
@@ -3342,7 +3382,7 @@ private fun ScheduleMessageDialog(text: String, onSchedule: (Long) -> Unit, onDi
                     shape = RoundedCornerShape(12.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Icon(Icons.Default.Schedule, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Icon(Icons.Rounded.Schedule, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(6.dp))
                     Text("Pick a time")
                 }
@@ -3359,7 +3399,7 @@ private fun ScheduledMessagesPill(next: com.example.notifications.ScheduledMessa
     val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
     Surface(
         shape = RoundedCornerShape(20.dp),
-        color = if (isDark) darkSurface(Color(0xFF263049), Color(0xFF181818)) else Color.White,
+        color = if (isDark) darkSurface(NavyRaised, Neutral900) else Color.White,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = if (isDark) 0.35f else 0.22f)),
         shadowElevation = 6.dp,
         modifier = Modifier.clickable(onClick = onClick).testTag("scheduled_messages_pill")
@@ -3368,7 +3408,7 @@ private fun ScheduledMessagesPill(next: com.example.notifications.ScheduledMessa
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
         ) {
-            Icon(Icons.Default.Schedule, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
+            Icon(Icons.Rounded.Schedule, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
             Spacer(modifier = Modifier.width(8.dp))
             Text(
                 text = (if (count > 1) "$count scheduled \u00B7 next " else "Scheduled \u00B7 ") + formatScheduleTime(next.sendAt),
@@ -3389,7 +3429,7 @@ private fun ScheduledMessagesDialog(
     onDismiss: () -> Unit
 ) {
     LaunchedEffect(messages.isEmpty()) { if (messages.isEmpty()) onDismiss() }
-    AlertDialog(
+    CherishAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Scheduled messages", fontWeight = FontWeight.Bold) },
         text = {
@@ -3401,7 +3441,7 @@ private fun ScheduledMessagesDialog(
                             Text(message.text, fontSize = 13.sp, maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                         }
                         IconButton(onClick = { onCancel(message.id) }) {
-                            Icon(Icons.Default.Close, contentDescription = "Cancel scheduled message", tint = MaterialTheme.colorScheme.error)
+                            Icon(Icons.Rounded.Close, contentDescription = "Cancel scheduled message", tint = MaterialTheme.colorScheme.error)
                         }
                     }
                 }
@@ -3491,7 +3531,7 @@ private fun ChatMessageRow(
         // Read marking is handled in the batched LaunchedEffect above the Scaffold.
         // Do NOT put Firestore writes inside LazyColumn items — they fire on every scroll.
 
-        val selectionAccent = if (isPrivate) (if (isDark) darkTone(Color(0xFF9CA3AF)) else Color(0xFF6B7280)) else RoseGoldPrimary
+        val selectionAccent = if (isPrivate) (if (isDark) darkTone(Gray400) else Gray500) else RoseGoldPrimary
 
         // A message that arrives while the chat is open lands with a spring: sent ones rise from
         // the composer, received ones slide in from the left
@@ -3516,7 +3556,7 @@ private fun ChatMessageRow(
                 glow.animateTo(0f, tween(900, easing = FastOutSlowInEasing))
             }
         }
-        val glowColor = if (isPrivate) (if (isDark) darkTone(Color(0xFF6B7280)) else Color(0xFF9CA3AF)) else RoseGoldPrimary
+        val glowColor = if (isPrivate) (if (isDark) darkTone(Gray500) else Gray400) else RoseGoldPrimary
         val rowTint = if (isSelectionMode && isSelected) {
             selectionAccent.copy(alpha = if (isDark) 0.22f else 0.14f)
         } else {
@@ -3679,7 +3719,7 @@ fun PinnedMessageBanner(
             )
             Spacer(modifier = Modifier.width(10.dp))
             Icon(
-                imageVector = Icons.Filled.PushPin,
+                imageVector = Icons.Rounded.PushPin,
                 contentDescription = null,
                 tint = RoseGoldPrimary,
                 modifier = Modifier.size(16.dp)
@@ -3705,7 +3745,7 @@ fun PinnedMessageBanner(
                 modifier = Modifier.size(28.dp)
             ) {
                 Icon(
-                    imageVector = Icons.Default.Close,
+                    imageVector = Icons.Rounded.Close,
                     contentDescription = "Unpin",
                     tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                     modifier = Modifier.size(16.dp)
@@ -3730,7 +3770,7 @@ fun MutualConsentDeletionBanner(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 6.dp),
-        shape = RoundedCornerShape(18.dp),
+        shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = if (isDark) MaterialTheme.colorScheme.surfaceVariant else if (isFromMe) Color(0xFFFFF8E1) else Color(0xFFFFEBEE)),
         border = BorderStroke(1.dp, if (isDark) MaterialTheme.colorScheme.outlineVariant else if (isFromMe) Color(0xFFFFE082) else Color(0xFFFFCDD2))
     ) {
@@ -3741,7 +3781,7 @@ fun MutualConsentDeletionBanner(
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
-                    imageVector = if (isFromMe) Icons.Default.HourglassTop else Icons.Default.WarningAmber,
+                    imageVector = if (isFromMe) Icons.Rounded.HourglassTop else Icons.Rounded.WarningAmber,
                     contentDescription = null,
                     tint = if (isFromMe) Color(0xFFF57F17) else MaterialTheme.colorScheme.error,
                     modifier = Modifier.size(20.dp)
@@ -3765,9 +3805,9 @@ fun MutualConsentDeletionBanner(
                     lineHeight = 16.sp
                 )
                 Spacer(modifier = Modifier.height(10.dp))
-                OutlinedButton(
+                CherishOutlinedButton(
                     onClick = onCancel,
-                    shape = RoundedCornerShape(10.dp),
+                    shape = RoundedCornerShape(12.dp),
                     modifier = Modifier.height(36.dp)
                 ) {
                     Text("Cancel Request", fontSize = 12.sp)
@@ -3781,17 +3821,17 @@ fun MutualConsentDeletionBanner(
                 )
                 Spacer(modifier = Modifier.height(10.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(
+                    CherishButton(
                         onClick = onAccept,
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
-                        shape = RoundedCornerShape(10.dp),
+                        shape = RoundedCornerShape(12.dp),
                         modifier = Modifier.height(36.dp)
                     ) {
                         Text("Accept & Clear Chat", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                     }
-                    OutlinedButton(
+                    CherishOutlinedButton(
                         onClick = onDecline,
-                        shape = RoundedCornerShape(10.dp),
+                        shape = RoundedCornerShape(12.dp),
                         modifier = Modifier.height(36.dp)
                     ) {
                         Text("Decline & Keep", fontSize = 12.sp)
@@ -3875,7 +3915,7 @@ fun StealthDisguiseNotesView(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(
-                    imageVector = if (checked) Icons.Default.CheckBox else Icons.Default.CheckBoxOutlineBlank,
+                    imageVector = if (checked) Icons.Rounded.CheckBox else Icons.Rounded.CheckBoxOutlineBlank,
                     contentDescription = null,
                     tint = if (checked) Color(0xFF4CAF50) else Color.LightGray,
                     modifier = Modifier.size(20.dp)
@@ -4023,7 +4063,7 @@ private fun ChatPartnerHeaderContent(
                     fontWeight = FontWeight.Bold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    color = if (isDark) Color.White else Color(0xFF0F172A)
+                    color = if (isDark) Color.White else Slate900
                 )
 
                 val partnerMood = presence.mood?.takeIf {
@@ -4032,7 +4072,7 @@ private fun ChatPartnerHeaderContent(
                 }
                 if (!partnerMood.isNullOrBlank()) {
                     Surface(
-                        shape = RoundedCornerShape(10.dp),
+                        shape = RoundedCornerShape(12.dp),
                         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.75f),
                         modifier = Modifier
                             .weight(1f, fill = false)
@@ -4101,7 +4141,7 @@ private fun ChatPartnerHeaderContent(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 color = if (partnerHasCheckAfter) {
-                    Color(0xFF3B82F6)
+                    Blue500
                 } else if (presence.isRecordingAudio || presence.isTyping || isPartnerOnline) {
                     OnlineGreen
                 } else {
@@ -4145,7 +4185,7 @@ private fun ChatPartnerTypingBubbleWrapper(
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        imageVector = Icons.Outlined.AutoAwesome,
+                        imageVector = Icons.Rounded.AutoAwesome,
                         contentDescription = null,
                         tint = Color.White,
                         modifier = Modifier.size(13.dp)
@@ -4163,7 +4203,7 @@ private fun ChatPartnerTypingBubbleWrapper(
                     modifier = Modifier
                         .size(10.dp)
                         .clip(CircleShape)
-                        .background(if (isDark) Color(0xFFECECEC).copy(alpha = dotAlpha) else Color(0xFF0D0D0D).copy(alpha = dotAlpha))
+                        .background(if (isDark) Neutral200.copy(alpha = dotAlpha) else InkBlack.copy(alpha = dotAlpha))
                 )
             }
         }
@@ -4218,8 +4258,8 @@ private fun PartnerTypingBubble(
             Spacer(modifier = Modifier.width(6.dp))
             Surface(
                 shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomEnd = 16.dp, bottomStart = 4.dp),
-                color = if (isDark) darkSurface(Color(0xFF1E2638)) else Color(0xFFF1F5FB),
-                border = BorderStroke(0.5.dp, if (isDark) darkSurface(Color(0xFF2A364F), Color(0xFF262626)) else Color(0xFFE2E8F0)),
+                color = if (isDark) darkSurface(NavyCard) else MistBlue,
+                border = BorderStroke(0.5.dp, if (isDark) darkSurface(NavyRaised, Neutral800) else Gray200),
                 shadowElevation = 0.8.dp
             ) {
                 Box(
@@ -4229,7 +4269,7 @@ private fun PartnerTypingBubble(
                     if (isRecording) {
                         RecordingBars(color = HeartRed)
                     } else {
-                        BouncingDots(color = if (isDark) darkTone(Color(0xFFCBD5E1)) else Color(0xFF64748B), pace = typingPace)
+                        BouncingDots(color = if (isDark) darkTone(Slate300) else Slate500, pace = typingPace)
                     }
                 }
             }
@@ -4246,7 +4286,7 @@ private fun RecordingBars(color: Color) {
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(
-            imageVector = Icons.Default.Mic,
+            imageVector = Icons.Rounded.Mic,
             contentDescription = "Recording a voice note",
             tint = color,
             modifier = Modifier.size(14.dp)
@@ -4272,7 +4312,7 @@ private fun RecordingBars(color: Color) {
                     .width(3.dp)
                     .height(14.dp)
                     .graphicsLayer { scaleY = level }
-                    .background(color.copy(alpha = 0.85f), RoundedCornerShape(2.dp))
+                    .background(color.copy(alpha = 0.85f), RoundedCornerShape(4.dp))
             )
         }
     }
@@ -4349,9 +4389,9 @@ fun DateSeparatorBadge(
         horizontalArrangement = Arrangement.Center
     ) {
         val lineColor = if (isPrivateMode) {
-            if (isDark) darkTone(Color(0xFF2A2B30)) else Color(0xFFE5E7EB)
+            if (isDark) darkTone(Graphite700) else Gray200
         } else {
-            if (isDark) darkTone(Color(0xFF334155)).copy(alpha = 0.5f) else Color(0xFFCBD5E1).copy(alpha = 0.7f)
+            if (isDark) darkTone(Gray700).copy(alpha = 0.5f) else Slate300.copy(alpha = 0.7f)
         }
 
         Box(
@@ -4397,16 +4437,16 @@ fun DateChip(
     Surface(
         shape = RoundedCornerShape(12.dp),
         color = if (isPrivateMode) {
-            if (isDark) darkTone(Color(0xFF232428)).copy(alpha = 0.95f) else Color(0xFFF3F4F6)
+            if (isDark) darkTone(Graphite850).copy(alpha = 0.95f) else Neutral200
         } else {
-            if (isDark) darkSurface(Color(0xFF1E293B)).copy(alpha = 0.92f) else Color(0xFFF1F5F9).copy(alpha = 0.95f)
+            if (isDark) darkSurface(NavyCard).copy(alpha = 0.92f) else MistBlue.copy(alpha = 0.95f)
         },
         border = BorderStroke(
             0.8.dp,
             if (isPrivateMode) {
-                if (isDark) darkTone(Color(0xFF374151)).copy(alpha = 0.6f) else Color(0xFFE5E7EB)
+                if (isDark) darkTone(Gray700).copy(alpha = 0.6f) else Gray200
             } else {
-                if (isDark) darkTone(Color(0xFF475569)).copy(alpha = 0.4f) else Color(0xFFE2E8F0)
+                if (isDark) darkTone(Color(0xFF475569)).copy(alpha = 0.4f) else Gray200
             }
         ),
         shadowElevation = shadowElevation,
@@ -4414,12 +4454,12 @@ fun DateChip(
     ) {
         Text(
             text = dateText,
-            fontSize = 11.5.sp,
+            fontSize = 11.sp,
             fontWeight = FontWeight.SemiBold,
             color = if (isPrivateMode) {
-                if (isDark) darkTone(Color(0xFF9CA3AF)) else Color(0xFF4B5563)
+                if (isDark) darkTone(Gray400) else Gray600
             } else {
-                if (isDark) darkTone(Color(0xFF94A3B8)) else Color(0xFF475569)
+                if (isDark) darkTone(Slate400) else Color(0xFF475569)
             },
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
         )
@@ -4439,18 +4479,18 @@ fun StrictlyTwoPersonBanner(
         contentAlignment = Alignment.Center
     ) {
         Surface(
-            shape = RoundedCornerShape(14.dp),
+            shape = RoundedCornerShape(16.dp),
             color = if (isPrivateMode) {
-                if (isDark) darkTone(Color(0xFF1E2024)).copy(alpha = 0.90f) else Color(0xFFF3F4F6)
+                if (isDark) darkTone(Graphite850).copy(alpha = 0.90f) else Neutral200
             } else {
-                if (isDark) darkTone(Color(0xFF152033)).copy(alpha = 0.92f) else Color(0xFFEFF6FF)
+                if (isDark) darkTone(NavyCard).copy(alpha = 0.92f) else MistBlue
             },
             border = BorderStroke(
                 1.dp,
                 if (isPrivateMode) {
-                    if (isDark) darkTone(Color(0xFF33353C)) else Color(0xFFE5E7EB)
+                    if (isDark) darkTone(Color(0xFF33353C)) else Gray200
                 } else {
-                    if (isDark) darkTone(Color(0xFF2563EB)).copy(alpha = 0.35f) else Color(0xFF93C5FD).copy(alpha = 0.55f)
+                    if (isDark) darkTone(Blue600).copy(alpha = 0.35f) else Blue300.copy(alpha = 0.55f)
                 }
             )
         ) {
@@ -4460,24 +4500,24 @@ fun StrictlyTwoPersonBanner(
                 horizontalArrangement = Arrangement.Center
             ) {
                 Icon(
-                    imageVector = Icons.Default.Lock,
+                    imageVector = Icons.Rounded.Lock,
                     contentDescription = null,
                     tint = if (isPrivateMode) {
-                        if (isDark) darkTone(Color(0xFF9CA3AF)) else Color(0xFF4B5563)
+                        if (isDark) darkTone(Gray400) else Gray600
                     } else {
-                        if (isDark) darkTone(Color(0xFF60A5FA)) else Color(0xFF2563EB)
+                        if (isDark) darkTone(Color(0xFF60A5FA)) else Blue600
                     },
                     modifier = Modifier.size(13.dp)
                 )
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(
                     text = "Strictly 2-Person Private Channel • End-to-End Encrypted",
-                    fontSize = 11.5.sp,
+                    fontSize = 11.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = if (isPrivateMode) {
-                        if (isDark) darkTone(Color(0xFFD1D5DB)) else Color(0xFF374151)
+                        if (isDark) darkTone(Color(0xFFD1D5DB)) else Gray700
                     } else {
-                        if (isDark) darkTone(Color(0xFF93C5FD)) else Color(0xFF1E40AF)
+                        if (isDark) darkTone(Blue300) else Color(0xFF1E40AF)
                     }
                 )
             }
@@ -4503,8 +4543,8 @@ fun StrictlyPrivateChatBeginningBanner(
         if (isPrivateMode) {
             Surface(
                 shape = RoundedCornerShape(16.dp),
-                color = if (isDark) darkTone(Color(0xFF1E2024)).copy(alpha = 0.85f) else Color(0xFFF3F4F6),
-                border = BorderStroke(1.dp, if (isDark) darkTone(Color(0xFF2E3036)) else Color(0xFFE5E7EB)),
+                color = if (isDark) darkTone(Graphite850).copy(alpha = 0.85f) else Neutral200,
+                border = BorderStroke(1.dp, if (isDark) darkTone(Graphite700) else Gray200),
                 modifier = Modifier.fillMaxWidth(0.92f)
             ) {
                 Column(
@@ -4516,24 +4556,24 @@ fun StrictlyPrivateChatBeginningBanner(
                         horizontalArrangement = Arrangement.Center
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Lock,
+                            imageVector = Icons.Rounded.Lock,
                             contentDescription = null,
-                            tint = if (isDark) darkTone(Color(0xFF9CA3AF)) else Color(0xFF4B5563),
+                            tint = if (isDark) darkTone(Gray400) else Gray600,
                             modifier = Modifier.size(15.dp)
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
                             text = "Strictly 2-Person Private Channel",
                             fontWeight = FontWeight.Bold,
-                            fontSize = 12.5.sp,
-                            color = if (isDark) darkTone(Color(0xFFE5E7EB)) else Color(0xFF1F2937)
+                            fontSize = 12.sp,
+                            color = if (isDark) darkTone(Gray200) else Gray800
                         )
                     }
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
                         text = "Messages, voice notes, and media are strictly between you and $partnerName. End-to-end encrypted.",
-                        fontSize = 11.5.sp,
-                        color = if (isDark) darkTone(Color(0xFF9CA3AF)) else Color(0xFF6B7280),
+                        fontSize = 11.sp,
+                        color = if (isDark) darkTone(Gray400) else Gray500,
                         textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                         lineHeight = 16.sp
                     )
@@ -4541,15 +4581,15 @@ fun StrictlyPrivateChatBeginningBanner(
             }
         } else {
             Surface(
-                shape = RoundedCornerShape(22.dp),
+                shape = RoundedCornerShape(24.dp),
                 color = if (isDark) {
-                    Color(0xFF151D2A).copy(alpha = 0.88f)
+                    Color(0xFF131824).copy(alpha = 0.88f)
                 } else {
-                    Color(0xFFFFFFFF).copy(alpha = 0.92f)
+                    Color.White.copy(alpha = 0.92f)
                 },
                 border = BorderStroke(
                     1.dp,
-                    if (isDark) darkTone(Color(0xFF2B3954)).copy(alpha = 0.6f) else Color(0xFFE2E8F0)
+                    if (isDark) darkTone(Color(0xFF2B3954)).copy(alpha = 0.6f) else Gray200
                 ),
                 shadowElevation = 2.dp,
                 modifier = Modifier.fillMaxWidth(0.95f)
@@ -4597,7 +4637,7 @@ fun StrictlyPrivateChatBeginningBanner(
                         ) {
                             Box(contentAlignment = Alignment.Center) {
                                 Icon(
-                                    imageVector = Icons.Default.Lock,
+                                    imageVector = Icons.Rounded.Lock,
                                     contentDescription = null,
                                     tint = RoseGoldPrimary,
                                     modifier = Modifier.size(12.dp)
@@ -4611,7 +4651,7 @@ fun StrictlyPrivateChatBeginningBanner(
                     Text(
                         text = "Strictly 2-Person Private Channel",
                         fontWeight = FontWeight.Bold,
-                        fontSize = 13.5.sp,
+                        fontSize = 13.sp,
                         color = MaterialTheme.colorScheme.onSurface
                     )
 
@@ -4619,7 +4659,7 @@ fun StrictlyPrivateChatBeginningBanner(
 
                     Text(
                         text = "Everything shared in this conversation is strictly between you and $partnerName. Zero third parties can ever join or view your messages.",
-                        fontSize = 11.5.sp,
+                        fontSize = 11.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                         lineHeight = 16.sp,
@@ -4639,7 +4679,7 @@ fun StrictlyPrivateChatBeginningBanner(
                         ) {
                             Text(
                                 text = "🔒 End-to-End Private Space",
-                                fontSize = 10.5.sp,
+                                fontSize = 10.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = RoseGoldPrimary
                             )
@@ -4762,10 +4802,10 @@ private fun ChatBottomComposerBar(
 
 
 /** The round buttons and pill at the top of private chat (ChatGPT's dark grey, with a fine edge). */
-private val PrivateChromeDark = Color(0xFF2A2A2A)
-private val PrivateChromeLight = Color(0xFFF0F0F0)
-private val PrivateChromeEdgeDark = Color(0xFF3A3A3A)
-private val PrivateChromeEdgeLight = Color(0xFFE0E0E0)
+private val PrivateChromeDark = Neutral800
+private val PrivateChromeLight = Neutral200
+private val PrivateChromeEdgeDark = Neutral700
+private val PrivateChromeEdgeLight = Neutral300
 
 @Composable
 private fun PrivateRoundButton(
@@ -4775,15 +4815,16 @@ private fun PrivateRoundButton(
     content: @Composable () -> Unit
 ) {
     val isAmoled = com.example.ui.theme.LocalAmoledBlack.current
-    val bg = if (isDark) (if (isAmoled) Color(0xFF171717) else PrivateChromeDark) else PrivateChromeLight
-    val edge = if (isDark) (if (isAmoled) Color(0xFF262626) else PrivateChromeEdgeDark) else PrivateChromeEdgeLight
+    val bg = if (isDark) (if (isAmoled) Neutral900 else PrivateChromeDark) else PrivateChromeLight
+    val edge = if (isDark) (if (isAmoled) Neutral800 else PrivateChromeEdgeDark) else PrivateChromeEdgeLight
     Box(
         contentAlignment = Alignment.Center,
         modifier = modifier
+            .pressScaleTarget()
             .clip(CircleShape)
             .background(bg)
             .border(1.dp, edge, CircleShape)
-            .clickable(onClick = onClick)
+            .springClickable(onClick = onClick)
     ) { content() }
 }
 

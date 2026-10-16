@@ -12,10 +12,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -34,6 +34,12 @@ import com.example.data.model.MovieItem
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import com.example.ui.components.CherishAlertDialog
+import com.example.ui.components.CherishButton
+import com.example.ui.components.CherishOutlinedButton
+import com.example.ui.components.CherishTonalButton
+import com.example.ui.components.pressScaleTarget
+import com.example.ui.components.springClickable
 
 /** The two of us, for naming and colouring who did what (her pink, him blue, as on the couple card). */
 class CouplePeople(
@@ -63,17 +69,18 @@ private fun TwoTabs(first: String, second: String, selected: Int, onSelect: (Int
     ) {
         listOf(first, second).forEachIndexed { index, label ->
             Surface(
-                shape = RoundedCornerShape(10.dp),
+                shape = RoundedCornerShape(12.dp),
                 color = if (selected == index) accent else Color.Transparent,
                 modifier = Modifier
                     .weight(1f)
-                    .clip(RoundedCornerShape(10.dp))
-                    .clickable { onSelect(index) }
+                    .pressScaleTarget()
+                    .clip(RoundedCornerShape(12.dp))
+                    .springClickable { onSelect(index) }
             ) {
                 Text(
                     text = label,
                     color = if (selected == index) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontSize = 12.5.sp,
+                    fontSize = 12.sp,
                     fontWeight = if (selected == index) FontWeight.Bold else FontWeight.Medium,
                     textAlign = TextAlign.Center,
                     maxLines = 1,
@@ -102,7 +109,7 @@ private fun CardHeader(emoji: String, title: String, subtitle: String, addLabel:
             Text(subtitle, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2)
         }
         FilledTonalIconButton(onClick = onAdd, modifier = Modifier.size(38.dp).testTag(addTag)) {
-            Icon(Icons.Default.Add, contentDescription = addLabel)
+            Icon(Icons.Rounded.Add, contentDescription = addLabel)
         }
     }
 }
@@ -114,7 +121,7 @@ private fun PersonChip(text: String, color: Color) {
         Text(
             text = text,
             color = color,
-            fontSize = 10.5.sp,
+            fontSize = 10.sp,
             fontWeight = FontWeight.SemiBold,
             maxLines = 1,
             modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
@@ -124,7 +131,7 @@ private fun PersonChip(text: String, color: Color) {
 
 @Composable
 private fun ConfirmDelete(what: String, onConfirm: () -> Unit, onDismiss: () -> Unit) {
-    AlertDialog(
+    CherishAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Remove “$what”?") },
         text = { Text("It's removed for both of you.") },
@@ -216,7 +223,7 @@ fun CoupleMoviesCard(
 private fun MovieRow(movie: MovieItem, people: CouplePeople, onToggleWatched: () -> Unit, onDelete: () -> Unit) {
     val iWatched = people.myId in movie.watchedAt
     Surface(
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(16.dp),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
         modifier = Modifier.fillMaxWidth().testTag("movie_${movie.id}")
     ) {
@@ -224,7 +231,7 @@ private fun MovieRow(movie: MovieItem, people: CouplePeople, onToggleWatched: ()
             Box(
                 modifier = Modifier
                     .size(42.dp)
-                    .clip(RoundedCornerShape(10.dp))
+                    .clip(RoundedCornerShape(12.dp))
                     .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.10f)),
                 contentAlignment = Alignment.Center
             ) {
@@ -235,7 +242,7 @@ private fun MovieRow(movie: MovieItem, people: CouplePeople, onToggleWatched: ()
                 Text(
                     text = movie.title,
                     fontWeight = FontWeight.Bold,
-                    fontSize = 14.5.sp,
+                    fontSize = 14.sp,
                     color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
@@ -245,7 +252,7 @@ private fun MovieRow(movie: MovieItem, people: CouplePeople, onToggleWatched: ()
                         movie.genre.ifBlank { null },
                         if (movie.addedBy.isNotBlank()) "added by ${people.nameOf(movie.addedBy)}" else null
                     ).joinToString(" • "),
-                    fontSize = 11.5.sp,
+                    fontSize = 11.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
@@ -285,10 +292,10 @@ private fun MovieRow(movie: MovieItem, people: CouplePeople, onToggleWatched: ()
                     contentColor = if (iWatched) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.primary
                 )
             ) {
-                Icon(Icons.Default.Check, contentDescription = if (iWatched) "I watched it (tap to undo)" else "I watched it", modifier = Modifier.size(18.dp))
+                Icon(Icons.Rounded.Check, contentDescription = if (iWatched) "I watched it (tap to undo)" else "I watched it", modifier = Modifier.size(18.dp))
             }
             IconButton(onClick = onDelete, modifier = Modifier.size(30.dp).testTag("movie_delete_${movie.id}")) {
-                Icon(Icons.Default.Close, contentDescription = "Remove movie", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(16.dp))
+                Icon(Icons.Rounded.Close, contentDescription = "Remove movie", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(16.dp))
             }
         }
     }
@@ -320,7 +327,7 @@ fun AddMovieDialog(
     val emojis = listOf("🍿", "🎬", "🌆", "⏳", "💌", "✨", "🚂", "💍", "☕")
     val accent = MaterialTheme.colorScheme.primary
 
-    AlertDialog(
+    CherishAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Add a movie 🍿", fontWeight = FontWeight.Bold) },
         text = {
@@ -361,16 +368,17 @@ fun AddMovieDialog(
                         Box(
                             modifier = Modifier
                                 .size(36.dp)
+                                .pressScaleTarget()
                                 .clip(CircleShape)
                                 .background(if (emoji == e) accent.copy(alpha = 0.18f) else MaterialTheme.colorScheme.surfaceVariant)
-                                .clickable { emoji = e },
+                                .springClickable { emoji = e },
                             contentAlignment = Alignment.Center
                         ) { Text(e, fontSize = 18.sp) }
                     }
                 }
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable { watchedTogether = !watchedTogether }
+                    modifier = Modifier.fillMaxWidth().pressScaleTarget().clip(RoundedCornerShape(12.dp)).springClickable { watchedTogether = !watchedTogether }
                 ) {
                     Checkbox(checked = watchedTogether, onCheckedChange = { watchedTogether = it })
                     Text("We already watched it together", fontSize = 13.sp)
@@ -385,7 +393,7 @@ fun AddMovieDialog(
             }
         },
         confirmButton = {
-            Button(
+            CherishButton(
                 onClick = {
                     onAdd(title, genre, emoji, watchedTogether, notes)
                     onDismiss()
@@ -450,14 +458,14 @@ fun CoupleBooksCard(
                         .padding(horizontal = 12.dp, vertical = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(3.dp)
                 ) {
-                    Text("Reading now", fontSize = 11.5.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary)
+                    Text("Reading now", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary)
                     listOfNotNull(
                         myReading?.let { people.myId to it },
                         partnerReading?.let { people.partnerId to it }
                     ).forEach { (userId, book) ->
                         Text(
                             text = "${people.nameOf(userId)}: ${book.emoji} ${book.title} • p. ${book.pageOf(userId)} of ${book.totalPages}",
-                            fontSize = 12.5.sp,
+                            fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.onSurface,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
@@ -514,7 +522,7 @@ fun CoupleBooksCard(
 @Composable
 private fun BookRow(book: BookItem, people: CouplePeople, onEditPage: () -> Unit, onDelete: () -> Unit) {
     Surface(
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(16.dp),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
         modifier = Modifier.fillMaxWidth().testTag("book_${book.id}")
     ) {
@@ -523,7 +531,7 @@ private fun BookRow(book: BookItem, people: CouplePeople, onEditPage: () -> Unit
                 Box(
                     modifier = Modifier
                         .size(42.dp)
-                        .clip(RoundedCornerShape(10.dp))
+                        .clip(RoundedCornerShape(12.dp))
                         .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.10f)),
                     contentAlignment = Alignment.Center
                 ) { Text(book.emoji, fontSize = 22.sp) }
@@ -532,30 +540,30 @@ private fun BookRow(book: BookItem, people: CouplePeople, onEditPage: () -> Unit
                     Text(
                         text = book.title,
                         fontWeight = FontWeight.Bold,
-                        fontSize = 14.5.sp,
+                        fontSize = 14.sp,
                         color = MaterialTheme.colorScheme.onSurface,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
                     Text(
                         text = listOfNotNull(book.author.ifBlank { null }, "${book.totalPages} pages", book.genre.ifBlank { null }).joinToString(" • "),
-                        fontSize = 11.5.sp,
+                        fontSize = 11.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
                 }
-                FilledTonalButton(
+                CherishTonalButton(
                     onClick = onEditPage,
                     contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
                     modifier = Modifier.height(32.dp).testTag("book_my_page_${book.id}")
                 ) {
-                    Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(14.dp))
+                    Icon(Icons.Rounded.Edit, contentDescription = null, modifier = Modifier.size(14.dp))
                     Spacer(modifier = Modifier.width(4.dp))
                     Text("My page", fontSize = 12.sp)
                 }
                 IconButton(onClick = onDelete, modifier = Modifier.size(30.dp).testTag("book_delete_${book.id}")) {
-                    Icon(Icons.Default.Close, contentDescription = "Remove book", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(16.dp))
+                    Icon(Icons.Rounded.Close, contentDescription = "Remove book", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(16.dp))
                 }
             }
 
@@ -573,7 +581,7 @@ private fun BookRow(book: BookItem, people: CouplePeople, onEditPage: () -> Unit
                         else -> "Not started"
                     }
                     Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        Text(people.nameOf(userId), fontSize = 11.5.sp, fontWeight = FontWeight.SemiBold, color = color, modifier = Modifier.width(64.dp), maxLines = 1)
+                        Text(people.nameOf(userId), fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = color, modifier = Modifier.width(64.dp), maxLines = 1)
                         Text(status, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f), maxLines = 1)
                     }
                     LinearProgressIndicator(
@@ -584,7 +592,7 @@ private fun BookRow(book: BookItem, people: CouplePeople, onEditPage: () -> Unit
                             .fillMaxWidth()
                             .padding(top = 3.dp, bottom = 6.dp)
                             .height(5.dp)
-                            .clip(RoundedCornerShape(3.dp))
+                            .clip(RoundedCornerShape(4.dp))
                     )
                 }
             }
@@ -610,15 +618,15 @@ private fun MyPageDialog(book: BookItem, people: CouplePeople, onDismiss: () -> 
         page = value.coerceIn(0, book.totalPages)
         pageText = page.toString()
     }
-    AlertDialog(
+    CherishAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("${book.emoji} ${book.title}", fontWeight = FontWeight.Bold, maxLines = 2) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("The page you're on (of ${book.totalPages})", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    OutlinedButton(onClick = { setPage(page - 10) }, contentPadding = PaddingValues(horizontal = 8.dp)) { Text("−10") }
-                    OutlinedButton(onClick = { setPage(page - 1) }, contentPadding = PaddingValues(horizontal = 8.dp)) { Text("−1") }
+                    CherishOutlinedButton(onClick = { setPage(page - 10) }, contentPadding = PaddingValues(horizontal = 8.dp)) { Text("−10") }
+                    CherishOutlinedButton(onClick = { setPage(page - 1) }, contentPadding = PaddingValues(horizontal = 8.dp)) { Text("−1") }
                     OutlinedTextField(
                         value = pageText,
                         onValueChange = { text ->
@@ -630,8 +638,8 @@ private fun MyPageDialog(book: BookItem, people: CouplePeople, onDismiss: () -> 
                         textStyle = LocalTextStyle.current.copy(textAlign = TextAlign.Center, fontWeight = FontWeight.Bold),
                         modifier = Modifier.weight(1f).testTag("book_page_input")
                     )
-                    OutlinedButton(onClick = { setPage(page + 1) }, contentPadding = PaddingValues(horizontal = 8.dp)) { Text("+1") }
-                    OutlinedButton(onClick = { setPage(page + 10) }, contentPadding = PaddingValues(horizontal = 8.dp)) { Text("+10") }
+                    CherishOutlinedButton(onClick = { setPage(page + 1) }, contentPadding = PaddingValues(horizontal = 8.dp)) { Text("+1") }
+                    CherishOutlinedButton(onClick = { setPage(page + 10) }, contentPadding = PaddingValues(horizontal = 8.dp)) { Text("+10") }
                 }
                 Slider(
                     value = page.toFloat(),
@@ -650,7 +658,7 @@ private fun MyPageDialog(book: BookItem, people: CouplePeople, onDismiss: () -> 
             }
         },
         confirmButton = {
-            Button(onClick = { onSave(page) }, modifier = Modifier.testTag("book_page_save")) { Text("Save") }
+            CherishButton(onClick = { onSave(page) }, modifier = Modifier.testTag("book_page_save")) { Text("Save") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
     )
@@ -685,7 +693,7 @@ fun AddBookDialog(
     val accent = MaterialTheme.colorScheme.primary
     val pages = pagesText.toIntOrNull() ?: 0
 
-    AlertDialog(
+    CherishAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Add a book 📚", fontWeight = FontWeight.Bold) },
         text = {
@@ -747,7 +755,7 @@ fun AddBookDialog(
             }
         },
         confirmButton = {
-            Button(
+            CherishButton(
                 onClick = {
                     onAdd(title, author, pages, genre, emoji, notes)
                     onDismiss()

@@ -12,9 +12,15 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.outlined.*
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.AddCircle
+import androidx.compose.material.icons.rounded.AllInclusive
+import androidx.compose.material.icons.rounded.DeleteOutline
+import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.Lock
+import androidx.compose.material.icons.rounded.MusicNote
+import androidx.compose.material.icons.rounded.Place
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -29,6 +35,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.YearlyJourneyEntry
 import com.example.ui.theme.*
+import com.example.ui.components.CherishAlertDialog
+import com.example.ui.components.CherishButton
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -83,7 +91,7 @@ fun LifetimeJourneyScreen(
                         modifier = Modifier.testTag("journey_back_button")
                     ) {
                         Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
                             contentDescription = "Back"
                         )
                     }
@@ -94,7 +102,7 @@ fun LifetimeJourneyScreen(
                         modifier = Modifier.testTag("journey_add_button")
                     ) {
                         Icon(
-                            imageVector = Icons.Default.AddCircle,
+                            imageVector = Icons.Rounded.AddCircle,
                             contentDescription = "Add Year Memory",
                             tint = RoseGoldPrimary
                         )
@@ -158,7 +166,7 @@ fun LifetimeJourneyScreen(
                                 modifier = Modifier.size(36.dp)
                             ) {
                                 Icon(
-                                    imageVector = Icons.Default.Edit,
+                                    imageVector = Icons.Rounded.Edit,
                                     contentDescription = "Edit Ages",
                                     tint = Color.White,
                                     modifier = Modifier.size(18.dp)
@@ -174,7 +182,7 @@ fun LifetimeJourneyScreen(
                             horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
                             Surface(
-                                shape = RoundedCornerShape(14.dp),
+                                shape = RoundedCornerShape(16.dp),
                                 color = MaterialTheme.colorScheme.surface.copy(alpha = 0.22f),
                                 modifier = Modifier.weight(1f)
                             ) {
@@ -189,7 +197,7 @@ fun LifetimeJourneyScreen(
                                     )
                                     Text(
                                         text = if (uiState.myCurrentAge > 0) "${uiState.myCurrentAge} Years" else "Add birthday",
-                                        fontSize = 17.sp,
+                                        fontSize = 16.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = MaterialTheme.colorScheme.surface
                                     )
@@ -197,7 +205,7 @@ fun LifetimeJourneyScreen(
                             }
 
                             Surface(
-                                shape = RoundedCornerShape(14.dp),
+                                shape = RoundedCornerShape(16.dp),
                                 color = MaterialTheme.colorScheme.surface.copy(alpha = 0.22f),
                                 modifier = Modifier.weight(1f)
                             ) {
@@ -212,7 +220,7 @@ fun LifetimeJourneyScreen(
                                     )
                                     Text(
                                         text = if (uiState.partnerCurrentAge > 0) "${uiState.partnerCurrentAge} Years" else "Add birthday",
-                                        fontSize = 17.sp,
+                                        fontSize = 16.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = MaterialTheme.colorScheme.surface
                                     )
@@ -230,7 +238,7 @@ fun LifetimeJourneyScreen(
                         .fillMaxWidth()
                         .clickable { showEditProfileDialog = true }
                         .testTag("secret_vow_card"),
-                    shape = RoundedCornerShape(22.dp),
+                    shape = RoundedCornerShape(24.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
                     border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
                 ) {
@@ -246,7 +254,7 @@ fun LifetimeJourneyScreen(
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(
-                                    imageVector = Icons.Default.Lock,
+                                    imageVector = Icons.Rounded.Lock,
                                     contentDescription = null,
                                     tint = RoseGoldPrimary,
                                     modifier = Modifier.size(18.dp)
@@ -260,7 +268,7 @@ fun LifetimeJourneyScreen(
                                 )
                             }
                             Icon(
-                                imageVector = Icons.Default.Edit,
+                                imageVector = Icons.Rounded.Edit,
                                 contentDescription = "Edit Vow",
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.size(16.dp)
@@ -296,7 +304,7 @@ fun LifetimeJourneyScreen(
                     )
 
                     Surface(
-                        shape = RoundedCornerShape(10.dp),
+                        shape = RoundedCornerShape(12.dp),
                         color = MaterialTheme.colorScheme.surfaceVariant,
                         modifier = Modifier.clickable { showAddDialog = true }
                     ) {
@@ -305,7 +313,7 @@ fun LifetimeJourneyScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Icon(
-                                imageVector = Icons.Default.Add,
+                                imageVector = Icons.Rounded.Add,
                                 contentDescription = null,
                                 tint = RoseGoldPrimary,
                                 modifier = Modifier.size(14.dp)
@@ -327,7 +335,9 @@ fun LifetimeJourneyScreen(
                 YearlyJourneyCard(
                     entry = journey,
                     onEdit = { entryToEdit = journey },
-                    onDelete = { viewModel.deleteYearlyJourney(journey.id) }
+                    onDelete = { viewModel.deleteYearlyJourney(journey.id) },
+                    // Years slide into place, and fade in and out, as they're added or deleted
+                    modifier = Modifier.animateItem()
                 )
             }
 
@@ -409,11 +419,12 @@ fun LifetimeJourneyScreen(
 fun YearlyJourneyCard(
     entry: YearlyJourneyEntry,
     onEdit: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(22.dp),
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
@@ -431,7 +442,7 @@ fun YearlyJourneyCard(
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Surface(
-                        shape = RoundedCornerShape(10.dp),
+                        shape = RoundedCornerShape(12.dp),
                         color = MaterialTheme.colorScheme.primaryContainer
                     ) {
                         Text(
@@ -455,10 +466,10 @@ fun YearlyJourneyCard(
 
                 Row {
                     IconButton(onClick = onEdit, modifier = Modifier.size(32.dp)) {
-                        Icon(Icons.Default.Edit, contentDescription = "Edit", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(16.dp))
+                        Icon(Icons.Rounded.Edit, contentDescription = "Edit", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(16.dp))
                     }
                     IconButton(onClick = onDelete, modifier = Modifier.size(32.dp)) {
-                        Icon(Icons.Default.DeleteOutline, contentDescription = "Delete", tint = HeartRed.copy(alpha = 0.7f), modifier = Modifier.size(16.dp))
+                        Icon(Icons.Rounded.DeleteOutline, contentDescription = "Delete", tint = HeartRed.copy(alpha = 0.7f), modifier = Modifier.size(16.dp))
                     }
                 }
             }
@@ -494,7 +505,7 @@ fun YearlyJourneyCard(
                         verticalAlignment = Alignment.Top
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Place,
+                            imageVector = Icons.Rounded.Place,
                             contentDescription = "Where we went",
                             tint = RoseGoldPrimary,
                             modifier = Modifier.size(18.dp)
@@ -581,7 +592,7 @@ fun YearlyJourneyCard(
                 Spacer(modifier = Modifier.height(8.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
-                        imageVector = Icons.Default.MusicNote,
+                        imageVector = Icons.Rounded.MusicNote,
                         contentDescription = null,
                         tint = RoseGoldPrimary,
                         modifier = Modifier.size(14.dp)
@@ -603,7 +614,7 @@ fun YearlyJourneyCard(
 fun LifetimeMilestonesCard() {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(22.dp),
+        shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
@@ -615,7 +626,7 @@ fun LifetimeMilestonesCard() {
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
-                    imageVector = Icons.Default.AllInclusive,
+                    imageVector = Icons.Rounded.AllInclusive,
                     contentDescription = null,
                     tint = RoseGoldPrimary,
                     modifier = Modifier.size(20.dp)
@@ -703,7 +714,7 @@ fun YearlyJourneyEditorDialog(
     var song by remember { mutableStateOf(entry?.songOrQuote ?: "") }
     var passionRating by remember { mutableIntStateOf(entry?.passionRating ?: 5) }
 
-    AlertDialog(
+    CherishAlertDialog(
         onDismissRequest = onDismiss,
         title = {
             Text(
@@ -818,7 +829,7 @@ fun YearlyJourneyEditorDialog(
             }
         },
         confirmButton = {
-            Button(
+            CherishButton(
                 onClick = {
                     val year = yearText.toIntOrNull() ?: defaultYear
                     val myAge = myAgeText.toIntOrNull() ?: defaultMyAge
@@ -851,7 +862,7 @@ fun EditLifetimeProfileDialog(
     var startYearText by remember { mutableStateOf(currentStartYear.toString()) }
     var vowText by remember { mutableStateOf(currentVow) }
 
-    AlertDialog(
+    CherishAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Our Lifetime Profile & Vow", fontWeight = FontWeight.Bold) },
         text = {
@@ -891,7 +902,7 @@ fun EditLifetimeProfileDialog(
             }
         },
         confirmButton = {
-            Button(
+            CherishButton(
                 onClick = {
                     val myBirth = myBirthText.toIntOrNull() ?: currentMyBirthYear
                     val partnerBirth = partnerBirthText.toIntOrNull() ?: currentPartnerBirthYear

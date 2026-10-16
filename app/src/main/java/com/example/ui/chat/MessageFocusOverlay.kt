@@ -26,7 +26,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -63,6 +63,8 @@ import com.example.ui.theme.HeartRed
 import com.example.ui.theme.RoseGoldPrimary
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
+import com.example.ui.components.pressScaleTarget
+import com.example.ui.components.springClickable
 
 data class FocusAction(
     val label: String,
@@ -181,7 +183,7 @@ fun MessageFocusOverlay(
 
             // Quick reactions above it, popping in one after another
             Surface(
-                shape = RoundedCornerShape(26.dp),
+                shape = RoundedCornerShape(28.dp),
                 color = MaterialTheme.colorScheme.surface,
                 shadowElevation = 10.dp,
                 modifier = Modifier
@@ -234,9 +236,10 @@ fun MessageFocusOverlay(
                         modifier = Modifier
                             .padding(start = 4.dp)
                             .size(34.dp)
+                            .pressScaleTarget()
                             .clip(CircleShape)
                             .background(MaterialTheme.colorScheme.surfaceVariant)
-                            .clickable {
+                            .springClickable {
                                 onMoreReactions()
                                 close()
                             }
@@ -244,7 +247,7 @@ fun MessageFocusOverlay(
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Add,
+                            imageVector = Icons.Rounded.Add,
                             contentDescription = "More reactions and actions",
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(20.dp)

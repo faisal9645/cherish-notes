@@ -13,6 +13,8 @@ import java.io.File
 
 data class MemoriesUiState(
     val memories: List<Memory> = emptyList(),
+    // The memories have come in at least once (until then the screen shows placeholders)
+    val isLoaded: Boolean = false,
     val isUploadingPhoto: Boolean = false,
     // Why the last memory couldn't be added (shown in the dialog), or null
     val addError: String? = null,
@@ -31,7 +33,7 @@ class MemoriesViewModel(
     init {
         viewModelScope.launch {
             coupleFeaturesRepository.listenToMemories().collect { list ->
-                _uiState.update { it.copy(memories = list) }
+                _uiState.update { it.copy(memories = list, isLoaded = true) }
             }
         }
     }

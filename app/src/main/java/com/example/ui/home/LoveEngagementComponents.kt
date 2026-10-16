@@ -17,8 +17,10 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.outlined.*
+import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Favorite
+import androidx.compose.material.icons.rounded.FavoriteBorder
+import androidx.compose.material.icons.rounded.Stars
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -40,6 +42,11 @@ import com.example.data.model.DailyQuestion
 import com.example.data.model.LoveJarNote
 import com.example.ui.theme.*
 import kotlin.random.Random
+import com.example.ui.components.CherishAlertDialog
+import com.example.ui.components.CherishButton
+import com.example.ui.components.CherishTonalButton
+import com.example.ui.components.pressScaleTarget
+import com.example.ui.components.springClickable
 
 /**
  * Instant Tactile Love Nudges Bar
@@ -92,7 +99,7 @@ fun LoveNudgesBar(
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
-                        imageVector = Icons.Default.Favorite,
+                        imageVector = Icons.Rounded.Favorite,
                         contentDescription = null,
                         tint = HeartRed,
                         modifier = Modifier.size(18.dp)
@@ -223,7 +230,7 @@ private fun NudgeButton(
                 .border(1.dp, MaterialTheme.colorScheme.outline, CircleShape),
             contentAlignment = Alignment.Center
         ) {
-            Text(text = emoji, fontSize = 23.sp)
+            Text(text = emoji, fontSize = 22.sp)
         }
         Spacer(modifier = Modifier.height(4.dp))
         Text(
@@ -268,7 +275,7 @@ fun DailyQuestionCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Surface(
-                    shape = RoundedCornerShape(10.dp),
+                    shape = RoundedCornerShape(12.dp),
                     color = RoseGoldContainer
                 ) {
                     Row(
@@ -286,7 +293,7 @@ fun DailyQuestionCard(
 
                 val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
                 Surface(
-                    shape = RoundedCornerShape(10.dp),
+                    shape = RoundedCornerShape(12.dp),
                     color = if (isDark) darkTone(Color(0xFF2E1C0C)) else Color(0xFFFFF3E0)
                 ) {
                     Row(
@@ -310,7 +317,7 @@ fun DailyQuestionCard(
             // The Question
             Text(
                 text = dailyQuestion.question,
-                fontSize = 17.sp,
+                fontSize = 16.sp,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onBackground,
                 lineHeight = 23.sp
@@ -331,7 +338,7 @@ fun DailyQuestionCard(
                         )
                     },
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(14.dp),
+                    shape = RoundedCornerShape(16.dp),
                     minLines = 2,
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = RoseGoldPrimary,
@@ -353,7 +360,7 @@ fun DailyQuestionCard(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
 
-                    Button(
+                    CherishButton(
                         onClick = {
                             if (myAnswerInput.isNotBlank()) {
                                 onSubmitAnswer(myAnswerInput)
@@ -422,7 +429,7 @@ fun DailyQuestionCard(
                             modifier = Modifier.size(28.dp)
                         ) {
                             Icon(
-                                imageVector = if (dailyQuestion.isLikedByPartner) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
+                                imageVector = if (dailyQuestion.isLikedByPartner) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
                                 contentDescription = "Like answer",
                                 tint = if (dailyQuestion.isLikedByPartner) HeartRed else MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.size(18.dp)
@@ -488,7 +495,7 @@ fun LoveJarCard(
                         .background(RoseGoldContainer),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(text = "🏺", fontSize = 26.sp)
+                    Text(text = "🏺", fontSize = 24.sp)
                 }
                 Spacer(modifier = Modifier.width(14.dp))
                 Column {
@@ -507,7 +514,7 @@ fun LoveJarCard(
             }
 
             Row {
-                FilledTonalButton(
+                CherishTonalButton(
                     onClick = onOpenJar,
                     shape = RoundedCornerShape(12.dp),
                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
@@ -548,7 +555,7 @@ fun BucketListCard(
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
-                        imageVector = Icons.Default.Stars,
+                        imageVector = Icons.Rounded.Stars,
                         contentDescription = null,
                         tint = RoseGoldPrimary,
                         modifier = Modifier.size(20.dp)
@@ -563,7 +570,7 @@ fun BucketListCard(
                 }
 
                 IconButton(onClick = onAddNew, modifier = Modifier.size(32.dp)) {
-                    Icon(Icons.Default.Add, contentDescription = "Add bucket dream", tint = RoseGoldPrimary)
+                    Icon(Icons.Rounded.Add, contentDescription = "Add bucket dream", tint = RoseGoldPrimary)
                 }
             }
 
@@ -580,8 +587,9 @@ fun BucketListCard(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(vertical = 4.dp)
+                        .pressScaleTarget()
                         .clip(RoundedCornerShape(8.dp))
-                        .clickable { onToggleItem(item.id) }
+                        .springClickable { onToggleItem(item.id) }
                         .padding(vertical = 2.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -625,7 +633,7 @@ fun DrawLoveNoteDialog(
     onDrawAnother: () -> Unit,
     onAddNote: () -> Unit
 ) {
-    AlertDialog(
+    CherishAlertDialog(
         onDismissRequest = onDismiss,
         title = {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -661,7 +669,7 @@ fun DrawLoveNoteDialog(
             }
         },
         confirmButton = {
-            Button(
+            CherishButton(
                 onClick = onDrawAnother,
                 colors = ButtonDefaults.buttonColors(containerColor = RoseGoldPrimary)
             ) {
@@ -688,10 +696,10 @@ fun AddLoveNoteDialog(
     var selectedEmoji by remember { mutableStateOf("💖") }
     val emojis = listOf("💖", "🌸", "✨", "💌", "🌟", "🥺", "☕")
 
-    AlertDialog(
+    CherishAlertDialog(
         onDismissRequest = onDismiss,
         title = {
-            Text("Drop a Note in the Love Jar 🏺", fontWeight = FontWeight.Bold, fontSize = 17.sp)
+            Text("Drop a Note in the Love Jar 🏺", fontWeight = FontWeight.Bold, fontSize = 16.sp)
         },
         text = {
             Column {
@@ -717,9 +725,10 @@ fun AddLoveNoteDialog(
                         Box(
                             modifier = Modifier
                                 .size(36.dp)
+                                .pressScaleTarget()
                                 .clip(CircleShape)
                                 .background(if (selectedEmoji == emoji) RoseGoldContainer else MaterialTheme.colorScheme.surfaceVariant)
-                                .clickable { selectedEmoji = emoji },
+                                .springClickable { selectedEmoji = emoji },
                             contentAlignment = Alignment.Center
                         ) {
                             Text(text = emoji, fontSize = 18.sp)
@@ -729,7 +738,7 @@ fun AddLoveNoteDialog(
             }
         },
         confirmButton = {
-            Button(
+            CherishButton(
                 onClick = {
                     if (text.isNotBlank()) {
                         onAdd(text, selectedEmoji)
@@ -762,7 +771,7 @@ fun AddBucketItemDialog(
     var category by remember { mutableStateOf("Romantic Dates") }
     val categories = listOf("Romantic Dates", "Travel", "Experiences", "Cozy Fun")
 
-    AlertDialog(
+    CherishAlertDialog(
         onDismissRequest = onDismiss,
         title = {
             Text("Add Couple Dream ✨", fontWeight = FontWeight.Bold, fontSize = 18.sp)
@@ -783,7 +792,7 @@ fun AddBucketItemDialog(
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(categories) { cat ->
                         Surface(
-                            shape = RoundedCornerShape(10.dp),
+                            shape = RoundedCornerShape(12.dp),
                             color = if (category == cat) RoseGoldPrimary else MaterialTheme.colorScheme.surfaceVariant,
                             modifier = Modifier.clickable { category = cat }
                         ) {
@@ -799,7 +808,7 @@ fun AddBucketItemDialog(
             }
         },
         confirmButton = {
-            Button(
+            CherishButton(
                 onClick = {
                     if (title.isNotBlank()) {
                         onAdd(title, category)

@@ -7,7 +7,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.rounded.Image
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.example.ui.theme.DayBlueSecondary
+import com.example.ui.theme.Gray200
 
 /**
  * Adaptive Media Grid for Chat & Memories.
@@ -319,7 +320,7 @@ private fun MediaTile(
 ) {
     val context = LocalContext.current
     val isDark = androidx.compose.material3.MaterialTheme.colorScheme.surface.luminance() < 0.5f
-    val tileBg = if (isDark) darkTone(Color(0xFF131824)) else Color(0xFFE2E8F0)
+    val tileBg = if (isDark) darkTone(Color(0xFF131824)) else Gray200
     // Shimmer while the photo loads; the placeholder icon only when there is nothing to show
     var isLoading by remember(url) { mutableStateOf(url.isNotBlank()) }
     var hasFailed by remember(url) { mutableStateOf(false) }
@@ -338,7 +339,7 @@ private fun MediaTile(
             )
         } else if (hasFailed || url.isBlank()) {
             Icon(
-                imageVector = Icons.Default.Image,
+                imageVector = Icons.Rounded.Image,
                 contentDescription = "Photo placeholder",
                 tint = darkTone(DayBlueSecondary).copy(alpha = 0.6f),
                 modifier = Modifier.size(36.dp)

@@ -23,9 +23,19 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.ArrowForward
+import androidx.compose.material.icons.rounded.Clear
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.ContentPaste
+import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.Movie
+import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Public
+import androidx.compose.material.icons.rounded.QueuePlayNext
+import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.TouchApp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -49,6 +59,8 @@ import coil.compose.AsyncImage
 import com.example.ui.security.EmergencyExitHandle
 import kotlinx.coroutines.delay
 import java.net.URLEncoder
+import com.example.ui.components.CherishButton
+import com.example.ui.components.CherishTonalButton
 
 /**
  * Extracts the 11-character YouTube video ID from any link, embed, shorts, or raw ID.
@@ -306,7 +318,7 @@ fun WatchPartyYouTubePickerModal(
                                     .clip(CircleShape)
                                     .background(ink.copy(alpha = 0.08f))
                             ) {
-                                Icon(Icons.Default.Close, contentDescription = "Close", tint = ink)
+                                Icon(Icons.Rounded.Close, contentDescription = "Close", tint = ink)
                             }
 
                             Spacer(modifier = Modifier.width(10.dp))
@@ -315,14 +327,14 @@ fun WatchPartyYouTubePickerModal(
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Surface(
                                         shape = CircleShape,
-                                        color = Color(0xFFFF0000).copy(alpha = 0.15f),
+                                        color = Color.Red.copy(alpha = 0.15f),
                                         modifier = Modifier.size(20.dp)
                                     ) {
                                         Box(contentAlignment = Alignment.Center) {
                                             Icon(
-                                                Icons.Default.PlayArrow,
+                                                Icons.Rounded.PlayArrow,
                                                 contentDescription = null,
-                                                tint = Color(0xFFFF0000),
+                                                tint = Color.Red,
                                                 modifier = Modifier.size(13.dp)
                                             )
                                         }
@@ -357,7 +369,7 @@ fun WatchPartyYouTubePickerModal(
                                     modifier = Modifier.size(34.dp)
                                 ) {
                                     Icon(
-                                        Icons.AutoMirrored.Filled.ArrowBack,
+                                        Icons.AutoMirrored.Rounded.ArrowBack,
                                         contentDescription = "Back",
                                         tint = if (canGoBack) ink else ink.copy(alpha = 0.25f),
                                         modifier = Modifier.size(18.dp)
@@ -369,7 +381,7 @@ fun WatchPartyYouTubePickerModal(
                                     modifier = Modifier.size(34.dp)
                                 ) {
                                     Icon(
-                                        Icons.AutoMirrored.Filled.ArrowForward,
+                                        Icons.AutoMirrored.Rounded.ArrowForward,
                                         contentDescription = "Forward",
                                         tint = if (canGoForward) ink else ink.copy(alpha = 0.25f),
                                         modifier = Modifier.size(18.dp)
@@ -380,7 +392,7 @@ fun WatchPartyYouTubePickerModal(
                                     modifier = Modifier.size(34.dp)
                                 ) {
                                     Icon(
-                                        Icons.Default.Refresh,
+                                        Icons.Rounded.Refresh,
                                         contentDescription = "Refresh",
                                         tint = ink,
                                         modifier = Modifier.size(18.dp)
@@ -398,7 +410,7 @@ fun WatchPartyYouTubePickerModal(
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Surface(
-                            shape = RoundedCornerShape(10.dp),
+                            shape = RoundedCornerShape(12.dp),
                             color = if (currentTab == 0) accent else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
                             modifier = Modifier
                                 .weight(1f)
@@ -410,7 +422,7 @@ fun WatchPartyYouTubePickerModal(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Icon(
-                                    Icons.Default.Movie,
+                                    Icons.Rounded.Movie,
                                     contentDescription = null,
                                     tint = if (currentTab == 0) MaterialTheme.colorScheme.onPrimary else ink,
                                     modifier = Modifier.size(15.dp)
@@ -426,7 +438,7 @@ fun WatchPartyYouTubePickerModal(
                         }
 
                         Surface(
-                            shape = RoundedCornerShape(10.dp),
+                            shape = RoundedCornerShape(12.dp),
                             color = if (currentTab == 1) accent else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
                             modifier = Modifier
                                 .weight(1f)
@@ -443,7 +455,7 @@ fun WatchPartyYouTubePickerModal(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Icon(
-                                    Icons.Default.Public,
+                                    Icons.Rounded.Public,
                                     contentDescription = null,
                                     tint = if (currentTab == 1) MaterialTheme.colorScheme.onPrimary else ink,
                                     modifier = Modifier.size(15.dp)
@@ -475,7 +487,7 @@ fun WatchPartyYouTubePickerModal(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Icon(
-                                imageVector = Icons.Default.Search,
+                                imageVector = Icons.Rounded.Search,
                                 contentDescription = "Search",
                                 tint = accent,
                                 modifier = Modifier.size(18.dp)
@@ -490,7 +502,7 @@ fun WatchPartyYouTubePickerModal(
                                 singleLine = true,
                                 textStyle = androidx.compose.ui.text.TextStyle(
                                     color = ink,
-                                    fontSize = 13.5.sp,
+                                    fontSize = 13.sp,
                                     fontWeight = FontWeight.Normal
                                 ),
                                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
@@ -512,7 +524,7 @@ fun WatchPartyYouTubePickerModal(
                                     modifier = Modifier.size(28.dp)
                                 ) {
                                     Icon(
-                                        Icons.Default.Clear,
+                                        Icons.Rounded.Clear,
                                         contentDescription = "Clear",
                                         tint = ink.copy(alpha = 0.5f),
                                         modifier = Modifier.size(16.dp)
@@ -524,14 +536,14 @@ fun WatchPartyYouTubePickerModal(
                                 modifier = Modifier.size(28.dp)
                             ) {
                                 Icon(
-                                    Icons.Default.ContentPaste,
+                                    Icons.Rounded.ContentPaste,
                                     contentDescription = "Paste",
                                     tint = accent,
                                     modifier = Modifier.size(16.dp)
                                 )
                             }
                             Spacer(modifier = Modifier.width(4.dp))
-                            FilledTonalButton(
+                            CherishTonalButton(
                                 onClick = { navigateOrSearch(searchQuery) },
                                 enabled = searchQuery.isNotBlank(),
                                 shape = RoundedCornerShape(8.dp),
@@ -540,7 +552,7 @@ fun WatchPartyYouTubePickerModal(
                             ) {
                                 Text(
                                     text = if (queryVideoId != null) "Play" else "Go",
-                                    fontSize = 11.5.sp,
+                                    fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold
                                 )
                             }
@@ -597,7 +609,7 @@ fun WatchPartyYouTubePickerModal(
                                             modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
-                                            Icon(Icons.Default.ContentPaste, contentDescription = null, tint = accent, modifier = Modifier.size(13.dp))
+                                            Icon(Icons.Rounded.ContentPaste, contentDescription = null, tint = accent, modifier = Modifier.size(13.dp))
                                             Spacer(modifier = Modifier.width(4.dp))
                                             Text("Paste Copied Video", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = accent)
                                         }
@@ -616,7 +628,7 @@ fun WatchPartyYouTubePickerModal(
                                     ) {
                                         Text(
                                             text = cat,
-                                            fontSize = 11.5.sp,
+                                            fontSize = 11.sp,
                                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                                             color = if (isSelected) accent else ink,
                                             modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
@@ -628,7 +640,7 @@ fun WatchPartyYouTubePickerModal(
                             // If searching with text, offer web search jump button
                             if (searchQuery.isNotBlank() && queryVideoId == null) {
                                 Surface(
-                                    shape = RoundedCornerShape(10.dp),
+                                    shape = RoundedCornerShape(12.dp),
                                     color = accent.copy(alpha = 0.1f),
                                     modifier = Modifier
                                         .fillMaxWidth()
@@ -639,16 +651,16 @@ fun WatchPartyYouTubePickerModal(
                                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Icon(Icons.Default.Search, contentDescription = null, tint = accent, modifier = Modifier.size(16.dp))
+                                        Icon(Icons.Rounded.Search, contentDescription = null, tint = accent, modifier = Modifier.size(16.dp))
                                         Spacer(modifier = Modifier.width(8.dp))
                                         Text(
                                             text = "Search full YouTube for “$searchQuery” 🌐",
-                                            fontSize = 12.5.sp,
+                                            fontSize = 12.sp,
                                             fontWeight = FontWeight.SemiBold,
                                             color = accent,
                                             modifier = Modifier.weight(1f)
                                         )
-                                        Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, tint = accent, modifier = Modifier.size(14.dp))
+                                        Icon(Icons.AutoMirrored.Rounded.ArrowForward, contentDescription = null, tint = accent, modifier = Modifier.size(14.dp))
                                     }
                                 }
                             }
@@ -713,7 +725,7 @@ fun WatchPartyYouTubePickerModal(
                                                         )
                                                     }
                                                     IconButton(onClick = { app.coupleFeaturesRepository.removeWatchLaterVideo(v.id) }) {
-                                                        Icon(Icons.Default.Delete, contentDescription = "Remove", tint = MaterialTheme.colorScheme.error)
+                                                        Icon(Icons.Rounded.Delete, contentDescription = "Remove", tint = MaterialTheme.colorScheme.error)
                                                     }
                                                 }
                                             }
@@ -776,7 +788,7 @@ fun WatchPartyYouTubePickerModal(
                                                     Text(
                                                         text = item.title,
                                                         color = ink,
-                                                        fontSize = 13.5.sp,
+                                                        fontSize = 13.sp,
                                                         fontWeight = FontWeight.Bold,
                                                         maxLines = 2,
                                                         overflow = TextOverflow.Ellipsis
@@ -785,20 +797,20 @@ fun WatchPartyYouTubePickerModal(
                                                     Text(
                                                         text = item.description,
                                                         color = ink.copy(alpha = 0.6f),
-                                                        fontSize = 11.5.sp,
+                                                        fontSize = 11.sp,
                                                         maxLines = 1,
                                                         overflow = TextOverflow.Ellipsis
                                                     )
                                                     Spacer(modifier = Modifier.height(6.dp))
                                                     Row(verticalAlignment = Alignment.CenterVertically) {
-                                                        FilledTonalButton(
+                                                        CherishTonalButton(
                                                             onClick = { onStart(item.videoId, item.title) },
                                                             shape = RoundedCornerShape(8.dp),
                                                             contentPadding = PaddingValues(horizontal = 10.dp, vertical = 3.dp),
                                                             modifier = Modifier.height(28.dp)
                                                         ) {
                                                             Icon(
-                                                                Icons.Default.PlayArrow,
+                                                                Icons.Rounded.PlayArrow,
                                                                 contentDescription = null,
                                                                 modifier = Modifier.size(13.dp)
                                                             )
@@ -1054,11 +1066,11 @@ fun WatchPartyYouTubePickerModal(
                                         modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Icon(Icons.Default.TouchApp, contentDescription = null, tint = accent, modifier = Modifier.size(14.dp))
+                                        Icon(Icons.Rounded.TouchApp, contentDescription = null, tint = accent, modifier = Modifier.size(14.dp))
                                         Spacer(modifier = Modifier.width(6.dp))
                                         Text(
                                             text = "Tap any video to sync & start Watch Together 🍿",
-                                            fontSize = 11.5.sp,
+                                            fontSize = 11.sp,
                                             color = Color.White
                                         )
                                     }
@@ -1148,11 +1160,11 @@ fun WatchPartyYouTubePickerModal(
                                             ),
                                             modifier = Modifier.size(42.dp)
                                         ) {
-                                            Icon(Icons.Default.QueuePlayNext, contentDescription = "Add to Up Next")
+                                            Icon(Icons.Rounded.QueuePlayNext, contentDescription = "Add to Up Next")
                                         }
                                     }
 
-                                    Button(
+                                    CherishButton(
                                         onClick = {
                                             onStart(activeId, detectedVideoTitle.ifBlank { "Watch Together" })
                                         },
@@ -1161,7 +1173,7 @@ fun WatchPartyYouTubePickerModal(
                                         contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
                                         modifier = Modifier.testTag("watch_party_start").height(42.dp)
                                     ) {
-                                        Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
+                                        Icon(Icons.Rounded.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
                                         Spacer(modifier = Modifier.width(4.dp))
                                         Text(
                                             text = "Watch Together 🍿",

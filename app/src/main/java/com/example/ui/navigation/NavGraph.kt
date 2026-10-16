@@ -28,15 +28,14 @@ import androidx.navigation.compose.rememberNavController
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.material3.*
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CloudDownload
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.SystemUpdate
+import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.CloudDownload
+import androidx.compose.material.icons.rounded.SystemUpdate
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
-import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -73,6 +72,10 @@ import com.example.ui.notes.SharedNotesScreen
 import com.example.ui.notes.SharedNotesViewModel
 import com.example.ui.profile.ProfileScreen
 import com.example.ui.profile.ProfileViewModel
+import com.example.ui.components.CherishToast
+import com.example.ui.components.CherishAlertDialog
+import com.example.ui.components.CherishButton
+import com.example.ui.components.CherishOutlinedButton
 
 /** The update check waits this long after the app is opened. */
 private const val UPDATE_CHECK_DELAY_MS = 4_000L
@@ -496,7 +499,7 @@ fun CherishNavGraph(
                         app.securityPreferences.ignoreChatNavigation = false
                         navController.popBackStack()
                     } else {
-                        android.widget.Toast.makeText(context, "Older chat is hidden. Use Recover All in settings to see it.", android.widget.Toast.LENGTH_LONG).show()
+                        CherishToast.show("Older chat is hidden. Use Recover All in settings to see it.", long = true)
                     }
                 }
             )
@@ -517,7 +520,7 @@ fun CherishNavGraph(
                             navController.navigate(Screen.Chat.route) { launchSingleTop = true }
                         }
                     } else {
-                        android.widget.Toast.makeText(context, "Older chat is hidden. Use Recover All in settings to see it.", android.widget.Toast.LENGTH_LONG).show()
+                        CherishToast.show("Older chat is hidden. Use Recover All in settings to see it.", long = true)
                     }
                 }
             )
@@ -638,6 +641,8 @@ fun CherishNavGraph(
             app = app,
             allowed = !isDisguiseActive && !isAppLocked
         )
+        // The app's own toasts, above every screen and under the lock and Notes, which hide them
+        com.example.ui.components.CherishToastHost(visible = !isDisguiseActive && !isAppLocked)
         }
 
     // App Lock overlay if locked and not in disguise
@@ -703,7 +708,7 @@ fun CherishNavGraph(
     if (updateState.showDialog && !isDisguiseActive) {
         // Takes focus without a touch; tells the privacy cover it isn't the user leaving
         SideEffect { PrivacyShield.noteInAppWindow() }
-        AlertDialog(
+        CherishAlertDialog(
             onDismissRequest = {
                 if (!updateState.isDownloading) profileViewModel.dismissUpdateDialog()
             },
@@ -724,10 +729,10 @@ fun CherishNavGraph(
                     ) {
                         Icon(
                             imageVector = when {
-                                updateState.isDownloading -> Icons.Default.CloudDownload
-                                updateState.isReadyToInstall -> Icons.Default.CheckCircle
-                                updateState.isUpdateAvailable -> Icons.Default.SystemUpdate
-                                else -> Icons.Default.CheckCircle
+                                updateState.isDownloading -> Icons.Rounded.CloudDownload
+                                updateState.isReadyToInstall -> Icons.Rounded.CheckCircle
+                                updateState.isUpdateAvailable -> Icons.Rounded.SystemUpdate
+                                else -> Icons.Rounded.CheckCircle
                             },
                             contentDescription = "System Update",
                             tint = MaterialTheme.colorScheme.primary,
@@ -745,7 +750,7 @@ fun CherishNavGraph(
                             updateState.isUpdateAvailable -> "Update Available!"
                             else -> "Cherish is Up to Date"
                         },
-                        fontSize = 19.sp,
+                        fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface,
                         textAlign = TextAlign.Center
@@ -863,23 +868,23 @@ fun CherishNavGraph(
                     updateState.isDownloading -> {
                     }
                     updateState.isReadyToInstall -> {
-                        Button(
+                        CherishButton(
                             onClick = { profileViewModel.triggerInstall(context) },
                             colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                             shape = RoundedCornerShape(12.dp)
                         ) {
-                            Icon(Icons.Default.SystemUpdate, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Icon(Icons.Rounded.SystemUpdate, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(6.dp))
                             Text("Install Now", fontWeight = FontWeight.Bold)
                         }
                     }
                     updateState.isUpdateAvailable -> {
-                        Button(
+                        CherishButton(
                             onClick = { profileViewModel.downloadAndInstallUpdate(context) },
                             colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                             shape = RoundedCornerShape(12.dp)
                         ) {
-                            Icon(Icons.Default.CloudDownload, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Icon(Icons.Rounded.CloudDownload, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(6.dp))
                             Text("Download & Install", fontWeight = FontWeight.Bold)
                         }
@@ -887,14 +892,14 @@ fun CherishNavGraph(
                     !updateState.isChecking -> {
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             if (!updateState.downloadUrl.isNullOrBlank()) {
-                                OutlinedButton(
+                                CherishOutlinedButton(
                                     onClick = { profileViewModel.downloadAndInstallUpdate(context) },
                                     shape = RoundedCornerShape(12.dp)
                                 ) {
                                     Text("Re-download Build", fontSize = 12.sp)
                                 }
                             }
-                            Button(
+                            CherishButton(
                                 onClick = { profileViewModel.dismissUpdateDialog() },
                                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                                 shape = RoundedCornerShape(12.dp)

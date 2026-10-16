@@ -11,7 +11,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -45,12 +45,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
+import com.example.ui.theme.HeartPink
+import com.example.ui.theme.Indigo950
+import com.example.ui.theme.LovePink
 
 /**
  * The heartbeat colours, also used by Heartbeat Touch and the Both of us card: pink and the app's
  * own blue, the same in every theme.
  */
-val HeartbeatPink = Color(0xFFFF4F9A) // neon rose
+val HeartbeatPink = LovePink // neon rose
 val HeartbeatBlue = com.example.ui.theme.DayBluePrimary
 
 private const val SENT_STATUS = "Heartbeat sent... 💓"
@@ -152,7 +155,7 @@ fun HeartbeatButton(
         ) {
             Surface(
                 shape = CircleShape,
-                color = Color(0xFF1E1B4B).copy(alpha = 0.94f),
+                color = Indigo950.copy(alpha = 0.94f),
                 border = BorderStroke(1.2.dp, HeartbeatPink.copy(alpha = 0.8f)),
                 shadowElevation = 8.dp,
                 modifier = Modifier
@@ -165,7 +168,7 @@ fun HeartbeatButton(
                 ) {
                     Text(
                         text = feltStatus.orEmpty(),
-                        fontSize = 12.5.sp,
+                        fontSize = 12.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = Color.White,
                         maxLines = 1
@@ -221,7 +224,7 @@ fun HeartbeatButton(
                 .testTag("love_heartbeat_button")
         ) {
             Icon(
-                imageVector = Icons.Filled.Favorite,
+                imageVector = Icons.Rounded.Favorite,
                 contentDescription = "Heartbeat Touch",
                 tint = Color.White,
                 modifier = Modifier.size(34.dp)
@@ -271,7 +274,7 @@ fun HeartbeatButton(
         // A vibrant bouquet of glowing hearts floats upward with sway & scale
         FloatingHeartSpecs.forEach { spec ->
             Icon(
-                imageVector = Icons.Filled.Favorite,
+                imageVector = Icons.Rounded.Favorite,
                 contentDescription = null,
                 tint = spec.color,
                 modifier = Modifier
@@ -323,12 +326,12 @@ private val FloatingHeartSpecs = listOf(
     // Prominent hero heart in the center
     HeartSpec(size = 32.dp, color = HeartbeatPink, targetY = 160f, targetX = 0f, swayFreq = 6f, delay = 0f),
     // Flanking large & medium hearts
-    HeartSpec(size = 26.dp, color = Color(0xFFFF2D55), targetY = 175f, targetX = -28f, swayFreq = 8f, delay = 0.05f),
+    HeartSpec(size = 26.dp, color = HeartPink, targetY = 175f, targetX = -28f, swayFreq = 8f, delay = 0.05f),
     HeartSpec(size = 26.dp, color = Color(0xFFFF3366), targetY = 180f, targetX = 28f, swayFreq = 7f, delay = 0.07f),
     // Drifting accent hearts
     HeartSpec(size = 20.dp, color = Color(0xFFFF6584), targetY = 190f, targetX = -48f, swayFreq = 9f, delay = 0.12f),
-    HeartSpec(size = 20.dp, color = Color(0xFFFF4F9A), targetY = 195f, targetX = 46f, swayFreq = 9f, delay = 0.15f),
+    HeartSpec(size = 20.dp, color = LovePink, targetY = 195f, targetX = 46f, swayFreq = 9f, delay = 0.15f),
     // High-flying sparkling mini hearts
     HeartSpec(size = 16.dp, color = Color(0xFFFF7597), targetY = 210f, targetX = -18f, swayFreq = 11f, delay = 0.20f),
-    HeartSpec(size = 16.dp, color = Color(0xFFFF2D55), targetY = 215f, targetX = 20f, swayFreq = 10f, delay = 0.22f)
+    HeartSpec(size = 16.dp, color = HeartPink, targetY = 215f, targetX = 20f, swayFreq = 10f, delay = 0.22f)
 )

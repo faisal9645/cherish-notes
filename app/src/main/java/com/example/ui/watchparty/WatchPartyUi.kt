@@ -23,7 +23,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -53,6 +53,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.toSize
 import com.example.CherishApplication
 import com.example.data.model.WatchPartySession
+import com.example.ui.components.CherishButton
 
 /** How the Watch Party shows on this phone: not at all, full screen, or small while doing other things. */
 enum class WatchPartyMode { Hidden, Theater, Mini }
@@ -210,7 +211,7 @@ fun WatchPartyInvite(modifier: Modifier = Modifier) {
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.padding(start = 14.dp, end = 4.dp, top = 5.dp, bottom = 5.dp)
             ) {
-                Text("🍿", fontSize = 17.sp)
+                Text("🍿", fontSize = 16.sp)
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
                     text = line,
@@ -222,7 +223,7 @@ fun WatchPartyInvite(modifier: Modifier = Modifier) {
                     modifier = Modifier.weight(1f)
                 )
                 Spacer(modifier = Modifier.width(6.dp))
-                Button(
+                CherishButton(
                     onClick = {
                         app.coupleFeaturesRepository.markWatchingParty(true)
                         WatchPartyUi.openTheater()
@@ -240,7 +241,7 @@ fun WatchPartyInvite(modifier: Modifier = Modifier) {
                     modifier = Modifier.size(32.dp)
                 ) {
                     Icon(
-                        Icons.Default.Close,
+                        Icons.Rounded.Close,
                         contentDescription = "Not now",
                         tint = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f),
                         modifier = Modifier.size(16.dp)

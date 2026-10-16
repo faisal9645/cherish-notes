@@ -8,8 +8,10 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.CalendarMonth
+import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -30,6 +32,11 @@ import com.example.ui.theme.appGradientShadow
 import com.example.ui.theme.appHorizontalGradient
 import java.util.Calendar
 import java.util.TimeZone
+import com.example.ui.components.CherishAlertDialog
+import com.example.ui.components.CherishButton
+import com.example.ui.components.CherishOutlinedButton
+import com.example.ui.components.pressScaleTarget
+import com.example.ui.components.springClickable
 
 /** Categories in the order they're offered when adding a date. */
 private val CATEGORY_ORDER = listOf(
@@ -87,7 +94,7 @@ fun ImportantDatesScreen(
                         onClick = onNavigateBack,
                         modifier = Modifier.testTag("dates_back_button")
                     ) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -98,16 +105,17 @@ fun ImportantDatesScreen(
         floatingActionButton = {
             Box(
                 modifier = Modifier
+                    .pressScaleTarget()
                     .appGradientShadow(CircleShape)
                     .clip(CircleShape)
                     .background(appHorizontalGradient())
                     .size(56.dp)
-                    .clickable { addDialogFor = "" to DateCategory.ANNIVERSARY }
+                    .springClickable { addDialogFor = "" to DateCategory.ANNIVERSARY }
                     .testTag("add_date_fab"),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    imageVector = Icons.Default.Add,
+                    imageVector = Icons.Rounded.Add,
                     contentDescription = "Add a date",
                     tint = Color.White,
                     modifier = Modifier.size(24.dp)
@@ -148,7 +156,9 @@ fun ImportantDatesScreen(
                     pill = DateReminders.whenLabel(next.daysUntil),
                     pillHighlighted = next.daysUntil <= 1,
                     extra = DateReminders.yearsLabel(next),
-                    onDelete = { pendingDelete = next.date }
+                    onDelete = { pendingDelete = next.date },
+                    // Dates slide into place, and fade in and out, as they're added or deleted
+                    modifier = Modifier.animateItem()
                 )
             }
 
@@ -173,7 +183,8 @@ fun ImportantDatesScreen(
                         pill = if (daysAgo <= 1) "Yesterday" else "$daysAgo days ago",
                         pillHighlighted = false,
                         extra = null,
-                        onDelete = { pendingDelete = date }
+                        onDelete = { pendingDelete = date },
+                        modifier = Modifier.animateItem()
                     )
                 }
             }
@@ -195,7 +206,7 @@ fun ImportantDatesScreen(
     }
 
     pendingDelete?.let { date ->
-        AlertDialog(
+        CherishAlertDialog(
             onDismissRequest = { pendingDelete = null },
             title = { Text("Delete this date?") },
             text = { Text("\"${date.title}\" will be removed for both of you.") },
@@ -219,15 +230,15 @@ fun ImportantDatesScreen(
 private fun EmptyDates(onPick: (String, DateCategory) -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(22.dp),
+        shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(containerColor = RoseGoldPrimary.copy(alpha = 0.08f))
     ) {
         Column(modifier = Modifier.padding(18.dp)) {
-            Text(text = "📅", fontSize = 30.sp)
+            Text(text = "📅", fontSize = 28.sp)
             Spacer(modifier = Modifier.height(6.dp))
             Text(
                 text = "No dates yet",
-                fontSize = 17.sp,
+                fontSize = 16.sp,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onSurface
             )
@@ -262,10 +273,11 @@ private fun DateCard(
     pill: String,
     pillHighlighted: Boolean,
     extra: String?,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
@@ -340,7 +352,7 @@ private fun DateCard(
 
             IconButton(onClick = onDelete, modifier = Modifier.size(36.dp)) {
                 Icon(
-                    Icons.Default.Delete,
+                    Icons.Rounded.Delete,
                     contentDescription = "Delete",
                     tint = MaterialTheme.colorScheme.outline,
                     modifier = Modifier.size(18.dp)
@@ -382,7 +394,7 @@ private fun AddDateDialog(
     var repeats by remember { mutableStateOf(true) }
     var showPicker by remember { mutableStateOf(false) }
 
-    AlertDialog(
+    CherishAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Add a date") },
         text = {
@@ -416,14 +428,14 @@ private fun AddDateDialog(
                     }
                 }
 
-                OutlinedButton(
+                CherishOutlinedButton(
                     onClick = { showPicker = true },
-                    shape = RoundedCornerShape(14.dp),
+                    shape = RoundedCornerShape(16.dp),
                     modifier = Modifier
                         .fillMaxWidth()
                         .testTag("date_pick_button")
                 ) {
-                    Icon(Icons.Default.CalendarMonth, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Icon(Icons.Rounded.CalendarMonth, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(dateMillis?.let { DateReminders.formatDate(it) } ?: "Choose the date")
                 }
@@ -432,8 +444,9 @@ private fun AddDateDialog(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
                         .fillMaxWidth()
+                        .pressScaleTarget()
                         .clip(RoundedCornerShape(12.dp))
-                        .clickable { repeats = !repeats }
+                        .springClickable { repeats = !repeats }
                         .padding(vertical = 2.dp)
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
@@ -457,9 +470,9 @@ private fun AddDateDialog(
             }
         },
         confirmButton = {
-            Button(
+            CherishButton(
                 onClick = {
-                    val day = dateMillis ?: return@Button
+                    val day = dateMillis ?: return@CherishButton
                     onAdd(title.trim(), day, category, notes.trim().ifBlank { null }, repeats)
                 },
                 enabled = title.isNotBlank() && dateMillis != null,

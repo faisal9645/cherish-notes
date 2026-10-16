@@ -39,9 +39,34 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.outlined.*
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.CalendarMonth
+import androidx.compose.material.icons.rounded.CalendarToday
+import androidx.compose.material.icons.rounded.Call
+import androidx.compose.material.icons.rounded.CallEnd
+import androidx.compose.material.icons.rounded.CameraAlt
+import androidx.compose.material.icons.automirrored.rounded.Chat
+import androidx.compose.material.icons.rounded.CheckCircleOutline
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.ContentCopy
+import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.DeleteOutline
+import androidx.compose.material.icons.rounded.Description
+import androidx.compose.material.icons.rounded.EventAvailable
+import androidx.compose.material.icons.rounded.Language
+import androidx.compose.material.icons.rounded.Mic
+import androidx.compose.material.icons.rounded.MusicNote
+import androidx.compose.material.icons.rounded.OpenInBrowser
+import androidx.compose.material.icons.rounded.Pause
+import androidx.compose.material.icons.rounded.Phone
+import androidx.compose.material.icons.rounded.PhoneInTalk
+import androidx.compose.material.icons.rounded.Place
+import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.PlayCircle
+import androidx.compose.material.icons.rounded.Star
+import androidx.compose.material.icons.rounded.Videocam
+import androidx.compose.material.icons.rounded.ZoomIn
+import androidx.compose.material.icons.rounded.ZoomOut
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -70,6 +95,8 @@ import com.example.ui.chat.mediaTileAnchor
 import com.example.ui.chat.openableMedia
 import androidx.compose.ui.graphics.graphicsLayer
 import com.example.ui.components.SelectionCheckBadge
+import com.example.ui.components.SkeletonListRows
+import com.example.ui.components.SkeletonPhotoGrid
 import com.example.ui.components.WaveformView
 import com.example.ui.theme.AppGradientStart
 import com.example.ui.theme.RoseGoldPrimary
@@ -82,6 +109,21 @@ import androidx.compose.ui.input.pointer.positionChanged
 import java.util.*
 import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
+import com.example.ui.theme.Amber500
+import com.example.ui.theme.Blue600
+import com.example.ui.theme.Emerald500
+import com.example.ui.theme.Gray400
+import com.example.ui.theme.Pink500
+import com.example.ui.theme.Red500
+import com.example.ui.theme.Slate400
+import com.example.ui.components.CherishToast
+import com.example.ui.components.CherishAlertDialog
+import com.example.ui.components.CherishButton
+import com.example.ui.components.CherishOutlinedButton
+import com.example.ui.components.CherishTonalButton
+import com.example.ui.components.pressScaleTarget
+import com.example.ui.components.springClickable
+import androidx.compose.material.icons.automirrored.rounded.PhoneMissed
 
 data class GalleryMediaItem(
     val id: String,
@@ -402,7 +444,7 @@ fun SharedGalleryScreen(
                         Text(
                             "${selectedItemIds.size} Selected",
                             fontWeight = FontWeight.Bold,
-                            fontSize = 17.sp,
+                            fontSize = 16.sp,
                             color = MaterialTheme.colorScheme.onSurface
                         )
                     },
@@ -411,7 +453,7 @@ fun SharedGalleryScreen(
                             onClick = { exitSelection() },
                             modifier = Modifier.testTag("gallery_selection_close")
                         ) {
-                            Icon(Icons.Default.Close, contentDescription = "Cancel Selection")
+                            Icon(Icons.Rounded.Close, contentDescription = "Cancel Selection")
                         }
                     },
                     actions = {
@@ -438,7 +480,7 @@ fun SharedGalleryScreen(
                             modifier = Modifier.testTag("gallery_delete_selected")
                         ) {
                             Icon(
-                                Icons.Default.Delete,
+                                Icons.Rounded.Delete,
                                 contentDescription = "Delete Selected",
                                 tint = if (selectedItemIds.isNotEmpty()) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
                             )
@@ -481,7 +523,7 @@ fun SharedGalleryScreen(
                             onClick = onNavigateBack,
                             modifier = Modifier.testTag("gallery_back_button")
                         ) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                            Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back")
                         }
                     },
                     actions = {
@@ -493,7 +535,7 @@ fun SharedGalleryScreen(
                                 }
                             ) {
                                 Icon(
-                                    Icons.Default.ZoomOut,
+                                    Icons.Rounded.ZoomOut,
                                     contentDescription = "Zoom Out (Smaller Thumbnails)",
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -504,7 +546,7 @@ fun SharedGalleryScreen(
                                 }
                             ) {
                                 Icon(
-                                    Icons.Default.ZoomIn,
+                                    Icons.Rounded.ZoomIn,
                                     contentDescription = "Zoom In (Bigger Thumbnails)",
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -517,7 +559,7 @@ fun SharedGalleryScreen(
                                 modifier = Modifier.testTag("gallery_select_button")
                             ) {
                                 Icon(
-                                    Icons.Default.CheckCircleOutline,
+                                    Icons.Rounded.CheckCircleOutline,
                                     contentDescription = "Select Items",
                                     tint = RoseGoldPrimary
                                 )
@@ -550,7 +592,7 @@ fun SharedGalleryScreen(
                             modifier = Modifier.testTag("gallery_calendar_search_button")
                         ) {
                             Icon(
-                                imageVector = if (selectedDateMillis != null) Icons.Default.EventAvailable else Icons.Default.CalendarMonth,
+                                imageVector = if (selectedDateMillis != null) Icons.Rounded.EventAvailable else Icons.Rounded.CalendarMonth,
                                 contentDescription = "Search by Date",
                                 tint = if (selectedDateMillis != null) RoseGoldPrimary else MaterialTheme.colorScheme.onSurface
                             )
@@ -562,7 +604,7 @@ fun SharedGalleryScreen(
                                 modifier = Modifier.testTag("gallery_clear_date_button")
                             ) {
                                 Icon(
-                                    Icons.Default.Close,
+                                    Icons.Rounded.Close,
                                     contentDescription = "Clear Date Filter",
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -599,7 +641,7 @@ fun SharedGalleryScreen(
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(
-                                imageVector = Icons.Default.CalendarToday,
+                                imageVector = Icons.Rounded.CalendarToday,
                                 contentDescription = null,
                                 tint = RoseGoldPrimary,
                                 modifier = Modifier.size(16.dp)
@@ -618,7 +660,7 @@ fun SharedGalleryScreen(
                             modifier = Modifier.size(24.dp)
                         ) {
                             Icon(
-                                imageVector = Icons.Default.Close,
+                                imageVector = Icons.Rounded.Close,
                                 contentDescription = "Clear Date Filter",
                                 tint = RoseGoldPrimary,
                                 modifier = Modifier.size(16.dp)
@@ -687,7 +729,7 @@ fun SharedGalleryScreen(
                             } else {
                                 "No shared photos or videos yet 💕"
                             }
-                            EmptyGalleryNotice(emptyText, isLoading = isGalleryLoading)
+                            EmptyGalleryNotice(emptyText, isLoading = isGalleryLoading, grid = true)
                         } else {
                             val configuration = LocalConfiguration.current
                             val screenWidthDp = configuration.screenWidthDp.toFloat() - 8f
@@ -853,7 +895,7 @@ fun SharedGalleryScreen(
                                                 contentAlignment = Alignment.Center
                                             ) {
                                                 Icon(
-                                                    imageVector = Icons.Default.PlayArrow,
+                                                    imageVector = Icons.Rounded.PlayArrow,
                                                     contentDescription = "Video Note",
                                                     tint = Color.White,
                                                     modifier = Modifier.size(22.dp)
@@ -873,7 +915,7 @@ fun SharedGalleryScreen(
                                                     verticalAlignment = Alignment.CenterVertically
                                                 ) {
                                                     Icon(
-                                                        imageVector = Icons.Default.Videocam,
+                                                        imageVector = Icons.Rounded.Videocam,
                                                         contentDescription = null,
                                                         tint = RoseGoldPrimary,
                                                         modifier = Modifier.size(11.dp)
@@ -882,7 +924,7 @@ fun SharedGalleryScreen(
                                                     Text(
                                                         text = if (item.originalMessage.isCircularVideoNote() || item.originalMessage.isVideoNote) "Video Note" else "Video",
                                                         color = Color.White,
-                                                        fontSize = 9.5.sp,
+                                                        fontSize = 9.sp,
                                                         fontWeight = FontWeight.Bold
                                                     )
                                                 }
@@ -906,13 +948,14 @@ fun SharedGalleryScreen(
                                                 modifier = Modifier
                                                     .align(Alignment.BottomEnd)
                                                     .padding(4.dp)
+                                                    .pressScaleTarget()
                                                     .clip(CircleShape)
                                                     .background(Color.Black.copy(alpha = 0.55f))
-                                                    .clickable { onNavigateToMessage(item.messageId) }
+                                                    .springClickable { onNavigateToMessage(item.messageId) }
                                                     .padding(6.dp)
                                             ) {
                                                 Icon(
-                                                    imageVector = Icons.Default.Chat,
+                                                    imageVector = Icons.AutoMirrored.Rounded.Chat,
                                                     contentDescription = "Show in chat",
                                                     tint = Color.White,
                                                     modifier = Modifier.size(14.dp)
@@ -925,16 +968,17 @@ fun SharedGalleryScreen(
                                                     .align(Alignment.TopEnd)
                                                     .padding(4.dp)
                                                     .size(32.dp)
+                                                    .pressScaleTarget()
                                                     .clip(CircleShape)
                                                     .background(Color.Black.copy(alpha = 0.65f))
-                                                    .clickable { mediaItemToDelete = item }
+                                                    .springClickable { mediaItemToDelete = item }
                                                     .testTag("gallery_item_delete_${item.id}"),
                                                 contentAlignment = Alignment.Center
                                             ) {
                                                 Icon(
-                                                    imageVector = Icons.Default.Delete,
+                                                    imageVector = Icons.Rounded.Delete,
                                                     contentDescription = "Delete",
-                                                    tint = Color(0xFF9CA3AF),
+                                                    tint = Gray400,
                                                     modifier = Modifier.size(16.dp)
                                                 )
                                             }
@@ -1009,7 +1053,7 @@ fun SharedGalleryScreen(
                                                     contentAlignment = Alignment.Center
                                                 ) {
                                                     Icon(
-                                                        imageVector = Icons.Default.Mic,
+                                                        imageVector = Icons.Rounded.Mic,
                                                         contentDescription = null,
                                                         tint = RoseGoldPrimary,
                                                         modifier = Modifier.size(18.dp)
@@ -1031,14 +1075,14 @@ fun SharedGalleryScreen(
                                                 }
 
                                                 // Show in chat button
-                                                OutlinedButton(
+                                                CherishOutlinedButton(
                                                     onClick = { onNavigateToMessage(msg.id) },
                                                     shape = RoundedCornerShape(20.dp),
                                                     contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
                                                     modifier = Modifier.height(32.dp)
                                                 ) {
                                                     Icon(
-                                                        imageVector = Icons.Default.Chat,
+                                                        imageVector = Icons.AutoMirrored.Rounded.Chat,
                                                         contentDescription = null,
                                                         tint = RoseGoldPrimary,
                                                         modifier = Modifier.size(13.dp)
@@ -1054,7 +1098,7 @@ fun SharedGalleryScreen(
                                                     onClick = { messageToDelete = msg },
                                                     modifier = Modifier.size(32.dp)
                                                 ) {
-                                                    Icon(Icons.Default.DeleteOutline, contentDescription = "Delete", tint = Color(0xFF9CA3AF), modifier = Modifier.size(18.dp))
+                                                    Icon(Icons.Rounded.DeleteOutline, contentDescription = "Delete", tint = Gray400, modifier = Modifier.size(18.dp))
                                                 }
                                             }
 
@@ -1082,7 +1126,7 @@ fun SharedGalleryScreen(
                                                         .background(RoseGoldPrimary)
                                                 ) {
                                                     Icon(
-                                                        imageVector = if (isThisPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                                        imageVector = if (isThisPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
                                                         contentDescription = if (isThisPlaying) "Pause" else "Play",
                                                         tint = Color.White,
                                                         modifier = Modifier.size(20.dp)
@@ -1194,7 +1238,7 @@ fun SharedGalleryScreen(
                                                 Box(
                                                     modifier = Modifier
                                                         .size(42.dp)
-                                                        .clip(RoundedCornerShape(10.dp))
+                                                        .clip(RoundedCornerShape(12.dp))
                                                         .background(getDomainBadgeColor(item.host).copy(alpha = 0.12f)),
                                                     contentAlignment = Alignment.Center
                                                 ) {
@@ -1221,7 +1265,7 @@ fun SharedGalleryScreen(
                                                     Text(
                                                         text = item.url,
                                                         fontSize = 12.sp,
-                                                        color = Color(0xFF2563EB),
+                                                        color = Blue600,
                                                         maxLines = 1,
                                                         overflow = TextOverflow.Ellipsis,
                                                         modifier = Modifier.clickable {
@@ -1231,7 +1275,7 @@ fun SharedGalleryScreen(
                                                                 }
                                                                 context.startActivity(intent)
                                                             } catch (e: Exception) {
-                                                                Toast.makeText(context, "Cannot open link", Toast.LENGTH_SHORT).show()
+                                                                CherishToast.show("Cannot open link")
                                                             }
                                                         }
                                                     )
@@ -1256,7 +1300,7 @@ fun SharedGalleryScreen(
                                                     Text(
                                                         text = "${formatGalleryDateTime(item.timestamp)} • Sent by ${item.senderName}",
                                                         fontSize = 11.sp,
-                                                        color = Color(0xFF94A3B8)
+                                                        color = Slate400
                                                     )
                                                 }
                                             }
@@ -1273,7 +1317,7 @@ fun SharedGalleryScreen(
                                                 verticalAlignment = Alignment.CenterVertically
                                             ) {
                                                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                                    FilledTonalButton(
+                                                    CherishTonalButton(
                                                         onClick = {
                                                             if (item.url.contains("youtube.com") || item.url.contains("youtu.be")) {
                                                                 onNavigateToMessage(item.messageId)
@@ -1290,37 +1334,37 @@ fun SharedGalleryScreen(
                                                         contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
                                                         modifier = Modifier.height(30.dp)
                                                     ) {
-                                                        Icon(Icons.Outlined.OpenInBrowser, contentDescription = null, modifier = Modifier.size(13.dp))
+                                                        Icon(Icons.Rounded.OpenInBrowser, contentDescription = null, modifier = Modifier.size(13.dp))
                                                         Spacer(modifier = Modifier.width(4.dp))
                                                         Text("Open", fontSize = 11.sp)
                                                     }
 
                                                     // Copy button
-                                                    OutlinedButton(
+                                                    CherishOutlinedButton(
                                                         onClick = {
                                                             val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                                                             cm.setPrimaryClip(ClipData.newPlainText("URL", item.url))
-                                                            Toast.makeText(context, "Link copied to clipboard", Toast.LENGTH_SHORT).show()
+                                                            CherishToast.show("Link copied to clipboard")
                                                         },
                                                         shape = RoundedCornerShape(12.dp),
                                                         contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
                                                         modifier = Modifier.height(30.dp)
                                                     ) {
-                                                        Icon(Icons.Outlined.ContentCopy, contentDescription = null, modifier = Modifier.size(13.dp))
+                                                        Icon(Icons.Rounded.ContentCopy, contentDescription = null, modifier = Modifier.size(13.dp))
                                                         Spacer(modifier = Modifier.width(4.dp))
                                                         Text("Copy", fontSize = 11.sp)
                                                     }
                                                 }
 
                                                 // Show in chat button
-                                                Button(
+                                                CherishButton(
                                                     onClick = { onNavigateToMessage(item.messageId) },
                                                     shape = RoundedCornerShape(12.dp),
                                                     colors = ButtonDefaults.buttonColors(containerColor = RoseGoldPrimary),
                                                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
                                                     modifier = Modifier.height(30.dp)
                                                 ) {
-                                                    Icon(Icons.Default.Chat, contentDescription = null, tint = Color.White, modifier = Modifier.size(13.dp))
+                                                    Icon(Icons.AutoMirrored.Rounded.Chat, contentDescription = null, tint = Color.White, modifier = Modifier.size(13.dp))
                                                     Spacer(modifier = Modifier.width(4.dp))
                                                     Text("Show in chat", fontSize = 11.sp, color = Color.White, fontWeight = FontWeight.SemiBold)
                                                 }
@@ -1335,7 +1379,7 @@ fun SharedGalleryScreen(
                                                     },
                                                     modifier = Modifier.size(30.dp)
                                                 ) {
-                                                    Icon(Icons.Default.DeleteOutline, contentDescription = "Delete", tint = Color(0xFF9CA3AF), modifier = Modifier.size(18.dp))
+                                                    Icon(Icons.Rounded.DeleteOutline, contentDescription = "Delete", tint = Gray400, modifier = Modifier.size(18.dp))
                                                 }
                                             }
                                         }
@@ -1390,9 +1434,9 @@ fun SharedGalleryScreen(
                                                     Spacer(modifier = Modifier.width(10.dp))
                                                 }
                                                 Icon(
-                                                    imageVector = Icons.Default.Star,
+                                                    imageVector = Icons.Rounded.Star,
                                                     contentDescription = null,
-                                                    tint = Color(0xFFF59E0B),
+                                                    tint = Amber500,
                                                     modifier = Modifier.size(20.dp)
                                                 )
                                                 Spacer(modifier = Modifier.width(8.dp))
@@ -1402,13 +1446,13 @@ fun SharedGalleryScreen(
                                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                                     modifier = Modifier.weight(1f)
                                                 )
-                                                OutlinedButton(
+                                                CherishOutlinedButton(
                                                     onClick = { onNavigateToMessage(msg.id) },
                                                     shape = RoundedCornerShape(20.dp),
                                                     contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
                                                     modifier = Modifier.height(30.dp)
                                                 ) {
-                                                    Icon(Icons.Default.Chat, contentDescription = null, tint = RoseGoldPrimary, modifier = Modifier.size(13.dp))
+                                                    Icon(Icons.AutoMirrored.Rounded.Chat, contentDescription = null, tint = RoseGoldPrimary, modifier = Modifier.size(13.dp))
                                                     Spacer(modifier = Modifier.width(4.dp))
                                                     Text("Show in chat", fontSize = 11.sp, color = RoseGoldPrimary)
                                                 }
@@ -1426,7 +1470,7 @@ fun SharedGalleryScreen(
                                                         modifier = Modifier
                                                             .fillMaxWidth()
                                                             .height(140.dp)
-                                                            .clip(RoundedCornerShape(10.dp))
+                                                            .clip(RoundedCornerShape(12.dp))
                                                             .openableMedia {
                                                                 selectedMediaUrl = starredUrls[0]
                                                                 selectedMessageIdForViewer = msg.id
@@ -1447,7 +1491,7 @@ fun SharedGalleryScreen(
                                                                 modifier = Modifier
                                                                     .weight(1f)
                                                                     .fillMaxHeight()
-                                                                    .clip(RoundedCornerShape(10.dp))
+                                                                    .clip(RoundedCornerShape(12.dp))
                                                                     .openableMedia {
                                                                         selectedMediaUrl = starUrl
                                                                         selectedMessageIdForViewer = msg.id
@@ -1522,16 +1566,16 @@ fun SharedGalleryScreen(
                                     val isCompleted = !isDeclined && !isCancelled && !isMissed
 
                                     val callIcon = when {
-                                        isRecording -> Icons.Filled.PhoneInTalk
-                                        isDeclined || isCancelled -> Icons.Default.CallEnd
-                                        isMissed -> Icons.Default.PhoneMissed
-                                        else -> Icons.Default.Call
+                                        isRecording -> Icons.Rounded.PhoneInTalk
+                                        isDeclined || isCancelled -> Icons.Rounded.CallEnd
+                                        isMissed -> Icons.AutoMirrored.Rounded.PhoneMissed
+                                        else -> Icons.Rounded.Call
                                     }
                                     val callColor = when {
                                         isRecording -> RoseGoldPrimary
-                                        isCompleted -> Color(0xFF10B981)
-                                        isCancelled -> Color(0xFFF59E0B)
-                                        else -> Color(0xFFEF4444)
+                                        isCompleted -> Emerald500
+                                        isCancelled -> Amber500
+                                        else -> Red500
                                     }
                                     val titleText = when {
                                         isRecording -> "Voice Call Recording"
@@ -1598,13 +1642,13 @@ fun SharedGalleryScreen(
                                                     )
                                                 }
                                                 Row(verticalAlignment = Alignment.CenterVertically) {
-                                                    OutlinedButton(
+                                                    CherishOutlinedButton(
                                                         onClick = { onNavigateToMessage(msg.id) },
                                                         shape = RoundedCornerShape(20.dp),
                                                         contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
                                                         modifier = Modifier.height(30.dp)
                                                     ) {
-                                                        Icon(Icons.Default.Chat, contentDescription = null, tint = RoseGoldPrimary, modifier = Modifier.size(13.dp))
+                                                        Icon(Icons.AutoMirrored.Rounded.Chat, contentDescription = null, tint = RoseGoldPrimary, modifier = Modifier.size(13.dp))
                                                         Spacer(modifier = Modifier.width(4.dp))
                                                         Text("Chat", fontSize = 11.sp, color = RoseGoldPrimary)
                                                     }
@@ -1626,14 +1670,14 @@ fun SharedGalleryScreen(
                                                 )
                                             } else {
                                                 Spacer(modifier = Modifier.height(8.dp))
-                                                FilledTonalButton(
+                                                CherishTonalButton(
                                                     onClick = { com.example.call.CallActivity.startOutgoing(context) },
                                                     shape = RoundedCornerShape(12.dp),
                                                     colors = ButtonDefaults.filledTonalButtonColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
                                                     contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
                                                     modifier = Modifier.fillMaxWidth().height(36.dp)
                                                 ) {
-                                                    Icon(Icons.Default.Phone, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(15.dp))
+                                                    Icon(Icons.Rounded.Phone, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(15.dp))
                                                     Spacer(modifier = Modifier.width(6.dp))
                                                     Text("Call Back", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onPrimaryContainer)
                                                 }
@@ -1659,12 +1703,12 @@ fun SharedGalleryScreen(
             3 -> if (count == 1) "starred message" else "starred messages"
             else -> if (count == 1) "call item" else "call items"
         }
-        AlertDialog(
+        CherishAlertDialog(
             onDismissRequest = { showMultiDeleteConfirmDialog = false },
             title = { Text("Delete $count $itemLabel?") },
             text = { Text("The selected items will be permanently removed from your shared gallery and chat.") },
             confirmButton = {
-                Button(
+                CherishButton(
                     onClick = {
                         deleteSelectedItems()
                         showMultiDeleteConfirmDialog = false
@@ -1685,12 +1729,12 @@ fun SharedGalleryScreen(
 
     // Delete Confirmation Dialog for Single Gallery Item
     messageToDelete?.let { msg ->
-        AlertDialog(
+        CherishAlertDialog(
             onDismissRequest = { messageToDelete = null },
             title = { Text("Delete gallery item?") },
             text = { Text("This item will be permanently removed from your shared gallery and chat.") },
             confirmButton = {
-                Button(
+                CherishButton(
                     onClick = {
                         val id = msg.id
                         chatViewModel.deleteMessage(id)
@@ -1715,12 +1759,12 @@ fun SharedGalleryScreen(
 
     // Delete Confirmation Dialog for a single photo/video tile (other photos of the same message stay)
     mediaItemToDelete?.let { item ->
-        AlertDialog(
+        CherishAlertDialog(
             onDismissRequest = { mediaItemToDelete = null },
             title = { Text(if (item.isVideo) "Delete video?" else "Delete photo?") },
             text = { Text("It will be permanently removed from your shared gallery and chat.") },
             confirmButton = {
-                Button(
+                CherishButton(
                     onClick = {
                         chatViewModel.deleteGalleryMedia(listOf(item.originalMessage), setOf(item.mediaUrl))
                         if (selectedMediaUrl == item.mediaUrl) {
@@ -1791,28 +1835,25 @@ fun SharedGalleryScreen(
 }
 
 @Composable
-private fun EmptyGalleryNotice(message: String, isLoading: Boolean = false) {
+private fun EmptyGalleryNotice(message: String, isLoading: Boolean = false, grid: Boolean = false) {
+    if (isLoading) {
+        // Grey shapes of what's loading: the photo grid, or rows for the other tabs
+        if (grid) SkeletonPhotoGrid(modifier = Modifier.padding(4.dp)) else SkeletonListRows()
+        return
+    }
     Box(
         modifier = Modifier
             .fillMaxSize()
             .padding(32.dp),
         contentAlignment = Alignment.Center
     ) {
-        if (isLoading) {
-            CircularProgressIndicator(
-                color = RoseGoldPrimary,
-                strokeWidth = 2.5.dp,
-                modifier = Modifier.size(28.dp)
-            )
-        } else {
-            Text(
-                text = message,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                lineHeight = 20.sp
-            )
-        }
+        Text(
+            text = message,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            lineHeight = 20.sp
+        )
     }
 }
 
@@ -1855,23 +1896,23 @@ private fun Modifier.gallerySelectable(
 private fun getDomainIcon(host: String): androidx.compose.ui.graphics.vector.ImageVector {
     val h = host.lowercase()
     return when {
-        h.contains("youtube") || h.contains("youtu.be") -> Icons.Default.PlayCircle
-        h.contains("instagram") -> Icons.Default.CameraAlt
-        h.contains("spotify") || h.contains("music") -> Icons.Default.MusicNote
-        h.contains("maps") || h.contains("goo.gl") -> Icons.Default.Place
-        h.contains("drive") || h.contains("doc") -> Icons.Default.Description
-        else -> Icons.Default.Language
+        h.contains("youtube") || h.contains("youtu.be") -> Icons.Rounded.PlayCircle
+        h.contains("instagram") -> Icons.Rounded.CameraAlt
+        h.contains("spotify") || h.contains("music") -> Icons.Rounded.MusicNote
+        h.contains("maps") || h.contains("goo.gl") -> Icons.Rounded.Place
+        h.contains("drive") || h.contains("doc") -> Icons.Rounded.Description
+        else -> Icons.Rounded.Language
     }
 }
 
 private fun getDomainBadgeColor(host: String): Color {
     val h = host.lowercase()
     return when {
-        h.contains("youtube") || h.contains("youtu.be") -> Color(0xFFEF4444)
-        h.contains("instagram") -> Color(0xFFEC4899)
-        h.contains("spotify") -> Color(0xFF10B981)
+        h.contains("youtube") || h.contains("youtu.be") -> Red500
+        h.contains("instagram") -> Pink500
+        h.contains("spotify") -> Emerald500
         h.contains("twitter") || h.contains("x.com") -> Color(0xFF0284C7)
-        h.contains("maps") -> Color(0xFFF59E0B)
+        h.contains("maps") -> Amber500
         else -> Color(0xFF6366F1)
     }
 }

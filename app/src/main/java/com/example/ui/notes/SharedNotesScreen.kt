@@ -8,13 +8,17 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.outlined.PushPin
+import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.PushPin
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import com.example.ui.components.pressScale
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
@@ -31,6 +35,10 @@ import com.example.ui.theme.appHorizontalGradient
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import com.example.ui.components.CherishAlertDialog
+import com.example.ui.components.CherishButton
+import com.example.ui.components.pressScaleTarget
+import com.example.ui.components.springClickable
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -57,7 +65,7 @@ fun SharedNotesScreen(
                         onClick = onNavigateBack,
                         modifier = Modifier.testTag("notes_back_button")
                     ) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -68,11 +76,12 @@ fun SharedNotesScreen(
         floatingActionButton = {
             Box(
                 modifier = Modifier
+                    .pressScaleTarget()
                     .appGradientShadow(CircleShape)
                     .clip(CircleShape)
                     .background(appHorizontalGradient())
                     .size(56.dp)
-                    .clickable {
+                    .springClickable {
                         editingNote = null
                         showAddDialog = true
                     }
@@ -80,7 +89,7 @@ fun SharedNotesScreen(
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    imageVector = Icons.Default.Add,
+                    imageVector = Icons.Rounded.Add,
                     contentDescription = "New Shared Note",
                     tint = Color.White,
                     modifier = Modifier.size(24.dp)
@@ -108,7 +117,9 @@ fun SharedNotesScreen(
                         showAddDialog = true
                     },
                     onTogglePin = { viewModel.togglePin(note.id) },
-                    onDelete = { viewModel.deleteNote(note.id) }
+                    onDelete = { viewModel.deleteNote(note.id) },
+                    // Notes slide into place, and fade in and out, as they're added, pinned or deleted
+                    modifier = Modifier.animateItem()
                 )
             }
             item {
@@ -134,7 +145,8 @@ fun SharedNoteCard(
     note: SharedNote,
     onClick: () -> Unit,
     onTogglePin: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     val categoryBadge = when (note.getTypedCategory()) {
         NoteCategory.LOVE_LETTER -> "💌 Love Letter"
@@ -143,10 +155,14 @@ fun SharedNoteCard(
         NoteCategory.NOTE -> "📝 Shared Note"
     }
 
+    // Card's own click keeps the ripple inside the rounded corners; the card shrinks a touch while held
+    val press = remember { MutableInteractionSource() }
     Card(
-        modifier = Modifier
+        onClick = onClick,
+        interactionSource = press,
+        modifier = modifier
             .fillMaxWidth()
-            .clickable { onClick() },
+            .pressScale(press),
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(
             containerColor = if (note.isPinned) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.surface
@@ -175,7 +191,7 @@ fun SharedNoteCard(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(onClick = onTogglePin, modifier = Modifier.size(32.dp)) {
                         Icon(
-                            imageVector = if (note.isPinned) Icons.Filled.PushPin else Icons.Outlined.PushPin,
+                            imageVector = if (note.isPinned) Icons.Rounded.PushPin else Icons.Outlined.PushPin,
                             contentDescription = "Pin Note",
                             tint = if (note.isPinned) RoseGoldPrimary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
                             modifier = Modifier.size(18.dp)
@@ -184,7 +200,7 @@ fun SharedNoteCard(
 
                     IconButton(onClick = onDelete, modifier = Modifier.size(32.dp)) {
                         Icon(
-                            imageVector = Icons.Default.Delete,
+                            imageVector = Icons.Rounded.Delete,
                             contentDescription = "Delete Note",
                             tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
                             modifier = Modifier.size(18.dp)
@@ -233,7 +249,7 @@ fun NoteEditDialog(
     var content by remember { mutableStateOf(initialNote?.content ?: "") }
     var category by remember { mutableStateOf(initialNote?.getTypedCategory() ?: NoteCategory.NOTE) }
 
-    AlertDialog(
+    CherishAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(if (initialNote != null) "Edit Note" else "New Shared Note") },
         text = {
@@ -276,7 +292,7 @@ fun NoteEditDialog(
             }
         },
         confirmButton = {
-            Button(
+            CherishButton(
                 onClick = {
                     if (title.isNotBlank() || content.isNotBlank()) {
                         onSave(initialNote?.id, title.ifBlank { "Untitled" }, content, category)

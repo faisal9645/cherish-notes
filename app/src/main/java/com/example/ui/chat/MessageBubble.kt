@@ -5,7 +5,27 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.widget.Toast
-import androidx.compose.material.icons.automirrored.outlined.VolumeUp
+import androidx.compose.material.icons.automirrored.rounded.Reply
+import androidx.compose.material.icons.automirrored.rounded.VolumeUp
+import androidx.compose.material.icons.outlined.ThumbDown
+import androidx.compose.material.icons.outlined.ThumbUp
+import androidx.compose.material.icons.rounded.AccessTime
+import androidx.compose.material.icons.rounded.ArrowDownward
+import androidx.compose.material.icons.rounded.Call
+import androidx.compose.material.icons.rounded.CallEnd
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.ContentCopy
+import androidx.compose.material.icons.rounded.DoneAll
+import androidx.compose.material.icons.rounded.Mic
+import androidx.compose.material.icons.rounded.MoreVert
+import androidx.compose.material.icons.rounded.Pause
+import androidx.compose.material.icons.rounded.Phone
+import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.PushPin
+import androidx.compose.material.icons.rounded.Share
+import androidx.compose.material.icons.rounded.Star
+import androidx.compose.material.icons.rounded.ThumbDown
+import androidx.compose.material.icons.rounded.ThumbUp
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.zIndex
 import androidx.compose.animation.*
@@ -20,8 +40,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -54,11 +72,15 @@ import java.util.Date
 import java.util.Locale
 
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
-import androidx.compose.material.icons.automirrored.filled.Reply
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
 import com.example.util.ChatTimeFormatter
+import com.example.ui.components.CherishToast
+import com.example.ui.components.pressScaleTarget
+import com.example.ui.components.springClickable
+import androidx.compose.material.icons.automirrored.rounded.InsertDriveFile
+import androidx.compose.material.icons.automirrored.rounded.PhoneMissed
 
 private fun formatMessageTime(rawTimestamp: Long): String {
     return ChatTimeFormatter.formatMessageTime(rawTimestamp)
@@ -95,7 +117,7 @@ fun MessageBubble(
     // text with a row of small actions under it
     val bubbleShape = if (isPrivateMode) {
         if (isFromMe) {
-            RoundedCornerShape(22.dp)
+            RoundedCornerShape(24.dp)
         } else {
             RoundedCornerShape(4.dp)
         }
@@ -112,8 +134,8 @@ fun MessageBubble(
 
     val bubbleBg = if (isPrivateMode) {
         if (isFromMe) {
-            if (isAmoledBlack) Color(0xFF212121)
-            else if (isDark) Color(0xFF2F2F2F)
+            if (isAmoledBlack) Neutral800
+            else if (isDark) Neutral750
             else PrivateBubbleLight
         } else {
             Color.Transparent
@@ -122,17 +144,17 @@ fun MessageBubble(
         if (isFromMe) {
             darkTone(DayBluePrimary)
         } else {
-            if (isDark) darkSurface(Color(0xFF1E2638)) else Color(0xFFF1F5FB)
+            if (isDark) darkSurface(NavyCard) else MistBlue
         }
     }
 
     val textColor = if (isPrivateMode) {
-        if (isDark) (if (isFromMe) Color.White else Color(0xFFECECEC)) else Color(0xFF0D0D0D)
+        if (isDark) (if (isFromMe) Color.White else Neutral200) else InkBlack
     } else {
         if (isFromMe) {
             Color.White
         } else {
-            if (isDark) darkTone(Color(0xFFF8FAFC)) else Color(0xFF0F172A)
+            if (isDark) darkTone(Color.White) else Slate900
         }
     }
 
@@ -427,7 +449,7 @@ fun MessageBubble(
                         ) {
                             if (message.isPinned) {
                                 Icon(
-                                    imageVector = Icons.Filled.PushPin,
+                                    imageVector = Icons.Rounded.PushPin,
                                     contentDescription = "Pinned",
                                     tint = Color.White.copy(alpha = 0.85f),
                                     modifier = Modifier.size(10.dp).padding(end = 2.dp)
@@ -435,7 +457,7 @@ fun MessageBubble(
                             }
                             if (message.isStarred) {
                                 Icon(
-                                    imageVector = Icons.Default.Star,
+                                    imageVector = Icons.Rounded.Star,
                                     contentDescription = "Starred",
                                     tint = GoldMilestone,
                                     modifier = Modifier.size(10.dp).padding(end = 2.dp)
@@ -451,10 +473,10 @@ fun MessageBubble(
                                 Spacer(modifier = Modifier.width(3.dp))
                                 MessageStatusTicks(message.getTypedStatus()) { status ->
                                     when (status) {
-                                        MessageStatus.SENDING -> Icon(Icons.Default.AccessTime, "Sending", tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(10.dp))
-                                        MessageStatus.SENT -> Icon(Icons.Default.Check, "Sent", tint = Color.White.copy(alpha = 0.8f), modifier = Modifier.size(10.dp))
-                                        MessageStatus.DELIVERED -> Icon(Icons.Default.DoneAll, "Delivered", tint = Color.White.copy(alpha = 0.9f), modifier = Modifier.size(11.dp))
-                                        MessageStatus.READ -> Icon(Icons.Default.DoneAll, "Read", tint = Color.White, modifier = Modifier.size(11.dp))
+                                        MessageStatus.SENDING -> Icon(Icons.Rounded.AccessTime, "Sending", tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(10.dp))
+                                        MessageStatus.SENT -> Icon(Icons.Rounded.Check, "Sent", tint = Color.White.copy(alpha = 0.8f), modifier = Modifier.size(10.dp))
+                                        MessageStatus.DELIVERED -> Icon(Icons.Rounded.DoneAll, "Delivered", tint = Color.White.copy(alpha = 0.9f), modifier = Modifier.size(11.dp))
+                                        MessageStatus.READ -> Icon(Icons.Rounded.DoneAll, "Read", tint = Color.White, modifier = Modifier.size(11.dp))
                                     }
                                 }
                             }
@@ -472,7 +494,7 @@ fun MessageBubble(
                 // around it (it used to show in the corner the photo's rounding left open)
                 val isPhotoOnly = message.getTypedType() == MessageType.IMAGE && isGenericPhotoText &&
                     message.replyToText.isNullOrEmpty()
-                val cardShape = if (isPhotoOnly) RoundedCornerShape(14.dp) else bubbleShape
+                val cardShape = if (isPhotoOnly) RoundedCornerShape(16.dp) else bubbleShape
 
                 val bubbleMinWidth = when (message.getTypedType()) {
                     MessageType.IMAGE -> when (gallerySize.lowercase()) {
@@ -523,7 +545,7 @@ fun MessageBubble(
                         .clip(cardShape)
                         .then(
                             if (highlightPulse.value > 0.04f) {
-                                val strokeColor = if (isPrivateMode) Color(0xFF9CA3AF) else RoseGoldPrimary
+                                val strokeColor = if (isPrivateMode) Gray400 else RoseGoldPrimary
                                 Modifier.border(
                                     BorderStroke(2.2.dp, strokeColor.copy(alpha = highlightPulse.value)),
                                     cardShape
@@ -531,7 +553,7 @@ fun MessageBubble(
                             } else if (isPhotoOnly) Modifier
                             else if (isPrivateMode) Modifier
                             else if (!isFromMe) Modifier.border(
-                                BorderStroke(0.5.dp, if (isDark) darkSurface(Color(0xFF2A364F), Color(0xFF262626)) else Color(0xFFE2E8F0)),
+                                BorderStroke(0.5.dp, if (isDark) darkSurface(NavyRaised, Neutral800) else Gray200),
                                 cardShape
                             )
                             else Modifier
@@ -540,7 +562,7 @@ fun MessageBubble(
                             if (isPhotoOnly) androidx.compose.ui.graphics.SolidColor(Color.Transparent)
                             else if (isPrivateMode) androidx.compose.ui.graphics.SolidColor(bubbleBg)
                             else if (isFromMe) appHorizontalGradient()
-                            else androidx.compose.ui.graphics.SolidColor(if (isDark) darkSurface(Color(0xFF1E2638)) else Color(0xFFF1F5FB))
+                            else androidx.compose.ui.graphics.SolidColor(if (isDark) darkSurface(NavyCard) else MistBlue)
                         )
                         .pointerInput(message.id) {
                             detectTapGestures(
@@ -604,7 +626,7 @@ fun MessageBubble(
                                 modifier = Modifier
                                     .width(3.dp)
                                     .height(28.dp)
-                                    .background(if (isPrivateMode) (if (isDark) darkTone(Color(0xFF9CA3AF)) else Color(0xFF6B7280)) else (if (isFromMe) Color.White else MaterialTheme.colorScheme.primary), CircleShape)
+                                    .background(if (isPrivateMode) (if (isDark) darkTone(Gray400) else Gray500) else (if (isFromMe) Color.White else MaterialTheme.colorScheme.primary), CircleShape)
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Column {
@@ -668,7 +690,7 @@ fun MessageBubble(
                                         ) {
                                             if (message.isPinned) {
                                                 Icon(
-                                                    imageVector = Icons.Filled.PushPin,
+                                                    imageVector = Icons.Rounded.PushPin,
                                                     contentDescription = "Pinned",
                                                     tint = Color.White.copy(alpha = 0.9f),
                                                     modifier = Modifier.size(11.dp).padding(end = 3.dp)
@@ -676,7 +698,7 @@ fun MessageBubble(
                                             }
                                             if (message.isStarred) {
                                                 Icon(
-                                                    imageVector = Icons.Default.Star,
+                                                    imageVector = Icons.Rounded.Star,
                                                     contentDescription = "Starred",
                                                     tint = GoldMilestone,
                                                     modifier = Modifier.size(11.dp).padding(end = 3.dp)
@@ -692,10 +714,10 @@ fun MessageBubble(
                                                 Spacer(modifier = Modifier.width(3.dp))
                                                 MessageStatusTicks(message.getTypedStatus()) { status ->
                                                     when (status) {
-                                                        MessageStatus.SENDING -> Icon(Icons.Default.AccessTime, "Sending", tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(10.dp))
-                                                        MessageStatus.SENT -> Icon(Icons.Default.Check, "Sent", tint = Color.White.copy(alpha = 0.8f), modifier = Modifier.size(11.dp))
-                                                        MessageStatus.DELIVERED -> Icon(Icons.Default.DoneAll, "Delivered", tint = Color.White.copy(alpha = 0.9f), modifier = Modifier.size(12.dp))
-                                                        MessageStatus.READ -> Icon(Icons.Default.DoneAll, "Read", tint = Color(0xFF60A5FA), modifier = Modifier.size(12.dp))
+                                                        MessageStatus.SENDING -> Icon(Icons.Rounded.AccessTime, "Sending", tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(10.dp))
+                                                        MessageStatus.SENT -> Icon(Icons.Rounded.Check, "Sent", tint = Color.White.copy(alpha = 0.8f), modifier = Modifier.size(11.dp))
+                                                        MessageStatus.DELIVERED -> Icon(Icons.Rounded.DoneAll, "Delivered", tint = Color.White.copy(alpha = 0.9f), modifier = Modifier.size(12.dp))
+                                                        MessageStatus.READ -> Icon(Icons.Rounded.DoneAll, "Read", tint = Color(0xFF60A5FA), modifier = Modifier.size(12.dp))
                                                     }
                                                 }
                                             }
@@ -735,18 +757,18 @@ fun MessageBubble(
                         val sizeText = com.example.util.DocumentHelper.formatFileSize(message.mediaSize)
 
                         val docIconBg = when (ext) {
-                            "PDF" -> Color(0xFFEF4444)
-                            "DOC", "DOCX" -> Color(0xFF2563EB)
-                            "XLS", "XLSX" -> Color(0xFF10B981)
+                            "PDF" -> Red500
+                            "DOC", "DOCX" -> Blue600
+                            "XLS", "XLSX" -> Emerald500
                             "PPT", "PPTX" -> Color(0xFFF97316)
                             "ZIP", "RAR", "7Z" -> Color(0xFF8B5CF6)
-                            else -> if (isPrivateMode) Color(0xFF6B7280) else RoseGoldPrimary
+                            else -> if (isPrivateMode) Gray500 else RoseGoldPrimary
                         }
 
                         Surface(
-                            shape = RoundedCornerShape(14.dp),
+                            shape = RoundedCornerShape(16.dp),
                             color = if (isPrivateMode) {
-                                if (isDark) Color(0xFF242424) else Color(0xFFE5E7EB)
+                                if (isDark) Neutral800 else Gray200
                             } else {
                                 if (isFromMe) Color.White.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
                             },
@@ -768,7 +790,7 @@ fun MessageBubble(
                                 Box(
                                     modifier = Modifier
                                         .size(42.dp)
-                                        .clip(RoundedCornerShape(10.dp))
+                                        .clip(RoundedCornerShape(12.dp))
                                         .background(docIconBg),
                                     contentAlignment = Alignment.Center
                                 ) {
@@ -781,7 +803,7 @@ fun MessageBubble(
                                         )
                                     } else {
                                         Icon(
-                                            imageVector = Icons.Default.InsertDriveFile,
+                                            imageVector = Icons.AutoMirrored.Rounded.InsertDriveFile,
                                             contentDescription = "Document",
                                             modifier = Modifier.size(24.dp),
                                             tint = Color.White
@@ -818,9 +840,9 @@ fun MessageBubble(
                                     modifier = Modifier.size(34.dp)
                                 ) {
                                     Icon(
-                                        imageVector = Icons.Default.ArrowDownward,
+                                        imageVector = Icons.Rounded.ArrowDownward,
                                         contentDescription = "Download document",
-                                        tint = if (isPrivateMode) (if (isDark) Color.White else Color(0xFF1F2937)) else (if (isFromMe) Color.White else MaterialTheme.colorScheme.primary),
+                                        tint = if (isPrivateMode) (if (isDark) Color.White else Gray800) else (if (isFromMe) Color.White else MaterialTheme.colorScheme.primary),
                                         modifier = Modifier.size(20.dp)
                                     )
                                 }
@@ -865,7 +887,7 @@ fun MessageBubble(
                                     ) {
                                         Box(contentAlignment = Alignment.Center) {
                                             Icon(
-                                                imageVector = Icons.Default.Mic,
+                                                imageVector = Icons.Rounded.Mic,
                                                 contentDescription = "Voice message",
                                                 tint = MaterialTheme.colorScheme.primary,
                                                 modifier = Modifier.size(12.dp)
@@ -884,7 +906,7 @@ fun MessageBubble(
                                         .then(
                                             if (isPrivateMode) {
                                                 Modifier.background(
-                                                    (if (isDark) darkTone(Color(0xFFECECEC)) else Color(0xFF1F2937)).copy(alpha = 0.2f),
+                                                    (if (isDark) darkTone(Neutral200) else Gray800).copy(alpha = 0.2f),
                                                     CircleShape
                                                 )
                                             } else if (isFromMe) {
@@ -895,7 +917,7 @@ fun MessageBubble(
                                         )
                                 ) {
                                     Icon(
-                                        imageVector = if (isPlayingAudio) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                        imageVector = if (isPlayingAudio) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
                                         contentDescription = if (isPlayingAudio) "Pause voice message" else "Play voice message",
                                         tint = if (isPrivateMode) textColor else Color.White,
                                         modifier = Modifier.size(24.dp)
@@ -909,7 +931,7 @@ fun MessageBubble(
                                             .padding(top = 1.dp, end = 1.dp)
                                             .size(8.dp)
                                             .clip(CircleShape)
-                                            .background(Color(0xFF2563EB))
+                                            .background(Blue600)
                                             .border(1.2.dp, if (isFromMe) Color.White else MaterialTheme.colorScheme.surface, CircleShape)
                                             .testTag("voice_note_unplayed_dot")
                                     )
@@ -952,15 +974,16 @@ fun MessageBubble(
                                                 fontWeight = FontWeight.Medium,
                                                 color = if (isPrivateMode) textColor.copy(alpha = 0.8f) 
                                                         else if (isFromMe) Color.White.copy(alpha = 0.9f) 
-                                                        else (if (isDark) darkTone(Color(0xFFCBD5E1)) else Color(0xFF0F172A))
+                                                        else (if (isDark) darkTone(Slate300) else Slate900)
                                             )
                                             if (isPlayingAudio && onToggleVoiceSpeed != null) {
                                                 Spacer(modifier = Modifier.width(6.dp))
                                                 Box(
                                                     modifier = Modifier
+                                                        .pressScaleTarget()
                                                         .clip(RoundedCornerShape(4.dp))
                                                         .background((if (isPrivateMode) textColor else if (isFromMe) Color.White else darkTone(DayBluePrimary)).copy(alpha = 0.2f))
-                                                        .clickable { onToggleVoiceSpeed() }
+                                                        .springClickable { onToggleVoiceSpeed() }
                                                         .padding(horizontal = 4.dp, vertical = 1.dp),
                                                     contentAlignment = Alignment.Center
                                                 ) {
@@ -993,16 +1016,16 @@ fun MessageBubble(
                                                 MessageStatusTicks(message.getTypedStatus()) { status ->
                                                     when (status) {
                                                         MessageStatus.SENDING -> {
-                                                            Icon(Icons.Default.AccessTime, "Sending", tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(11.dp))
+                                                            Icon(Icons.Rounded.AccessTime, "Sending", tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(11.dp))
                                                         }
                                                         MessageStatus.SENT -> {
-                                                            Icon(Icons.Default.Check, "Sent", tint = Color.White.copy(alpha = 0.8f), modifier = Modifier.size(12.dp))
+                                                            Icon(Icons.Rounded.Check, "Sent", tint = Color.White.copy(alpha = 0.8f), modifier = Modifier.size(12.dp))
                                                         }
                                                         MessageStatus.DELIVERED -> {
-                                                            Icon(Icons.Default.DoneAll, "Delivered", tint = Color.White.copy(alpha = 0.9f), modifier = Modifier.size(13.dp))
+                                                            Icon(Icons.Rounded.DoneAll, "Delivered", tint = Color.White.copy(alpha = 0.9f), modifier = Modifier.size(13.dp))
                                                         }
                                                         MessageStatus.READ -> {
-                                                            Icon(Icons.Default.DoneAll, "Read", tint = Color.White, modifier = Modifier.size(13.dp))
+                                                            Icon(Icons.Rounded.DoneAll, "Read", tint = Color.White, modifier = Modifier.size(13.dp))
                                                         }
                                                     }
                                                 }
@@ -1036,7 +1059,7 @@ fun MessageBubble(
                                     ) {
                                         Box(contentAlignment = Alignment.Center) {
                                             Icon(
-                                                imageVector = Icons.Default.Mic,
+                                                imageVector = Icons.Rounded.Mic,
                                                 contentDescription = "Voice message",
                                                 tint = MaterialTheme.colorScheme.primary,
                                                 modifier = Modifier.size(12.dp)
@@ -1054,7 +1077,7 @@ fun MessageBubble(
                             colors = CallRecordingColors(
                                 content = textColor,
                                 button = when {
-                                    isPrivateMode -> (if (isDark) darkTone(Color(0xFFECECEC)) else Color(0xFF1F2937)).copy(alpha = 0.2f)
+                                    isPrivateMode -> (if (isDark) darkTone(Neutral200) else Gray800).copy(alpha = 0.2f)
                                     isFromMe -> Color.White.copy(alpha = 0.25f)
                                     else -> MaterialTheme.colorScheme.primary
                                 },
@@ -1091,7 +1114,7 @@ fun MessageBubble(
                             fontWeight = FontWeight.Normal,
                             color = if (isPrivateMode) textColor
                                     else if (isFromMe) Color.White 
-                                    else (if (isDark) darkTone(Color(0xFFCBD5E1)) else Color(0xFF0F172A))
+                                    else (if (isDark) darkTone(Slate300) else Slate900)
                         )
                         Spacer(modifier = Modifier.height(2.dp))
                         Row(
@@ -1100,7 +1123,7 @@ fun MessageBubble(
                         ) {
                             if (message.isPinned) {
                                 Icon(
-                                    imageVector = Icons.Filled.PushPin,
+                                    imageVector = Icons.Rounded.PushPin,
                                     contentDescription = "Pinned",
                                     tint = if (isPrivateMode) textColor.copy(alpha = 0.8f) else if (isFromMe) Color.White.copy(alpha = 0.9f) else MaterialTheme.colorScheme.primary,
                                     modifier = Modifier.size(12.dp).padding(end = 4.dp)
@@ -1108,7 +1131,7 @@ fun MessageBubble(
                             }
                             if (message.isStarred) {
                                 Icon(
-                                    imageVector = Icons.Default.Star,
+                                    imageVector = Icons.Rounded.Star,
                                     contentDescription = "Starred",
                                     tint = GoldMilestone,
                                     modifier = Modifier.size(12.dp).padding(end = 4.dp)
@@ -1123,10 +1146,10 @@ fun MessageBubble(
                                 Spacer(modifier = Modifier.width(3.dp))
                                 MessageStatusTicks(message.getTypedStatus()) { status ->
                                     when (status) {
-                                        MessageStatus.SENDING -> Icon(Icons.Default.AccessTime, "Sending", tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(11.dp))
-                                        MessageStatus.SENT -> Icon(Icons.Default.Check, "Sent", tint = Color.White.copy(alpha = 0.8f), modifier = Modifier.size(12.dp))
-                                        MessageStatus.DELIVERED -> Icon(Icons.Default.DoneAll, "Delivered", tint = Color.White.copy(alpha = 0.9f), modifier = Modifier.size(13.dp))
-                                        MessageStatus.READ -> Icon(Icons.Default.DoneAll, "Read", tint = Color.White, modifier = Modifier.size(13.dp))
+                                        MessageStatus.SENDING -> Icon(Icons.Rounded.AccessTime, "Sending", tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(11.dp))
+                                        MessageStatus.SENT -> Icon(Icons.Rounded.Check, "Sent", tint = Color.White.copy(alpha = 0.8f), modifier = Modifier.size(12.dp))
+                                        MessageStatus.DELIVERED -> Icon(Icons.Rounded.DoneAll, "Delivered", tint = Color.White.copy(alpha = 0.9f), modifier = Modifier.size(13.dp))
+                                        MessageStatus.READ -> Icon(Icons.Rounded.DoneAll, "Read", tint = Color.White, modifier = Modifier.size(13.dp))
                                     }
                                 }
                             }
@@ -1154,20 +1177,20 @@ fun MessageBubble(
                         val isCompleted = !isDeclined && !isCancelled && !isMissed
                         val iconColor = when {
                             isFromMe -> Color.White
-                            isCompleted -> Color(0xFF10B981)
-                            isCancelled -> Color(0xFFF59E0B)
-                            else -> Color(0xFFEF4444)
+                            isCompleted -> Emerald500
+                            isCancelled -> Amber500
+                            else -> Red500
                         }
                         val iconBg = when {
                             isFromMe -> Color.White.copy(alpha = 0.22f)
-                            isCompleted -> Color(0xFF10B981).copy(alpha = 0.15f)
-                            isCancelled -> Color(0xFFF59E0B).copy(alpha = 0.15f)
-                            else -> Color(0xFFEF4444).copy(alpha = 0.15f)
+                            isCompleted -> Emerald500.copy(alpha = 0.15f)
+                            isCancelled -> Amber500.copy(alpha = 0.15f)
+                            else -> Red500.copy(alpha = 0.15f)
                         }
                         val icon = when {
-                            isDeclined || isCancelled -> Icons.Default.CallEnd
-                            isMissed -> Icons.Default.PhoneMissed
-                            else -> Icons.Default.Call
+                            isDeclined || isCancelled -> Icons.Rounded.CallEnd
+                            isMissed -> Icons.AutoMirrored.Rounded.PhoneMissed
+                            else -> Icons.Rounded.Call
                         }
                         val subtitleText = when {
                             isDeclined -> "Call declined"
@@ -1216,7 +1239,7 @@ fun MessageBubble(
                             onClick = {
                                 com.example.call.CallActivity.startOutgoing(context)
                             },
-                            shape = RoundedCornerShape(10.dp),
+                            shape = RoundedCornerShape(12.dp),
                             color = if (isFromMe) Color.White.copy(alpha = 0.22f) else MaterialTheme.colorScheme.primaryContainer,
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -1228,7 +1251,7 @@ fun MessageBubble(
                                 horizontalArrangement = Arrangement.Center
                             ) {
                                 Icon(
-                                    imageVector = Icons.Default.Phone,
+                                    imageVector = Icons.Rounded.Phone,
                                     contentDescription = null,
                                     tint = if (isFromMe) Color.White else MaterialTheme.colorScheme.onPrimaryContainer,
                                     modifier = Modifier.size(15.dp)
@@ -1236,7 +1259,7 @@ fun MessageBubble(
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
                                     text = "Call Back",
-                                    fontSize = 12.5.sp,
+                                    fontSize = 12.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = if (isFromMe) Color.White else MaterialTheme.colorScheme.onPrimaryContainer
                                 )
@@ -1303,7 +1326,7 @@ fun MessageBubble(
                     ) {
                         if (message.isPinned) {
                             Icon(
-                                imageVector = Icons.Filled.PushPin,
+                                imageVector = Icons.Rounded.PushPin,
                                 contentDescription = "Pinned",
                                 tint = if (isPrivateMode) textColor.copy(alpha = 0.8f) else if (isFromMe) Color.White.copy(alpha = 0.9f) else MaterialTheme.colorScheme.primary,
                                 modifier = Modifier
@@ -1314,7 +1337,7 @@ fun MessageBubble(
 
                         if (message.isStarred) {
                             Icon(
-                                imageVector = Icons.Default.Star,
+                                imageVector = Icons.Rounded.Star,
                                 contentDescription = "Starred",
                                 tint = GoldMilestone,
                                 modifier = Modifier
@@ -1346,13 +1369,13 @@ fun MessageBubble(
                         if (isFromMe) {
                             Spacer(modifier = Modifier.width(4.dp))
                             val tickTint = if (isPrivateMode) {
-                                if (isDark) Color(0xFF9CA3AF) else Color(0xFF6B7280)
+                                if (isDark) Gray400 else Gray500
                             } else Color.White
                             MessageStatusTicks(message.getTypedStatus()) { status ->
                                 when (status) {
                                     MessageStatus.SENDING -> {
                                         Icon(
-                                            imageVector = Icons.Default.AccessTime,
+                                            imageVector = Icons.Rounded.AccessTime,
                                             contentDescription = "Sending",
                                             tint = tickTint.copy(alpha = 0.6f),
                                             modifier = Modifier.size(11.dp)
@@ -1360,7 +1383,7 @@ fun MessageBubble(
                                     }
                                     MessageStatus.SENT -> {
                                         Icon(
-                                            imageVector = Icons.Default.Check,
+                                            imageVector = Icons.Rounded.Check,
                                             contentDescription = "Sent",
                                             tint = tickTint.copy(alpha = 0.8f),
                                             modifier = Modifier.size(12.dp)
@@ -1368,7 +1391,7 @@ fun MessageBubble(
                                     }
                                     MessageStatus.DELIVERED -> {
                                         Icon(
-                                            imageVector = Icons.Default.DoneAll,
+                                            imageVector = Icons.Rounded.DoneAll,
                                             contentDescription = "Delivered",
                                             tint = tickTint.copy(alpha = 0.9f),
                                             modifier = Modifier.size(13.dp)
@@ -1376,7 +1399,7 @@ fun MessageBubble(
                                     }
                                     MessageStatus.READ -> {
                                         Icon(
-                                            imageVector = Icons.Default.DoneAll,
+                                            imageVector = Icons.Rounded.DoneAll,
                                             contentDescription = "Read",
                                             tint = tickTint,
                                             modifier = Modifier.size(13.dp)
@@ -1486,7 +1509,7 @@ fun MessageBubble(
                                     },
                                     label = "reaction_count"
                                 ) { shownCount ->
-                                    Text(text = " $shownCount", fontSize = 12.5.sp)
+                                    Text(text = " $shownCount", fontSize = 12.sp)
                                 }
                             }
                         }
@@ -1560,21 +1583,21 @@ private fun ReplyIndicator(
 ) {
 
     val backgroundColor = when {
-        isReached -> if (isPrivateMode) Color(0xFF4B5563) else RoseGoldPrimary
-        isPrivateMode -> if (isDark) darkTone(Color(0xFF1F2937)) else Color(0xFFF3F4F6)
+        isReached -> if (isPrivateMode) Gray600 else RoseGoldPrimary
+        isPrivateMode -> if (isDark) darkTone(Gray800) else Neutral200
         isDark -> darkTone(Color(0xFF2C2227))
-        else -> Color(0xFFFFF0F5)
+        else -> Color(0xFFFFF1F4)
     }
 
     val iconTint = when {
         isReached -> Color.White
-        isPrivateMode -> if (isDark) Color.White else Color(0xFF374151)
+        isPrivateMode -> if (isDark) Color.White else Gray700
         else -> RoseGoldPrimary
     }
 
     val borderColor = when {
-        isReached -> if (isPrivateMode) Color(0xFF9CA3AF) else RoseGoldPrimary
-        isPrivateMode -> if (isDark) darkTone(Color(0xFF4B5563)) else Color(0xFFD1D5DB)
+        isReached -> if (isPrivateMode) Gray400 else RoseGoldPrimary
+        isPrivateMode -> if (isDark) darkTone(Gray600) else Color(0xFFD1D5DB)
         else -> RoseGoldPrimary.copy(alpha = 0.5f)
     }
 
@@ -1605,7 +1628,7 @@ private fun ReplyIndicator(
         contentAlignment = Alignment.Center
     ) {
         Icon(
-            imageVector = Icons.AutoMirrored.Filled.Reply,
+            imageVector = Icons.AutoMirrored.Rounded.Reply,
             contentDescription = "Swipe to reply",
             tint = iconTint,
             modifier = Modifier.size(20.dp)
@@ -1614,8 +1637,8 @@ private fun ReplyIndicator(
 }
 
 /** My bubble in private chat, dark and light: sleek ChatGPT tones. */
-internal val PrivateBubbleDark = Color(0xFF2F2F2F)
-internal val PrivateBubbleLight = Color(0xFFF3F4F6)
+internal val PrivateBubbleDark = Neutral750
+internal val PrivateBubbleLight = Neutral200
 
 /** The small icons under my partner's message in private chat: copy, 👍, 👎, read aloud, share, more. */
 @Composable
@@ -1638,17 +1661,17 @@ private fun PrivateMessageActions(
         verticalAlignment = Alignment.CenterVertically
     ) {
         if (text.isNotBlank()) {
-            PrivateAction(Icons.Outlined.ContentCopy, "Copy", tint) {
+            PrivateAction(Icons.Rounded.ContentCopy, "Copy", tint) {
                 val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
                 clipboard?.setPrimaryClip(ClipData.newPlainText("Message", text))
-                Toast.makeText(context, "Copied", Toast.LENGTH_SHORT).show()
+                CherishToast.show("Copied")
             }
         }
-        PrivateAction(if ("👍" in reacted) Icons.Filled.ThumbUp else Icons.Outlined.ThumbUp, "Like", tint) { onReact("👍") }
-        PrivateAction(if ("👎" in reacted) Icons.Filled.ThumbDown else Icons.Outlined.ThumbDown, "Dislike", tint) { onReact("👎") }
+        PrivateAction(if ("👍" in reacted) Icons.Rounded.ThumbUp else Icons.Outlined.ThumbUp, "Like", tint) { onReact("👍") }
+        PrivateAction(if ("👎" in reacted) Icons.Rounded.ThumbDown else Icons.Outlined.ThumbDown, "Dislike", tint) { onReact("👎") }
         if (text.isNotBlank()) {
-            PrivateAction(Icons.AutoMirrored.Outlined.VolumeUp, "Read aloud", tint) { ReadAloud.toggle(context, text) }
-            PrivateAction(Icons.Outlined.Share, "Share", tint) {
+            PrivateAction(Icons.AutoMirrored.Rounded.VolumeUp, "Read aloud", tint) { ReadAloud.toggle(context, text) }
+            PrivateAction(Icons.Rounded.Share, "Share", tint) {
                 val send = Intent(Intent.ACTION_SEND).apply {
                     type = "text/plain"
                     putExtra(Intent.EXTRA_TEXT, text)
@@ -1656,7 +1679,7 @@ private fun PrivateMessageActions(
                 context.startActivity(Intent.createChooser(send, null))
             }
         }
-        PrivateAction(Icons.Default.MoreVert, "More", tint, onClick = onMore)
+        PrivateAction(Icons.Rounded.MoreVert, "More", tint, onClick = onMore)
     }
 }
 
@@ -1666,8 +1689,9 @@ private fun PrivateAction(icon: ImageVector, label: String, tint: Color, onClick
         contentAlignment = Alignment.Center,
         modifier = Modifier
             .size(36.dp)
+            .pressScaleTarget()
             .clip(CircleShape)
-            .clickable(onClick = onClick)
+            .springClickable(onClick = onClick)
     ) {
         Icon(icon, contentDescription = label, tint = tint, modifier = Modifier.size(20.dp))
     }

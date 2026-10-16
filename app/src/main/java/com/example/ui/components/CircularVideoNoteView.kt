@@ -16,13 +16,12 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.VolumeOff
-import androidx.compose.material.icons.automirrored.filled.VolumeUp
-import androidx.compose.material.icons.filled.OpenInFull
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Repeat
+import androidx.compose.material.icons.automirrored.rounded.VolumeOff
+import androidx.compose.material.icons.automirrored.rounded.VolumeUp
+import androidx.compose.material.icons.rounded.OpenInFull
+import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.Repeat
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -56,6 +55,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
 import java.io.File
+import com.example.ui.theme.Blue300
+import com.example.ui.theme.Blue500
+import com.example.ui.theme.NavyCard
+import com.example.ui.theme.Slate900
 
 /** Only one video note plays at a time: starting one stops (and releases) the others. */
 private object VideoNotePlayback {
@@ -67,7 +70,7 @@ fun stopAllVideoNotes() {
     VideoNotePlayback.activeKey = null
 }
 
-private val BlueCircularBorder = Color(0xFF3B82F6)
+private val BlueCircularBorder = Blue500
 
 @Composable
 fun CircularVideoNoteView(
@@ -325,7 +328,7 @@ fun CircularVideoNoteView(
         modifier = modifier
             .then(if (isRound) Modifier.defaultMinSize(minWidth = 220.dp, minHeight = 220.dp) else Modifier)
             .clip(shape)
-            .background(Color(0xFF0F172A))
+            .background(Slate900)
             .pointerInput(Unit) {
                 detectTapGestures(
                     onLongPress = {
@@ -519,8 +522,8 @@ fun CircularVideoNoteView(
                         .background(
                             Brush.radialGradient(
                                 colors = listOf(
-                                    Color(0xFF1E293B),
-                                    Color(0xFF0F172A)
+                                    NavyCard,
+                                    Slate900
                                 )
                             )
                         )
@@ -550,7 +553,7 @@ fun CircularVideoNoteView(
                 // 2. Synchronized active playback progress ring along the exact same circumference
                 if (progress > 0.002f) {
                     drawArc(
-                        color = Color(0xFF93C5FD),
+                        color = Blue300,
                         startAngle = -90f,
                         sweepAngle = (progress * 360f).coerceIn(0f, 360f),
                         useCenter = false,
@@ -577,14 +580,14 @@ fun CircularVideoNoteView(
                         )
                     } else if (hasError) {
                         Icon(
-                            imageVector = Icons.Default.Refresh,
+                            imageVector = Icons.Rounded.Refresh,
                             contentDescription = "Retry playback",
                             tint = Color.White,
                             modifier = Modifier.size(32.dp)
                         )
                     } else {
                         Icon(
-                            imageVector = Icons.Default.PlayArrow,
+                            imageVector = Icons.Rounded.PlayArrow,
                             contentDescription = "Play video note",
                             tint = Color.White,
                             modifier = Modifier.size(34.dp)
@@ -613,7 +616,7 @@ fun CircularVideoNoteView(
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         Icon(
-                            imageVector = Icons.Default.OpenInFull,
+                            imageVector = Icons.Rounded.OpenInFull,
                             contentDescription = "Make circle video big",
                             tint = Color.White,
                             modifier = Modifier.size(if (isRound) 15.dp else 17.dp)
@@ -642,7 +645,7 @@ fun CircularVideoNoteView(
         ) {
             Box(contentAlignment = Alignment.Center) {
                 Icon(
-                    imageVector = Icons.Default.Repeat,
+                    imageVector = Icons.Rounded.Repeat,
                     contentDescription = if (isLooping) "Continuous loop enabled" else "Continuous loop disabled",
                     tint = Color.White,
                     modifier = Modifier.size(if (isRound) 15.dp else 17.dp)
@@ -672,7 +675,7 @@ fun CircularVideoNoteView(
         ) {
             Box(contentAlignment = Alignment.Center) {
                 Icon(
-                    imageVector = if (isMuted) Icons.AutoMirrored.Filled.VolumeOff else Icons.AutoMirrored.Filled.VolumeUp,
+                    imageVector = if (isMuted) Icons.AutoMirrored.Rounded.VolumeOff else Icons.AutoMirrored.Rounded.VolumeUp,
                     contentDescription = if (isMuted) "Unmute audio" else "Mute audio",
                     tint = Color.White,
                     modifier = Modifier.size(if (isRound) 15.dp else 17.dp)

@@ -18,7 +18,7 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
@@ -50,6 +50,8 @@ import kotlin.math.cos
 import kotlin.math.pow
 import kotlin.math.sin
 import kotlin.random.Random
+import com.example.ui.theme.HeartPink
+import com.example.ui.theme.Rose600
 
 /** Haptic vocabulary for the chat; Compose's LocalHapticFeedback only offers a long-press buzz. */
 enum class ChatHaptic { Tick, Send, Receive, LongPress, Delete }
@@ -157,7 +159,7 @@ fun Modifier.shimmer(baseColor: Color, highlightColor: Color): Modifier = compos
 }
 
 private val HeartColors = listOf(
-    Color(0xFFFF2D55), Color(0xFFFF6B9A), Color(0xFFFF8FB1), Color(0xFFE11D48), Color(0xFFFF4D6D)
+    HeartPink, Color(0xFFFF6B9A), Color(0xFFFF8FB1), Rose600, Color(0xFFFF4D6D)
 )
 
 internal class BurstHeart(
@@ -202,7 +204,7 @@ fun rememberHeartBurstState(): HeartBurstState = remember { HeartBurstState() }
  */
 @Composable
 fun Modifier.heartBurst(state: HeartBurstState): Modifier {
-    val heart = rememberVectorPainter(Icons.Filled.Favorite)
+    val heart = rememberVectorPainter(Icons.Rounded.Favorite)
     return drawWithContent {
         drawContent()
         val t = state.progress.value
@@ -252,7 +254,7 @@ fun FloatingHeartsStream(
     origin: Offset?,
     modifier: Modifier = Modifier
 ) {
-    val heart = rememberVectorPainter(Icons.Filled.Favorite)
+    val heart = rememberVectorPainter(Icons.Rounded.Favorite)
     val hearts = remember { mutableStateListOf<RisingHeart>() }
     var now by remember { mutableLongStateOf(0L) }
 
