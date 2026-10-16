@@ -80,7 +80,7 @@ fun FloatingTabBar(
 ) {
     val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
     val barColor = if (isDark) Color.Black else Color.White
-    val highlightColor = if (isDark) Color(0xFF18181B) else MistBlue
+    val highlightColor = if (isDark) MaterialTheme.colorScheme.primaryContainer else MistBlue
     val selectedColor = MaterialTheme.colorScheme.primary
     val idleColor = if (isDark) darkTone(Slate400) else Slate500
     val badgeColor = HeartRed

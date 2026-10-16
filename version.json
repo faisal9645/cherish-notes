@@ -1,9 +1,9 @@
 {
-  "versionCode": 179,
-  "versionName": "1.8.7",
-  "tagName": "v1.8.7-179",
-  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.8.7-179/app_update_179.apk",
-  "assetSize": 18375644,
-  "releaseNotes": "Notes v1.8.7 (Build 179):\n\u2022 Pure AMOLED dark black everywhere in dark mode\n\u2022 Rounded rectangle navigation bar\n\u2022 Back gesture in notes disguise closes the app\n\u2022 Reliable online and offline message send and receive",
-  "releaseDate": "2026-10-16T13:35:13Z"
+  "versionCode": 180,
+  "versionName": "1.8.8",
+  "tagName": "v1.8.8-180",
+  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.8.8-180/app_update_180.apk",
+  "assetSize": 18375204,
+  "releaseNotes": "Notes v1.8.8 (Build 180):\n\u2022 Reverted blue theme in dark mode with dark AMOLED black screens\n\u2022 Rounded rectangle navigation bar with blue selection\n\u2022 Notes disguise back gesture closes app\n\u2022 Fast and reliable online & offline message send and receive",
+  "releaseDate": "2026-10-16T13:49:11Z"
 }

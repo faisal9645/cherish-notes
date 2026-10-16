@@ -42,20 +42,20 @@ private val PureWhiteColorScheme = lightColorScheme(
     outlineVariant = Color(0xFFEDF2F7)
 )
 
-// Dark Mode (AMOLED-Style): Strict #000000 pure black background & surface, deep blue accents, no rose/pink, crisp white text
+// Dark Mode (AMOLED-Style with Blue Theme): Strict #000000 pure black background & surface, deep blue accents, crisp white text
 private val DarkColorScheme = darkColorScheme(
     primary = DarkBluePrimary, // Deep Dark Blue (0xFF1D4ED8)
     onPrimary = Color.White,
-    primaryContainer = Color(0xFF141414),
-    onPrimaryContainer = Color(0xFFE5E5E5),
+    primaryContainer = Color(0xFF172554), // Deep blue container
+    onPrimaryContainer = Color(0xFFBFDBFE), // Soft light blue text
     secondary = DarkBlueSecondary,
     onSecondary = Color.White,
-    secondaryContainer = Color(0xFF141414),
-    onSecondaryContainer = Color(0xFFE5E5E5),
+    secondaryContainer = Color(0xFF1E3A8A), // Rich blue container
+    onSecondaryContainer = Color(0xFFDBEAFE),
     tertiary = DarkBlueTertiary,
     onTertiary = Color.White,
-    tertiaryContainer = Color(0xFF141414),
-    onTertiaryContainer = Color(0xFFE5E5E5),
+    tertiaryContainer = Color(0xFF0F172A),
+    onTertiaryContainer = Color(0xFFDBEAFE),
     background = Color(0xFF000000), // Strict AMOLED pure black #000000
     onBackground = Color(0xFFFFFFFF),
     surface = Color(0xFF000000), // Strict AMOLED pure black #000000
@@ -94,7 +94,7 @@ private val AmoledBlackColorScheme = DarkColorScheme.copy(
     outlineVariant = Color(0xFF171717)
 )
 
-/** True in dark mode & Black (AMOLED) theme, where dark surfaces are pure/near-black instead of navy. */
+/** True in the Black (AMOLED) theme, where dark surfaces are near-black greys instead of navy. */
 val LocalAmoledBlack = staticCompositionLocalOf { false }
 
 /**
@@ -113,16 +113,10 @@ fun Color.withoutBlue(): Color {
     return Color(grey, grey, grey, alpha)
 }
 
-/** A dark-mode surface: [navy] in light mode fallback, pure [black] in dark/AMOLED mode. */
+/** A dark-mode surface: [navy] in the Dark theme, [black] in the Black theme. */
 @Composable
-fun darkSurface(navy: Color, black: Color = Color.Black): Color =
-    if (LocalAmoledBlack.current || isAppInDark()) {
-        if (black == Color(0xFF141414) || black == Color(0xFF1A1A1A) || black == Color(0xFF121212) || black == Color(0xFF1E2638) || black == Color(0xFF111827)) {
-            Color.Black
-        } else {
-            black
-        }
-    } else navy
+fun darkSurface(navy: Color, black: Color = Color(0xFF141414)): Color =
+    if (LocalAmoledBlack.current) black else navy
 
 @Composable
 fun CherishTheme(
@@ -148,7 +142,7 @@ fun CherishTheme(
         fontScale = currentDensity.fontScale.coerceAtMost(1.0f)
     )
 
-    CompositionLocalProvider(LocalDensity provides cappedDensity, LocalAmoledBlack provides isDark) {
+    CompositionLocalProvider(LocalDensity provides cappedDensity, LocalAmoledBlack provides (themeMode == 3)) {
         MaterialTheme(
             colorScheme = colorScheme,
             typography = Typography,
