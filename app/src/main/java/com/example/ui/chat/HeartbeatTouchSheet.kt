@@ -39,6 +39,7 @@ import com.example.ui.home.HeartbeatBlue
 import com.example.util.HeartbeatHapticHelper
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
+import com.example.ui.components.softShadow
 
 @Composable
 fun HeartbeatTouchDialog(
@@ -61,6 +62,42 @@ fun HeartbeatTouchDialog(
     var syncConnectedSeconds by remember { mutableIntStateOf(0) }
     var whoStoppedMessage by remember { mutableStateOf<String?>(null) }
     var previousBothTouching by remember { mutableStateOf(false) }
+
+    // Dual-Touch Gravitational Pull physics: simulates two liquid-magnetic gravitational bodies
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+    val gravitationalCoalescence = remember { Animatable(0f) }
+    var hasEngagedMagneticLock by remember { mutableStateOf(false) }
+
+    LaunchedEffect(isBothTouching) {
+        if (isBothTouching) {
+            gravitationalCoalescence.animateTo(
+                targetValue = 1f,
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioHighBouncy,
+                    stiffness = Spring.StiffnessLow
+                )
+            )
+        } else {
+            hasEngagedMagneticLock = false
+            gravitationalCoalescence.animateTo(
+                targetValue = 0f,
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                    stiffness = Spring.StiffnessMedium
+                )
+            )
+        }
+    }
+
+    // Crisp haptic micro-tick when the magnetic lock engages
+    LaunchedEffect(gravitationalCoalescence.value) {
+        if (gravitationalCoalescence.value >= 0.86f && !hasEngagedMagneticLock && isBothTouching) {
+            hasEngagedMagneticLock = true
+            try {
+                haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
+            } catch (_: Exception) {}
+        }
+    }
 
     // Handle heartbeat haptics
     LaunchedEffect(shouldFeelHeartbeat(isBothTouching)) {
@@ -246,7 +283,7 @@ fun HeartbeatTouchDialog(
                         fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold,
                         textAlign = TextAlign.Center,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 9.dp)
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
                     )
                 }
 
@@ -285,53 +322,127 @@ fun HeartbeatTouchDialog(
 
                 Spacer(modifier = Modifier.height(36.dp))
 
-                // Pulsating Touch Sensor Circle
+                // Pulsating Touch Sensor Circle with Dual-Touch Gravitational Pull Physics
+                val coalescence = gravitationalCoalescence.value
                 Box(
                     contentAlignment = Alignment.Center,
                     modifier = Modifier
-                        .size(200.dp)
+                        .size(220.dp)
                         .onGloballyPositioned { coordinates ->
                             heartCenter = coordinates.positionInRoot() +
                                 Offset(coordinates.size.width / 2f, coordinates.size.height / 2f)
                         }
                         .scale(pulseScale)
                 ) {
-                    // Outer ripple ring
+                    // Outer ripple ring & fluid surface tension canvas
+                    Canvas(modifier = Modifier.fillMaxSize()) {
+                        val center = Offset(size.width / 2f, size.height / 2f)
+                        val maxSeparation = size.width * 0.28f
+                        val currentSeparation = maxSeparation * (1f - coalescence)
+
+                        // If both are touching or coalescing, draw two liquid droplets pulling together
+                        if (coalescence > 0.01f || isBothTouching) {
+                            val droplet1Center = Offset(center.x - currentSeparation, center.y + currentSeparation * 0.35f)
+                            val droplet2Center = Offset(center.x + currentSeparation, center.y - currentSeparation * 0.35f)
+                            val dropletRadius = (size.width * 0.22f) * (0.85f + 0.25f * coalescence)
+
+                            // Surface tension liquid neck bridge
+                            if (currentSeparation < maxSeparation * 0.75f) {
+                                val neckAlpha = (1f - (currentSeparation / (maxSeparation * 0.75f))).coerceIn(0f, 1f)
+                                drawCircle(
+                                    brush = Brush.radialGradient(
+                                        colors = listOf(
+                                            Color(0xFFFF529A).copy(alpha = 0.55f * neckAlpha),
+                                            HeartbeatBlue.copy(alpha = 0.4f * neckAlpha),
+                                            Color.Transparent
+                                        ),
+                                        center = center,
+                                        radius = dropletRadius * 1.5f
+                                    ),
+                                    radius = dropletRadius * 1.5f,
+                                    center = center
+                                )
+                            }
+
+                            // Body 1: User's liquid droplet (Rose/Pink)
+                            drawCircle(
+                                brush = Brush.radialGradient(
+                                    colors = listOf(
+                                        HeartbeatPink.copy(alpha = 0.75f),
+                                        HeartbeatPink.copy(alpha = 0.25f),
+                                        Color.Transparent
+                                    ),
+                                    center = droplet1Center,
+                                    radius = dropletRadius
+                                ),
+                                radius = dropletRadius,
+                                center = droplet1Center
+                            )
+
+                            // Body 2: Partner's liquid droplet (Azure/Blue)
+                            drawCircle(
+                                brush = Brush.radialGradient(
+                                    colors = listOf(
+                                        HeartbeatBlue.copy(alpha = 0.75f),
+                                        HeartbeatBlue.copy(alpha = 0.25f),
+                                        Color.Transparent
+                                    ),
+                                    center = droplet2Center,
+                                    radius = dropletRadius
+                                ),
+                                radius = dropletRadius,
+                                center = droplet2Center
+                            )
+                        } else {
+                            // Single ambient idle ripple
+                            drawCircle(
+                                color = (if (isConnected) HeartbeatBlue else HeartbeatPink).copy(alpha = glowAlpha * 0.30f),
+                                radius = size.width * 0.44f,
+                                center = center
+                            )
+                        }
+                    }
+
+                    // Outer border ring with magnetic glow
                     Box(
                         modifier = Modifier
-                            .fillMaxSize()
+                            .size(190.dp)
                             .clip(CircleShape)
-                            .background(
-                                (if (isConnected) HeartbeatBlue else HeartbeatPink)
-                                    .copy(alpha = glowAlpha * 0.30f)
-                            )
                             .border(
-                                3.dp,
-                                (if (isConnected) HeartbeatBlue else HeartbeatPink).copy(alpha = glowAlpha),
-                                CircleShape
+                                width = if (hasEngagedMagneticLock) 3.5.dp else 2.5.dp,
+                                color = (if (isConnected) HeartbeatBlue else HeartbeatPink).copy(alpha = glowAlpha),
+                                shape = CircleShape
                             )
                     )
 
-                    // Inner circle: pink to blue like the heartbeat button, softer until someone holds it
+                    // Inner core circle: merges both bodies into unified magnetic lock
                     Box(
                         contentAlignment = Alignment.Center,
                         modifier = Modifier
-                            .size(130.dp)
-                            .shadow(if (isConnected) 20.dp else 6.dp, CircleShape)
+                            .size((130f + 16f * coalescence).dp)
+                            .softShadow(if (isConnected) (20f + 10f * coalescence).dp else 6.dp, CircleShape)
                             .clip(CircleShape)
                             .background(
-                                Brush.linearGradient(listOf(HeartbeatPink, HeartbeatBlue)),
-                                alpha = if (isConnected || isMeTouching || isPartnerTouching) 1f else 0.6f
+                                Brush.linearGradient(
+                                    listOf(
+                                        HeartbeatPink.copy(alpha = 0.7f + 0.3f * coalescence),
+                                        HeartbeatBlue.copy(alpha = 0.7f + 0.3f * coalescence)
+                                    )
+                                )
                             )
-                            .border(2.dp, Color.White.copy(alpha = 0.55f), CircleShape)
+                            .border(
+                                width = if (hasEngagedMagneticLock) 2.5.dp else 2.dp,
+                                color = if (hasEngagedMagneticLock) Color.White else Color.White.copy(alpha = 0.65f),
+                                shape = CircleShape
+                            )
                     ) {
                         Icon(
                             imageVector = Icons.Rounded.Favorite,
                             contentDescription = "Heart symbol",
                             tint = Color.White,
                             modifier = Modifier
-                                .size(62.dp)
-                                .scale(if (isConnected) pulseScale / 1.15f else 1.0f)
+                                .size((62f + 8f * coalescence).dp)
+                                .scale(if (isConnected) pulseScale / 1.12f else 1.0f)
                         )
                     }
                 }

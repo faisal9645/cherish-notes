@@ -9,13 +9,22 @@ import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import com.example.ui.chat.areAnimationsDisabled
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -52,6 +61,7 @@ fun AvatarView(
     name: String,
     size: Dp = 48.dp,
     isOnline: Boolean = false,
+    isTyping: Boolean = false,
     showOnlineBadge: Boolean = true,
     modifier: Modifier = Modifier,
     // The blue ring; off where the photo sits in a ring of its own (e.g. the couple card)
@@ -65,23 +75,60 @@ fun AvatarView(
         }
     }
 
+    val isAlive = isOnline || isTyping
+    // The breath runs only while they're online or typing (and not with system animations off), and
+    // only drawing reads it, so an avatar never recomposes for it
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val breathPhase = androidx.compose.runtime.remember { Animatable(0f) }
+    LaunchedEffect(isAlive) {
+        breathPhase.snapTo(0f)
+        if (isAlive && !context.areAnimationsDisabled()) {
+            breathPhase.animateTo(
+                targetValue = (2.0 * Math.PI).toFloat(),
+                animationSpec = infiniteRepeatable(
+                    animation = tween(3500, easing = LinearEasing),
+                    repeatMode = RepeatMode.Restart
+                )
+            )
+        }
+    }
+    // Organic 3.5-second sinusoidal breathing curve: smooth expansion & spring-damped relaxation
+    val breathProgress = {
+        val phaseD = breathPhase.value.toDouble()
+        val rawCos = (1.0 - kotlin.math.cos(phaseD)) / 2.0
+        val dampened = rawCos * (1.0 - 0.06 * kotlin.math.sin(phaseD))
+        dampened.toFloat().coerceIn(0f, 1f)
+    }
+
     Box(
         modifier = modifier.size(size),
         contentAlignment = Alignment.Center
     ) {
-        // Glowing vibrant royal blue ring around avatar
+        // Glowing vibrant royal blue ring around avatar with organic breathing physics
         Box(
             modifier = (if (showRing) {
                 Modifier
                     .size((size - 4.dp).coerceAtLeast(24.dp))
+                    .graphicsLayer {
+                        val breath = breathProgress()
+                        scaleX = 1f + 0.042f * breath
+                        scaleY = 1f + 0.042f * breath
+                        alpha = if (isAlive) 0.72f + 0.28f * breath else 1f
+                    }
                     .border(
                         width = 2.dp,
                         brush = appHorizontalGradient(),
                         shape = CircleShape
                     )
-                    .padding(1.5.dp)
+                    .padding(2.dp)
             } else {
-                Modifier.size(size)
+                Modifier
+                    .size(size)
+                    .graphicsLayer {
+                        val breath = breathProgress()
+                        scaleX = 1f + 0.042f * breath
+                        scaleY = 1f + 0.042f * breath
+                    }
             })
                 .clip(CircleShape)
                 .background(MaterialTheme.colorScheme.surfaceVariant),
@@ -129,6 +176,11 @@ fun AvatarView(
             Box(
                 modifier = Modifier
                     .size(badgeSize)
+                    .graphicsLayer {
+                        val badgeScale = 1f + 0.15f * breathProgress()
+                        scaleX = badgeScale
+                        scaleY = badgeScale
+                    }
                     .align(Alignment.BottomEnd)
                     .offset(x = (-1.5).dp, y = (-1.5).dp)
                     .clip(CircleShape)

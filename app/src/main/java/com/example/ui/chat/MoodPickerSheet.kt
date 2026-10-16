@@ -18,6 +18,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.theme.RoseGoldPrimary
+import com.example.ui.components.fluidSheetInertia
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -61,6 +62,7 @@ fun MoodPickerSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .fluidSheetInertia()
                 .padding(horizontal = 20.dp, vertical = 8.dp)
                 .navigationBarsPadding()
         ) {
@@ -90,7 +92,7 @@ fun MoodPickerSheet(
                         .fillMaxWidth()
                         .testTag("my_current_mood")
                 ) {
-                    Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
+                    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
                         Text(
                             text = "Your mood now",
                             fontSize = 11.sp,
@@ -193,7 +195,7 @@ fun MoodPickerSheet(
                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                             color = if (isSelected) RoseGoldPrimary else MaterialTheme.colorScheme.onSurface,
                             emojiScale = 1.2f,
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp)
                         )
                     }
                 }

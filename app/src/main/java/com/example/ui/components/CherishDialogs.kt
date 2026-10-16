@@ -25,6 +25,18 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.window.DialogWindowProvider
 import com.example.ui.theme.darkSurface
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.layout.offset
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.unit.IntOffset
+import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
+
 /** The look every pop-up in the secret app shares: dialogs and bottom sheets. */
 object CherishDialogDefaults {
     val shape: Shape = RoundedCornerShape(24.dp)
@@ -42,6 +54,65 @@ object CherishDialogDefaults {
     @OptIn(ExperimentalMaterial3Api::class)
     @Composable
     fun SheetDragHandle() = BottomSheetDefaults.DragHandle(width = 36.dp, height = 4.dp)
+}
+
+/**
+ * Fluid Bottom-Sheet Inertia & Momentum Catching:
+ * Applies non-linear edge resistance when dragged down, and applies up to 24dp
+ * rubber-band stretch (overshoot) when pulled beyond the top that springs back.
+ */
+@Composable
+fun Modifier.fluidSheetInertia(): Modifier {
+    val scope = rememberCoroutineScope()
+    val overscrollOffset = remember { Animatable(0f) }
+    val density = LocalDensity.current
+    val maxStretchPx = with(density) { 24.dp.toPx() }
+
+    return this
+        .offset { IntOffset(0, overscrollOffset.value.roundToInt()) }
+        .pointerInput(Unit) {
+            var totalDragY = 0f
+            detectVerticalDragGestures(
+                onDragStart = { totalDragY = 0f },
+                onDragEnd = {
+                    totalDragY = 0f
+                    scope.launch {
+                        overscrollOffset.animateTo(
+                            targetValue = 0f,
+                            animationSpec = spring(
+                                dampingRatio = Spring.DampingRatioMediumBouncy,
+                                stiffness = Spring.StiffnessMediumLow
+                            )
+                        )
+                    }
+                },
+                onDragCancel = {
+                    totalDragY = 0f
+                    scope.launch {
+                        overscrollOffset.animateTo(
+                            targetValue = 0f,
+                            animationSpec = spring(
+                                dampingRatio = Spring.DampingRatioMediumBouncy,
+                                stiffness = Spring.StiffnessMediumLow
+                            )
+                        )
+                    }
+                },
+                onVerticalDrag = { change, dragAmount ->
+                    totalDragY += dragAmount
+                    // Rubber-band stretch up to 24dp when pulled beyond top
+                    val stretch = if (totalDragY < 0f) {
+                        val pull = -totalDragY
+                        -((pull * maxStretchPx) / (pull + maxStretchPx * 1.5f))
+                    } else {
+                        // Non-linear edge resistance
+                        val pull = totalDragY
+                        (pull * 48f) / (pull + 120f)
+                    }
+                    scope.launch { overscrollOffset.snapTo(stretch) }
+                }
+            )
+        }
 }
 
 @Composable

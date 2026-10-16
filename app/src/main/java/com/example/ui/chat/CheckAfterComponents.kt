@@ -3,15 +3,21 @@ package com.example.ui.chat
 import com.example.ui.theme.darkTone
 
 import android.app.TimePickerDialog
+import kotlinx.coroutines.launch
+import com.example.ui.components.fluidSheetInertia
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AccessTime
 import androidx.compose.material.icons.rounded.Add
@@ -52,6 +58,8 @@ import com.example.ui.components.CherishAlertDialog
 import com.example.ui.components.CherishButton
 import com.example.ui.components.CherishOutlinedButton
 import com.example.ui.components.CherishTonalButton
+import com.example.ui.theme.steadyDigits
+import com.example.ui.components.CherishSwitch
 
 object CheckAfterHelper {
     fun formatTargetTime(timeMillis: Long): String {
@@ -275,7 +283,7 @@ fun CheckAfterChatBanner(
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.Rounded.HourglassEmpty,
@@ -288,7 +296,8 @@ fun CheckAfterChatBanner(
                                 text = remainingText,
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.SemiBold,
-                                color = primaryAccent
+                                color = primaryAccent,
+                                style = LocalTextStyle.current.steadyDigits
                             )
                         }
                     }
@@ -302,7 +311,7 @@ fun CheckAfterChatBanner(
                                 text = note,
                                 fontSize = 11.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
@@ -427,7 +436,7 @@ fun CheckAfterBottomSheet(
         )
     }
 
-    var selectedPreset by remember { mutableStateOf("2h") }
+    var selectedPreset: String? by remember { mutableStateOf<String?>("2h") }
     var selectedNote by remember { mutableStateOf(currentNote ?: "") }
     var targetMillis by remember {
         mutableLongStateOf(
@@ -451,6 +460,7 @@ fun CheckAfterBottomSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .fluidSheetInertia()
                 .padding(horizontal = 20.dp, vertical = 6.dp)
                 .navigationBarsPadding(),
             horizontalAlignment = Alignment.CenterHorizontally
@@ -663,11 +673,25 @@ fun CheckAfterBottomSheet(
                             fontSize = 12.sp,
                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                             color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.padding(horizontal = 11.dp, vertical = 6.dp)
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
                         )
                     }
                 }
             }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Mechanical Watch Crown Rotary Dial for precise timer tuning with angular inertia & tactile micro-clicks
+            RotaryCrownTimePicker(
+                currentMinutes = remember(targetMillis) {
+                    if (targetMillis == Long.MAX_VALUE) 60
+                    else ((targetMillis - System.currentTimeMillis()).coerceAtLeast(0L) / 60000L).toInt().coerceIn(5, 720)
+                },
+                onMinutesChanged = { mins ->
+                    selectedPreset = null
+                    targetMillis = System.currentTimeMillis() + (mins * 60_000L)
+                }
+            )
 
             Spacer(modifier = Modifier.height(8.dp))
 
@@ -736,7 +760,7 @@ fun CheckAfterBottomSheet(
                             text = noteTag,
                             fontSize = 11.sp,
                             color = if (isTagSelected) primaryAccent else MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp)
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                         )
                     }
                 }
@@ -777,7 +801,7 @@ fun CheckAfterBottomSheet(
                         color = MaterialTheme.colorScheme.onSurface
                     )
                 }
-                Switch(
+                CherishSwitch(
                     checked = isReminderEnabled,
                     onCheckedChange = { onToggleReminder(it) },
                     modifier = Modifier.scale(0.8f),
@@ -927,7 +951,7 @@ fun SpaceRequestCard(
             .fillMaxWidth()
             .testTag("space_request_card")
     ) {
-        Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
+        Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
                     imageVector = Icons.Rounded.Favorite,
@@ -969,7 +993,7 @@ fun SpaceRequestCard(
                         text = request.note,
                         fontSize = 11.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -1012,6 +1036,181 @@ fun SpaceRequestCard(
                         ) { Text("OK", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = primaryAccent) }
                     }
                 }
+            }
+        }
+    }
+}
+
+/**
+ * Rotary Dial Physics for "Pick a Time" / Timers:
+ * Feels like turning a high-end mechanical watch crown.
+ * Each notch has an angular inertia decay with subtle micro-clicks (HapticFeedbackType.TextHandleMove).
+ */
+@Composable
+fun RotaryCrownTimePicker(
+    currentMinutes: Int,
+    minMinutes: Int = 5,
+    maxMinutes: Int = 720,
+    stepMinutes: Int = 5,
+    onMinutesChanged: (Int) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val haptic = LocalHapticFeedback.current
+    val scope = rememberCoroutineScope()
+    val angularOffset = remember { Animatable(currentMinutes.toFloat()) }
+    var lastHapticNotch by remember { mutableIntStateOf(currentMinutes / stepMinutes) }
+
+    val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp)
+    ) {
+        // Watch crown dial display header
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center,
+            modifier = Modifier.padding(bottom = 6.dp)
+        ) {
+            val totalMins = angularOffset.value.toInt().coerceIn(minMinutes, maxMinutes)
+            val hours = totalMins / 60
+            val mins = totalMins % 60
+            val timeLabel = when {
+                hours > 0 && mins > 0 -> "${hours}h ${mins}m"
+                hours > 0 -> "${hours} hour${if (hours > 1) "s" else ""}"
+                else -> "$mins minutes"
+            }
+            Text(
+                text = "Crown Dial: ",
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                text = timeLabel,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary
+            )
+        }
+
+        // Mechanical Watch Crown Cylindrical Wheel
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(46.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(
+                    if (isDark) Brush.horizontalGradient(
+                        listOf(
+                            Color(0xFF1E2129),
+                            Color(0xFF333842),
+                            Color(0xFF4C5362),
+                            Color(0xFF333842),
+                            Color(0xFF1E2129)
+                        )
+                    ) else Brush.horizontalGradient(
+                        listOf(
+                            Color(0xFFD1D5DB),
+                            Color(0xFFF3F4F6),
+                            Color(0xFFFFFFFF),
+                            Color(0xFFF3F4F6),
+                            Color(0xFFD1D5DB)
+                        )
+                    )
+                )
+                .border(
+                    1.dp,
+                    if (isDark) Color.White.copy(alpha = 0.15f) else Color.Black.copy(alpha = 0.12f),
+                    RoundedCornerShape(12.dp)
+                )
+                .pointerInput(Unit) {
+                    var lastDragTime = 0L
+                    detectHorizontalDragGestures(
+                        onDragStart = {
+                            lastDragTime = System.currentTimeMillis()
+                        },
+                        onDragEnd = {
+                            // Angular inertia decay down to nearest notch
+                            scope.launch {
+                                val targetSnap = (kotlin.math.round(angularOffset.value / stepMinutes) * stepMinutes)
+                                    .coerceIn(minMinutes.toFloat(), maxMinutes.toFloat())
+                                angularOffset.animateTo(
+                                    targetValue = targetSnap,
+                                    animationSpec = spring(
+                                        dampingRatio = Spring.DampingRatioMediumBouncy,
+                                        stiffness = Spring.StiffnessMediumLow
+                                    )
+                                )
+                                onMinutesChanged(targetSnap.toInt())
+                            }
+                        },
+                        onDragCancel = {
+                            scope.launch {
+                                val targetSnap = (kotlin.math.round(angularOffset.value / stepMinutes) * stepMinutes)
+                                    .coerceIn(minMinutes.toFloat(), maxMinutes.toFloat())
+                                angularOffset.animateTo(targetSnap, spring(dampingRatio = Spring.DampingRatioMediumBouncy))
+                                onMinutesChanged(targetSnap.toInt())
+                            }
+                        },
+                        onHorizontalDrag = { change, dragAmount ->
+                            change.consume()
+                            lastDragTime = System.currentTimeMillis()
+
+                            // 1dp drag moves approx 0.4 minutes
+                            val deltaMins = -dragAmount * 0.35f
+                            val nextVal = (angularOffset.value + deltaMins).coerceIn(minMinutes.toFloat(), maxMinutes.toFloat())
+                            val currentNotch = (nextVal / stepMinutes).toInt()
+
+                            if (currentNotch != lastHapticNotch) {
+                                lastHapticNotch = currentNotch
+                                try {
+                                    // Mechanical crown micro-click tactile feedback
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                } catch (_: Exception) {}
+                                onMinutesChanged(currentNotch * stepMinutes)
+                            }
+                            scope.launch { angularOffset.snapTo(nextVal) }
+                        }
+                    )
+                },
+            contentAlignment = Alignment.Center
+        ) {
+            // Milled Crown Grooves/Notches
+            androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxSize()) {
+                val notchSpacing = 16.dp.toPx()
+                val offsetPx = (angularOffset.value * 2.8f) % notchSpacing
+                val numNotches = (size.width / notchSpacing).toInt() + 4
+
+                for (i in -2..numNotches) {
+                    val x = i * notchSpacing - offsetPx
+                    if (x in 0f..size.width) {
+                        val distFromCenter = kotlin.math.abs(x - size.width / 2f) / (size.width / 2f)
+                        val notchAlpha = (1f - distFromCenter * distFromCenter).coerceIn(0.1f, 0.9f)
+                        val isMajor = (i % 3 == 0)
+                        val notchHeight = if (isMajor) size.height * 0.65f else size.height * 0.4f
+                        val startY = (size.height - notchHeight) / 2f
+                        val endY = startY + notchHeight
+
+                        drawLine(
+                            color = (if (isDark) Color.White else Color.Black).copy(alpha = notchAlpha * 0.45f),
+                            start = Offset(x, startY),
+                            end = Offset(x, endY),
+                            strokeWidth = if (isMajor) 2.2.dp.toPx() else 1.2.dp.toPx()
+                        )
+                    }
+                }
+
+                // Center jewel / detent alignment marker
+                val centerX = size.width / 2f
+                drawLine(
+                    color = Color(0xFFF43F5E), // Rose-red jewel indicator
+                    start = Offset(centerX, 4.dp.toPx()),
+                    end = Offset(centerX, size.height - 4.dp.toPx()),
+                    strokeWidth = 2.5.dp.toPx()
+                )
             }
         }
     }

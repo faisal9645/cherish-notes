@@ -436,7 +436,7 @@ class SecurityPreferences(private val context: Context) {
     private val _callAiNoiseMode = MutableStateFlow(getCallAiNoiseMode())
     val callAiNoiseModeFlow: StateFlow<String> = _callAiNoiseMode.asStateFlow()
 
-    fun isCallLowDataMode(): Boolean = prefs.getBoolean(KEY_CALL_LOW_DATA_MODE, false)
+    fun isCallLowDataMode(): Boolean = prefs.getBoolean(KEY_CALL_LOW_DATA_MODE, true)
     fun setCallLowDataMode(enabled: Boolean) {
         prefs.edit().putBoolean(KEY_CALL_LOW_DATA_MODE, enabled).apply()
         _callLowDataMode.value = enabled

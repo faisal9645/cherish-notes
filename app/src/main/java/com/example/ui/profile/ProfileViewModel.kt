@@ -44,7 +44,7 @@ data class ProfileUiState(
     val isHeartbeatTriggerEnabled: Boolean = true,
     val isCallRingingEnabled: Boolean = true,
     val callAiNoiseMode: String = "balanced",
-    val isCallLowDataMode: Boolean = false,
+    val isCallLowDataMode: Boolean = true,
     val callDefaultAudioOutput: String = "earpiece",
     val isCallAutoRecordEnabled: Boolean = true,
     val callMaskingStyle: String = "normal",

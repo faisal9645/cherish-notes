@@ -6,6 +6,7 @@ import androidx.compose.animation.core.AnimationVector1D
 import androidx.compose.animation.core.FastOutLinearInEasing
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.ui.draw.shadow
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -166,16 +167,29 @@ fun MessageFocusOverlay(
             val menuX = sideX(menuW)
             val sideOrigin = if (isFromMe) 1f else 0f
 
-            // The pressed message, lifted
+            val currentProgress = progress.value.coerceIn(0f, 1f)
+            val shadowElevation = lerp(1f, 16f, currentProgress).dp
+            val cardTiltDegrees = lerp(0f, if (isFromMe) -1.5f else 1.5f, currentProgress)
+
+            // The pressed message, lifted toward the user like picking up a physical card off a table
             Box(
                 modifier = Modifier
-                    .offset { IntOffset(anchor.left.roundToInt(), bubbleTop(progress.value).roundToInt()) }
+                    .offset { IntOffset(anchor.left.roundToInt(), bubbleTop(currentProgress).roundToInt()) }
                     .width(anchor.width.toDp())
+                    .shadow(
+                        elevation = shadowElevation,
+                        shape = RoundedCornerShape(18.dp),
+                        ambientColor = Color.Black.copy(alpha = 0.3f * currentProgress),
+                        spotColor = Color.Black.copy(alpha = 0.45f * currentProgress),
+                        clip = false
+                    )
                     .graphicsLayer {
-                        val s = bubbleScale(progress.value)
+                        val s = bubbleScale(currentProgress)
                         scaleX = s
                         scaleY = s
-                        transformOrigin = TransformOrigin(sideOrigin, 0f)
+                        rotationZ = cardTiltDegrees
+                        cameraDistance = 16f * density.density
+                        transformOrigin = TransformOrigin(sideOrigin, 0.5f)
                     }
             ) {
                 bubble()
