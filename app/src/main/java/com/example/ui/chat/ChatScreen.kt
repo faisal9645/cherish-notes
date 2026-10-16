@@ -30,6 +30,7 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -114,6 +115,8 @@ import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -251,6 +254,7 @@ fun ChatScreen(
     }
 
     val searchFocusRequester = remember { FocusRequester() }
+    val composerFocusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
 
     // Automatically open keyboard and focus input when search is opened
@@ -1489,6 +1493,19 @@ fun ChatScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .background(barBg)
+                        .pointerInput(isImeVisible) {
+                            if (!isImeVisible) {
+                                detectVerticalDragGestures { change, dragAmount ->
+                                    if (dragAmount < -10f) {
+                                        change.consume()
+                                        try {
+                                            composerFocusRequester.requestFocus()
+                                            keyboardController?.show()
+                                        } catch (_: Exception) {}
+                                    }
+                                }
+                            }
+                        }
                         .windowInsetsPadding(WindowInsets.navigationBars.union(WindowInsets.ime))
                 ) {
                 ChatBottomComposerBar(
@@ -1570,7 +1587,8 @@ fun ChatScreen(
                                 if (listState.firstVisibleItemIndex <= 2) listState.scrollToItem(0, scrollOffset = 0)
                             }
                         }
-                    }
+                    },
+                    focusRequester = composerFocusRequester
                 )
 
             }
@@ -1809,6 +1827,50 @@ fun ChatScreen(
                 // never recomposes the chat
                 val listPhysics = rememberChatListPhysics()
 
+                // Swipe up on chat screen immediately opens the keyboard
+                val swipeUpToOpenKeyboardConnection = remember(isImeVisible) {
+                    object : NestedScrollConnection {
+                        var accumulatedUpDrag = 0f
+
+                        override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                            if (source == NestedScrollSource.Drag) {
+                                if (!isImeVisible) {
+                                    // Dragging finger up towards top: available.y < 0
+                                    if (available.y < 0f && listState.firstVisibleItemIndex == 0) {
+                                        accumulatedUpDrag += -available.y
+                                        if (accumulatedUpDrag > 14f) {
+                                            accumulatedUpDrag = 0f
+                                            try {
+                                                composerFocusRequester.requestFocus()
+                                                keyboardController?.show()
+                                            } catch (_: Exception) {}
+                                        }
+                                    } else if (available.y > 0f) {
+                                        accumulatedUpDrag = 0f
+                                    }
+                                } else {
+                                    // When keyboard is open, swiping down on the chat list dismisses keyboard cleanly
+                                    if (available.y > 18f && listState.firstVisibleItemIndex <= 1) {
+                                        keyboardController?.hide()
+                                    }
+                                }
+                            }
+                            return Offset.Zero
+                        }
+
+                        override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
+                            if (!isImeVisible && source == NestedScrollSource.Drag && available.y < -6f) {
+                                accumulatedUpDrag = 0f
+                                try {
+                                    composerFocusRequester.requestFocus()
+                                    keyboardController?.show()
+                                } catch (_: Exception) {}
+                            }
+                            return Offset.Zero
+                        }
+                    }
+                }
+
                 LazyColumn(
                     state = listState,
                     modifier = Modifier
@@ -1816,9 +1878,7 @@ fun ChatScreen(
                         .fillMaxWidth()
                         // Older messages fade softly under the header instead of a hard cut
                         .chatTopFadingEdge(listState)
-                        // Pull the chat down and the keyboard follows the finger and tucks away
-                        // (Android 11+); it comes back up the same way
-                        .imeNestedScroll()
+                        .nestedScroll(swipeUpToOpenKeyboardConnection)
                         .nestedScroll(listPhysics.nestedScroll)
                         .chatListTouchAnchor(listPhysics)
                         .onSizeChanged { newSize ->
@@ -4786,6 +4846,7 @@ private fun ChatBottomComposerBar(
     onSendHaptic: () -> Unit,
     onUnreadJumpDone: () -> Unit,
     onInputFocused: () -> Unit = {},
+    focusRequester: FocusRequester = remember { FocusRequester() },
     modifier: Modifier = Modifier
 ) {
     MessageComposer(
@@ -4827,6 +4888,7 @@ private fun ChatBottomComposerBar(
         },
         isPrivateMode = (uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE),
         onInputFocused = onInputFocused,
+        focusRequester = focusRequester,
         modifier = modifier
     )
 }

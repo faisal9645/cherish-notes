@@ -84,9 +84,10 @@ def main():
         "versionCode": version_code,
         "versionName": version_name,
         "tagName": tag_name,
-        "downloadUrl": f"https://github.com/{REPO}/releases/download/{tag_name}/cherish-notes-{tag_name}.apk",
+        "downloadUrl": f"https://github.com/{REPO}/releases/download/{tag_name}/app_update_{version_code}.apk",
         "assetSize": apk_len,
-        "releaseNotes": release_body
+        "releaseNotes": release_body,
+        "releaseDate": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     }
     with open("version.json", "w", encoding="utf-8") as vf:
         json.dump(version_json_data, vf, indent=2)
@@ -139,7 +140,7 @@ def main():
                 else:
                     sys.exit(1)
 
-    assets_to_upload = [f"app_update_{version_code}.apk", f"cherish-notes-{tag_name}.apk", "app-release.apk"]
+    assets_to_upload = [f"app_update_{version_code}.apk"]
     for asset_name in assets_to_upload:
         if asset_name in existing_assets and existing_asset_sizes.get(asset_name) == apk_len:
             print(f"Asset {asset_name} is already uploaded with matching size ({apk_len} bytes). Skipping.")

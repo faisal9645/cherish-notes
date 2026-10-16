@@ -60,7 +60,6 @@ import com.example.ui.dates.ImportantDatesScreen
 import com.example.ui.dates.ImportantDatesViewModel
 import com.example.ui.disguise.NotesDisguiseScreen
 import com.example.ui.disguise.NotesDisguiseViewModel
-import com.example.ui.disguise.heartReveal
 import com.example.ui.gallery.SharedGalleryScreen
 import com.example.ui.home.HomeScreen
 import com.example.ui.home.HomeViewModel
@@ -178,27 +177,18 @@ fun CherishNavGraph(
         }
     }
 
-    // Where the hold that opened the secret space was (the + button): the chat opens out of it as a
-    // growing heart. Null for other ways in (e.g. a notification), which fade in as before.
-    var revealOrigin by remember { mutableStateOf<androidx.compose.ui.geometry.Offset?>(null) }
-    LaunchedEffect(isDisguiseActive) {
-        if (isDisguiseActive) revealOrigin = null
-    }
-
-    // Hidden at once; shown either fading in or, from a hold, fully there under the opening heart
-    // while it settles from a slight zoom
+    // Hidden at once; shown smoothly scaling and fading in on reveal
     val appAlpha by animateFloatAsState(
         targetValue = if (isDisguiseActive) 0f else 1f,
-        animationSpec = if (isDisguiseActive || revealOrigin != null) snap() else tween(160, easing = FastOutSlowInEasing),
+        animationSpec = if (isDisguiseActive) snap() else tween(300, easing = FastOutSlowInEasing),
         label = "app_reveal_alpha"
     )
     val appScale by animateFloatAsState(
-        targetValue = if (isDisguiseActive) 0.96f else 1f,
-        animationSpec = when {
-            isDisguiseActive -> snap()
-            revealOrigin != null -> tween(com.example.ui.disguise.HeartReveal.DURATION_MS, easing = FastOutSlowInEasing)
-            else -> tween(160, easing = FastOutSlowInEasing)
-        },
+        targetValue = if (isDisguiseActive) 0.95f else 1f,
+        animationSpec = if (isDisguiseActive) snap() else spring(
+            dampingRatio = 0.85f,
+            stiffness = Spring.StiffnessMediumLow
+        ),
         label = "app_reveal_scale"
     )
 
@@ -722,39 +712,18 @@ fun CherishNavGraph(
         }
     }
 
-    // Real Notes Disguise screen - instant zero-latency snap on disguise. Opened by the hold, a heart
-    // grows out of the + button with the chat showing through it; other ways in fade, as before.
+    // Real Notes Disguise screen - instant zero-latency snap on disguise, elegant smooth reveal on unlock
     AnimatedVisibility(
         visible = isDisguiseActive,
         enter = EnterTransition.None,
-        exit = if (revealOrigin != null) ExitTransition.None
-               else fadeOut(animationSpec = tween(160, easing = FastOutSlowInEasing)) +
-                    scaleOut(targetScale = 1.04f, animationSpec = tween(160, easing = FastOutSlowInEasing)),
+        exit = fadeOut(animationSpec = tween(280, easing = FastOutSlowInEasing)) +
+               scaleOut(targetScale = 1.04f, animationSpec = tween(280, easing = FastOutSlowInEasing)),
         modifier = Modifier.fillMaxSize()
     ) {
-        // Notes stays until the heart has opened all the way; going back to Notes is always instant,
-        // even halfway through (the heart closes at once)
-        val origin = revealOrigin
-        val heartOpen by transition.animateFloat(
-            transitionSpec = {
-                if (targetState == EnterExitState.PostExit && origin != null) {
-                    tween(com.example.ui.disguise.HeartReveal.DURATION_MS, easing = LinearEasing)
-                } else {
-                    snap()
-                }
-            },
-            label = "heart_reveal"
-        ) { state -> if (state == EnterExitState.PostExit && origin != null) 1f else 0f }
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .heartReveal(origin) { heartOpen }
-        ) {
         NotesDisguiseScreen(
             viewModel = notesDisguiseViewModel,
             securityPreferences = app.securityPreferences,
-            onSecretGestureTriggered = { revealFrom ->
-                revealOrigin = revealFrom
+            onSecretGestureTriggered = {
                 app.securityPreferences.revealSecretApp()
                 if (isUserLoggedIn) {
                     val currentRoute = navController.currentBackStackEntry?.destination?.route
@@ -771,7 +740,6 @@ fun CherishNavGraph(
             },
             modifier = Modifier.fillMaxSize()
         )
-        }
     }
     // In-App OTA Updates Dialog: ONLY show inside Cherish app, NEVER inside Notes app
     if (updateState.showDialog && !isDisguiseActive) {

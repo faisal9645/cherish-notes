@@ -148,6 +148,7 @@ fun MessageComposer(
     onInputFocused: () -> Unit = {},
     onPickDocument: (() -> Unit)? = null,
     onPickVideo: (() -> Unit)? = null,
+    focusRequester: FocusRequester = remember { FocusRequester() },
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -155,7 +156,6 @@ fun MessageComposer(
     val keyboardController = LocalSoftwareKeyboardController.current
     val focusManager = LocalFocusManager.current
     val scope = rememberCoroutineScope()
-    val focusRequester = remember { FocusRequester() }
 
     var showEmojiPanel by remember { mutableStateOf(false) }
     var isLockedRecording by remember { mutableStateOf(false) }

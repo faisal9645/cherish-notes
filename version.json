@@ -1,9 +1,9 @@
 {
-  "versionCode": 177,
-  "versionName": "1.8.5",
-  "tagName": "v1.8.5-177",
-  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.8.5-177/app_update_177.apk",
-  "assetSize": 18387480,
-  "releaseNotes": "Notes v1.8.5 (Build 177):\n• Smoother scrolling and swipe gestures\n• Attachments load faster with small previews\n• Filter attachments by type, and drag the handle to jump through months\n• Bug fixes and improvements",
-  "releaseDate": "2026-10-16T11:42:00Z"
+  "versionCode": 178,
+  "versionName": "1.8.6",
+  "tagName": "v1.8.6-178",
+  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.8.6-178/app_update_178.apk",
+  "assetSize": 18381252,
+  "releaseNotes": "Notes v1.8.6 (Build 178):\n\u2022 Instant keyboard opening on swipe up in chat\n\u2022 Smooth Cherish disguise transition with lock unlock effect\n\u2022 UI performance and animation refinements",
+  "releaseDate": "2026-10-16T12:30:13Z"
 }

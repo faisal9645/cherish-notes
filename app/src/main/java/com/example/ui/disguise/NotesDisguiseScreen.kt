@@ -192,7 +192,7 @@ fun NotesDisguiseScreen(
             unlockAnimProgress.snapTo(0f)
             unlockAnimProgress.animateTo(
                 targetValue = 1f,
-                animationSpec = tween(420, easing = FastOutSlowInEasing)
+                animationSpec = tween(550, easing = FastOutSlowInEasing)
             )
         }
 
@@ -223,8 +223,8 @@ fun NotesDisguiseScreen(
         }
 
         coroutineScope.launch {
-            // A beat for the button's bloom, then the chat opens out of it as a growing heart
-            delay(180)
+            // Satisfying unlock bloom animation, then smooth transition into Cherish
+            delay(520)
             onSecretGestureTriggered(fabCenter)
             delay(400)
             isUnlockingSecret = false
@@ -937,6 +937,71 @@ fun NotesDisguiseScreen(
                 },
                 onDismiss = { showNotesSettingsDialog = false }
             )
+        }
+
+        // Satisfying secret opening transition overlay once hold completes
+        if (isUnlockingAnimationPlaying) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = unlockAnimProgress.value * 0.35f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Surface(
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.surface,
+                        shadowElevation = 14.dp,
+                        modifier = Modifier
+                            .size(72.dp)
+                            .scale(0.82f + (unlockAnimProgress.value * 0.28f))
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(notesHorizontalGradient),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.LockOpen,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(34.dp)
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Surface(
+                        shape = RoundedCornerShape(20.dp),
+                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f),
+                        shadowElevation = 6.dp,
+                        modifier = Modifier.graphicsLayer {
+                            alpha = unlockAnimProgress.value
+                        }
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 20.dp, vertical = 9.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(16.dp),
+                                color = darkTone(DayBluePrimary),
+                                strokeWidth = 2.2.dp
+                            )
+                            Text(
+                                text = "Opening Cherish...",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                    }
+                }
+            }
         }
     }
 }
