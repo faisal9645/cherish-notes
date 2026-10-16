@@ -30,17 +30,20 @@ android {
   packaging { jniLibs { useLegacyPackaging = true } }
 
   signingConfigs {
-    val releaseKeyFile = file(System.getenv("KEYSTORE_PATH") ?: "${rootDir}/my-upload-key.jks")
-    if (releaseKeyFile.exists()) {
+    val envPath = System.getenv("KEYSTORE_PATH")?.trim()
+    val releaseKeyFile = if (!envPath.isNullOrEmpty()) file(envPath) else file("${rootDir}/my-upload-key.jks")
+    if (releaseKeyFile.exists() && !System.getenv("STORE_PASSWORD").isNullOrBlank()) {
       create("release") {
         storeFile = releaseKeyFile
         storePassword = System.getenv("STORE_PASSWORD")
-        keyAlias = "upload"
-        keyPassword = System.getenv("KEY_PASSWORD")
+        keyAlias = System.getenv("KEY_ALIAS")?.takeIf { it.isNotBlank() } ?: "upload"
+        keyPassword = System.getenv("KEY_PASSWORD") ?: System.getenv("STORE_PASSWORD")
       }
     }
     create("debugConfig") {
-      storeFile = file("${rootDir}/debug.keystore")
+      val localDebugKeystore = file("${rootDir}/debug.keystore")
+      val userHomeDebugKeystore = file("${System.getProperty("user.home")}/.android/debug.keystore")
+      storeFile = if (localDebugKeystore.exists()) localDebugKeystore else userHomeDebugKeystore
       storePassword = "android"
       keyAlias = "androiddebugkey"
       keyPassword = "android"

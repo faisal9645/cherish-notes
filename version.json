@@ -3,7 +3,7 @@
   "versionName": "1.8.3",
   "tagName": "v1.8.3-175",
   "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.8.3-175/app_update_175.apk",
-  "assetSize": 18171772,
+  "assetSize": 18175780,
   "releaseNotes": "Notes v1.8.3 (Build 175):\n• Single-package OTA distribution\n• Complete uninstall data purge (zero residual storage)\n• Chat draft message persistence across tabs\n• Cleaned audio settings & updated call icon",
   "releaseDate": "2026-10-16T12:45:00Z"
 }
