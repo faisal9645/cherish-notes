@@ -79,12 +79,13 @@ fun FloatingTabBar(
     modifier: Modifier = Modifier,
 ) {
     val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
-    val barColor = if (isDark) darkSurface(navy = Color(0xFF111827), black = Color(0xFF1A1A1A)) else Color.White
-    val highlightColor = if (isDark) MaterialTheme.colorScheme.primaryContainer else MistBlue
+    val barColor = if (isDark) Color.Black else Color.White
+    val highlightColor = if (isDark) Color(0xFF18181B) else MistBlue
     val selectedColor = MaterialTheme.colorScheme.primary
     val idleColor = if (isDark) darkTone(Slate400) else Slate500
     val badgeColor = HeartRed
-    val shape = RoundedCornerShape(50)
+    val shape = RoundedCornerShape(18.dp)
+    val highlightShape = RoundedCornerShape(13.dp)
     // The tab the highlight is on: the tapped one straight away
     var shownIndex by remember(selectedIndex) { mutableIntStateOf(selectedIndex) }
     val haptic = LocalHapticFeedback.current
@@ -102,12 +103,12 @@ fun FloatingTabBar(
                 .softShadow(
                     elevation = 16.dp,
                     shape = shape,
-                    ambientColor = Color.Black.copy(alpha = 0.10f),
-                    spotColor = selectedColor.copy(alpha = 0.25f)
+                    ambientColor = if (isDark) Color.Black.copy(alpha = 0.5f) else Color.Black.copy(alpha = 0.10f),
+                    spotColor = if (isDark) Color.Black.copy(alpha = 0.5f) else selectedColor.copy(alpha = 0.25f)
                 )
                 .clip(shape)
                 .background(barColor)
-                .then(if (isDark) Modifier.border(1.dp, Color.White.copy(alpha = 0.08f), shape) else Modifier)
+                .then(if (isDark) Modifier.border(1.dp, Color(0xFF27272A), shape) else Modifier)
                 .padding(6.dp)
         ) {
             val tabWidth = maxWidth / tabs.size
@@ -121,7 +122,7 @@ fun FloatingTabBar(
                     .offset(x = highlightX)
                     .width(tabWidth)
                     .fillMaxHeight()
-                    .clip(shape)
+                    .clip(highlightShape)
                     .background(highlightColor)
             )
             Row(modifier = Modifier.fillMaxSize()) {

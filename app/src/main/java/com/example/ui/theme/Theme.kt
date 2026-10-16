@@ -46,55 +46,55 @@ private val PureWhiteColorScheme = lightColorScheme(
 private val DarkColorScheme = darkColorScheme(
     primary = DarkBluePrimary, // Deep Dark Blue (0xFF1D4ED8)
     onPrimary = Color.White,
-    primaryContainer = Color(0xFF0F172A),
-    onPrimaryContainer = Color(0xFF93C5FD),
+    primaryContainer = Color(0xFF141414),
+    onPrimaryContainer = Color(0xFFE5E5E5),
     secondary = DarkBlueSecondary,
     onSecondary = Color.White,
-    secondaryContainer = Color(0xFF172554),
-    onSecondaryContainer = Color(0xFFBFDBFE),
+    secondaryContainer = Color(0xFF141414),
+    onSecondaryContainer = Color(0xFFE5E5E5),
     tertiary = DarkBlueTertiary,
     onTertiary = Color.White,
-    tertiaryContainer = Color(0xFF0F172A),
-    onTertiaryContainer = Color(0xFFDBEAFE),
+    tertiaryContainer = Color(0xFF141414),
+    onTertiaryContainer = Color(0xFFE5E5E5),
     background = Color(0xFF000000), // Strict AMOLED pure black #000000
     onBackground = Color(0xFFFFFFFF),
     surface = Color(0xFF000000), // Strict AMOLED pure black #000000
     onSurface = Color(0xFFFFFFFF),
-    surfaceVariant = Color(0xFF0A0E1A), // Ultra-deep midnight black for inputs and cards
+    surfaceVariant = Color(0xFF000000), // Strict AMOLED pure black
     onSurfaceVariant = Color(0xFFE2E8F0),
     surfaceTint = Color.Transparent,
     surfaceContainer = Color(0xFF000000),
     surfaceContainerLow = Color(0xFF000000),
     surfaceContainerLowest = Color(0xFF000000),
-    surfaceContainerHigh = Color(0xFF070B16),
-    surfaceContainerHighest = Color(0xFF0C1220),
-    outline = Color(0xFF1E293B),
-    outlineVariant = Color(0xFF0A0F1D)
+    surfaceContainerHigh = Color(0xFF080808),
+    surfaceContainerHighest = Color(0xFF101010),
+    outline = Color(0xFF262626),
+    outlineVariant = Color(0xFF171717)
 )
 
 // Black (AMOLED): black surfaces, neutral greys and white, no blue anywhere
 private val AmoledBlackColorScheme = DarkColorScheme.copy(
     primary = Color(0xFF737373),
     onPrimary = Color.White,
-    primaryContainer = Color(0xFF1A1A1A),
+    primaryContainer = Color(0xFF141414),
     onPrimaryContainer = Color(0xFFE5E5E5),
     secondary = Color(0xFF8A8A8A),
     onSecondary = Color.White,
-    secondaryContainer = Color(0xFF1A1A1A),
+    secondaryContainer = Color(0xFF141414),
     onSecondaryContainer = Color(0xFFE5E5E5),
     tertiary = Color(0xFF8A8A8A),
     onTertiary = Color.White,
     tertiaryContainer = Color(0xFF141414),
     onTertiaryContainer = Color(0xFFE5E5E5),
     onSurfaceVariant = Color(0xFFD4D4D4),
-    surfaceVariant = Color(0xFF0B0B0B),
-    surfaceContainerHigh = Color(0xFF0E0E0E),
-    surfaceContainerHighest = Color(0xFF141414),
+    surfaceVariant = Color(0xFF000000),
+    surfaceContainerHigh = Color(0xFF080808),
+    surfaceContainerHighest = Color(0xFF101010),
     outline = Color(0xFF262626),
     outlineVariant = Color(0xFF171717)
 )
 
-/** True in the Black (AMOLED) theme, where dark surfaces are near-black greys instead of navy. */
+/** True in dark mode & Black (AMOLED) theme, where dark surfaces are pure/near-black instead of navy. */
 val LocalAmoledBlack = staticCompositionLocalOf { false }
 
 /**
@@ -113,10 +113,16 @@ fun Color.withoutBlue(): Color {
     return Color(grey, grey, grey, alpha)
 }
 
-/** A dark-mode surface: [navy] in the Dark theme, [black] in the Black theme. */
+/** A dark-mode surface: [navy] in light mode fallback, pure [black] in dark/AMOLED mode. */
 @Composable
-fun darkSurface(navy: Color, black: Color = Color(0xFF141414)): Color =
-    if (LocalAmoledBlack.current) black else navy
+fun darkSurface(navy: Color, black: Color = Color.Black): Color =
+    if (LocalAmoledBlack.current || isAppInDark()) {
+        if (black == Color(0xFF141414) || black == Color(0xFF1A1A1A) || black == Color(0xFF121212) || black == Color(0xFF1E2638) || black == Color(0xFF111827)) {
+            Color.Black
+        } else {
+            black
+        }
+    } else navy
 
 @Composable
 fun CherishTheme(
@@ -124,6 +130,11 @@ fun CherishTheme(
     content: @Composable () -> Unit
 ) {
     val isSystemDark = isSystemInDarkTheme()
+    val isDark = when (themeMode) {
+        1 -> false
+        2, 3 -> true
+        else -> isSystemDark
+    }
     val colorScheme = when (themeMode) {
         1 -> PureWhiteColorScheme
         2 -> DarkColorScheme
@@ -137,7 +148,7 @@ fun CherishTheme(
         fontScale = currentDensity.fontScale.coerceAtMost(1.0f)
     )
 
-    CompositionLocalProvider(LocalDensity provides cappedDensity, LocalAmoledBlack provides (themeMode == 3)) {
+    CompositionLocalProvider(LocalDensity provides cappedDensity, LocalAmoledBlack provides isDark) {
         MaterialTheme(
             colorScheme = colorScheme,
             typography = Typography,

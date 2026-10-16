@@ -79,7 +79,7 @@ class MainActivity : FragmentActivity() {
             2, 3 -> true
             else -> isSystemDark
         }
-        window.decorView.setBackgroundColor(if (isInitialDark) android.graphics.Color.parseColor("#121212") else android.graphics.Color.WHITE)
+        window.decorView.setBackgroundColor(if (isInitialDark) android.graphics.Color.BLACK else android.graphics.Color.WHITE)
         setHighRefreshRate()
         // Screenshots inside the app are allowed; only previews (recent apps) hide the secret chat
         // (see setSecretAppOnScreen and PrivacyShield)

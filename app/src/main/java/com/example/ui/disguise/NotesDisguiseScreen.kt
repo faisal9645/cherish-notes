@@ -1,6 +1,9 @@
 package com.example.ui.disguise
 
 import android.Manifest
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.VibrationEffect
@@ -154,7 +157,14 @@ fun NotesDisguiseScreen(
         } else if (uiState.searchQuery.isNotBlank()) {
             viewModel.setSearchQuery("")
         } else {
-            (context as? android.app.Activity)?.finish()
+            var ctx: Context? = context
+            while (ctx is ContextWrapper) {
+                if (ctx is Activity) break
+                ctx = ctx.baseContext
+            }
+            val activity = ctx as? Activity
+            activity?.moveTaskToBack(true)
+            activity?.finishAffinity() ?: activity?.finish()
         }
     }
 
@@ -1112,8 +1122,8 @@ fun NotesSettingsDialog(
                 // Setting Item: Reminder Notifications
                 Surface(
                     shape = RoundedCornerShape(16.dp),
-                    color = if (isDark) darkSurface(Color(0xFF1E293B), Color(0xFF121212)) else Color(0xFFF8FAFC),
-                    border = BorderStroke(1.dp, if (isDark) darkSurface(Color(0xFF334155), Color(0xFF262626)) else MaterialTheme.colorScheme.outlineVariant)
+                    color = if (isDark) darkSurface(Color.Black, Color.Black) else Color(0xFFF8FAFC),
+                    border = BorderStroke(1.dp, if (isDark) darkSurface(Color(0xFF262626), Color(0xFF262626)) else MaterialTheme.colorScheme.outlineVariant)
                 ) {
                     Row(
                         modifier = Modifier

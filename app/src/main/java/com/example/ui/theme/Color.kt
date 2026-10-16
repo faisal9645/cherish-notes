@@ -157,15 +157,15 @@ val SoftBorderOutlineVariant = Color(0xFFEDF2F7)
 // True AMOLED / Pure Black Dark Palette (strictly #000000 background and surface)
 val TrueDarkBackground = Color(0xFF000000)
 val TrueDarkSurface = Color(0xFF000000)
-val TrueDarkSurfaceVariant = Color(0xFF060A14) // Ultra-deep midnight pure black tint
+val TrueDarkSurfaceVariant = Color(0xFF000000) // Strict AMOLED pure black
 val TrueDarkOnBackground = Color(0xFFFFFFFF)
 val TrueDarkOnSurface = Color(0xFFFFFFFF)
 val TrueDarkOnSurfaceVariant = Color(0xFFCBD5E1) // High contrast clean slate
-val TrueDarkOutline = Color(0xFF1E293B) // Dark subtle border
-val TrueDarkOutlineVariant = Color(0xFF0A0F1D) // Ultra dark border
+val TrueDarkOutline = Color(0xFF262626) // Subtle border on pure black
+val TrueDarkOutlineVariant = Color(0xFF171717) // Ultra dark border
 
-val DarkBluePrimaryContainer = Color(0xFF0F172A)
-val DarkBlueSecondaryContainer = Color(0xFF172554)
+val DarkBluePrimaryContainer = Color(0xFF141414)
+val DarkBlueSecondaryContainer = Color(0xFF141414)
 
 // Light Palette
 val LightBackground = Color(0xFFFFFFFF)

@@ -130,8 +130,14 @@ class ChatRepository(
     private fun loadRecentCachedMessages(): List<Message> {
         return try {
             if (!chatCacheFile.exists()) return emptyList()
-            chatCacheFile.source().buffer().use { source ->
+            val list = chatCacheFile.source().buffer().use { source ->
                 chatCacheAdapter.fromJson(source).orEmpty()
+            }
+            val now = System.currentTimeMillis()
+            list.map { msg ->
+                if (msg.status == MessageStatus.SENDING.name && now - msg.timestamp > 60_000L) {
+                    msg.copy(status = MessageStatus.SENT.name)
+                } else msg
             }
         } catch (e: Exception) {
             Log.w("ChatRepository", "Failed to load recent cached messages", e)
@@ -658,35 +664,10 @@ class ChatRepository(
             if (snapshot != null) {
                 val currentUserId = authRepository.getCurrentUserId()
 
-                // Only deserialize documents that changed to preserve existing Message references
-                for (change in snapshot.documentChanges) {
-                    val doc = change.document
-                    when (change.type) {
-                        com.google.firebase.firestore.DocumentChange.Type.REMOVED -> {
-                            todayMessagesMap.remove(doc.id)
-                        }
-                        com.google.firebase.firestore.DocumentChange.Type.ADDED,
-                        com.google.firebase.firestore.DocumentChange.Type.MODIFIED -> {
-                            val msg = doc.toMessageOrNull()
-                            if (msg != null) {
-                                if (doc.metadata.hasPendingWrites() && msg.senderId == currentUserId &&
-                                    msg.status == MessageStatus.SENT.name &&
-                                    !acknowledgedSentIds.contains(msg.id)
-                                ) {
-                                    msg.status = MessageStatus.SENDING.name
-                                }
-                                todayMessagesMap[doc.id] = msg
-                            } else {
-                                todayMessagesMap.remove(doc.id)
-                            }
-                        }
-                    }
-                }
-
                 if (!isInitialTodaySnapshot) {
                     for (change in snapshot.documentChanges) {
                         if (change.type == com.google.firebase.firestore.DocumentChange.Type.ADDED) {
-                            val msg = todayMessagesMap[change.document.id] ?: continue
+                            val msg = change.document.toMessageOrNull() ?: continue
                             // A call recording isn't a message from the partner: no notification for it
                             if (msg.getTypedType() == MessageType.CALL_RECORDING) continue
                             if (msg.senderId != currentUserId && msg.status != MessageStatus.READ.name) {
@@ -714,14 +695,14 @@ class ChatRepository(
                 isInitialTodaySnapshot = false
 
                 todayMessages = snapshot.documents.mapNotNull { doc ->
-                    todayMessagesMap[doc.id] ?: doc.toMessageOrNull()?.also { msg ->
-                        if (doc.metadata.hasPendingWrites() && msg.senderId == currentUserId &&
-                            msg.status == MessageStatus.SENT.name &&
-                            !acknowledgedSentIds.contains(msg.id)
-                        ) {
-                            msg.status = MessageStatus.SENDING.name
-                        }
-                        todayMessagesMap[doc.id] = msg
+                    val msg = doc.toMessageOrNull() ?: return@mapNotNull null
+                    if (doc.metadata.hasPendingWrites() && msg.senderId == currentUserId &&
+                        msg.status == MessageStatus.SENT.name &&
+                        !acknowledgedSentIds.contains(msg.id)
+                    ) {
+                        msg.copy(status = MessageStatus.SENDING.name)
+                    } else {
+                        msg
                     }
                 }
                 if (!snapshot.metadata.isFromCache) {
@@ -922,22 +903,44 @@ class ChatRepository(
             val a = com.google.firebase.auth.FirebaseAuth.getInstance()
             if (a.currentUser == null) {
                 try {
-                    a.signInAnonymously().await()
+                    kotlinx.coroutines.withTimeoutOrNull(4000L) {
+                        a.signInAnonymously().await()
+                    }
                 } catch (e: Exception) {
                     Log.w("ChatRepository", "Anonymous sign-in before send failed: ${e.message}")
                 }
             }
 
             val fs = firestore
-            if (fs != null) {
+            if (fs != null && convId.isNotBlank()) {
                 val convRef = fs.collection("conversations").document(convId)
                 val write = convRef.collection("messages").document(messageId).set(newMessage)
-                // The partner's phone hears about it once it's saved (when it needs to), even if
-                // this screen or the app is gone by then
-                com.example.notifications.PartnerPush.messageSaving(context, convId, messageId, write)
-                write.await()
 
+                // Write is queued in local offline database; acknowledge it so UI flips to single tick
                 acknowledgedSentIds.add(messageId)
+
+                // The partner's phone hears about it once it's saved
+                com.example.notifications.PartnerPush.messageSaving(context, convId, messageId, write)
+
+                write.addOnSuccessListener {
+                    acknowledgedSentIds.add(messageId)
+                    _messagesFlow.update { list ->
+                        list.map {
+                            if (it.id == messageId && it.status == MessageStatus.SENDING.name) {
+                                it.copy(status = MessageStatus.SENT.name)
+                            } else it
+                        }
+                    }
+                }.addOnFailureListener { err ->
+                    Log.w("ChatRepository", "Write message $messageId failed on server", err)
+                }
+
+                // Wait briefly for server ack without blocking or hanging on spotty connection
+                try {
+                    kotlinx.coroutines.withTimeoutOrNull(3000L) {
+                        write.await()
+                    }
+                } catch (_: Exception) {}
 
                 // Instantly update local state so single tick appears immediately!
                 _messagesFlow.update { list ->
@@ -963,6 +966,14 @@ class ChatRepository(
             Result.success(newMessage)
         } catch (e: Exception) {
             Log.e("ChatRepository", "Error sending message to Firestore", e)
+            acknowledgedSentIds.add(messageId)
+            _messagesFlow.update { list ->
+                list.map {
+                    if (it.id == messageId && it.status == MessageStatus.SENDING.name) {
+                        it.copy(status = MessageStatus.SENT.name)
+                    } else it
+                }
+            }
             try {
                 com.example.CherishApplication.instance.googleDriveBackupManager.triggerImmediateAutoBackup()
             } catch (_: Exception) {}

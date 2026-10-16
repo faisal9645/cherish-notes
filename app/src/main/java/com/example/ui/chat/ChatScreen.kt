@@ -148,7 +148,6 @@ import com.example.ui.components.pressScaleTarget
 import com.example.ui.components.springClickable
 import androidx.compose.material.icons.automirrored.rounded.InsertDriveFile
 import com.example.ui.components.softShadow
-import com.example.ui.components.chatTopFadingEdge
 
 @Stable
 class ComposerState(initialText: String = "") {
@@ -1094,23 +1093,8 @@ fun ChatScreen(
                 )
             } else Box {
                 val isPrivate = uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE
-                // Frosted glass: the wallpaper behind the bar, blurred (Android 12+; tinted before)
-                if (showWallpaper && !isPrivate && android.os.Build.VERSION.SDK_INT >= 31 && chatScreenSize != IntSize.Zero) {
-                    Box(modifier = Modifier.matchParentSize().clipToBounds()) {
-                        ChatWallpaper(
-                            chatBgTheme = uiState.chatBgTheme,
-                            modifier = Modifier
-                                .layout { measurable, constraints ->
-                                    // Laid out like the real wallpaper (whole screen, from the top), so it lines up
-                                    val wallpaper = measurable.measure(Constraints.fixed(chatScreenSize.width, chatScreenSize.height))
-                                    layout(constraints.maxWidth, constraints.maxHeight) { wallpaper.place(0, 0) }
-                                }
-                                .blur(24.dp)
-                        )
-                    }
-                }
                 val topBarBackgroundModifier = if (isPrivate) {
-                    val topBg = if (isDark) Neutral800 else Color.White
+                    val topBg = if (isDark) Color.Black else Color.White
                     Modifier
                         .fillMaxWidth()
                         .background(
@@ -1437,10 +1421,10 @@ fun ChatScreen(
             }
         },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = if (uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE) {
+                    containerColor = if (isDark) {
+                        Color.Black
+                    } else if (uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE) {
                         Color.Transparent
-                    } else if (showWallpaper) {
-                        MaterialTheme.colorScheme.surface.copy(alpha = if (android.os.Build.VERSION.SDK_INT >= 31) 0.72f else 0.92f)
                     } else {
                         MaterialTheme.colorScheme.surface
                     }
@@ -1465,7 +1449,7 @@ fun ChatScreen(
                     ) {
                         Icon(Icons.Rounded.Call, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Call in progress \u00b7 tap to return", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                        Text("Call in progress · tap to return", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Medium)
                     }
                 }
             }
@@ -1474,16 +1458,14 @@ fun ChatScreen(
             }
         },
         bottomBar = {
-            val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+            val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f || com.example.ui.theme.isAppInDark()
             val isPrivate = uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE
-            val barBg = if (isPrivate) {
-                if (isDark) Color.Black else Color.White
-            } else if (isDark) TrueDarkSurface else Color.White
+            val barBg = if (isDark) Color.Black else Color.White
             // In private mode (ChatGPT style): flat background with no harsh shadow or border
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .then(if (!isPrivate) Modifier.shadow(8.dp, RectangleShape, clip = false) else Modifier)
+                    .then(if (!isPrivate && !isDark) Modifier.shadow(8.dp, RectangleShape, clip = false) else Modifier)
                     .background(barBg)
                     // Touches on the tray stay in the tray
                     .pointerInput(Unit) {}
@@ -1595,8 +1577,12 @@ fun ChatScreen(
                 }
             }
     },
-        containerColor = if (showWallpaper) Color.Transparent else if (uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE) {
-            if (isDark) Neutral800 else Color.White
+        containerColor = if (isDark) {
+            Color.Black
+        } else if (showWallpaper) {
+            Color.Transparent
+        } else if (uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE) {
+            Color.White
         } else MaterialTheme.colorScheme.background
     ) { paddingValues ->
         Column(
@@ -1876,8 +1862,6 @@ fun ChatScreen(
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxWidth()
-                        // Older messages fade softly under the header instead of a hard cut
-                        .chatTopFadingEdge(listState)
                         .nestedScroll(swipeUpToOpenKeyboardConnection)
                         .nestedScroll(listPhysics.nestedScroll)
                         .chatListTouchAnchor(listPhysics)

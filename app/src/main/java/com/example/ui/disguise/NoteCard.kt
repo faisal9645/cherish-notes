@@ -48,9 +48,9 @@ data class NoteCardThemeColors(
 fun resolveNoteCardColors(colorHex: String?, isDark: Boolean, amoledBlack: Boolean = false): NoteCardThemeColors {
     val colors = noteCardColors(colorHex, isDark)
     if (!(isDark && amoledBlack)) return colors
-    // Black theme: near-black card, every blue border/accent/badge turned neutral grey
+    // Black theme: pure AMOLED black card, every blue border/accent/badge turned neutral grey
     return NoteCardThemeColors(
-        containerColor = Color(0xFF0D0D0D),
+        containerColor = Color(0xFF000000),
         borderColor = colors.borderColor.withoutBlue(),
         accentPrimary = colors.accentPrimary.withoutBlue(),
         accentContainer = colors.accentContainer.withoutBlue(),

@@ -82,7 +82,7 @@ fun NormalWallpaper(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(if (isDark) darkTone(InkBlack) else Color.White)
+            .background(if (isDark) Color.Black else Color.White)
     )
 }
 
@@ -105,8 +105,7 @@ fun LoveImmersiveWallpaper(
         else -> com.example.R.drawable.chat_bg_theme_2_day
     }
     val fallbackBg = when {
-        isAmoled -> InkBlack
-        isDark -> Color(0xFF011565)
+        isAmoled || isDark -> Color.Black
         else -> Color.White
     }
 
@@ -140,8 +139,7 @@ fun DoodleWallpaper(
 ) {
     val isAmoled = com.example.ui.theme.LocalAmoledBlack.current
     val fallbackBg = when {
-        isAmoled -> InkBlack
-        isDark -> Color(0xFF0B132B)
+        isAmoled || isDark -> Color.Black
         else -> Color.White
     }
 
