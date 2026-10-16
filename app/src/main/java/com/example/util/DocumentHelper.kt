@@ -91,6 +91,10 @@ object DocumentHelper {
                 setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, fileName)
                 setAllowedOverMetered(true)
                 setAllowedOverRoaming(true)
+                val mime = getMimeType(fileName)
+                if (mime.isNotBlank() && mime != "*/*") {
+                    setMimeType(mime)
+                }
             }
             val dm = context.getSystemService(Context.DOWNLOAD_SERVICE) as? DownloadManager
             if (dm != null) {
