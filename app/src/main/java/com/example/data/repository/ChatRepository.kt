@@ -68,6 +68,9 @@ class ChatRepository(
     
     private var previousMessageLimit = 0L
     private var todayMessages: List<Message> = emptyList()
+    private val todayMessagesMap = LinkedHashMap<String, Message>()
+    @Volatile private var hasAppBeenOpened: Boolean = false
+    @Volatile private var pendingConversationId: String? = null
     private var previousMessages: List<Message> = emptyList()
     private var localBackupMessages: List<Message> = emptyList()
     private var sortedLocalBackupDescending: List<Message> = emptyList()
@@ -118,15 +121,17 @@ class ChatRepository(
         java.io.File(context.filesDir, "cherish_recent_chat_cache.json")
     }
 
+    private val chatCacheAdapter by lazy {
+        val moshi = com.squareup.moshi.Moshi.Builder().build()
+        val listType = com.squareup.moshi.Types.newParameterizedType(List::class.java, Message::class.java)
+        moshi.adapter<List<Message>>(listType)
+    }
+
     private fun loadRecentCachedMessages(): List<Message> {
         return try {
             if (!chatCacheFile.exists()) return emptyList()
-            val moshi = com.squareup.moshi.Moshi.Builder()
-                .build()
-            val listType = com.squareup.moshi.Types.newParameterizedType(List::class.java, Message::class.java)
-            val adapter = moshi.adapter<List<Message>>(listType)
             chatCacheFile.source().buffer().use { source ->
-                adapter.fromJson(source).orEmpty()
+                chatCacheAdapter.fromJson(source).orEmpty()
             }
         } catch (e: Exception) {
             Log.w("ChatRepository", "Failed to load recent cached messages", e)
@@ -134,33 +139,43 @@ class ChatRepository(
         }
     }
 
+    private var cacheSaveJob: kotlinx.coroutines.Job? = null
+
     private fun saveRecentCachedMessages(messages: List<Message>) {
         if (messages.isEmpty()) return
-        repoScope.launch {
+        cacheSaveJob?.cancel()
+        cacheSaveJob = repoScope.launch {
+            kotlinx.coroutines.delay(1500L) // Debounce frequent updates (ticks, reactions, status)
             try {
                 // Keep the most recent 200 messages for instantaneous cold start
                 val recent = if (messages.size > 200) messages.takeLast(200) else messages
-                val moshi = com.squareup.moshi.Moshi.Builder()
-                    .build()
-                val listType = com.squareup.moshi.Types.newParameterizedType(List::class.java, Message::class.java)
-                val adapter = moshi.adapter<List<Message>>(listType)
                 val tempFile = java.io.File(context.filesDir, "cherish_recent_chat_cache.tmp")
                 tempFile.sink().buffer().use { sink ->
-                    adapter.toJson(sink, recent)
+                    chatCacheAdapter.toJson(sink, recent)
                 }
                 if (tempFile.exists()) {
                     tempFile.renameTo(chatCacheFile)
                 }
             } catch (e: Exception) {
-                Log.w("ChatRepository", "Failed to save recent cached messages", e)
+                if (e !is kotlinx.coroutines.CancellationException) {
+                    Log.w("ChatRepository", "Failed to save recent cached messages", e)
+                }
             }
         }
     }
 
     init {
-        // Instant cold start: load recent messages from the phone's local cache immediately
-        val initialCached = loadRecentCachedMessages()
-        _messagesFlow.value = initialCached
+        // Load recent messages from local cache on background thread so cold start / push doesn't block main thread
+        repoScope.launch {
+            val initialCached = loadRecentCachedMessages()
+            if (initialCached.isNotEmpty()) {
+                withContext(Dispatchers.Main) {
+                    if (_messagesFlow.value.isEmpty()) {
+                        _messagesFlow.value = initialCached
+                    }
+                }
+            }
+        }
 
         CoroutineScope(Dispatchers.IO).launch {
             authRepository.currentUserState
@@ -171,18 +186,29 @@ class ChatRepository(
                     withContext(Dispatchers.Main) {
                         clearOlderPages()
                         todayMessages = emptyList()
+                        todayMessagesMap.clear()
                         localBackupMessages = emptyList()
                         _isQueryExhaustedFlow.value = false
                         _isLoadingMoreFlow.value = false
                         _hasPreviousChatsAvailableFlow.value = convId != null
                         resetGalleryCache()
-                        if (convId != null) {
+                        pendingConversationId = convId
+                        val isForeground = com.example.CherishApplication.isAppInForeground
+                        if (convId != null && (isForeground || hasAppBeenOpened)) {
                             startGlobalMessagesListener(convId)
-                        } else {
+                        } else if (convId == null) {
                             stopGlobalMessagesListener()
                         }
                     }
                 }
+        }
+    }
+
+    fun ensureGlobalMessagesListener(forceRestart: Boolean = false) {
+        hasAppBeenOpened = true
+        val convId = pendingConversationId ?: getConversationId()
+        if (convId.isNotBlank()) {
+            startGlobalMessagesListener(convId, forceRestart = forceRestart)
         }
     }
 
@@ -199,6 +225,7 @@ class ChatRepository(
         currentActiveConversationId = null
         clearOlderPages()
         todayMessages = emptyList()
+        todayMessagesMap.clear()
         localBackupMessages = emptyList()
         sortedLocalBackupDescending = emptyList()
         _messagesFlow.value = emptyList()
@@ -602,6 +629,7 @@ class ChatRepository(
         if (!forceRestart && currentActiveConversationId == conversationId && globalTodayListener != null) return
         globalTodayListener?.remove()
         clearOlderPages()
+        todayMessagesMap.clear()
         currentActiveConversationId = conversationId
         isInitialTodaySnapshot = true
         val fs = firestore
@@ -628,13 +656,39 @@ class ChatRepository(
                 return@addSnapshotListener
             }
             if (snapshot != null) {
+                val currentUserId = authRepository.getCurrentUserId()
+
+                // Only deserialize documents that changed to preserve existing Message references
+                for (change in snapshot.documentChanges) {
+                    val doc = change.document
+                    when (change.type) {
+                        com.google.firebase.firestore.DocumentChange.Type.REMOVED -> {
+                            todayMessagesMap.remove(doc.id)
+                        }
+                        com.google.firebase.firestore.DocumentChange.Type.ADDED,
+                        com.google.firebase.firestore.DocumentChange.Type.MODIFIED -> {
+                            val msg = doc.toMessageOrNull()
+                            if (msg != null) {
+                                if (doc.metadata.hasPendingWrites() && msg.senderId == currentUserId &&
+                                    msg.status == MessageStatus.SENT.name &&
+                                    !acknowledgedSentIds.contains(msg.id)
+                                ) {
+                                    msg.status = MessageStatus.SENDING.name
+                                }
+                                todayMessagesMap[doc.id] = msg
+                            } else {
+                                todayMessagesMap.remove(doc.id)
+                            }
+                        }
+                    }
+                }
+
                 if (!isInitialTodaySnapshot) {
                     for (change in snapshot.documentChanges) {
                         if (change.type == com.google.firebase.firestore.DocumentChange.Type.ADDED) {
-                            val msg = change.document.toMessageOrNull() ?: continue
+                            val msg = todayMessagesMap[change.document.id] ?: continue
                             // A call recording isn't a message from the partner: no notification for it
                             if (msg.getTypedType() == MessageType.CALL_RECORDING) continue
-                            val currentUserId = authRepository.getCurrentUserId()
                             if (msg.senderId != currentUserId && msg.status != MessageStatus.READ.name) {
                                 if (!com.example.notifications.NotificationHelper.isAppOpenOnScreen(context)) {
                                     val previewText = when (msg.getTypedType()) {
@@ -659,17 +713,16 @@ class ChatRepository(
                 }
                 isInitialTodaySnapshot = false
 
-                val currentUserId = authRepository.getCurrentUserId()
                 todayMessages = snapshot.documents.mapNotNull { doc ->
-                    val msg = doc.toMessageOrNull() ?: return@mapNotNull null
-                    // My message that hasn't reached the server yet is still sending (a clock, not a tick)
-                    if (doc.metadata.hasPendingWrites() && msg.senderId == currentUserId &&
-                        msg.status == MessageStatus.SENT.name &&
-                        !acknowledgedSentIds.contains(msg.id)
-                    ) {
-                        msg.status = MessageStatus.SENDING.name
+                    todayMessagesMap[doc.id] ?: doc.toMessageOrNull()?.also { msg ->
+                        if (doc.metadata.hasPendingWrites() && msg.senderId == currentUserId &&
+                            msg.status == MessageStatus.SENT.name &&
+                            !acknowledgedSentIds.contains(msg.id)
+                        ) {
+                            msg.status = MessageStatus.SENDING.name
+                        }
+                        todayMessagesMap[doc.id] = msg
                     }
-                    msg
                 }
                 if (!snapshot.metadata.isFromCache) {
                     markArrivedAsDelivered(convRef, todayMessages, currentUserId)

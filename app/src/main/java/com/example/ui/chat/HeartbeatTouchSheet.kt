@@ -5,6 +5,8 @@ import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -150,15 +152,21 @@ fun HeartbeatTouchDialog(
                     )
                 )
                 .pointerInput(Unit) {
-                    detectTapGestures(
-                        onPress = {
-                            isMeTouching = true
-                            onTouchChanged(true)
-                            tryAwaitRelease()
+                    awaitEachGesture {
+                        awaitFirstDown(requireUnconsumed = false)
+                        isMeTouching = true
+                        onTouchChanged(true)
+                        try {
+                            while (true) {
+                                val event = awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Main)
+                                val anyPressed = event.changes.any { it.pressed }
+                                if (!anyPressed) break
+                            }
+                        } finally {
                             isMeTouching = false
                             onTouchChanged(false)
                         }
-                    )
+                    }
                 },
             contentAlignment = Alignment.Center
         ) {

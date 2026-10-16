@@ -95,6 +95,12 @@ data class User(
     @get:Exclude @set:Exclude
     var presenceReceivedAt: Long = 0L
 
+    /**
+     * When this phone received this user's live heartbeat touch update, on this phone's own clock.
+     */
+    @get:Exclude @set:Exclude
+    var heartbeatTouchReceivedAt: Long = 0L
+
     @get:PropertyName("notificationPermission") @set:PropertyName("notificationPermission")
     var notificationPermission: Boolean = true
 
@@ -105,6 +111,15 @@ data class User(
         if (presenceReceivedAt > 0L) return now - presenceReceivedAt <= ONLINE_WINDOW_MS
         // Otherwise compare clocks; either way, no heartbeat for a few beats means the app is gone
         return kotlin.math.abs(now - lastSeen) <= ONLINE_WINDOW_MS
+    }
+
+    fun isEffectivelyHeartTouching(): Boolean {
+        if (heartbeatTouchingTimestamp <= 0L) return false
+        val now = System.currentTimeMillis()
+        if (heartbeatTouchReceivedAt > 0L) {
+            return (now - heartbeatTouchReceivedAt) in 0L..8_000L
+        }
+        return kotlin.math.abs(now - heartbeatTouchingTimestamp) <= 12_000L
     }
 
     fun isEffectivelyTyping(): Boolean {

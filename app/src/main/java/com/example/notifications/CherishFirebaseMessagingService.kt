@@ -36,6 +36,18 @@ class CherishFirebaseMessagingService : FirebaseMessagingService() {
             return
         }
 
+        // Calls ring even with the app open or closed (they open their own screen, never the chat or Notes)
+        when (remoteMessage.data["type"]) {
+            "call_invite" -> {
+                com.example.call.CallManager.onPushInvite(remoteMessage.data)
+                return
+            }
+            "call_cancel" -> {
+                com.example.call.CallManager.onPushCancel(remoteMessage.data)
+                return
+            }
+        }
+
         val hasSession = try {
             app.authRepository.isUserLoggedIn() ||
                 app.securityPreferences.getCoupleSecretKey().isNotBlank() ||
@@ -47,18 +59,6 @@ class CherishFirebaseMessagingService : FirebaseMessagingService() {
         if (!hasSession) {
             Log.w("CherishFCM", "No active user or couple session, skipping message notification")
             return
-        }
-
-        // Calls ring even with the app open (they open their own screen, never the chat or Notes)
-        when (remoteMessage.data["type"]) {
-            "call_invite" -> {
-                com.example.call.CallManager.onPushInvite(remoteMessage.data)
-                return
-            }
-            "call_cancel" -> {
-                com.example.call.CallManager.onPushCancel(remoteMessage.data)
-                return
-            }
         }
 
         val myUid = app.authRepository.getCurrentUserId()

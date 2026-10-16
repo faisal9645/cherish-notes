@@ -188,11 +188,8 @@ class ChatViewModel(
      * older message rows, keeping chat scrolling and rendering silky-smooth during long sessions.
      */
     @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
-    val reversedChatRowItems: StateFlow<List<ChatUiRowItem>> = _uiState
-        .map { it.messageFilter() }
-        .distinctUntilChanged()
-        .mapLatest { filter ->
-            val list = filterMessages(filter)
+    val reversedChatRowItems: StateFlow<List<ChatUiRowItem>> = displayedMessages
+        .mapLatest { list ->
             val size = list.size
             val items = ArrayList<ChatUiRowItem>(size)
             for (i in list.indices) {
@@ -217,12 +214,15 @@ class ChatViewModel(
         .flowOn(kotlinx.coroutines.Dispatchers.Default)
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-    // Preserved scroll position when navigating between tabs (Chat, Love & Us, Settings)
+    // Preserved scroll position and composer draft when navigating between tabs (Chat, Love & Us, Settings)
     var savedScrollIndex: Int = 0
     var savedScrollOffset: Int = 0
     var savedScrollKey: String? = null
+    var draftMessageText: String = ""
 
     init {
+        chatRepository.ensureGlobalMessagesListener()
+        authRepository.ensureCoupleRoomListener()
         authRepository.connectPartnerListenerOnce()
         authRepository.updatePresence()
         chatRepository.markPendingDelivered()
@@ -265,10 +265,11 @@ class ChatViewModel(
 
         viewModelScope.launch {
             authRepository.partnerUserState.collect { partner ->
-                val partnerTouching = partner?.heartbeatTouchingTimestamp?.let { it > 0L && (System.currentTimeMillis() - it < 4500L) } ?: false
+                val partnerTouching = partner?.isEffectivelyHeartTouching() ?: false
                 val isCallActive = com.example.call.CallManager.hasActiveCall()
+                val partnerOnline = (partner?.isEffectivelyOnline() ?: false) || isCallActive
                 _partnerPresence.value = PartnerPresenceState(
-                    isOnline = (partner?.isEffectivelyOnline() ?: false) || isCallActive,
+                    isOnline = partnerOnline,
                     isTyping = partner?.isEffectivelyTyping() ?: false,
                     isRecordingAudio = partner?.isEffectivelyRecording() ?: false,
                     isHeartTouching = partnerTouching,
@@ -285,12 +286,22 @@ class ChatViewModel(
                     checkAfterTimeMillis = partner?.checkAfterTimeMillis,
                     checkAfterCreatedAt = partner?.checkAfterCreatedAt
                 )
-                // Only update partnerUser in _uiState if basic identity changed to prevent screen re-evaluation
-                if (_uiState.value.partnerUser?.id != partner?.id ||
-                    _uiState.value.partnerUser?.photoUrl != partner?.photoUrl ||
-                    _uiState.value.partnerUser?.displayName != partner?.displayName
-                ) {
-                    _uiState.update { it.copy(partnerUser = partner) }
+                // Keep partner heartbeat/online status and identity up-to-date in _uiState
+                _uiState.update { currentUiState ->
+                    var updated = currentUiState
+                    if (updated.isPartnerHeartTouching != partnerTouching || updated.isPartnerOnline != partnerOnline) {
+                        updated = updated.copy(
+                            isPartnerHeartTouching = partnerTouching,
+                            isPartnerOnline = partnerOnline
+                        )
+                    }
+                    if (updated.partnerUser?.id != partner?.id ||
+                        updated.partnerUser?.photoUrl != partner?.photoUrl ||
+                        updated.partnerUser?.displayName != partner?.displayName
+                    ) {
+                        updated = updated.copy(partnerUser = partner)
+                    }
+                    updated
                 }
             }
         }
@@ -400,7 +411,7 @@ class ChatViewModel(
                 val delayMs = if (_partnerPresence.value.isHeartTouching) 500L else 2000L
                 kotlinx.coroutines.delay(delayMs)
                 val partner = authRepository.partnerUserState.value
-                val partnerTouching = partner?.heartbeatTouchingTimestamp?.let { it > 0L && (System.currentTimeMillis() - it < 4500L) } ?: false
+                val partnerTouching = partner?.isEffectivelyHeartTouching() ?: false
                 val newOnline = (partner?.isEffectivelyOnline() ?: false) || com.example.call.CallManager.hasActiveCall()
                 val newTyping = partner?.isEffectivelyTyping() ?: false
                 val newRecording = partner?.isEffectivelyRecording() ?: false
@@ -425,6 +436,15 @@ class ChatViewModel(
                             batteryLevel = partner?.batteryLevel,
                             isCharging = partner?.isCharging ?: false,
                             lastSeen = partnerLastSeen
+                        )
+                    }
+                }
+
+                if (_uiState.value.isPartnerHeartTouching != partnerTouching || _uiState.value.isPartnerOnline != newOnline) {
+                    _uiState.update {
+                        it.copy(
+                            isPartnerHeartTouching = partnerTouching,
+                            isPartnerOnline = newOnline
                         )
                     }
                 }

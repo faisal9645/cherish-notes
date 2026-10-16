@@ -350,14 +350,18 @@ object CallManager {
                 // Rings in its notification instead, with Answer and Decline
                 CallNotifications.showIncoming(app, invite)
             }
-        } else if (!CherishApplication.isAppInForeground && BackgroundDelivery.mayOpenCallScreen(app)) {
-            // Out of the app: the call screen comes up by itself, over other apps and the lock
-            // screen, where the phone allows it ("Incoming Call Screen" in Settings). It rings in
-            // its notification all the same (that's also how a locked phone shows it otherwise)
-            try {
-                app.startActivity(CallActivity.incomingIntent(app, invite))
-            } catch (e: Exception) {
-                Log.w(TAG, "Couldn't open the call screen over other apps", e)
+        } else if (!CherishApplication.isAppInForeground && !secPrefs.getCallMaskingStyle().equals("discreet", ignoreCase = true)) {
+            // Out of the app or app closed: attempt direct activity launch if allowed or device is locked/sleeping.
+            // Note: CallNotifications.showIncoming(app, invite) was already posted above with fullScreenIntent!
+            if (BackgroundDelivery.canOpenCallScreen(app) || com.example.notifications.NotificationHelper.isDeviceLockedOrSleeping(app)) {
+                try {
+                    val intent = CallActivity.incomingIntent(app, invite).apply {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                    }
+                    app.startActivity(intent)
+                } catch (e: Exception) {
+                    Log.w(TAG, "Couldn't open the call screen directly", e)
+                }
             }
         }
     }
@@ -1189,7 +1193,7 @@ object CallManager {
             ?: cleanCoupleId(app.authRepository.getSavedCoupleId())
 
     private fun cleanCoupleId(raw: String?): String? =
-        raw?.trim()?.ifBlank { null }?.takeIf { it != "couple_default" }
+        raw?.trim()?.ifBlank { null }
 
     private fun isSameCouple(a: String?, b: String?): Boolean {
         if (a.isNullOrBlank() || b.isNullOrBlank()) return false

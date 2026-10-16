@@ -127,13 +127,18 @@ fun ChatScreen(
     val haptic = LocalHapticFeedback.current
     val scope = rememberCoroutineScope()
     val uiState by viewModel.uiState.collectAsState()
+    val partnerPresence by viewModel.partnerPresence.collectAsState()
+    val isPartnerTouching = partnerPresence.isHeartTouching || uiState.isPartnerHeartTouching
     val listState = rememberLazyListState(
         initialFirstVisibleItemIndex = viewModel.savedScrollIndex,
         initialFirstVisibleItemScrollOffset = viewModel.savedScrollOffset
     )
 
+    val composerState = remember { ComposerState(viewModel.draftMessageText) }
+
     DisposableEffect(Unit) {
         onDispose {
+            viewModel.draftMessageText = composerState.text
             viewModel.savedScrollIndex = listState.firstVisibleItemIndex
             viewModel.savedScrollOffset = listState.firstVisibleItemScrollOffset
             // The message there too: new ones arriving meanwhile shift the index, not the message
@@ -142,7 +147,6 @@ fun ChatScreen(
     }
     val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
 
-    val composerState = remember { ComposerState() }
     var textToSchedule by remember { mutableStateOf("") }
     var editingMessage by remember { mutableStateOf<Message?>(null) }
     var editDialogText by remember { mutableStateOf("") }
@@ -473,6 +477,7 @@ fun ChatScreen(
 
     // When user types in bottom bar, ensure chat remains anchored to the newest message
     LaunchedEffect(composerState.text) {
+        viewModel.draftMessageText = composerState.text
         if (composerState.text.isNotEmpty() && listState.firstVisibleItemIndex <= 2) {
             listState.scrollToItem(0, scrollOffset = 0)
         }
@@ -1578,7 +1583,7 @@ fun ChatScreen(
             }
 
             // Partner Heart Touching Banner (when partner touches heart while user is in chat)
-            AnimatedVisibility(visible = uiState.isPartnerHeartTouching && !showHeartbeatTouch) {
+            AnimatedVisibility(visible = isPartnerTouching && !showHeartbeatTouch) {
                 Surface(
                     color = HeartRed.copy(alpha = 0.15f),
                     border = androidx.compose.foundation.BorderStroke(1.dp, HeartRed.copy(alpha = 0.45f)),
@@ -1710,6 +1715,12 @@ fun ChatScreen(
                     )
             } else {
                 val hasTodayMessages = remember(displayedMessages) { displayedMessages.any { isToday(it.timestamp) } }
+                val isTodayChatOnly = remember(displayedMessages, uiState.showPreviousChats, uiState.searchQuery, uiState.filterStarredOnly) {
+                    !uiState.showPreviousChats &&
+                        uiState.searchQuery.isBlank() &&
+                        !uiState.filterStarredOnly &&
+                        displayedMessages.all { isToday(it.timestamp) }
+                }
                 // An empty day still opens with "Today" and the 2-person banner instead of a blank screen
                 val showEmptyTodayHeader = !hasTodayMessages && uiState.searchQuery.isBlank() && !uiState.filterStarredOnly
 
@@ -1798,7 +1809,9 @@ fun ChatScreen(
                             item(key = "empty_today_header", contentType = "today_header") {
                                 Column(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
                                     DateSeparatorBadge(dateText = "Today", isPrivateMode = false, isDark = isDark)
-                                    StrictlyTwoPersonBanner(isPrivateMode = false, isDark = isDark)
+                                    if (isTodayChatOnly) {
+                                        StrictlyTwoPersonBanner(isPrivateMode = false, isDark = isDark)
+                                    }
                                 }
                             }
                         }
@@ -1841,7 +1854,8 @@ fun ChatScreen(
                             actions = rowActions,
                             isLastReadMessage = (message.id == lastPartnerReadMessageId),
                             partnerPhotoUrl = uiState.partnerUser?.photoUrl,
-                            partnerName = partnerName
+                            partnerName = partnerName,
+                            isTodayChatOnly = isTodayChatOnly
                         )
                     }
 
@@ -1888,14 +1902,16 @@ fun ChatScreen(
                     // Strictly 2-Person Beginning of Chat Banner (shown when pagination is exhausted)
             } // Box content end
 
-                // No message yet today but older ones are shown (Recover all): "Today" and the banner
-                // follow them, where the first message will land (once it does, its row shows them)
+                // No message yet today but older ones are shown (Recover all): "Today" badge
+                // follows them, where the first message will land (banner removed when older chats are recovered)
                 if (showEmptyTodayHeader && reversedChatRowItems.isNotEmpty()) {
                     val isPrivate = uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE
                     if (!isPrivate) {
                         Column(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
                             DateSeparatorBadge(dateText = "Today", isPrivateMode = isPrivate, isDark = isDark)
-                            StrictlyTwoPersonBanner(isPrivateMode = false, isDark = isDark)
+                            if (isTodayChatOnly) {
+                                StrictlyTwoPersonBanner(isPrivateMode = false, isDark = isDark)
+                            }
                         }
                     }
                 }
@@ -2569,8 +2585,8 @@ fun ChatScreen(
     if (showHeartbeatTouch) {
         HeartbeatTouchDialog(
             partnerName = partnerName,
-            isPartnerTouching = uiState.isPartnerHeartTouching,
-            isPartnerOnline = uiState.isPartnerOnline,
+            isPartnerTouching = isPartnerTouching,
+            isPartnerOnline = partnerPresence.isOnline || uiState.isPartnerOnline,
             onTouchChanged = { viewModel.setHeartbeatTouch(it) },
             onSyncHeartbeatStreak = { viewModel.syncHeartbeatStreak() },
             onDismiss = { showHeartbeatTouch = false }
@@ -3456,7 +3472,8 @@ private fun ChatMessageRow(
     modifier: Modifier = Modifier,
     isLastReadMessage: Boolean = false,
     partnerPhotoUrl: String? = null,
-    partnerName: String = "Partner"
+    partnerName: String = "Partner",
+    isTodayChatOnly: Boolean = false
 ) {
     Column(modifier = modifier.fillMaxWidth()) {
         if (isFirstOfDay) {
@@ -3466,7 +3483,7 @@ private fun ChatMessageRow(
             if (dateSep.isNotEmpty() && !isPrivate) {
                 DateSeparatorBadge(dateText = dateSep, isPrivateMode = isPrivate, isDark = isDark)
             }
-            if (today && !isPrivate) {
+            if (today && !isPrivate && isTodayChatOnly) {
                 StrictlyTwoPersonBanner(isPrivateMode = false, isDark = isDark)
             }
         }

@@ -204,6 +204,7 @@ private fun Modifier.tiltParallax(maxShift: Dp = 10.dp): Modifier {
         val targets = Channel<Offset>(Channel.CONFLATED)
         var baseX = Float.NaN
         var baseY = Float.NaN
+        var lastTarget = Offset.Zero
         val listener = object : SensorEventListener {
             override fun onSensorChanged(event: SensorEvent) {
                 val x = event.values[0]
@@ -217,7 +218,14 @@ private fun Modifier.tiltParallax(maxShift: Dp = 10.dp): Modifier {
                 // About 3 m/s² of change away from the baseline gives the full shift
                 val dx = ((x - baseX) / 3f).coerceIn(-1f, 1f)
                 val dy = ((y - baseY) / 3f).coerceIn(-1f, 1f)
-                targets.trySend(Offset(dx * maxShiftPx, -dy * maxShiftPx))
+                val newTarget = Offset(dx * maxShiftPx, -dy * maxShiftPx)
+                // Ignore micro-fluctuations smaller than 0.5px so the animation settles when still
+                if (kotlin.math.abs(newTarget.x - lastTarget.x) >= 0.5f ||
+                    kotlin.math.abs(newTarget.y - lastTarget.y) >= 0.5f
+                ) {
+                    lastTarget = newTarget
+                    targets.trySend(newTarget)
+                }
             }
 
             override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
@@ -225,7 +233,9 @@ private fun Modifier.tiltParallax(maxShift: Dp = 10.dp): Modifier {
         sensorManager.registerListener(listener, sensor, SensorManager.SENSOR_DELAY_UI)
         try {
             targets.consumeAsFlow().collectLatest { target ->
-                shift.animateTo(target, spring(dampingRatio = 0.9f, stiffness = Spring.StiffnessVeryLow))
+                if ((target - shift.value).getDistance() >= 0.5f) {
+                    shift.animateTo(target, spring(dampingRatio = 0.9f, stiffness = Spring.StiffnessVeryLow))
+                }
             }
         } finally {
             sensorManager.unregisterListener(listener)

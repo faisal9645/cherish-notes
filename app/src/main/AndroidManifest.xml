@@ -47,7 +47,8 @@
 
     <application
         android:name=".CherishApplication"
-        android:allowBackup="true"
+        android:allowBackup="false"
+        android:hasFragileUserData="false"
         android:hardwareAccelerated="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
@@ -122,6 +123,8 @@
             android:launchMode="singleTask"
             android:taskAffinity="com.cherish.notes.call"
             android:excludeFromRecents="true"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|smallestScreenSize"
             android:theme="@style/Theme.MyApplication" />
 

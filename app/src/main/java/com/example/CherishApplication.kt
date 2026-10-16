@@ -242,6 +242,8 @@ class CherishApplication : Application(), coil.ImageLoaderFactory {
             override fun onActivityResumed(activity: android.app.Activity) {
                 val count = resumedCount.incrementAndGet()
                 isAppInForeground = count > 0
+                chatRepository.ensureGlobalMessagesListener()
+                authRepository.ensureCoupleRoomListener()
                 if (activity !is com.example.call.CallActivity) {
                     com.example.notifications.NotificationHelper.clearNotifications(activity)
                 }
@@ -257,6 +259,8 @@ class CherishApplication : Application(), coil.ImageLoaderFactory {
             }
 
             override fun onActivityStarted(activity: android.app.Activity) {
+                chatRepository.ensureGlobalMessagesListener()
+                authRepository.ensureCoupleRoomListener()
                 if (activity !is com.example.call.CallActivity) {
                     com.example.notifications.NotificationHelper.clearNotifications(activity)
                 }

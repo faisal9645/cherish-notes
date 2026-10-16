@@ -115,9 +115,7 @@ object PartnerPush {
     private suspend fun shouldPushMessage(context: Context, messageId: String): Boolean {
         val app = context as? com.example.CherishApplication ?: return true
         val auth = app.authRepository
-        // Not while the last alert is unseen: the server would only answer "already notified",
-        // and every ask runs the function
-        if (auth.isPartnerNotificationsOff() || isAlertUnseen(auth)) return false
+        if (auth.isPartnerNotificationsOff()) return false
         if (auth.isPartnerInCherish()) {
             val shown = withTimeoutOrNull(LIVE_DELIVERY_WAIT_MS) {
                 app.chatRepository.listenToMessages("").first { messages ->
@@ -126,8 +124,7 @@ object PartnerPush {
             }
             if (shown != null) return false
         }
-        // The partner may have been alerted meanwhile (by another message of this phone's)
-        return !isAlertUnseen(auth)
+        return true
     }
 
     /** The partner's phone was alerted about a message and they haven't been in Cherish since. */
@@ -155,7 +152,7 @@ object PartnerPush {
         extras: Map<String, Any> = emptyMap()
     ): Map<*, *>? {
         val couple = coupleId.trim()
-        if (couple.isBlank() || couple == "couple_default" || item.second.isBlank()) return emptyMap<String, Any>()
+        if (couple.isBlank() || item.second.isBlank()) return emptyMap<String, Any>()
         val data = hashMapOf<String, Any>("kind" to kind, "coupleId" to couple, item.first to item.second)
         data.putAll(extras)
         repeat(ATTEMPTS) { attempt ->

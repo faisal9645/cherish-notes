@@ -70,13 +70,17 @@ fun HomeScreen(
     }
 
     val chatState = chatViewModel?.uiState?.collectAsState()?.value
+    val chatPartnerPresence = chatViewModel?.partnerPresence?.collectAsState()?.value
+    val uiState by viewModel.uiState.collectAsState()
+    val isPartnerTouching = chatPartnerPresence?.isHeartTouching == true ||
+        chatState?.isPartnerHeartTouching == true ||
+        uiState.isPartnerHeartTouching
+
     var showHeartbeatTouch by remember { mutableStateOf(false) }
     // The partner started Heartbeat Touch: open it so it can be felt together
-    LaunchedEffect(chatState?.isPartnerHeartTouching) {
-        if (chatState?.isPartnerHeartTouching == true) showHeartbeatTouch = true
+    LaunchedEffect(isPartnerTouching) {
+        if (isPartnerTouching) showHeartbeatTouch = true
     }
-
-    val uiState by viewModel.uiState.collectAsState()
     val currentUser = uiState.currentUser
     val partner = uiState.partnerUser
     val partnerName = partner?.displayName?.ifBlank { null }
@@ -284,7 +288,7 @@ fun HomeScreen(
         floatingActionButton = {
             if (chatViewModel != null) {
                 HeartbeatButton(
-                    isPartnerTouching = chatState?.isPartnerHeartTouching == true,
+                    isPartnerTouching = isPartnerTouching,
                     onOpenHeartbeatTouch = { showHeartbeatTouch = true },
                     onSendThinkingOfYou = { chatViewModel.sendThinkingOfYou() }
                 )
@@ -936,8 +940,8 @@ fun HomeScreen(
     if (showHeartbeatTouch && chatViewModel != null) {
         com.example.ui.chat.HeartbeatTouchDialog(
             partnerName = partnerName,
-            isPartnerTouching = chatState?.isPartnerHeartTouching == true,
-            isPartnerOnline = chatState?.isPartnerOnline == true,
+            isPartnerTouching = isPartnerTouching,
+            isPartnerOnline = chatPartnerPresence?.isOnline == true || chatState?.isPartnerOnline == true || isOnline,
             onTouchChanged = { chatViewModel.setHeartbeatTouch(it) },
             onSyncHeartbeatStreak = { chatViewModel.syncHeartbeatStreak() },
             onDismiss = { showHeartbeatTouch = false }

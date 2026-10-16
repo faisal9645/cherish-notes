@@ -345,9 +345,7 @@ object NotificationHelper {
             .setNumber(if (isBadgeEnabled) 1 else 0)
             .setAutoCancel(true)
             .setOngoing(false)
-            // setOnlyAlertOnce(true) ensures Android alerts (vibrates/sounds) ONCE on first arrival,
-            // and quietly updates the text for subsequent messages until the user opens or clears the notification!
-            .setOnlyAlertOnce(true)
+            .setOnlyAlertOnce(false)
             .setContentIntent(pendingIntent)
             .setDeleteIntent(getDismissIntent(context))
             .setPriority(NotificationCompat.PRIORITY_HIGH)

@@ -408,48 +408,59 @@ fun CherishNavGraph(
         }
 
         composable(Screen.Chat.route) {
-            ChatScreen(
-                viewModel = sharedChatViewModel,
-                onNavigateBack = {
-                    app.securityPreferences.forceDisguise()
-                },
-                onNavigateToGallery = {
-                    app.securityPreferences.ignoreChatNavigation = true
-                    navController.navigate(Screen.SharedGallery.route)
-                },
-                onQuickDisguise = { app.securityPreferences.forceDisguise() },
-                onNavigateToDates = {
-                    app.securityPreferences.ignoreChatNavigation = true
-                    navController.navigate(Screen.ImportantDates.route) { launchSingleTop = true }
-                },
-                onNavigateToOurWords = {
-                    app.securityPreferences.ignoreChatNavigation = true
-                    navController.navigate(Screen.OurWords.route) { launchSingleTop = true }
-                },
-                onNavigateToHome = {
-                    app.securityPreferences.ignoreChatNavigation = true
-                    val popped = navController.popBackStack(Screen.Home.route, inclusive = false)
-                    if (!popped) {
-                        navController.navigate(Screen.Home.route) {
-                            launchSingleTop = true
-                        }
-                    }
-                },
-                onNavigateToProfile = {
-                    app.securityPreferences.ignoreChatNavigation = true
-                    val popped = navController.popBackStack(Screen.Profile.route, inclusive = false)
-                    if (!popped) {
-                        navController.navigate(Screen.Profile.route) {
-                            launchSingleTop = true
-                        }
-                    }
-                },
-                onLoggedOut = {
-                    navController.navigate(Screen.Auth.route) {
-                        popUpTo(0) { inclusive = true }
-                    }
+            // When starting disguised as Notes, defer composing the heavy ChatScreen by a few
+            // frames so NotesDisguiseScreen appears immediately on screen without jank.
+            var isChatReady by remember { mutableStateOf(!isDisguiseActive) }
+            LaunchedEffect(Unit) {
+                if (!isChatReady) {
+                    kotlinx.coroutines.delay(120)
+                    isChatReady = true
                 }
-            )
+            }
+            if (isChatReady || !isDisguiseActive) {
+                ChatScreen(
+                    viewModel = sharedChatViewModel,
+                    onNavigateBack = {
+                        app.securityPreferences.forceDisguise()
+                    },
+                    onNavigateToGallery = {
+                        app.securityPreferences.ignoreChatNavigation = true
+                        navController.navigate(Screen.SharedGallery.route)
+                    },
+                    onQuickDisguise = { app.securityPreferences.forceDisguise() },
+                    onNavigateToDates = {
+                        app.securityPreferences.ignoreChatNavigation = true
+                        navController.navigate(Screen.ImportantDates.route) { launchSingleTop = true }
+                    },
+                    onNavigateToOurWords = {
+                        app.securityPreferences.ignoreChatNavigation = true
+                        navController.navigate(Screen.OurWords.route) { launchSingleTop = true }
+                    },
+                    onNavigateToHome = {
+                        app.securityPreferences.ignoreChatNavigation = true
+                        val popped = navController.popBackStack(Screen.Home.route, inclusive = false)
+                        if (!popped) {
+                            navController.navigate(Screen.Home.route) {
+                                launchSingleTop = true
+                            }
+                        }
+                    },
+                    onNavigateToProfile = {
+                        app.securityPreferences.ignoreChatNavigation = true
+                        val popped = navController.popBackStack(Screen.Profile.route, inclusive = false)
+                        if (!popped) {
+                            navController.navigate(Screen.Profile.route) {
+                                launchSingleTop = true
+                            }
+                        }
+                    },
+                    onLoggedOut = {
+                        navController.navigate(Screen.Auth.route) {
+                            popUpTo(0) { inclusive = true }
+                        }
+                    }
+                )
+            }
         }
 
         composable(Screen.Memories.route) {

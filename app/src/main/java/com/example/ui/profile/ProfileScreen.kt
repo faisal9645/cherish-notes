@@ -1283,7 +1283,7 @@ fun ProfileScreen(
                     },
                     leadingContent = {
                         Icon(
-                            Icons.Default.PhoneInTalk,
+                            Icons.Default.PhonelinkRing,
                             contentDescription = null,
                             tint = if (isCallScreenAllowed) primaryAccent else MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -1304,49 +1304,6 @@ fun ProfileScreen(
                     modifier = Modifier.testTag("incoming_call_screen")
                 )
 
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), thickness = 0.6.dp)
-
-                // Default Audio Output
-                ListItem(
-                    headlineContent = { Text("Default Audio Output", fontSize = 15.sp, fontWeight = FontWeight.SemiBold) },
-                    supportingContent = { Text("Route audio when starting or answering calls", fontSize = 13.sp) },
-                    leadingContent = { Icon(Icons.Default.VolumeUp, contentDescription = null, tint = primaryAccent) }
-                )
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 4.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(MaterialTheme.colorScheme.surfaceVariant)
-                        .padding(4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    listOf(
-                        "earpiece" to "Earpiece (Default)",
-                        "speaker" to "Speakerphone"
-                    ).forEach { (output, label) ->
-                        val isSelected = uiState.callDefaultAudioOutput == output
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(if (isSelected) primaryAccent else Color.Transparent)
-                                .clickable { viewModel.setCallDefaultAudioOutput(output) }
-                                .padding(vertical = 8.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = label,
-                                color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                fontSize = 12.sp,
-                                textAlign = TextAlign.Center
-                            )
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(6.dp))
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), thickness = 0.6.dp)
 
                 // AI Noise Suppression Mode

@@ -99,7 +99,9 @@ class CallService : Service() {
             return false
         }
         ringing = true
-        CallNotifications.ringFromApp(this, invite)
+        if (CallManager.isCallScreenVisible) {
+            CallNotifications.ringFromApp(this, invite)
+        }
         return true
     }
 

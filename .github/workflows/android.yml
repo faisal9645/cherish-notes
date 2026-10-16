@@ -77,6 +77,12 @@ jobs:
 
           if gh release view "$TAG_NAME" > /dev/null 2>&1; then
             echo "Release $TAG_NAME already exists, uploading $UPDATE_APK..."
+            for asset in $(gh release view "$TAG_NAME" --json assets --jq '.assets[].name'); do
+              if [ "$asset" != "app_update_${VERSION_CODE}.apk" ]; then
+                echo "Removing extra asset $asset from release $TAG_NAME..."
+                gh release delete-asset "$TAG_NAME" "$asset" -y || true
+              fi
+            done
             gh release upload "$TAG_NAME" "$UPDATE_APK" --clobber
           else
             echo "Creating new release $TAG_NAME with single OTA APK..."

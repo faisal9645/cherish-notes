@@ -24,6 +24,7 @@ data class HomeUiState(
     val daysTogether: Long = 280L,
     val isPartnerTyping: Boolean = false,
     val isPartnerOnline: Boolean = false,
+    val isPartnerHeartTouching: Boolean = false,
     val dailyQuestion: DailyQuestion = DailyQuestion(),
     val loveJarNotes: List<LoveJarNote> = emptyList(),
     val bucketList: List<BucketListItem> = emptyList(),
@@ -52,7 +53,8 @@ class HomeViewModel(
                     it.copy(
                         partnerUser = partner,
                         isPartnerOnline = (partner?.isEffectivelyOnline() ?: false) || com.example.call.CallManager.hasActiveCall(),
-                        isPartnerTyping = partner?.isEffectivelyTyping() ?: false
+                        isPartnerTyping = partner?.isEffectivelyTyping() ?: false,
+                        isPartnerHeartTouching = partner?.isEffectivelyHeartTouching() ?: false
                     )
                 }
             }
@@ -99,12 +101,14 @@ class HomeViewModel(
                     val partner = state.partnerUser
                     val newOnline = (partner?.isEffectivelyOnline() ?: false) || com.example.call.CallManager.hasActiveCall()
                     val newTyping = partner?.isEffectivelyTyping() ?: false
-                    if (state.isPartnerOnline == newOnline && state.isPartnerTyping == newTyping) {
+                    val newTouching = partner?.isEffectivelyHeartTouching() ?: false
+                    if (state.isPartnerOnline == newOnline && state.isPartnerTyping == newTyping && state.isPartnerHeartTouching == newTouching) {
                         state
                     } else {
                         state.copy(
                             isPartnerOnline = newOnline,
-                            isPartnerTyping = newTyping
+                            isPartnerTyping = newTyping,
+                            isPartnerHeartTouching = newTouching
                         )
                     }
                 }

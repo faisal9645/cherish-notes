@@ -267,7 +267,9 @@ class AuthRepository(private val context: Context) {
                 updateFcmToken(localUser.id)
                 listenToCurrentUser(localUser.id)
                 connectPartnerListenerOnce()
-                localUser.coupleId?.trim()?.ifBlank { null }?.let { listenToCoupleRoom(it, localUser.id) }
+                if (com.example.CherishApplication.isAppInForeground || wasForegroundThisProcess) {
+                    localUser.coupleId?.trim()?.ifBlank { null }?.let { listenToCoupleRoom(it, localUser.id) }
+                }
             }
         }
 
@@ -342,9 +344,9 @@ class AuthRepository(private val context: Context) {
 
     fun onAppForegroundStateChanged(inForeground: Boolean) {
         isAppInForeground = inForeground
-        if (inForeground) wasForegroundThisProcess = true
-        updatePresence()
         if (inForeground) {
+            wasForegroundThisProcess = true
+            ensureCoupleRoomListener()
             startHeartbeat()
             kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
                 updateNotificationStatus()
@@ -352,6 +354,13 @@ class AuthRepository(private val context: Context) {
         } else {
             heartbeatJob?.cancel()
         }
+        updatePresence()
+    }
+
+    fun ensureCoupleRoomListener() {
+        val localUser = _currentUserState.value ?: return
+        val coupleId = localUser.coupleId?.trim()?.ifBlank { null } ?: return
+        listenToCoupleRoom(coupleId, localUser.id)
     }
 
     fun updatePresence() {
@@ -1167,7 +1176,7 @@ class AuthRepository(private val context: Context) {
         if (active) {
             heartbeatTouchJob = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
                 while (isActive) {
-                    kotlinx.coroutines.delay(2000L)
+                    kotlinx.coroutines.delay(1200L)
                     val liveTs = System.currentTimeMillis()
                     try {
                         userDocument(uid)?.set(
@@ -1681,8 +1690,8 @@ class AuthRepository(private val context: Context) {
                 if (docNotifPerm != null && partner.notificationPermission != docNotifPerm) {
                     partner.notificationPermission = docNotifPerm
                 }
+                val now = System.currentTimeMillis()
                 if (!doc.metadata.isFromCache) {
-                    val now = System.currentTimeMillis()
                     val previous = partnerServerLastSeen
                     val step = if (previous != null && previous.first == doc.id) docLastSeen - previous.second else -1L
                     val clockDiff = kotlin.math.abs(now - docLastSeen)
@@ -1705,6 +1714,11 @@ class AuthRepository(private val context: Context) {
                     partnerServerLastSeen = doc.id to docLastSeen
                 }
                 if (partnerServerLastSeen?.first == doc.id) partner.presenceReceivedAt = partnerPresenceReceivedAt
+                if (partner.heartbeatTouchingTimestamp > 0L) {
+                    partner.heartbeatTouchReceivedAt = now
+                } else {
+                    partner.heartbeatTouchReceivedAt = 0L
+                }
                 // When they were last in Cherish (one message alert until they're back, see PartnerPush)
                 (doc.get("chatSeenAt") as? com.google.firebase.Timestamp)?.toDate()?.time?.let { seenAt ->
                     if (seenAt > partnerChatSeenAt) partnerChatSeenAt = seenAt
