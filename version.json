@@ -1,9 +1,9 @@
 {
-  "versionCode": 176,
-  "versionName": "1.8.4",
-  "tagName": "v1.8.4-176",
-  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.8.4-176/app_update_176.apk",
-  "assetSize": 18206344,
-  "releaseNotes": "Notes v1.8.4 (Build 176):\n• Fixed package signature mismatch (permanent keystore)\n• Complete UI overhaul with Cherish Toast & Dialogs\n• Rounded system icons and interactive press animations\n• Zero residual storage on uninstall",
-  "releaseDate": "2026-10-16T15:15:00Z"
+  "versionCode": 177,
+  "versionName": "1.8.5",
+  "tagName": "v1.8.5-177",
+  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.8.5-177/app_update_177.apk",
+  "assetSize": 18387480,
+  "releaseNotes": "Notes v1.8.5 (Build 177):\n• Smoother scrolling and swipe gestures\n• Attachments load faster with small previews\n• Filter attachments by type, and drag the handle to jump through months\n• Bug fixes and improvements",
+  "releaseDate": "2026-10-16T11:42:00Z"
 }
