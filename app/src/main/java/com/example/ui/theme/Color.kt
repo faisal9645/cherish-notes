@@ -12,6 +12,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.unit.dp
+import com.example.ui.components.softShadow
 
 // Day Mode Blues (Vibrant electric royal blues matching screenshots)
 val DayBluePrimary = Color(0xFF3048F5)
@@ -91,7 +92,7 @@ fun appVerticalGradient(): Brush {
 @Composable
 fun Modifier.appGradientShadow(shape: Shape = RoundedCornerShape(16.dp)): Modifier {
     val shadowColor = if (LocalAmoledBlack.current) Color(0x35000000) else if (isAppInDark()) Color(0x351D4ED8) else Color(0x353048F5)
-    return this.shadow(
+    return this.softShadow(
         elevation = 8.dp,
         shape = shape,
         ambientColor = shadowColor,

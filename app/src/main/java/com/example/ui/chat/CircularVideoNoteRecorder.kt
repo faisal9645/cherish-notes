@@ -63,6 +63,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.io.File
 import kotlin.math.roundToInt
+import com.example.ui.theme.steadyDigits
 
 /**
  * Telegram-Style Circular Video Note Recorder:
@@ -481,7 +482,7 @@ fun CircularVideoNoteRecorderDialog(
                         ) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
                             ) {
                                 Box(
                                     modifier = Modifier
@@ -498,7 +499,8 @@ fun CircularVideoNoteRecorderDialog(
                                     ),
                                     color = Color.White,
                                     fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold
+                                    fontWeight = FontWeight.Bold,
+                                    style = LocalTextStyle.current.steadyDigits
                                 )
                             }
                         }
@@ -515,7 +517,7 @@ fun CircularVideoNoteRecorderDialog(
                             ),
                             modifier = Modifier
                                 .align(Alignment.BottomCenter)
-                                .padding(bottom = 14.dp)
+                                .padding(bottom = 16.dp)
                                 .clickable {
                                     isMirrorMode = !isMirrorMode
                                     textureViewRef?.let { tv -> adjustTextureTransform(tv, tv.width, tv.height) }
@@ -525,7 +527,7 @@ fun CircularVideoNoteRecorderDialog(
                         ) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp)
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
                             ) {
                                 Text(
                                     text = if (isMirrorMode) "🪞 Mirrored" else "✨ Normal",

@@ -140,7 +140,7 @@ fun SkeletonCards(count: Int = 3, modifier: Modifier = Modifier) {
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(20.dp))
                     .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.03f))
-                    .padding(18.dp)
+                    .padding(20.dp)
             ) {
                 SkeletonBlock(sweep, Modifier.fillMaxWidth(0.45f).height(14.dp))
                 SkeletonBlock(sweep, Modifier.fillMaxWidth().height(10.dp))
@@ -164,7 +164,7 @@ fun SkeletonChatBubbles(modifier: Modifier = Modifier) {
         verticalArrangement = Arrangement.spacedBy(8.dp),
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 14.dp, vertical = 10.dp)
+            .padding(horizontal = 16.dp, vertical = 12.dp)
             .semantics { contentDescription = "Loading earlier messages" }
     ) {
         listOf(0.62f to false, 0.45f to true, 0.7f to false).forEach { (width, mine) ->

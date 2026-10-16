@@ -34,6 +34,8 @@ import java.text.DateFormatSymbols
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
+import com.example.ui.components.lazyFadingEdges
+import androidx.compose.foundation.lazy.rememberLazyListState
 
 /** "yyyy-MM" moved by [offset] months. */
 private fun shiftMonth(month: String, offset: Int): String {
@@ -123,12 +125,16 @@ fun SynchronicityScreen(
             )
         }
     ) { padding ->
+        val momentsList = rememberLazyListState()
         LazyColumn(
+            state = momentsList,
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 96.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
+                // Moments fade softly at the top and bottom edges as they scroll
+                .lazyFadingEdges(momentsList)
                 .testTag("synchronicity_history_list")
         ) {
             item(key = "stats") {
@@ -187,7 +193,7 @@ fun SynchronicityScreen(
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(12.dp))
                                     .background(tileBrush(pattern, isCustom = pattern !in SyncPatterns.defaults))
-                                    .padding(horizontal = 10.dp, vertical = 6.dp)
+                                    .padding(horizontal = 12.dp, vertical = 6.dp)
                             ) {
                                 Text("$pattern ×$count", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                             }
@@ -199,7 +205,7 @@ fun SynchronicityScreen(
             when {
                 isLoading -> item(key = "loading") {
                     // Grey rows shaped like the moments on their way
-                    com.example.ui.components.SkeletonListRows(count = 4)
+                    com.example.ui.components.SkeletonListRows(count = 4, modifier = Modifier.animateItem())
                 }
                 loadFailed -> item(key = "failed") {
                     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth().padding(16.dp)) {
@@ -249,7 +255,7 @@ fun SynchronicityScreen(
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.06f)),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Text("What the numbers might whisper", fontWeight = FontWeight.Bold, fontSize = 14.sp)
                         Text(
                             "Sweet meanings, just for fun — not predictions.",

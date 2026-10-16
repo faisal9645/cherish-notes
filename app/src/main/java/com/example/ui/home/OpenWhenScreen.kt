@@ -49,6 +49,7 @@ import com.example.ui.components.CherishButton
 import com.example.ui.components.pressScale
 import com.example.ui.components.pressScaleTarget
 import com.example.ui.components.springClickable
+import com.example.ui.components.softShadow
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -187,10 +188,11 @@ fun EnvelopeCard(
         shape = RoundedCornerShape(20.dp),
         color = MaterialTheme.colorScheme.surface,
         border = BorderStroke(1.dp, if (letter.isOpened) RoseGoldPrimary.copy(alpha = 0.4f) else Lavender50),
-        shadowElevation = 2.dp,
         modifier = modifier
             .fillMaxWidth()
             .pressScale(press)
+            // A soft, wide shadow instead of the surface's own tight one, so it floats
+            .softShadow(6.dp, RoundedCornerShape(20.dp), clip = false)
     ) {
         Column(
             modifier = Modifier.padding(16.dp),
@@ -240,7 +242,7 @@ fun EnvelopeCard(
                 color = if (letter.isOpened) (if (isDark) darkTone(Blue900) else Green50) else (if (isDark) MaterialTheme.colorScheme.surfaceVariant else Lavender50)
             ) {
                 Row(
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(

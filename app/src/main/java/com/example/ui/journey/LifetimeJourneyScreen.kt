@@ -37,6 +37,9 @@ import com.example.data.model.YearlyJourneyEntry
 import com.example.ui.theme.*
 import com.example.ui.components.CherishAlertDialog
 import com.example.ui.components.CherishButton
+import com.example.ui.components.softShadow
+import com.example.ui.components.lazyFadingEdges
+import androidx.compose.foundation.lazy.rememberLazyListState
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -114,10 +117,14 @@ fun LifetimeJourneyScreen(
         },
         containerColor = MaterialTheme.colorScheme.surface
     ) { paddingValues ->
+        val journeyList = rememberLazyListState()
         LazyColumn(
+            state = journeyList,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
+                // The years fade softly at the top and bottom edges as they scroll
+                .lazyFadingEdges(journeyList)
                 .padding(horizontal = 20.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
             contentPadding = PaddingValues(top = 10.dp, bottom = 40.dp)
@@ -130,7 +137,7 @@ fun LifetimeJourneyScreen(
                         .appGradientShadow(RoundedCornerShape(24.dp))
                         .clip(RoundedCornerShape(24.dp))
                         .background(appHorizontalGradient())
-                        .padding(22.dp)
+                        .padding(24.dp)
                 ) {
                     Column {
                         Row(
@@ -187,7 +194,7 @@ fun LifetimeJourneyScreen(
                                 modifier = Modifier.weight(1f)
                             ) {
                                 Column(
-                                    modifier = Modifier.padding(vertical = 10.dp, horizontal = 12.dp),
+                                    modifier = Modifier.padding(vertical = 12.dp, horizontal = 12.dp),
                                     horizontalAlignment = Alignment.CenterHorizontally
                                 ) {
                                     Text(
@@ -210,7 +217,7 @@ fun LifetimeJourneyScreen(
                                 modifier = Modifier.weight(1f)
                             ) {
                                 Column(
-                                    modifier = Modifier.padding(vertical = 10.dp, horizontal = 12.dp),
+                                    modifier = Modifier.padding(vertical = 12.dp, horizontal = 12.dp),
                                     horizontalAlignment = Alignment.CenterHorizontally
                                 ) {
                                     Text(
@@ -309,7 +316,7 @@ fun LifetimeJourneyScreen(
                         modifier = Modifier.clickable { showAddDialog = true }
                     ) {
                         Row(
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Icon(
@@ -423,11 +430,14 @@ fun YearlyJourneyCard(
     modifier: Modifier = Modifier
 ) {
     Card(
-        modifier = modifier.fillMaxWidth(),
+        // A soft, wide shadow instead of the card's own tight one, so it floats
+        modifier = modifier
+            .fillMaxWidth()
+            .softShadow(6.dp, RoundedCornerShape(24.dp), clip = false),
         shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Column(
             modifier = Modifier
@@ -450,7 +460,7 @@ fun YearlyJourneyCard(
                             fontSize = 15.sp,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
                         )
                     }
 

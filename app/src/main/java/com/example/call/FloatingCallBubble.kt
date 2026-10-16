@@ -52,6 +52,9 @@ import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
 import com.example.ui.components.pressScaleTarget
 import com.example.ui.components.springClickable
+import androidx.compose.material3.LocalTextStyle
+import com.example.ui.theme.steadyDigits
+import com.example.ui.components.softShadow
 
 /**
  * Draggable Floating Mini Call Bubble (Picture-in-Picture)
@@ -122,14 +125,14 @@ fun FloatingCallBubble(
                 shadowElevation = 10.dp,
                 modifier = Modifier
                     .pressScaleTarget()
-                    .shadow(12.dp, RoundedCornerShape(28.dp))
+                    .softShadow(12.dp, RoundedCornerShape(28.dp))
                     .clip(RoundedCornerShape(28.dp))
                     .springClickable {
                         CallActivity.startOutgoing(context)
                     }
             ) {
                 Row(
-                    modifier = Modifier.padding(start = 6.dp, end = 6.dp, top = 5.dp, bottom = 5.dp),
+                    modifier = Modifier.padding(start = 6.dp, end = 6.dp, top = 4.dp, bottom = 4.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     // Avatar or Call Icon
@@ -166,7 +169,8 @@ fun FloatingCallBubble(
                         text = durationFormatted,
                         fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = LocalTextStyle.current.steadyDigits
                     )
 
                     Spacer(modifier = Modifier.width(4.dp))

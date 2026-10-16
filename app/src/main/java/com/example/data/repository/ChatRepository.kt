@@ -1221,6 +1221,46 @@ class ChatRepository(
         if (emptiedIds.isNotEmpty()) deleteMessages(emptiedIds) else triggerBackup()
     }
 
+    /**
+     * A video message's gallery poster as the server has it now (the other phone may have made it
+     * since this phone last loaded the message). Empty when it has none yet; null when the server
+     * couldn't be asked (offline) or the message is gone.
+     */
+    suspend fun fetchSavedPoster(messageId: String): String? {
+        val fs = firestore ?: return null
+        return try {
+            val doc = fs.collection("conversations").document(getConversationId())
+                .collection("messages").document(messageId)
+                .get(Source.SERVER).await()
+            if (!doc.exists()) return null
+            val poster = (doc.get("thumbnailUrls") as? List<*>)
+                ?.filterIsInstance<String>()
+                ?.firstOrNull { it.isNotBlank() }
+            if (poster != null) updateMessageEverywhere(messageId) { it.copy(thumbnailUrls = listOf(poster)) }
+            poster.orEmpty()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w("ChatRepository", "Couldn't check the poster of $messageId", e)
+            null
+        }
+    }
+
+    /** Saves [posterUrl] as a video message's gallery poster, for both phones. */
+    fun savePoster(messageId: String, posterUrl: String) {
+        updateMessageEverywhere(messageId) { it.copy(thumbnailUrls = listOf(posterUrl)) }
+        try {
+            firestore?.collection("conversations")
+                ?.document(getConversationId())
+                ?.collection("messages")
+                ?.document(messageId)
+                ?.update("thumbnailUrls", listOf(posterUrl))
+                ?.addOnFailureListener { e -> Log.w("ChatRepository", "Failed to save the poster of $messageId", e) }
+        } catch (e: Exception) {
+            Log.w("ChatRepository", "Failed to save the poster of $messageId", e)
+        }
+    }
+
     private fun findMessage(messageId: String): Message? =
         _messagesFlow.value.find { it.id == messageId }
             ?: _galleryMediaMessages.value.find { it.id == messageId }

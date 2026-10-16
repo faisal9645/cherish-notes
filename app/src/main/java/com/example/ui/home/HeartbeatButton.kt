@@ -48,6 +48,7 @@ import kotlinx.coroutines.delay
 import com.example.ui.theme.HeartPink
 import com.example.ui.theme.Indigo950
 import com.example.ui.theme.LovePink
+import com.example.ui.components.softShadow
 
 /**
  * The heartbeat colours, also used by Heartbeat Touch and the Both of us card: pink and the app's
@@ -164,7 +165,7 @@ fun HeartbeatButton(
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
                 ) {
                     Text(
                         text = feltStatus.orEmpty(),
@@ -191,7 +192,7 @@ fun HeartbeatButton(
                     scaleX = beat.value + bump
                     scaleY = beat.value + bump
                 }
-                .shadow(10.dp, CircleShape)
+                .softShadow(10.dp, CircleShape)
                 .clip(CircleShape)
                 // Pink to the app's blue, in every theme
                 .background(Brush.linearGradient(listOf(HeartbeatPink, HeartbeatBlue)))

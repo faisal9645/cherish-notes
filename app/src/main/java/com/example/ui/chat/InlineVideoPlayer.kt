@@ -549,7 +549,7 @@ fun InlineYouTubeCard(
                             .align(Alignment.BottomCenter)
                             .fillMaxWidth()
                             .background(Color.Black.copy(alpha = 0.75f))
-                            .padding(horizontal = 12.dp, vertical = 7.dp),
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
@@ -764,7 +764,7 @@ fun LinkPreviewCard(
             .padding(vertical = 4.dp)
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(

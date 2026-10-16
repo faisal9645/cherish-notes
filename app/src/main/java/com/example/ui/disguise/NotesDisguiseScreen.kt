@@ -50,6 +50,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
@@ -79,7 +82,8 @@ fun NotesDisguiseScreen(
         NotesDisguiseViewModel(app.notesRepository)
     },
     securityPreferences: SecurityPreferences,
-    onSecretGestureTriggered: () -> Unit,
+    /** The hold opened the secret space; [revealFrom] is the + button's centre (the heart opens there). */
+    onSecretGestureTriggered: (revealFrom: Offset?) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -158,6 +162,8 @@ fun NotesDisguiseScreen(
     var isUnlockingSecret by remember { mutableStateOf(false) }
     var isUnlockingAnimationPlaying by remember { mutableStateOf(false) }
     val unlockAnimProgress = remember { Animatable(0f) }
+    // Where the + button is on screen: the secret space opens out of it as a growing heart
+    var fabCenter by remember { mutableStateOf<Offset?>(null) }
 
     fun triggerSecretUnlock() {
         if (isUnlockingSecret) return
@@ -186,7 +192,7 @@ fun NotesDisguiseScreen(
             unlockAnimProgress.snapTo(0f)
             unlockAnimProgress.animateTo(
                 targetValue = 1f,
-                animationSpec = tween(650, easing = FastOutSlowInEasing)
+                animationSpec = tween(420, easing = FastOutSlowInEasing)
             )
         }
 
@@ -201,7 +207,7 @@ fun NotesDisguiseScreen(
                     onSuccess = {
                         coroutineScope.launch {
                             delay(250)
-                            onSecretGestureTriggered()
+                            onSecretGestureTriggered(fabCenter)
                             delay(400)
                             isUnlockingSecret = false
                             isUnlockingAnimationPlaying = false
@@ -217,8 +223,9 @@ fun NotesDisguiseScreen(
         }
 
         coroutineScope.launch {
-            delay(580)
-            onSecretGestureTriggered()
+            // A beat for the button's bloom, then the chat opens out of it as a growing heart
+            delay(180)
+            onSecretGestureTriggered(fabCenter)
             delay(400)
             isUnlockingSecret = false
             isUnlockingAnimationPlaying = false
@@ -638,6 +645,7 @@ fun NotesDisguiseScreen(
                         Box(
                             modifier = Modifier
                                 .testTag("add_note_fab")
+                                .onGloballyPositioned { fabCenter = it.boundsInRoot().center }
                                 .size(56.dp)
                                 .scale(fabScale)
                                 .shadow(6.dp, CircleShape, ambientColor = Color(0x353048F5), spotColor = Color(0x353048F5))
@@ -889,70 +897,6 @@ fun NotesDisguiseScreen(
         )
     }
 
-    // Satisfying secret opening transition overlay once hold completes
-    if (isUnlockingAnimationPlaying) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color.Black.copy(alpha = unlockAnimProgress.value * 0.35f)),
-            contentAlignment = Alignment.Center
-        ) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
-            ) {
-                Surface(
-                    shape = CircleShape,
-                    color = MaterialTheme.colorScheme.surface,
-                    shadowElevation = 14.dp,
-                    modifier = Modifier
-                        .size(72.dp)
-                        .scale(0.82f + (unlockAnimProgress.value * 0.28f))
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(notesHorizontalGradient),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.LockOpen,
-                            contentDescription = null,
-                            tint = Color.White,
-                            modifier = Modifier.size(34.dp)
-                        )
-                    }
-                }
-                Spacer(modifier = Modifier.height(16.dp))
-                Surface(
-                    shape = RoundedCornerShape(20.dp),
-                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f),
-                    shadowElevation = 6.dp,
-                    modifier = Modifier.graphicsLayer {
-                        alpha = unlockAnimProgress.value
-                    }
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 9.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(16.dp),
-                            color = darkTone(DayBluePrimary),
-                            strokeWidth = 2.2.dp
-                        )
-                        Text(
-                            text = "Opening Cherish...",
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                    }
-                }
-            }
-        }
-    }
 }
 }
 }

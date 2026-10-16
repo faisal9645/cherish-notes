@@ -47,6 +47,7 @@ import com.example.ui.components.CherishButton
 import com.example.ui.components.CherishTonalButton
 import com.example.ui.components.pressScaleTarget
 import com.example.ui.components.springClickable
+import com.example.ui.components.CherishCheckbox
 
 /**
  * Instant Tactile Love Nudges Bar
@@ -279,7 +280,7 @@ fun DailyQuestionCard(
                     color = RoseGoldContainer
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
@@ -381,7 +382,7 @@ fun DailyQuestionCard(
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(16.dp))
                         .background(MaterialTheme.colorScheme.surfaceVariant)
-                        .padding(14.dp)
+                        .padding(16.dp)
                 ) {
                     // My Answer
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -409,7 +410,7 @@ fun DailyQuestionCard(
                     HorizontalDivider(
                         color = MaterialTheme.colorScheme.outline,
                         thickness = 0.5.dp,
-                        modifier = Modifier.padding(vertical = 10.dp)
+                        modifier = Modifier.padding(vertical = 12.dp)
                     )
 
                     // Partner's Answer
@@ -593,7 +594,7 @@ fun BucketListCard(
                         .padding(vertical = 2.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Checkbox(
+                    CherishCheckbox(
                         checked = item.isCompleted,
                         onCheckedChange = { onToggleItem(item.id) },
                         colors = CheckboxDefaults.colors(checkedColor = RoseGoldPrimary)
@@ -800,7 +801,7 @@ fun AddBucketItemDialog(
                                 text = cat,
                                 color = if (category == cat) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontSize = 11.sp,
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
                             )
                         }
                     }

@@ -70,6 +70,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.components.AvatarView
 import kotlinx.coroutines.delay
+import androidx.compose.material3.LocalTextStyle
+import com.example.ui.theme.steadyDigits
 
 private val HangUpRed = Color(0xFFE53935)
 private val AnswerGreen = Color(0xFF16A34A)
@@ -150,7 +152,7 @@ fun CallScreen(
                     border = BorderStroke(1.dp, WarningAmber.copy(alpha = 0.45f))
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text("⚠️", fontSize = 13.sp)
@@ -281,7 +283,13 @@ private fun CallStatusText(state: CallUiState) {
             }
         }
         val seconds = if (state.connectedAtElapsed > 0L) ((now - state.connectedAtElapsed) / 1000).coerceAtLeast(0) else 0
-        Text(formatCallDuration(seconds), fontSize = 18.sp, fontWeight = FontWeight.Medium, color = colors.onBackground)
+        Text(
+            formatCallDuration(seconds),
+            fontSize = 18.sp,
+            fontWeight = FontWeight.Medium,
+            color = colors.onBackground,
+            style = LocalTextStyle.current.steadyDigits
+        )
     }
 }
 
@@ -331,7 +339,7 @@ private fun RecordingNoticeCard() {
             fontSize = 13.sp,
             lineHeight = 18.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(14.dp)
+            modifier = Modifier.padding(16.dp)
         )
     }
 }
@@ -339,7 +347,7 @@ private fun RecordingNoticeCard() {
 @Composable
 private fun WeakNetworkChip() {
     Surface(shape = RoundedCornerShape(50), color = WarningAmber.copy(alpha = 0.14f)) {
-        Row(modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Rounded.SignalCellularAlt1Bar, contentDescription = null, tint = WarningAmber, modifier = Modifier.size(14.dp))
             Spacer(modifier = Modifier.width(4.dp))
             Text("Weak connection", fontSize = 12.sp, color = WarningAmber)

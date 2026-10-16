@@ -40,6 +40,10 @@ import com.example.ui.components.CherishOutlinedButton
 import com.example.ui.components.CherishTonalButton
 import com.example.ui.components.pressScaleTarget
 import com.example.ui.components.springClickable
+import com.example.ui.components.CherishAssistChip
+import com.example.ui.components.CherishCheckbox
+import com.example.ui.components.CherishFilterChip
+import com.example.ui.components.CherishSlider
 
 /** The two of us, for naming and colouring who did what (her pink, him blue, as on the couple card). */
 class CouplePeople(
@@ -124,7 +128,7 @@ private fun PersonChip(text: String, color: Color) {
             fontSize = 10.sp,
             fontWeight = FontWeight.SemiBold,
             maxLines = 1,
-            modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
         )
     }
 }
@@ -171,7 +175,7 @@ fun CoupleMoviesCard(
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
-        Column(modifier = Modifier.fillMaxWidth().padding(18.dp)) {
+        Column(modifier = Modifier.fillMaxWidth().padding(20.dp)) {
             CardHeader(
                 emoji = "🍿",
                 title = "Our Movies",
@@ -335,7 +339,7 @@ fun AddMovieDialog(
                 Text("Ideas", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     items(MovieIdeas) { (ideaTitle, ideaGenre, ideaEmoji) ->
-                        AssistChip(
+                        CherishAssistChip(
                             onClick = {
                                 title = ideaTitle
                                 genre = ideaGenre
@@ -355,7 +359,7 @@ fun AddMovieDialog(
                 Text("Genre", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     items(genres) { g ->
-                        FilterChip(
+                        CherishFilterChip(
                             selected = genre == g,
                             onClick = { genre = g },
                             label = { Text(g, fontSize = 12.sp) },
@@ -380,7 +384,7 @@ fun AddMovieDialog(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.fillMaxWidth().pressScaleTarget().clip(RoundedCornerShape(12.dp)).springClickable { watchedTogether = !watchedTogether }
                 ) {
-                    Checkbox(checked = watchedTogether, onCheckedChange = { watchedTogether = it })
+                    CherishCheckbox(checked = watchedTogether, onCheckedChange = { watchedTogether = it })
                     Text("We already watched it together", fontSize = 13.sp)
                 }
                 OutlinedTextField(
@@ -437,7 +441,7 @@ fun CoupleBooksCard(
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
-        Column(modifier = Modifier.fillMaxWidth().padding(18.dp)) {
+        Column(modifier = Modifier.fillMaxWidth().padding(20.dp)) {
             CardHeader(
                 emoji = "📚",
                 title = "Our Books",
@@ -590,7 +594,7 @@ private fun BookRow(book: BookItem, people: CouplePeople, onEditPage: () -> Unit
                         trackColor = color.copy(alpha = 0.18f),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(top = 3.dp, bottom = 6.dp)
+                            .padding(top = 4.dp, bottom = 6.dp)
                             .height(5.dp)
                             .clip(RoundedCornerShape(4.dp))
                     )
@@ -641,7 +645,7 @@ private fun MyPageDialog(book: BookItem, people: CouplePeople, onDismiss: () -> 
                     CherishOutlinedButton(onClick = { setPage(page + 1) }, contentPadding = PaddingValues(horizontal = 8.dp)) { Text("+1") }
                     CherishOutlinedButton(onClick = { setPage(page + 10) }, contentPadding = PaddingValues(horizontal = 8.dp)) { Text("+10") }
                 }
-                Slider(
+                CherishSlider(
                     value = page.toFloat(),
                     onValueChange = { setPage(it.toInt()) },
                     valueRange = 0f..book.totalPages.toFloat().coerceAtLeast(1f)
@@ -701,7 +705,7 @@ fun AddBookDialog(
                 Text("Suggestions", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     items(BookIdeas) { idea ->
-                        AssistChip(
+                        CherishAssistChip(
                             onClick = {
                                 title = idea.title
                                 author = idea.author
@@ -737,7 +741,7 @@ fun AddBookDialog(
                 )
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     items(genres) { g ->
-                        FilterChip(
+                        CherishFilterChip(
                             selected = genre == g,
                             onClick = { genre = g },
                             label = { Text(g, fontSize = 12.sp) },

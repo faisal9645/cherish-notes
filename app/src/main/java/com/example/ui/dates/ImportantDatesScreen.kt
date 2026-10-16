@@ -37,6 +37,12 @@ import com.example.ui.components.CherishButton
 import com.example.ui.components.CherishOutlinedButton
 import com.example.ui.components.pressScaleTarget
 import com.example.ui.components.springClickable
+import com.example.ui.components.CherishAssistChip
+import com.example.ui.components.CherishFilterChip
+import com.example.ui.components.CherishSwitch
+import com.example.ui.components.softShadow
+import com.example.ui.components.lazyFadingEdges
+import androidx.compose.foundation.lazy.rememberLazyListState
 
 /** Categories in the order they're offered when adding a date. */
 private val CATEGORY_ORDER = listOf(
@@ -124,11 +130,15 @@ fun ImportantDatesScreen(
         },
         containerColor = MaterialTheme.colorScheme.surface
     ) { paddingValues ->
+        val datesList = rememberLazyListState()
         LazyColumn(
+            state = datesList,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .padding(horizontal = 18.dp),
+                // Dates fade softly at the top and bottom edges as they scroll
+                .lazyFadingEdges(datesList)
+                .padding(horizontal = 20.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             item {
@@ -169,7 +179,7 @@ fun ImportantDatesScreen(
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = 10.dp)
+                        modifier = Modifier.padding(top = 12.dp)
                     )
                 }
                 items(past, key = { it.id }) { date ->
@@ -233,7 +243,7 @@ private fun EmptyDates(onPick: (String, DateCategory) -> Unit) {
         shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(containerColor = RoseGoldPrimary.copy(alpha = 0.08f))
     ) {
-        Column(modifier = Modifier.padding(18.dp)) {
+        Column(modifier = Modifier.padding(20.dp)) {
             Text(text = "📅", fontSize = 28.sp)
             Spacer(modifier = Modifier.height(6.dp))
             Text(
@@ -253,7 +263,7 @@ private fun EmptyDates(onPick: (String, DateCategory) -> Unit) {
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 SUGGESTIONS.forEach { (title, category) ->
-                    AssistChip(
+                    CherishAssistChip(
                         onClick = { onPick(title, category) },
                         label = { Text("${DateReminders.emoji(category)}  $title", fontSize = 13.sp) }
                     )
@@ -277,15 +287,18 @@ private fun DateCard(
     modifier: Modifier = Modifier
 ) {
     Card(
-        modifier = modifier.fillMaxWidth(),
+        // A soft, wide shadow instead of the card's own tight one, so it floats
+        modifier = modifier
+            .fillMaxWidth()
+            .softShadow(6.dp, RoundedCornerShape(20.dp), clip = false),
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(start = 16.dp, top = 14.dp, bottom = 14.dp, end = 6.dp),
+                .padding(start = 16.dp, top = 16.dp, bottom = 16.dp, end = 6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(
@@ -337,7 +350,7 @@ private fun DateCard(
                         fontSize = 12.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = if (pillHighlighted) Color.White else RoseGoldPrimary,
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
                     )
                 }
                 if (extra != null) {
@@ -345,7 +358,7 @@ private fun DateCard(
                         text = extra,
                         fontSize = 11.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = 3.dp, end = 4.dp)
+                        modifier = Modifier.padding(top = 4.dp, end = 4.dp)
                     )
                 }
             }
@@ -418,7 +431,7 @@ private fun AddDateDialog(
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     CATEGORY_ORDER.forEach { option ->
-                        FilterChip(
+                        CherishFilterChip(
                             selected = category == option,
                             onClick = { category = option },
                             label = {
@@ -457,7 +470,7 @@ private fun AddDateDialog(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
-                    Switch(checked = repeats, onCheckedChange = { repeats = it })
+                    CherishSwitch(checked = repeats, onCheckedChange = { repeats = it })
                 }
 
                 OutlinedTextField(

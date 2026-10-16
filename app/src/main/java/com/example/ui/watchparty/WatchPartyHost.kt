@@ -147,6 +147,8 @@ import com.example.ui.components.CherishAlertDialog
 import com.example.ui.components.CherishTonalButton
 import com.example.ui.components.pressScaleTarget
 import com.example.ui.components.springClickable
+import androidx.compose.material3.LocalTextStyle
+import com.example.ui.theme.steadyDigits
 
 /** The quick reactions under the video. */
 private val ReactionEmojis = listOf("❤️", "🍿", "😂", "🥺", "💋")
@@ -734,7 +736,7 @@ private fun VideoLayer(
             exit = fadeOut(tween(220)),
             modifier = Modifier
                 .align(Alignment.TopCenter)
-                .padding(top = if (compact) 4.dp else 10.dp)
+                .padding(top = if (compact) 4.dp else 12.dp)
         ) {
             OverlayPill(shownChip?.text.orEmpty(), compact)
         }
@@ -798,7 +800,7 @@ private fun VideoLayer(
                 fontWeight = FontWeight.Medium,
                 modifier = Modifier
                     .background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
-                    .padding(horizontal = 10.dp, vertical = 4.dp)
+                    .padding(horizontal = 12.dp, vertical = 4.dp)
             )
         }
 
@@ -809,7 +811,7 @@ private fun VideoLayer(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(Color.Black.copy(alpha = 0.86f))
-                    .padding(10.dp)
+                    .padding(12.dp)
             ) {
                 Text(
                     text = if (compact) "Can't play here" else "This video can't play inside the app",
@@ -852,7 +854,7 @@ private fun OverlayPill(text: String, compact: Boolean) {
             textAlign = TextAlign.Center,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(horizontal = if (compact) 8.dp else 14.dp, vertical = if (compact) 3.dp else 7.dp)
+            modifier = Modifier.padding(horizontal = if (compact) 8.dp else 16.dp, vertical = if (compact) 4.dp else 8.dp)
         )
     }
 }
@@ -994,7 +996,7 @@ private fun Theater(
                         textAlign = TextAlign.Center,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(top = 10.dp)
+                            .padding(top = 12.dp)
                     )
                     Spacer(modifier = Modifier.weight(1f))
                     ReactionBar(onReact = onReact, buttonSize = 54.dp)
@@ -1072,7 +1074,7 @@ private fun TheaterHeader(
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp),
-            modifier = Modifier.padding(start = 14.dp, top = 2.dp, bottom = 10.dp)
+            modifier = Modifier.padding(start = 16.dp, top = 2.dp, bottom = 12.dp)
         ) {
             Surface(
                 shape = RoundedCornerShape(50),
@@ -1090,7 +1092,7 @@ private fun TheaterHeader(
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color.White,
-                    modifier = Modifier.padding(horizontal = 9.dp, vertical = 3.dp)
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                 )
             }
             AvatarView(photoUrl = partnerPhoto, name = partnerName, size = 22.dp, showOnlineBadge = false, showRing = false)
@@ -1161,7 +1163,7 @@ private fun PlaybackDeck(
     var dragging by remember { mutableStateOf<Float?>(null) }
     val shownPosition = dragging ?: position
     val max = if (total > 1f) total else maxOf(shownPosition + 60f, 60f)
-    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp)) {
+    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp)) {
         Slider(
             value = shownPosition.coerceIn(0f, max),
             onValueChange = { dragging = it },
@@ -1180,8 +1182,8 @@ private fun PlaybackDeck(
                 .testTag("watch_party_progress_slider")
         )
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text(clock(shownPosition), fontSize = 12.sp, color = muted)
-            Text(if (total > 1f) clock(total) else "--:--", fontSize = 12.sp, color = muted)
+            Text(clock(shownPosition), fontSize = 12.sp, color = muted, style = LocalTextStyle.current.steadyDigits)
+            Text(if (total > 1f) clock(total) else "--:--", fontSize = 12.sp, color = muted, style = LocalTextStyle.current.steadyDigits)
         }
         Row(
             horizontalArrangement = Arrangement.Center,
@@ -1302,7 +1304,7 @@ private fun TheaterActions(onChatWhileWatching: () -> Unit, onEndForBoth: () -> 
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 10.dp)
+            .padding(horizontal = 16.dp, vertical = 12.dp)
     ) {
         CherishTonalButton(
             onClick = onChatWhileWatching,
@@ -1357,7 +1359,7 @@ private fun DockBar(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
                 .fillMaxSize()
-                .padding(7.dp)
+                .padding(8.dp)
         ) {
             VideoSlot(
                 modifier = Modifier.fillMaxHeight().aspectRatio(16f / 9f, matchHeightConstraintsFirst = true),
@@ -1367,7 +1369,7 @@ private fun DockBar(
             Column(
                 modifier = Modifier
                     .weight(1f)
-                    .padding(start = 10.dp)
+                    .padding(start = 12.dp)
             ) {
                 Text(
                     text = party.title,

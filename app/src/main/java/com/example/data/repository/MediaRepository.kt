@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Matrix
 import android.media.ExifInterface
+import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.os.Build
 import android.util.Log
@@ -179,42 +180,68 @@ class MediaRepository(private val context: Context) {
     }
 
     /**
-     * A small JPEG preview of an already-prepared image (longest side [maxDim] px), shown in chat
-     * bubbles and the gallery instead of the full photo. Null if the image can't be decoded.
+     * A gallery tile's picture of an already-prepared photo: its middle square, [TILE_SIZE] px WebP,
+     * about 10 KB, so a screenful of tiles doesn't load every full photo. Null if it can't be decoded.
      */
-    suspend fun createThumbnail(image: File, maxDim: Int = 480): File? = withContext(Dispatchers.IO) {
+    suspend fun createThumbnail(image: File): File? = withContext(Dispatchers.IO) {
         try {
             val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
             BitmapFactory.decodeFile(image.absolutePath, bounds)
             if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return@withContext null
             var sampleSize = 1
-            while (bounds.outWidth / (sampleSize * 2) >= maxDim && bounds.outHeight / (sampleSize * 2) >= maxDim) {
+            while (minOf(bounds.outWidth, bounds.outHeight) / (sampleSize * 2) >= TILE_SIZE) {
                 sampleSize *= 2
             }
             val decoded = BitmapFactory.decodeFile(
                 image.absolutePath,
                 BitmapFactory.Options().apply { inSampleSize = sampleSize }
             ) ?: return@withContext null
-            val scale = maxDim.toFloat() / maxOf(decoded.width, decoded.height)
-            val preview = if (scale < 1f) {
-                Bitmap.createScaledBitmap(
-                    decoded,
-                    (decoded.width * scale).toInt().coerceAtLeast(1),
-                    (decoded.height * scale).toInt().coerceAtLeast(1),
-                    true
-                )
-            } else {
-                decoded
-            }
-            val thumbnail = File(image.parentFile, "thumb_${image.name}")
-            FileOutputStream(thumbnail).use { out -> preview.compress(Bitmap.CompressFormat.JPEG, 68, out) }
-            if (preview !== decoded) preview.recycle()
+            val thumbnail = File(image.parentFile ?: context.cacheDir, "thumb_${image.nameWithoutExtension}.webp")
+            writeTile(decoded, thumbnail)
             decoded.recycle()
             thumbnail
         } catch (e: Exception) {
             Log.w("MediaRepository", "Thumbnail creation failed", e)
             null
         }
+    }
+
+    /**
+     * A video's poster for its gallery tile, the same size as a photo's: a frame from half a second
+     * in (the first frames are often black). [source] is a file path or a link; for a link only the
+     * start of the video is read, not all of it. Null when no frame can be read.
+     */
+    suspend fun createVideoPoster(source: String, target: File): File? = withContext(Dispatchers.IO) {
+        val retriever = MediaMetadataRetriever()
+        try {
+            if (source.startsWith("http://") || source.startsWith("https://")) {
+                retriever.setDataSource(source, HashMap())
+            } else {
+                retriever.setDataSource(source.removePrefix("file://"))
+            }
+            val frame = retriever.getFrameAtTime(500_000L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+                ?: retriever.getFrameAtTime(0L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+                ?: return@withContext null
+            target.parentFile?.mkdirs()
+            writeTile(frame, target)
+            frame.recycle()
+            target.takeIf { it.length() > 0L }
+        } catch (e: Exception) {
+            Log.w("MediaRepository", "Couldn't make a poster for the video", e)
+            null
+        } finally {
+            runCatching { retriever.release() }
+        }
+    }
+
+    /** [bitmap]'s middle square, [TILE_SIZE] px, written to [file] as a small WebP. */
+    private fun writeTile(bitmap: Bitmap, file: File) {
+        val side = minOf(bitmap.width, bitmap.height)
+        val square = Bitmap.createBitmap(bitmap, (bitmap.width - side) / 2, (bitmap.height - side) / 2, side, side)
+        val tile = if (side > TILE_SIZE) Bitmap.createScaledBitmap(square, TILE_SIZE, TILE_SIZE, true) else square
+        writeWebp(tile, TILE_QUALITY, file)
+        if (tile !== square && tile !== bitmap) tile.recycle()
+        if (square !== bitmap) square.recycle()
     }
 
     /**
@@ -406,5 +433,9 @@ class MediaRepository(private val context: Context) {
         /** ...and if it's still above this, its longest side goes down to [PHOTO_BUSY_MAX_DIM]. */
         const val PHOTO_LIMIT_BYTES = 140L * 1024L
         const val PHOTO_BUSY_MAX_DIM = 1080
+        /** A gallery tile's picture (photo thumbnail or video poster): a square this many px a side... */
+        const val TILE_SIZE = 360
+        /** ...at this quality, about 10 KB. */
+        const val TILE_QUALITY = 60
     }
 }

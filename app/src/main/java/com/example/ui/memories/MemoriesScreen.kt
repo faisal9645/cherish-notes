@@ -45,6 +45,10 @@ import com.example.ui.components.CherishButton
 import com.example.ui.components.SkeletonCards
 import com.example.ui.components.pressScaleTarget
 import com.example.ui.components.springClickable
+import com.example.ui.components.softShadow
+import com.example.ui.components.lazyFadingEdges
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.animation.core.tween
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -107,14 +111,22 @@ fun MemoriesScreen(
             kotlinx.coroutines.delay(2_500)
             waitedLong = true
         }
-        if (!uiState.isLoaded && !waitedLong) {
+        // The placeholders melt into the memories (or the empty state) instead of the list popping in;
+        // each side of the crossfade keeps showing what it was
+        val shown = when {
+            !uiState.isLoaded && !waitedLong -> 0
+            uiState.memories.isEmpty() -> 1
+            else -> 2
+        }
+        Crossfade(targetState = shown, animationSpec = tween(280), label = "memories_content") { phase ->
+        if (phase == 0) {
             SkeletonCards(
                 count = 3,
                 modifier = Modifier
                     .padding(paddingValues)
                     .padding(16.dp)
             )
-        } else if (uiState.memories.isEmpty()) {
+        } else if (phase == 1) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -154,10 +166,14 @@ fun MemoriesScreen(
                 }
             }
         } else {
+            val memoriesList = rememberLazyListState()
             LazyColumn(
+                state = memoriesList,
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(paddingValues)
+                    // Cards fade softly at the top and bottom edges as they scroll
+                    .lazyFadingEdges(memoriesList)
                     .padding(horizontal = 20.dp, vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
@@ -173,6 +189,7 @@ fun MemoriesScreen(
                     Spacer(modifier = Modifier.height(72.dp))
                 }
             }
+        }
         }
     }
 
@@ -207,10 +224,13 @@ fun MemoryCard(
     modifier: Modifier = Modifier
 ) {
     Card(
-        modifier = modifier.fillMaxWidth(),
+        // A soft, wide shadow instead of the card's own tight one, so it floats
+        modifier = modifier
+            .fillMaxWidth()
+            .softShadow(6.dp, RoundedCornerShape(20.dp), clip = false),
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
             if (!memory.photoUrl.isNullOrEmpty()) {
@@ -224,7 +244,7 @@ fun MemoryCard(
                 )
             }
 
-            Column(modifier = Modifier.padding(18.dp)) {
+            Column(modifier = Modifier.padding(20.dp)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,

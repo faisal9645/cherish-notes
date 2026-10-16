@@ -60,6 +60,7 @@ import com.example.ui.dates.ImportantDatesScreen
 import com.example.ui.dates.ImportantDatesViewModel
 import com.example.ui.disguise.NotesDisguiseScreen
 import com.example.ui.disguise.NotesDisguiseViewModel
+import com.example.ui.disguise.heartReveal
 import com.example.ui.gallery.SharedGalleryScreen
 import com.example.ui.home.HomeScreen
 import com.example.ui.home.HomeViewModel
@@ -73,6 +74,11 @@ import com.example.ui.notes.SharedNotesViewModel
 import com.example.ui.profile.ProfileScreen
 import com.example.ui.profile.ProfileViewModel
 import com.example.ui.components.CherishToast
+import com.example.ui.components.LocalNavAnimatedScope
+import com.example.ui.components.LocalSharedTransitionScope
+import com.example.ui.components.PLACE_TRANSFORM_MS
+import com.example.ui.components.PlaceKeys
+import com.example.ui.components.PlaceScreen
 import com.example.ui.components.CherishAlertDialog
 import com.example.ui.components.CherishButton
 import com.example.ui.components.CherishOutlinedButton
@@ -80,6 +86,7 @@ import com.example.ui.components.CherishOutlinedButton
 /** The update check waits this long after the app is opened. */
 private const val UPDATE_CHECK_DELAY_MS = 4_000L
 
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun CherishNavGraph(
     app: CherishApplication,
@@ -171,14 +178,27 @@ fun CherishNavGraph(
         }
     }
 
+    // Where the hold that opened the secret space was (the + button): the chat opens out of it as a
+    // growing heart. Null for other ways in (e.g. a notification), which fade in as before.
+    var revealOrigin by remember { mutableStateOf<androidx.compose.ui.geometry.Offset?>(null) }
+    LaunchedEffect(isDisguiseActive) {
+        if (isDisguiseActive) revealOrigin = null
+    }
+
+    // Hidden at once; shown either fading in or, from a hold, fully there under the opening heart
+    // while it settles from a slight zoom
     val appAlpha by animateFloatAsState(
         targetValue = if (isDisguiseActive) 0f else 1f,
-        animationSpec = if (isDisguiseActive) snap() else tween(160, easing = FastOutSlowInEasing),
+        animationSpec = if (isDisguiseActive || revealOrigin != null) snap() else tween(160, easing = FastOutSlowInEasing),
         label = "app_reveal_alpha"
     )
     val appScale by animateFloatAsState(
         targetValue = if (isDisguiseActive) 0.96f else 1f,
-        animationSpec = if (isDisguiseActive) snap() else tween(160, easing = FastOutSlowInEasing),
+        animationSpec = when {
+            isDisguiseActive -> snap()
+            revealOrigin != null -> tween(com.example.ui.disguise.HeartReveal.DURATION_MS, easing = FastOutSlowInEasing)
+            else -> tween(160, easing = FastOutSlowInEasing)
+        },
         label = "app_reveal_scale"
     )
 
@@ -275,21 +295,29 @@ fun CherishNavGraph(
             shapes = MaterialTheme.shapes,
             typography = secretTypography
         ) {
-        NavHost(
-            navController = navController,
-            startDestination = startDestination,
+        // Shared elements (a Love & Us tile growing into its screen) are drawn above every screen here
+        SharedTransitionLayout(
             modifier = Modifier
                 .fillMaxSize()
                 .graphicsLayer {
                     alpha = appAlpha
                     scaleX = appScale
                     scaleY = appScale
-                },
+                }
+        ) {
+        CompositionLocalProvider(LocalSharedTransitionScope provides this) {
+        NavHost(
+            navController = navController,
+            startDestination = startDestination,
+            modifier = Modifier.fillMaxSize(),
         enterTransition = {
             val fromOrder = getTabOrder(initialState.destination.route)
             val toOrder = getTabOrder(targetState.destination.route)
             if (app.securityPreferences.isDisguiseActive()) {
                 EnterTransition.None
+            } else if (isPlaceTransform(initialState.destination.route, targetState.destination.route)) {
+                // The tile grows into the screen; the rest only crossfades
+                fadeIn(animationSpec = tween(PLACE_TRANSFORM_MS))
             } else if (fromOrder >= 0 && toOrder >= 0 && fromOrder != toOrder) {
                 if (toOrder > fromOrder) {
                     slideIntoContainer(
@@ -312,6 +340,8 @@ fun CherishNavGraph(
             val toOrder = getTabOrder(targetState.destination.route)
             if (app.securityPreferences.isDisguiseActive()) {
                 ExitTransition.None
+            } else if (isPlaceTransform(initialState.destination.route, targetState.destination.route)) {
+                fadeOut(animationSpec = tween(PLACE_TRANSFORM_MS))
             } else if (fromOrder >= 0 && toOrder >= 0 && fromOrder != toOrder) {
                 if (toOrder > fromOrder) {
                     slideOutOfContainer(
@@ -334,6 +364,8 @@ fun CherishNavGraph(
             val toOrder = getTabOrder(targetState.destination.route)
             if (app.securityPreferences.isDisguiseActive()) {
                 EnterTransition.None
+            } else if (isPlaceTransform(initialState.destination.route, targetState.destination.route)) {
+                fadeIn(animationSpec = tween(PLACE_TRANSFORM_MS))
             } else if (fromOrder >= 0 && toOrder >= 0 && fromOrder != toOrder) {
                 if (toOrder > fromOrder) {
                     slideIntoContainer(
@@ -356,6 +388,8 @@ fun CherishNavGraph(
             val toOrder = getTabOrder(targetState.destination.route)
             if (app.securityPreferences.isDisguiseActive()) {
                 ExitTransition.None
+            } else if (isPlaceTransform(initialState.destination.route, targetState.destination.route)) {
+                fadeOut(animationSpec = tween(PLACE_TRANSFORM_MS))
             } else if (fromOrder >= 0 && toOrder >= 0 && fromOrder != toOrder) {
                 if (toOrder > fromOrder) {
                     slideOutOfContainer(
@@ -387,6 +421,8 @@ fun CherishNavGraph(
         }
 
         composable(Screen.Home.route) {
+            // Its tiles grow into the screens they open (see PlaceScreen)
+            CompositionLocalProvider(LocalNavAnimatedScope provides this) {
             HomeScreen(
                 viewModel = homeViewModel,
                 onNavigateToChat = {
@@ -408,6 +444,7 @@ fun CherishNavGraph(
                 onQuickDisguise = { app.securityPreferences.reDisguise() },
                 chatViewModel = sharedChatViewModel
             )
+            }
         }
 
         composable(Screen.Chat.route) {
@@ -467,27 +504,34 @@ fun CherishNavGraph(
         }
 
         composable(Screen.Memories.route) {
-            MemoriesScreen(
-                viewModel = memoriesViewModel,
-                onNavigateBack = { navController.popBackStack() }
-            )
+            PlaceScreen(PlaceKeys.MEMORIES, this) {
+                MemoriesScreen(
+                    viewModel = memoriesViewModel,
+                    onNavigateBack = { navController.popBackStack() }
+                )
+            }
         }
 
         composable(Screen.ImportantDates.route) {
-            ImportantDatesScreen(
-                viewModel = importantDatesViewModel,
-                onNavigateBack = { navController.popBackStack() }
-            )
+            PlaceScreen(PlaceKeys.DATES, this) {
+                ImportantDatesScreen(
+                    viewModel = importantDatesViewModel,
+                    onNavigateBack = { navController.popBackStack() }
+                )
+            }
         }
 
         composable(Screen.SharedNotes.route) {
-            SharedNotesScreen(
-                viewModel = notesViewModel,
-                onNavigateBack = { navController.popBackStack() }
-            )
+            PlaceScreen(PlaceKeys.NOTES, this) {
+                SharedNotesScreen(
+                    viewModel = notesViewModel,
+                    onNavigateBack = { navController.popBackStack() }
+                )
+            }
         }
 
         composable(Screen.SharedGallery.route) {
+            PlaceScreen(PlaceKeys.GALLERY, this) {
             SharedGalleryScreen(
                 chatViewModel = sharedChatViewModel,
                 onNavigateBack = {
@@ -503,6 +547,7 @@ fun CherishNavGraph(
                     }
                 }
             )
+            }
         }
 
         composable(Screen.OurWords.route) {
@@ -628,6 +673,8 @@ fun CherishNavGraph(
             )
         }
     }
+        }
+        }
 
         // The Watch Party above every screen (full screen, in the chat's bar, or small elsewhere);
         // the lock and Notes cover it, and nothing of it is kept running behind them
@@ -675,18 +722,39 @@ fun CherishNavGraph(
         }
     }
 
-    // Real Notes Disguise screen - instant zero-latency snap on disguise, elegant smooth reveal on unlock
+    // Real Notes Disguise screen - instant zero-latency snap on disguise. Opened by the hold, a heart
+    // grows out of the + button with the chat showing through it; other ways in fade, as before.
     AnimatedVisibility(
         visible = isDisguiseActive,
         enter = EnterTransition.None,
-        exit = fadeOut(animationSpec = tween(160, easing = FastOutSlowInEasing)) +
-               scaleOut(targetScale = 1.04f, animationSpec = tween(160, easing = FastOutSlowInEasing)),
+        exit = if (revealOrigin != null) ExitTransition.None
+               else fadeOut(animationSpec = tween(160, easing = FastOutSlowInEasing)) +
+                    scaleOut(targetScale = 1.04f, animationSpec = tween(160, easing = FastOutSlowInEasing)),
         modifier = Modifier.fillMaxSize()
     ) {
+        // Notes stays until the heart has opened all the way; going back to Notes is always instant,
+        // even halfway through (the heart closes at once)
+        val origin = revealOrigin
+        val heartOpen by transition.animateFloat(
+            transitionSpec = {
+                if (targetState == EnterExitState.PostExit && origin != null) {
+                    tween(com.example.ui.disguise.HeartReveal.DURATION_MS, easing = LinearEasing)
+                } else {
+                    snap()
+                }
+            },
+            label = "heart_reveal"
+        ) { state -> if (state == EnterExitState.PostExit && origin != null) 1f else 0f }
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .heartReveal(origin) { heartOpen }
+        ) {
         NotesDisguiseScreen(
             viewModel = notesDisguiseViewModel,
             securityPreferences = app.securityPreferences,
-            onSecretGestureTriggered = {
+            onSecretGestureTriggered = { revealFrom ->
+                revealOrigin = revealFrom
                 app.securityPreferences.revealSecretApp()
                 if (isUserLoggedIn) {
                     val currentRoute = navController.currentBackStackEntry?.destination?.route
@@ -703,6 +771,7 @@ fun CherishNavGraph(
             },
             modifier = Modifier.fillMaxSize()
         )
+        }
     }
     // In-App OTA Updates Dialog: ONLY show inside Cherish app, NEVER inside Notes app
     if (updateState.showDialog && !isDisguiseActive) {
@@ -717,7 +786,7 @@ fun CherishNavGraph(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(top = 10.dp),
+                        .padding(top = 12.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Box(
@@ -828,7 +897,7 @@ fun CherishNavGraph(
                             color = MaterialTheme.colorScheme.surfaceVariant,
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Column(modifier = Modifier.padding(14.dp)) {
+                            Column(modifier = Modifier.padding(16.dp)) {
                                 Text(
                                     text = if (updateState.isUpdateAvailable) "What's New in this update:" else "Status:",
                                     fontSize = 12.sp,
@@ -936,5 +1005,13 @@ private fun getTabOrder(route: String?): Int {
         Screen.Profile.route -> 2
         else -> -1
     }
+}
+
+/** Love & Us and a screen one of its tiles opens: the tile grows into it, so the rest only crossfades. */
+private fun isPlaceTransform(from: String?, to: String?): Boolean {
+    val places = setOf(
+        Screen.SharedGallery.route, Screen.Memories.route, Screen.ImportantDates.route, Screen.SharedNotes.route
+    )
+    return (from == Screen.Home.route && to in places) || (to == Screen.Home.route && from in places)
 }
 

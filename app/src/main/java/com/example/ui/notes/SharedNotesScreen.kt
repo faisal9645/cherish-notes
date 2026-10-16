@@ -39,6 +39,10 @@ import com.example.ui.components.CherishAlertDialog
 import com.example.ui.components.CherishButton
 import com.example.ui.components.pressScaleTarget
 import com.example.ui.components.springClickable
+import com.example.ui.components.CherishFilterChip
+import com.example.ui.components.softShadow
+import com.example.ui.components.lazyFadingEdges
+import androidx.compose.foundation.lazy.rememberLazyListState
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -102,10 +106,14 @@ fun SharedNotesScreen(
             uiState.notes.sortedWith(compareByDescending<SharedNote> { it.isPinned }.thenByDescending { it.updatedAt })
         }
 
+        val notesList = rememberLazyListState()
         LazyColumn(
+            state = notesList,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
+                // Notes fade softly at the top and bottom edges as they scroll
+                .lazyFadingEdges(notesList)
                 .padding(horizontal = 20.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
@@ -162,14 +170,16 @@ fun SharedNoteCard(
         interactionSource = press,
         modifier = modifier
             .fillMaxWidth()
-            .pressScale(press),
+            .pressScale(press)
+            // A soft, wide shadow instead of the card's own tight one; a pinned note floats higher
+            .softShadow(if (note.isPinned) 10.dp else 6.dp, RoundedCornerShape(20.dp), clip = false),
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(
             containerColor = if (note.isPinned) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.surface
         ),
-        elevation = CardDefaults.cardElevation(defaultElevation = if (note.isPinned) 3.dp else 1.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
-        Column(modifier = Modifier.padding(18.dp)) {
+        Column(modifier = Modifier.padding(20.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -184,7 +194,7 @@ fun SharedNoteCard(
                         fontSize = 11.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
                     )
                 }
 
@@ -282,7 +292,7 @@ fun NoteEditDialog(
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     NoteCategory.values().forEach { cat ->
-                        FilterChip(
+                        CherishFilterChip(
                             selected = category == cat,
                             onClick = { category = cat },
                             label = { Text(cat.name.replace("_", " "), fontSize = 10.sp) }

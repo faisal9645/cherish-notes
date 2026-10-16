@@ -42,6 +42,7 @@ import java.util.Locale
 import kotlin.math.roundToInt
 import com.example.ui.components.pressScaleTarget
 import com.example.ui.components.springClickable
+import com.example.ui.components.softShadow
 
 /** One date's next time: in [daysUntil] days (0 = today), its [years]th time (null if unknown or first). */
 data class UpcomingDate(val date: ImportantDate, val daysUntil: Int, val years: Int?)
@@ -229,7 +230,7 @@ fun UpcomingDateRow(upcoming: UpcomingDate, modifier: Modifier = Modifier) {
                 fontSize = 12.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = if (isToday) Color.White else RoseGoldPrimary,
-                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
             )
         }
     }
@@ -254,9 +255,9 @@ fun DatesReminderCard(
             shape = RoundedCornerShape(28.dp),
             color = MaterialTheme.colorScheme.surface,
             modifier = Modifier
-                .padding(horizontal = 26.dp)
+                .padding(horizontal = 28.dp)
                 .fillMaxWidth()
-                .shadow(16.dp, RoundedCornerShape(28.dp))
+                .softShadow(16.dp, RoundedCornerShape(28.dp))
                 // Taps on the card don't close it
                 .pointerInput(Unit) { detectTapGestures { } }
         ) {
@@ -317,7 +318,7 @@ fun DatesReminderCard(
                             fontSize = 14.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = Color.White,
-                            modifier = Modifier.padding(horizontal = 20.dp, vertical = 9.dp)
+                            modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
                         )
                     }
                 }

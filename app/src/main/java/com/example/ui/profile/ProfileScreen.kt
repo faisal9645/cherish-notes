@@ -111,6 +111,11 @@ import com.example.ui.components.CherishTonalButton
 import com.example.ui.components.pressScaleTarget
 import com.example.ui.components.springClickable
 import androidx.compose.material.icons.automirrored.rounded.VolumeUp
+import com.example.ui.components.CherishFilterChip
+import com.example.ui.components.CherishRadioButton
+import com.example.ui.components.CherishSlider
+import com.example.ui.components.CherishSwitch
+import com.example.ui.components.scrollFadingEdges
 
 @Composable
 private fun SettingsSection(
@@ -343,11 +348,14 @@ fun ProfileScreen(
         containerColor = MaterialTheme.colorScheme.surface
     ) { paddingValues ->
         val primaryAccent = MaterialTheme.colorScheme.primary
+        val settingsScroll = rememberScrollState()
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .verticalScroll(rememberScrollState())
+                // Settings fade softly under the top bar and at the bottom edge as they scroll
+                .scrollFadingEdges(settingsScroll)
+                .verticalScroll(settingsScroll)
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
@@ -368,7 +376,7 @@ fun ProfileScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clickable { showEditProfileDialog = true }
-                        .padding(horizontal = 16.dp, vertical = 14.dp)
+                        .padding(horizontal = 16.dp, vertical = 16.dp)
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         AvatarView(
@@ -533,7 +541,7 @@ fun ProfileScreen(
                     supportingContent = { Text("Opens as functional notes app with secret unlock gesture", fontSize = 13.sp) },
                     leadingContent = { Icon(Icons.Rounded.EditNote, contentDescription = null, tint = primaryAccent) },
                     trailingContent = {
-                        Switch(
+                        CherishSwitch(
                             checked = uiState.isDisguiseModeEnabled,
                             onCheckedChange = { viewModel.setDisguiseMode(it) }
                         )
@@ -548,7 +556,7 @@ fun ProfileScreen(
                         supportingContent = { Text("Type secret word in Notes search to reveal chat", fontSize = 13.sp) },
                         leadingContent = { Icon(Icons.Rounded.Password, contentDescription = null, tint = primaryAccent) },
                         trailingContent = {
-                            Switch(
+                            CherishSwitch(
                                 checked = uiState.isKeywordTriggerEnabled,
                                 onCheckedChange = { viewModel.setKeywordTriggerEnabled(it) }
                             )
@@ -625,7 +633,7 @@ fun ProfileScreen(
                                     .pressScaleTarget()
                                     .clip(RoundedCornerShape(8.dp))
                                     .background(if (isSelected) primaryAccent else Color.Transparent)
-                                    .springClickable { viewModel.setPlusHoldDuration(duration) }
+                                    .springClickable(tick = true) { viewModel.setPlusHoldDuration(duration) }
                                     .padding(vertical = 8.dp),
                                 contentAlignment = Alignment.Center
                             ) {
@@ -652,7 +660,7 @@ fun ProfileScreen(
                             Icon(Icons.Rounded.Security, contentDescription = null, tint = primaryAccent)
                         },
                         trailingContent = {
-                            Switch(
+                            CherishSwitch(
                                 checked = uiState.isRequirePhoneLockAfterHold,
                                 onCheckedChange = { viewModel.setRequirePhoneLockAfterHold(it) }
                             )
@@ -662,7 +670,7 @@ fun ProfileScreen(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 14.dp, vertical = 6.dp),
+                            .padding(horizontal = 16.dp, vertical = 6.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         CherishOutlinedButton(
@@ -685,7 +693,7 @@ fun ProfileScreen(
                     supportingContent = { Text("Discreet full-thumb switch on center-right screen edge for instant 1-tap Notes disguise", fontSize = 13.sp) },
                     leadingContent = { Icon(Icons.AutoMirrored.Rounded.ExitToApp, contentDescription = null, tint = HeartRed) },
                     trailingContent = {
-                        Switch(
+                        CherishSwitch(
                             checked = uiState.isSideEmergencyExitEnabled,
                             onCheckedChange = { viewModel.setSideEmergencyExitEnabled(it) }
                         )
@@ -746,7 +754,7 @@ fun ProfileScreen(
                             }
                         }
 
-                        Slider(
+                        CherishSlider(
                             value = uiState.sideEmergencyExitOpacity,
                             onValueChange = { viewModel.setSideEmergencyExitOpacity(it) },
                             valueRange = 0.05f..1.0f,
@@ -777,7 +785,7 @@ fun ProfileScreen(
                     supportingContent = { Text("Locks the app whenever you leave it", fontSize = 13.sp) },
                     leadingContent = { Icon(Icons.Rounded.Lock, contentDescription = null, tint = primaryAccent) },
                     trailingContent = {
-                        Switch(
+                        CherishSwitch(
                             checked = uiState.isAppLockEnabled,
                             onCheckedChange = { enabled ->
                                 if (enabled) {
@@ -793,7 +801,7 @@ fun ProfileScreen(
                 if (uiState.isAppLockEnabled) {
                     val lockPrefs = remember { com.example.security.SecurityPreferences.getInstance(context) }
                     var lockAfter by remember { mutableIntStateOf(lockPrefs.getAutoLockTimeoutSeconds()) }
-                    Column(modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 10.dp)) {
+                    Column(modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 12.dp)) {
                         Text(
                             text = "Lock again after leaving",
                             fontSize = 13.sp,
@@ -817,7 +825,7 @@ fun ProfileScreen(
                                         .pressScaleTarget()
                                         .clip(RoundedCornerShape(8.dp))
                                         .background(if (isSelected) primaryAccent else Color.Transparent)
-                                        .springClickable {
+                                        .springClickable(tick = true) {
                                             lockAfter = seconds
                                             lockPrefs.setAutoLockTimeoutSeconds(seconds)
                                         }
@@ -852,7 +860,7 @@ fun ProfileScreen(
                     },
                     leadingContent = { Icon(Icons.Rounded.Fingerprint, contentDescription = null, tint = primaryAccent) },
                     trailingContent = {
-                        Switch(
+                        CherishSwitch(
                             checked = uiState.isBiometricEnabled && uiState.isAppLockEnabled,
                             enabled = uiState.isAppLockEnabled,
                             onCheckedChange = { viewModel.setBiometric(it) }
@@ -868,7 +876,7 @@ fun ProfileScreen(
                     supportingContent = { Text("Block screenshots and screen recording in app", fontSize = 13.sp) },
                     leadingContent = { Icon(Icons.Rounded.Shield, contentDescription = null, tint = primaryAccent) },
                     trailingContent = {
-                        Switch(
+                        CherishSwitch(
                             checked = uiState.isScreenshotProtectionEnabled,
                             onCheckedChange = { enabled ->
                                 viewModel.setScreenshotProtection(enabled) { isProtected ->
@@ -943,7 +951,7 @@ fun ProfileScreen(
                         )
                     },
                     trailingContent = {
-                        Switch(
+                        CherishSwitch(
                             checked = uiState.isNotificationsEnabled,
                             onCheckedChange = { viewModel.setNotificationsEnabled(context, it) },
                             modifier = Modifier.testTag("notification_bar_switch")
@@ -960,7 +968,7 @@ fun ProfileScreen(
                         supportingContent = { Text("Disguise private messages on notification bar and lock screen", fontSize = 12.sp) },
                         leadingContent = { Icon(Icons.Rounded.Security, contentDescription = null, tint = primaryAccent, modifier = Modifier.size(20.dp)) },
                         trailingContent = {
-                            Switch(
+                            CherishSwitch(
                                 checked = uiState.isHideNotificationContent,
                                 onCheckedChange = { viewModel.setHideNotificationContent(it) }
                             )
@@ -1013,7 +1021,7 @@ fun ProfileScreen(
                                         color = MaterialTheme.colorScheme.surfaceVariant,
                                         modifier = Modifier.fillMaxWidth()
                                     ) {
-                                        Column(modifier = Modifier.padding(10.dp)) {
+                                        Column(modifier = Modifier.padding(12.dp)) {
                                             Text(
                                                 titleInput.ifBlank { com.example.security.SecurityPreferences.DEFAULT_MASKED_TITLE },
                                                 fontWeight = FontWeight.SemiBold,
@@ -1068,7 +1076,7 @@ fun ProfileScreen(
                         )
                     },
                     trailingContent = {
-                        Switch(
+                        CherishSwitch(
                             checked = uiState.isBadgeNotificationEnabled,
                             onCheckedChange = { viewModel.setBadgeNotificationEnabled(context, it) },
                             modifier = Modifier.testTag("app_badge_switch")
@@ -1096,7 +1104,7 @@ fun ProfileScreen(
                         )
                     },
                     trailingContent = {
-                        Switch(
+                        CherishSwitch(
                             checked = uiState.isHeartbeatTriggerEnabled,
                             onCheckedChange = { viewModel.setHeartbeatTriggerEnabled(it) },
                             modifier = Modifier.testTag("heartbeat_trigger_switch")
@@ -1165,9 +1173,9 @@ fun ProfileScreen(
                         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 14.dp, vertical = 8.dp)
+                            .padding(horizontal = 16.dp, vertical = 8.dp)
                     ) {
-                        Column(modifier = Modifier.padding(14.dp)) {
+                        Column(modifier = Modifier.padding(16.dp)) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -1195,7 +1203,7 @@ fun ProfileScreen(
                                         color = if (isPermBlocked || isAlertClosed) Red500 else Emerald500,
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 11.sp,
-                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                                     )
                                 }
                             }
@@ -1318,7 +1326,7 @@ fun ProfileScreen(
                         )
                     },
                     trailingContent = {
-                        Switch(
+                        CherishSwitch(
                             checked = uiState.isCallRingingEnabled,
                             onCheckedChange = { viewModel.setCallRingingEnabled(it) },
                             modifier = Modifier.testTag("call_ringing_switch_voice")
@@ -1395,7 +1403,7 @@ fun ProfileScreen(
                                 .pressScaleTarget()
                                 .clip(RoundedCornerShape(8.dp))
                                 .background(if (isSelected) primaryAccent else Color.Transparent)
-                                .springClickable { viewModel.setCallAiNoiseMode(mode) }
+                                .springClickable(tick = true) { viewModel.setCallAiNoiseMode(mode) }
                                 .padding(vertical = 8.dp),
                             contentAlignment = Alignment.Center
                         ) {
@@ -1430,7 +1438,7 @@ fun ProfileScreen(
                         )
                     },
                     trailingContent = {
-                        Switch(
+                        CherishSwitch(
                             checked = uiState.isCallLowDataMode,
                             onCheckedChange = { viewModel.setCallLowDataMode(it) }
                         )
@@ -1456,7 +1464,7 @@ fun ProfileScreen(
                         )
                     },
                     trailingContent = {
-                        Switch(
+                        CherishSwitch(
                             checked = uiState.isCallAutoRecordEnabled,
                             onCheckedChange = { viewModel.setCallAutoRecordEnabled(it) }
                         )
@@ -1497,7 +1505,7 @@ fun ProfileScreen(
                                 .pressScaleTarget()
                                 .clip(RoundedCornerShape(8.dp))
                                 .background(if (isSelected) primaryAccent else Color.Transparent)
-                                .springClickable { viewModel.setCallMaskingStyle(style) }
+                                .springClickable(tick = true) { viewModel.setCallMaskingStyle(style) }
                                 .padding(vertical = 8.dp),
                             contentAlignment = Alignment.Center
                         ) {
@@ -1527,7 +1535,7 @@ fun ProfileScreen(
                         )
                     },
                     trailingContent = {
-                        Switch(
+                        CherishSwitch(
                             checked = uiState.isCallVibrateConnected,
                             onCheckedChange = { viewModel.setCallVibrateConnected(it) }
                         )
@@ -1548,7 +1556,7 @@ fun ProfileScreen(
                         )
                     },
                     trailingContent = {
-                        Switch(
+                        CherishSwitch(
                             checked = uiState.isCallVibrateMute,
                             onCheckedChange = { viewModel.setCallVibrateMute(it) }
                         )
@@ -1589,7 +1597,7 @@ fun ProfileScreen(
                                 .pressScaleTarget()
                                 .clip(RoundedCornerShape(8.dp))
                                 .background(if (isSelected) primaryAccent else Color.Transparent)
-                                .springClickable { viewModel.setThemeMode(mode) }
+                                .springClickable(tick = true) { viewModel.setThemeMode(mode) }
                                 .padding(vertical = 8.dp),
                             contentAlignment = Alignment.Center
                         ) {
@@ -1633,7 +1641,7 @@ fun ProfileScreen(
                                 .pressScaleTarget()
                                 .clip(RoundedCornerShape(8.dp))
                                 .background(if (isSelected) primaryAccent else Color.Transparent)
-                                .springClickable { viewModel.setChatBgTheme(theme) }
+                                .springClickable(tick = true) { viewModel.setChatBgTheme(theme) }
                                 .padding(vertical = 8.dp),
                             contentAlignment = Alignment.Center
                         ) {
@@ -1673,7 +1681,7 @@ fun ProfileScreen(
                                 .pressScaleTarget()
                                 .clip(RoundedCornerShape(8.dp))
                                 .background(if (isSelected) primaryAccent else Color.Transparent)
-                                .springClickable { viewModel.setImageGallerySize(key) }
+                                .springClickable(tick = true) { viewModel.setImageGallerySize(key) }
                                 .padding(vertical = 8.dp),
                             contentAlignment = Alignment.Center
                         ) {
@@ -1694,7 +1702,7 @@ fun ProfileScreen(
                     headlineContent = { Text("Double-Tap Zoom in Viewer", fontSize = 15.sp, fontWeight = FontWeight.SemiBold) },
                     supportingContent = { Text("Instant 2.8x zoom on photo double-tap", fontSize = 13.sp) },
                     trailingContent = {
-                        Switch(
+                        CherishSwitch(
                             checked = uiState.isDoubleTapZoomEnabled,
                             onCheckedChange = { viewModel.setDoubleTapZoom(it) }
                         )
@@ -1707,7 +1715,7 @@ fun ProfileScreen(
                     headlineContent = { Text("Haptic Feedback", fontSize = 15.sp, fontWeight = FontWeight.SemiBold) },
                     supportingContent = { Text("Tactile pulses on gestures and reactions", fontSize = 13.sp) },
                     trailingContent = {
-                        Switch(
+                        CherishSwitch(
                             checked = uiState.isHapticEnabled,
                             onCheckedChange = { viewModel.setHapticEnabled(it) }
                         )
@@ -1727,7 +1735,7 @@ fun ProfileScreen(
                         headlineContent = { Text(label, fontSize = 14.sp) },
                         modifier = Modifier.padding(start = 16.dp),
                         trailingContent = {
-                            Switch(
+                            CherishSwitch(
                                 checked = checked && uiState.isHapticEnabled,
                                 enabled = uiState.isHapticEnabled,
                                 onCheckedChange = onChange
@@ -1743,7 +1751,7 @@ fun ProfileScreen(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 14.dp, vertical = 10.dp),
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     // ❤️ Normal Mode option
@@ -1762,8 +1770,8 @@ fun ProfileScreen(
                                 onNavigateToChat()
                             }
                     ) {
-                        Row(modifier = Modifier.padding(14.dp), verticalAlignment = Alignment.Top) {
-                            RadioButton(
+                        Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.Top) {
+                            CherishRadioButton(
                                 selected = currentMode == com.example.ui.chat.ChatExperienceMode.NORMAL,
                                 onClick = { 
                                     viewModel.setChatExperienceMode(com.example.ui.chat.ChatExperienceMode.NORMAL) 
@@ -1800,8 +1808,8 @@ fun ProfileScreen(
                                 onNavigateToChat()
                             }
                     ) {
-                        Row(modifier = Modifier.padding(14.dp), verticalAlignment = Alignment.Top) {
-                            RadioButton(
+                        Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.Top) {
+                            CherishRadioButton(
                                 selected = currentMode == com.example.ui.chat.ChatExperienceMode.PRIVATE,
                                 onClick = { 
                                     viewModel.setChatExperienceMode(com.example.ui.chat.ChatExperienceMode.PRIVATE) 
@@ -1834,7 +1842,7 @@ fun ProfileScreen(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 14.dp, vertical = 12.dp),
+                                .padding(horizontal = 16.dp, vertical = 12.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
@@ -1872,7 +1880,7 @@ fun ProfileScreen(
                                     )
                                 }
                             }
-                            Switch(
+                            CherishSwitch(
                                 checked = uiState.isChatSoundsEnabled,
                                 onCheckedChange = { viewModel.setChatSoundsEnabled(it) },
                                 colors = SwitchDefaults.colors(
@@ -1898,7 +1906,7 @@ fun ProfileScreen(
                             Text("Sound volume", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
                             Text("${soundVolume.toInt()}%", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
-                        androidx.compose.material3.Slider(
+                        CherishSlider(
                             value = soundVolume,
                             onValueChange = { soundVolume = it },
                             onValueChangeFinished = {
@@ -1923,7 +1931,7 @@ fun ProfileScreen(
                 val partnerActiveCheckAfter = partner?.hasActiveCheckAfter() == true
 
                 if (myActiveCheckAfter) {
-                    Column(modifier = Modifier.padding(14.dp)) {
+                    Column(modifier = Modifier.padding(16.dp)) {
                         Text(
                             text = "❤️ Your Check-After is Active",
                             fontWeight = FontWeight.Bold,
@@ -1969,7 +1977,7 @@ fun ProfileScreen(
                         }
                     }
                 } else if (partnerActiveCheckAfter) {
-                    Column(modifier = Modifier.padding(14.dp)) {
+                    Column(modifier = Modifier.padding(16.dp)) {
                         Text(
                             text = "💕 Partner's Check-After Time",
                             fontWeight = FontWeight.Bold,
@@ -1990,7 +1998,7 @@ fun ProfileScreen(
                         )
                     }
                 } else {
-                    Box(modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)) {
+                    Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
                         CherishButton(
                             onClick = { showCheckAfterSheet = true },
                             shape = RoundedCornerShape(12.dp),
@@ -2010,7 +2018,7 @@ fun ProfileScreen(
                     headlineContent = { Text("Arrival Reminder Notification", fontSize = 15.sp, fontWeight = FontWeight.SemiBold) },
                     supportingContent = { Text("Discreet alert when partner's quiet period completes", fontSize = 13.sp) },
                     trailingContent = {
-                        Switch(
+                        CherishSwitch(
                             checked = uiState.isCheckAfterReminderEnabled,
                             onCheckedChange = { viewModel.setCheckAfterReminderEnabled(it) }
                         )
@@ -2071,7 +2079,7 @@ fun ProfileScreen(
                                     color = if (securityScore.passedCount >= 6) Color(0xFF059669) else Color(0xFFD97706),
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.5.dp)
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                                 )
                             }
                             Spacer(modifier = Modifier.width(6.dp))
@@ -2112,7 +2120,7 @@ fun ProfileScreen(
                 title = "Backup & Recovery",
                 icon = Icons.Rounded.CloudDone
             ) {
-                Column(modifier = Modifier.padding(14.dp)) {
+                Column(modifier = Modifier.padding(16.dp)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -2133,7 +2141,7 @@ fun ProfileScreen(
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Green800,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                             )
                         }
                     }
@@ -2276,7 +2284,7 @@ fun ProfileScreen(
                             }
                     ) {
                         Row(
-                            modifier = Modifier.padding(14.dp),
+                            modifier = Modifier.padding(16.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Icon(Icons.Rounded.CameraAlt, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
@@ -2305,7 +2313,7 @@ fun ProfileScreen(
                             }
                     ) {
                         Row(
-                            modifier = Modifier.padding(14.dp),
+                            modifier = Modifier.padding(16.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Icon(Icons.Rounded.PhotoLibrary, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
@@ -2332,7 +2340,7 @@ fun ProfileScreen(
                                 }
                         ) {
                             Row(
-                                modifier = Modifier.padding(14.dp),
+                                modifier = Modifier.padding(16.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Icon(Icons.Rounded.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error)
@@ -2481,7 +2489,7 @@ fun ProfileScreen(
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             statusSuggestions.forEach { suggestion ->
-                                FilterChip(
+                                CherishFilterChip(
                                     selected = statusInput == suggestion,
                                     onClick = { statusInput = suggestion },
                                     label = { Text(suggestion, style = MaterialTheme.typography.bodySmall) },

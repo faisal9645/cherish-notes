@@ -214,7 +214,7 @@ fun OurMonthStory(recap: MonthRecap, myName: String, partnerName: String, onDism
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(start = 10.dp, end = 10.dp, top = 8.dp)
+                        .padding(start = 12.dp, end = 12.dp, top = 8.dp)
                 ) {
                     slides.indices.forEach { i ->
                         Box(
@@ -414,7 +414,7 @@ private fun InfoLine(emoji: String, title: String, detail: String?) {
         color = Color.White.copy(alpha = 0.14f),
         modifier = Modifier.fillMaxWidth()
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 14.dp, vertical = 11.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
             Text(emoji, fontSize = 20.sp)
             Spacer(modifier = Modifier.width(10.dp))
             Column {
@@ -468,7 +468,7 @@ private fun EmojiPage(recap: MonthRecap, partnerName: String) {
             Surface(shape = RoundedCornerShape(50), color = Color.White.copy(alpha = 0.16f)) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(horizontal = 18.dp, vertical = 10.dp)
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp)
                 ) {
                     recap.myEmoji?.let { Text("Yours $it", color = Color.White, fontSize = 15.sp) }
                     if (recap.myEmoji != null && recap.partnerEmoji != null) {
@@ -614,7 +614,7 @@ private fun CutestPage(recap: MonthRecap, partnerName: String) {
                 .fillMaxWidth()
                 .popIn(100)
         ) {
-            Column(modifier = Modifier.padding(horizontal = 22.dp, vertical = 18.dp)) {
+            Column(modifier = Modifier.padding(horizontal = 24.dp, vertical = 20.dp)) {
                 Text("“", fontFamily = FontFamily.Serif, fontSize = 58.sp, lineHeight = 58.sp, color = Color.White.copy(alpha = 0.8f))
                 Text(
                     text = text,
@@ -728,7 +728,7 @@ fun OurMonthInviteCard(recap: MonthRecap, onWatch: () -> Unit, onDismiss: () -> 
         modifier = Modifier
             .fillMaxWidth()
             .statusBarsPadding()
-            .padding(top = 68.dp, start = 14.dp, end = 14.dp),
+            .padding(top = 68.dp, start = 16.dp, end = 16.dp),
         contentAlignment = Alignment.TopCenter
     ) {
         Surface(
@@ -743,7 +743,7 @@ fun OurMonthInviteCard(recap: MonthRecap, onWatch: () -> Unit, onDismiss: () -> 
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
                     .background(Brush.horizontalGradient(listOf(HeartbeatPink, HeartbeatBlue)))
-                    .padding(start = 14.dp, end = 4.dp, top = 10.dp, bottom = 10.dp)
+                    .padding(start = 16.dp, end = 4.dp, top = 12.dp, bottom = 12.dp)
             ) {
                 Text("✨", fontSize = 24.sp)
                 Spacer(modifier = Modifier.width(10.dp))
@@ -776,7 +776,7 @@ fun OurMonthInviteCard(recap: MonthRecap, onWatch: () -> Unit, onDismiss: () -> 
                         fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = HeartbeatPink,
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
                     )
                 }
                 IconButton(onClick = onDismiss, modifier = Modifier.size(36.dp)) {

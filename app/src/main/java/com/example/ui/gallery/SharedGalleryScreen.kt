@@ -25,6 +25,7 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -64,6 +65,7 @@ import androidx.compose.material.icons.rounded.Place
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.PlayCircle
 import androidx.compose.material.icons.rounded.Star
+import androidx.compose.material.icons.rounded.UnfoldMore
 import androidx.compose.material.icons.rounded.Videocam
 import androidx.compose.material.icons.rounded.ZoomIn
 import androidx.compose.material.icons.rounded.ZoomOut
@@ -121,9 +123,11 @@ import com.example.ui.components.CherishAlertDialog
 import com.example.ui.components.CherishButton
 import com.example.ui.components.CherishOutlinedButton
 import com.example.ui.components.CherishTonalButton
+import com.example.ui.components.CherishFilterChip
 import com.example.ui.components.pressScaleTarget
 import com.example.ui.components.springClickable
 import androidx.compose.material.icons.automirrored.rounded.PhoneMissed
+import com.example.ui.theme.steadyDigits
 
 data class GalleryMediaItem(
     val id: String,
@@ -341,6 +345,8 @@ fun SharedGalleryScreen(
                             id = msg.id,
                             messageId = msg.id,
                             mediaUrl = vUrl,
+                            // Its poster (about 10 KB) when it has one; the video itself is never loaded for a tile
+                            previewUrl = msg.thumbnailFor(vUrl),
                             isVideo = true,
                             durationSeconds = msg.durationSeconds,
                             timestamp = msg.timestamp,
@@ -351,6 +357,35 @@ fun SharedGalleryScreen(
             }
         }
         list.sortedByDescending { it.timestamp }
+    }
+
+    // The Media tab's filter: what kind (all, photos, videos, video notes) and who sent it (anyone, me, partner)
+    var mediaKind by rememberSaveable { mutableIntStateOf(MEDIA_ALL) }
+    var mediaFrom by rememberSaveable { mutableIntStateOf(FROM_ANYONE) }
+    val partnerFirstName = remember(chatState.partnerUser?.displayName) {
+        chatState.partnerUser?.displayName?.trim()?.substringBefore(' ')?.ifBlank { null } ?: "Partner"
+    }
+    // How many of each kind there are, so kinds with none aren't offered
+    val mediaKindCounts = remember(galleryMediaItems) {
+        IntArray(4).also { counts ->
+            counts[MEDIA_ALL] = galleryMediaItems.size
+            galleryMediaItems.forEach { counts[mediaKindOf(it)]++ }
+        }
+    }
+    val shownMediaItems = remember(galleryMediaItems, mediaKind, mediaFrom, currentUserId) {
+        if (mediaKind == MEDIA_ALL && mediaFrom == FROM_ANYONE) {
+            galleryMediaItems
+        } else {
+            galleryMediaItems.filter { item ->
+                val fromMe = item.originalMessage.senderId == currentUserId
+                (mediaKind == MEDIA_ALL || mediaKindOf(item) == mediaKind) &&
+                    when (mediaFrom) {
+                        FROM_ME -> fromMe
+                        FROM_PARTNER -> !fromMe
+                        else -> true
+                    }
+            }
+        }
     }
 
     val mediaMessages = remember(filteredMessages) {
@@ -383,9 +418,9 @@ fun SharedGalleryScreen(
     }
 
     // Multi-select works per tab: one key per photo/video tile, otherwise one key per message
-    val selectableIdsOnPage = remember(pagerState.currentPage, galleryMediaItems, voiceMessages, callHistoryItems, extractedLinks, starredMessages) {
+    val selectableIdsOnPage = remember(pagerState.currentPage, shownMediaItems, voiceMessages, callHistoryItems, extractedLinks, starredMessages) {
         when (pagerState.currentPage) {
-            0 -> galleryMediaItems.map { it.id }
+            0 -> shownMediaItems.map { it.id }
             1 -> voiceMessages.map { it.id }
             2 -> extractedLinks.map { it.messageId }.distinct()
             3 -> starredMessages.map { it.id }
@@ -499,7 +534,7 @@ fun SharedGalleryScreen(
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                             val countText = when (pagerState.currentPage) {
-                                0 -> "${galleryMediaItems.size} photos & videos"
+                                0 -> "${shownMediaItems.size} ${MEDIA_KIND_COUNT_WORDS[mediaKind]}"
                                 1 -> "${voiceMessages.size} voice notes"
                                 2 -> "${extractedLinks.size} shared links"
                                 3 -> "${starredMessages.size} starred items"
@@ -528,7 +563,7 @@ fun SharedGalleryScreen(
                     },
                     actions = {
                         // Quick Telegram-style thumbnail zoom controls for media tab
-                        if (pagerState.currentPage == 0 && galleryMediaItems.isNotEmpty()) {
+                        if (pagerState.currentPage == 0 && shownMediaItems.isNotEmpty()) {
                             IconButton(
                                 onClick = {
                                     if (gridColumnCount < 5) gridColumnCount++
@@ -630,7 +665,7 @@ fun SharedGalleryScreen(
                     shape = RoundedCornerShape(12.dp),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 14.dp, vertical = 6.dp)
+                        .padding(horizontal = 16.dp, vertical = 6.dp)
                 ) {
                     Row(
                         modifier = Modifier
@@ -721,15 +756,37 @@ fun SharedGalleryScreen(
             ) { page ->
                 when (page) {
                     // TAB 0: Media (Photos & Videos)
-                    0 -> {
-                        if (galleryMediaItems.isEmpty()) {
+                    0 -> Column(modifier = Modifier.fillMaxSize()) {
+                        // What kind, and whose
+                        if (galleryMediaItems.isNotEmpty()) {
+                            MediaFilterRow(
+                                kind = mediaKind,
+                                onKind = { mediaKind = it },
+                                kindCounts = mediaKindCounts,
+                                from = mediaFrom,
+                                onFrom = { mediaFrom = it },
+                                partnerName = partnerFirstName
+                            )
+                        }
+                        // The placeholders melt into the content instead of it popping in (each side of the
+                        // crossfade keeps showing what it was)
+                        val shownTab = when { shownMediaItems.isEmpty() && isGalleryLoading -> 0; shownMediaItems.isEmpty() -> 1; else -> 2 }
+                        Crossfade(targetState = shownTab, animationSpec = tween(280), label = "gallery_tab", modifier = Modifier.weight(1f)) { phase ->
+                        if (phase != 2) {
+                            val what = MEDIA_KIND_EMPTY_WORDS[mediaKind] + when (mediaFrom) {
+                                FROM_ME -> " from you"
+                                FROM_PARTNER -> " from $partnerFirstName"
+                                else -> ""
+                            }
                             val emptyText = if (selectedDateMillis != null) {
                                 val sdf = SimpleDateFormat("MMM d, yyyy", Locale.getDefault())
-                                "No photos or videos found on ${sdf.format(Date(selectedDateMillis!!))} 📅"
-                            } else {
+                                "No $what found on ${sdf.format(Date(selectedDateMillis!!))} 📅"
+                            } else if (galleryMediaItems.isEmpty()) {
                                 "No shared photos or videos yet 💕"
+                            } else {
+                                "No $what yet 💕"
                             }
-                            EmptyGalleryNotice(emptyText, isLoading = isGalleryLoading, grid = true)
+                            EmptyGalleryNotice(emptyText, isLoading = phase == 0, grid = true)
                         } else {
                             val configuration = LocalConfiguration.current
                             val screenWidthDp = configuration.screenWidthDp.toFloat() - 8f
@@ -748,10 +805,10 @@ fun SharedGalleryScreen(
                             val gridEntrance = remember { androidx.compose.animation.core.Animatable(0f) }
                             LaunchedEffect(Unit) { gridEntrance.animateTo(1f, tween(320)) }
                             val gridState = rememberLazyGridState()
-                            val onThisDayItems = remember(galleryMediaItems, selectedDateMillis, isSelectionMode) {
-                                if (selectedDateMillis == null && !isSelectionMode) galleryOnThisDay(galleryMediaItems) else emptyList()
+                            val onThisDayItems = remember(shownMediaItems, selectedDateMillis, isSelectionMode) {
+                                if (selectedDateMillis == null && !isSelectionMode) galleryOnThisDay(shownMediaItems) else emptyList()
                             }
-                            val monthGroups = remember(galleryMediaItems) { galleryByMonth(galleryMediaItems) }
+                            val monthGroups = remember(shownMediaItems) { galleryByMonth(shownMediaItems) }
                             // Each grid entry's date, in grid order (the card and month headers too), for the scrollbar
                             val gridDates = remember(onThisDayItems, monthGroups) {
                                 buildList<Long> {
@@ -806,6 +863,7 @@ fun SharedGalleryScreen(
                                     item(key = "on_this_day", span = { GridItemSpan(maxLineSpan) }) {
                                         OnThisDayCard(
                                             items = onThisDayItems,
+                                            posterFor = { chatViewModel.videoPoster(it.originalMessage, it.mediaUrl) },
                                             onOpen = { picked ->
                                                 selectedMediaUrl = picked.mediaUrl
                                                 selectedMessageIdForViewer = picked.messageId
@@ -813,9 +871,10 @@ fun SharedGalleryScreen(
                                         )
                                     }
                                 }
-                                // Month by month, newest first: an "October 2026" header over each month's photos
+                                // Month by month, newest first: an "October 2026" header over each month's
+                                // photos, which stays at the top while you're in that month
                                 monthGroups.forEach { (month, monthItems) ->
-                                    item(key = "month_$month", span = { GridItemSpan(maxLineSpan) }) {
+                                    stickyHeader(key = "month_$month") {
                                         GalleryMonthHeader(month = month, count = monthItems.size)
                                     }
                                     items(monthItems, key = { it.id }) { item ->
@@ -853,35 +912,13 @@ fun SharedGalleryScreen(
                                                 )
                                             }
                                     ) {
-                                        val modelData = remember(item.previewUrl) {
-                                            val url = item.previewUrl
-                                            if (url.startsWith("data:image")) {
-                                                try {
-                                                    val base64 = url.substringAfter("base64,")
-                                                    android.util.Base64.decode(base64, android.util.Base64.DEFAULT)
-                                                } catch (e: Exception) {
-                                                    url
-                                                }
-                                            } else {
-                                                android.net.Uri.parse(url)
-                                            }
-                                        }
-
-                                        val context = androidx.compose.ui.platform.LocalContext.current
                                         val isVideoItem = item.isVideo
 
-                                        AsyncImage(
-                                            model = coil.request.ImageRequest.Builder(context)
-                                                .data(modelData)
-                                                .apply {
-                                                    if (isVideoItem) {
-                                                        decoderFactory(coil.decode.VideoFrameDecoder.Factory())
-                                                    }
-                                                }
-                                                .crossfade(260)
-                                                .build(),
-                                            contentDescription = if (isVideoItem) "Shared video note" else "Shared photo",
-                                            contentScale = ContentScale.Crop,
+                                        // Small tiles show the ~10 KB thumbnail; two big columns, the full photo
+                                        GalleryTileImage(
+                                            item = item,
+                                            full = gridColumnCount <= 2,
+                                            posterFor = { chatViewModel.videoPoster(it.originalMessage, it.mediaUrl) },
                                             modifier = Modifier.fillMaxSize()
                                         )
 
@@ -994,24 +1031,29 @@ fun SharedGalleryScreen(
                             )
                             }
                         }
+                        }
                     }
 
                     // TAB 1: Voice Notes (Playable with audio player and Show in Chat)
                     1 -> {
-                        if (voiceMessages.isEmpty()) {
+                        // The placeholders melt into the content instead of it popping in (each side of the
+                        // crossfade keeps showing what it was)
+                        val shownTab = when { voiceMessages.isEmpty() && isGalleryLoading -> 0; voiceMessages.isEmpty() -> 1; else -> 2 }
+                        Crossfade(targetState = shownTab, animationSpec = tween(280), label = "gallery_tab") { phase ->
+                        if (phase != 2) {
                             val emptyText = if (selectedDateMillis != null) {
                                 val sdf = SimpleDateFormat("MMM d, yyyy", Locale.getDefault())
                                 "No voice notes found on ${sdf.format(Date(selectedDateMillis!!))} 📅"
                             } else {
                                 "No shared voice notes yet 🎙️"
                             }
-                            EmptyGalleryNotice(emptyText, isLoading = isGalleryLoading)
+                            EmptyGalleryNotice(emptyText, isLoading = phase == 0)
                         } else {
                             GalleryLazyColumn(
                                 dateAt = { voiceMessages.getOrNull(it)?.timestamp },
                                 modifier = Modifier
                                     .fillMaxSize()
-                                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                                    .padding(horizontal = 16.dp, vertical = 12.dp),
                                 verticalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
                                 items(voiceMessages, key = { it.id }) { msg ->
@@ -1035,7 +1077,7 @@ fun SharedGalleryScreen(
                                             )
                                             .testTag("gallery_voice_${msg.id}")
                                     ) {
-                                        Column(modifier = Modifier.padding(14.dp)) {
+                                        Column(modifier = Modifier.padding(16.dp)) {
                                             // Top info: Sender + Date & Time
                                             Row(
                                                 modifier = Modifier.fillMaxWidth(),
@@ -1110,7 +1152,7 @@ fun SharedGalleryScreen(
                                                     .fillMaxWidth()
                                                     .clip(RoundedCornerShape(12.dp))
                                                     .background(MaterialTheme.colorScheme.surfaceVariant)
-                                                    .padding(horizontal = 10.dp, vertical = 8.dp),
+                                                    .padding(horizontal = 12.dp, vertical = 8.dp),
                                                 verticalAlignment = Alignment.CenterVertically
                                             ) {
                                                 // Play / Pause Button
@@ -1164,7 +1206,8 @@ fun SharedGalleryScreen(
                                                                 "${duration}s audio"
                                                             },
                                                             fontSize = 11.sp,
-                                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                            style = LocalTextStyle.current.steadyDigits
                                                         )
                                                         if (isThisActive) {
                                                             Text(
@@ -1185,24 +1228,29 @@ fun SharedGalleryScreen(
                                 }
                             }
                         }
+                        }
                     }
 
                     // TAB 2: Links (WhatsApp Style with dates, times, and actions)
                     2 -> {
-                        if (extractedLinks.isEmpty()) {
+                        // The placeholders melt into the content instead of it popping in (each side of the
+                        // crossfade keeps showing what it was)
+                        val shownTab = when { extractedLinks.isEmpty() && isGalleryLoading -> 0; extractedLinks.isEmpty() -> 1; else -> 2 }
+                        Crossfade(targetState = shownTab, animationSpec = tween(280), label = "gallery_tab") { phase ->
+                        if (phase != 2) {
                             val emptyText = if (selectedDateMillis != null) {
                                 val sdf = SimpleDateFormat("MMM d, yyyy", Locale.getDefault())
                                 "No links found on ${sdf.format(Date(selectedDateMillis!!))} 📅"
                             } else {
                                 "No shared links yet 🔗\nAny links shared in your secret chat will automatically appear here."
                             }
-                            EmptyGalleryNotice(emptyText, isLoading = isGalleryLoading)
+                            EmptyGalleryNotice(emptyText, isLoading = phase == 0)
                         } else {
                             GalleryLazyColumn(
                                 dateAt = { extractedLinks.getOrNull(it)?.timestamp },
                                 modifier = Modifier
                                     .fillMaxSize()
-                                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                                    .padding(horizontal = 16.dp, vertical = 12.dp),
                                 verticalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
                                 items(extractedLinks, key = { "${it.messageId}_${it.url}" }) { item ->
@@ -1222,7 +1270,7 @@ fun SharedGalleryScreen(
                                             )
                                             .testTag("gallery_link_${item.messageId}")
                                     ) {
-                                        Column(modifier = Modifier.padding(14.dp)) {
+                                        Column(modifier = Modifier.padding(16.dp)) {
                                             Row(
                                                 modifier = Modifier.fillMaxWidth(),
                                                 verticalAlignment = Alignment.Top
@@ -1230,7 +1278,7 @@ fun SharedGalleryScreen(
                                                 if (isSelectionMode) {
                                                     SelectionCheckBadge(
                                                         isSelected = item.messageId in selectedItemIds,
-                                                        modifier = Modifier.padding(top = 9.dp)
+                                                        modifier = Modifier.padding(top = 8.dp)
                                                     )
                                                     Spacer(modifier = Modifier.width(10.dp))
                                                 }
@@ -1306,7 +1354,7 @@ fun SharedGalleryScreen(
                                             }
 
                                             HorizontalDivider(
-                                                modifier = Modifier.padding(vertical = 10.dp),
+                                                modifier = Modifier.padding(vertical = 12.dp),
                                                 color = MaterialTheme.colorScheme.outlineVariant
                                             )
 
@@ -1387,24 +1435,29 @@ fun SharedGalleryScreen(
                                 }
                             }
                         }
+                        }
                     }
 
                     // TAB 3: Starred
                     3 -> {
-                        if (starredMessages.isEmpty()) {
+                        // The placeholders melt into the content instead of it popping in (each side of the
+                        // crossfade keeps showing what it was)
+                        val shownTab = when { starredMessages.isEmpty() && isGalleryLoading -> 0; starredMessages.isEmpty() -> 1; else -> 2 }
+                        Crossfade(targetState = shownTab, animationSpec = tween(280), label = "gallery_tab") { phase ->
+                        if (phase != 2) {
                             val emptyText = if (selectedDateMillis != null) {
                                 val sdf = SimpleDateFormat("MMM d, yyyy", Locale.getDefault())
                                 "No starred items found on ${sdf.format(Date(selectedDateMillis!!))} 📅"
                             } else {
                                 "No starred messages or media yet ⭐"
                             }
-                            EmptyGalleryNotice(emptyText, isLoading = isGalleryLoading)
+                            EmptyGalleryNotice(emptyText, isLoading = phase == 0)
                         } else {
                             GalleryLazyColumn(
                                 dateAt = { starredMessages.getOrNull(it)?.timestamp },
                                 modifier = Modifier
                                     .fillMaxSize()
-                                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                                    .padding(horizontal = 16.dp, vertical = 12.dp),
                                 verticalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
                                 items(starredMessages, key = { it.id }) { msg ->
@@ -1424,7 +1477,7 @@ fun SharedGalleryScreen(
                                             )
                                             .testTag("gallery_starred_${msg.id}")
                                     ) {
-                                        Column(modifier = Modifier.padding(14.dp)) {
+                                        Column(modifier = Modifier.padding(16.dp)) {
                                             Row(
                                                 modifier = Modifier.fillMaxWidth(),
                                                 verticalAlignment = Alignment.CenterVertically
@@ -1463,8 +1516,9 @@ fun SharedGalleryScreen(
                                             val starredUrls = msg.getAllMediaUrls()
                                             if (starredUrls.isNotEmpty() && msg.getTypedType() == MessageType.IMAGE) {
                                                 if (starredUrls.size == 1) {
+                                                    // Wide, so the full photo (the small thumbnails are squares)
                                                     AsyncImage(
-                                                        model = msg.thumbnailFor(starredUrls[0]),
+                                                        model = starredUrls[0],
                                                         contentDescription = null,
                                                         contentScale = ContentScale.Crop,
                                                         modifier = Modifier
@@ -1485,7 +1539,7 @@ fun SharedGalleryScreen(
                                                     ) {
                                                         starredUrls.forEach { starUrl ->
                                                             AsyncImage(
-                                                                model = msg.thumbnailFor(starUrl),
+                                                                model = starUrl,
                                                                 contentDescription = null,
                                                                 contentScale = ContentScale.Crop,
                                                                 modifier = Modifier
@@ -1534,24 +1588,29 @@ fun SharedGalleryScreen(
                                 }
                             }
                         }
+                        }
                     }
 
                     // TAB 4: Calls & Recordings
                     4 -> {
-                        if (callHistoryItems.isEmpty()) {
+                        // The placeholders melt into the content instead of it popping in (each side of the
+                        // crossfade keeps showing what it was)
+                        val shownTab = when { callHistoryItems.isEmpty() && isGalleryLoading -> 0; callHistoryItems.isEmpty() -> 1; else -> 2 }
+                        Crossfade(targetState = shownTab, animationSpec = tween(280), label = "gallery_tab") { phase ->
+                        if (phase != 2) {
                             val emptyText = if (selectedDateMillis != null) {
                                 val sdf = SimpleDateFormat("MMM d, yyyy", Locale.getDefault())
                                 "No calls or recordings found on ${sdf.format(Date(selectedDateMillis!!))} 📞"
                             } else {
                                 "No calls or recordings yet 📞"
                             }
-                            EmptyGalleryNotice(emptyText, isLoading = isGalleryLoading)
+                            EmptyGalleryNotice(emptyText, isLoading = phase == 0)
                         } else {
                             GalleryLazyColumn(
                                 dateAt = { callHistoryItems.getOrNull(it)?.timestamp },
                                 modifier = Modifier
                                     .fillMaxSize()
-                                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                                    .padding(horizontal = 16.dp, vertical = 12.dp),
                                 verticalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
                                 items(callHistoryItems, key = { it.id }) { msg ->
@@ -1604,7 +1663,7 @@ fun SharedGalleryScreen(
                                             )
                                             .testTag("gallery_call_${msg.id}")
                                     ) {
-                                        Column(modifier = Modifier.padding(14.dp)) {
+                                        Column(modifier = Modifier.padding(16.dp)) {
                                             Row(
                                                 modifier = Modifier.fillMaxWidth(),
                                                 verticalAlignment = Alignment.CenterVertically
@@ -1686,6 +1745,7 @@ fun SharedGalleryScreen(
                                     }
                                 }
                             }
+                        }
                         }
                     }
                 }
@@ -1787,8 +1847,9 @@ fun SharedGalleryScreen(
     }
 
     selectedMediaUrl?.let { url ->
-        val galleryAllUrls = remember(galleryMediaItems) {
-            galleryMediaItems.map { it.mediaUrl }.filter { it.isNotBlank() }.distinct()
+        // Swiping in the viewer goes through what the Media tab shows (its filter too)
+        val galleryAllUrls = remember(shownMediaItems) {
+            shownMediaItems.map { it.mediaUrl }.filter { it.isNotBlank() }.distinct()
         }
         val circularUrls = remember(galleryMediaItems, sourceMessages) {
             val fromGallery = galleryMediaItems
@@ -1935,11 +1996,142 @@ private fun galleryOnThisDay(items: List<GalleryMediaItem>): List<GalleryMediaIt
     }
 }
 
+/** The Media tab's kinds, for its filter. */
+private const val MEDIA_ALL = 0
+private const val MEDIA_PHOTOS = 1
+private const val MEDIA_VIDEOS = 2
+private const val MEDIA_VIDEO_NOTES = 3
+private val MEDIA_KIND_LABELS = listOf("All", "Photos", "Videos", "Video notes")
+private val MEDIA_KIND_COUNT_WORDS = listOf("photos & videos", "photos", "videos", "video notes")
+private val MEDIA_KIND_EMPTY_WORDS = listOf("photos or videos", "photos", "videos", "video notes")
+
+/** Who sent it, for the Media tab's filter. */
+private const val FROM_ANYONE = 0
+private const val FROM_ME = 1
+private const val FROM_PARTNER = 2
+
+private fun mediaKindOf(item: GalleryMediaItem): Int = when {
+    !item.isVideo -> MEDIA_PHOTOS
+    item.originalMessage.isCircularVideoNote() -> MEDIA_VIDEO_NOTES
+    else -> MEDIA_VIDEOS
+}
+
+/**
+ * The Media tab's filter: all, photos, videos or video notes (kinds there are none of aren't
+ * offered), and from me or from my partner. Tapping the chosen sender again shows both.
+ */
+@Composable
+private fun MediaFilterRow(
+    kind: Int,
+    onKind: (Int) -> Unit,
+    kindCounts: IntArray,
+    from: Int,
+    onFrom: (Int) -> Unit,
+    partnerName: String
+) {
+    val chipColors = FilterChipDefaults.filterChipColors(
+        selectedContainerColor = RoseGoldPrimary.copy(alpha = 0.12f),
+        selectedLabelColor = RoseGoldPrimary
+    )
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState())
+            .padding(horizontal = 16.dp, vertical = 4.dp)
+    ) {
+        MEDIA_KIND_LABELS.forEachIndexed { index, label ->
+            if (index == MEDIA_ALL || index == kind || kindCounts[index] > 0) {
+                CherishFilterChip(
+                    selected = kind == index,
+                    onClick = { onKind(index) },
+                    label = { Text(label, fontSize = 12.sp) },
+                    colors = chipColors,
+                    modifier = Modifier.testTag("gallery_filter_kind_$index")
+                )
+            }
+        }
+        Box(
+            modifier = Modifier
+                .width(1.dp)
+                .height(20.dp)
+                .background(MaterialTheme.colorScheme.outlineVariant)
+        )
+        listOf(FROM_ME to "From me", FROM_PARTNER to "From $partnerName").forEach { (value, label) ->
+            CherishFilterChip(
+                selected = from == value,
+                onClick = { onFrom(if (from == value) FROM_ANYONE else value) },
+                label = { Text(label, fontSize = 12.sp, maxLines = 1) },
+                colors = chipColors,
+                modifier = Modifier.testTag("gallery_filter_from_$value")
+            )
+        }
+    }
+}
+
+/**
+ * A gallery tile's picture: a photo's small thumbnail ([full]: the full photo, shown over the
+ * thumbnail while it loads), or a video's poster, so a tile never downloads a video. A video
+ * without a poster yet gets one from [posterFor].
+ */
+@Composable
+private fun GalleryTileImage(
+    item: GalleryMediaItem,
+    full: Boolean,
+    posterFor: suspend (GalleryMediaItem) -> Any?,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    val videoPoster by produceState<Any?>(
+        initialValue = if (item.isVideo) item.previewUrl.takeIf { it != item.mediaUrl } else null,
+        item.id
+    ) {
+        if (item.isVideo && value == null) value = posterFor(item)
+    }
+    val showFull = full && !item.isVideo && item.previewUrl != item.mediaUrl
+    val shownUrl = if (showFull) item.mediaUrl else item.previewUrl
+    val model: Any? = remember(item.isVideo, shownUrl, videoPoster) {
+        if (item.isVideo) {
+            videoPoster?.let { if (it is String) galleryImageModel(it) else it }
+        } else {
+            galleryImageModel(shownUrl)
+        }
+    }
+    // The tile's own background shows until the poster is ready
+    if (model == null) return
+    AsyncImage(
+        model = coil.request.ImageRequest.Builder(context)
+            .data(model)
+            .apply {
+                // Going between thumbnail and full photo keeps showing the one it had until the other's in
+                if (!item.isVideo) placeholderMemoryCacheKey(if (showFull) item.previewUrl else item.mediaUrl)
+            }
+            .crossfade(260)
+            .build(),
+        contentDescription = if (item.isVideo) "Shared video" else "Shared photo",
+        contentScale = ContentScale.Crop,
+        modifier = modifier
+    )
+}
+
+/** What the image loader gets for a stored link: an inline picture's bytes, or the link. */
+private fun galleryImageModel(url: String): Any = if (url.startsWith("data:image")) {
+    runCatching { android.util.Base64.decode(url.substringAfter("base64,"), android.util.Base64.DEFAULT) }
+        .getOrDefault(url)
+} else {
+    Uri.parse(url)
+}
+
 @Composable
 private fun GalleryMonthHeader(month: String, count: Int) {
     Row(
         verticalAlignment = Alignment.Bottom,
-        modifier = Modifier.padding(start = 4.dp, top = 14.dp, bottom = 4.dp)
+        modifier = Modifier
+            .fillMaxWidth()
+            // Stays readable while it rests over the photos at the top
+            .background(MaterialTheme.colorScheme.background.copy(alpha = 0.94f))
+            .padding(start = 4.dp, top = 12.dp, bottom = 6.dp)
     ) {
         Text(
             text = month,
@@ -1959,8 +2151,11 @@ private fun GalleryMonthHeader(month: String, count: Int) {
 
 /** "On this day": a row of photos from this date in earlier years; tapping one opens it. */
 @Composable
-private fun OnThisDayCard(items: List<GalleryMediaItem>, onOpen: (GalleryMediaItem) -> Unit) {
-    val context = androidx.compose.ui.platform.LocalContext.current
+private fun OnThisDayCard(
+    items: List<GalleryMediaItem>,
+    posterFor: suspend (GalleryMediaItem) -> Any?,
+    onOpen: (GalleryMediaItem) -> Unit
+) {
     val yearsAgo = remember(items) {
         val now = Calendar.getInstance().get(Calendar.YEAR)
         val then = Calendar.getInstance().apply { timeInMillis = items.first().timestamp }.get(Calendar.YEAR)
@@ -1991,19 +2186,22 @@ private fun OnThisDayCard(items: List<GalleryMediaItem>, onOpen: (GalleryMediaIt
                 modifier = Modifier.horizontalScroll(rememberScrollState())
             ) {
                 items.take(10).forEach { memory ->
-                    AsyncImage(
-                        model = coil.request.ImageRequest.Builder(context)
-                            .data(memory.previewUrl)
-                            .apply { if (memory.isVideo) decoderFactory(coil.decode.VideoFrameDecoder.Factory()) }
-                            .crossfade(true)
-                            .build(),
-                        contentDescription = "Memory from this day",
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier
-                            .size(92.dp)
-                            .clip(RoundedCornerShape(12.dp))
-                            .openableMedia { onOpen(memory) }
-                    )
+                    key(memory.id) {
+                        Box(
+                            modifier = Modifier
+                                .size(92.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.6f))
+                                .openableMedia { onOpen(memory) }
+                        ) {
+                            GalleryTileImage(
+                                item = memory,
+                                full = false,
+                                posterFor = posterFor,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -2083,9 +2281,10 @@ private fun GalleryLazyColumn(
 }
 
 /**
- * The scrollbar along the right edge of a long gallery list: it shows where you are, top to
- * bottom, and its thumb can be dragged to go anywhere quickly, with the date there beside it.
- * Only the thumb takes touches; the list scrolls and taps as usual everywhere else.
+ * The drag handle along the right edge of a long gallery list: a pill with arrows up and down that
+ * shows where you are, top to bottom, and can be dragged to go anywhere quickly, with the date
+ * there beside it (and a tick as each month goes by). Only the handle takes touches; the list
+ * scrolls and taps as usual everywhere else.
  */
 @Composable
 private fun GalleryScrollbar(
@@ -2100,14 +2299,25 @@ private fun GalleryScrollbar(
 
     val scope = rememberCoroutineScope()
     val density = androidx.compose.ui.platform.LocalDensity.current
-    val thumbHeight = 52.dp
-    val thumbWidth = 28.dp
+    val haptics = androidx.compose.ui.platform.LocalHapticFeedback.current
+    val currentDateAt by rememberUpdatedState(dateAt)
+    val thumbHeight = 46.dp
+    // The touch area; the pill inside is narrower
+    val thumbWidth = 36.dp
     val thumbHeightPx = with(density) { thumbHeight.toPx() }
     var trackHeightPx by remember { mutableFloatStateOf(0f) }
     var dragging by remember { mutableStateOf(false) }
     /** Where the dragged thumb is: 0 at the top, 1 at the bottom. */
     var dragFraction by remember { mutableFloatStateOf(0f) }
     var lastTarget by remember { mutableIntStateOf(-1) }
+    /** The month under the handle while it's dragged (year * 12 + month), for the tick as it changes. */
+    var lastMonth by remember { mutableIntStateOf(-1) }
+    val monthAt = { index: Int ->
+        currentDateAt(index)?.let { time ->
+            val calendar = Calendar.getInstance().apply { timeInMillis = time }
+            calendar.get(Calendar.YEAR) * 12 + calendar.get(Calendar.MONTH)
+        } ?: -1
+    }
 
     // The first index the list can be scrolled to: the thumb's range maps onto 0 to this
     val lastFirstIndex = { (position.totalCount() - position.visibleCount()).coerceAtLeast(1) }
@@ -2117,10 +2327,17 @@ private fun GalleryScrollbar(
         }
     }
     val active = dragging || position.isScrolling()
-    val alpha by androidx.compose.animation.core.animateFloatAsState(
-        targetValue = if (active) 1f else 0.45f,
+    // Always there on a long list; fully solid while you scroll or hold it
+    val handleAlpha by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = if (active) 1f else 0.85f,
         animationSpec = tween(250),
         label = "gallery_scrollbar_alpha"
+    )
+    // A little bigger while it's held
+    val grabScale by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = if (dragging) 1.12f else 1f,
+        animationSpec = androidx.compose.animation.core.spring(dampingRatio = 0.6f, stiffness = 500f),
+        label = "gallery_scrollbar_grab"
     )
     val thumbY = { ((trackHeightPx - thumbHeightPx).coerceAtLeast(0f) * (if (dragging) dragFraction else listFraction)).roundToInt() }
 
@@ -2139,13 +2356,13 @@ private fun GalleryScrollbar(
                         .align(Alignment.TopEnd)
                         .offset {
                             IntOffset(
-                                x = -(thumbWidth + 6.dp).roundToPx(),
+                                x = -(thumbWidth + 2.dp).roundToPx(),
                                 y = thumbY() + ((thumbHeight - 32.dp) / 2).roundToPx()
                             )
                         }
                         .height(32.dp)
                 ) {
-                    Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 14.dp)) {
+                    Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 16.dp)) {
                         Text(label, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
                     }
                 }
@@ -2163,7 +2380,9 @@ private fun GalleryScrollbar(
                         onDragStart = {
                             dragFraction = listFraction
                             lastTarget = position.firstVisible()
+                            lastMonth = monthAt(lastTarget)
                             dragging = true
+                            haptics.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
                         },
                         onDragEnd = { dragging = false },
                         onDragCancel = { dragging = false },
@@ -2177,19 +2396,40 @@ private fun GalleryScrollbar(
                                 lastTarget = target
                                 // A newer jump cancels the one still going
                                 scope.launch { position.scrollTo(target) }
+                                val month = monthAt(target)
+                                if (month != lastMonth) {
+                                    lastMonth = month
+                                    haptics.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
+                                }
                             }
                         }
                     )
                 }
         ) {
-            Box(
+            // A pill to grab, with arrows up and down, so it's plain it can be dragged
+            Surface(
+                shape = RoundedCornerShape(percent = 50),
+                color = RoseGoldPrimary,
+                shadowElevation = 3.dp,
                 modifier = Modifier
-                    .padding(end = 3.dp)
-                    .width(if (dragging) 8.dp else 5.dp)
-                    .fillMaxHeight()
-                    .clip(CircleShape)
-                    .background(RoseGoldPrimary.copy(alpha = alpha))
-            )
+                    .padding(end = 4.dp)
+                    .graphicsLayer {
+                        alpha = handleAlpha
+                        scaleX = grabScale
+                        scaleY = grabScale
+                        transformOrigin = androidx.compose.ui.graphics.TransformOrigin(1f, 0.5f)
+                    }
+                    .size(width = 24.dp, height = thumbHeight)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = Icons.Rounded.UnfoldMore,
+                        contentDescription = "Drag to scroll",
+                        tint = Color.White,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
         }
     }
 }

@@ -59,6 +59,8 @@ import com.example.ui.theme.Blue300
 import com.example.ui.theme.Blue500
 import com.example.ui.theme.NavyCard
 import com.example.ui.theme.Slate900
+import androidx.compose.material3.LocalTextStyle
+import com.example.ui.theme.steadyDigits
 
 /** Only one video note plays at a time: starting one stops (and releases) the others. */
 private object VideoNotePlayback {
@@ -541,7 +543,7 @@ fun CircularVideoNoteView(
 
         // Blue Circular Outline & Unified Synchronized Progress Ring
         if (isRound) {
-            Canvas(modifier = Modifier.fillMaxSize().padding(1.5.dp)) {
+            Canvas(modifier = Modifier.fillMaxSize().padding(2.dp)) {
                 val strokeWidth = 3.dp.toPx()
                 val radius = (size.minDimension - strokeWidth) / 2f
                 // 1. Prominent blue circular ring outline around circumference by default
@@ -603,8 +605,8 @@ fun CircularVideoNoteView(
                 modifier = Modifier
                     .align(Alignment.TopStart)
                     .padding(
-                        top = if (isRound) 30.dp else 12.dp,
-                        start = if (isRound) 30.dp else 12.dp
+                        top = if (isRound) 32.dp else 12.dp,
+                        start = if (isRound) 32.dp else 12.dp
                     )
             ) {
                 Surface(
@@ -635,8 +637,8 @@ fun CircularVideoNoteView(
             modifier = Modifier
                 .align(Alignment.TopEnd)
                 .padding(
-                    top = if (isRound) 30.dp else 12.dp,
-                    end = if (isRound) 30.dp else 12.dp
+                    top = if (isRound) 32.dp else 12.dp,
+                    end = if (isRound) 32.dp else 12.dp
                 )
                 .size(if (isRound) 28.dp else 32.dp)
                 .clickable {
@@ -660,8 +662,8 @@ fun CircularVideoNoteView(
             modifier = Modifier
                 .align(Alignment.BottomEnd)
                 .padding(
-                    bottom = if (isRound) 30.dp else 12.dp,
-                    end = if (isRound) 30.dp else 12.dp
+                    bottom = if (isRound) 32.dp else 12.dp,
+                    end = if (isRound) 32.dp else 12.dp
                 )
                 .size(if (isRound) 28.dp else 32.dp)
                 .clickable {
@@ -698,7 +700,8 @@ fun CircularVideoNoteView(
                     fontSize = 11.sp,
                     color = Color.White,
                     fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(horizontal = 9.dp, vertical = 2.5.dp)
+                    style = LocalTextStyle.current.steadyDigits,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
                 )
             }
         }

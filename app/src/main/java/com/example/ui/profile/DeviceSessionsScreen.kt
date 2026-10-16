@@ -47,6 +47,9 @@ import com.example.ui.components.CherishAlertDialog
 import com.example.ui.components.CherishButton
 import com.example.ui.components.pressScale
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import com.example.ui.components.softShadow
+import com.example.ui.components.lazyFadingEdges
+import androidx.compose.foundation.lazy.rememberLazyListState
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -188,7 +191,7 @@ fun DeviceSessionsScreen(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Column(
-                            modifier = Modifier.padding(14.dp),
+                            modifier = Modifier.padding(16.dp),
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             SessionDetailRow("Device Name", detailSession.deviceName)
@@ -279,10 +282,14 @@ fun DeviceSessionsScreen(
         },
         containerColor = MaterialTheme.colorScheme.surface
     ) { paddingValues ->
+        val sessionsList = rememberLazyListState()
         LazyColumn(
+            state = sessionsList,
             modifier = modifier
                 .fillMaxSize()
                 .padding(paddingValues)
+                // Devices fade softly at the top and bottom edges as they scroll
+                .lazyFadingEdges(sessionsList)
                 .padding(horizontal = 20.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
@@ -324,7 +331,7 @@ fun DeviceSessionsScreen(
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                         ) {
                             Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(Green800))
                             Spacer(modifier = Modifier.width(4.dp))
@@ -345,11 +352,12 @@ fun DeviceSessionsScreen(
                     shape = RoundedCornerShape(20.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                     border = BorderStroke(1.dp, if (session.isCurrent) RoseGoldPrimary.copy(alpha = 0.4f) else MaterialTheme.colorScheme.outlineVariant),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
                     modifier = Modifier
                         .animateItem()
                         .fillMaxWidth()
                         .pressScale(press)
+                        .softShadow(6.dp, RoundedCornerShape(20.dp), clip = false)
                 ) {
                     Row(
                         modifier = Modifier.padding(16.dp),

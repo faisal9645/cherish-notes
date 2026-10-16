@@ -25,6 +25,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.withPermit
 import java.io.File
 
 /** A photo, video or voice message that didn't send; shown above the message box with Retry. */
@@ -663,6 +664,8 @@ class ChatViewModel(
                 mediaName?.substringBeforeLast('.')?.ifBlank { null }?.let { "$it.mp4" }
             } else mediaName
 
+            // Its gallery tile's small picture (a photo's thumbnail, a video's poster) goes up alongside
+            val tilePicture = async { uploadTilePicture(type, preparedFile, coupleId) }
             val url = mediaRepository.uploadFile(
                 file = preparedFile,
                 type = type,
@@ -676,6 +679,7 @@ class ChatViewModel(
                 }
             ).getOrNull()
             if (url == null || !isDeliverable(url)) {
+                tilePicture.cancel()
                 return@runUpload FailedUpload(label, retry)
             }
 
@@ -694,7 +698,7 @@ class ChatViewModel(
                 mediaName = sentName ?: preparedFile.name,
                 mediaSize = preparedFile.length(),
                 replyTo = _uiState.value.replyingToMessage,
-                thumbnailUrls = emptyList()
+                thumbnailUrls = listOfNotNull(tilePicture.await())
             )
             _uiState.update { it.copy(replyingToMessage = null) }
             runCatching {
@@ -710,10 +714,85 @@ class ChatViewModel(
     }
 
     /**
-     * Previews are generated and cached locally by Coil directly from the main compressed photo URL,
-     * avoiding duplicate thumbnail files in cloud storage.
+     * The small square picture a photo or video shows as in the gallery (about 10 KB: a photo's
+     * thumbnail, a video's poster), uploaded. Null when it couldn't be made or sent; the gallery
+     * then makes do without it. Chat bubbles always show the full photo.
      */
-    private suspend fun uploadThumbnail(image: File, coupleId: String): String = ""
+    private suspend fun uploadTilePicture(type: MessageType, media: File, coupleId: String): String? {
+        var tile: File? = null
+        return try {
+            tile = when (type) {
+                MessageType.IMAGE -> mediaRepository.createThumbnail(media)
+                MessageType.VIDEO -> mediaRepository.createVideoPoster(
+                    media.absolutePath,
+                    File(File(CherishApplication.instance.cacheDir, "compressed_media"), "poster_${media.nameWithoutExtension}.webp")
+                )
+                else -> null
+            } ?: return null
+            mediaRepository.uploadFile(tile, MessageType.IMAGE, coupleId).getOrNull()
+                ?.takeIf { it.startsWith("https://") || it.startsWith("http://") }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w("ChatViewModel", "Couldn't send the gallery picture", e)
+            null
+        } finally {
+            tile?.let { runCatching { it.delete() } }
+        }
+    }
+
+    /** Video posters being made this session, by message, so each is only made once. */
+    private val posterJobs = java.util.concurrent.ConcurrentHashMap<String, Deferred<Any?>>()
+    /** Posters are made two at a time: each reads the start of a video. */
+    private val posterSlots = kotlinx.coroutines.sync.Semaphore(2)
+
+    /**
+     * What a video's gallery tile shows: its poster. A video sent before posters existed gets one
+     * the first time a phone shows it: made from the start of the video (not the whole video), kept
+     * on this phone, and saved for both phones, so it's only ever made once. Null when no frame can
+     * be read.
+     */
+    suspend fun videoPoster(message: Message, videoUrl: String): Any? {
+        message.thumbnailFor(videoUrl).takeIf { it != videoUrl }?.let { return it }
+        val job = posterJobs.computeIfAbsent(message.id) {
+            viewModelScope.async(kotlinx.coroutines.Dispatchers.IO) { makeVideoPoster(message.id, videoUrl) }
+        }
+        return job.await()
+    }
+
+    private suspend fun makeVideoPoster(messageId: String, videoUrl: String): Any? = try {
+        makeVideoPosterNow(messageId, videoUrl)
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        Log.w("ChatViewModel", "Couldn't make the poster of $messageId", e)
+        null
+    }
+
+    private suspend fun makeVideoPosterNow(messageId: String, videoUrl: String): Any? = posterSlots.withPermit {
+        val app = CherishApplication.instance
+        // The other phone may have made it already
+        val saved = chatRepository.fetchSavedPoster(messageId)
+        if (!saved.isNullOrEmpty()) return@withPermit saved
+        val safeId = messageId.replace(Regex("[^A-Za-z0-9_-]"), "_")
+        val posterFile = File(File(app.cacheDir, "video_posters"), "poster_$safeId.webp")
+        if (!posterFile.exists() || posterFile.length() == 0L) {
+            // The video itself when it's on this phone (sent from here, or played here already)
+            val localVideo = com.example.util.VideoThumbnailHelper.getVideoCacheFile(app, videoUrl)
+                .takeIf { it.exists() && it.length() > 1024 }
+            mediaRepository.createVideoPoster(localVideo?.absolutePath ?: videoUrl, posterFile)
+                ?: return@withPermit null
+        }
+        // Saved for both phones when the server could be asked and has none yet; otherwise this
+        // phone's copy is shown, and the next session tries again
+        if (saved != null) {
+            val uploaded = mediaRepository.uploadFile(posterFile, MessageType.IMAGE, chatRepository.getConversationId())
+                .getOrNull()
+                ?.takeIf { it.startsWith("https://") || it.startsWith("http://") }
+            if (uploaded != null) chatRepository.savePoster(messageId, uploaded)
+        }
+        posterFile
+    }
 
     fun sendMultipleImages(uris: List<Uri>) {
         if (uris.isEmpty()) return
@@ -721,13 +800,17 @@ class ChatViewModel(
         runUpload(labelFor(uris.size), retry = { sendMultipleImages(uris) }) {
             val coupleId = chatRepository.getConversationId()
             val uploadedUrls = mutableListOf<String>()
+            // Each photo's gallery thumbnail, in the same order ("" for one that couldn't be made)
+            val thumbnailUrls = mutableListOf<String>()
             val notSent = mutableListOf<Uri>()
             val tempFiles = mutableListOf<File>()
             try {
                 for ((index, uri) in uris.withIndex()) {
+                    var thumbnail: String? = null
                     val url = try {
                         val preparedFile = mediaRepository.compressAndPrepareImage(uri)
                         tempFiles.add(preparedFile)
+                        val tilePicture = async { uploadTilePicture(MessageType.IMAGE, preparedFile, coupleId) }
                         val uploaded = mediaRepository.uploadFile(
                             file = preparedFile,
                             type = MessageType.IMAGE,
@@ -735,8 +818,10 @@ class ChatViewModel(
                             onProgress = { p -> reportUploadProgress((index + p) / uris.size.toFloat()) }
                         ).getOrNull()
                         if (uploaded != null && isDeliverable(uploaded)) {
+                            thumbnail = tilePicture.await()
                             uploaded
                         } else {
+                            tilePicture.cancel()
                             null
                         }
                     } catch (e: CancellationException) {
@@ -745,7 +830,12 @@ class ChatViewModel(
                         Log.w("ChatViewModel", "Photo ${index + 1} of ${uris.size} failed", e)
                         null
                     }
-                    if (url != null) uploadedUrls.add(url) else notSent.add(uri)
+                    if (url != null) {
+                        uploadedUrls.add(url)
+                        thumbnailUrls.add(thumbnail.orEmpty())
+                    } else {
+                        notSent.add(uri)
+                    }
                 }
                 if (uploadedUrls.isNotEmpty()) {
                     chatRepository.sendMessage(
@@ -754,7 +844,7 @@ class ChatViewModel(
                         mediaUrl = uploadedUrls.firstOrNull(),
                         mediaUrls = uploadedUrls,
                         replyTo = _uiState.value.replyingToMessage,
-                        thumbnailUrls = emptyList()
+                        thumbnailUrls = if (thumbnailUrls.any { it.isNotBlank() }) thumbnailUrls else emptyList()
                     )
                     _uiState.update { it.copy(replyingToMessage = null) }
                 }
@@ -843,13 +933,19 @@ class ChatViewModel(
     fun sendVideoNote(videoFile: java.io.File, durationSeconds: Int) {
         val retry = { sendVideoNote(videoFile, durationSeconds) }
         runUpload("video note", retry) {
+            val coupleId = chatRepository.getConversationId()
+            // Its gallery poster goes up alongside
+            val poster = async { uploadTilePicture(MessageType.VIDEO, videoFile, coupleId) }
             val url = mediaRepository.uploadFile(
                 file = videoFile,
                 type = MessageType.VIDEO,
-                coupleId = chatRepository.getConversationId(),
+                coupleId = coupleId,
                 onProgress = ::reportUploadProgress
             ).getOrNull()
-            if (url == null || !isDeliverable(url)) return@runUpload FailedUpload("video note", retry)
+            if (url == null || !isDeliverable(url)) {
+                poster.cancel()
+                return@runUpload FailedUpload("video note", retry)
+            }
             com.example.util.VideoThumbnailHelper.cacheLocalVideo(com.example.CherishApplication.instance, videoFile, url)
             soundEffectsPlayer.playSound(ChatSoundEffectsPlayer.SoundType.SENT)
             chatRepository.sendMessage(
@@ -858,7 +954,8 @@ class ChatViewModel(
                 mediaUrl = url,
                 mediaName = "videonote_${System.currentTimeMillis()}.mp4",
                 durationSeconds = durationSeconds,
-                isVideoNote = true
+                isVideoNote = true,
+                thumbnailUrls = listOfNotNull(poster.await())
             )
             null
         }

@@ -130,7 +130,7 @@ fun CherishToastHost(visible: Boolean, modifier: Modifier = Modifier) {
                     textAlign = TextAlign.Center,
                     lineHeight = 18.sp,
                     maxLines = 3,
-                    modifier = Modifier.padding(horizontal = 18.dp, vertical = 10.dp)
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp)
                 )
             }
         }

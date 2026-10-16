@@ -53,6 +53,7 @@ import com.example.ui.theme.Indigo950
 import com.example.ui.theme.MistBlue
 import com.example.ui.theme.NavyDeep
 import com.example.ui.components.CherishToast
+import com.example.ui.components.softShadow
 
 private val OurWordsFont = FontFamily(Font(R.font.great_vibes_regular))
 
@@ -183,7 +184,7 @@ fun OurWordsScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(start = 20.dp, end = 20.dp, bottom = 18.dp)
+                            .padding(start = 20.dp, end = 20.dp, bottom = 20.dp)
                     ) {
                         Text(
                             text = if (page == 0) "Swipe to open" else "$page / ${words.size}",
@@ -279,7 +280,7 @@ private fun PaperSheet(paper: PaperColors, modifier: Modifier = Modifier, conten
         border = BorderStroke(1.dp, paper.edge),
         modifier = modifier
             .fillMaxSize()
-            .shadow(10.dp, shape, ambientColor = BookSky.copy(alpha = 0.25f), spotColor = BookBlue.copy(alpha = 0.25f))
+            .softShadow(10.dp, shape, ambientColor = BookSky.copy(alpha = 0.25f), spotColor = BookBlue.copy(alpha = 0.25f))
     ) {
         Box(
             modifier = Modifier
@@ -352,7 +353,7 @@ private fun OurWordsPage(message: Message, signedBy: String, paper: PaperColors)
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(start = 48.dp, end = 26.dp, top = 22.dp, bottom = 22.dp)
+                .padding(start = 48.dp, end = 28.dp, top = 24.dp, bottom = 24.dp)
         ) {
             Text("“", fontFamily = FontFamily.Serif, fontSize = 64.sp, color = paper.accent.copy(alpha = 0.8f), lineHeight = 64.sp)
             Column(
@@ -403,7 +404,7 @@ private fun OurWordsEmpty(paper: PaperColors) {
                 verticalArrangement = Arrangement.Center,
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(start = 44.dp, end = 22.dp)
+                    .padding(start = 44.dp, end = 24.dp)
                     .testTag("our_words_empty")
             ) {
                 Icon(Icons.AutoMirrored.Rounded.MenuBook, contentDescription = null, tint = paper.accent, modifier = Modifier.size(44.dp))

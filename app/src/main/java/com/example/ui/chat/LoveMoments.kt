@@ -74,6 +74,7 @@ import com.example.ui.theme.Lavender200
 import com.example.ui.theme.LovePink
 import com.example.ui.components.pressScaleTarget
 import com.example.ui.components.springClickable
+import com.example.ui.components.softShadow
 
 /** Message effect: a goodnight that dims the partner's screen with stars when they see it. */
 const val EFFECT_GOODNIGHT = "goodnight"
@@ -309,13 +310,13 @@ fun GoodnightCard(partnerName: String, onSendGoodnight: () -> Unit, onDismiss: (
     ) {
         Box(
             modifier = Modifier
-                .padding(horizontal = 30.dp)
+                .padding(horizontal = 32.dp)
                 .fillMaxWidth()
                 .graphicsLayer {
                     scaleX = cardIn.value
                     scaleY = cardIn.value
                 }
-                .shadow(20.dp, RoundedCornerShape(28.dp))
+                .softShadow(20.dp, RoundedCornerShape(28.dp))
                 .clip(RoundedCornerShape(28.dp))
                 .background(
                     Brush.verticalGradient(listOf(Color(0xFF141833), Indigo950, Color(0xFF3A2A5C)))
@@ -328,7 +329,7 @@ fun GoodnightCard(partnerName: String, onSendGoodnight: () -> Unit, onDismiss: (
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 24.dp, vertical = 26.dp)
+                    .padding(horizontal = 24.dp, vertical = 28.dp)
             ) {
                 Box(modifier = Modifier.size(96.dp), contentAlignment = Alignment.Center) {
                     Box(
@@ -378,7 +379,7 @@ fun GoodnightCard(partnerName: String, onSendGoodnight: () -> Unit, onDismiss: (
                         fontSize = 15.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = Color(0xFF2A2140),
-                        modifier = Modifier.padding(horizontal = 26.dp, vertical = 11.dp)
+                        modifier = Modifier.padding(horizontal = 28.dp, vertical = 12.dp)
                     )
                 }
                 if (!sent) {
@@ -391,7 +392,7 @@ fun GoodnightCard(partnerName: String, onSendGoodnight: () -> Unit, onDismiss: (
                             .pressScaleTarget()
                             .clip(RoundedCornerShape(50))
                             .springClickable { onDismiss() }
-                            .padding(horizontal = 14.dp, vertical = 8.dp)
+                            .padding(horizontal = 16.dp, vertical = 8.dp)
                     )
                 }
             }
@@ -544,7 +545,7 @@ fun LoveCelebration(title: String, subtitle: String?, onDismiss: () -> Unit) {
                     scaleX = cardIn.value
                     scaleY = cardIn.value
                 }
-                .shadow(18.dp, RoundedCornerShape(28.dp))
+                .softShadow(18.dp, RoundedCornerShape(28.dp))
                 .clip(RoundedCornerShape(28.dp))
                 .background(Brush.verticalGradient(listOf(Color(0xFFFFE3EA), Color(0xFFFFC2D1), Color(0xFFFF9EB5))))
                 .padding(horizontal = 28.dp, vertical = 24.dp)
@@ -678,7 +679,7 @@ fun HugNudgeCard(partnerName: String, mood: String, onSendHug: () -> Unit, onDis
         modifier = Modifier
             .fillMaxWidth()
             .statusBarsPadding()
-            .padding(top = 68.dp, start = 14.dp, end = 14.dp),
+            .padding(top = 68.dp, start = 16.dp, end = 16.dp),
         contentAlignment = Alignment.TopCenter
     ) {
         Surface(
@@ -691,7 +692,7 @@ fun HugNudgeCard(partnerName: String, mood: String, onSendHug: () -> Unit, onDis
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(start = 14.dp, end = 4.dp, top = 10.dp, bottom = 10.dp)
+                modifier = Modifier.padding(start = 16.dp, end = 4.dp, top = 12.dp, bottom = 12.dp)
             ) {
                 Text(text = "🤗", fontSize = 24.sp)
                 Spacer(modifier = Modifier.width(10.dp))
@@ -724,7 +725,7 @@ fun HugNudgeCard(partnerName: String, mood: String, onSendHug: () -> Unit, onDis
                         fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = Color.White,
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
                     )
                 }
                 IconButton(onClick = onDismiss, modifier = Modifier.size(36.dp)) {

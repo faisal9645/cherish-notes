@@ -46,6 +46,8 @@ import com.example.ui.components.WaveformView
 import com.example.util.formatRecordingLength
 import com.example.ui.components.pressScaleTarget
 import com.example.ui.components.springClickable
+import androidx.compose.material3.LocalTextStyle
+import com.example.ui.theme.steadyDigits
 
 /** The recording player's colours. */
 @Immutable
@@ -159,7 +161,8 @@ fun CallRecordingPlayerRow(
                     text = if (isActive) "${formatRecordingLength(positionSec)} / $total" else total,
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Medium,
-                    color = contentColor.copy(alpha = 0.85f)
+                    color = contentColor.copy(alpha = 0.85f),
+                    style = LocalTextStyle.current.steadyDigits
                 )
                 if (isActive) {
                     Spacer(modifier = Modifier.width(8.dp))

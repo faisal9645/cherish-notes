@@ -218,7 +218,7 @@ fun PrivacyAuditScreen(
                         .testTag("privacy_check_${check.id}")
                 ) {
                     Row(
-                        modifier = Modifier.padding(14.dp),
+                        modifier = Modifier.padding(16.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Box(

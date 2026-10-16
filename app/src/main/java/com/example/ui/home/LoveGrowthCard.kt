@@ -112,7 +112,7 @@ fun LoveGrowthCard(daysTogether: Int?, dailyStreak: Int, heartbeatStreak: Int) {
                             fontSize = 12.sp,
                             fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
                             color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                         )
                     }
                 }
@@ -167,7 +167,7 @@ fun LoveGrowthCard(daysTogether: Int?, dailyStreak: Int, heartbeatStreak: Int) {
                 color = MaterialTheme.colorScheme.surfaceVariant,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Row(modifier = Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(text = "💡", fontSize = 16.sp)
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
@@ -189,7 +189,7 @@ private fun GrowthStat(label: String, value: String, modifier: Modifier = Modifi
         color = MaterialTheme.colorScheme.primary.copy(alpha = 0.07f),
         modifier = modifier
     ) {
-        Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)) {
+        Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
             Text(text = label, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text(
                 text = value,

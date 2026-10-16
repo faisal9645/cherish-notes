@@ -113,8 +113,13 @@ import com.example.ui.theme.Gray500
 import com.example.ui.theme.Indigo950
 import com.example.ui.theme.NavyDeep
 import com.example.ui.components.CherishToast
+import com.example.ui.components.PlaceKeys
+import com.example.ui.components.PlaceTileShape
+import com.example.ui.components.PlaceTransition
+import com.example.ui.components.containerTransform
 import com.example.ui.components.pressScaleTarget
 import com.example.ui.components.springClickable
+import com.example.ui.components.softShadow
 
 /**
  * One of us on the Love & Us tab.
@@ -458,7 +463,8 @@ fun BothOfUsCard(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .shadow(if (cardColors.isLight) 2.dp else 0.dp, cardShape)
+                // A soft, wide shadow so the card floats (by day; at night it rests on black)
+                .softShadow(if (cardColors.isLight) 8.dp else 0.dp, cardShape)
                 .clip(cardShape)
                 .background(cardColors.background)
                 .loveBackground(HeartbeatPink, HeartbeatBlue, drift, flight, strength = if (cardColors.isLight) 1f else 1.6f)
@@ -479,7 +485,7 @@ fun BothOfUsCard(
                         .clip(RoundedCornerShape(50))
                         .background(cardColors.pill)
                         .border(1.dp, cardColors.hairline, RoundedCornerShape(50))
-                        .padding(horizontal = 14.dp, vertical = 6.dp)
+                        .padding(horizontal = 16.dp, vertical = 6.dp)
                         .testTag("both_of_us_today")
                 ) {
                     Icon(Icons.Rounded.CalendarMonth, contentDescription = null, tint = cardColors.softInk, modifier = Modifier.size(14.dp))
@@ -659,7 +665,7 @@ fun BothOfUsCard(
                             .clip(RoundedCornerShape(16.dp))
                             .background(blue.copy(alpha = if (cardColors.isLight) 0.12f else 0.35f))
                             .springClickable { if (togetherDays != null) editingTogether = true else onOpenChat() }
-                            .padding(start = 14.dp, end = if (togetherDays != null) 14.dp else 10.dp, top = 8.dp, bottom = 8.dp)
+                            .padding(start = 16.dp, end = if (togetherDays != null) 16.dp else 12.dp, top = 8.dp, bottom = 8.dp)
                             .testTag("both_of_us_days_count")
                     ) {
                         if (togetherDays != null) {
@@ -1102,7 +1108,7 @@ private fun PersonDetails(
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = modifier
-            .padding(horizontal = 3.dp)
+            .padding(horizontal = 4.dp)
             .testTag("both_of_us_${person.id}")
     ) {
         // Partner's local time (small): if you're ever in different time zones only, show "Her time: 11:40 PM" under her photo
@@ -1111,11 +1117,11 @@ private fun PersonDetails(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.Center,
                 modifier = Modifier
-                    .padding(bottom = 5.dp)
+                    .padding(bottom = 4.dp)
                     .clip(RoundedCornerShape(50))
                     .background(color.copy(alpha = if (cc.isLight) 0.08f else 0.18f))
                     .border(0.7.dp, color.copy(alpha = 0.32f), RoundedCornerShape(50))
-                    .padding(horizontal = 7.dp, vertical = 2.5.dp)
+                    .padding(horizontal = 8.dp, vertical = 2.dp)
                     .testTag("partner_local_time")
             ) {
                 Icon(
@@ -1143,7 +1149,7 @@ private fun PersonDetails(
                 .clip(RoundedCornerShape(50))
                 .background(cc.pill)
                 .border(1.dp, color.copy(alpha = 0.35f), RoundedCornerShape(50))
-                .padding(horizontal = 5.dp, vertical = 3.5.dp)
+                .padding(horizontal = 4.dp, vertical = 4.dp)
         ) {
             Box(
                 Modifier
@@ -1188,7 +1194,7 @@ private fun PersonDetails(
                 .pressScaleTarget()
                 .clip(RoundedCornerShape(16.dp))
                 .springClickable(enabled = person.id.isNotBlank()) { onEditBirthday() }
-                .padding(horizontal = 4.dp, vertical = 3.dp)
+                .padding(horizontal = 4.dp, vertical = 4.dp)
         ) {
             if (born == null) {
                 SoftPill(color = color) {
@@ -1239,7 +1245,7 @@ private fun SoftPill(color: Color, content: @Composable () -> Unit) {
         modifier = Modifier
             .clip(RoundedCornerShape(50))
             .background(color.copy(alpha = 0.12f))
-            .padding(horizontal = 12.dp, vertical = 5.dp)
+            .padding(horizontal = 12.dp, vertical = 4.dp)
     ) { content() }
 }
 
@@ -1269,6 +1275,8 @@ private fun LovePlaces(
             Triple(Icons.Rounded.EventAvailable, "Our Dates", "Important Days") to onOpenDates,
             Triple(Icons.Rounded.EditNote, "Our Notes", "Love Notes") to onOpenNotes
         )
+        // Each tile grows into the screen it opens
+        val transformKeys = listOf(PlaceKeys.GALLERY, PlaceKeys.MEMORIES, PlaceKeys.DATES, PlaceKeys.NOTES)
         places.forEachIndexed { i, (place, onOpen) ->
             if (i > 0) {
                 Box(
@@ -1283,6 +1291,7 @@ private fun LovePlaces(
                 title = place.second,
                 subtitle = place.third,
                 color = lerp(pink, blue, i / (places.size - 1f)),
+                transformKey = transformKeys[i],
                 onClick = onOpen,
                 modifier = Modifier.weight(1f)
             )
@@ -1297,6 +1306,7 @@ private fun PlaceTile(
     title: String,
     subtitle: String,
     color: Color,
+    transformKey: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -1304,9 +1314,13 @@ private fun PlaceTile(
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = modifier
+            .containerTransform(transformKey, PlaceTileShape, isTile = true)
             .pressScaleTarget()
             .clip(RoundedCornerShape(16.dp))
-            .springClickable(onClick = onClick)
+            .springClickable(onClick = {
+                PlaceTransition.open(transformKey)
+                onClick()
+            })
             .padding(vertical = 6.dp, horizontal = 2.dp)
             .testTag("love_place_${title.lowercase().replace(' ', '_')}")
     ) {

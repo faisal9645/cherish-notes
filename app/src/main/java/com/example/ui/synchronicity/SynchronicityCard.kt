@@ -68,6 +68,8 @@ import com.example.ui.components.CherishToast
 import com.example.ui.components.CherishAlertDialog
 import com.example.ui.components.CherishButton
 import com.example.ui.components.CherishOutlinedButton
+import com.example.ui.components.CherishAssistChip
+import com.example.ui.components.CherishFilterChip
 
 /**
  * The number tiles, in the app's own blues (day and night): times go sky to royal blue, numbers
@@ -233,7 +235,7 @@ fun SynchronicityCard(
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier
-                                .padding(start = 8.dp, end = 10.dp, top = 5.dp, bottom = 5.dp)
+                                .padding(start = 8.dp, end = 12.dp, top = 4.dp, bottom = 4.dp)
                                 .semantics(mergeDescendants = true) {
                                     contentDescription = "Synchronicity streak: ${state.streak} days in a row"
                                 }
@@ -312,7 +314,7 @@ fun SynchronicityCard(
                             SynchronicityRepository.NOT_ALLOWED_MESSAGE,
                             fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.onErrorContainer,
-                            modifier = Modifier.padding(10.dp)
+                            modifier = Modifier.padding(12.dp)
                         )
                     }
                 }
@@ -418,7 +420,7 @@ internal fun SyncStat(label: String, value: Int, modifier: Modifier = Modifier) 
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.padding(vertical = 10.dp, horizontal = 6.dp)
+            modifier = Modifier.padding(vertical = 12.dp, horizontal = 6.dp)
         ) {
             AnimatedContent(
                 targetState = value,
@@ -509,7 +511,7 @@ internal fun MomentRow(
             modifier = Modifier
                 .clip(RoundedCornerShape(12.dp))
                 .background(tileBrush(moment.pattern, isCustom = moment.pattern !in SyncPatterns.defaults))
-                .padding(horizontal = 9.dp, vertical = 6.dp)
+                .padding(horizontal = 8.dp, vertical = 6.dp)
                 .widthIn(min = 40.dp)
         ) {
             Text(moment.pattern, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color.White)
@@ -624,7 +626,7 @@ internal fun RecordMomentSheet(
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 patterns.forEach { option ->
                     val selected = option == pattern
-                    FilterChip(
+                    CherishFilterChip(
                         selected = selected,
                         onClick = { pattern = option },
                         label = { Text(option, fontWeight = FontWeight.Bold) },
@@ -666,7 +668,7 @@ internal fun RecordMomentSheet(
             Spacer(modifier = Modifier.height(8.dp))
             val quickTimes = remember(pattern) { pattern?.let { recentOccurrences(it) }.orEmpty() }
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilterChip(
+                CherishFilterChip(
                     selected = seenAt == null,
                     onClick = { seenAt = null },
                     label = { Text("Just now") },
@@ -674,7 +676,7 @@ internal fun RecordMomentSheet(
                     modifier = Modifier.testTag("synchronicity_when_now")
                 )
                 quickTimes.forEach { time ->
-                    FilterChip(
+                    CherishFilterChip(
                         selected = seenAt == time,
                         onClick = { seenAt = time },
                         label = { Text(seenLabel(time, state.today)) },
@@ -684,14 +686,14 @@ internal fun RecordMomentSheet(
                 // A time picked earlier (or the one being edited) that isn't a quick choice
                 val picked = seenAt
                 if (picked != null && picked !in quickTimes) {
-                    FilterChip(
+                    CherishFilterChip(
                         selected = true,
                         onClick = { showDatePicker = true },
                         label = { Text(seenLabel(picked, state.today)) },
                         colors = syncChipColors()
                     )
                 }
-                AssistChip(
+                CherishAssistChip(
                     onClick = { showDatePicker = true },
                     label = { Text("Earlier…") },
                     colors = AssistChipDefaults.assistChipColors(labelColor = MaterialTheme.colorScheme.primary),

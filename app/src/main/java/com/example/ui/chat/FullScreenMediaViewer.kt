@@ -298,10 +298,18 @@ fun FullScreenMediaViewer(
         } catch (_: Exception) {}
     }
 
-    // Calculate background opacity based on swipe down
-    val backgroundAlpha = remember(swipeOffsetY) {
-        val dragDist = abs(swipeOffsetY)
-        (1f - (dragDist / 500f)).coerceIn(0.2f, 1f)
+    // Parallax depth dismiss physics: quadratic scrim fade, scale down 1.0 -> 0.75, corner rounding 0dp -> 32dp
+    val dismissProgress = remember(swipeOffsetY) {
+        (swipeOffsetY.coerceAtLeast(0f) / 480f).coerceIn(0f, 1f)
+    }
+    val backgroundAlpha = remember(dismissProgress) {
+        (1f - dismissProgress * dismissProgress).coerceIn(0.05f, 1f)
+    }
+    val dismissScale = remember(dismissProgress) {
+        androidx.compose.ui.util.lerp(1.0f, 0.75f, dismissProgress)
+    }
+    val dismissCornerRadius = remember(dismissProgress) {
+        androidx.compose.ui.unit.lerp(0.dp, 32.dp, dismissProgress)
     }
 
     Dialog(
@@ -422,6 +430,8 @@ fun FullScreenMediaViewer(
                                         var decidedDirection = false
                                         var isVerticalSwipeDismiss = false
                                         var overscrollX = 0f
+                                        // The finger's speed: a quick flick down closes, like a long pull
+                                        val velocityTracker = androidx.compose.ui.input.pointer.util.VelocityTracker()
 
                                         while (true) {
                                             val event = awaitPointerEvent()
@@ -460,6 +470,7 @@ fun FullScreenMediaViewer(
                                                 val delta = change.positionChange()
                                                 totalX += delta.x
                                                 totalY += delta.y
+                                                velocityTracker.addPosition(change.uptimeMillis, change.position)
 
                                                 if (scale > 1.05f) {
                                                     // Zoomed-in state: Pan the zoomed image
@@ -499,12 +510,9 @@ fun FullScreenMediaViewer(
                                                     }
 
                                                     if (decidedDirection && isVerticalSwipeDismiss) {
+                                                        // The photo follows the finger; letting go decides
                                                         change.consume()
                                                         swipeOffsetY = totalY
-                                                        if (swipeOffsetY > 160f) {
-                                                            closeAnimated()
-                                                            break
-                                                        }
                                                     } else {
                                                         // Horizontal or undecided swipe:
                                                         // DO NOT consume change! HorizontalPager handles sliding smoothly to next/prev photo!
@@ -537,8 +545,34 @@ fun FullScreenMediaViewer(
                                             scale = 1f
                                             offset = Offset.Zero
                                         }
-                                        if (swipeOffsetY <= 160f) {
-                                            swipeOffsetY = 0f
+                                        if (isVerticalSwipeDismiss) {
+                                            val velocityY = velocityTracker.calculateVelocity().y
+                                            val flicked = velocityY >= 1100.dp.toPx() && swipeOffsetY > 24.dp.toPx()
+                                            val from = swipeOffsetY
+                                            if (from > 160f || flicked) {
+                                                // Pulled far enough, or flicked: the photo flies off at the
+                                                // finger's speed while the viewer fades away
+                                                val flyTo = size.height.toFloat() + from
+                                                scope.launch {
+                                                    androidx.compose.animation.core.animate(
+                                                        initialValue = from,
+                                                        targetValue = flyTo,
+                                                        initialVelocity = velocityY.coerceAtLeast(1500.dp.toPx()),
+                                                        animationSpec = spring(dampingRatio = 1f, stiffness = 120f)
+                                                    ) { value, _ -> swipeOffsetY = value }
+                                                }
+                                                closeAnimated()
+                                            } else if (from != 0f) {
+                                                // Not far enough: it springs back, carrying the finger's speed
+                                                scope.launch {
+                                                    androidx.compose.animation.core.animate(
+                                                        initialValue = from,
+                                                        targetValue = 0f,
+                                                        initialVelocity = velocityY,
+                                                        animationSpec = spring(dampingRatio = 0.72f, stiffness = 520f)
+                                                    ) { value, _ -> swipeOffsetY = value }
+                                                }
+                                            }
                                         }
 
                                         // If user swiped past the boundary while zoomed in, glide to next/previous photo
@@ -626,10 +660,11 @@ fun FullScreenMediaViewer(
                             contentScale = ContentScale.Fit,
                             modifier = Modifier
                                 .fillMaxSize()
+                                .clip(RoundedCornerShape(dismissCornerRadius))
                                 .graphicsLayer {
                                     if (page == pagerState.currentPage) {
-                                        scaleX = scale
-                                        scaleY = scale
+                                        scaleX = scale * dismissScale
+                                        scaleY = scale * dismissScale
                                         translationX = offset.x
                                         translationY = offset.y + swipeOffsetY
                                     }
@@ -750,7 +785,7 @@ fun FullScreenMediaViewer(
                                     color = Color.White,
                                     fontWeight = FontWeight.SemiBold,
                                     fontSize = 13.sp,
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
                                 )
                             }
                         }
@@ -880,7 +915,7 @@ fun FullScreenMediaViewer(
                             contentPadding = PaddingValues(horizontal = 24.dp),
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(bottom = 14.dp)
+                                .padding(bottom = 16.dp)
                         ) {
                             itemsIndexed(mediaList) { idx, url ->
                                 val isSelected = idx == currentIndex
@@ -950,7 +985,7 @@ fun FullScreenMediaViewer(
                         shape = RoundedCornerShape(24.dp),
                         color = Color.Black.copy(alpha = 0.75f),
                         border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.25f)),
-                        modifier = Modifier.padding(bottom = 10.dp)
+                        modifier = Modifier.padding(bottom = 12.dp)
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
@@ -975,7 +1010,7 @@ fun FullScreenMediaViewer(
                                     .pressScaleTarget()
                                     .clip(RoundedCornerShape(12.dp))
                                     .springClickable { resetZoom() }
-                                    .padding(horizontal = 10.dp, vertical = 6.dp)
+                                    .padding(horizontal = 12.dp, vertical = 6.dp)
                             ) {
                                 val percent = (scale * 100).roundToInt()
                                 Text(

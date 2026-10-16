@@ -133,7 +133,7 @@ fun ChatWatchPartySlot(blocked: Boolean) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 10.dp, vertical = 4.dp)
+                .padding(horizontal = 12.dp, vertical = 4.dp)
                 .height(DockHeight)
                 .onGloballyPositioned { c ->
                     WatchPartyUi.chatDockBounds = Rect(c.positionInRoot(), c.size.toSize())
@@ -209,7 +209,7 @@ fun WatchPartyInvite(modifier: Modifier = Modifier) {
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(start = 14.dp, end = 4.dp, top = 5.dp, bottom = 5.dp)
+                modifier = Modifier.padding(start = 16.dp, end = 4.dp, top = 4.dp, bottom = 4.dp)
             ) {
                 Text("🍿", fontSize = 16.sp)
                 Spacer(modifier = Modifier.width(8.dp))

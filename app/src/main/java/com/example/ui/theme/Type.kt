@@ -41,14 +41,24 @@ val Typography =
 // and 32 sp (bigger only for emoji and big numbers), with no half sizes. Its corners likewise use
 // 4, 8, 12, 16, 20, 24 and 28 dp, or fully round.
 
-/** The secret app's typeface (Plus Jakarta Sans). The Notes disguise keeps the phone's plain font. */
+/**
+ * The secret app's typeface: Nunito, soft and rounded (free, SIL Open Font License). The Notes
+ * disguise keeps the phone's plain font.
+ */
 val CherishFontFamily =
   FontFamily(
-    Font(R.font.plus_jakarta_sans_regular, FontWeight.Normal),
-    Font(R.font.plus_jakarta_sans_medium, FontWeight.Medium),
-    Font(R.font.plus_jakarta_sans_semibold, FontWeight.SemiBold),
-    Font(R.font.plus_jakarta_sans_bold, FontWeight.Bold),
+    Font(R.font.nunito_regular, FontWeight.Normal),
+    Font(R.font.nunito_medium, FontWeight.Medium),
+    Font(R.font.nunito_semibold, FontWeight.SemiBold),
+    Font(R.font.nunito_bold, FontWeight.Bold),
   )
+
+/**
+ * This style with every digit the same width, so a ticking time ("0:19" → "0:20") or countdown stays
+ * still instead of shifting as it changes. Nunito's digits are one width already; this keeps them
+ * steady in any other font (e.g. the phone's font on the call screen).
+ */
+val TextStyle.steadyDigits: TextStyle get() = copy(fontFeatureSettings = "tnum")
 
 /** These styles, all set in [family]. */
 fun Typography.withFontFamily(family: FontFamily): Typography =

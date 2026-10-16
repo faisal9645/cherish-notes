@@ -13,6 +13,7 @@ import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -119,6 +120,7 @@ import com.example.ui.components.CherishToast
 import com.example.ui.components.pressScaleTarget
 import com.example.ui.components.springClickable
 import androidx.compose.material.icons.automirrored.rounded.InsertDriveFile
+import com.example.ui.theme.steadyDigits
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -271,8 +273,49 @@ fun MessageComposer(
         }
     }
 
-    // Tiny bounce animation when tapping send
+    // Message Release "Paper Plane" Spring Drag & Micro-Particle Burst Physics
     val sendBounce = remember { Animatable(1f) }
+    val sendParticleProgress = remember { Animatable(0f) }
+    var activeSendParticles by remember {
+        mutableStateOf<List<SendBurstParticle>>(emptyList())
+    }
+    val waveformImplosion = remember { Animatable(1f) }
+
+    fun triggerSendLaunchPhysics(onComplete: () -> Unit) {
+        activeSendParticles = listOf(
+            SendBurstParticle(offsetX = -6f, driftX = -10f, size = 3.6f, color = Color(0xFFFF6B95)),
+            SendBurstParticle(offsetX = 3f, driftX = 7f, size = 2.8f, color = Color.White),
+            SendBurstParticle(offsetX = -2f, driftX = -4f, size = 4.0f, color = Color(0xFF60A5FA)),
+            SendBurstParticle(offsetX = 7f, driftX = 11f, size = 3.2f, color = Color(0xFFFFD1DC))
+        )
+        scope.launch {
+            // Send button tap compression (scale: 0.88f)
+            sendBounce.animateTo(0.88f, tween(45, easing = FastOutSlowInEasing))
+            // On release springs outward (scale: 1.05f -> 1.0f)
+            launch {
+                sendBounce.animateTo(1.05f, spring(stiffness = Spring.StiffnessMedium))
+                sendBounce.animateTo(1.0f, spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium))
+            }
+            sendParticleProgress.snapTo(0f)
+            sendParticleProgress.animateTo(1f, tween(480, easing = FastOutSlowInEasing))
+            activeSendParticles = emptyList()
+        }
+        onComplete()
+    }
+
+    fun triggerCancelImplosion(onComplete: () -> Unit) {
+        scope.launch {
+            waveformImplosion.animateTo(
+                targetValue = 0f,
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                    stiffness = Spring.StiffnessMedium
+                )
+            )
+            onComplete()
+            waveformImplosion.snapTo(1f)
+        }
+    }
 
     // Private chat's mic: the phone's voice typing, its words added to the message box
     val voiceTyping = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
@@ -563,7 +606,8 @@ fun MessageComposer(
                             text = "%d:%02d".format(recordingDurationSec / 60, recordingDurationSec % 60),
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface,
-                            fontSize = 14.sp
+                            fontSize = 14.sp,
+                            style = LocalTextStyle.current.steadyDigits
                         )
 
                         Spacer(modifier = Modifier.width(8.dp))
@@ -628,19 +672,28 @@ fun MessageComposer(
                             text = "%d:%02d".format(recordingDurationSec / 60, recordingDurationSec % 60),
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface,
-                            fontSize = 13.sp
+                            fontSize = 13.sp,
+                            style = LocalTextStyle.current.steadyDigits
                         )
 
                         Spacer(modifier = Modifier.width(6.dp))
 
-                        // Growing waveform (takes available space)
+                        // Growing waveform with Implosion Spring on Cancel
                         WaveformView(
                             amplitudes = recordingAmplitudes.takeLast(45),
                             progress = 1f,
                             isRecording = true,
                             activeColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.85f),
                             height = 26.dp,
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier
+                                .weight(1f)
+                                .graphicsLayer {
+                                    val imp = waveformImplosion.value
+                                    scaleX = imp
+                                    scaleY = imp
+                                    alpha = imp
+                                    translationX = (1f - imp) * (dragOffsetX - 30f)
+                                }
                         )
 
                         Spacer(modifier = Modifier.width(6.dp))
@@ -1014,12 +1067,10 @@ fun MessageComposer(
                                         }
                                     ) {
                                         if (!nothingToSend) {
-                                            scope.launch {
-                                                sendBounce.animateTo(0.78f, tween(65, easing = FastOutSlowInEasing))
-                                                sendBounce.animateTo(1f, spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium))
+                                            triggerSendLaunchPhysics {
+                                                onSendText()
+                                                closeEmojiBoard()
                                             }
-                                            onSendText()
-                                            closeEmojiBoard()
                                         } else if (isPrivateMode) {
                                             startVoiceTyping()
                                         }
@@ -1035,6 +1086,27 @@ fun MessageComposer(
                                     tint = sendTint,
                                     modifier = Modifier.size(if (isPrivateMode) 22.dp else 22.dp)
                                 )
+
+                                // Microscopic burst of 3-5 glowing particles floating up 20dp with air drag resistance
+                                if (activeSendParticles.isNotEmpty() && sendParticleProgress.value > 0f) {
+                                    val progress = sendParticleProgress.value
+                                    val floatDistancePx = with(density) { 20.dp.toPx() }
+                                    androidx.compose.foundation.Canvas(
+                                        modifier = Modifier.fillMaxSize()
+                                    ) {
+                                        activeSendParticles.forEach { particle ->
+                                            val currentY = -progress * floatDistancePx * (1f - progress * 0.32f)
+                                            val currentX = particle.offsetX + particle.driftX * progress * (1f - progress * 0.25f)
+                                            val particleAlpha = (1f - progress * progress).coerceIn(0f, 1f)
+                                            val radius = particle.size * (1f - progress * 0.35f)
+                                            drawCircle(
+                                                color = particle.color.copy(alpha = particleAlpha),
+                                                radius = radius,
+                                                center = Offset(size.width / 2f + currentX, size.height / 2f + currentY)
+                                            )
+                                        }
+                                    }
+                                }
                             }
                         }
                         "SEND_VOICE" -> {
@@ -1058,7 +1130,9 @@ fun MessageComposer(
                                     .bounceClick {
                                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                         isLockedRecording = false
-                                        onStopAndSendVoiceRecord()
+                                        triggerSendLaunchPhysics {
+                                            onStopAndSendVoiceRecord()
+                                        }
                                     }
                                     .testTag("composer_send_locked_voice_button"),
                                 contentAlignment = Alignment.Center
@@ -1167,12 +1241,17 @@ fun MessageComposer(
 
                                                 var hasLocked = false
                                                 var crossedTrashThreshold = false
+                                                // The finger's speed: a quick flick up locks, a quick flick
+                                                // left cancels, without sliding all the way
+                                                val velocityTracker = androidx.compose.ui.input.pointer.util.VelocityTracker()
+                                                val flickSpeedPx = 900.dp.toPx()
 
                                                 while (true) {
                                                     val event = awaitPointerEvent()
                                                     val change = event.changes.firstOrNull { it.id == down.id }
                                                     if (change == null || !change.pressed) break
                                                     change.consume()
+                                                    velocityTracker.addPosition(change.uptimeMillis, change.position)
 
                                                     val delta = change.position - down.position
                                                     val rawDx = delta.x.coerceAtMost(0f)
@@ -1193,7 +1272,9 @@ fun MessageComposer(
                                                         crossedTrashThreshold = false
                                                     }
 
-                                                    if (dragOffsetY < -55f && !hasLocked) {
+                                                    val flickedUp = dragOffsetY < -16f &&
+                                                        velocityTracker.calculateVelocity().y <= -flickSpeedPx
+                                                    if ((dragOffsetY < -55f || flickedUp) && !hasLocked) {
                                                         hasLocked = true
                                                         isLockedRecording = true
                                                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -1202,13 +1283,19 @@ fun MessageComposer(
                                                 }
 
                                                 if (!hasLocked && !isLockedRecording) {
-                                                    if (dragOffsetX < -82f) {
+                                                    val flickedLeft = dragOffsetX < -20f &&
+                                                        velocityTracker.calculateVelocity().x <= -flickSpeedPx
+                                                    if (dragOffsetX < -82f || flickedLeft) {
                                                         try {
                                                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                                         } catch (_: Exception) {}
-                                                        onCancelVoiceRecord()
+                                                        triggerCancelImplosion {
+                                                            onCancelVoiceRecord()
+                                                        }
                                                     } else {
-                                                        onStopAndSendVoiceRecord()
+                                                        triggerSendLaunchPhysics {
+                                                            onStopAndSendVoiceRecord()
+                                                        }
                                                     }
                                                 }
                                             }
@@ -1417,7 +1504,7 @@ private fun EmojiAttachmentPanel(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 10.dp),
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
                 horizontalArrangement = Arrangement.SpaceAround,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -1604,7 +1691,7 @@ fun ReplyPreviewCard(
         modifier = modifier
     ) {
         Row(
-            modifier = Modifier.padding(start = 10.dp, top = 4.dp, bottom = 4.dp),
+            modifier = Modifier.padding(start = 12.dp, top = 4.dp, bottom = 4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(
@@ -1693,3 +1780,10 @@ fun Modifier.bounceClick(
 
 /** Private chat's round send button: ChatGPT's blue. */
 private val PrivateSendBlue = Color(0xFF2F6BEA)
+
+data class SendBurstParticle(
+    val offsetX: Float,
+    val driftX: Float,
+    val size: Float,
+    val color: Color
+)

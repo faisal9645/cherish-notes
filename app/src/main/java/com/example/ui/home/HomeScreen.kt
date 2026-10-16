@@ -20,6 +20,9 @@ import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.AllInclusive
 import androidx.compose.material.icons.rounded.Call
 import androidx.compose.material.icons.rounded.ChatBubble
+import androidx.compose.material.icons.rounded.ChatBubbleOutline
+import androidx.compose.material.icons.rounded.FavoriteBorder
+import androidx.compose.material.icons.rounded.PersonOutline
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.CloudSync
 import androidx.compose.material.icons.rounded.Event
@@ -43,9 +46,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.LoveJarNote
 import com.example.ui.components.AvatarView
+import com.example.ui.components.FloatingTab
+import com.example.ui.components.FloatingTabBar
 import com.example.ui.chat.CheckAfterHelper
 import kotlinx.coroutines.delay
 import com.example.ui.theme.*
+import com.example.ui.components.scrollFadingEdges
 
 /** How often the battery is re-read while the Love & Us tab is on screen. */
 private const val BATTERY_REFRESH_MS = 3 * 60 * 1000L
@@ -210,88 +216,39 @@ fun HomeScreen(
             )
         },
         bottomBar = {
-            val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
-            val barBg = if (isDark) TrueDarkSurface else Color.White
-            Surface(
-                color = barBg,
-                tonalElevation = 0.dp,
-                shadowElevation = 8.dp,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(barBg)
-                        .navigationBarsPadding()
-                ) {
-                    HorizontalDivider(color = if (isDark) TrueDarkOutline else Gray200, thickness = 0.8.dp)
-                    // Streamlined 3-tab navigation focused on strictly 2-person chat, daily growth, and ironclad security
-                    NavigationBar(
-                        containerColor = barBg,
-                        tonalElevation = 0.dp,
-                        windowInsets = WindowInsets(0.dp)
-                    ) {
-                        NavigationBarItem(
-                            selected = true,
-                            onClick = { },
-                            icon = { Icon(Icons.Rounded.Favorite, contentDescription = "Us & Growth") },
-                            label = { 
-                                val streak = uiState.currentUser?.heartbeatStreak ?: 0
-                                if (streak > 0) {
-                                    Text("Love & Us 🔥$streak") 
-                                } else {
-                                    Text("Love & Us") 
-                                }
-                            },
-                            colors = NavigationBarItemDefaults.colors(
-                                selectedIconColor = MaterialTheme.colorScheme.primary,
-                                selectedTextColor = MaterialTheme.colorScheme.primary,
-                                indicatorColor = if (isDark) MaterialTheme.colorScheme.primaryContainer else MistBlue,
-                                unselectedIconColor = if (isDark) darkTone(Slate400) else Slate500,
-                                unselectedTextColor = if (isDark) darkTone(Slate400) else Slate500
-                            )
-                        )
-                        NavigationBarItem(
-                            selected = false,
-                            onClick = onNavigateToChat,
-                            icon = {
-                                BadgedBox(
-                                    badge = {
-                                        if (uiState.unreadCount > 0) {
-                                            Badge(containerColor = HeartRed) {
-                                                Text(if (uiState.unreadCount > 99) "99+" else uiState.unreadCount.toString())
-                                            }
-                                        }
-                                    }
-                                ) {
-                                    Icon(Icons.Rounded.ChatBubble, contentDescription = "Chat")
-                                }
-                            },
-                            label = { Text("Private Chat") },
-                            colors = NavigationBarItemDefaults.colors(
-                                selectedIconColor = MaterialTheme.colorScheme.primary,
-                                selectedTextColor = MaterialTheme.colorScheme.primary,
-                                indicatorColor = if (isDark) MaterialTheme.colorScheme.primaryContainer else MistBlue,
-                                unselectedIconColor = if (isDark) darkTone(Slate400) else Slate500,
-                                unselectedTextColor = if (isDark) darkTone(Slate400) else Slate500
-                            )
-                        )
-                        NavigationBarItem(
-                            selected = false,
-                            onClick = onNavigateToProfile,
-                            icon = { Icon(Icons.Rounded.Person, contentDescription = "Profile") },
-                            label = { Text("Profile") },
-                            colors = NavigationBarItemDefaults.colors(
-                                selectedIconColor = MaterialTheme.colorScheme.primary,
-                                selectedTextColor = MaterialTheme.colorScheme.primary,
-                                indicatorColor = if (isDark) MaterialTheme.colorScheme.primaryContainer else MistBlue,
-                                unselectedIconColor = if (isDark) darkTone(Slate400) else Slate500,
-                                unselectedTextColor = if (isDark) darkTone(Slate400) else Slate500
-                            )
-                        )
+            // Streamlined 3-tab navigation focused on strictly 2-person chat, daily growth, and ironclad
+            // security, in a bar floating above the bottom edge
+            val streak = uiState.currentUser?.heartbeatStreak ?: 0
+            FloatingTabBar(
+                tabs = listOf(
+                    FloatingTab(
+                        label = if (streak > 0) "Love & Us 🔥$streak" else "Love & Us",
+                        icon = Icons.Rounded.FavoriteBorder,
+                        selectedIcon = Icons.Rounded.Favorite,
+                        contentDescription = "Us & Growth"
+                    ),
+                    FloatingTab(
+                        label = "Private Chat",
+                        icon = Icons.Rounded.ChatBubbleOutline,
+                        selectedIcon = Icons.Rounded.ChatBubble,
+                        contentDescription = "Chat",
+                        badgeCount = uiState.unreadCount
+                    ),
+                    FloatingTab(
+                        label = "Profile",
+                        icon = Icons.Rounded.PersonOutline,
+                        selectedIcon = Icons.Rounded.Person,
+                        contentDescription = "Profile"
+                    )
+                ),
+                selectedIndex = 0,
+                onSelect = { index ->
+                    when (index) {
+                        1 -> onNavigateToChat()
+                        2 -> onNavigateToProfile()
                     }
                 }
-            }
+            )
         },
         // Heartbeat: at the bottom centre, big enough to reach any time
         floatingActionButton = {
@@ -306,12 +263,18 @@ fun HomeScreen(
         floatingActionButtonPosition = FabPosition.Center,
         containerColor = MaterialTheme.colorScheme.surface
     ) { paddingValues ->
+        val loveScroll = rememberScrollState()
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(paddingValues)
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp, vertical = 10.dp),
+                // The cards run on under the floating tab bar; the bar's room is inside the scroll,
+                // so the last card still scrolls clear of it
+                .padding(top = paddingValues.calculateTopPadding())
+                // They fade softly under the top bar, and toward the bottom edge round the tab bar
+                .scrollFadingEdges(loveScroll, top = 18.dp, bottom = 32.dp)
+                .verticalScroll(loveScroll)
+                .padding(horizontal = 16.dp, vertical = 12.dp)
+                .padding(bottom = paddingValues.calculateBottomPadding()),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             // A watch party is on and I'm not in it: join it right from here
@@ -542,7 +505,7 @@ fun HomeScreen(
                         Box(
                             modifier = Modifier
                                 .background(HeartRed, CircleShape)
-                                .padding(horizontal = 7.dp, vertical = 3.dp)
+                                .padding(horizontal = 8.dp, vertical = 4.dp)
                         ) {
                             Text(
                                 text = if (uiState.unreadCount > 99) "99+" else uiState.unreadCount.toString(),
@@ -659,7 +622,7 @@ fun HomeScreen(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                        .padding(horizontal = 16.dp, vertical = 16.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -726,7 +689,7 @@ fun HomeScreen(
                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                 elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
             ) {
-                Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
+                Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                         Box(
                             modifier = Modifier
@@ -787,7 +750,7 @@ fun HomeScreen(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                        .padding(horizontal = 16.dp, vertical = 16.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -989,7 +952,7 @@ private fun LoveActionButton(
         modifier = modifier.testTag(tag)
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Center
         ) {

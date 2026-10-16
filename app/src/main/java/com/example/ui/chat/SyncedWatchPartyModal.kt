@@ -483,7 +483,7 @@ fun WatchPartyYouTubePickerModal(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 10.dp, vertical = 2.dp),
+                                .padding(horizontal = 12.dp, vertical = 2.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Icon(
@@ -606,7 +606,7 @@ fun WatchPartyYouTubePickerModal(
                                         }
                                     ) {
                                         Row(
-                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
                                             Icon(Icons.Rounded.ContentPaste, contentDescription = null, tint = accent, modifier = Modifier.size(13.dp))
@@ -631,7 +631,7 @@ fun WatchPartyYouTubePickerModal(
                                             fontSize = 11.sp,
                                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                                             color = if (isSelected) accent else ink,
-                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
                                         )
                                     }
                                 }
@@ -694,7 +694,7 @@ fun WatchPartyYouTubePickerModal(
                                                     .clickable { onStart(v.videoId, v.title) }
                                             ) {
                                                 Row(
-                                                    modifier = Modifier.padding(10.dp),
+                                                    modifier = Modifier.padding(12.dp),
                                                     verticalAlignment = Alignment.CenterVertically
                                                 ) {
                                                     AsyncImage(
@@ -748,7 +748,7 @@ fun WatchPartyYouTubePickerModal(
                                                 .clickable { onStart(item.videoId, item.title) }
                                         ) {
                                             Row(
-                                                modifier = Modifier.padding(10.dp),
+                                                modifier = Modifier.padding(12.dp),
                                                 verticalAlignment = Alignment.CenterVertically
                                             ) {
                                                 Box(
@@ -1063,7 +1063,7 @@ fun WatchPartyYouTubePickerModal(
                                         .padding(bottom = 16.dp)
                                 ) {
                                     Row(
-                                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
+                                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         Icon(Icons.Rounded.TouchApp, contentDescription = null, tint = accent, modifier = Modifier.size(14.dp))

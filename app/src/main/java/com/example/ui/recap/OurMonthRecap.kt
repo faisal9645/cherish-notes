@@ -160,7 +160,8 @@ object OurMonthRecap {
                     val urls = message.getAllMediaUrls()
                     photos += urls.size
                     val liked = (if (message.isStarred) 3 else 0) + message.reactions.size
-                    urls.forEach { photoPreviews += message.thumbnailFor(it) to liked }
+                    // The full photo: the collage shows them big (the small thumbnails are for gallery tiles)
+                    urls.forEach { photoPreviews += it to liked }
                 }
                 type == MessageType.VIDEO || message.isCircularVideoNote() -> videos++
                 type == MessageType.AUDIO -> voiceNotes++

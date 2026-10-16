@@ -217,10 +217,10 @@ fun MessageBubble(
         onLongClick()
     }
 
-    // Swipe-to-reply interactive state with density-aware threshold
+    // Swipe-to-reply interactive state with density-aware threshold (48dp detent threshold)
     val density = androidx.compose.ui.platform.LocalDensity.current
-    val thresholdPx = remember(density) { with(density) { 42.dp.toPx() } }
-    val maxDragPx = remember(density) { with(density) { 76.dp.toPx() } }
+    val thresholdPx = remember(density) { with(density) { 48.dp.toPx() } }
+    val maxDragPx = remember(density) { with(density) { 88.dp.toPx() } }
 
     val swipeOffset = remember { Animatable(0f) }
 
@@ -272,7 +272,7 @@ fun MessageBubble(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 6.dp, vertical = 2.5.dp),
+            .padding(horizontal = 6.dp, vertical = 2.dp),
         contentAlignment = if (isFromMe) Alignment.CenterEnd else Alignment.CenterStart
     ) {
         // Stationary background reply indicator on the left (revealed when swiping right on ANY message)
@@ -312,38 +312,74 @@ fun MessageBubble(
                 modifier = (if (isYouTube) Modifier.fillMaxWidth() else Modifier)
                     .pointerInput(message.id, onSwipeToReply) {
                         if (onSwipeToReply != null) {
+                            var accumulatedDragX = 0f
+                            // Quadratic resistance: offset = x / (1 + |x| * k)
+                            val quadraticK = 0.0035f
+                            // The finger's speed, from its own path (the bubble under it moves)
+                            val velocityTracker = androidx.compose.ui.input.pointer.util.VelocityTracker()
+                            val flickSpeedPx = 900.dp.toPx()
+                            val flickMinPx = 14.dp.toPx()
                             detectHorizontalDragGestures(
                                 onDragStart = {
+                                    accumulatedDragX = 0f
+                                    velocityTracker.resetTracking()
                                     hasTriggeredThresholdHaptic = false
                                 },
                                 onDragEnd = {
-                                    if (abs(swipeOffset.value) >= thresholdPx) {
+                                    val offset = swipeOffset.value
+                                    val velocity = velocityTracker.calculateVelocity().x
+                                    // A quick flick outwards replies too, even short of the mark
+                                    val flicked = abs(velocity) >= flickSpeedPx && abs(offset) >= flickMinPx &&
+                                        kotlin.math.sign(velocity) == kotlin.math.sign(offset)
+                                    if (abs(offset) >= thresholdPx || flicked) {
                                         try {
-                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
                                         } catch (_: Exception) {}
                                         onSwipeToReply()
                                     }
                                     hasTriggeredThresholdHaptic = false
+                                    // It springs back carrying the finger's speed (eased by the same
+                                    // resistance the drag had), so letting go is one continuous motion
+                                    val ease = 1f / (1f + abs(accumulatedDragX) * quadraticK)
+                                    accumulatedDragX = 0f
                                     scope.launch {
-                                        swipeOffset.animateTo(0f, spring(dampingRatio = Spring.DampingRatioMediumBouncy))
+                                        swipeOffset.animateTo(
+                                            targetValue = 0f,
+                                            animationSpec = spring(
+                                                stiffness = Spring.StiffnessMediumLow,
+                                                dampingRatio = Spring.DampingRatioMediumBouncy
+                                            ),
+                                            initialVelocity = velocity * ease * ease
+                                        )
                                     }
                                 },
                                 onDragCancel = {
                                     hasTriggeredThresholdHaptic = false
+                                    accumulatedDragX = 0f
                                     scope.launch {
-                                        swipeOffset.animateTo(0f, spring(dampingRatio = Spring.DampingRatioMediumBouncy))
+                                        swipeOffset.animateTo(
+                                            targetValue = 0f,
+                                            animationSpec = spring(
+                                                stiffness = Spring.StiffnessMediumLow,
+                                                dampingRatio = Spring.DampingRatioMediumBouncy
+                                            )
+                                        )
                                     }
                                 },
                                 onHorizontalDrag = { change, dragAmount ->
                                     change.consume()
-                                    val current = swipeOffset.value
-                                    // Swipe in both left and right directions allowed on any message
-                                    val newTarget = (current + dragAmount).coerceIn(-maxDragPx, maxDragPx)
-                                    
+                                    accumulatedDragX += dragAmount
+                                    velocityTracker.addPosition(change.uptimeMillis, androidx.compose.ui.geometry.Offset(accumulatedDragX, 0f))
+                                    val absX = abs(accumulatedDragX)
+                                    val signX = kotlin.math.sign(accumulatedDragX)
+                                    val dampedOffset = (absX / (1f + absX * quadraticK)) * signX
+                                    val newTarget = dampedOffset.coerceIn(-maxDragPx, maxDragPx)
+
                                     if (abs(newTarget) >= thresholdPx && !hasTriggeredThresholdHaptic) {
                                         hasTriggeredThresholdHaptic = true
                                         try {
-                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            // Crisp tactile tick right when detent threshold is breached
+                                            haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
                                         } catch (_: Exception) {}
                                     } else if (abs(newTarget) < thresholdPx) {
                                         hasTriggeredThresholdHaptic = false
@@ -445,7 +481,7 @@ fun MessageBubble(
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                         ) {
                             if (message.isPinned) {
                                 Icon(
@@ -605,8 +641,8 @@ fun MessageBubble(
                             else PaddingValues(horizontal = 4.dp, vertical = 4.dp)
                         }
                         else if (isPrivateMode && !isFromMe) PaddingValues(start = 2.dp, end = 2.dp, top = 2.dp, bottom = 4.dp)
-                        else if (isPrivateMode) PaddingValues(horizontal = 17.dp, vertical = 11.dp)
-                        else PaddingValues(horizontal = 12.dp, vertical = 7.dp)
+                        else if (isPrivateMode) PaddingValues(horizontal = 17.dp, vertical = 12.dp)
+                        else PaddingValues(horizontal = 12.dp, vertical = 8.dp)
                     )
             ) {
                 // Reply Quote Preview
@@ -685,7 +721,7 @@ fun MessageBubble(
                                             .padding(6.dp)
                                     ) {
                                         Row(
-                                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.5.dp),
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
                                             if (message.isPinned) {
@@ -693,7 +729,7 @@ fun MessageBubble(
                                                     imageVector = Icons.Rounded.PushPin,
                                                     contentDescription = "Pinned",
                                                     tint = Color.White.copy(alpha = 0.9f),
-                                                    modifier = Modifier.size(11.dp).padding(end = 3.dp)
+                                                    modifier = Modifier.size(11.dp).padding(end = 4.dp)
                                                 )
                                             }
                                             if (message.isStarred) {
@@ -701,7 +737,7 @@ fun MessageBubble(
                                                     imageVector = Icons.Rounded.Star,
                                                     contentDescription = "Starred",
                                                     tint = GoldMilestone,
-                                                    modifier = Modifier.size(11.dp).padding(end = 3.dp)
+                                                    modifier = Modifier.size(11.dp).padding(end = 4.dp)
                                                 )
                                             }
                                             Text(
@@ -784,7 +820,7 @@ fun MessageBubble(
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(horizontal = 10.dp, vertical = 10.dp),
+                                    .padding(horizontal = 12.dp, vertical = 12.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Box(
@@ -1246,7 +1282,7 @@ fun MessageBubble(
                                 .padding(vertical = 2.dp)
                         ) {
                             Row(
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.Center
                             ) {
@@ -1480,7 +1516,7 @@ fun MessageBubble(
             ) {
                 Row(
                     modifier = Modifier
-                        .padding(horizontal = 8.dp, vertical = 2.5.dp)
+                        .padding(horizontal = 8.dp, vertical = 2.dp)
                         .animateContentSize(spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessMediumLow)),
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                     verticalAlignment = Alignment.CenterVertically
@@ -1601,12 +1637,21 @@ private fun ReplyIndicator(
         else -> RoseGoldPrimary.copy(alpha = 0.5f)
     }
 
+    val snapScale by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = if (isReached) 1.18f else 1.0f,
+        animationSpec = androidx.compose.animation.core.spring(
+            dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
+            stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow
+        ),
+        label = "reply_snap"
+    )
+
     Box(
         modifier = modifier
             .size(36.dp)
             .graphicsLayer {
                 val p = progress()
-                val scale = (0.55f + (p * 0.45f)).coerceIn(0.55f, if (isReached) 1.15f else 1.0f)
+                val scale = ((0.55f + (p * 0.45f)).coerceIn(0.55f, 1.0f)) * snapScale
                 scaleX = scale
                 scaleY = scale
                 this.alpha = p.coerceIn(0.2f, 1f)
@@ -1656,7 +1701,7 @@ private fun PrivateMessageActions(
     Row(
         // The first icon lines up with the text, as in ChatGPT
         modifier = Modifier
-            .padding(top = 10.dp, bottom = 6.dp)
+            .padding(top = 12.dp, bottom = 6.dp)
             .offset(x = (-8).dp),
         verticalAlignment = Alignment.CenterVertically
     ) {

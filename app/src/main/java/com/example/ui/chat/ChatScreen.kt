@@ -37,6 +37,7 @@ import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.draw.shadow
+import com.example.ui.components.fluidSheetInertia
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.Logout
@@ -113,6 +114,7 @@ import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
@@ -142,6 +144,8 @@ import com.example.ui.components.CherishTonalButton
 import com.example.ui.components.pressScaleTarget
 import com.example.ui.components.springClickable
 import androidx.compose.material.icons.automirrored.rounded.InsertDriveFile
+import com.example.ui.components.softShadow
+import com.example.ui.components.chatTopFadingEdge
 
 @Stable
 class ComposerState(initialText: String = "") {
@@ -480,7 +484,9 @@ fun ChatScreen(
         val sentByMe = state.currentUser?.id != null &&
             state.messages.lastOrNull { !it.isDeleted }?.senderId == state.currentUser.id
         if (!sentByMe && listState.firstVisibleItemIndex > 2) return@LaunchedEffect
-        listState.scrollToItem(0, scrollOffset = 0)
+        // The older messages glide up to make room (a quick animated scroll, not a jump), while the
+        // new one lands with its spring
+        listState.animateScrollToItem(0, scrollOffset = 0)
         delay(40)
         listState.scrollToItem(0, scrollOffset = 0)
         delay(120)
@@ -1634,7 +1640,7 @@ fun ChatScreen(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 14.dp, vertical = 9.dp),
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
@@ -1798,12 +1804,25 @@ fun ChatScreen(
                         }
                     }
                 }
+                // The messages' springs (the iMessage feel, with a slight jelly squash at speed): they
+                // trail a hair behind while scrolling and settle. Read only while drawing, so scrolling
+                // never recomposes the chat
+                val listPhysics = rememberChatListPhysics()
+
                 LazyColumn(
                     state = listState,
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxWidth()
+                        // Older messages fade softly under the header instead of a hard cut
+                        .chatTopFadingEdge(listState)
+                        // Pull the chat down and the keyboard follows the finger and tucks away
+                        // (Android 11+); it comes back up the same way
+                        .imeNestedScroll()
+                        .nestedScroll(listPhysics.nestedScroll)
+                        .chatListTouchAnchor(listPhysics)
                         .onSizeChanged { newSize ->
+                            listPhysics.viewportHeight = newSize.height.toFloat()
                             val prevHeight = lastLazyColumnHeight
                             lastLazyColumnHeight = newSize.height
                             if (prevHeight > 0 && prevHeight != newSize.height && reversedChatRowItems.isNotEmpty()) {
@@ -1872,29 +1891,46 @@ fun ChatScreen(
                                 message.timestamp >= chatOpenedAt - 2_000L &&
                                 message.id !in initialMessageIds && landedMessageIds.add(message.id)
                         }
-                        ChatMessageRow(
-                            message = message,
-                            isFromMe = isFromMe,
-                            isFirstOfDay = item.isFirstOfDay,
-                            dateSeparatorText = item.dateSeparatorText,
-                            isOldestShown = item.isOldestShown,
-                            isFreshArrival = isFreshArrival,
-                            isPrivate = uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE,
-                            isDark = isDark,
-                            isHighlighted = highlightedMessageId == message.id,
-                            isSelectionMode = isSelectionMode,
-                            isSelected = isSelectionMode && message.id in selectedItemIds,
-                            isPlayingAudio = currentPlayingId == message.id && isAudioPlaying,
-                            audioProgress = { if (currentPlayingIdState.value == message.id) audioProgressState.value else 0f },
-                            gallerySize = uiState.gallerySize,
-                            voicePlaybackSpeed = uiState.voicePlaybackSpeed,
-                            senderPhotoUrl = if (isFromMe) uiState.currentUser?.photoUrl else uiState.partnerUser?.photoUrl,
-                            actions = rowActions,
-                            isLastReadMessage = (message.id == lastPartnerReadMessageId),
-                            partnerPhotoUrl = uiState.partnerUser?.photoUrl,
-                            partnerName = partnerName,
-                            isTodayChatOnly = isTodayChatOnly
-                        )
+                        Box(
+                            modifier = Modifier
+                                // A deleted message fades out and its neighbours glide together to
+                                // close the gap (a new one lands with its own spring, see landing)
+                                .animateItem(
+                                    fadeInSpec = null,
+                                    placementSpec = spring(
+                                        dampingRatio = 0.85f,
+                                        stiffness = Spring.StiffnessMediumLow,
+                                        visibilityThreshold = IntOffset.VisibilityThreshold
+                                    ),
+                                    fadeOutSpec = tween(180)
+                                )
+                                .fillMaxWidth()
+                                .chatRowSpring(listPhysics)
+                        ) {
+                            ChatMessageRow(
+                                message = message,
+                                isFromMe = isFromMe,
+                                isFirstOfDay = item.isFirstOfDay,
+                                dateSeparatorText = item.dateSeparatorText,
+                                isOldestShown = item.isOldestShown,
+                                isFreshArrival = isFreshArrival,
+                                isPrivate = uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE,
+                                isDark = isDark,
+                                isHighlighted = highlightedMessageId == message.id,
+                                isSelectionMode = isSelectionMode,
+                                isSelected = isSelectionMode && message.id in selectedItemIds,
+                                isPlayingAudio = currentPlayingId == message.id && isAudioPlaying,
+                                audioProgress = { if (currentPlayingIdState.value == message.id) audioProgressState.value else 0f },
+                                gallerySize = uiState.gallerySize,
+                                voicePlaybackSpeed = uiState.voicePlaybackSpeed,
+                                senderPhotoUrl = if (isFromMe) uiState.currentUser?.photoUrl else uiState.partnerUser?.photoUrl,
+                                actions = rowActions,
+                                isLastReadMessage = (message.id == lastPartnerReadMessageId),
+                                partnerPhotoUrl = uiState.partnerUser?.photoUrl,
+                                partnerName = partnerName,
+                                isTodayChatOnly = isTodayChatOnly
+                            )
+                        }
                     }
 
                     // 1. Loading older messages indicator (shown at top of list while paginating)
@@ -1903,7 +1939,7 @@ fun ChatScreen(
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(vertical = 14.dp),
+                                    .padding(vertical = 16.dp),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Surface(
@@ -2065,7 +2101,7 @@ fun ChatScreen(
                 exit = fadeOut(tween(200)) + scaleOut(tween(200), targetScale = 0.85f),
                 modifier = Modifier
                     .align(Alignment.TopCenter)
-                    .padding(top = 10.dp)
+                    .padding(top = 12.dp)
                     .offset { IntOffset(0, unreadJumpDrop.roundToPx()) }
             ) {
                 val isPrivate = uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE
@@ -2092,7 +2128,7 @@ fun ChatScreen(
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(start = 10.dp, end = 14.dp, top = 7.dp, bottom = 7.dp)
+                        modifier = Modifier.padding(start = 12.dp, end = 16.dp, top = 8.dp, bottom = 8.dp)
                     ) {
                         Icon(
                             imageVector = if (unreadJumpUp[0]) Icons.Rounded.KeyboardArrowUp else Icons.Rounded.KeyboardArrowDown,
@@ -2267,7 +2303,7 @@ fun ChatScreen(
                     .align(Alignment.BottomStart)
                     .widthIn(max = 600.dp)
                     .fillMaxWidth()
-                    .padding(start = 12.dp, end = 70.dp, bottom = 6.dp)
+                    .padding(start = 12.dp, end = 72.dp, bottom = 6.dp)
                     .onSizeChanged { bottomOverlayHeightPx = it.height }
             ) {
                 val isPrivate = uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE
@@ -2329,7 +2365,7 @@ fun ChatScreen(
                 exit = fadeOut() + slideOutVertically(targetOffsetY = { -it }),
                 modifier = Modifier
                     .align(Alignment.TopCenter)
-                    .padding(top = 10.dp)
+                    .padding(top = 12.dp)
             ) {
                 Surface(
                     shape = RoundedCornerShape(20.dp),
@@ -2656,6 +2692,7 @@ fun ChatScreen(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .fluidSheetInertia()
                     .padding(horizontal = 24.dp)
                     .padding(bottom = 36.dp, top = 8.dp)
             ) {
@@ -3204,13 +3241,13 @@ private fun GoodMorningGreeting(
     ) {
         Box(
             modifier = Modifier
-                .padding(horizontal = 30.dp)
+                .padding(horizontal = 32.dp)
                 .fillMaxWidth()
                 .graphicsLayer {
                     scaleX = cardIn.value
                     scaleY = cardIn.value
                 }
-                .shadow(20.dp, RoundedCornerShape(28.dp))
+                .softShadow(20.dp, RoundedCornerShape(28.dp))
                 .clip(RoundedCornerShape(28.dp))
                 .background(
                     Brush.verticalGradient(
@@ -3222,7 +3259,7 @@ private fun GoodMorningGreeting(
         ) {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.padding(horizontal = 24.dp, vertical = 26.dp)
+                modifier = Modifier.padding(horizontal = 24.dp, vertical = 28.dp)
             ) {
                 // The sun rising behind a soft glow
                 Box(modifier = Modifier.size(110.dp), contentAlignment = Alignment.Center) {
@@ -3291,7 +3328,7 @@ private fun GoodMorningGreeting(
                         fontSize = 14.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = Color(0xFF5A3015),
-                        modifier = Modifier.padding(horizontal = 22.dp, vertical = 9.dp)
+                        modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp)
                     )
                 }
                 Spacer(modifier = Modifier.height(8.dp))
@@ -3628,7 +3665,7 @@ private fun ChatMessageRow(
                     SelectionCheckBadge(
                         isSelected = isSelected,
                         accentColor = selectionAccent,
-                        modifier = Modifier.padding(start = 14.dp)
+                        modifier = Modifier.padding(start = 16.dp)
                     )
                 }
                 Box(
@@ -3708,7 +3745,7 @@ fun PinnedMessageBanner(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 8.dp),
+                .padding(horizontal = 16.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(
@@ -3777,7 +3814,7 @@ fun MutualConsentDeletionBanner(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(14.dp)
+                .padding(16.dp)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
@@ -4044,6 +4081,7 @@ private fun ChatPartnerHeaderContent(
                 name = partnerName,
                 size = avatarSize,
                 isOnline = isPartnerOnline,
+                isTyping = presence.isTyping || presence.isRecordingAudio,
                 showOnlineBadge = !partnerHasCheckAfter
             )
         }
@@ -4246,7 +4284,7 @@ private fun PartnerTypingBubble(
         Row(
             verticalAlignment = Alignment.Bottom,
             modifier = Modifier
-                .padding(start = 22.dp, end = 16.dp, top = 2.dp, bottom = 8.dp)
+                .padding(start = 24.dp, end = 16.dp, top = 2.dp, bottom = 8.dp)
                 .testTag("partner_typing_bubble")
         ) {
             AvatarView(
@@ -4263,7 +4301,7 @@ private fun PartnerTypingBubble(
                 shadowElevation = 0.8.dp
             ) {
                 Box(
-                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 11.dp),
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     if (isRecording) {
@@ -4384,7 +4422,7 @@ fun DateSeparatorBadge(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 24.dp, vertical = 10.dp),
+            .padding(horizontal = 24.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Center
     ) {
@@ -4409,7 +4447,7 @@ fun DateSeparatorBadge(
             dateText = dateText,
             isPrivateMode = isPrivateMode,
             isDark = isDark,
-            modifier = Modifier.padding(horizontal = 10.dp)
+            modifier = Modifier.padding(horizontal = 12.dp)
         )
 
         Box(
@@ -4495,7 +4533,7 @@ fun StrictlyTwoPersonBanner(
             )
         ) {
             Row(
-                modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.Center
             ) {
@@ -4675,7 +4713,7 @@ fun StrictlyPrivateChatBeginningBanner(
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.5.dp)
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
                         ) {
                             Text(
                                 text = "🔒 End-to-End Private Space",

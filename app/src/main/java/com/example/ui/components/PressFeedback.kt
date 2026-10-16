@@ -65,15 +65,19 @@ fun Modifier.pressScaleTarget(pressedScale: Float = CARD_PRESSED_SCALE): Modifie
 /**
  * `clickable` with a tap that feels physical: the element shrinks a touch while held and springs
  * back, with the usual ripple. With a [pressScaleTarget] earlier in the chain, that whole card
- * shrinks; without one, this element does.
+ * shrinks; without one, this element does. [tick] adds a light haptic tick, for choosing an option
+ * in a picker (only while "Haptic Feedback" is on in Settings).
  */
 @OptIn(ExperimentalComposeUiApi::class)
 fun Modifier.springClickable(
     enabled: Boolean = true,
     onClickLabel: String? = null,
     role: Role? = null,
+    tick: Boolean = false,
     onClick: () -> Unit
 ): Modifier = composed {
+    val haptics = rememberControlHaptics()
+    val click: () -> Unit = if (tick) ({ haptics.tick(); onClick() }) else onClick
     val interactionSource = remember { MutableInteractionSource() }
     var target by remember { mutableStateOf<MutableState<Boolean>?>(null) }
     val isPressed by interactionSource.collectIsPressedAsState()
@@ -98,7 +102,7 @@ fun Modifier.springClickable(
             enabled = enabled,
             onClickLabel = onClickLabel,
             role = role,
-            onClick = onClick
+            onClick = click
         )
 }
 
