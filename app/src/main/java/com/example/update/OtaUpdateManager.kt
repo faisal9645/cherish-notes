@@ -72,7 +72,10 @@ class OtaUpdateManager private constructor(private val appContext: Context) {
             fetchFromApi()?.let { found += it }
             if (found.none { it.hasUpdate }) fetchFromFirestore()?.let { found += it }
             if (found.none { it.hasUpdate }) fetchFromWebRedirect()?.let { found += it }
-            val info = found.maxByOrNull { it.latestVersionCode }
+
+            // Prioritize sources that actually report a newer update available
+            val info = found.filter { it.hasUpdate }.maxByOrNull { it.latestVersionCode }
+                ?: found.maxByOrNull { it.latestVersionCode }
 
             if (info != null) {
                 _latestUpdateInfo.value = info
@@ -94,8 +97,8 @@ class OtaUpdateManager private constructor(private val appContext: Context) {
     }
 
     /**
-     * version.json from GitHub's own copy (current within minutes) and a CDN copy (can be hours
-     * old), the newest of the two; the other mirrors only when those can't be reached.
+     * version.json from GitHub raw and CDN mirrors. Compares all reachable mirrors
+     * and selects the newest version code found to avoid stale CDN responses.
      */
     private fun fetchFromVersionJson(): UpdateInfo? {
         val mirrors = listOf(
@@ -105,12 +108,11 @@ class OtaUpdateManager private constructor(private val appContext: Context) {
             "https://cdn.statically.io/gh/faisal9645/cherish-notes/main/version.json"
         )
         var best: UpdateInfo? = null
-        var answers = 0
         for (mirrorUrl in mirrors) {
-            if (answers >= 2) break
             val info = fetchVersionJsonFrom(mirrorUrl) ?: continue
-            answers++
-            if (best == null || info.latestVersionCode > best.latestVersionCode) best = info
+            if (best == null || info.latestVersionCode > best.latestVersionCode) {
+                best = info
+            }
         }
         return best
     }
@@ -123,7 +125,7 @@ class OtaUpdateManager private constructor(private val appContext: Context) {
             conn = (url.openConnection() as HttpURLConnection).apply {
                 requestMethod = "GET"
                 setRequestProperty("User-Agent", "CherishApp/${BuildConfig.VERSION_NAME}")
-                setRequestProperty("Cache-Control", "no-cache")
+                setRequestProperty("Cache-Control", "no-cache, no-store, must-revalidate")
                 setRequestProperty("Pragma", "no-cache")
                 connectTimeout = 7000
                 readTimeout = 7000
@@ -253,7 +255,9 @@ class OtaUpdateManager private constructor(private val appContext: Context) {
             }
 
             if (apkDownloadUrl.isBlank() && tagName.isNotBlank()) {
-                apkDownloadUrl = "https://github.com/faisal9645/cherish-notes/releases/download/$tagName/cherish-notes-$tagName.apk"
+                if (remoteVersionCode > 0) {
+                    apkDownloadUrl = "https://github.com/faisal9645/cherish-notes/releases/download/$tagName/app_update_$remoteVersionCode.apk"
+                }
             }
 
             val currentCode = BuildConfig.VERSION_CODE
@@ -357,7 +361,7 @@ class OtaUpdateManager private constructor(private val appContext: Context) {
             lower.contains("incomplete") || lower.contains("corrupted") ->
                 "Downloaded file was incomplete. Tap Download & Install to retry."
             lower.contains("code 404") || lower.contains("404") ->
-                "Update package not found on server. Please try again later."
+                "Update package is being prepared on the server. Please wait a minute and tap retry."
             lower.contains("no space") || lower.contains("enospc") ->
                 "Not enough storage space to download update."
             else -> raw
@@ -381,10 +385,15 @@ class OtaUpdateManager private constructor(private val appContext: Context) {
         var responseCode = conn.responseCode
         var redirectCount = 0
 
-        while (responseCode in arrayOf(HttpURLConnection.HTTP_MOVED_PERM, HttpURLConnection.HTTP_MOVED_TEMP, 307, 308) && redirectCount < 5) {
-            val newUrl = conn.getHeaderField("Location") ?: break
+        while (responseCode in arrayOf(HttpURLConnection.HTTP_MOVED_PERM, HttpURLConnection.HTTP_MOVED_TEMP, 303, 307, 308) && redirectCount < 7) {
+            val location = conn.getHeaderField("Location") ?: break
+            val resolvedUrl = try {
+                URL(URL(currentUrl), location).toString()
+            } catch (_: Exception) {
+                location
+            }
             conn.disconnect()
-            currentUrl = newUrl
+            currentUrl = resolvedUrl
             conn = openConnectionWithHeaders(currentUrl)
             responseCode = conn.responseCode
             redirectCount++
@@ -406,11 +415,9 @@ class OtaUpdateManager private constructor(private val appContext: Context) {
         if (apkFile.exists()) {
             val archive = appContext.packageManager.getPackageArchiveInfo(apkFile.absolutePath, 0)
             if (archive != null && archive.packageName == appContext.packageName) {
-                if (info.assetSize <= 0L || apkFile.length() == info.assetSize) {
-                    _updateState.value = UpdateState.ReadyToInstall(apkFile)
-                    withContext(Dispatchers.Main) { installApk(context, apkFile) }
-                    return@withContext
-                }
+                _updateState.value = UpdateState.ReadyToInstall(apkFile)
+                withContext(Dispatchers.Main) { installApk(context, apkFile) }
+                return@withContext
             }
             apkFile.delete()
         }
@@ -424,19 +431,31 @@ class OtaUpdateManager private constructor(private val appContext: Context) {
                 if (partFile.exists()) partFile.delete()
 
                 val baseTagUrl = info.downloadUrl.substringBeforeLast("/")
-                val directUrls = listOfNotNull(
-                    info.downloadUrl.takeIf { it.isNotBlank() },
-                    if (info.latestVersionCode > 0) "$baseTagUrl/app_update_${info.latestVersionCode}.apk" else null,
-                    "$baseTagUrl/app-release.apk",
-                    if (info.latestVersionName.isNotBlank() && info.latestVersionCode > 0)
-                        "$baseTagUrl/cherish-notes-v${info.latestVersionName}-${info.latestVersionCode}.apk" else null,
-                    if (info.latestVersionName.isNotBlank())
-                        "$baseTagUrl/cherish-notes-v${info.latestVersionName}.apk" else null
-                ).distinct()
+                val vCode = info.latestVersionCode
+                val vName = info.latestVersionName.removePrefix("v").removePrefix("V")
+                val cleanTag = if (vCode > 0 && vName.isNotBlank()) "v$vName-$vCode" else "v$vName"
+
+                val directUrls = mutableListOf<String>()
+                if (info.downloadUrl.isNotBlank()) {
+                    directUrls.add(info.downloadUrl)
+                }
+                if (vCode > 0) {
+                    directUrls.add("$baseTagUrl/app_update_$vCode.apk")
+                    directUrls.add("https://github.com/faisal9645/cherish-notes/releases/download/$cleanTag/app_update_$vCode.apk")
+                    directUrls.add("https://github.com/faisal9645/cherish-notes/releases/download/v$vName/app_update_$vCode.apk")
+                    directUrls.add("https://github.com/faisal9645/cherish-notes/releases/latest/download/app_update_$vCode.apk")
+                }
+                directUrls.add("$baseTagUrl/app-release.apk")
+                if (vName.isNotBlank() && vCode > 0) {
+                    directUrls.add("$baseTagUrl/cherish-notes-v$vName-$vCode.apk")
+                }
+                if (vName.isNotBlank()) {
+                    directUrls.add("$baseTagUrl/cherish-notes-v$vName.apk")
+                }
 
                 // Multi-CDN mirrors to guarantee downloads even if GitHub domain has DNS issues
                 val candidateUrls = mutableListOf<String>()
-                for (u in directUrls) {
+                for (u in directUrls.distinct()) {
                     candidateUrls.add(u)
                     if (u.startsWith("https://github.com/")) {
                         candidateUrls.add("https://ghproxy.net/$u")
@@ -687,8 +706,10 @@ class OtaUpdateManager private constructor(private val appContext: Context) {
     }
 
     private fun isSemanticVersionNewer(remote: String, current: String): Boolean {
-        val r = remote.split(".").mapNotNull { it.toIntOrNull() }
-        val c = current.split(".").mapNotNull { it.toIntOrNull() }
+        val cleanRemote = remote.trim().removePrefix("v").removePrefix("V")
+        val cleanCurrent = current.trim().removePrefix("v").removePrefix("V")
+        val r = cleanRemote.split(".").mapNotNull { it.takeWhile { ch -> ch.isDigit() }.toIntOrNull() }
+        val c = cleanCurrent.split(".").mapNotNull { it.takeWhile { ch -> ch.isDigit() }.toIntOrNull() }
         for (i in 0 until maxOf(r.size, c.size)) {
             val rVal = r.getOrNull(i) ?: 0
             val cVal = c.getOrNull(i) ?: 0

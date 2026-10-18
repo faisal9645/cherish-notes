@@ -91,3 +91,6 @@ jobs:
               --notes "Automated OTA update for version $VERSION_NAME (Build $VERSION_CODE)" \
               "$UPDATE_APK"
           fi
+
+          echo "Purging jsdelivr cache for version.json..."
+          curl -s "https://purge.jsdelivr.net/gh/${{ github.repository }}@main/version.json" || true

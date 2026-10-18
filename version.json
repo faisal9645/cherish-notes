@@ -1,9 +1,9 @@
 {
-  "versionCode": 182,
-  "versionName": "1.8.10",
-  "tagName": "v1.8.10-182",
-  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.8.10-182/app_update_182.apk",
-  "assetSize": 18375348,
-  "releaseNotes": "Notes v1.8.10 (Build 182):\n• Fixed OTA update package download on update server\n• Smooth full-screen media photo zoom and focal-point panning\n• Username updates preserve existing couple data, messages, and calls\n• Clean couple passcode display without COUPLE_ prefix\n• Real-time partner username synchronization for already logged-in partners\n• Fixed duplicate 'notes.notes.' in notification headers\n• User privacy settings and options retained across version updates",
-  "releaseDate": "2026-10-18T18:00:00Z"
+  "versionCode": 183,
+  "versionName": "1.8.11",
+  "tagName": "v1.8.11-183",
+  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.8.11-183/app_update_183.apk",
+  "assetSize": 18397608,
+  "releaseNotes": "Notes v1.8.11 (Build 183):\n• Fixed OTA update package download on server with multi-mirror fallbacks\n• Fixed update checking and version synchronization across CDN mirrors\n• Instant cache-purge on release publishing\n• Bug fixes and stability improvements",
+  "releaseDate": "2026-10-18T18:18:00Z"
 }
