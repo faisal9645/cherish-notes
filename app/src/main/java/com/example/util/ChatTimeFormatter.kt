@@ -133,6 +133,21 @@ object ChatTimeFormatter {
     }
 
     /**
+     * When a photo was sent, for the photo viewer: "Today at 6:15 PM", "Yesterday at 9:41 AM",
+     * "Oct 4 at 8:30 PM" ("Oct 4, 2025 at 8:30 PM" in another year). Its day follows the 6 AM
+     * rollover, like the chat's date headers.
+     */
+    fun formatDayAndTime(rawTimestamp: Long): String {
+        if (rawTimestamp <= 0L) return ""
+        val day = when {
+            isToday(rawTimestamp) -> "Today"
+            isYesterday(rawTimestamp) -> "Yesterday"
+            else -> formatConversationTime(rawTimestamp)
+        }
+        return "$day at ${formatMessageTime(rawTimestamp)}"
+    }
+
+    /**
      * Formats date separator header for chat message history based on 6 AM rollover.
      */
     fun formatDateSeparator(rawTimestamp: Long): String {

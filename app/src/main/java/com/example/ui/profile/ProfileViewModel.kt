@@ -35,6 +35,9 @@ data class ProfileUiState(
     val showPreviousChats: Boolean = false,
     val themeMode: Int = 0,
     val chatBgTheme: Int = 0,
+    // The chat's message text size (sp) and font (see ChatFont)
+    val chatTextSize: Int = com.example.security.SecurityPreferences.DEFAULT_CHAT_TEXT_SIZE,
+    val chatFont: Int = 0,
     val chatExperienceMode: com.example.ui.chat.ChatExperienceMode = com.example.ui.chat.ChatExperienceMode.NORMAL,
     val isSideEmergencyExitEnabled: Boolean = true,
     val sideEmergencyExitOpacity: Float = 0.35f,
@@ -164,6 +167,8 @@ class ProfileViewModel(
             isCheckAfterReminderEnabled = securityPreferences.isCheckAfterReminderEnabled(),
             themeMode = securityPreferences.getThemeMode(),
             chatBgTheme = securityPreferences.getChatBgTheme(),
+            chatTextSize = securityPreferences.getChatTextSize(),
+            chatFont = securityPreferences.getChatFont(),
             chatExperienceMode = securityPreferences.getChatExperienceMode(),
             isNotificationsEnabled = securityPreferences.isNotificationsEnabled(),
             isBadgeNotificationEnabled = securityPreferences.isBadgeNotificationEnabled(),
@@ -200,6 +205,8 @@ class ProfileViewModel(
                 isCheckAfterReminderEnabled = securityPreferences.isCheckAfterReminderEnabled(),
                 themeMode = securityPreferences.getThemeMode(),
                 chatBgTheme = securityPreferences.getChatBgTheme(),
+                chatTextSize = securityPreferences.getChatTextSize(),
+                chatFont = securityPreferences.getChatFont(),
                 chatExperienceMode = securityPreferences.getChatExperienceMode(),
                 isSideEmergencyExitEnabled = securityPreferences.isSideEmergencyExitEnabled(),
                 sideEmergencyExitOpacity = securityPreferences.getSideEmergencyExitOpacity(),
@@ -325,6 +332,18 @@ class ProfileViewModel(
         }
 
         viewModelScope.launch {
+            securityPreferences.chatTextSize.collect { size ->
+                _uiState.update { it.copy(chatTextSize = size) }
+            }
+        }
+
+        viewModelScope.launch {
+            securityPreferences.chatFont.collect { font ->
+                _uiState.update { it.copy(chatFont = font) }
+            }
+        }
+
+        viewModelScope.launch {
             securityPreferences.isSecretHistoryRevealed.collect { revealed ->
                 _uiState.update { it.copy(isSecretHistoryRevealed = revealed) }
             }
@@ -409,6 +428,14 @@ class ProfileViewModel(
 
     fun setChatBgTheme(theme: Int) {
         securityPreferences.setChatBgTheme(theme)
+    }
+
+    fun setChatTextSize(sizeSp: Int) {
+        securityPreferences.setChatTextSize(sizeSp)
+    }
+
+    fun setChatFont(font: Int) {
+        securityPreferences.setChatFont(font)
     }
 
     fun updateProfile(

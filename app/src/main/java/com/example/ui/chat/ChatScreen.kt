@@ -637,14 +637,16 @@ fun ChatScreen(
                 val isVideoNote = message.isCircularVideoNote() || message.isVideoNote
                 val isVideo = message.getTypedType() == MessageType.VIDEO || isVideoNote
                 val ownPhotos = siblings ?: message.getAllMediaUrls()
+                // A photo opens among all the chat's photos (an album's in their order), so the
+                // viewer counts them all ("88 of 100") and swipes on through them
+                val chatPhotos = if (isVideo) emptyList() else latestDisplayedMessages.value
+                    .filter { it.getTypedType() == MessageType.IMAGE }
+                    .flatMap { it.getAllMediaUrls() }
+                    .distinct()
                 val mediaList = when {
                     isVideo -> listOf(url)
-                    ownPhotos.size > 1 -> ownPhotos
-                    else -> latestDisplayedMessages.value
-                        .filter { it.getTypedType() == MessageType.IMAGE }
-                        .flatMap { it.getAllMediaUrls() }
-                        .distinct()
-                        .ifEmpty { listOf(url) }
+                    url in chatPhotos -> chatPhotos
+                    else -> ownPhotos.ifEmpty { listOf(url) }
                 }
                 viewModel.openFullScreenMedia(url, if (isVideo) MessageType.VIDEO else MessageType.IMAGE, mediaList, isVideoNote = isVideoNote)
             },
@@ -1010,6 +1012,11 @@ fun ChatScreen(
     val showWallpaper = !uiState.isStealthCurtainActive &&
         uiState.chatExperienceMode != com.example.ui.chat.ChatExperienceMode.PRIVATE
     var chatScreenSize by remember { mutableStateOf(IntSize.Zero) }
+    // Settings > Appearance: the messages' text size and font, here and in the message box
+    val chatTextStyle = remember(uiState.chatTextSize, uiState.chatFont) {
+        ChatTextStyle(uiState.chatTextSize, ChatFont.of(uiState.chatFont))
+    }
+    CompositionLocalProvider(LocalChatTextStyle provides chatTextStyle) {
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -2433,6 +2440,7 @@ fun ChatScreen(
         }
     }
     } // Box: wallpaper + Scaffold
+    } // Chat text style
 
 
     androidx.compose.animation.AnimatedVisibility(
@@ -2609,19 +2617,21 @@ fun ChatScreen(
             onMoreReactions = { viewModel.setSelectedMessageForActions(live) },
             onDismissed = { focusedMessage = null }
         ) {
-            MessageBubble(
-                message = live,
-                isFromMe = focusedIsFromMe,
-                isPlayingAudio = false,
-                audioProgress = { 0f },
-                onPlayAudio = {},
-                onImageClick = {},
-                onLongClick = {},
-                onReactionClick = { emoji -> viewModel.toggleReaction(live.id, emoji) },
-                gallerySize = uiState.gallerySize,
-                isPrivateMode = isPrivate,
-                senderPhotoUrl = if (focusedIsFromMe) uiState.currentUser?.photoUrl else uiState.partnerUser?.photoUrl
-            )
+            CompositionLocalProvider(LocalChatTextStyle provides chatTextStyle) {
+                MessageBubble(
+                    message = live,
+                    isFromMe = focusedIsFromMe,
+                    isPlayingAudio = false,
+                    audioProgress = { 0f },
+                    onPlayAudio = {},
+                    onImageClick = {},
+                    onLongClick = {},
+                    onReactionClick = { emoji -> viewModel.toggleReaction(live.id, emoji) },
+                    gallerySize = uiState.gallerySize,
+                    isPrivateMode = isPrivate,
+                    senderPhotoUrl = if (focusedIsFromMe) uiState.currentUser?.photoUrl else uiState.partnerUser?.photoUrl
+                )
+            }
         }
     }
 
@@ -2920,12 +2930,14 @@ fun ChatScreen(
                 .filter { it.isNotBlank() }
                 .toSet()
         }
+        val mediaTimes = remember(uiState.messages) { mediaTimesOf(uiState.messages) }
         FullScreenMediaViewer(
             mediaUrl = url,
             allMediaUrls = uiState.allMediaUrlsForViewer,
             openFrom = openFrom,
             isCircularVideo = uiState.isFullScreenVideoNote,
             circularMediaUrls = circularUrls,
+            mediaTimes = mediaTimes,
             onShowInChat = { clickedUrl ->
                 val targetMsg = uiState.messages.find { it.mediaUrl == clickedUrl || it.getAllMediaUrls().contains(clickedUrl) }
                 if (targetMsg != null && !viewModel.navigateToMessageInChat(targetMsg.id)) {
@@ -3615,10 +3627,13 @@ private fun ChatMessageRow(
         val selectionAccent = if (isPrivate) (if (isDark) darkTone(Gray400) else Gray500) else RoseGoldPrimary
 
         // A message that arrives while the chat is open lands with a spring: sent ones rise from
-        // the composer, received ones slide in from the left
-        val landing = remember(message.id) { Animatable(if (isFreshArrival) 0f else 1f) }
+        // the composer, received ones slide in from the left. A big emoji has its own entrance
+        // (it flies out of the message box or pops in, see BigEmoji)
+        val isBigEmoji = remember(message, isPrivate) { !isPrivate && message.bigEmojis() != null }
+        val landsWithSpring = isFreshArrival && !isBigEmoji
+        val landing = remember(message.id) { Animatable(if (landsWithSpring) 0f else 1f) }
         LaunchedEffect(message.id) {
-            if (isFreshArrival) landing.animateTo(1f, spring(dampingRatio = 0.62f, stiffness = 420f))
+            if (landsWithSpring) landing.animateTo(1f, spring(dampingRatio = 0.62f, stiffness = 420f))
         }
 
         // Jump-to-message highlight: a soft wash of colour across the row (no outlines) and a
@@ -3684,7 +3699,7 @@ private fun ChatMessageRow(
                     }
                 }
                 .then(
-                    if (isFreshArrival) {
+                    if (landsWithSpring) {
                         Modifier.graphicsLayer {
                             val p = landing.value
                             alpha = p.coerceIn(0f, 1f)
@@ -3749,7 +3764,8 @@ private fun ChatMessageRow(
                         senderPhotoUrl = senderPhotoUrl,
                         isLastReadMessage = isLastReadMessage,
                         partnerPhotoUrl = partnerPhotoUrl,
-                        partnerName = partnerName
+                        partnerName = partnerName,
+                        isFreshArrival = isFreshArrival
                     )
                 }
             }

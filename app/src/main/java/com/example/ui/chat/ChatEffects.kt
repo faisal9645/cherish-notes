@@ -158,7 +158,7 @@ fun Modifier.shimmer(baseColor: Color, highlightColor: Color): Modifier = compos
     }
 }
 
-private val HeartColors = listOf(
+internal val HeartColors = listOf(
     HeartPink, Color(0xFFFF6B9A), Color(0xFFFF8FB1), Rose600, Color(0xFFFF4D6D)
 )
 
@@ -225,7 +225,7 @@ fun Modifier.heartBurst(state: HeartBurstState): Modifier {
     }
 }
 
-private fun DrawScope.drawHeart(heart: VectorPainter, center: Offset, size: Float, rotation: Float, color: Color, alpha: Float) {
+internal fun DrawScope.drawHeart(heart: VectorPainter, center: Offset, size: Float, rotation: Float, color: Color, alpha: Float) {
     if (size <= 0f || alpha <= 0f) return
     translate(center.x - size / 2, center.y - size / 2) {
         rotate(rotation, pivot = Offset(size / 2, size / 2)) {

@@ -82,6 +82,9 @@ data class ChatUiState(
     val targetScrollMessageId: String? = null,
     val temporaryClearTimestamp: Long = 0L,
     val chatBgTheme: Int = 0,
+    // Settings > Appearance: the messages' text size (sp) and font (see ChatFont)
+    val chatTextSize: Int = SecurityPreferences.DEFAULT_CHAT_TEXT_SIZE,
+    val chatFont: Int = 0,
     val chatExperienceMode: ChatExperienceMode = ChatExperienceMode.NORMAL,
     // The current 6 AM day; changes at 6 AM so "today only" filters recompute
     val logicalDay: String = ""
@@ -125,6 +128,8 @@ class ChatViewModel(
         ChatUiState(
             gallerySize = securityPreferences.getImageGallerySize(),
             chatBgTheme = securityPreferences.getChatBgTheme(),
+            chatTextSize = securityPreferences.getChatTextSize(),
+            chatFont = securityPreferences.getChatFont(),
             chatExperienceMode = securityPreferences.getChatExperienceMode(),
             showPreviousChats = securityPreferences.isShowPreviousChatsEnabled(),
             isSecretHistoryRevealed = securityPreferences.isSecretHistoryRevealed.value,
@@ -310,6 +315,18 @@ class ChatViewModel(
         viewModelScope.launch {
             securityPreferences.chatBgTheme.collect { theme ->
                 _uiState.update { it.copy(chatBgTheme = theme) }
+            }
+        }
+
+        viewModelScope.launch {
+            securityPreferences.chatTextSize.collect { size ->
+                _uiState.update { it.copy(chatTextSize = size) }
+            }
+        }
+
+        viewModelScope.launch {
+            securityPreferences.chatFont.collect { font ->
+                _uiState.update { it.copy(chatFont = font) }
             }
         }
 

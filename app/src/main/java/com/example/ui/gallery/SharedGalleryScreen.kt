@@ -92,6 +92,7 @@ import com.example.data.model.Message
 import com.example.data.model.MessageType
 import com.example.ui.chat.ChatViewModel
 import com.example.ui.chat.FullScreenMediaViewer
+import com.example.ui.chat.mediaTimesOf
 import com.example.ui.chat.MediaTileAnchor
 import com.example.ui.chat.mediaTileAnchor
 import com.example.ui.chat.openableMedia
@@ -1868,11 +1869,13 @@ fun SharedGalleryScreen(
             url.contains("video_note", ignoreCase = true) ||
             url.contains("videonote", ignoreCase = true)
         }
+        val mediaTimes = remember(sourceMessages) { mediaTimesOf(sourceMessages) }
         FullScreenMediaViewer(
             mediaUrl = url,
             allMediaUrls = if (galleryAllUrls.isNotEmpty()) galleryAllUrls else listOf(url),
             isCircularVideo = isCurrentCircular,
             circularMediaUrls = circularUrls,
+            mediaTimes = mediaTimes,
             onShowInChat = { clickedUrl ->
                 val targetMsg = sourceMessages.find { it.mediaUrl == clickedUrl || it.getAllMediaUrls().contains(clickedUrl) }
                     ?: allGalleryItems.find { it.mediaUrl == clickedUrl || it.getAllMediaUrls().contains(clickedUrl) }

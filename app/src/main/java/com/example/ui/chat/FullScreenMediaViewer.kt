@@ -114,6 +114,8 @@ fun FullScreenMediaViewer(
     openFrom: TransformOrigin = TransformOrigin.Center,
     isCircularVideo: Boolean = false,
     circularMediaUrls: Set<String> = emptySet(),
+    // When each one was sent, by its URL (see mediaTimesOf): shown under the count
+    mediaTimes: Map<String, Long> = emptyMap(),
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
@@ -973,7 +975,11 @@ fun FullScreenMediaViewer(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            // Leaves the buttons on the right their room; a long date shortens instead
+                            modifier = Modifier.weight(1f, fill = false)
+                        ) {
                             Box(
                                 modifier = Modifier
                                     .size(38.dp)
@@ -994,15 +1000,33 @@ fun FullScreenMediaViewer(
                             Spacer(modifier = Modifier.width(8.dp))
                             Surface(
                                 shape = RoundedCornerShape(12.dp),
-                                color = Color.Black.copy(alpha = 0.50f)
+                                color = Color.Black.copy(alpha = 0.50f),
+                                modifier = Modifier.weight(1f, fill = false)
                             ) {
-                                Text(
-                                    text = if (mediaList.size > 1) "${currentIndex + 1} of ${mediaList.size}" else "Photo View",
-                                    color = Color.White,
-                                    fontWeight = FontWeight.SemiBold,
-                                    fontSize = 13.sp,
-                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
-                                )
+                                // Which one of how many ("88 of 100"), and when it was sent
+                                val sentAt = remember(currentUrl, mediaTimes) {
+                                    mediaTimes[currentUrl]?.let { com.example.util.ChatTimeFormatter.formatDayAndTime(it) }
+                                }
+                                Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)) {
+                                    Text(
+                                        text = if (mediaList.size > 1) "${currentIndex + 1} of ${mediaList.size}" else "Photo View",
+                                        color = Color.White,
+                                        fontWeight = FontWeight.SemiBold,
+                                        fontSize = 13.sp,
+                                        maxLines = 1,
+                                        modifier = Modifier.testTag("full_screen_media_count")
+                                    )
+                                    if (!sentAt.isNullOrEmpty()) {
+                                        Text(
+                                            text = sentAt,
+                                            color = Color.White.copy(alpha = 0.8f),
+                                            fontSize = 11.sp,
+                                            maxLines = 1,
+                                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                            modifier = Modifier.testTag("full_screen_media_time")
+                                        )
+                                    }
+                                }
                             }
                         }
 
@@ -1334,6 +1358,15 @@ fun Modifier.openableMedia(
             }
         )
     }
+}
+
+/** When each photo or video of [messages] was sent, by its URL: the viewer's date line. */
+internal fun mediaTimesOf(messages: List<com.example.data.model.Message>): Map<String, Long> {
+    val times = HashMap<String, Long>()
+    messages.forEach { message ->
+        message.getAllMediaUrls().forEach { url -> times.getOrPut(url) { message.timestamp } }
+    }
+    return times
 }
 
 /** A rounded rectangle [width] x [height] (px) in the middle of the layer. */

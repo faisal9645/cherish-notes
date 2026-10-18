@@ -53,6 +53,12 @@ val CherishFontFamily =
     Font(R.font.nunito_bold, FontWeight.Bold),
   )
 
+/** "Sweetie", a chat font: Mali, a sweet, rounded handwriting (free, SIL Open Font License). */
+val SweetieFontFamily = FontFamily(Font(R.font.mali_regular))
+
+/** "Romantic", a chat font: Great Vibes, a flowing romantic script (free, SIL Open Font License). */
+val RomanticFontFamily = FontFamily(Font(R.font.great_vibes_regular))
+
 /**
  * This style with every digit the same width, so a ticking time ("0:19" → "0:20") or countdown stays
  * still instead of shifting as it changes. Nunito's digits are one width already; this keeps them

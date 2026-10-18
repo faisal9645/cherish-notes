@@ -1677,6 +1677,17 @@ fun ProfileScreen(
                 Spacer(modifier = Modifier.height(6.dp))
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), thickness = 0.6.dp)
 
+                // How the chat's messages read: their text size and font, with a preview
+                ChatTextSettings(
+                    textSize = uiState.chatTextSize,
+                    font = uiState.chatFont,
+                    accent = primaryAccent,
+                    onTextSizeChange = { viewModel.setChatTextSize(it) },
+                    onFontChange = { viewModel.setChatFont(it) }
+                )
+
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), thickness = 0.6.dp)
+
                 ListItem(
                     headlineContent = { Text("Photo Thumbnail Size", fontSize = 15.sp, fontWeight = FontWeight.SemiBold) },
                     supportingContent = { Text("Grid sizing in chat photo gallery", fontSize = 13.sp) },

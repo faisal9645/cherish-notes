@@ -70,6 +70,19 @@ fun ChatEmoji(emoji: String, fontSize: TextUnit, modifier: Modifier = Modifier) 
     EmojiText(text = emoji, fontSize = fontSize, emojiScale = 1f, modifier = modifier)
 }
 
+/**
+ * The emojis of [text] (with the chat skin tone) when it is nothing but 1-3 emojis, which the chat
+ * shows big without a bubble, like Telegram; null for anything else.
+ */
+internal fun bigEmojisIn(text: String): List<String>? {
+    if (text.isBlank() || text.length > 64) return null
+    val tokens = tokenize(text)
+    if (tokens.any { !it.isEmoji && it.text.isNotBlank() }) return null
+    val emojis = tokens.filter { it.isEmoji }
+    if (emojis.size !in 1..3) return null
+    return emojis.map { withFairSkinTone(it.text) }
+}
+
 private class EmojiContent(val text: AnnotatedString, val hasEmoji: Boolean)
 
 private class EmojiToken(val text: String, val isEmoji: Boolean)

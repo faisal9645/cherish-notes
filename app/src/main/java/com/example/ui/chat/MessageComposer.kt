@@ -69,6 +69,7 @@ import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.layout
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
@@ -156,6 +157,8 @@ fun MessageComposer(
     val keyboardController = LocalSoftwareKeyboardController.current
     val focusManager = LocalFocusManager.current
     val scope = rememberCoroutineScope()
+    // What I type looks like what I'll send: the chat's text size and font from Settings
+    val chatText = LocalChatTextStyle.current
 
     var showEmojiPanel by remember { mutableStateOf(false) }
     var isLockedRecording by remember { mutableStateOf(false) }
@@ -812,10 +815,10 @@ fun MessageComposer(
                         ) {
                             @Suppress("DEPRECATION")
                             val inputTextStyle = TextStyle(
-                                fontFamily = LocalTextStyle.current.fontFamily,
+                                fontFamily = chatText.font.family ?: LocalTextStyle.current.fontFamily,
                                 color = if (isDark) Neutral200 else InkBlack,
-                                fontSize = 16.sp,
-                                lineHeight = 22.sp,
+                                fontSize = chatText.fontSize(extraSp = 2),
+                                lineHeight = chatText.fontSize(extraSp = 2) * 1.375f,
                                 platformStyle = PlatformTextStyle(includeFontPadding = false)
                             )
 
@@ -919,10 +922,10 @@ fun MessageComposer(
                                 value = text,
                                 onValueChange = onTextChanged,
                                 textStyle = TextStyle(
-                                    fontFamily = LocalTextStyle.current.fontFamily,
+                                    fontFamily = chatText.font.family ?: LocalTextStyle.current.fontFamily,
                                     color = if (isDark) Color.White else Slate900,
-                                    fontSize = 14.sp,
-                                    lineHeight = 18.sp
+                                    fontSize = chatText.fontSize(),
+                                    lineHeight = chatText.fontSize() * 1.3f
                                 ),
                                 cursorBrush = SolidColor(DayBluePrimary),
                                 maxLines = 5,
@@ -934,6 +937,8 @@ fun MessageComposer(
                                             onInputFocused()
                                         }
                                     }
+                                    // A big emoji sent from here flies out of the text
+                                    .onGloballyPositioned { ComposerTextAnchor.update(it) }
                                     .testTag("composer_text_input")
                             )
                         }

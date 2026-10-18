@@ -37,6 +37,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -111,7 +112,9 @@ fun MessageBubble(
     onSeekAudio: ((Float) -> Unit)? = null,
     isLastReadMessage: Boolean = false,
     partnerPhotoUrl: String? = null,
-    partnerName: String = "Partner"
+    partnerName: String = "Partner",
+    // Arrived while the chat is open (a big emoji then flies or pops in)
+    isFreshArrival: Boolean = false
 ) {
     // Private chat looks like the ChatGPT app: mine in a rounded blue bubble, my partner's as plain
     // text with a row of small actions under it
@@ -131,6 +134,8 @@ fun MessageBubble(
 
     val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
     val isAmoledBlack = com.example.ui.theme.LocalAmoledBlack.current
+    // The text size and font chosen in Settings
+    val chatText = LocalChatTextStyle.current
 
     val bubbleBg = if (isPrivateMode) {
         if (isFromMe) {
@@ -268,6 +273,8 @@ fun MessageBubble(
 
     // Round video notes get the circle layout; shared videos are cards in a normal bubble
     val isVideoNote = remember(message) { message.isCircularVideoNote() }
+    // Just 1-3 emojis: shown big with no bubble, like Telegram (not in private chat, which looks like ChatGPT)
+    val bigEmojis = remember(message, isPrivateMode) { if (isPrivateMode) null else message.bigEmojis() }
 
     Box(
         modifier = modifier
@@ -409,14 +416,21 @@ fun MessageBubble(
                 var isPlayingVideoNote by remember { mutableStateOf(false) }
                 val screenWidth = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp.dp
                 val restingCircleSize = 235.dp
-                val expandedCircleSize = (screenWidth - 24.dp).coerceAtMost(360.dp)
+                // Playing, it grows to the width of the screen, like Telegram: past the chat's side
+                // margins (required size), centred on the screen
+                val expandedCircleSize = screenWidth - 16.dp
+                val bringPlayingNoteIntoView = remember { androidx.compose.foundation.relocation.BringIntoViewRequester() }
                 val animatedCircleSize by androidx.compose.animation.core.animateDpAsState(
                     targetValue = if (isPlayingVideoNote) expandedCircleSize else restingCircleSize,
                     animationSpec = androidx.compose.animation.core.spring(
                         dampingRatio = androidx.compose.animation.core.Spring.DampingRatioLowBouncy,
                         stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow
                     ),
-                    label = "circleVideoSize"
+                    label = "circleVideoSize",
+                    // Once grown, the chat scrolls so the whole circle is in view
+                    finishedListener = {
+                        if (isPlayingVideoNote) scope.launch { bringPlayingNoteIntoView.bringIntoView() }
+                    }
                 )
 
                 Column(
@@ -425,7 +439,8 @@ fun MessageBubble(
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(animatedCircleSize)
+                            .requiredSize(animatedCircleSize)
+                            .bringIntoViewRequester(bringPlayingNoteIntoView)
                             .graphicsLayer {
                                 scaleX = pressScale * videoHighlightScale
                                 scaleY = pressScale * videoHighlightScale
@@ -471,51 +486,67 @@ fun MessageBubble(
                     }
 
                     // Align status chip closely against bottom edge of circular video
-                    Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        color = Color.Black.copy(alpha = 0.65f),
+                    FloatingTimeChip(
+                        message = message,
+                        isFromMe = isFromMe,
                         modifier = Modifier
                             .offset(y = (-10).dp)
                             .zIndex(1f)
                             .padding(horizontal = 6.dp)
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                        ) {
-                            if (message.isPinned) {
-                                Icon(
-                                    imageVector = Icons.Rounded.PushPin,
-                                    contentDescription = "Pinned",
-                                    tint = Color.White.copy(alpha = 0.85f),
-                                    modifier = Modifier.size(10.dp).padding(end = 2.dp)
-                                )
-                            }
-                            if (message.isStarred) {
-                                Icon(
-                                    imageVector = Icons.Rounded.Star,
-                                    contentDescription = "Starred",
-                                    tint = GoldMilestone,
-                                    modifier = Modifier.size(10.dp).padding(end = 2.dp)
-                                )
-                            }
-                            Text(
-                                text = formatMessageTime(message.timestamp),
-                                fontSize = 10.sp,
-                                color = Color.White,
-                                fontWeight = FontWeight.Medium
+                    )
+                }
+            } else if (bigEmojis != null) {
+                // Telegram-style big emoji: no bubble, just the emojis, which come alive when they
+                // arrive and again on a tap (see BigEmoji)
+                var bigEmojiReplay by remember { mutableIntStateOf(0) }
+                Box(
+                    modifier = Modifier
+                        .graphicsLayer {
+                            val pulse = highlightPulse.value
+                            val highlight = if (pulse > 0f) 1f + 0.06f * kotlin.math.sin(pulse * Math.PI.toFloat()) else 1f
+                            scaleX = pressScale * highlight
+                            scaleY = pressScale * highlight
+                        }
+                        .heartBurst(heartBurst)
+                        .pointerInput(message.id) {
+                            detectTapGestures(
+                                onTap = { bigEmojiReplay++ },
+                                onPress = trackPress,
+                                onLongPress = onBubbleLongPress,
+                                onDoubleTap = { triggerHeartBurst() }
                             )
-                            if (isFromMe) {
-                                Spacer(modifier = Modifier.width(3.dp))
-                                MessageStatusTicks(message.getTypedStatus()) { status ->
-                                    when (status) {
-                                        MessageStatus.SENDING -> Icon(Icons.Rounded.AccessTime, "Sending", tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(10.dp))
-                                        MessageStatus.SENT -> Icon(Icons.Rounded.Check, "Sent", tint = Color.White.copy(alpha = 0.8f), modifier = Modifier.size(10.dp))
-                                        MessageStatus.DELIVERED -> Icon(Icons.Rounded.DoneAll, "Delivered", tint = Color.White.copy(alpha = 0.9f), modifier = Modifier.size(11.dp))
-                                        MessageStatus.READ -> Icon(Icons.Rounded.DoneAll, "Read", tint = Color.White, modifier = Modifier.size(11.dp))
-                                    }
+                        }
+                        .testTag("message_bubble_${message.id}")
+                ) {
+                    BigEmoji(
+                        emojis = bigEmojis,
+                        isFromMe = isFromMe,
+                        entrance = when {
+                            !isFreshArrival -> BigEmojiEntrance.None
+                            isFromMe -> BigEmojiEntrance.FlyFromComposer
+                            else -> BigEmojiEntrance.PopIn
+                        },
+                        replay = bigEmojiReplay,
+                        footer = {
+                            FloatingTimeChip(message = message, isFromMe = isFromMe, modifier = Modifier.offset(y = (-4).dp))
+                        }
+                    )
+
+                    // Bursting Heart Dopamine Pop Animation on Double-Tap
+                    if (showBurstHeart) {
+                        Box(
+                            modifier = Modifier.matchParentSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "💖",
+                                fontSize = 44.sp,
+                                modifier = Modifier.graphicsLayer {
+                                    scaleX = heartScale.value
+                                    scaleY = heartScale.value
+                                    alpha = heartAlpha.value
                                 }
-                            }
+                            )
                         }
                     }
                 }
@@ -1146,7 +1177,7 @@ fun MessageBubble(
                     ) {
                         EmojiText(
                             text = message.text,
-                            fontSize = 13.sp,
+                            style = chatText.applyTo(MaterialTheme.typography.bodyMedium, extraSp = -1),
                             fontWeight = FontWeight.Normal,
                             color = if (isPrivateMode) textColor
                                     else if (isFromMe) Color.White 
@@ -1305,10 +1336,10 @@ fun MessageBubble(
                         EmojiText(
                             text = message.text,
                             color = textColor,
-                            // ChatGPT's reading size in private chat
+                            // ChatGPT's reading size in private chat (2sp bigger); both follow Settings
                             style = if (isPrivateMode) {
-                                MaterialTheme.typography.bodyLarge.copy(fontSize = 16.sp, lineHeight = 23.sp)
-                            } else MaterialTheme.typography.bodyMedium,
+                                chatText.applyTo(MaterialTheme.typography.bodyLarge, extraSp = 2)
+                            } else chatText.applyTo(MaterialTheme.typography.bodyMedium),
                             fontStyle = if (message.isDeleted) FontStyle.Italic else FontStyle.Normal,
                             largeWhenEmojiOnly = true
                         )
@@ -1579,6 +1610,55 @@ fun MessageBubble(
         }
     }
 }
+}
+
+/** The time (with pin, star and ticks) in a small dark pill: under a round video note or a big emoji. */
+@Composable
+private fun FloatingTimeChip(message: Message, isFromMe: Boolean, modifier: Modifier = Modifier) {
+    Surface(
+        shape = RoundedCornerShape(12.dp),
+        color = Color.Black.copy(alpha = 0.65f),
+        modifier = modifier
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+        ) {
+            if (message.isPinned) {
+                Icon(
+                    imageVector = Icons.Rounded.PushPin,
+                    contentDescription = "Pinned",
+                    tint = Color.White.copy(alpha = 0.85f),
+                    modifier = Modifier.size(10.dp).padding(end = 2.dp)
+                )
+            }
+            if (message.isStarred) {
+                Icon(
+                    imageVector = Icons.Rounded.Star,
+                    contentDescription = "Starred",
+                    tint = GoldMilestone,
+                    modifier = Modifier.size(10.dp).padding(end = 2.dp)
+                )
+            }
+            Text(
+                text = formatMessageTime(message.timestamp),
+                fontSize = 10.sp,
+                color = Color.White,
+                fontWeight = FontWeight.Medium
+            )
+            if (isFromMe) {
+                Spacer(modifier = Modifier.width(3.dp))
+                MessageStatusTicks(message.getTypedStatus()) { status ->
+                    when (status) {
+                        MessageStatus.SENDING -> Icon(Icons.Rounded.AccessTime, "Sending", tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(10.dp))
+                        MessageStatus.SENT -> Icon(Icons.Rounded.Check, "Sent", tint = Color.White.copy(alpha = 0.8f), modifier = Modifier.size(10.dp))
+                        MessageStatus.DELIVERED -> Icon(Icons.Rounded.DoneAll, "Delivered", tint = Color.White.copy(alpha = 0.9f), modifier = Modifier.size(11.dp))
+                        MessageStatus.READ -> Icon(Icons.Rounded.DoneAll, "Read", tint = Color.White, modifier = Modifier.size(11.dp))
+                    }
+                }
+            }
+        }
+    }
 }
 
 /** When my message was seen, or how far it got: shown for a moment after tapping its time. */

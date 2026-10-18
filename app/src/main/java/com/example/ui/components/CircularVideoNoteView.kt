@@ -7,6 +7,8 @@ import android.net.Uri
 import android.util.Log
 import android.view.Surface
 import android.view.TextureView
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
@@ -29,6 +31,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.BiasAlignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
@@ -74,6 +77,13 @@ fun stopAllVideoNotes() {
 
 private val BlueCircularBorder = Blue500
 
+// A round note's buttons sit on its diagonals, inside the curve at any size (it grows to the
+// screen's width while playing), where fixed corner insets would fall outside the circle
+private const val ROUND_BUTTON_BIAS = 0.65f
+private val RoundTopStart = BiasAlignment(-ROUND_BUTTON_BIAS, -ROUND_BUTTON_BIAS)
+private val RoundTopEnd = BiasAlignment(ROUND_BUTTON_BIAS, -ROUND_BUTTON_BIAS)
+private val RoundBottomEnd = BiasAlignment(ROUND_BUTTON_BIAS, ROUND_BUTTON_BIAS)
+
 @Composable
 fun CircularVideoNoteView(
     videoUrl: String,
@@ -115,6 +125,12 @@ fun CircularVideoNoteView(
     LaunchedEffect(activelyPlaying) {
         onPlayingChanged?.invoke(activelyPlaying)
     }
+    // A round note has its ring only while it plays (it fades in and out)
+    val ringAlpha = animateFloatAsState(
+        targetValue = if (activelyPlaying) 1f else 0f,
+        animationSpec = tween(durationMillis = 220),
+        label = "video_note_ring"
+    )
 
     LaunchedEffect(isLooping) {
         try {
@@ -541,25 +557,29 @@ fun CircularVideoNoteView(
             }
         }
 
-        // Blue Circular Outline & Unified Synchronized Progress Ring
+        // Blue ring with the playback progress running round it: only while the note plays,
+        // none on a note at rest
         if (isRound) {
             Canvas(modifier = Modifier.fillMaxSize().padding(2.dp)) {
+                val alpha = ringAlpha.value
+                if (alpha <= 0f) return@Canvas
                 val strokeWidth = 3.dp.toPx()
                 val radius = (size.minDimension - strokeWidth) / 2f
-                // 1. Prominent blue circular ring outline around circumference by default
                 drawCircle(
                     color = BlueCircularBorder,
                     radius = radius,
-                    style = Stroke(width = strokeWidth)
+                    style = Stroke(width = strokeWidth),
+                    alpha = alpha
                 )
-                // 2. Synchronized active playback progress ring along the exact same circumference
+                // Synchronized playback progress along the same circumference
                 if (progress > 0.002f) {
                     drawArc(
                         color = Blue300,
                         startAngle = -90f,
                         sweepAngle = (progress * 360f).coerceIn(0f, 360f),
                         useCenter = false,
-                        style = Stroke(width = strokeWidth + 0.8f.dp.toPx(), cap = StrokeCap.Round)
+                        style = Stroke(width = strokeWidth + 0.8f.dp.toPx(), cap = StrokeCap.Round),
+                        alpha = alpha
                     )
                 }
             }
@@ -603,11 +623,8 @@ fun CircularVideoNoteView(
         if (onExpandClick != null) {
             Box(
                 modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .padding(
-                        top = if (isRound) 32.dp else 12.dp,
-                        start = if (isRound) 32.dp else 12.dp
-                    )
+                    .align(if (isRound) RoundTopStart else Alignment.TopStart)
+                    .padding(if (isRound) 0.dp else 12.dp)
             ) {
                 Surface(
                     shape = CircleShape,
@@ -635,11 +652,8 @@ fun CircularVideoNoteView(
             border = BorderStroke(1.dp, Color.White.copy(alpha = 0.7f)),
             shadowElevation = 3.dp,
             modifier = Modifier
-                .align(Alignment.TopEnd)
-                .padding(
-                    top = if (isRound) 32.dp else 12.dp,
-                    end = if (isRound) 32.dp else 12.dp
-                )
+                .align(if (isRound) RoundTopEnd else Alignment.TopEnd)
+                .padding(if (isRound) 0.dp else 12.dp)
                 .size(if (isRound) 28.dp else 32.dp)
                 .clickable {
                     isLooping = !isLooping
@@ -660,11 +674,8 @@ fun CircularVideoNoteView(
             shape = CircleShape,
             color = Color.Black.copy(alpha = 0.6f),
             modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(
-                    bottom = if (isRound) 32.dp else 12.dp,
-                    end = if (isRound) 32.dp else 12.dp
-                )
+                .align(if (isRound) RoundBottomEnd else Alignment.BottomEnd)
+                .padding(if (isRound) 0.dp else 12.dp)
                 .size(if (isRound) 28.dp else 32.dp)
                 .clickable {
                     isMuted = !isMuted

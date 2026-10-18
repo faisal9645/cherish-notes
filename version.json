@@ -1,9 +1,9 @@
 {
-  "versionCode": 183,
-  "versionName": "1.8.11",
-  "tagName": "v1.8.11-183",
-  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.8.11-183/app_update_183.apk",
-  "assetSize": 18397608,
-  "releaseNotes": "Notes v1.8.11 (Build 183):\n• Fixed OTA update package download on server with multi-mirror fallbacks\n• Fixed update checking and version synchronization across CDN mirrors\n• Instant cache-purge on release publishing\n• Bug fixes and stability improvements",
-  "releaseDate": "2026-10-18T18:18:00Z"
+  "versionCode": 184,
+  "versionName": "1.8.12",
+  "tagName": "v1.8.12-184",
+  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.8.12-184/app_update_184.apk",
+  "assetSize": 18500000,
+  "releaseNotes": "Notes v1.8.12 (Build 184):\n• Big animated emojis with particle bursts and haptics\n• Custom chat text sizing & fonts (Sweetie and Romantic)\n• Improved circular video note controls and progress ring\n• Photo viewer timestamps and full-screen enhancements\n• Bug fixes and performance improvements",
+  "releaseDate": "2026-10-18T19:40:00Z"
 }

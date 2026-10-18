@@ -268,6 +268,30 @@ class SecurityPreferences(private val context: Context) {
         _chatBgTheme.value = theme
     }
 
+    private val _chatTextSize = MutableStateFlow(getChatTextSize())
+    val chatTextSize: StateFlow<Int> = _chatTextSize.asStateFlow()
+
+    /** The chat's message text size, in sp (14 is the usual size). */
+    fun getChatTextSize(): Int =
+        prefs.getInt(KEY_CHAT_TEXT_SIZE, DEFAULT_CHAT_TEXT_SIZE).coerceIn(MIN_CHAT_TEXT_SIZE, MAX_CHAT_TEXT_SIZE)
+
+    fun setChatTextSize(sizeSp: Int) {
+        val size = sizeSp.coerceIn(MIN_CHAT_TEXT_SIZE, MAX_CHAT_TEXT_SIZE)
+        prefs.edit().putInt(KEY_CHAT_TEXT_SIZE, size).apply()
+        _chatTextSize.value = size
+    }
+
+    private val _chatFont = MutableStateFlow(getChatFont())
+    val chatFont: StateFlow<Int> = _chatFont.asStateFlow()
+
+    // The font chat messages are written in: 0 = the app's font, 1 = Sweetie, 2 = Romantic
+    fun getChatFont(): Int = prefs.getInt(KEY_CHAT_FONT, 0).coerceIn(0, 2)
+
+    fun setChatFont(font: Int) {
+        prefs.edit().putInt(KEY_CHAT_FONT, font).apply()
+        _chatFont.value = font
+    }
+
     fun getDisguisePasscode(): String {
         val saved = prefs.getString(KEY_DISGUISE_PASSCODE, null)
         if (saved == null || saved == "1234") {
@@ -1013,6 +1037,11 @@ class SecurityPreferences(private val context: Context) {
         private const val KEY_SIDE_EMERGENCY_EXIT_ENABLED = "side_emergency_exit_enabled"
         private const val KEY_SIDE_EMERGENCY_EXIT_OPACITY = "side_emergency_exit_opacity"
         private const val KEY_CHAT_SOUNDS_ENABLED = "chat_sounds_enabled"
+        private const val KEY_CHAT_TEXT_SIZE = "chat_text_size"
+        private const val KEY_CHAT_FONT = "chat_font"
+        const val DEFAULT_CHAT_TEXT_SIZE = 14
+        const val MIN_CHAT_TEXT_SIZE = 12
+        const val MAX_CHAT_TEXT_SIZE = 24
         private const val KEY_PARTNER_CUSTOM_TIMEZONE = "partner_custom_timezone"
         private const val KEY_SEEN_CALL_RECORDING_NOTICE = "seen_call_recording_notice"
         private const val KEY_LAST_SEEN_APP_VERSION = "last_seen_app_version_code"
