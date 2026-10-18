@@ -478,7 +478,7 @@ fun MessageBubble(
                             ) {
                                 Text(
                                     text = "💖",
-                                    fontSize = 44.sp,
+                                    fontSize = 36.sp,
                                     modifier = Modifier.graphicsLayer {
                                         scaleX = heartScale.value
                                         scaleY = heartScale.value
@@ -544,7 +544,7 @@ fun MessageBubble(
                         ) {
                             Text(
                                 text = "💖",
-                                fontSize = 44.sp,
+                                fontSize = 36.sp,
                                 modifier = Modifier.graphicsLayer {
                                     scaleX = heartScale.value
                                     scaleY = heartScale.value

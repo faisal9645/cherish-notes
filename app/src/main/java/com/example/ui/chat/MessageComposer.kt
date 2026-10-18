@@ -390,8 +390,8 @@ fun MessageComposer(
             // 0: Couple / Love & Deep Intimacy (lying on chest, forehead kiss, bed cuddles, kisses & romance)
             listOf(
                 // Forehead kisses, tender kisses, lying on chest, deep cuddles, tongue
-                "👅", "😚", "🫂", "🛌", "🛏️", "💋", "😘", "😙", "😗", "💏", "👩‍❤️‍💋‍👨",
-                "🧑‍❤️‍💋‍🧑", "👩‍❤️‍💋‍👩", "👨‍❤️‍💋‍👨", "👄", "🫦", "🫠", "🥰", "😍", "🤱🏻", "💆🏻",
+                "👅", "😚", "🫂", "🛌", "🛏️", "💋", "😘", "😙", "😗", "💏🏻", "👩🏻‍❤️‍💋‍👨🏻",
+                "🧑🏻‍❤️‍💋‍🧑🏻", "👩🏻‍❤️‍💋‍👩🏻", "👨🏻‍❤️‍💋‍👨🏻", "👄", "🫦", "🫠", "🥰", "😍", "🤱🏻", "💆🏻",
                 "💆🏻‍♂️", "💆🏻‍♀️", "😴", "💤", "🥱", "🥺", "🥹", "🤤", "🥵", "😳",
                 "🫣", "🤭", "🤫", "🫶🏻", "🫰🏻", "🫀", "🤲🏻", "🫳🏻", "🫴🏻", "🤝🏻",
                 "👫🏻", "🧑🏻‍🤝‍🧑🏻", "💑🏻", "👩🏻‍❤️‍👨🏻", "🧑🏻‍❤️‍🧑🏻", "👩🏻‍❤️‍👩🏻", "👨🏻‍❤️‍👨🏻", "👭🏻", "👬🏻", "👣",
@@ -1463,7 +1463,7 @@ fun MessageComposer(
                                             .padding(vertical = 4.dp),
                                         contentAlignment = Alignment.Center
                                     ) {
-                                        Text(text = displayEmoji, fontSize = 26.sp)
+                                        Text(text = displayEmoji, fontSize = 21.sp)
                                     }
                                 }
                             }
@@ -1622,7 +1622,7 @@ private fun EmojiAttachmentPanel(
                                 .padding(vertical = 4.dp),
                             contentAlignment = Alignment.Center
                         ) {
-                            Text(text = displayEmoji, fontSize = 23.sp)
+                            Text(text = displayEmoji, fontSize = 19.sp)
                         }
                     }
                 }

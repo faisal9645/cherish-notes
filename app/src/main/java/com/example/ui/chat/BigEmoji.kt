@@ -114,12 +114,12 @@ internal fun BigEmoji(
     val context = LocalContext.current
     val view = LocalView.current
     val fontSize = when (emojis.size) {
-        1 -> 64.sp
-        2 -> 48.sp
-        else -> 38.sp
+        1 -> 48.sp
+        2 -> 36.sp
+        else -> 28.sp
     }
     // The motions and bursts are made for one big emoji; two or three smaller ones scale them down
-    val glyphScale = fontSize.value / 64f
+    val glyphScale = fontSize.value / 48f
     // The message box's text size, which a sent emoji grows from
     val typedSp = LocalChatTextStyle.current.fontSize().value
     val bases = remember(emojis) { emojis.map(::baseOf) }

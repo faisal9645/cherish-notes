@@ -45,7 +45,7 @@ fun EmojiText(
     style: TextStyle = LocalTextStyle.current,
     maxLines: Int = Int.MAX_VALUE,
     overflow: TextOverflow = TextOverflow.Clip,
-    emojiScale: Float = 1.18f,
+    emojiScale: Float = 1.08f,
     largeWhenEmojiOnly: Boolean = false
 ) {
     val content = remember(text, emojiScale, largeWhenEmojiOnly) {
@@ -115,10 +115,10 @@ private fun buildEmojiContent(raw: String, emojiScale: Float, largeWhenEmojiOnly
 
 /** How much bigger a message of just [count] (up to 6) emojis draws them. */
 private fun largeEmojiScale(count: Int): Float = when (count) {
-    1 -> 2.35f
-    2 -> 1.8f
-    3 -> 1.55f
-    else -> 1.35f
+    1 -> 1.75f
+    2 -> 1.45f
+    3 -> 1.30f
+    else -> 1.15f
 }
 
 /** A message's text with each emoji in its own inline slot ([inlineEmojiId]), so they can move. */
@@ -129,7 +129,7 @@ internal class InlineEmojiText(val text: AnnotatedString, val emojis: List<Strin
  * ([emojiScale], or larger for a message of just a few emojis); null with no emojis, or so many
  * that moving them all isn't worth it.
  */
-internal fun inlineEmojiText(raw: String, emojiScale: Float = 1.18f): InlineEmojiText? {
+internal fun inlineEmojiText(raw: String, emojiScale: Float = 1.08f): InlineEmojiText? {
     val tokens = tokenize(raw)
     val emojiCount = tokens.count { it.isEmoji }
     if (emojiCount == 0 || emojiCount > MAX_INLINE_EMOJIS) return null
@@ -260,40 +260,48 @@ private val toneCache = LruCache<String, String>(256)
 private val glyphPaint = Paint()
 
 /**
- * Adds the fair skin tone to every hand/person in the emoji sequence that has none. Kept as is
- * when any tone is already set, or when this phone's emoji font has no glyph for the toned form
- * (e.g. family sequences), so it never breaks into separate pictures.
+ * Adds or normalizes the fair skin tone on hands, gestures, and people in the emoji sequence.
+ * Replaces default yellow or other tones with the soft, natural fair original skin tone (0x1F3FB).
  */
 @Synchronized
 internal fun withFairSkinTone(emoji: String): String {
     toneCache.get(emoji)?.let { return it }
     var hasBase = false
+    var hasOtherTone = false
     var i = 0
     while (i < emoji.length) {
         val cp = emoji.codePointAt(i)
-        if (isSkinTone(cp)) {
-            toneCache.put(emoji, emoji)
-            return emoji
+        if (isSkinTone(cp) && cp != FAIR_SKIN_TONE) {
+            hasOtherTone = true
         }
         if (isModifierBase(cp)) hasBase = true
         i += Character.charCount(cp)
     }
-    var result = emoji
-    if (hasBase) {
-        val toned = StringBuilder(emoji.length + 4)
-        i = 0
-        while (i < emoji.length) {
-            val cp = emoji.codePointAt(i)
-            i += Character.charCount(cp)
+    if (!hasBase && !hasOtherTone) {
+        toneCache.put(emoji, emoji)
+        return emoji
+    }
+    val toned = StringBuilder(emoji.length + 8)
+    i = 0
+    while (i < emoji.length) {
+        val cp = emoji.codePointAt(i)
+        i += Character.charCount(cp)
+        if (isSkinTone(cp)) {
+            // Normalize any existing non-fair skin tone to fair skin tone
+            toned.appendCodePoint(FAIR_SKIN_TONE)
+        } else {
             toned.appendCodePoint(cp)
             if (isModifierBase(cp)) {
                 // Skin tone sequences don't use the emoji variation selector
                 if (i < emoji.length && emoji[i].code == 0xFE0F) i++
-                toned.appendCodePoint(FAIR_SKIN_TONE)
+                // If next character is not already a skin tone, insert FAIR_SKIN_TONE
+                if (i >= emoji.length || !isSkinTone(emoji.codePointAt(i))) {
+                    toned.appendCodePoint(FAIR_SKIN_TONE)
+                }
             }
         }
-        if (glyphPaint.hasGlyph(toned.toString())) result = toned.toString()
     }
+    val result = toned.toString()
     toneCache.put(emoji, result)
     return result
 }
