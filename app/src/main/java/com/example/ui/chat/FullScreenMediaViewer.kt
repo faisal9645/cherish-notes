@@ -81,7 +81,10 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
 import java.io.OutputStream
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.layout.onSizeChanged
 import kotlin.math.abs
+import kotlin.math.hypot
 import kotlin.math.roundToInt
 import com.example.ui.theme.Blue500
 import com.example.ui.theme.Gray400
@@ -198,13 +201,54 @@ fun FullScreenMediaViewer(
         mediaList.getOrNull(currentIndex) ?: mediaUrl
     }
 
-    // Zoom & Pan state
-    var scale by remember(currentIndex) { mutableFloatStateOf(1f) }
-    var offset by remember(currentIndex) { mutableStateOf(Offset.Zero) }
+    // Zoom & Pan state: Google Photos style smooth Animatable zoom with focal-point tracking
+    val scaleAnim = remember(currentIndex) { Animatable(1f) }
+    val offsetXAnim = remember(currentIndex) { Animatable(0f) }
+    val offsetYAnim = remember(currentIndex) { Animatable(0f) }
     var swipeOffsetY by remember(currentIndex) { mutableFloatStateOf(0f) }
     var isChromeVisible by remember { mutableStateOf(true) }
 
+    var containerSize by remember { mutableStateOf(IntSize.Zero) }
+    var currentImageSize by remember(currentIndex) { mutableStateOf(Size.Zero) }
+
+    val scale = scaleAnim.value
+    val offset = Offset(offsetXAnim.value, offsetYAnim.value)
+
     val filmstripListState = rememberLazyListState()
+
+    fun calculateMaxBounds(scaleVal: Float, cSize: IntSize, imgSize: Size): Offset {
+        if (scaleVal <= 1.001f || cSize.width <= 0 || cSize.height <= 0) {
+            return Offset.Zero
+        }
+        val cw = cSize.width.toFloat()
+        val ch = cSize.height.toFloat()
+
+        val (contentW, contentH) = if (imgSize.width > 0f && imgSize.height > 0f && !imgSize.width.isNaN() && !imgSize.height.isNaN()) {
+            val imgAspect = imgSize.width / imgSize.height
+            val containerAspect = cw / ch
+            if (imgAspect > containerAspect) {
+                // Wide image: fills width, letterboxed vertically
+                val fittedW = cw
+                val fittedH = cw / imgAspect
+                fittedW to fittedH
+            } else {
+                // Tall image: fills height, pillarboxed horizontally
+                val fittedH = ch
+                val fittedW = ch * imgAspect
+                fittedW to fittedH
+            }
+        } else {
+            cw to ch
+        }
+
+        val renderedW = contentW * scaleVal
+        val renderedH = contentH * scaleVal
+
+        val maxX = maxOf(0f, (renderedW - cw) / 2f)
+        val maxY = maxOf(0f, (renderedH - ch) / 2f)
+
+        return Offset(maxX, maxY)
+    }
 
     // Sync pager and filmstrip
     LaunchedEffect(pagerState.currentPage) {
@@ -212,35 +256,81 @@ fun FullScreenMediaViewer(
         if (mediaList.isNotEmpty() && currentIndex in mediaList.indices) {
             filmstripListState.animateScrollToItem(currentIndex)
         }
-        scale = 1f
-        offset = Offset.Zero
+        scaleAnim.snapTo(1f)
+        offsetXAnim.snapTo(0f)
+        offsetYAnim.snapTo(0f)
         swipeOffsetY = 0f
     }
 
-    fun resetZoom() {
-        scale = 1f
-        offset = Offset.Zero
+    fun resetZoom(animated: Boolean = true) {
+        if (animated) {
+            scope.launch {
+                launch { scaleAnim.animateTo(1f, spring(dampingRatio = 0.85f, stiffness = 380f)) }
+                launch { offsetXAnim.animateTo(0f, spring(dampingRatio = 0.85f, stiffness = 380f)) }
+                launch { offsetYAnim.animateTo(0f, spring(dampingRatio = 0.85f, stiffness = 380f)) }
+            }
+        } else {
+            scope.launch {
+                scaleAnim.snapTo(1f)
+                offsetXAnim.snapTo(0f)
+                offsetYAnim.snapTo(0f)
+            }
+        }
         swipeOffsetY = 0f
     }
 
     fun zoomIn() {
-        scale = (scale + 0.6f).coerceAtMost(5.0f)
+        scope.launch {
+            val targetScale = (scaleAnim.value + 0.65f).coerceAtMost(5.0f)
+            val bounds = calculateMaxBounds(targetScale, containerSize, currentImageSize)
+            val targetOffsetX = offsetXAnim.value.coerceIn(-bounds.x, bounds.x)
+            val targetOffsetY = offsetYAnim.value.coerceIn(-bounds.y, bounds.y)
+            launch { scaleAnim.animateTo(targetScale, spring(dampingRatio = 0.85f, stiffness = 380f)) }
+            launch { offsetXAnim.animateTo(targetOffsetX, spring(dampingRatio = 0.85f, stiffness = 380f)) }
+            launch { offsetYAnim.animateTo(targetOffsetY, spring(dampingRatio = 0.85f, stiffness = 380f)) }
+        }
     }
 
     fun zoomOut() {
-        scale = (scale - 0.6f).coerceAtLeast(1.0f)
-        if (scale <= 1.05f) {
-            offset = Offset.Zero
+        scope.launch {
+            val targetScale = (scaleAnim.value - 0.65f).coerceAtLeast(1.0f)
+            val bounds = calculateMaxBounds(targetScale, containerSize, currentImageSize)
+            val targetOffsetX = if (targetScale <= 1.05f) 0f else offsetXAnim.value.coerceIn(-bounds.x, bounds.x)
+            val targetOffsetY = if (targetScale <= 1.05f) 0f else offsetYAnim.value.coerceIn(-bounds.y, bounds.y)
+            launch { scaleAnim.animateTo(targetScale, spring(dampingRatio = 0.85f, stiffness = 380f)) }
+            launch { offsetXAnim.animateTo(targetOffsetX, spring(dampingRatio = 0.85f, stiffness = 380f)) }
+            launch { offsetYAnim.animateTo(targetOffsetY, spring(dampingRatio = 0.85f, stiffness = 380f)) }
         }
     }
 
     fun toggleMaxMinZoom(tapPosition: Offset = Offset.Zero) {
-        if (scale > 1.2f) {
-            // Zoom out to minimum (fit screen)
-            resetZoom()
-        } else {
-            // Zoom in to max (2.8x)
-            scale = 2.8f
+        scope.launch {
+            if (scaleAnim.value > 1.15f) {
+                // Zoom out to minimum (fit screen)
+                launch { scaleAnim.animateTo(1f, spring(dampingRatio = 0.85f, stiffness = 380f)) }
+                launch { offsetXAnim.animateTo(0f, spring(dampingRatio = 0.85f, stiffness = 380f)) }
+                launch { offsetYAnim.animateTo(0f, spring(dampingRatio = 0.85f, stiffness = 380f)) }
+            } else {
+                // Zoom in to 2.8x focused smoothly at tap position like Google Photos
+                val targetScale = 2.8f
+                val center = if (containerSize.width > 0 && containerSize.height > 0) {
+                    Offset(containerSize.width / 2f, containerSize.height / 2f)
+                } else {
+                    Offset.Zero
+                }
+                val tapPoint = if (tapPosition != Offset.Zero && center != Offset.Zero) tapPosition else center
+                val f = tapPoint - center
+                // Keep the tapped position anchored under the tap
+                val rawOffsetX = -f.x * (targetScale - 1f)
+                val rawOffsetY = -f.y * (targetScale - 1f)
+                val bounds = calculateMaxBounds(targetScale, containerSize, currentImageSize)
+                val targetOffsetX = rawOffsetX.coerceIn(-bounds.x, bounds.x)
+                val targetOffsetY = rawOffsetY.coerceIn(-bounds.y, bounds.y)
+
+                launch { scaleAnim.animateTo(targetScale, spring(dampingRatio = 0.85f, stiffness = 380f)) }
+                launch { offsetXAnim.animateTo(targetOffsetX, spring(dampingRatio = 0.85f, stiffness = 380f)) }
+                launch { offsetYAnim.animateTo(targetOffsetY, spring(dampingRatio = 0.85f, stiffness = 380f)) }
+            }
         }
     }
 
@@ -414,17 +504,20 @@ fun FullScreenMediaViewer(
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
+                        .onSizeChanged { containerSize = it }
                         .then(
                             if (page == pagerState.currentPage && !isVideo) {
                                 Modifier.pointerInput(page) {
                                     var lastTapTime = 0L
                                     var lastTapOffset = Offset.Zero
+                                    var tapJob: kotlinx.coroutines.Job? = null
 
                                     awaitEachGesture {
                                         val down = awaitFirstDown(requireUnconsumed = false)
                                         val startTime = System.currentTimeMillis()
                                         var isMultiTouch = false
                                         var previousDistance = 0f
+                                        var lastCentroid = Offset.Zero
                                         var totalX = 0f
                                         var totalY = 0f
                                         var decidedDirection = false
@@ -439,29 +532,46 @@ fun FullScreenMediaViewer(
                                             if (activeChanges.isEmpty()) break
 
                                             if (activeChanges.size >= 2) {
-                                                // Multi-finger pinch-to-zoom
+                                                // Multi-finger pinch-to-zoom & focal panning
                                                 isMultiTouch = true
                                                 val p0 = activeChanges[0].position
                                                 val p1 = activeChanges[1].position
-                                                val currentDistance = kotlin.math.hypot(p0.x - p1.x, p0.y - p1.y)
+                                                val currentDistance = hypot(p0.x - p1.x, p0.y - p1.y)
+                                                val currentCentroid = (p0 + p1) / 2f
 
                                                 if (previousDistance > 0f && currentDistance > 0f) {
                                                     val zoomDelta = currentDistance / previousDistance
-                                                    val newScale = (scale * zoomDelta).coerceIn(0.85f, 5.0f)
-                                                    scale = newScale
+                                                    val oldScale = scaleAnim.value
 
-                                                    // Centroid pan
-                                                    val centroidChange = (activeChanges[0].positionChange() + activeChanges[1].positionChange()) / 2f
-                                                    if (scale > 1.05f) {
-                                                        val maxBoundX = (scale - 1f) * 600f
-                                                        val maxBoundY = (scale - 1f) * 800f
-                                                        offset = Offset(
-                                                            x = (offset.x + centroidChange.x).coerceIn(-maxBoundX, maxBoundX),
-                                                            y = (offset.y + centroidChange.y).coerceIn(-maxBoundY, maxBoundY)
-                                                        )
+                                                    // Elastic zoom scale with resistance beyond [1.0, 5.0]
+                                                    var newScale = oldScale * zoomDelta
+                                                    if (newScale < 1.0f) {
+                                                        val under = 1.0f - newScale
+                                                        newScale = 1.0f - (under * 0.45f)
+                                                        newScale = newScale.coerceAtLeast(0.7f)
+                                                    } else if (newScale > 5.0f) {
+                                                        val over = newScale - 5.0f
+                                                        newScale = 5.0f + (over * 0.45f)
+                                                        newScale = newScale.coerceAtMost(6.5f)
+                                                    }
+
+                                                    val effectiveDelta = if (oldScale > 0f) newScale / oldScale else 1f
+                                                    val center = Offset(containerSize.width / 2f, containerSize.height / 2f)
+
+                                                    // Precise focal point zoom formula: keep centroid anchored under fingers
+                                                    val fOld = lastCentroid - center
+                                                    val fNew = currentCentroid - center
+                                                    val oldOffset = Offset(offsetXAnim.value, offsetYAnim.value)
+                                                    val newOffset = fNew - (fOld - oldOffset) * effectiveDelta
+
+                                                    scope.launch {
+                                                        scaleAnim.snapTo(newScale)
+                                                        offsetXAnim.snapTo(newOffset.x)
+                                                        offsetYAnim.snapTo(newOffset.y)
                                                     }
                                                 }
                                                 previousDistance = currentDistance
+                                                lastCentroid = currentCentroid
                                                 activeChanges.forEach { it.consume() }
 
                                             } else if (activeChanges.size == 1 && !isMultiTouch) {
@@ -472,119 +582,209 @@ fun FullScreenMediaViewer(
                                                 totalY += delta.y
                                                 velocityTracker.addPosition(change.uptimeMillis, change.position)
 
-                                                if (scale > 1.05f) {
-                                                    // Zoomed-in state: Pan the zoomed image
-                                                    val maxBoundX = (scale - 1f) * 600f
-                                                    val maxBoundY = (scale - 1f) * 800f
-                                                    val newX = offset.x + delta.x
-                                                    val newY = offset.y + delta.y
+                                                if (scaleAnim.value > 1.05f) {
+                                                    // Zoomed in: pan image with rubber-band edge resistance
+                                                    val curScale = scaleAnim.value
+                                                    val bounds = calculateMaxBounds(curScale, containerSize, currentImageSize)
+                                                    val curX = offsetXAnim.value
+                                                    val curY = offsetYAnim.value
 
-                                                    // Track overscroll at boundary
-                                                    if (newX > maxBoundX) {
-                                                        overscrollX += (newX - maxBoundX)
-                                                    } else if (newX < -maxBoundX) {
-                                                        overscrollX += (newX - (-maxBoundX))
-                                                    } else {
-                                                        overscrollX = 0f
+                                                    val newX = if (bounds.x > 0f) {
+                                                        if (curX > bounds.x && delta.x > 0f) curX + delta.x * 0.35f
+                                                        else if (curX < -bounds.x && delta.x < 0f) curX + delta.x * 0.35f
+                                                        else curX + delta.x
+                                                    } else curX
+
+                                                    val newY = if (bounds.y > 0f) {
+                                                        if (curY > bounds.y && delta.y > 0f) curY + delta.y * 0.35f
+                                                        else if (curY < -bounds.y && delta.y < 0f) curY + delta.y * 0.35f
+                                                        else curY + delta.y
+                                                    } else curY
+
+                                                    // Track overscroll at horizontal bounds for paging
+                                                    if (bounds.x > 0f) {
+                                                        if (newX > bounds.x) overscrollX += (newX - bounds.x)
+                                                        else if (newX < -bounds.x) overscrollX += (newX - (-bounds.x))
+                                                        else overscrollX = 0f
                                                     }
 
-                                                    offset = Offset(
-                                                        x = newX.coerceIn(-maxBoundX, maxBoundX),
-                                                        y = newY.coerceIn(-maxBoundY, maxBoundY)
-                                                    )
+                                                    scope.launch {
+                                                        offsetXAnim.snapTo(newX)
+                                                        offsetYAnim.snapTo(newY)
+                                                    }
                                                     change.consume()
-
                                                 } else {
-                                                    // Normal 1.0x scale:
-                                                    // Detect if user intended a clear horizontal slide or vertical pull-down dismiss
+                                                    // Normal 1.0x scale: Horizontal swipe for pager or vertical pull-down dismiss
                                                     if (!decidedDirection) {
                                                         if (abs(totalX) > 20f && abs(totalX) > abs(totalY)) {
-                                                            // Clear horizontal swipe: Leave change completely unconsumed so HorizontalPager slides pages smoothly
                                                             decidedDirection = true
                                                             isVerticalSwipeDismiss = false
-                                                        } else if (totalY > 40f && totalY > abs(totalX) * 1.8f) {
-                                                            // Clear downwards swipe: Handle vertical pull-down to dismiss
+                                                        } else if (totalY > 30f && totalY > abs(totalX) * 1.5f) {
                                                             decidedDirection = true
                                                             isVerticalSwipeDismiss = true
                                                         }
                                                     }
 
                                                     if (decidedDirection && isVerticalSwipeDismiss) {
-                                                        // The photo follows the finger; letting go decides
                                                         change.consume()
                                                         swipeOffsetY = totalY
-                                                    } else {
-                                                        // Horizontal or undecided swipe:
-                                                        // DO NOT consume change! HorizontalPager handles sliding smoothly to next/prev photo!
                                                     }
                                                 }
                                             }
                                         }
 
+                                        // Gesture finished (fingers lifted)
                                         val elapsed = System.currentTimeMillis() - startTime
-                                        val dist = kotlin.math.hypot(totalX, totalY)
+                                        val dist = hypot(totalX, totalY)
 
-                                        // Tap / Double-tap detection with responsive touch thresholds
-                                        if (dist < 40f && !isMultiTouch && elapsed < 380L) {
-                                            val now = System.currentTimeMillis()
-                                            val tapPos = down.position
-                                            if (now - lastTapTime < 380L && (tapPos - lastTapOffset).getDistance() < 120f) {
-                                                // Double tap
-                                                if (doubleTapZoom) toggleMaxMinZoom(tapPos)
-                                                lastTapTime = 0L
-                                            } else {
-                                                lastTapTime = now
-                                                lastTapOffset = tapPos
-                                                // Single tap: toggle chrome visibility
-                                                isChromeVisible = !isChromeVisible
+                                        if (isMultiTouch) {
+                                            // End of pinch gesture: spring back smoothly if scale < 1.0x or > 5.0x, or offset out of bounds
+                                            val curScale = scaleAnim.value
+                                            val targetScale = curScale.coerceIn(1.0f, 5.0f)
+                                            val bounds = calculateMaxBounds(targetScale, containerSize, currentImageSize)
+                                            val targetX = if (targetScale <= 1.05f) 0f else offsetXAnim.value.coerceIn(-bounds.x, bounds.x)
+                                            val targetY = if (targetScale <= 1.05f) 0f else offsetYAnim.value.coerceIn(-bounds.y, bounds.y)
+
+                                            scope.launch {
+                                                launch { scaleAnim.animateTo(targetScale, spring(dampingRatio = 0.82f, stiffness = 380f)) }
+                                                launch { offsetXAnim.animateTo(targetX, spring(dampingRatio = 0.82f, stiffness = 380f)) }
+                                                launch { offsetYAnim.animateTo(targetY, spring(dampingRatio = 0.82f, stiffness = 380f)) }
                                             }
-                                        }
-
-                                        // Snap back near 1.0x to immediately re-enable pager scrolling
-                                        if (scale < 1.15f) {
-                                            scale = 1f
-                                            offset = Offset.Zero
-                                        }
-                                        if (isVerticalSwipeDismiss) {
-                                            val velocityY = velocityTracker.calculateVelocity().y
-                                            val flicked = velocityY >= 1100.dp.toPx() && swipeOffsetY > 24.dp.toPx()
-                                            val from = swipeOffsetY
-                                            if (from > 160f || flicked) {
-                                                // Pulled far enough, or flicked: the photo flies off at the
-                                                // finger's speed while the viewer fades away
-                                                val flyTo = size.height.toFloat() + from
-                                                scope.launch {
-                                                    androidx.compose.animation.core.animate(
-                                                        initialValue = from,
-                                                        targetValue = flyTo,
-                                                        initialVelocity = velocityY.coerceAtLeast(1500.dp.toPx()),
-                                                        animationSpec = spring(dampingRatio = 1f, stiffness = 120f)
-                                                    ) { value, _ -> swipeOffsetY = value }
-                                                }
-                                                closeAnimated()
-                                            } else if (from != 0f) {
-                                                // Not far enough: it springs back, carrying the finger's speed
-                                                scope.launch {
-                                                    androidx.compose.animation.core.animate(
-                                                        initialValue = from,
-                                                        targetValue = 0f,
-                                                        initialVelocity = velocityY,
-                                                        animationSpec = spring(dampingRatio = 0.72f, stiffness = 520f)
-                                                    ) { value, _ -> swipeOffsetY = value }
+                                        } else {
+                                            // Tap / Double-tap detection
+                                            if (dist < 30f && elapsed < 350L) {
+                                                val now = System.currentTimeMillis()
+                                                val tapPos = down.position
+                                                if (now - lastTapTime < 320L && (tapPos - lastTapOffset).getDistance() < 100f) {
+                                                    // Double tap: cancel pending single-tap and toggle zoom
+                                                    tapJob?.cancel()
+                                                    tapJob = null
+                                                    lastTapTime = 0L
+                                                    if (doubleTapZoom) {
+                                                        toggleMaxMinZoom(tapPos)
+                                                    }
+                                                } else {
+                                                    lastTapTime = now
+                                                    lastTapOffset = tapPos
+                                                    tapJob?.cancel()
+                                                    tapJob = scope.launch {
+                                                        kotlinx.coroutines.delay(260L)
+                                                        isChromeVisible = !isChromeVisible
+                                                    }
                                                 }
                                             }
-                                        }
 
-                                        // If user swiped past the boundary while zoomed in, glide to next/previous photo
-                                        if (overscrollX < -120f && pagerState.currentPage < mediaList.lastIndex) {
-                                            scope.launch {
-                                                resetZoom()
-                                                pagerState.animateScrollToPage(pagerState.currentPage + 1)
+                                            // Single finger release when zoomed in: fling or spring back to bounds
+                                            if (scaleAnim.value > 1.05f) {
+                                                val curScale = scaleAnim.value
+                                                val bounds = calculateMaxBounds(curScale, containerSize, currentImageSize)
+                                                val velocity = velocityTracker.calculateVelocity()
+                                                val targetX = offsetXAnim.value.coerceIn(-bounds.x, bounds.x)
+                                                val targetY = offsetYAnim.value.coerceIn(-bounds.y, bounds.y)
+
+                                                scope.launch {
+                                                    if (offsetXAnim.value != targetX || offsetYAnim.value != targetY) {
+                                                        launch {
+                                                            offsetXAnim.animateTo(
+                                                                targetValue = targetX,
+                                                                initialVelocity = velocity.x,
+                                                                animationSpec = spring(dampingRatio = 0.82f, stiffness = 380f)
+                                                            )
+                                                        }
+                                                        launch {
+                                                            offsetYAnim.animateTo(
+                                                                targetValue = targetY,
+                                                                initialVelocity = velocity.y,
+                                                                animationSpec = spring(dampingRatio = 0.82f, stiffness = 380f)
+                                                            )
+                                                        }
+                                                    } else if (hypot(velocity.x, velocity.y) > 120f) {
+                                                        // Smooth momentum fling with decay
+                                                        launch {
+                                                            val decaySpec = exponentialDecay<Float>(frictionMultiplier = 1.3f)
+                                                            offsetXAnim.animateDecay(
+                                                                initialVelocity = velocity.x,
+                                                                animationSpec = decaySpec
+                                                            ) {
+                                                                if (value < -bounds.x || value > bounds.x) {
+                                                                    cancelAnimation()
+                                                                }
+                                                            }
+                                                            if (offsetXAnim.value !in -bounds.x..bounds.x) {
+                                                                offsetXAnim.animateTo(
+                                                                    targetValue = offsetXAnim.value.coerceIn(-bounds.x, bounds.x),
+                                                                    animationSpec = spring(dampingRatio = 0.82f, stiffness = 380f)
+                                                                )
+                                                            }
+                                                        }
+                                                        launch {
+                                                            val decaySpec = exponentialDecay<Float>(frictionMultiplier = 1.3f)
+                                                            offsetYAnim.animateDecay(
+                                                                initialVelocity = velocity.y,
+                                                                animationSpec = decaySpec
+                                                            ) {
+                                                                if (value < -bounds.y || value > bounds.y) {
+                                                                    cancelAnimation()
+                                                                }
+                                                            }
+                                                            if (offsetYAnim.value !in -bounds.y..bounds.y) {
+                                                                offsetYAnim.animateTo(
+                                                                    targetValue = offsetYAnim.value.coerceIn(-bounds.y, bounds.y),
+                                                                    animationSpec = spring(dampingRatio = 0.82f, stiffness = 380f)
+                                                                )
+                                                            }
+                                                        }
+                                                    }
+                                                }
                                             }
-                                        } else if (overscrollX > 120f && pagerState.currentPage > 0) {
-                                            scope.launch {
-                                                resetZoom()
-                                                pagerState.animateScrollToPage(pagerState.currentPage - 1)
+
+                                            // Snap back near 1.0x to immediately re-enable pager scrolling
+                                            if (scaleAnim.value < 1.05f) {
+                                                scope.launch {
+                                                    scaleAnim.animateTo(1f, spring(dampingRatio = 0.85f, stiffness = 380f))
+                                                    offsetXAnim.animateTo(0f, spring(dampingRatio = 0.85f, stiffness = 380f))
+                                                    offsetYAnim.animateTo(0f, spring(dampingRatio = 0.85f, stiffness = 380f))
+                                                }
+                                            }
+
+                                            if (isVerticalSwipeDismiss) {
+                                                val velocityY = velocityTracker.calculateVelocity().y
+                                                val flicked = velocityY >= 1100.dp.toPx() && swipeOffsetY > 24.dp.toPx()
+                                                val from = swipeOffsetY
+                                                if (from > 160f || flicked) {
+                                                    val flyTo = size.height.toFloat() + from
+                                                    scope.launch {
+                                                        androidx.compose.animation.core.animate(
+                                                            initialValue = from,
+                                                            targetValue = flyTo,
+                                                            initialVelocity = velocityY.coerceAtLeast(1500.dp.toPx()),
+                                                            animationSpec = spring(dampingRatio = 1f, stiffness = 120f)
+                                                        ) { value, _ -> swipeOffsetY = value }
+                                                    }
+                                                    closeAnimated()
+                                                } else if (from != 0f) {
+                                                    scope.launch {
+                                                        androidx.compose.animation.core.animate(
+                                                            initialValue = from,
+                                                            targetValue = 0f,
+                                                            initialVelocity = velocityY,
+                                                            animationSpec = spring(dampingRatio = 0.72f, stiffness = 520f)
+                                                        ) { value, _ -> swipeOffsetY = value }
+                                                    }
+                                                }
+                                            }
+
+                                            // If user swiped past the boundary while zoomed in, glide to next/previous photo
+                                            if (overscrollX < -120f && pagerState.currentPage < mediaList.lastIndex) {
+                                                scope.launch {
+                                                    resetZoom(animated = false)
+                                                    pagerState.animateScrollToPage(pagerState.currentPage + 1)
+                                                }
+                                            } else if (overscrollX > 120f && pagerState.currentPage > 0) {
+                                                scope.launch {
+                                                    resetZoom(animated = false)
+                                                    pagerState.animateScrollToPage(pagerState.currentPage - 1)
+                                                }
                                             }
                                         }
                                     }
@@ -658,15 +858,21 @@ fun FullScreenMediaViewer(
                                 .build(),
                             contentDescription = "Full-screen media photo",
                             contentScale = ContentScale.Fit,
+                            onSuccess = { state ->
+                                val intrinsic = state.painter.intrinsicSize
+                                if (intrinsic.width > 0f && intrinsic.height > 0f && !intrinsic.width.isNaN() && !intrinsic.height.isNaN()) {
+                                    currentImageSize = intrinsic
+                                }
+                            },
                             modifier = Modifier
                                 .fillMaxSize()
                                 .clip(RoundedCornerShape(dismissCornerRadius))
                                 .graphicsLayer {
                                     if (page == pagerState.currentPage) {
-                                        scaleX = scale * dismissScale
-                                        scaleY = scale * dismissScale
-                                        translationX = offset.x
-                                        translationY = offset.y + swipeOffsetY
+                                        scaleX = scaleAnim.value * dismissScale
+                                        scaleY = scaleAnim.value * dismissScale
+                                        translationX = offsetXAnim.value
+                                        translationY = offsetYAnim.value + swipeOffsetY
                                     }
                                 }
                         )

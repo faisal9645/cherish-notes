@@ -68,7 +68,8 @@ object CallNotifications {
             )
             enableVibration(true)
             vibrationPattern = longArrayOf(0, 900, 700, 900, 700)
-            lockscreenVisibility = Notification.VISIBILITY_PRIVATE
+            lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+            setBypassDnd(true)
             setShowBadge(false)
         }
         val incomingSilent = NotificationChannel(CHANNEL_INCOMING_SILENT, "Silent calls", NotificationManager.IMPORTANCE_HIGH).apply {
@@ -76,14 +77,16 @@ object CallNotifications {
             setSound(null, null)
             enableVibration(true)
             vibrationPattern = longArrayOf(0, 900, 700, 900, 700)
-            lockscreenVisibility = Notification.VISIBILITY_PRIVATE
+            lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+            setBypassDnd(true)
             setShowBadge(false)
         }
         val incomingQuiet = NotificationChannel(CHANNEL_INCOMING_QUIET, "Incoming calls", NotificationManager.IMPORTANCE_HIGH).apply {
             description = "Shows who's calling while the app rings"
             setSound(null, null)
             enableVibration(false)
-            lockscreenVisibility = Notification.VISIBILITY_PRIVATE
+            lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+            setBypassDnd(true)
             setShowBadge(false)
         }
         val ongoing = NotificationChannel(CHANNEL_ONGOING, "Call in progress", NotificationManager.IMPORTANCE_LOW).apply {
@@ -169,13 +172,13 @@ object CallNotifications {
         // Post notification immediately so incoming call screen / heads-up banner shows with 0 delay
         showRingingNotification(context, invite)
         if (!silenced) {
+            ringFromApp(context, invite)
             CallService.startRinging(context, invite)
         }
     }
 
     /** The notification shows the call and rings by itself (the app's ringing service isn't up). */
     internal fun showRingingNotification(context: Context, invite: CallInvite) {
-        CallRinger.stop(context)
         shownCallId = invite.callId
         val ringing = if (silencedCallId == invite.callId) Ringing.QUIET else Ringing.NOTIFICATION
         notify(context, ID_INCOMING, buildIncoming(context, invite, ringing))
@@ -225,7 +228,11 @@ object CallNotifications {
                 .setColor(ACCENT)
                 .setContentTitle(maskedTitle)
                 .setContentText(maskedText)
-                .setSubText(maskedTitle)
+                .apply {
+                    if (!maskedTitle.equals("Notes", ignoreCase = true)) {
+                        setSubText(maskedTitle)
+                    }
+                }
                 .setCategory(NotificationCompat.CATEGORY_REMINDER)
                 .setPriority(NotificationCompat.PRIORITY_HIGH)
                 .setOngoing(true)
@@ -410,7 +417,11 @@ object CallNotifications {
             .setColor(ACCENT)
             .setContentTitle(title)
             .setContentText(text)
-            .setSubText(if (isMasked) prefs.getMaskedNotificationTitle() else "Cherish")
+            .apply {
+                if (!isMasked) {
+                    setSubText("Cherish")
+                }
+            }
             .setCategory(if (isMasked) NotificationCompat.CATEGORY_REMINDER else NotificationCompat.CATEGORY_MISSED_CALL)
             .setAutoCancel(true)
             .setSilent(!isRinging)

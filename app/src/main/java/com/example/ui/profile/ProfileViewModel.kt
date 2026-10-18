@@ -112,16 +112,30 @@ class ProfileViewModel(
         viewModelScope.launch {
             val cleanUser = username.trim().ifBlank { _uiState.value.currentUser?.displayName ?: "Me" }
             val cleanPartner = partnerName.trim()
-            val cleanCode = coupleSecretCode.trim().ifBlank { "CHERISH-FOREVER" }
+            val cleanCode = coupleSecretCode.trim()
+                .removePrefix("COUPLE_")
+                .removePrefix("couple_")
+                .ifBlank { "CHERISH-FOREVER" }
+                .uppercase()
 
-            authRepository.updateProfile(cleanUser, _uiState.value.currentUser?.statusMessage ?: "", null, false)
-            if (cleanPartner.isNotBlank()) {
-                authRepository.pairWithPartner(cleanPartner, cleanCode)
+            val existingCoupleId = _uiState.value.currentUser?.coupleId?.trim()?.ifBlank { null }
+                ?: authRepository.getSavedCoupleId().takeIf { it != "couple_default" }
+
+            val result = if (!existingCoupleId.isNullOrBlank()) {
+                authRepository.updateExistingCoupleCredentials(cleanUser, cleanPartner, cleanCode)
+            } else {
+                authRepository.updateProfile(cleanUser, _uiState.value.currentUser?.statusMessage ?: "", null, false)
+                if (cleanPartner.isNotBlank()) {
+                    authRepository.pairWithPartner(cleanPartner, cleanCode)
+                } else {
+                    Result.success(authRepository.currentUserState.value ?: com.example.data.model.User())
+                }
             }
+
             securityPreferences.setCoupleSecretKey(cleanCode)
             _uiState.update { it.copy(coupleKey = cleanCode) }
             googleDriveBackupManager.triggerImmediateAutoBackup()
-            onResult(true)
+            onResult(result.isSuccess)
         }
     }
 
@@ -578,8 +592,20 @@ class ProfileViewModel(
 
     fun updatePartnerEmailAndKey(partnerEmail: String, coupleKey: String) {
         viewModelScope.launch {
-            authRepository.pairWithPartner(partnerEmail, coupleKey)
-            _uiState.update { it.copy(coupleKey = coupleKey) }
+            val cleanCode = coupleKey.trim()
+                .removePrefix("COUPLE_")
+                .removePrefix("couple_")
+                .ifBlank { "CHERISH-FOREVER" }
+                .uppercase()
+            val existingCoupleId = _uiState.value.currentUser?.coupleId?.trim()?.ifBlank { null }
+            if (!existingCoupleId.isNullOrBlank()) {
+                val currentName = _uiState.value.currentUser?.displayName ?: "Me"
+                authRepository.updateExistingCoupleCredentials(currentName, partnerEmail, cleanCode)
+            } else {
+                authRepository.pairWithPartner(partnerEmail, cleanCode)
+            }
+            securityPreferences.setCoupleSecretKey(cleanCode)
+            _uiState.update { it.copy(coupleKey = cleanCode) }
         }
     }
 

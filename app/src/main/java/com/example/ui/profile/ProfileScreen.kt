@@ -475,16 +475,23 @@ fun ProfileScreen(
                 icon = Icons.Rounded.Favorite
             ) {
                 ListItem(
+                    modifier = Modifier.clickable { showPairDialog = true },
                     headlineContent = { Text("My Username", fontSize = 15.sp, fontWeight = FontWeight.SemiBold) },
                     supportingContent = {
                         Text(user?.displayName?.ifBlank { "Me" } ?: "Me", fontSize = 13.sp)
                     },
                     leadingContent = {
                         Icon(Icons.Rounded.Person, contentDescription = null, tint = primaryAccent)
+                    },
+                    trailingContent = {
+                        IconButton(onClick = { showPairDialog = true }) {
+                            Icon(Icons.Rounded.Edit, contentDescription = "Edit login credentials", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
                     }
                 )
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), thickness = 0.6.dp)
                 ListItem(
+                    modifier = Modifier.clickable { showPairDialog = true },
                     headlineContent = { Text("Partner's Account", fontSize = 15.sp, fontWeight = FontWeight.SemiBold) },
                     supportingContent = {
                         val partnerDisplay = user?.partnerEmail?.removeSuffix("@cherish.app")
@@ -494,14 +501,25 @@ fun ProfileScreen(
                     },
                     leadingContent = {
                         Icon(Icons.Rounded.Favorite, contentDescription = null, tint = HeartRed)
+                    },
+                    trailingContent = {
+                        IconButton(onClick = { showPairDialog = true }) {
+                            Icon(Icons.Rounded.Edit, contentDescription = "Edit credentials", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
                     }
                 )
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), thickness = 0.6.dp)
                 ListItem(
+                    modifier = Modifier.clickable { showPairDialog = true },
                     headlineContent = { Text("Shared Couple Passcode", fontSize = 15.sp, fontWeight = FontWeight.SemiBold) },
-                    supportingContent = { Text(uiState.coupleKey.ifBlank { "CHERISH-FOREVER" }, fontSize = 13.sp) },
+                    supportingContent = { Text(uiState.coupleKey.removePrefix("COUPLE_").removePrefix("couple_").ifBlank { "CHERISH-FOREVER" }, fontSize = 13.sp) },
                     leadingContent = {
                         Icon(Icons.Rounded.Key, contentDescription = null, tint = primaryAccent)
+                    },
+                    trailingContent = {
+                        IconButton(onClick = { showPairDialog = true }) {
+                            Icon(Icons.Rounded.Edit, contentDescription = "Edit passcode", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
                     }
                 )
             }
@@ -2642,8 +2660,18 @@ fun ProfileScreen(
     // User Login Settings Dialog
     if (showPairDialog) {
         var usernameInput by remember { mutableStateOf(user?.displayName ?: "") }
-        var partnerEmailInput by remember { mutableStateOf(user?.partnerEmail ?: partner?.displayName ?: "") }
-        var coupleKeyInput by remember { mutableStateOf(uiState.coupleKey) }
+        var partnerEmailInput by remember {
+            mutableStateOf(
+                user?.partnerEmail?.removeSuffix("@cherish.app")
+                    ?: partner?.displayName
+                    ?: ""
+            )
+        }
+        var coupleKeyInput by remember {
+            mutableStateOf(
+                uiState.coupleKey.removePrefix("COUPLE_").removePrefix("couple_")
+            )
+        }
 
         CherishAlertDialog(
             onDismissRequest = { showPairDialog = false },

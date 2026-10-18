@@ -60,22 +60,31 @@ internal object CallRinger {
             ?: AudioManager.RINGER_MODE_NORMAL
         if (mode == AudioManager.RINGER_MODE_SILENT) return
 
-        // Hold partial wakelock so CPU stays awake to ring and vibrate while screen is off/locked
+        // Hold CPU and screen wakelock so device wakes up and stays awake to ring and vibrate while screen is off/locked
         try {
             val pm = context.getSystemService(Context.POWER_SERVICE) as? android.os.PowerManager
             wakeLock = pm?.newWakeLock(android.os.PowerManager.PARTIAL_WAKE_LOCK, "cherish:call_ringer_wake")?.apply {
                 setReferenceCounted(false)
-                // As long as a call can ring (CallManager gives up after at most 95 seconds)
                 acquire(100_000L)
             }
+            @Suppress("DEPRECATION")
+            val screenLock = pm?.newWakeLock(
+                android.os.PowerManager.SCREEN_BRIGHT_WAKE_LOCK or
+                android.os.PowerManager.ACQUIRE_CAUSES_WAKEUP or
+                android.os.PowerManager.ON_AFTER_RELEASE,
+                "cherish:call_ringer_screen_wake"
+            )
+            screenLock?.acquire(15_000L)
         } catch (_: Exception) {}
 
         if (withRingtone && mode == AudioManager.RINGER_MODE_NORMAL) {
             try {
                 // The phone's ringtone as the system keeps a copy of it (readable without any
                 // permission), else the file it was chosen from
-                val uri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
-                    ?: RingtoneManager.getActualDefaultRingtoneUri(context, RingtoneManager.TYPE_RINGTONE)
+                val uri = RingtoneManager.getActualDefaultRingtoneUri(context, RingtoneManager.TYPE_RINGTONE)
+                    ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
+                    ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+                    ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
                     ?: android.provider.Settings.System.DEFAULT_RINGTONE_URI
                 ringtone = RingtoneManager.getRingtone(context, uri)?.apply {
                     audioAttributes = ATTRIBUTES
@@ -83,6 +92,7 @@ internal object CallRinger {
                     play()
                 }
                 // Watchdog replay ensuring continuous ringing even across OEMs that stop after 1 track cycle
+                handler.removeCallbacks(replay)
                 handler.postDelayed(replay, 1_000L)
             } catch (e: Exception) {
                 Log.w(TAG, "Ringtone unavailable", e)

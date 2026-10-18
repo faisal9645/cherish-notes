@@ -1,9 +1,9 @@
 {
-  "versionCode": 180,
-  "versionName": "1.8.8",
-  "tagName": "v1.8.8-180",
-  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.8.8-180/app_update_180.apk",
+  "versionCode": 181,
+  "versionName": "1.8.9",
+  "tagName": "v1.8.9-181",
+  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.8.9-181/app_update_181.apk",
   "assetSize": 18375204,
-  "releaseNotes": "Notes v1.8.8 (Build 180):\n\u2022 Reverted blue theme in dark mode with dark AMOLED black screens\n\u2022 Rounded rectangle navigation bar with blue selection\n\u2022 Notes disguise back gesture closes app\n\u2022 Fast and reliable online & offline message send and receive",
-  "releaseDate": "2026-10-16T13:49:11Z"
+  "releaseNotes": "Notes v1.8.9 (Build 181):\n• Username updates preserve existing couple data, messages, and calls\n• Clean couple passcode display without COUPLE_ prefix\n• Real-time partner username synchronization for already logged-in partners\n• Fixed duplicate 'notes.notes.' in notification headers\n• User privacy settings and options retained across version updates",
+  "releaseDate": "2026-10-18T16:25:00Z"
 }

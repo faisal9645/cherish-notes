@@ -55,7 +55,7 @@ object MediaCompressor {
     private const val RECORDING_BIT_RATE = 48_000
     private const val VIDEO_TIMEOUT_MS = 10L * 60 * 1000
     private const val RECORDING_TIMEOUT_MS = 5L * 60 * 1000
-    private const val MIN_OUTPUT_BYTES = 1024L
+    private const val MIN_OUTPUT_BYTES = 128L
 
     private val mainHandler = Handler(Looper.getMainLooper())
 

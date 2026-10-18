@@ -397,6 +397,29 @@ class AuthRepository(private val context: Context) {
                     }
                 }
 
+                // Synchronize shared couple passcode so UI and credentials dialog always display it correctly
+                val remoteSecretCode = snapshot.getString("secretCode")?.trim()
+                val cleanPasscode = if (!remoteSecretCode.isNullOrBlank()) {
+                    remoteSecretCode.removePrefix("COUPLE_").removePrefix("couple_")
+                } else {
+                    cleanCoupleId.removePrefix("COUPLE_").removePrefix("couple_")
+                }
+                if (cleanPasscode.isNotBlank() && cleanPasscode != "default") {
+                    securityPrefs.setCoupleSecretKey(cleanPasscode.uppercase())
+                }
+
+                // Keep partner displayName synchronized in local state if available from couple space
+                val isP1 = p1 == currentUid
+                val partnerNameFromCouple = if (isP1) snapshot.getString("partner2Name") else snapshot.getString("partner1Name")
+                if (!partnerNameFromCouple.isNullOrBlank()) {
+                    val currentPartner = _partnerUserState.value
+                    if (currentPartner != null && currentPartner.displayName != partnerNameFromCouple) {
+                        _partnerUserState.value = currentPartner.copy(displayName = partnerNameFromCouple)
+                    } else if (currentPartner == null && !otherId.isNullOrBlank()) {
+                        _partnerUserState.value = User(id = otherId, displayName = partnerNameFromCouple)
+                    }
+                }
+
                 // Both birthdays (ages and days lived on the Love & Us tab)
                 val birthdays = (snapshot.get("birthdays") as? Map<*, *>).orEmpty()
                     .mapNotNull { (key, value) -> if (key is String && value is String) key to value else null }
@@ -696,7 +719,7 @@ class AuthRepository(private val context: Context) {
         _currentUserState.value = finalUser
         saveLocalUserSession(finalUser)
         securityPrefs.setApprovedPartnerEmail(partnerVirtualEmail)
-        securityPrefs.setCoupleSecretKey(coupleId)
+        securityPrefs.setCoupleSecretKey(cleanCode)
 
         listenToCurrentUser(uid)
         connectPartnerListenerOnce()
@@ -796,7 +819,12 @@ class AuthRepository(private val context: Context) {
         if (!partnerVirtualEmail.isNullOrBlank()) {
             securityPrefs.setApprovedPartnerEmail(partnerVirtualEmail)
         }
-        securityPrefs.setCoupleSecretKey(coupleId)
+        val cleanPasscode = if (cleanKey.isNotBlank() && cleanKey != "cherish" && cleanKey != "cherish-forever-2026" && cleanKey != "cherish-love" && cleanKey != "couple_default") {
+            cleanKey.removePrefix("couple_").removePrefix("COUPLE_")
+        } else {
+            coupleId.removePrefix("couple_").removePrefix("COUPLE_")
+        }
+        securityPrefs.setCoupleSecretKey(cleanPasscode)
 
         // Connect real-time listeners right away
         listenToCurrentUser(uid)
@@ -905,7 +933,12 @@ class AuthRepository(private val context: Context) {
         if (cleanPartner.isNotBlank()) {
             securityPrefs.setApprovedPartnerEmail("$cleanPartner@cherish.app")
         }
-        securityPrefs.setCoupleSecretKey(coupleId)
+        val cleanPasscode = if (cleanKey.isNotBlank() && cleanKey != "cherish" && cleanKey != "cherish-forever-2026" && cleanKey != "cherish-love" && cleanKey != "couple_default") {
+            cleanKey.removePrefix("couple_").removePrefix("COUPLE_")
+        } else {
+            coupleId.removePrefix("couple_").removePrefix("COUPLE_")
+        }
+        securityPrefs.setCoupleSecretKey(cleanPasscode)
         _currentUserState.value = localUser
         saveLocalUserSession(localUser)
 
@@ -971,7 +1004,8 @@ class AuthRepository(private val context: Context) {
             if (!partnerVirtualEmail.isNullOrBlank()) {
                 securityPrefs.setApprovedPartnerEmail(partnerVirtualEmail)
             }
-            securityPrefs.setCoupleSecretKey(coupleId)
+            val cleanPasscode = if (cleanKey.isNotBlank()) cleanKey.removePrefix("couple_").removePrefix("COUPLE_") else coupleId.removePrefix("couple_").removePrefix("COUPLE_")
+            securityPrefs.setCoupleSecretKey(cleanPasscode)
 
             listenToCurrentUser(uid)
             connectPartnerListenerOnce()
@@ -1044,6 +1078,35 @@ class AuthRepository(private val context: Context) {
                 updates["photoUrl"] = photoUrl
             }
             userDocument(uid)?.set(updates as Map<String, Any>, com.google.firebase.firestore.SetOptions.merge())
+
+            // Update existing couple room with the new username so partner sees it
+            val coupleId = current.coupleId?.trim()?.ifBlank { null } ?: getSavedCoupleId()
+            if (!coupleId.isNullOrBlank() && coupleId != "couple_default") {
+                val coupleRef = getCoupleDocRef(coupleId)
+                if (coupleRef != null) {
+                    try {
+                        val coupleSnap = coupleRef.get().await()
+                        if (coupleSnap.exists()) {
+                            val p1Id = coupleSnap.getString("partner1Id")
+                            val coupleField = if (p1Id == uid) "partner1Name" else "partner2Name"
+                            coupleRef.set(mapOf(coupleField to displayName, "updatedAt" to System.currentTimeMillis()), com.google.firebase.firestore.SetOptions.merge())
+                        }
+                    } catch (e: Exception) {
+                        Log.w("AuthRepository", "Couple name sync in updateProfile: ${e.message}")
+                    }
+                }
+            }
+
+            val partnerId = current.partnerId
+            if (!partnerId.isNullOrBlank()) {
+                try {
+                    userDocument(partnerId)?.set(
+                        mapOf("partnerName" to displayName),
+                        com.google.firebase.firestore.SetOptions.merge()
+                    )
+                } catch (_: Exception) {}
+            }
+
             Result.success(Unit)
         } catch (e: Exception) {
             Log.w("AuthRepository", "Failed to update profile in Firestore, local update kept", e)
@@ -1234,7 +1297,12 @@ class AuthRepository(private val context: Context) {
         }
 
         securityPrefs.setApprovedPartnerEmail(partnerEmail)
-        securityPrefs.setCoupleSecretKey(coupleId)
+        val cleanPasscode = if (cleanKey.isNotBlank() && cleanKey != "cherish" && cleanKey != "cherish-forever-2026" && cleanKey != "cherish-love" && cleanKey != "couple_default") {
+            cleanKey.removePrefix("couple_").removePrefix("COUPLE_")
+        } else {
+            coupleId.removePrefix("couple_").removePrefix("COUPLE_")
+        }
+        securityPrefs.setCoupleSecretKey(cleanPasscode)
 
         val updatedUser = (_currentUserState.value ?: User(id = uid)).copy(
             partnerId = partnerId,
@@ -1260,6 +1328,129 @@ class AuthRepository(private val context: Context) {
             Log.w("AuthRepository", "Pair with partner Firestore update warning", e)
             Result.success(updatedUser)
         }
+    }
+
+    suspend fun updateExistingCoupleCredentials(
+        newUsername: String,
+        partnerName: String,
+        newSecretCode: String
+    ): Result<User> {
+        val uid = getCurrentUserId()
+        if (uid.isBlank()) return Result.failure(Exception("Log in first"))
+
+        val currentUser = _currentUserState.value ?: User(id = uid)
+        val existingCoupleId = currentUser.coupleId?.trim()?.ifBlank { null }
+            ?: getSavedCoupleId().takeIf { it != "couple_default" }
+
+        val cleanUser = newUsername.trim().ifBlank { currentUser.displayName.ifBlank { "Me" } }
+        val cleanPartner = partnerName.trim().removeSuffix("@cherish.app")
+        val cleanKey = newSecretCode.trim()
+            .removePrefix("COUPLE_")
+            .removePrefix("couple_")
+            .filter { it.isLetterOrDigit() || it == '_' || it == '-' }
+
+        // If no existing couple room exists yet, pair with partner
+        if (existingCoupleId.isNullOrBlank()) {
+            val pairRes = pairWithPartner(cleanPartner, if (cleanKey.isNotBlank()) cleanKey else "CHERISH-FOREVER")
+            if (cleanUser != currentUser.displayName && cleanUser.isNotBlank()) {
+                updateProfile(cleanUser, currentUser.statusMessage, null, false)
+            }
+            return pairRes
+        }
+
+        val coupleRef = getCoupleDocRef(existingCoupleId)
+        val partnerId = currentUser.partnerId
+        val partnerEmail = if (cleanPartner.isNotBlank()) {
+            if (partnerName.contains("@")) partnerName.trim().lowercase() else "${cleanPartner.lowercase()}@cherish.app"
+        } else {
+            currentUser.partnerEmail
+        }
+
+        // Keep existing coupleId intact so messages, gallery, notes and call history remain intact
+        val updatedUser = currentUser.copy(
+            displayName = cleanUser,
+            partnerEmail = partnerEmail,
+            coupleId = existingCoupleId
+        )
+        _currentUserState.value = updatedUser
+        saveLocalUserSession(updatedUser)
+
+        val passcodeToStore = if (cleanKey.isNotBlank() && cleanKey != "CHERISH-FOREVER") {
+            cleanKey.uppercase()
+        } else {
+            securityPrefs.getCoupleSecretKey().removePrefix("COUPLE_").removePrefix("couple_").uppercase()
+        }
+        securityPrefs.setCoupleSecretKey(passcodeToStore)
+
+        if (!partnerEmail.isNullOrBlank()) {
+            securityPrefs.setApprovedPartnerEmail(partnerEmail)
+        }
+
+        // Firestore background sync
+        val fs = firestore
+        if (fs != null) {
+            try {
+                // 1. Update user document
+                val userUpdates = mutableMapOf<String, Any>(
+                    "displayName" to cleanUser
+                )
+                if (partnerEmail != null) {
+                    userUpdates["partnerEmail"] = partnerEmail
+                }
+                userDocument(uid)?.set(userUpdates, com.google.firebase.firestore.SetOptions.merge())
+
+                // 2. Update existing couple document without touching member list or room id
+                if (coupleRef != null) {
+                    val coupleSnap = coupleRef.get().await()
+                    val coupleUpdates = mutableMapOf<String, Any>(
+                        "updatedAt" to System.currentTimeMillis()
+                    )
+                    if (cleanKey.isNotBlank() && cleanKey != "CHERISH-FOREVER") {
+                        coupleUpdates["secretCode"] = cleanKey.lowercase()
+                    }
+
+                    if (coupleSnap.exists()) {
+                        val p1Id = coupleSnap.getString("partner1Id")
+                        val p2Id = coupleSnap.getString("partner2Id")
+                        val p1Name = coupleSnap.getString("partner1Name")
+
+                        if (p1Id == uid || (p1Id.isNullOrBlank() && p2Id != uid) || p1Name.equals(currentUser.displayName, ignoreCase = true)) {
+                            coupleUpdates["partner1Name"] = cleanUser
+                            if (cleanPartner.isNotBlank()) {
+                                coupleUpdates["partner2Name"] = cleanPartner
+                            }
+                        } else {
+                            coupleUpdates["partner2Name"] = cleanUser
+                            if (cleanPartner.isNotBlank()) {
+                                coupleUpdates["partner1Name"] = cleanPartner
+                            }
+                        }
+                    } else {
+                        coupleUpdates["partner1Id"] = uid
+                        coupleUpdates["partner1Name"] = cleanUser
+                        if (cleanPartner.isNotBlank()) {
+                            coupleUpdates["partner2Name"] = cleanPartner
+                        }
+                    }
+                    coupleRef.set(coupleUpdates, com.google.firebase.firestore.SetOptions.merge())
+                }
+
+                // 3. Keep partner user doc informed if paired
+                if (!partnerId.isNullOrBlank()) {
+                    userDocument(partnerId)?.set(
+                        mapOf(
+                            "partnerName" to cleanUser,
+                            "partnerEmail" to updatedUser.email
+                        ),
+                        com.google.firebase.firestore.SetOptions.merge()
+                    )
+                }
+            } catch (e: Exception) {
+                Log.w("AuthRepository", "Failed syncing updated couple credentials: ${e.message}")
+            }
+        }
+
+        return Result.success(updatedUser)
     }
 
     @Volatile private var lastFirestoreOnlineWritten: Boolean? = null
@@ -2018,7 +2209,9 @@ class AuthRepository(private val context: Context) {
         val sessionCoupleId = sessionPrefs.getString("coupleId", null)?.trim()?.ifBlank { null }
         if (!sessionCoupleId.isNullOrBlank()) return sessionCoupleId
         val secretKey = securityPrefs.getCoupleSecretKey().trim().ifBlank { null }
-        if (!secretKey.isNullOrBlank()) return secretKey
+        if (!secretKey.isNullOrBlank()) {
+            return if (secretKey.startsWith("couple_", ignoreCase = true)) secretKey else "couple_${secretKey.lowercase()}"
+        }
         return "couple_default"
     }
 

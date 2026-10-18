@@ -38,11 +38,11 @@ internal object CallRecordingUploader {
     private const val RECORD_DIR = "callrec"
     /** This phone's own copies, played without downloading (see CallRecordingPlayer). */
     private const val PLAY_DIR = "call_recordings"
-    private const val MIN_BYTES = 1024L
+    private const val MIN_BYTES = 128L
     private const val MAX_ATTEMPTS = 5
     private const val GIVE_UP_AFTER_MS = 3L * 24 * 60 * 60 * 1000
     /** Unfinished uploads wait this long after the app starts, so they don't slow it down. */
-    private const val RESUME_DELAY_MS = 15_000L
+    private const val RESUME_DELAY_MS = 3_000L
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val running = Collections.synchronizedSet(mutableSetOf<String>())
@@ -139,14 +139,22 @@ internal object CallRecordingUploader {
         val fs = FirebaseFirestore.getInstance()
         val callDoc = fs.collection("couples").document(job.coupleId).collection("calls").document(job.callId)
         val wav = File(job.sourcePath)
-        val compressed = File(wav.parentFile ?: File(app.cacheDir, RECORD_DIR), "rec_${job.callId}.m4a")
+        val parentDir = wav.parentFile ?: File(app.cacheDir, RECORD_DIR)
+        val compressed = File(parentDir, "rec_${job.callId}.m4a")
+        val playDir = File(File(app.cacheDir, PLAY_DIR), job.callId).apply { mkdirs() }
 
         // 1. Small: AAC (.m4a) instead of the WAV; the WAV itself if this phone can't encode it
         var waveform = job.waveform
+        val localPlayCopy = listOf("part_0.m4a", "part_0.mp4", "part_0.aac", "part_0.wav")
+            .map { File(playDir, it) }
+            .firstOrNull { it.exists() && it.length() >= MIN_BYTES }
+
         val file: File = if (compressed.length() >= MIN_BYTES) {
             compressed
+        } else if (localPlayCopy != null) {
+            localPlayCopy
         } else {
-            val source = awaitRecording(wav)
+            val source = awaitRecording(app, job, wav)
             if (source == null) {
                 Log.w(TAG, "No usable recording for ${job.callId}")
                 if (job.attempts > 0) markFailed(fs, callDoc, "recording_lost")
@@ -172,15 +180,36 @@ internal object CallRecordingUploader {
 
         // 2. Playable on this phone right away, from its own copy
         try {
-            val playDir = File(File(app.cacheDir, PLAY_DIR), job.callId).apply { mkdirs() }
             val copy = File(playDir, "part_0.$ext")
-            if (copy.length() != file.length()) file.copyTo(copy, overwrite = true)
+            if (copy.absolutePath != file.absolutePath && copy.length() != file.length()) {
+                file.copyTo(copy, overwrite = true)
+            }
         } catch (e: Exception) {
             Log.w(TAG, "Couldn't keep a copy to play", e)
         }
 
+        // Measure actual audio length if not known accurately
+        var actualDurationSec = job.durationSec
+        if (actualDurationSec <= 1) {
+            val probed = try {
+                val retriever = android.media.MediaMetadataRetriever()
+                retriever.setDataSource(file.absolutePath)
+                val durationMs = retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L
+                retriever.release()
+                (durationMs / 1000L).toInt()
+            } catch (_: Exception) { 0 }
+            if (probed > 0) {
+                actualDurationSec = probed
+            } else if (ext == "wav" && file.length() > 44L) {
+                // 32kHz 16-bit mono = 64000 bytes/sec
+                val sec = ((file.length() - 44L) / 64000L).toInt()
+                if (sec > 0) actualDurationSec = sec
+            }
+        }
+        val effectiveDuration = actualDurationSec.coerceAtLeast(1)
+
         // 3. In the chat and the Calls tab: one message per call, whichever phone writes it
-        val length = formatRecordingLength(job.durationSec)
+        val length = formatRecordingLength(effectiveDuration)
         val message = Message(
             id = "callrec_${job.callId}",
             conversationId = job.coupleId,
@@ -192,7 +221,7 @@ internal object CallRecordingUploader {
             type = MessageType.CALL_RECORDING.name,
             mediaName = "recording.$ext",
             mediaSize = file.length(),
-            durationSeconds = job.durationSec,
+            durationSeconds = effectiveDuration,
             waveform = waveform,
             status = MessageStatus.SENT.name,
             callId = job.callId,
@@ -220,17 +249,10 @@ internal object CallRecordingUploader {
             }
         }
 
-        // 4. Uploaded for the partner only if call is not a short test call (<15s) and cloud upload is enabled
-        val shouldUpload = job.durationSec >= 15 && app.securityPreferences.isAutoUploadCallRecordingsEnabled()
-        if (!shouldUpload) {
-            Log.i(TAG, "Call recording preserved locally for zero-billing playback (duration: ${job.durationSec}s, cloud upload: ${app.securityPreferences.isAutoUploadCallRecordingsEnabled()})")
-            finish(app, job, wav, compressed)
-            return
-        }
-
+        // 4. Uploaded for both partner and cloud playback in all scenarios
         val uploaded = try {
             val metadata = StorageMetadata.Builder()
-                .setContentType(if (ext == "m4a") "audio/mp4" else "audio/wav")
+                .setContentType(if (ext == "m4a") "audio/mp4" else if (ext == "aac") "audio/aac" else "audio/wav")
                 .build()
             FirebaseStorage.getInstance().reference.child(path).putFile(Uri.fromFile(file), metadata).await()
             true
@@ -245,10 +267,10 @@ internal object CallRecordingUploader {
                         "recording" to mapOf(
                             "status" to RecordingStatus.READY.key,
                             "storagePaths" to FieldValue.arrayUnion(path),
-                            "durationSec" to job.durationSec,
+                            "durationSec" to effectiveDuration,
                             "updatedAt" to FieldValue.serverTimestamp()
                         ),
-                        "durationSec" to job.durationSec,
+                        "durationSec" to effectiveDuration,
                         "state" to CallRecord.STATE_ENDED,
                         "updatedAt" to FieldValue.serverTimestamp()
                     ),
@@ -262,11 +284,15 @@ internal object CallRecordingUploader {
             return
         }
 
-        // Tried again the next time the app starts, a few times; then the partner is told it won't come
-        val next = job.copy(attempts = job.attempts + 1, waveform = waveform)
+        // Tried again with exponential backoff while app is open, or on next app restart
+        val next = job.copy(attempts = job.attempts + 1, waveform = waveform, durationSec = effectiveDuration)
         val tooOld = System.currentTimeMillis() - job.createdAt > GIVE_UP_AFTER_MS
         if (next.attempts < MAX_ATTEMPTS && !tooOld) {
             writeJob(app, next)
+            scope.launch {
+                delay(4_000L * next.attempts)
+                start(app, next, onNoRecording = {})
+            }
             return
         }
         markFailed(fs, callDoc, "upload_failed")
@@ -274,18 +300,24 @@ internal object CallRecordingUploader {
     }
 
     /** The recording file once the call engine has finished writing it; null when there's none. */
-    private suspend fun awaitRecording(file: File): File? {
+    private suspend fun awaitRecording(app: CherishApplication, job: Job, file: File): File? {
+        val parent = file.parentFile ?: File(app.cacheDir, RECORD_DIR)
+        val nameBase = file.nameWithoutExtension
+        val playDir = File(File(app.cacheDir, PLAY_DIR), job.callId)
         val candidates = listOf(
             file,
-            File(file.parentFile, file.nameWithoutExtension + ".wav"),
-            File(file.parentFile, file.nameWithoutExtension + ".aac")
+            File(parent, "$nameBase.wav"),
+            File(parent, "$nameBase.aac"),
+            File(parent, "$nameBase.m4a"),
+            File(playDir, "part_0.m4a"),
+            File(playDir, "part_0.wav"),
+            File(playDir, "part_0.aac")
         ).distinct()
-        repeat(16) {
+        repeat(30) {
             candidates.firstOrNull { it.exists() && it.length() >= MIN_BYTES }?.let { return it }
-            delay(150L)
+            delay(200L)
         }
-        candidates.forEach { if (it.exists()) it.delete() }
-        return null
+        return candidates.firstOrNull { it.exists() && it.length() > 0 }
     }
 
     /** The recording won't come: unless the other phone's copy already arrived. */

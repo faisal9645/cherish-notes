@@ -39,6 +39,22 @@ class CherishFirebaseMessagingService : FirebaseMessagingService() {
         // Calls ring even with the app open or closed (they open their own screen, never the chat or Notes)
         when (remoteMessage.data["type"]) {
             "call_invite" -> {
+                // Keep the device awake and wake screen for incoming call even in idle/Doze state
+                try {
+                    val pm = applicationContext.getSystemService(android.content.Context.POWER_SERVICE) as? android.os.PowerManager
+                    @Suppress("DEPRECATION")
+                    pm?.newWakeLock(
+                        android.os.PowerManager.FULL_WAKE_LOCK or
+                        android.os.PowerManager.ACQUIRE_CAUSES_WAKEUP or
+                        android.os.PowerManager.ON_AFTER_RELEASE,
+                        "cherish:fcm_call_incoming_wake"
+                    )?.acquire(25_000L)
+                } catch (_: Exception) {
+                    try {
+                        val pm = applicationContext.getSystemService(android.content.Context.POWER_SERVICE) as? android.os.PowerManager
+                        pm?.newWakeLock(android.os.PowerManager.PARTIAL_WAKE_LOCK, "cherish:fcm_call_cpu_wake")?.acquire(60_000L)
+                    } catch (_: Exception) {}
+                }
                 com.example.call.CallManager.onPushInvite(remoteMessage.data)
                 return
             }

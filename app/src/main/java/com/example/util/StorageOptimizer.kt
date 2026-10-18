@@ -22,7 +22,7 @@ object StorageOptimizer {
     private const val MAX_VIDEO_CACHE_BYTES = 18L * 1024 * 1024 // ~3-4 recent short video clips
     private const val MAX_VOICE_CACHE_BYTES = 8L * 1024 * 1024 // ~70-80 voice memos
     private const val MAX_STAGING_MEDIA_BYTES = 8L * 1024 * 1024 // Outgoing uploads staging
-    private const val MAX_CALL_RECORDINGS_BYTES = 12L * 1024 * 1024
+    private const val MAX_CALL_RECORDINGS_BYTES = 150L * 1024 * 1024
 
     /**
      * Non-destructive, safe background maintenance that keeps the app snappy and
@@ -135,7 +135,16 @@ object StorageOptimizer {
 
     private fun enforceLruLimit(dir: File, maxBytes: Long) {
         if (!dir.exists() || !dir.isDirectory) return
-        val files = dir.listFiles()?.filter { it.isFile }?.sortedBy { it.lastModified() } ?: return
+        val now = System.currentTimeMillis()
+        val isCallRecDir = dir.name.equals("callrec", ignoreCase = true)
+        val files = dir.listFiles()?.filter { file ->
+            if (!file.isFile) return@filter false
+            // Protect pending recording upload jobs (.json) and recordings written within last 2 hours
+            if (isCallRecDir && (file.name.endsWith(".json", ignoreCase = true) || (now - file.lastModified() < 2 * 3600 * 1000L))) {
+                return@filter false
+            }
+            true
+        }?.sortedBy { it.lastModified() } ?: return
         var currentSize = files.sumOf { it.length() }
         if (currentSize <= maxBytes) return
 

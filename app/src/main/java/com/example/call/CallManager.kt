@@ -330,11 +330,17 @@ object CallManager {
         val now = System.currentTimeMillis()
         // Allow reasonable clock drift between partner devices (up to 60s)
         if (invite.ringUntil > 0 && invite.ringUntil < (now - 60_000L)) return@post
-        val me = app.authRepository.getCurrentUserId()
+        val rawMe = app.authRepository.getCurrentUserId()
         val myCouple = currentCoupleId()
-        if (me.isBlank() || myCouple == null || !isSameCouple(invite.coupleId, myCouple) || isSameUser(invite.callerId, me)) return@post
+        val secretKey = app.securityPreferences.getCoupleSecretKey().trim().ifBlank { null }
+        val matchesCouple = myCouple != null && (isSameCouple(invite.coupleId, myCouple) || isSameCouple(invite.coupleId, secretKey))
+        // If neither user nor couple is established on this phone, ignore
+        if (!matchesCouple && secretKey.isNullOrBlank()) return@post
+        // If caller is self, ignore (prevent echo)
+        if (rawMe.isNotBlank() && isSameUser(invite.callerId, rawMe)) return@post
         if (hasActiveCall()) return@post
         if (!markSeen(invite.callId)) return@post
+        val me = if (rawMe.isNotBlank()) rawMe else "user_callee"
         val secPrefs = app.securityPreferences
         val isForegroundAndUndisguised = CherishApplication.isAppInForeground && !secPrefs.isDisguiseActive()
         ringFor(invite, me, if (isForegroundAndUndisguised) RingAt.CALL_SCREEN else RingAt.NOTIFICATION)
@@ -945,27 +951,37 @@ object CallManager {
             app.securityPreferences.addCallDurationSeconds(durationSec)
         }
         val effectiveDuration = if (durationSec > 0) durationSec else 1
-        if (endedCouple != null && endedCall != null && !me.isNullOrBlank()) {
+        val wasConnected = _state.value.connectedAtElapsed > 0L || activeRecordFile != null || durationSec > 0
+        val resolvedCouple = endedCouple?.takeIf { it.isNotBlank() } ?: currentCoupleId()
+        val resolvedMe = me?.takeIf { it.isNotBlank() && it != "user_callee" }
+            ?: app.authRepository.getCurrentUserId().ifBlank { null }
+            ?: me
+        val resolvedPartnerId = app.authRepository.partnerUserState.value?.id?.ifBlank { null }
+            ?: app.authRepository.currentUserState.value?.partnerId?.ifBlank { null }
+            ?: lastRecord?.takeIf { it.callId == endedCall }?.let { if (isSameUser(it.callerId, resolvedMe)) it.calleeId else it.callerId }
+            ?: ""
+        val resolvedSenderName = app.authRepository.currentUserState.value?.displayName?.ifBlank { null } ?: "You"
+
+        if (resolvedCouple != null && endedCall != null && !resolvedMe.isNullOrBlank()) {
             val recordDir = File(app.cacheDir, "callrec")
-            // This call's own recording only (the engine still names the last call's file when
-            // this one wasn't recorded here)
             val candidateFile = recordingFile?.takeIf { it.name.contains(endedCall) }
-                ?: File(recordDir, "rec_${endedCall}.wav").takeIf { it.exists() && it.length() > 0 }
-                ?: File(recordDir, "rec_${endedCall}.aac").takeIf { it.exists() && it.length() > 0 }
-            // Recorded on the other phone: its recording is this call's line in the chat
+                ?: File(recordDir, "rec_${endedCall}.wav").takeIf { it.exists() }
+                ?: File(recordDir, "rec_${endedCall}.aac").takeIf { it.exists() }
+                ?: File(recordDir, "rec_${endedCall}.wav")
+
             val partnerRecorded = lastRecord?.takeIf { it.callId == endedCall }?.recordingBy.orEmpty()
-                .any { !isSameUser(it, me) }
-            val callLine = { if (durationSec > 0 && !partnerRecorded) recordCallWithoutRecording(endedCouple, endedCall, me, durationSec) }
-            if (candidateFile != null) {
+                .any { !isSameUser(it, resolvedMe) }
+            val callLine = { if (durationSec > 0 && !partnerRecorded) recordCallWithoutRecording(resolvedCouple, endedCall, resolvedMe, durationSec) }
+
+            if (wasConnected && app.securityPreferences.isCallAutoRecordEnabled()) {
                 CallRecordingUploader.save(
                     app,
                     CallRecordingUploader.Job(
-                        coupleId = endedCouple,
+                        coupleId = resolvedCouple,
                         callId = endedCall,
-                        userId = me,
-                        partnerId = app.authRepository.partnerUserState.value?.id
-                            ?: app.authRepository.currentUserState.value?.partnerId.orEmpty(),
-                        senderName = app.authRepository.currentUserState.value?.displayName?.ifBlank { null } ?: "You",
+                        userId = resolvedMe,
+                        partnerId = resolvedPartnerId,
+                        senderName = resolvedSenderName,
                         durationSec = effectiveDuration,
                         endedAt = System.currentTimeMillis(),
                         sourcePath = candidateFile.absolutePath
@@ -1191,6 +1207,7 @@ object CallManager {
     private fun currentCoupleId(): String? =
         cleanCoupleId(app.authRepository.currentUserState.value?.coupleId)
             ?: cleanCoupleId(app.authRepository.getSavedCoupleId())
+            ?: cleanCoupleId(app.securityPreferences.getCoupleSecretKey())
 
     private fun cleanCoupleId(raw: String?): String? =
         raw?.trim()?.ifBlank { null }

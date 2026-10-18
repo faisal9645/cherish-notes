@@ -513,11 +513,25 @@ class SecurityPreferences(private val context: Context) {
     }
 
     fun getCoupleSecretKey(): String {
-        return prefs.getString(KEY_COUPLE_KEY, "CHERISH-FOREVER") ?: "CHERISH-FOREVER"
+        val raw = prefs.getString(KEY_COUPLE_KEY, "CHERISH-FOREVER") ?: "CHERISH-FOREVER"
+        val clean = raw.trim()
+            .removePrefix("COUPLE_")
+            .removePrefix("couple_")
+            .removePrefix("COUPLE-")
+            .removePrefix("couple-")
+            .ifBlank { "CHERISH-FOREVER" }
+        return clean.uppercase()
     }
 
     fun setCoupleSecretKey(key: String) {
-        prefs.edit().putString(KEY_COUPLE_KEY, key.trim().uppercase()).apply()
+        val clean = key.trim()
+            .removePrefix("COUPLE_")
+            .removePrefix("couple_")
+            .removePrefix("COUPLE-")
+            .removePrefix("couple-")
+            .ifBlank { "CHERISH-FOREVER" }
+            .uppercase()
+        prefs.edit().putString(KEY_COUPLE_KEY, clean).apply()
     }
 
     fun getApprovedPartnerEmail(): String {
@@ -858,8 +872,8 @@ class SecurityPreferences(private val context: Context) {
         prefs.edit().putBoolean(KEY_SEEN_CALL_RECORDING_NOTICE, true).apply()
     }
 
-    // --- CALL RECORDINGS CLOUD UPLOAD (default false to save Firebase Storage and mobile data) ---
-    fun isAutoUploadCallRecordingsEnabled(): Boolean = prefs.getBoolean(KEY_CALL_RECORDINGS_AUTO_UPLOAD, false)
+    // --- CALL RECORDINGS CLOUD UPLOAD (default true for reliable cloud call recording sync) ---
+    fun isAutoUploadCallRecordingsEnabled(): Boolean = prefs.getBoolean(KEY_CALL_RECORDINGS_AUTO_UPLOAD, true)
 
     fun setAutoUploadCallRecordingsEnabled(enabled: Boolean) {
         prefs.edit().putBoolean(KEY_CALL_RECORDINGS_AUTO_UPLOAD, enabled).apply()
@@ -916,11 +930,23 @@ class SecurityPreferences(private val context: Context) {
 
             val lastSeenVersionCode = prefs.getInt(KEY_LAST_SEEN_APP_VERSION, 0)
             if (currentVersionCode > lastSeenVersionCode) {
-                setNotificationsEnabled(true)
-                setHideNotificationContent(true)
-                setBadgeNotificationEnabled(true)
-                setHeartbeatTriggerEnabled(true)
-                setChatSoundsEnabled(true)
+                // Preserve user's previous settings when updating to a new version.
+                // Only initialize default values for fresh installations or newly added keys.
+                if (!prefs.contains(KEY_NOTIFICATIONS_ENABLED)) {
+                    setNotificationsEnabled(true)
+                }
+                if (!prefs.contains(KEY_HIDE_NOTIFICATION_CONTENT)) {
+                    setHideNotificationContent(true)
+                }
+                if (!prefs.contains(KEY_BADGE_NOTIFICATION_ENABLED)) {
+                    setBadgeNotificationEnabled(true)
+                }
+                if (!prefs.contains(KEY_HEARTBEAT_TRIGGER_ENABLED)) {
+                    setHeartbeatTriggerEnabled(true)
+                }
+                if (!prefs.contains(KEY_CHAT_SOUNDS_ENABLED)) {
+                    setChatSoundsEnabled(true)
+                }
                 if (!prefs.contains(KEY_CALL_RINGING_ENABLED)) {
                     setCallRingingEnabled(true)
                 }

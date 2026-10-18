@@ -318,7 +318,7 @@ object NotificationHelper {
         } else {
             messageText.ifBlank { "New message" }
         }
-        val subText = if (isDiscreet) maskedTitle else "Cherish"
+        val subText = if (isDiscreet || maskedTitle.equals("Notes", ignoreCase = true)) null else "Cherish"
 
         val appIcon = getAppIconBitmap(context)
 
@@ -335,7 +335,11 @@ object NotificationHelper {
             .setColor(0xFF2563FF.toInt())
             .setContentTitle(displayTitle)
             .setContentText(displayText)
-            .setSubText(subText)
+            .apply {
+                if (!subText.isNullOrBlank() && !subText.equals("Notes", ignoreCase = true)) {
+                    setSubText(subText)
+                }
+            }
             .apply {
                 if (!isDiscreet) {
                     setStyle(NotificationCompat.BigTextStyle().bigText(displayText))
@@ -413,7 +417,7 @@ object NotificationHelper {
         val maskedText = prefs.getMaskedNotificationText()
         val displayTitle = if (isDiscreet) maskedTitle else "Thinking of you"
         val displayText = if (isDiscreet) maskedText else "Sent a heartbeat \uD83D\uDC93"
-        val subText = if (isDiscreet) maskedTitle else "Cherish"
+        val subText = if (isDiscreet || maskedTitle.equals("Notes", ignoreCase = true)) null else "Cherish"
 
         val isBadgeEnabled = prefs.isBadgeNotificationEnabled()
         val appIcon = getAppIconBitmap(context)
@@ -436,7 +440,11 @@ object NotificationHelper {
             .setColor(0xFF2563FF.toInt())
             .setContentTitle(displayTitle)
             .setContentText(displayText)
-            .setSubText(subText)
+            .apply {
+                if (!subText.isNullOrBlank() && !subText.equals("Notes", ignoreCase = true)) {
+                    setSubText(subText)
+                }
+            }
             .setBadgeIconType(if (isBadgeEnabled) NotificationCompat.BADGE_ICON_SMALL else NotificationCompat.BADGE_ICON_NONE)
             .setNumber(if (isBadgeEnabled) 1 else 0)
             .setAutoCancel(true)
@@ -492,7 +500,7 @@ object NotificationHelper {
         val maskedText = prefs.getMaskedNotificationText()
         val displayTitle = if (isDiscreet) maskedTitle else "Heartbeat Felt"
         val displayText = if (isDiscreet) maskedText else "Your partner felt your heartbeat \uD83D\uDC93"
-        val subText = if (isDiscreet) maskedTitle else "Cherish"
+        val subText = if (isDiscreet || maskedTitle.equals("Notes", ignoreCase = true)) null else "Cherish"
 
         val appIcon = getAppIconBitmap(context)
         val notification = NotificationCompat.Builder(context, CHANNEL_MESSAGES_ID)
@@ -503,7 +511,11 @@ object NotificationHelper {
             .setColor(0xFF2563FF.toInt())
             .setContentTitle(displayTitle)
             .setContentText(displayText)
-            .setSubText(subText)
+            .apply {
+                if (!subText.isNullOrBlank() && !subText.equals("Notes", ignoreCase = true)) {
+                    setSubText(subText)
+                }
+            }
             .setAutoCancel(true)
             .setOngoing(false)
             .setOnlyAlertOnce(true)
@@ -672,7 +684,11 @@ object NotificationHelper {
             .setColor(0xFF2563FF.toInt())
             .setContentTitle(displayTitle)
             .setContentText(displayText)
-            .setSubText(if (isDisguised) prefs.getMaskedNotificationTitle() else "Cherish")
+            .apply {
+                if (!isDisguised) {
+                    setSubText("Cherish")
+                }
+            }
             .setAutoCancel(true)
             .setOngoing(false)
             .setContentIntent(pendingIntent)
@@ -739,7 +755,6 @@ object NotificationHelper {
             .setContentTitle(displayTitle)
             .setContentText(displayText)
             .setStyle(NotificationCompat.BigTextStyle().bigText(displayText))
-            .setSubText("Notes")
             .setAutoCancel(true)
             .setOngoing(false)
             .setContentIntent(pendingIntent)
