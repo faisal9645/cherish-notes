@@ -1,9 +1,9 @@
 {
-  "versionCode": 186,
-  "versionName": "1.8.14",
-  "tagName": "v1.8.14-186",
-  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.8.14-186/app_update_186.apk",
+  "versionCode": 187,
+  "versionName": "1.8.15",
+  "tagName": "v1.8.15-187",
+  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.8.15-187/app_update_187.apk",
   "assetSize": 18637928,
-  "releaseNotes": "Notes v1.8.14 (Build 186):\n• Realistic hugging animation for 🤗 and 🫂 emojis: hands and arms wrap around in a warm, tight embrace and squeeze instead of bursting hearts\n• Video notes powered by ExoPlayer with smooth inline silent playback\n• Material 3 date & time pickers across chat schedule, search jump, and check-after\n• Categorized Settings & Privacy pages (Account, Privacy, Chats, Notifications, Calls, Storage)",
-  "releaseDate": "2026-10-18T20:40:00Z"
+  "releaseNotes": "Notes v1.8.15 (Build 187):\n• Beautiful, heartwarming hug animation for 🤗 and 🫂: organic cuddle squash & snuggle head tilt, warm radiant embrace aura, glowing rosy blush on cheeks, warmth ripples, and delicate floating sparkles in original warm rose & honey palette (build 180 colors restored)\n• Clean emoji rendering with zero awkward overlays",
+  "releaseDate": "2026-10-18T21:08:00Z"
 }

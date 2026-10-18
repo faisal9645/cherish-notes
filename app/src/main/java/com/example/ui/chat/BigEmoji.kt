@@ -33,14 +33,12 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.GraphicsLayerScope
 import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.scale
-import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.vector.VectorPainter
@@ -306,12 +304,13 @@ internal fun GraphicsLayerScope.emojiMotion(motion: EmojiMotion, t: Float, unit:
             scaleY = s
         }
         EmojiMotion.Hug -> {
-            // Opens its arms, then squeezes tight, twice, rocking gently in the hug
-            val open = pulse(t, 0.14f, 0.06f) + 0.7f * pulse(t, 0.5f, 0.06f)
-            val squeeze = pulse(t, 0.3f, 0.08f) + 0.8f * pulse(t, 0.65f, 0.08f)
+            // Opens its arms wide, then wraps tight in a warm, blissful cuddle with head tilt
+            val open = pulse(t, 0.12f, 0.06f) + 0.6f * pulse(t, 0.48f, 0.06f)
+            val squeeze = pulse(t, 0.32f, 0.08f) + 0.85f * pulse(t, 0.64f, 0.08f)
             scaleX = 1f + 0.08f * open - 0.14f * squeeze
-            scaleY = 1f + 0.02f * open + 0.08f * squeeze
-            rotationZ = 6f * sin(t * 2f * PI_F) * fade
+            scaleY = 1f + 0.02f * open + 0.09f * squeeze
+            rotationZ = -8f * squeeze + 4f * sin(t * 2.5f * PI_F) * fade
+            translationY = 2f * unit * squeeze
         }
         EmojiMotion.Blush -> {
             // Bashful: shrinks a little and tilts away, swaying shyly
@@ -599,7 +598,7 @@ private val FLUSHED = setOf("😳")
 // ---- The burst around them --------------------------------------------------------------------
 
 private enum class BurstStyle(val count: Int, val tapCount: Int) {
-    Hearts(9, 14), HeartBeats(12, 20), KissHearts(6, 10), Hug(2, 2), Blush(5, 8), Flushed(2, 2), Confetti(22, 34),
+    Hearts(9, 14), HeartBeats(12, 20), KissHearts(6, 10), Hug(6, 8), Blush(5, 8), Flushed(2, 2), Confetti(22, 34),
     Sparkles(9, 14), Twinkle(2, 4), LaughTears(6, 10), SobTears(16, 24), CryTears(3, 5), Sweat(2, 3),
     Sigh(3, 5), Dots(3, 3), Question(1, 3), Ripples(3, 4), Embers(12, 18), Rage(9, 13)
 }
@@ -607,7 +606,7 @@ private enum class BurstStyle(val count: Int, val tapCount: Int) {
 private enum class ParticleShape {
     Heart, Confetti, Sparkle, Drop, Ember, Puff, Glyph,
     // These stay where they start: a ring spreading out, a dot, a glow on the face, an aura behind it
-    Ring, Dot, Glow, Aura, HugArms
+    Ring, Dot, Glow, Aura
 }
 
 private class Particle(
@@ -638,7 +637,6 @@ private class EmojiBurstState {
         private set
     // Reused for drawing
     val path = Path()
-    val path2 = Path()
     val glyphPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { textAlign = Paint.Align.CENTER }
 
     suspend fun burst(bases: List<String>, motions: List<EmojiMotion>, strong: Boolean, scale: Float) {
@@ -748,11 +746,14 @@ private fun particlesFor(
                 life = rnd(0.5f, 0.62f), gravity = -22f,
                 dx = if (base == KISS_MARK) 0f else 0.2f, dy = if (base == KISS_MARK) 0f else 0.14f
             )
-            // A warm embrace with hugging hands and arms wrapping around, and a soft glow behind
-            BurstStyle.Hug -> if (i == 0) {
-                particle(ParticleShape.Aura, size = 56f, start = 0.05f, life = 0.90f, color = HugGlowColor)
-            } else {
-                particle(ParticleShape.HugArms, size = 64f, start = 0.02f, life = 0.96f)
+            // A warm, loving embrace: glowing aura behind, blushing cheeks, gentle warmth ripple, and sweet sparkles
+            BurstStyle.Hug -> when (i) {
+                0 -> particle(ParticleShape.Aura, size = 52f, start = 0.12f, life = 0.75f, color = HugGlowColor)
+                1 -> particle(ParticleShape.Glow, size = 17f, start = 0.18f, life = 0.70f, dx = -0.24f, dy = 0.08f, color = HugCheekColor)
+                2 -> particle(ParticleShape.Glow, size = 17f, start = 0.18f, life = 0.70f, dx = 0.24f, dy = 0.08f, color = HugCheekColor)
+                3 -> particle(ParticleShape.Ring, distance = 58f, size = 2.5f, start = 0.28f, life = 0.50f, color = HugGlowColor)
+                4 -> particle(ParticleShape.Sparkle, angle = UP + rnd(-0.7f, 0.7f), distance = rnd(35f, 65f), size = rnd(10f, 14f), spin = rnd(-40f, 40f), start = 0.32f, life = 0.50f, color = HugColors[1])
+                else -> particle(ParticleShape.Heart, angle = UP + rnd(-0.6f, 0.6f), distance = rnd(30f, 60f), size = rnd(9f, 13f), spin = rnd(-25f, 25f), start = 0.34f, life = 0.50f, gravity = -14f, color = HugColors[0])
             }
             // Rosy cheeks, and a few tiny hearts
             BurstStyle.Blush -> if (i < 2) {
@@ -891,13 +892,9 @@ private val SighColors = listOf(Color(0xFFB0BEC5), Color(0xFFCFD8DC), Color(0xFF
 private val DotColors = listOf(Color(0xFF9AA0A6))
 private val RippleColors = listOf(Color(0xFF8AB4F8), Color(0xFFA7C7FA))
 private val RageColor = Color(0xFFFF3B30)
-// The hug in 🫂's own colours: one of the two in blue, the other in sky blue (no warm tint)
-private val HugColors = listOf(Color(0xFF2F6FD6), Color(0xFF6EC1F2), Color(0xFFA9DDFB))
-private val HugGlowColor = Color(0xFFBFE6FF)
-private val HugArmLeftColor = Color(0xFF6EC1F2)
-private val HugArmRightColor = Color(0xFF2F6FD6)
-private val HugArmOutlineColor = Color(0xFF1B4F9C)
-private val HugShadowColor = Color(0x35000000)
+private val HugColors = listOf(Color(0xFFFF8FB1), Color(0xFFFFB74D), Color(0xFFFF6B9A))
+private val HugGlowColor = Color(0xFFFFB3C7)
+private val HugCheekColor = Color(0xFFFF7A9A)
 private const val QUESTION_MARK = "❓"
 
 /** Draws [state]'s burst around this element; nothing clips it, so it flies past the edges. */
@@ -938,10 +935,6 @@ private fun DrawScope.drawParticle(p: Particle, t: Float, heart: VectorPainter, 
             val pop = if (local < 0.12f) BackOut.transform(local / 0.12f) else 1f
             val alpha = if (local > 0.8f) (1f - local) / 0.2f else 1f
             drawCircle(p.color, radius = p.size.dp.toPx() / 2f * pop, center = origin, alpha = alpha)
-            return
-        }
-        ParticleShape.HugArms -> {
-            drawHugArms(state.path, state.path2, origin, p.size.dp.toPx(), local)
             return
         }
         else -> Unit
@@ -998,7 +991,7 @@ private fun DrawScope.drawParticle(p: Particle, t: Float, heart: VectorPainter, 
                 }
             }
         }
-        ParticleShape.Ring, ParticleShape.Dot, ParticleShape.Glow, ParticleShape.Aura, ParticleShape.HugArms -> Unit
+        ParticleShape.Ring, ParticleShape.Dot, ParticleShape.Glow, ParticleShape.Aura -> Unit
     }
 }
 
@@ -1027,209 +1020,6 @@ private fun DrawScope.drawDrop(path: Path, center: Offset, size: Float, color: C
     path.cubicTo(center.x - r, center.y - r * 0.55f, center.x - r * 0.35f, center.y - r * 1.15f, center.x, center.y - r * 1.8f)
     path.close()
     drawPath(path, color, alpha = alpha)
-}
-
-/** Two hugging arms with hands and fingers that wrap around the emoji and squeeze in a real embrace. */
-private fun DrawScope.drawHugArms(
-    path: Path,
-    path2: Path,
-    center: Offset,
-    sizePx: Float,
-    local: Float
-) {
-    val r = sizePx * 0.5f
-    if (r <= 0f) return
-    val scale = r / 40f
-
-    val reach = smoothstep((local / 0.22f).coerceIn(0f, 1f))
-    val release = smoothstep(((local - 0.72f) / 0.28f).coerceIn(0f, 1f))
-    val fadeIn = (local / 0.10f).coerceIn(0f, 1f)
-    val fadeOut = (1f - ((local - 0.82f) / 0.18f).coerceIn(0f, 1f))
-    val alpha = (fadeIn * fadeOut).coerceIn(0f, 1f)
-    if (alpha <= 0.01f) return
-
-    val sq1 = pulse(local, 0.32f, 0.08f)
-    val sq2 = pulse(local, 0.64f, 0.08f)
-    val squeeze = sq1 + 0.85f * sq2
-    val squeezePull = squeeze * 5.5f * scale
-    val fingerCurlDeg = squeeze * 12f
-
-    val rockDeg = 3.5f * sin(local * 2.5f * PI_F) * (1f - release)
-
-    rotate(rockDeg, pivot = center) {
-        // Draw Upper Right Arm first (top-right wrapping over top-left)
-        drawSingleHugArm(
-            path = path,
-            path2 = path2,
-            center = center,
-            r = r,
-            scale = scale,
-            reach = reach,
-            release = release,
-            squeezePull = squeezePull,
-            fingerCurlDeg = fingerCurlDeg,
-            signX = 1f,
-            signY = -1f,
-            armColor = HugArmRightColor,
-            outlineColor = HugArmOutlineColor,
-            alpha = alpha
-        )
-        // Draw Lower Left Arm second (bottom-left wrapping over bottom-right, overlapping in front)
-        drawSingleHugArm(
-            path = path,
-            path2 = path2,
-            center = center,
-            r = r,
-            scale = scale,
-            reach = reach,
-            release = release,
-            squeezePull = squeezePull,
-            fingerCurlDeg = fingerCurlDeg,
-            signX = -1f,
-            signY = 1f,
-            armColor = HugArmLeftColor,
-            outlineColor = HugArmOutlineColor,
-            alpha = alpha
-        )
-    }
-}
-
-private fun DrawScope.drawSingleHugArm(
-    path: Path,
-    path2: Path,
-    center: Offset,
-    r: Float,
-    scale: Float,
-    reach: Float,
-    release: Float,
-    squeezePull: Float,
-    fingerCurlDeg: Float,
-    signX: Float,
-    signY: Float,
-    armColor: Color,
-    outlineColor: Color,
-    alpha: Float
-) {
-    val ox = center.x
-    val oy = center.y
-    val reachShift = (1f - reach) * 0.75f * r + release * 0.35f * r
-
-    // Outer edge base
-    val xBase = ox + signX * (1.18f * r + reachShift)
-    val yBaseTop = oy + signY * (0.12f * r) - squeezePull * 0.3f
-    val yBaseBottom = oy + signY * (0.38f * r) + squeezePull * 0.3f
-
-    // Wrist location
-    val xWrist = ox - signX * (0.10f * r - squeezePull * 0.7f + reachShift * 0.25f)
-    val yWrist = oy + signY * (0.24f * r)
-
-    // Forearm path
-    path.reset()
-    path.moveTo(xBase, yBaseBottom)
-    path.cubicTo(
-        ox + signX * 0.65f * r, oy + signY * (0.46f * r) + squeezePull * 0.4f,
-        ox - signX * 0.05f * r, oy + signY * (0.42f * r) + squeezePull * 0.4f,
-        xWrist, yWrist + signY * (0.09f * r)
-    )
-    path.lineTo(xWrist, yWrist - signY * (0.09f * r))
-    path.cubicTo(
-        ox - signX * 0.02f * r, oy + signY * (0.20f * r),
-        ox + signX * 0.60f * r, oy + signY * (0.18f * r),
-        xBase, yBaseTop
-    )
-    path.close()
-
-    val shadowOffset = Offset(0f, 2.5f * scale)
-
-    // Forearm shadow
-    translate(shadowOffset.x, shadowOffset.y) {
-        drawPath(path, color = HugShadowColor.copy(alpha = alpha * 0.35f))
-    }
-    // Forearm fill
-    drawPath(path, color = armColor, alpha = alpha)
-    // Forearm outline
-    drawPath(path, color = outlineColor, alpha = alpha, style = Stroke(width = 1.6f * scale, cap = StrokeCap.Round))
-
-    // Palm
-    val xPalm = ox - signX * (0.18f * r - squeezePull * 0.8f + reachShift * 0.25f)
-    val yPalm = oy + signY * (0.22f * r)
-    val palmRadius = 0.10f * r
-    val palmCenter = Offset(xPalm, yPalm)
-
-    drawCircle(color = HugShadowColor.copy(alpha = alpha * 0.35f), radius = palmRadius, center = palmCenter + shadowOffset)
-    drawCircle(color = armColor, radius = palmRadius, center = palmCenter, alpha = alpha)
-    drawCircle(color = outlineColor, radius = palmRadius, center = palmCenter, alpha = alpha, style = Stroke(width = 1.6f * scale))
-
-    // Fingers
-    val dirX = -signX
-    val fingerW = maxOf(4.5f * scale, 3.5f)
-    val thumbW = maxOf(5.0f * scale, 4.0f)
-
-    // 4 fingers + 1 thumb wrapping around the side of the emoji
-    drawFinger(
-        kp = Offset(xPalm + dirX * 0.05f * r, yPalm - signY * 0.07f * r),
-        angleDeg = (if (signX < 0) -24f else 156f) + (if (signX < 0) -fingerCurlDeg else fingerCurlDeg),
-        len = 0.20f * r, width = fingerW, shadowOffset = shadowOffset,
-        armColor = armColor, outlineColor = outlineColor, alpha = alpha, scale = scale
-    )
-    drawFinger(
-        kp = Offset(xPalm + dirX * 0.08f * r, yPalm - signY * 0.02f * r),
-        angleDeg = (if (signX < 0) -6f else 174f) + (if (signX < 0) -fingerCurlDeg else fingerCurlDeg),
-        len = 0.24f * r, width = fingerW, shadowOffset = shadowOffset,
-        armColor = armColor, outlineColor = outlineColor, alpha = alpha, scale = scale
-    )
-    drawFinger(
-        kp = Offset(xPalm + dirX * 0.06f * r, yPalm + signY * 0.04f * r),
-        angleDeg = (if (signX < 0) 10f else 190f) + (if (signX < 0) -fingerCurlDeg * 0.8f else fingerCurlDeg * 0.8f),
-        len = 0.21f * r, width = fingerW, shadowOffset = shadowOffset,
-        armColor = armColor, outlineColor = outlineColor, alpha = alpha, scale = scale
-    )
-    drawFinger(
-        kp = Offset(xPalm + dirX * 0.02f * r, yPalm + signY * 0.09f * r),
-        angleDeg = (if (signX < 0) 26f else 206f) + (if (signX < 0) -fingerCurlDeg * 0.6f else fingerCurlDeg * 0.6f),
-        len = 0.16f * r, width = fingerW, shadowOffset = shadowOffset,
-        armColor = armColor, outlineColor = outlineColor, alpha = alpha, scale = scale
-    )
-    drawFinger(
-        kp = Offset(xPalm - dirX * 0.01f * r, yPalm - signY * 0.09f * r),
-        angleDeg = (if (signX < 0) -55f else 125f) + (if (signX < 0) -fingerCurlDeg * 0.5f else fingerCurlDeg * 0.5f),
-        len = 0.14f * r, width = thumbW, shadowOffset = shadowOffset,
-        armColor = armColor, outlineColor = outlineColor, alpha = alpha, scale = scale
-    )
-
-    // Soft forearm highlight along top curve
-    path2.reset()
-    path2.moveTo(xBase, yBaseTop + signY * 1.5f * scale)
-    path2.cubicTo(
-        ox + signX * 0.60f * r, oy + signY * (0.18f * r + 1.5f * scale),
-        ox - signX * 0.02f * r, oy + signY * (0.20f * r + 1.5f * scale),
-        xWrist, yWrist - signY * (0.09f * r - 1.5f * scale)
-    )
-    drawPath(path2, color = Color(0x35FFFFFF), alpha = alpha, style = Stroke(width = 1.8f * scale, cap = StrokeCap.Round))
-}
-
-private fun DrawScope.drawFinger(
-    kp: Offset,
-    angleDeg: Float,
-    len: Float,
-    width: Float,
-    shadowOffset: Offset,
-    armColor: Color,
-    outlineColor: Color,
-    alpha: Float,
-    scale: Float
-) {
-    val rad = angleDeg * PI_F / 180f
-    val tip = Offset(kp.x + len * cos(rad), kp.y + len * sin(rad))
-
-    // Finger shadow
-    drawLine(HugShadowColor.copy(alpha = alpha * 0.35f), kp + shadowOffset, tip + shadowOffset, strokeWidth = width + 2f * scale, cap = StrokeCap.Round)
-    // Finger outline
-    drawLine(outlineColor, kp, tip, strokeWidth = width + 1.8f * scale, cap = StrokeCap.Round, alpha = alpha)
-    // Finger fill
-    drawLine(armColor, kp, tip, strokeWidth = width, cap = StrokeCap.Round, alpha = alpha)
-    // Soft top highlight
-    drawLine(Color(0x40FFFFFF), kp, tip, strokeWidth = width * 0.35f, cap = StrokeCap.Round, alpha = alpha)
 }
 
 // Telegram's send flight: up out of the message box quickly, across a beat later, growing with a
