@@ -169,6 +169,20 @@ private fun SettingsSection(
     }
 }
 
+/** Settings & Privacy's pages, like Telegram's: the main list opens one page per kind of setting. */
+private enum class SettingsPage(
+    val title: String,
+    val subtitle: String,
+    val icon: androidx.compose.ui.graphics.vector.ImageVector
+) {
+    Account("Account & Couple", "Username, partner, passcode and check-after", Icons.Rounded.Favorite),
+    Privacy("Privacy", "Stealth vault, app lock, security audit and devices", Icons.Rounded.Security),
+    Chats("Chats", "Theme, wallpaper, text size, font and chat mode", Icons.Rounded.ChatBubble),
+    Notifications("Notifications", "Alerts, badges and reminders", Icons.Rounded.Notifications),
+    Calls("Calls", "Ringing, noise reduction and call recording", Icons.Rounded.PhoneInTalk),
+    Storage("Storage", "Backup and cache", Icons.Rounded.CloudDone)
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProfileScreen(
@@ -285,9 +299,13 @@ fun ProfileScreen(
         }
     }
 
-    // Android back button & edge gesture: re-disguise directly to Notes app for security
+    // Which page of settings is open (null: the main list)
+    var settingsPage by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf<SettingsPage?>(null) }
+
+    // Android back button & edge gesture: from a page, back to the main list; from the list,
+    // re-disguise directly to Notes app for security
     BackHandler {
-        onQuickDisguise()
+        if (settingsPage != null) settingsPage = null else onQuickDisguise()
     }
 
     var dragAccumulator by remember { mutableFloatStateOf(0f) }
@@ -322,7 +340,8 @@ fun ProfileScreen(
                     if (directionLocked && isHorizontal) {
                         if (accX > 70f) {
                             change.consume()
-                            onNavigateToChat()
+                            // A page goes back to the main list; the list goes to the chat
+                            if (settingsPage != null) settingsPage = null else onNavigateToChat()
                             break
                         }
                     }
@@ -333,14 +352,14 @@ fun ProfileScreen(
             TopAppBar(
                 title = {
                     Text(
-                        "Settings & Privacy",
+                        settingsPage?.title ?: "Settings & Privacy",
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
                     )
                 },
                 navigationIcon = {
                     IconButton(
-                        onClick = onNavigateToChat,
+                        onClick = { if (settingsPage != null) settingsPage = null else onNavigateToChat() },
                         modifier = Modifier.testTag("profile_back_button")
                     ) {
                         Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back")
@@ -354,17 +373,32 @@ fun ProfileScreen(
         containerColor = MaterialTheme.colorScheme.surface
     ) { paddingValues ->
         val primaryAccent = MaterialTheme.colorScheme.primary
+        // The main list, or one of its pages: a page slides in from the right, and back out
+        AnimatedContent(
+            targetState = settingsPage,
+            transitionSpec = {
+                val opening = targetState != null
+                (slideInHorizontally(androidx.compose.animation.core.tween(280)) { if (opening) it else -it / 4 } +
+                    fadeIn(androidx.compose.animation.core.tween(220)))
+                    .togetherWith(
+                        slideOutHorizontally(androidx.compose.animation.core.tween(280)) { if (opening) -it / 4 else it } +
+                            fadeOut(androidx.compose.animation.core.tween(180))
+                    )
+            },
+            label = "settings_page",
+            modifier = Modifier.padding(paddingValues)
+        ) { page ->
         val settingsScroll = rememberScrollState()
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(paddingValues)
                 // Settings fade softly under the top bar and at the bottom edge as they scroll
                 .scrollFadingEdges(settingsScroll)
                 .verticalScroll(settingsScroll)
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            if (page == null) {
             // 1. My profile, plain like any settings screen: photo, name, email and note; tap the
             // photo to change it, the row or the pencil to edit (the two of us are on Love & Us)
             val myName = user?.displayName?.ifBlank { "Me" } ?: "Me"
@@ -475,7 +509,37 @@ fun ProfileScreen(
                 }
             }
 
+            // The kinds of settings, each on its own page
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+            ) {
+                Column(modifier = Modifier.padding(vertical = 4.dp)) {
+                    SettingsPage.entries.forEachIndexed { index, item ->
+                        if (index > 0) {
+                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), thickness = 0.6.dp)
+                        }
+                        ListItem(
+                            headlineContent = { Text(item.title, fontSize = 15.sp, fontWeight = FontWeight.SemiBold) },
+                            supportingContent = { Text(item.subtitle, fontSize = 13.sp) },
+                            leadingContent = { Icon(item.icon, contentDescription = null, tint = primaryAccent) },
+                            trailingContent = {
+                                Icon(Icons.Rounded.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                            },
+                            modifier = Modifier
+                                .clickable { settingsPage = item }
+                                .testTag("settings_page_${item.name}")
+                        )
+                    }
+                }
+            }
+            } // Main list
+
             // 2. Couple Connection & Credentials Section
+            if (page == SettingsPage.Account) {
             SettingsSection(
                 title = "Couple Connection",
                 icon = Icons.Rounded.Favorite,
@@ -536,7 +600,10 @@ fun ProfileScreen(
 
 
 
+            } // Account
+
             // 3. Privacy, Stealth Disguise & Vault
+            if (page == SettingsPage.Privacy) {
             SettingsSection(
                 title = "Privacy & Stealth Vault",
                 icon = Icons.Rounded.Security
@@ -956,7 +1023,10 @@ fun ProfileScreen(
 
             }
  
+            } // Privacy
+
             // 4. Notification Settings Section (Separated Notification Bar & App Badge)
+            if (page == SettingsPage.Notifications) {
             SettingsSection(
                 title = "Notification Settings",
                 icon = Icons.Rounded.Notifications
@@ -1331,7 +1401,10 @@ fun ProfileScreen(
 
             }
 
+            } // Notifications
+
             // 4. Voice Calls Settings Section
+            if (page == SettingsPage.Calls) {
             SettingsSection(
                 title = "Voice Calls",
                 icon = Icons.Rounded.PhoneInTalk
@@ -1592,7 +1665,10 @@ fun ProfileScreen(
                 )
             }
 
+            } // Calls
+
             // 5. Appearance & Experience Section
+            if (page == SettingsPage.Chats) {
             SettingsSection(
                 title = "Appearance & Experience",
                 icon = Icons.Rounded.Palette
@@ -1961,7 +2037,10 @@ fun ProfileScreen(
                 }
             }
 
+            } // Chats
+
             // 5. Check-After & Shared Presence Section
+            if (page == SettingsPage.Account) {
             SettingsSection(
                 title = "Check-After & Presence",
                 icon = Icons.Rounded.HourglassTop
@@ -2087,7 +2166,10 @@ fun ProfileScreen(
                 )
             }
 
+            } // Account
+
             // 6. Security Tools & Vault Section
+            if (page == SettingsPage.Privacy) {
             val secPrefs = remember { com.example.security.SecurityPreferences.getInstance(context) }
             val securityScore = secPrefs.getSecurityAuditScore()
 
@@ -2140,7 +2222,15 @@ fun ProfileScreen(
                     },
                     modifier = Modifier.clickable { onNavigateToDeviceSessions() }
                 )
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), thickness = 0.6.dp)
+            }
+            } // Privacy
+
+            // 7. Storage: the cache, and Backup & Recovery
+            if (page == SettingsPage.Storage) {
+            SettingsSection(
+                title = "Storage & Cache",
+                icon = Icons.Rounded.CleaningServices
+            ) {
                 ListItem(
                     headlineContent = { Text("Storage & Cache Manager", fontSize = 15.sp, fontWeight = FontWeight.SemiBold) },
                     supportingContent = { Text("Clear temporary media cache without deleting chats", fontSize = 13.sp) },
@@ -2154,7 +2244,6 @@ fun ProfileScreen(
                 )
             }
 
-            // 7. Backup & Recovery Section
             SettingsSection(
                 title = "Backup & Recovery",
                 icon = Icons.Rounded.CloudDone
@@ -2227,7 +2316,10 @@ fun ProfileScreen(
                 }
             }
 
-            // 8. Updates & Logout Actions
+            } // Storage
+
+            // 8. Updates & Logout Actions, under the main list
+            if (page == null) {
             CherishButton(
                 onClick = { viewModel.checkForUpdates(context) },
                 modifier = Modifier
@@ -2276,9 +2368,11 @@ fun ProfileScreen(
                 Spacer(modifier = Modifier.width(8.dp))
                 Text("Log Out", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
             }
+            } // Main list
 
             Spacer(modifier = Modifier.height(24.dp))
         }
+        } // AnimatedContent
     }
 
     

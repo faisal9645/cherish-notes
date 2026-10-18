@@ -3462,7 +3462,22 @@ private fun formatScheduleTime(at: Long): String {
 /** Pick when to send [text]: quick choices, or any time from the clock. */
 @Composable
 private fun ScheduleMessageDialog(text: String, onSchedule: (Long) -> Unit, onDismiss: () -> Unit) {
-    val context = LocalContext.current
+    // Any time: the app's own (Material) time picker
+    var showTimePicker by remember { mutableStateOf(false) }
+    if (showTimePicker) {
+        val now = remember { java.util.Calendar.getInstance() }
+        com.example.ui.components.CherishTimePickerDialog(
+            title = "Send at",
+            initialHour = now.get(java.util.Calendar.HOUR_OF_DAY),
+            initialMinute = now.get(java.util.Calendar.MINUTE),
+            confirmText = "Schedule",
+            onPick = { hour, minute ->
+                showTimePicker = false
+                onSchedule(nextTimeAt(hour, minute))
+            },
+            onDismiss = { showTimePicker = false }
+        )
+    }
     val choices = remember {
         listOf(
             nextTimeAt(7),
@@ -3493,16 +3508,7 @@ private fun ScheduleMessageDialog(text: String, onSchedule: (Long) -> Unit, onDi
                     }
                 }
                 CherishOutlinedButton(
-                    onClick = {
-                        val now = java.util.Calendar.getInstance()
-                        android.app.TimePickerDialog(
-                            context,
-                            { _, hour, minute -> onSchedule(nextTimeAt(hour, minute)) },
-                            now.get(java.util.Calendar.HOUR_OF_DAY),
-                            now.get(java.util.Calendar.MINUTE),
-                            false
-                        ).show()
-                    },
+                    onClick = { showTimePicker = true },
                     shape = RoundedCornerShape(12.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {

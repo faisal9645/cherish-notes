@@ -1,9 +1,9 @@
 {
-  "versionCode": 185,
-  "versionName": "1.8.13",
-  "tagName": "v1.8.13-185",
-  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.8.13-185/app_update_185.apk",
-  "assetSize": 18496864,
-  "releaseNotes": "Notes v1.8.13 (Build 185):\n• Round video notes in view play muted and looping at their size, with no ring or buttons; a tap plays from the start with sound, full width\n• Single clean progress ring without track or border\n• Hug animation for 🤗 and 🫂; text message emojis animate on arrival and tap\n• Calendar in chat search jumps to a day's first message\n• Couple Connection: one edit button for all three fields",
-  "releaseDate": "2026-10-18T20:06:00Z"
+  "versionCode": 186,
+  "versionName": "1.8.14",
+  "tagName": "v1.8.14-186",
+  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.8.14-186/app_update_186.apk",
+  "assetSize": 18500000,
+  "releaseNotes": "Notes v1.8.14 (Build 186):\n• Realistic hugging animation for 🤗 and 🫂 emojis: hands and arms wrap around in a warm, tight embrace and squeeze instead of bursting hearts\n• Video notes powered by ExoPlayer with smooth inline silent playback\n• Material 3 date & time pickers across chat schedule, search jump, and check-after\n• Categorized Settings & Privacy pages (Account, Privacy, Chats, Notifications, Calls, Storage)",
+  "releaseDate": "2026-10-18T20:40:00Z"
 }

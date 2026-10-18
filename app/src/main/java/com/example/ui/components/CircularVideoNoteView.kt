@@ -1,11 +1,13 @@
 package com.example.ui.components
 
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.graphics.Bitmap
-import android.graphics.SurfaceTexture
-import android.media.MediaPlayer
 import android.net.Uri
+import android.os.PowerManager
 import android.util.Log
-import android.view.Surface
 import android.view.TextureView
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -26,6 +28,7 @@ import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Repeat
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -45,35 +48,96 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
-import com.example.util.VideoThumbnailHelper
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
-import kotlinx.coroutines.launch
-import java.io.File
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.media3.common.C
+import androidx.media3.common.MediaItem
+import androidx.media3.common.PlaybackException
+import androidx.media3.common.Player
+import androidx.media3.common.VideoSize
+import androidx.media3.exoplayer.ExoPlayer
 import com.example.ui.theme.Blue500
 import com.example.ui.theme.NavyCard
 import com.example.ui.theme.Slate900
-import androidx.compose.material3.LocalTextStyle
 import com.example.ui.theme.steadyDigits
+import com.example.util.VideoThumbnailHelper
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.withContext
+import java.io.File
+import kotlin.math.roundToInt
 
 /**
  * Only one video note plays with sound at a time: starting one stops (and releases) the others.
- * While none does, the chat's round notes play silently where they are (their previews), unless
- * previews are off (the app hidden behind Notes).
+ * While none does, the round note most in view in the chat plays silently where it is (its
+ * preview); only that one, so a single video is decoding. No previews while the app hides behind
+ * Notes, or in Battery Saver.
  */
 private object VideoNotePlayback {
     var activeKey by mutableStateOf<Any?>(null)
     var previewsAllowed by mutableStateOf(true)
+    // How much of each round note in the chat is on screen
+    val inView = mutableStateMapOf<Any, InView>()
+
+    /** Whose turn it is to preview: the note with the most of it on screen (half at least), then the lowest. */
+    fun previewChoice(): Any? = inView.entries
+        .filter { it.value.shown >= MIN_SHOWN_TO_PREVIEW }
+        .maxWithOrNull(compareBy<Map.Entry<Any, InView>>({ it.value.shown }, { it.value.row }))
+        ?.key
+
+    fun report(key: Any, coordinates: LayoutCoordinates) {
+        val width = coordinates.size.width
+        val height = coordinates.size.height
+        if (!coordinates.isAttached || width <= 0 || height <= 0) {
+            inView.remove(key)
+            return
+        }
+        // The part on screen (the list clips the rest), in tenths, and roughly where: so scrolling
+        // changes these only now and then
+        val visible = coordinates.boundsInWindow()
+        val shown = ((visible.width * visible.height) / (width.toFloat() * height) * 10f).roundToInt() / 10f
+        val now = InView(shown, (visible.center.y / ROW_PX).roundToInt())
+        if (inView[key] != now) inView[key] = now
+    }
+}
+
+private data class InView(val shown: Float, val row: Int)
+
+/** Battery Saver: no silent previews while it's on. */
+private object BatterySaver {
+    var isOn by mutableStateOf(false)
+        private set
+    private var watching = false
+
+    fun watch(context: Context) {
+        if (watching) return
+        watching = true
+        val app = context.applicationContext
+        val power = app.getSystemService(PowerManager::class.java) ?: return
+        isOn = power.isPowerSaveMode
+        ContextCompat.registerReceiver(
+            app,
+            object : BroadcastReceiver() {
+                override fun onReceive(context: Context, intent: Intent) {
+                    isOn = power.isPowerSaveMode
+                }
+            },
+            IntentFilter(PowerManager.ACTION_POWER_SAVE_MODE_CHANGED),
+            ContextCompat.RECEIVER_NOT_EXPORTED
+        )
+    }
 }
 
 /** Stops every video note, silent previews too (each goes back to its still frame), e.g. when the app hides. */
@@ -96,6 +160,12 @@ private val RoundTopStart = BiasAlignment(-ROUND_BUTTON_BIAS, -ROUND_BUTTON_BIAS
 private val RoundTopEnd = BiasAlignment(ROUND_BUTTON_BIAS, -ROUND_BUTTON_BIAS)
 private val RoundBottomEnd = BiasAlignment(ROUND_BUTTON_BIAS, ROUND_BUTTON_BIAS)
 
+private const val MIN_SHOWN_TO_PREVIEW = 0.5f
+private const val ROW_PX = 96f
+/** A note is the one most in view this long before its preview starts: not while scrolling past. */
+private const val PREVIEW_SETTLE_MS = 220L
+private const val TAG = "CircularVideoNoteView"
+
 @Composable
 fun CircularVideoNoteView(
     videoUrl: String,
@@ -110,32 +180,33 @@ fun CircularVideoNoteView(
     shape: androidx.compose.ui.graphics.Shape = CircleShape,
     // Fill the shape (cropping the edges), or show the whole picture with bars
     cropToFill: Boolean = true,
-    // In the chat: while no note plays with sound, it plays where it is, muted and looping, at
-    // its size, with no ring or buttons; a tap plays it from the start with sound (like Telegram)
+    // In the chat: when it's the one most in view and no note plays with sound, it plays where it
+    // is, muted and looping, at its size, with no ring or buttons; a tap plays it from the start
+    // with sound (like Telegram)
     silentPreview: Boolean = false
 ) {
     val isRound = shape == CircleShape
     val context = LocalContext.current
     // Playing its silent preview (muted, looping, no ring or buttons)
     var isPreview by remember { mutableStateOf(false) }
+    // The player exists only while this note plays (with sound or as a preview)
     var playerRequested by remember { mutableStateOf(autoPlay) }
+    var player by remember { mutableStateOf<ExoPlayer?>(null) }
+    var textureView by remember { mutableStateOf<TextureView?>(null) }
+    // Meant to be playing (set before the player is ready)
     var isPlaying by remember { mutableStateOf(autoPlay) }
-    var shouldPlayWhenReady by remember { mutableStateOf(autoPlay) }
     var isCompleted by remember { mutableStateOf(false) }
     var isMuted by remember { mutableStateOf(false) }
     var isLooping by remember { mutableStateOf(false) }
     var progress by remember { mutableFloatStateOf(0f) }
-    var mediaPlayerRef by remember { mutableStateOf<MediaPlayer?>(null) }
+    // Its first frame is on screen
     var isVideoReady by remember { mutableStateOf(false) }
     var isLoading by remember { mutableStateOf(false) }
     var hasError by remember { mutableStateOf(false) }
     var thumbnailBitmap by remember { mutableStateOf<Bitmap?>(null) }
-    var videoWidth by remember { mutableIntStateOf(0) }
-    var videoHeight by remember { mutableIntStateOf(0) }
     var videoAspect by remember { mutableFloatStateOf(1f) }
     var effectiveDurationSeconds by remember { mutableIntStateOf(durationSeconds) }
     var localVideoFile by remember { mutableStateOf<File?>(null) }
-    val scope = rememberCoroutineScope()
     val playbackKey = remember { Any() }
 
     // Playing with sound (a silent preview doesn't count): it grows and shows its ring
@@ -150,23 +221,19 @@ fun CircularVideoNoteView(
         label = "video_note_ring"
     )
 
-    // A preview loops muted whatever the loop and sound buttons are set to
-    LaunchedEffect(isLooping, isPreview) {
-        try {
-            mediaPlayerRef?.isLooping = isLooping || isPreview
-        } catch (_: Exception) {}
+    // The player follows: muted and looping as a preview, otherwise as its buttons are set
+    LaunchedEffect(player, isMuted, isLooping, isPreview) {
+        player?.let { p ->
+            p.volume = if (isMuted || isPreview) 0f else 1f
+            p.repeatMode = if (isLooping || isPreview) Player.REPEAT_MODE_ONE else Player.REPEAT_MODE_OFF
+        }
     }
 
     fun releasePlayer() {
-        try {
-            mediaPlayerRef?.stop()
-            mediaPlayerRef?.release()
-        } catch (_: Exception) {}
-        mediaPlayerRef = null
+        // The player goes with it (see below)
         playerRequested = false
         isPreview = false
         isPlaying = false
-        shouldPlayWhenReady = false
         isVideoReady = false
         isLoading = false
         isCompleted = false
@@ -179,32 +246,24 @@ fun CircularVideoNoteView(
         isCompleted = false
         isPreview = false
         VideoNotePlayback.activeKey = playbackKey
-        playerRequested = true
-        shouldPlayWhenReady = true
         isPlaying = true
+        player?.play()
+        playerRequested = true
     }
 
-    // Plays where it is, muted and looping (its player kept when it has one)
+    // Plays where it is, muted and looping (on its player, when it has one)
     fun startPreview() {
         if (hasError) return
         isPreview = true
         isCompleted = false
-        val mp = mediaPlayerRef
-        if (playerRequested && mp != null && isVideoReady) {
-            try {
-                mp.setVolume(0f, 0f)
-                mp.isLooping = true
-                if (!mp.isPlaying) mp.start()
-                isPlaying = true
-                shouldPlayWhenReady = true
-                return
-            } catch (e: Exception) {
-                Log.w("CircularVideoNoteView", "Preview error", e)
-            }
+        isPlaying = true
+        player?.let { p ->
+            p.volume = 0f
+            p.repeatMode = Player.REPEAT_MODE_ONE
+            if (p.playbackState == Player.STATE_ENDED) p.seekTo(0)
+            p.play()
         }
         playerRequested = true
-        shouldPlayWhenReady = true
-        isPlaying = true
     }
 
     // From the silent preview: from the start, with sound (and so its ring and buttons)
@@ -213,58 +272,158 @@ fun CircularVideoNoteView(
         isCompleted = false
         progress = 0f
         VideoNotePlayback.activeKey = playbackKey
-        val mp = mediaPlayerRef
-        if (mp != null && isVideoReady) {
-            try {
-                if (isMuted) mp.setVolume(0f, 0f) else mp.setVolume(1f, 1f)
-                mp.isLooping = isLooping
-                mp.seekTo(0)
-                if (!mp.isPlaying) mp.start()
-                isPlaying = true
-                shouldPlayWhenReady = true
-            } catch (e: Exception) {
-                Log.w("CircularVideoNoteView", "Play with sound error", e)
-                startPlayback()
-            }
+        isPlaying = true
+        player?.let { p ->
+            p.volume = if (isMuted) 0f else 1f
+            p.repeatMode = if (isLooping) Player.REPEAT_MODE_ONE else Player.REPEAT_MODE_OFF
+            p.seekTo(0)
+            p.play()
+        }
+        playerRequested = true
+    }
+
+    // Played to its end (a loop never ends)
+    fun onPlayedThrough() {
+        if (silentPreview) {
+            // Small again, back to its silent preview (while it's still the one most in view)
+            progress = 0f
+            startPreview()
+            if (VideoNotePlayback.activeKey === playbackKey) VideoNotePlayback.activeKey = null
         } else {
-            // Still loading: it starts with sound once ready
-            startPlayback()
+            isPlaying = false
+            isCompleted = true
+            progress = 1f
         }
     }
 
-    // One note plays with sound: while it does, the others go still, silent previews too. While
-    // none does, a round note in the chat plays its silent preview
+    val listener = remember {
+        object : Player.Listener {
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                isLoading = playbackState == Player.STATE_BUFFERING
+                when (playbackState) {
+                    Player.STATE_READY -> {
+                        hasError = false
+                        val durationMs = player?.duration ?: C.TIME_UNSET
+                        if (effectiveDurationSeconds <= 0 && durationMs > 0) {
+                            effectiveDurationSeconds = (durationMs / 1000).toInt().coerceAtLeast(1)
+                        }
+                    }
+                    Player.STATE_ENDED -> onPlayedThrough()
+                    else -> Unit
+                }
+            }
+
+            override fun onRenderedFirstFrame() {
+                isVideoReady = true
+            }
+
+            override fun onVideoSizeChanged(videoSize: VideoSize) {
+                if (thumbnailBitmap == null && videoSize.width > 0 && videoSize.height > 0) {
+                    videoAspect = videoSize.width * videoSize.pixelWidthHeightRatio / videoSize.height
+                }
+            }
+
+            override fun onPlayerError(error: PlaybackException) {
+                Log.w(TAG, "Playback error", error)
+                // Shows its retry button, even from a preview
+                isPreview = false
+                isVideoReady = false
+                isPlaying = false
+                isLoading = false
+                hasError = true
+            }
+        }
+    }
+
+    // The player (ExoPlayer: quick to start, loops without a gap), while this note plays
+    DisposableEffect(playerRequested) {
+        if (!playerRequested) return@DisposableEffect onDispose { }
+        val exo = ExoPlayer.Builder(context).build().apply {
+            addListener(listener)
+            volume = if (isMuted || isPreview) 0f else 1f
+            repeatMode = if (isLooping || isPreview) Player.REPEAT_MODE_ONE else Player.REPEAT_MODE_OFF
+            playWhenReady = isPlaying
+        }
+        player = exo
+        onDispose {
+            exo.removeListener(listener)
+            exo.release()
+            if (player === exo) player = null
+            isVideoReady = false
+            isLoading = false
+        }
+    }
+    // It plays the downloaded copy (fetched first when there's none yet), else the link itself
+    LaunchedEffect(player) {
+        val p = player ?: return@LaunchedEffect
+        isLoading = true
+        val file = localVideoFile?.takeIf { it.exists() && it.length() > 1024 }
+            ?: VideoThumbnailHelper.getCachedFile(context, videoUrl)?.takeIf { it.exists() }?.also { localVideoFile = it }
+        val uri = when {
+            file != null -> Uri.fromFile(file)
+            videoUrl.contains("://") -> Uri.parse(videoUrl)
+            else -> Uri.fromFile(File(videoUrl))
+        }
+        p.setMediaItem(MediaItem.fromUri(uri))
+        p.prepare()
+    }
+    // Its picture goes to the TextureView on screen
+    DisposableEffect(player, textureView) {
+        val p = player
+        val tv = textureView
+        if (p == null || tv == null) return@DisposableEffect onDispose { }
+        p.setVideoTextureView(tv)
+        onDispose {
+            try {
+                p.clearVideoTextureView(tv)
+            } catch (_: Exception) {}
+        }
+    }
+
+    // Tells the chat whether it's at the most-in-view note's turn to preview (and when it can)
+    LaunchedEffect(silentPreview) {
+        if (silentPreview) BatterySaver.watch(context)
+    }
+
+    // One note plays with sound; while it does, the others are still, previews too. While none
+    // does, the round note most in view in the chat plays its silent preview
     LaunchedEffect(playbackKey) {
         if (autoPlay) VideoNotePlayback.activeKey = playbackKey
-        snapshotFlow { VideoNotePlayback.activeKey to VideoNotePlayback.previewsAllowed }
-            .collect { (active, previewsAllowed) ->
-                if (active !== playbackKey && playerRequested && (!isPreview || active != null || !previewsAllowed)) {
-                    releasePlayer()
-                }
-                if (silentPreview && previewsAllowed && active == null && !playerRequested) startPreview()
+        snapshotFlow {
+            val active = VideoNotePlayback.activeKey
+            val myTurn = silentPreview && active == null && VideoNotePlayback.previewsAllowed &&
+                !BatterySaver.isOn && VideoNotePlayback.previewChoice() === playbackKey
+            active to myTurn
+        }.collectLatest { (active, myTurn) ->
+            when {
+                active === playbackKey -> Unit
+                isPreview -> if (!myTurn) releasePlayer()
+                // Another note plays with sound, or all were stopped
+                playerRequested -> releasePlayer()
             }
+            if (myTurn && !playerRequested && !hasError) {
+                delay(PREVIEW_SETTLE_MS)
+                startPreview()
+            }
+        }
     }
 
     // Lifecycle observer: pause video when app goes to background; a silent preview goes on when back
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_PAUSE || event == Lifecycle.Event.ON_STOP) {
-                try {
-                    mediaPlayerRef?.let { mp ->
-                        if (mp.isPlaying) {
-                            mp.pause()
-                            isPlaying = false
-                            shouldPlayWhenReady = false
-                        }
+            when (event) {
+                Lifecycle.Event.ON_PAUSE, Lifecycle.Event.ON_STOP -> player?.let { p ->
+                    if (p.playWhenReady) {
+                        p.pause()
+                        isPlaying = false
                     }
-                } catch (_: Exception) {}
-            } else if (event == Lifecycle.Event.ON_RESUME && isPreview) {
-                shouldPlayWhenReady = true
-                isPlaying = true
-                try {
-                    mediaPlayerRef?.let { mp -> if (isVideoReady && !mp.isPlaying) mp.start() }
-                } catch (_: Exception) {}
+                }
+                Lifecycle.Event.ON_RESUME -> if (isPreview) {
+                    isPlaying = true
+                    player?.play()
+                }
+                else -> Unit
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -279,13 +438,7 @@ fun CircularVideoNoteView(
             if (VideoNotePlayback.activeKey === playbackKey) {
                 VideoNotePlayback.activeKey = null
             }
-            try {
-                mediaPlayerRef?.stop()
-                mediaPlayerRef?.release()
-            } catch (_: Exception) {}
-            mediaPlayerRef = null
-            isVideoReady = false
-            isLoading = false
+            VideoNotePlayback.inView.remove(playbackKey)
         }
     }
 
@@ -339,63 +492,48 @@ fun CircularVideoNoteView(
 
     // Toggle play / pause helper (a tap on a silent preview plays it with sound)
     val togglePlayPause: () -> Unit = {
-        if (isPreview) {
-            playWithSound()
-        } else if (isCompleted) {
-            isCompleted = false
-            progress = 0f
-            mediaPlayerRef?.let { mp ->
-                try {
-                    VideoNotePlayback.activeKey = playbackKey
-                    mp.seekTo(0)
-                    mp.start()
-                    isPlaying = true
-                    shouldPlayWhenReady = true
-                } catch (e: Exception) {
-                    Log.w("CircularVideoNoteView", "Replay error", e)
-                    startPlayback()
-                }
-            } ?: run {
-                startPlayback()
+        val p = player
+        when {
+            isPreview -> playWithSound()
+            hasError && p != null -> {
+                hasError = false
+                VideoNotePlayback.activeKey = playbackKey
+                isPlaying = true
+                p.prepare()
+                p.play()
             }
-        } else if (!playerRequested || mediaPlayerRef == null) {
-            startPlayback()
-        } else {
-            mediaPlayerRef?.let { mp ->
-                try {
-                    if (mp.isPlaying) {
-                        mp.pause()
-                        isPlaying = false
-                        shouldPlayWhenReady = false
-                    } else {
-                        VideoNotePlayback.activeKey = playbackKey
-                        mp.start()
-                        isPlaying = true
-                        shouldPlayWhenReady = true
-                    }
-                } catch (e: Exception) {
-                    Log.w("CircularVideoNoteView", "Toggle play error", e)
+            isCompleted -> {
+                isCompleted = false
+                progress = 0f
+                if (p != null) {
+                    VideoNotePlayback.activeKey = playbackKey
+                    isPlaying = true
+                    p.seekTo(0)
+                    p.play()
+                } else {
                     startPlayback()
                 }
-            } ?: run {
-                startPlayback()
+            }
+            !playerRequested || p == null -> startPlayback()
+            isPlaying -> {
+                p.pause()
+                isPlaying = false
+            }
+            else -> {
+                VideoNotePlayback.activeKey = playbackKey
+                isPlaying = true
+                p.play()
             }
         }
     }
 
     // Progress tracker from actual playback position
-    LaunchedEffect(isPlaying, isVideoReady) {
+    LaunchedEffect(isPlaying, player) {
+        val p = player ?: return@LaunchedEffect
         while (isActive && isPlaying) {
-            mediaPlayerRef?.let { mp ->
-                try {
-                    if (mp.isPlaying) {
-                        val cur = mp.currentPosition
-                        val dur = mp.duration
-                        if (dur > 0) {
-                            progress = (cur.toFloat() / dur.toFloat()).coerceIn(0f, 1f)
-                        }
-                    }
-                } catch (_: Exception) {}
+            val durationMs = p.duration
+            if (durationMs > 0) {
+                progress = (p.currentPosition.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f)
             }
             delay(50)
         }
@@ -428,6 +566,11 @@ fun CircularVideoNoteView(
     Box(
         modifier = modifier
             .then(if (isRound) Modifier.defaultMinSize(minWidth = 220.dp, minHeight = 220.dp) else Modifier)
+            // How much of it is on screen, for the chat's one silent preview
+            .then(
+                if (silentPreview) Modifier.onGloballyPositioned { VideoNotePlayback.report(playbackKey, it) }
+                else Modifier
+            )
             .clip(shape)
             .background(Slate900)
             .pointerInput(Unit) {
@@ -448,161 +591,8 @@ fun CircularVideoNoteView(
         // TextureView surface with precise aspect preservation matching thumbnail ContentScale.Crop
         if (playerRequested) {
             AndroidView(
-                factory = { ctx ->
-                    val textureView = TextureView(ctx)
-                    var activeSurface: Surface? = null
-
-                    fun setupAndPlay(mp: MediaPlayer, source: String) {
-                        try {
-                            mp.reset()
-                            activeSurface?.let { mp.setSurface(it) }
-                            mp.isLooping = isLooping || isPreview
-                            if (source.startsWith("http://") || source.startsWith("https://") || source.startsWith("content://")) {
-                                mp.setDataSource(ctx, Uri.parse(source))
-                            } else {
-                                val path = source.removePrefix("file://")
-                                mp.setDataSource(path)
-                            }
-                            if (isMuted || isPreview) mp.setVolume(0f, 0f) else mp.setVolume(1f, 1f)
-                            mp.setOnPreparedListener { preparedMp ->
-                                mediaPlayerRef = preparedMp
-                                // As it is now: a preview muted and looping, or with sound
-                                if (isMuted || isPreview) preparedMp.setVolume(0f, 0f) else preparedMp.setVolume(1f, 1f)
-                                preparedMp.isLooping = isLooping || isPreview
-                                videoWidth = preparedMp.videoWidth
-                                videoHeight = preparedMp.videoHeight
-                                if (thumbnailBitmap == null && videoWidth > 0 && videoHeight > 0) {
-                                    videoAspect = videoWidth.toFloat() / videoHeight.toFloat()
-                                }
-                                if (effectiveDurationSeconds <= 0 && preparedMp.duration > 0) {
-                                    effectiveDurationSeconds = (preparedMp.duration / 1000).coerceAtLeast(1)
-                                }
-                                isVideoReady = true
-                                isLoading = false
-                                hasError = false
-                                if (shouldPlayWhenReady || isPlaying) {
-                                    try {
-                                        preparedMp.start()
-                                        isPlaying = true
-                                    } catch (e: Exception) {
-                                        Log.w("CircularVideoNoteView", "Error starting MediaPlayer", e)
-                                    }
-                                }
-                            }
-                            mp.setOnErrorListener { _, what, extra ->
-                                Log.w("CircularVideoNoteView", "MediaPlayer error: what=$what, extra=$extra")
-                                // Shows its retry button, even from a preview
-                                isPreview = false
-                                isVideoReady = false
-                                isPlaying = false
-                                isLoading = false
-                                hasError = true
-                                true
-                            }
-                            mp.setOnCompletionListener {
-                                if (!isPreview && !isLooping && silentPreview) {
-                                    // Played through with sound: small again, back to its silent preview
-                                    progress = 0f
-                                    startPreview()
-                                    if (VideoNotePlayback.activeKey === playbackKey) VideoNotePlayback.activeKey = null
-                                } else if (isLooping || isPreview) {
-                                    try {
-                                        mp.seekTo(0)
-                                        mp.start()
-                                        isPlaying = true
-                                        isCompleted = false
-                                    } catch (_: Exception) {
-                                        isPlaying = false
-                                        isCompleted = true
-                                        progress = 1f
-                                    }
-                                } else {
-                                    isPlaying = false
-                                    isCompleted = true
-                                    progress = 1f
-                                }
-                            }
-                            isLoading = true
-                            mp.prepareAsync()
-                        } catch (e: Exception) {
-                            Log.w("CircularVideoNoteView", "Setup MediaPlayer error", e)
-                            isLoading = false
-                            hasError = true
-                        }
-                    }
-
-                    textureView.surfaceTextureListener = object : TextureView.SurfaceTextureListener {
-                        override fun onSurfaceTextureAvailable(st: SurfaceTexture, width: Int, height: Int) {
-                            try {
-                                activeSurface?.release()
-                                val surface = Surface(st)
-                                activeSurface = surface
-                                mediaPlayerRef?.release()
-
-                                val mp = MediaPlayer()
-                                mediaPlayerRef = mp
-
-                                val readyFile = localVideoFile
-                                if (readyFile != null && readyFile.exists() && readyFile.length() > 1024) {
-                                    setupAndPlay(mp, readyFile.absolutePath)
-                                } else {
-                                    isLoading = true
-                                    scope.launch(Dispatchers.IO) {
-                                        val f = VideoThumbnailHelper.getCachedFile(ctx, videoUrl)
-                                        withContext(Dispatchers.Main) {
-                                            if (activeSurface != null) {
-                                                if (f != null && f.exists()) {
-                                                    localVideoFile = f
-                                                    setupAndPlay(mp, f.absolutePath)
-                                                } else {
-                                                    setupAndPlay(mp, videoUrl)
-                                                }
-                                            } else {
-                                                isLoading = false
-                                            }
-                                        }
-                                    }
-                                }
-                            } catch (e: Exception) {
-                                Log.w("CircularVideoNoteView", "Failed setting up TextureView MediaPlayer", e)
-                                isLoading = false
-                                hasError = true
-                            }
-                        }
-
-                        override fun onSurfaceTextureSizeChanged(st: SurfaceTexture, width: Int, height: Int) {}
-
-                        override fun onSurfaceTextureDestroyed(st: SurfaceTexture): Boolean {
-                            try {
-                                mediaPlayerRef?.stop()
-                                mediaPlayerRef?.release()
-                            } catch (_: Exception) {}
-                            mediaPlayerRef = null
-                            activeSurface?.release()
-                            activeSurface = null
-                            isVideoReady = false
-                            return true
-                        }
-
-                        override fun onSurfaceTextureUpdated(st: SurfaceTexture) {}
-                    }
-                    textureView
-                },
-                update = {
-                    mediaPlayerRef?.let { mp ->
-                        if (isMuted || isPreview) mp.setVolume(0f, 0f) else mp.setVolume(1f, 1f)
-                    }
-                },
-                onRelease = { tv ->
-                    try {
-                        tv.surfaceTextureListener = null
-                        mediaPlayerRef?.stop()
-                        mediaPlayerRef?.release()
-                    } catch (_: Exception) {}
-                    mediaPlayerRef = null
-                    isVideoReady = false
-                    isLoading = false
-                },
+                factory = { ctx -> TextureView(ctx).also { textureView = it } },
+                onRelease = { tv -> if (textureView === tv) textureView = null },
                 modifier = Modifier
                     .fillMaxSize()
                     .graphicsLayer {
@@ -770,11 +760,6 @@ fun CircularVideoNoteView(
                 .size(if (isRound) 28.dp else 32.dp)
                 .clickable {
                     isMuted = !isMuted
-                    mediaPlayerRef?.let { mp ->
-                        try {
-                            if (isMuted) mp.setVolume(0f, 0f) else mp.setVolume(1f, 1f)
-                        } catch (_: Exception) {}
-                    }
                 }
         ) {
             Box(contentAlignment = Alignment.Center) {

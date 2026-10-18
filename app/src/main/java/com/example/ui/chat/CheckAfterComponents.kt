@@ -2,7 +2,6 @@ package com.example.ui.chat
 
 import com.example.ui.theme.darkTone
 
-import android.app.TimePickerDialog
 import kotlinx.coroutines.launch
 import com.example.ui.components.fluidSheetInertia
 import androidx.compose.animation.*
@@ -424,6 +423,8 @@ fun CheckAfterBottomSheet(
     // Personal space for some days (more than 2 needs the partner's OK)
     var customDays by remember { mutableIntStateOf(3) }
     var showDaysPicker by remember { mutableStateOf(false) }
+    // "Custom": a time of day, from the app's own (Material) time picker
+    var showTimePicker by remember { mutableStateOf(false) }
 
     val quickNotes = remember {
         listOf(
@@ -642,25 +643,7 @@ fun CheckAfterBottomSheet(
                                         showDaysPicker = true
                                     }
                                     "Custom" -> {
-                                        val cal = Calendar.getInstance()
-                                        TimePickerDialog(
-                                            context,
-                                            { _, hourOfDay, minute ->
-                                                val targetCal = Calendar.getInstance().apply {
-                                                    set(Calendar.HOUR_OF_DAY, hourOfDay)
-                                                    set(Calendar.MINUTE, minute)
-                                                    set(Calendar.SECOND, 0)
-                                                    set(Calendar.MILLISECOND, 0)
-                                                    if (timeInMillis <= System.currentTimeMillis()) {
-                                                        add(Calendar.DAY_OF_YEAR, 1)
-                                                    }
-                                                }
-                                                targetMillis = targetCal.timeInMillis
-                                            },
-                                            cal.get(Calendar.HOUR_OF_DAY) + 1,
-                                            cal.get(Calendar.MINUTE),
-                                            false
-                                        ).show()
+                                        showTimePicker = true
                                     }
                                     else -> {
                                         targetMillis = System.currentTimeMillis() + duration
@@ -864,6 +847,29 @@ fun CheckAfterBottomSheet(
 
             Spacer(modifier = Modifier.height(4.dp))
         }
+    }
+
+    if (showTimePicker) {
+        val now = remember { Calendar.getInstance() }
+        com.example.ui.components.CherishTimePickerDialog(
+            title = "Check after",
+            initialHour = now.get(Calendar.HOUR_OF_DAY) + 1,
+            initialMinute = now.get(Calendar.MINUTE),
+            onPick = { hourOfDay, minute ->
+                showTimePicker = false
+                // That time today, or tomorrow when it has passed
+                targetMillis = Calendar.getInstance().apply {
+                    set(Calendar.HOUR_OF_DAY, hourOfDay)
+                    set(Calendar.MINUTE, minute)
+                    set(Calendar.SECOND, 0)
+                    set(Calendar.MILLISECOND, 0)
+                    if (timeInMillis <= System.currentTimeMillis()) {
+                        add(Calendar.DAY_OF_YEAR, 1)
+                    }
+                }.timeInMillis
+            },
+            onDismiss = { showTimePicker = false }
+        )
     }
 
     if (showDaysPicker) {

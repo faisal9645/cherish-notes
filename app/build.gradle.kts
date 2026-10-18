@@ -16,8 +16,8 @@ android {
     applicationId = "com.cherish.notes"
     minSdk = 24
     targetSdk = 35
-    versionCode = 185
-    versionName = "1.8.13"
+    versionCode = 186
+    versionName = "1.8.14"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     resourceConfigurations += listOf("en")
@@ -141,6 +141,8 @@ dependencies {
   implementation(libs.androidx.media3.transformer)
   implementation(libs.androidx.media3.effect)
   implementation(libs.androidx.media3.common)
+  // Plays video notes and videos; already in the app through the transformer, so it adds no size
+  implementation(libs.androidx.media3.exoplayer)
   implementation(libs.androidx.biometric)
   implementation(libs.androidx.credentials)
   implementation(libs.androidx.credentials.play.services)
