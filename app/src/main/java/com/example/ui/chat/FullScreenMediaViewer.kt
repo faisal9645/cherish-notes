@@ -702,15 +702,21 @@ fun FullScreenMediaViewer(
                                                         // Smooth momentum fling with decay
                                                         launch {
                                                             val decaySpec = exponentialDecay<Float>(frictionMultiplier = 1.3f)
-                                                            offsetXAnim.animateDecay(
-                                                                initialVelocity = velocity.x,
-                                                                animationSpec = decaySpec
-                                                            ) {
-                                                                if (value < -bounds.x || value > bounds.x) {
-                                                                    cancelAnimation()
+                                                            var hitBoundary = false
+                                                            try {
+                                                                kotlinx.coroutines.coroutineScope {
+                                                                    offsetXAnim.animateDecay(
+                                                                        initialVelocity = velocity.x,
+                                                                        animationSpec = decaySpec
+                                                                    ) {
+                                                                        if (value < -bounds.x || value > bounds.x) {
+                                                                            hitBoundary = true
+                                                                            kotlinx.coroutines.cancel()
+                                                                        }
+                                                                    }
                                                                 }
-                                                            }
-                                                            if (offsetXAnim.value !in -bounds.x..bounds.x) {
+                                                            } catch (_: kotlinx.coroutines.CancellationException) {}
+                                                            if (hitBoundary || offsetXAnim.value !in -bounds.x..bounds.x) {
                                                                 offsetXAnim.animateTo(
                                                                     targetValue = offsetXAnim.value.coerceIn(-bounds.x, bounds.x),
                                                                     animationSpec = spring(dampingRatio = 0.82f, stiffness = 380f)
@@ -719,15 +725,21 @@ fun FullScreenMediaViewer(
                                                         }
                                                         launch {
                                                             val decaySpec = exponentialDecay<Float>(frictionMultiplier = 1.3f)
-                                                            offsetYAnim.animateDecay(
-                                                                initialVelocity = velocity.y,
-                                                                animationSpec = decaySpec
-                                                            ) {
-                                                                if (value < -bounds.y || value > bounds.y) {
-                                                                    cancelAnimation()
+                                                            var hitBoundary = false
+                                                            try {
+                                                                kotlinx.coroutines.coroutineScope {
+                                                                    offsetYAnim.animateDecay(
+                                                                        initialVelocity = velocity.y,
+                                                                        animationSpec = decaySpec
+                                                                    ) {
+                                                                        if (value < -bounds.y || value > bounds.y) {
+                                                                            hitBoundary = true
+                                                                            kotlinx.coroutines.cancel()
+                                                                        }
+                                                                    }
                                                                 }
-                                                            }
-                                                            if (offsetYAnim.value !in -bounds.y..bounds.y) {
+                                                            } catch (_: kotlinx.coroutines.CancellationException) {}
+                                                            if (hitBoundary || offsetYAnim.value !in -bounds.y..bounds.y) {
                                                                 offsetYAnim.animateTo(
                                                                     targetValue = offsetYAnim.value.coerceIn(-bounds.y, bounds.y),
                                                                     animationSpec = spring(dampingRatio = 0.82f, stiffness = 380f)
@@ -858,10 +870,12 @@ fun FullScreenMediaViewer(
                                 .build(),
                             contentDescription = "Full-screen media photo",
                             contentScale = ContentScale.Fit,
-                            onSuccess = { state ->
-                                val intrinsic = state.painter.intrinsicSize
-                                if (intrinsic.width > 0f && intrinsic.height > 0f && !intrinsic.width.isNaN() && !intrinsic.height.isNaN()) {
-                                    currentImageSize = intrinsic
+                            onState = { state ->
+                                if (state is coil.compose.AsyncImagePainter.State.Success) {
+                                    val intrinsic = state.painter.intrinsicSize
+                                    if (intrinsic.width > 0f && intrinsic.height > 0f && !intrinsic.width.isNaN() && !intrinsic.height.isNaN()) {
+                                        currentImageSize = intrinsic
+                                    }
                                 }
                             },
                             modifier = Modifier

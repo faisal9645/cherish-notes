@@ -69,7 +69,6 @@ object CallNotifications {
             enableVibration(true)
             vibrationPattern = longArrayOf(0, 900, 700, 900, 700)
             lockscreenVisibility = Notification.VISIBILITY_PUBLIC
-            setBypassDnd(true)
             setShowBadge(false)
         }
         val incomingSilent = NotificationChannel(CHANNEL_INCOMING_SILENT, "Silent calls", NotificationManager.IMPORTANCE_HIGH).apply {
@@ -78,7 +77,6 @@ object CallNotifications {
             enableVibration(true)
             vibrationPattern = longArrayOf(0, 900, 700, 900, 700)
             lockscreenVisibility = Notification.VISIBILITY_PUBLIC
-            setBypassDnd(true)
             setShowBadge(false)
         }
         val incomingQuiet = NotificationChannel(CHANNEL_INCOMING_QUIET, "Incoming calls", NotificationManager.IMPORTANCE_HIGH).apply {
@@ -86,7 +84,6 @@ object CallNotifications {
             setSound(null, null)
             enableVibration(false)
             lockscreenVisibility = Notification.VISIBILITY_PUBLIC
-            setBypassDnd(true)
             setShowBadge(false)
         }
         val ongoing = NotificationChannel(CHANNEL_ONGOING, "Call in progress", NotificationManager.IMPORTANCE_LOW).apply {
