@@ -391,12 +391,12 @@ fun MessageComposer(
             listOf(
                 // Forehead kisses, tender kisses, lying on chest, deep cuddles, tongue
                 "👅", "😚", "🫂", "🛌", "🛏️", "💋", "😘", "😙", "😗", "💏", "👩‍❤️‍💋‍👨",
-                "🧑‍❤️‍💋‍🧑", "👩‍❤️‍💋‍👩", "👨‍❤️‍💋‍👨", "👄", "🫦", "🫠", "🥰", "😍", "🤱", "💆",
-                "💆‍♂️", "💆‍♀️", "😴", "💤", "🥱", "🥺", "🥹", "🤤", "🥵", "😳",
+                "🧑‍❤️‍💋‍🧑", "👩‍❤️‍💋‍👩", "👨‍❤️‍💋‍👨", "👄", "🫦", "🫠", "🥰", "😍", "🤱🏻", "💆🏻",
+                "💆🏻‍♂️", "💆🏻‍♀️", "😴", "💤", "🥱", "🥺", "🥹", "🤤", "🥵", "😳",
                 "🫣", "🤭", "🤫", "🫶🏻", "🫰🏻", "🫀", "🤲🏻", "🫳🏻", "🫴🏻", "🤝🏻",
-                "👫", "🧑‍🤝‍🧑", "💑", "👩‍❤️‍👨", "🧑‍❤️‍🧑", "👩‍❤️‍👩", "👨‍❤️‍👨", "👭", "👬", "👣",
+                "👫🏻", "🧑🏻‍🤝‍🧑🏻", "💑🏻", "👩🏻‍❤️‍👨🏻", "🧑🏻‍❤️‍🧑🏻", "👩🏻‍❤️‍👩🏻", "👨🏻‍❤️‍👨🏻", "👭🏻", "👬🏻", "👣",
                 // Romantic date nights, bath, intimacy & gifts
-                "🛁", "🧖", "🧖‍♀️", "🧖‍♂️", "🕯️", "🍷", "🥂", "🍾", "🍫", "🍓",
+                "🛁", "🧖🏻", "🧖🏻‍♀️", "🧖🏻‍♂️", "🕯️", "🍷", "🥂", "🍾", "🍫", "🍓",
                 "🍒", "🧁", "🍯", "🧸", "🏩", "💒", "💍", "💌", "🔐", "🗝️",
                 "🔒", "♾️", "🕊️", "🌙", "🪐", "🌟", "✨", "💫", "🪽", "🪶",
                 "🎀", "🪞", "🪔", "🌹", "🥀", "💐", "🌷", "🌸", "🌺", "🌼",
@@ -460,8 +460,8 @@ fun MessageComposer(
                 "⚽", "🏀", "🏈", "⚾", "🥎", "🎾", "🏐", "🏉", "🥏", "🎱",
                 "🪀", "🏓", "🏸", "🏒", "🏑", "🥍", "🏏", "🪃", "🥅", "⛳",
                 "🪁", "🏹", "🎣", "🤿", "🥊", "🥋", "🎽", "🛹", "🛼", "🛷",
-                "⛸️", "🥌", "🎿", "⛷️", "🏂", "🪂", "🏋️", "🤼", "🤸", "🤺",
-                "⛹️", "🏇", "🧘", "🏄", "🏊", "🤽", "🚣", "🧗", "🚴", "🏆",
+                "⛸️", "🥌", "🎿", "⛷🏻", "🏂🏻", "🪂", "🏋🏻", "🤼🏻", "🤸🏻", "🤺",
+                "⛹🏻", "🏇🏻", "🧘🏻", "🏄🏻", "🏊🏻", "🤽🏻", "🚣🏻", "🧗🏻", "🚴🏻", "🏆",
                 "🥇", "🥈", "🥉", "🏅", "🎖️", "🏵️", "🎗️", "🎫", "🎟️", "🎪",
                 "🎭", "🎨", "🎬", "🎤", "🎧", "🎼", "🎹", "🥁", "🪘", "🎷",
                 "🎺", "🪗", "🎸", "🎻", "🪕", "🎲", "♟️", "🎯", "🎳", "🎮"
@@ -488,7 +488,7 @@ fun MessageComposer(
                 "🆎", "🆑", "🅾️", "🆘", "❌", "⭕", "🛑", "⛔", "📛", "🚫",
                 "✅", "☑️", "✔️", "❎", "➕", "➖", "➗", "➰", "➿", "〽️"
             )
-        )
+        ).map { category -> category.map(::withFairSkinTone) }
     }
     val emojiPagerState = androidx.compose.foundation.pager.rememberPagerState(initialPage = 0, pageCount = { emojiCategories.size })
 
@@ -1416,7 +1416,7 @@ fun MessageComposer(
                                 ) {
                                     Text(
                                         text = tabEmoji,
-                                        fontSize = if (isSelected) 20.sp else 16.sp
+                                        fontSize = if (isSelected) 18.sp else 15.sp
                                     )
                                 }
                             }
@@ -1451,18 +1451,19 @@ fun MessageComposer(
                                 verticalArrangement = Arrangement.spacedBy(2.dp)
                             ) {
                                 items(currentEmojis, key = { "${pageIndex}_$it" }) { emoji ->
+                                    val displayEmoji = remember(emoji) { withFairSkinTone(emoji) }
                                     Box(
                                         modifier = Modifier
                                             .pressScaleTarget()
                                             .clip(RoundedCornerShape(8.dp))
                                             .springClickable {
                                                 haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                                onTextChanged(text + emoji)
+                                                onTextChanged(text + displayEmoji)
                                             }
                                             .padding(vertical = 4.dp),
                                         contentAlignment = Alignment.Center
                                     ) {
-                                        Text(text = emoji, fontSize = 32.sp)
+                                        Text(text = displayEmoji, fontSize = 26.sp)
                                     }
                                 }
                             }
@@ -1575,7 +1576,7 @@ private fun EmojiAttachmentPanel(
                     ) {
                         Text(
                             text = tabEmoji,
-                            fontSize = if (isSelected) 18.sp else 16.sp
+                            fontSize = if (isSelected) 16.sp else 14.sp
                         )
                     }
                 }
@@ -1609,18 +1610,19 @@ private fun EmojiAttachmentPanel(
                     verticalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
                     items(currentEmojis, key = { "${pageIndex}_$it" }) { emoji ->
+                        val displayEmoji = remember(emoji) { withFairSkinTone(emoji) }
                         Box(
                             modifier = Modifier
                                 .pressScaleTarget()
                                 .clip(RoundedCornerShape(8.dp))
                                 .springClickable {
                                     haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                    onEmojiPicked(emoji)
+                                    onEmojiPicked(displayEmoji)
                                 }
                                 .padding(vertical = 4.dp),
                             contentAlignment = Alignment.Center
                         ) {
-                            Text(text = emoji, fontSize = 28.sp)
+                            Text(text = displayEmoji, fontSize = 23.sp)
                         }
                     }
                 }

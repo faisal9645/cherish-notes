@@ -147,6 +147,7 @@ fun FullScreenMediaViewer(
     val closeAnimated: () -> Unit = {
         if (!isClosing) {
             isClosing = true
+            com.example.ui.components.stopAllVideoNotes()
             scope.launch {
                 entrance.animateTo(0f, tween(200, easing = FastOutSlowInEasing))
                 onDismiss()
@@ -154,6 +155,11 @@ fun FullScreenMediaViewer(
         }
     }
     BackHandler(onBack = closeAnimated)
+    DisposableEffect(Unit) {
+        onDispose {
+            com.example.ui.components.stopAllVideoNotes()
+        }
+    }
     var showDeleteConfirmDialog by remember { mutableStateOf(false) }
 
     val app = context.applicationContext as? CherishApplication
@@ -825,25 +831,27 @@ fun FullScreenMediaViewer(
                                 .background(Slate900),
                             contentAlignment = Alignment.Center
                         ) {
-                            com.example.ui.components.CircularVideoNoteView(
-                                videoUrl = pageUrl,
-                                autoPlay = true,
-                                shape = CircleShape,
-                                cropToFill = true,
-                                modifier = Modifier.fillMaxSize()
-                            )
-                        }
-                    } else if (isVideo) {
-                        // A shared video: full width, whole picture shown
+                        val isCurrentPage = page == pagerState.currentPage
                         com.example.ui.components.CircularVideoNoteView(
                             videoUrl = pageUrl,
-                            autoPlay = true,
-                            shape = androidx.compose.ui.graphics.RectangleShape,
-                            cropToFill = false,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .fillMaxHeight(0.8f)
+                            autoPlay = isCurrentPage,
+                            shape = CircleShape,
+                            cropToFill = true,
+                            modifier = Modifier.fillMaxSize()
                         )
+                    }
+                } else if (isVideo) {
+                    // A shared video: full width, whole picture shown
+                    val isCurrentPage = page == pagerState.currentPage
+                    com.example.ui.components.CircularVideoNoteView(
+                        videoUrl = pageUrl,
+                        autoPlay = isCurrentPage,
+                        shape = androidx.compose.ui.graphics.RectangleShape,
+                        cropToFill = false,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .fillMaxHeight(0.8f)
+                    )
                     } else {
                         val modelData = remember(pageUrl) {
                             when {

@@ -385,6 +385,24 @@ fun CircularVideoNoteView(
         if (silentPreview) BatterySaver.watch(context)
     }
 
+    // React to autoPlay changes (e.g. pagers swiping between media in full-screen viewer)
+    LaunchedEffect(autoPlay) {
+        if (autoPlay) {
+            if (!isPlaying || !playerRequested) {
+                startPlayback()
+            }
+        } else {
+            if (isPlaying || playerRequested) {
+                player?.pause()
+                isPlaying = false
+                playerRequested = false
+                if (VideoNotePlayback.activeKey === playbackKey) {
+                    VideoNotePlayback.activeKey = null
+                }
+            }
+        }
+    }
+
     // One note plays with sound; while it does, the others are still, previews too. While none
     // does, the round note most in view in the chat plays its silent preview
     LaunchedEffect(playbackKey) {

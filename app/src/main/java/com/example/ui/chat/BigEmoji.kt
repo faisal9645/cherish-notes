@@ -114,12 +114,12 @@ internal fun BigEmoji(
     val context = LocalContext.current
     val view = LocalView.current
     val fontSize = when (emojis.size) {
-        1 -> 72.sp
-        2 -> 56.sp
-        else -> 46.sp
+        1 -> 64.sp
+        2 -> 48.sp
+        else -> 38.sp
     }
     // The motions and bursts are made for one big emoji; two or three smaller ones scale them down
-    val glyphScale = fontSize.value / 72f
+    val glyphScale = fontSize.value / 64f
     // The message box's text size, which a sent emoji grows from
     val typedSp = LocalChatTextStyle.current.fontSize().value
     val bases = remember(emojis) { emojis.map(::baseOf) }
@@ -746,7 +746,7 @@ private fun particlesFor(
                 life = rnd(0.5f, 0.62f), gravity = -22f,
                 dx = if (base == KISS_MARK) 0f else 0.2f, dy = if (base == KISS_MARK) 0f else 0.14f
             )
-            // A warm, loving embrace: glowing aura behind, blushing cheeks, gentle warmth ripple, and sweet sparkles
+            // A serene embrace: glowing blue aura behind, soft cheeks, blue ripple, and sweet sparkles
             BurstStyle.Hug -> when (i) {
                 0 -> particle(ParticleShape.Aura, size = 52f, start = 0.12f, life = 0.75f, color = HugGlowColor)
                 1 -> particle(ParticleShape.Glow, size = 17f, start = 0.18f, life = 0.70f, dx = -0.24f, dy = 0.08f, color = HugCheekColor)
@@ -892,9 +892,10 @@ private val SighColors = listOf(Color(0xFFB0BEC5), Color(0xFFCFD8DC), Color(0xFF
 private val DotColors = listOf(Color(0xFF9AA0A6))
 private val RippleColors = listOf(Color(0xFF8AB4F8), Color(0xFFA7C7FA))
 private val RageColor = Color(0xFFFF3B30)
-private val HugColors = listOf(Color(0xFFFF8FB1), Color(0xFFFFB74D), Color(0xFFFF6B9A))
-private val HugGlowColor = Color(0xFFFFB3C7)
-private val HugCheekColor = Color(0xFFFF7A9A)
+// The hug in 🫂's own colours: vibrant blue, sky blue, and soft light blue burst
+private val HugColors = listOf(Color(0xFF2F6FD6), Color(0xFF6EC1F2), Color(0xFFA9DDFB))
+private val HugGlowColor = Color(0xFFBFE6FF)
+private val HugCheekColor = Color(0xFF6EC1F2)
 private const val QUESTION_MARK = "❓"
 
 /** Draws [state]'s burst around this element; nothing clips it, so it flies past the edges. */

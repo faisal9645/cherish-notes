@@ -45,7 +45,7 @@ fun EmojiText(
     style: TextStyle = LocalTextStyle.current,
     maxLines: Int = Int.MAX_VALUE,
     overflow: TextOverflow = TextOverflow.Clip,
-    emojiScale: Float = 1.3f,
+    emojiScale: Float = 1.18f,
     largeWhenEmojiOnly: Boolean = false
 ) {
     val content = remember(text, emojiScale, largeWhenEmojiOnly) {
@@ -115,10 +115,10 @@ private fun buildEmojiContent(raw: String, emojiScale: Float, largeWhenEmojiOnly
 
 /** How much bigger a message of just [count] (up to 6) emojis draws them. */
 private fun largeEmojiScale(count: Int): Float = when (count) {
-    1 -> 2.8f
-    2 -> 2.1f
-    3 -> 1.8f
-    else -> 1.5f
+    1 -> 2.35f
+    2 -> 1.8f
+    3 -> 1.55f
+    else -> 1.35f
 }
 
 /** A message's text with each emoji in its own inline slot ([inlineEmojiId]), so they can move. */
@@ -129,7 +129,7 @@ internal class InlineEmojiText(val text: AnnotatedString, val emojis: List<Strin
  * ([emojiScale], or larger for a message of just a few emojis); null with no emojis, or so many
  * that moving them all isn't worth it.
  */
-internal fun inlineEmojiText(raw: String, emojiScale: Float = 1.3f): InlineEmojiText? {
+internal fun inlineEmojiText(raw: String, emojiScale: Float = 1.18f): InlineEmojiText? {
     val tokens = tokenize(raw)
     val emojiCount = tokens.count { it.isEmoji }
     if (emojiCount == 0 || emojiCount > MAX_INLINE_EMOJIS) return null
@@ -265,7 +265,7 @@ private val glyphPaint = Paint()
  * (e.g. family sequences), so it never breaks into separate pictures.
  */
 @Synchronized
-private fun withFairSkinTone(emoji: String): String {
+internal fun withFairSkinTone(emoji: String): String {
     toneCache.get(emoji)?.let { return it }
     var hasBase = false
     var i = 0

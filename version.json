@@ -1,9 +1,9 @@
 {
-  "versionCode": 187,
-  "versionName": "1.8.15",
-  "tagName": "v1.8.15-187",
-  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.8.15-187/app_update_187.apk",
+  "versionCode": 188,
+  "versionName": "1.8.16",
+  "tagName": "v1.8.16-188",
+  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.8.16-188/app_update_188.apk",
   "assetSize": 18636680,
-  "releaseNotes": "Notes v1.8.15 (Build 187):\n• Beautiful, heartwarming hug animation for 🤗 and 🫂: organic cuddle squash & snuggle head tilt, warm radiant embrace aura, glowing rosy blush on cheeks, warmth ripples, and delicate floating sparkles in original warm rose & honey palette (build 180 colors restored)\n• Clean emoji rendering with zero awkward overlays",
-  "releaseDate": "2026-10-18T21:08:00Z"
+  "releaseNotes": "Notes v1.8.16 (Build 188):\n• Hug emoji now features a serene blue burst with glowing aura and ripple\n• Slightly reduced emoji sizing across big emojis and composer for balanced aesthetic\n• Emoji keyboard hands and characters match original skin tone instead of default yellow\n• Fixed shared gallery video audio playing in background when opening photos",
+  "releaseDate": "2026-10-18T21:45:00Z"
 }
