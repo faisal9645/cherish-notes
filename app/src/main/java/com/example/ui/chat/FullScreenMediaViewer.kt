@@ -704,15 +704,13 @@ fun FullScreenMediaViewer(
                                                             val decaySpec = exponentialDecay<Float>(frictionMultiplier = 1.3f)
                                                             var hitBoundary = false
                                                             try {
-                                                                kotlinx.coroutines.coroutineScope {
-                                                                    offsetXAnim.animateDecay(
-                                                                        initialVelocity = velocity.x,
-                                                                        animationSpec = decaySpec
-                                                                    ) {
-                                                                        if (value < -bounds.x || value > bounds.x) {
-                                                                            hitBoundary = true
-                                                                            kotlinx.coroutines.cancel()
-                                                                        }
+                                                                offsetXAnim.animateDecay(
+                                                                    initialVelocity = velocity.x,
+                                                                    animationSpec = decaySpec
+                                                                ) {
+                                                                    if (value < -bounds.x || value > bounds.x) {
+                                                                        hitBoundary = true
+                                                                        throw kotlinx.coroutines.CancellationException()
                                                                     }
                                                                 }
                                                             } catch (_: kotlinx.coroutines.CancellationException) {}
@@ -727,15 +725,13 @@ fun FullScreenMediaViewer(
                                                             val decaySpec = exponentialDecay<Float>(frictionMultiplier = 1.3f)
                                                             var hitBoundary = false
                                                             try {
-                                                                kotlinx.coroutines.coroutineScope {
-                                                                    offsetYAnim.animateDecay(
-                                                                        initialVelocity = velocity.y,
-                                                                        animationSpec = decaySpec
-                                                                    ) {
-                                                                        if (value < -bounds.y || value > bounds.y) {
-                                                                            hitBoundary = true
-                                                                            kotlinx.coroutines.cancel()
-                                                                        }
+                                                                offsetYAnim.animateDecay(
+                                                                    initialVelocity = velocity.y,
+                                                                    animationSpec = decaySpec
+                                                                ) {
+                                                                    if (value < -bounds.y || value > bounds.y) {
+                                                                        hitBoundary = true
+                                                                        throw kotlinx.coroutines.CancellationException()
                                                                     }
                                                                 }
                                                             } catch (_: kotlinx.coroutines.CancellationException) {}
