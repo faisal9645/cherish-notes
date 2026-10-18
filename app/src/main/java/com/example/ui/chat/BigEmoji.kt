@@ -171,8 +171,8 @@ internal fun BigEmoji(
     }
     LaunchedEffect(replay) {
         if (replay == 0) return@LaunchedEffect
-        // A heart beats in the hand too
-        if (EmojiMotion.Heartbeat in motions) {
+        // A heart beats in the hand too, and a hug squeezes
+        if (EmojiMotion.Heartbeat in motions || EmojiMotion.Hug in motions) {
             if (com.example.security.SecurityPreferences.getInstance(context).isHapticFeedbackEnabled()) {
                 context.vibrateHeartbeat()
             }
@@ -260,8 +260,8 @@ internal fun BigEmoji(
 
 // ---- Each emoji's own animation ---------------------------------------------------------------
 
-private enum class EmojiMotion(val durationMs: Int) {
-    Heartbeat(1500), KissBlow(1400), Love(1300), Blush(1500), Joy(1200), Laugh(1300), Nervous(1300),
+internal enum class EmojiMotion(val durationMs: Int) {
+    Heartbeat(1500), KissBlow(1400), Love(1300), Hug(1600), Blush(1500), Joy(1200), Laugh(1300), Nervous(1300),
     Silly(1300), Wink(1100), Smirk(1400), Relieved(1600), Yum(1300), Neutral(1600), Confused(1500),
     Unamused(1500), Wow(1000), Scream(1300), Sob(1500), Sad(1600), Angry(1000), Fire(1400),
     Party(1300), Wave(1500), Cheer(1100), Sparkle(1400), Jelly(1100)
@@ -271,7 +271,7 @@ private enum class EmojiMotion(val durationMs: Int) {
  * Moves one emoji [t] of the way (0-1) through its [motion]; outside that range it's at rest.
  * [unit] is the px of 1dp at a single big emoji's size.
  */
-private fun GraphicsLayerScope.emojiMotion(motion: EmojiMotion, t: Float, unit: Float) {
+internal fun GraphicsLayerScope.emojiMotion(motion: EmojiMotion, t: Float, unit: Float) {
     if (t <= 0f || t >= 1f) return
     val fade = 1f - t
     // Eases a motion in over its first moments, so it starts from rest
@@ -302,6 +302,14 @@ private fun GraphicsLayerScope.emojiMotion(motion: EmojiMotion, t: Float, unit: 
             val s = 1f + 0.1f * sin(t * PI_F)
             scaleX = s
             scaleY = s
+        }
+        EmojiMotion.Hug -> {
+            // Opens its arms, then squeezes tight, twice, rocking gently in the hug
+            val open = pulse(t, 0.14f, 0.06f) + 0.7f * pulse(t, 0.5f, 0.06f)
+            val squeeze = pulse(t, 0.3f, 0.08f) + 0.8f * pulse(t, 0.65f, 0.08f)
+            scaleX = 1f + 0.08f * open - 0.14f * squeeze
+            scaleY = 1f + 0.02f * open + 0.08f * squeeze
+            rotationZ = 6f * sin(t * 2f * PI_F) * fade
         }
         EmojiMotion.Blush -> {
             // Bashful: shrinks a little and tilts away, swaying shyly
@@ -500,9 +508,10 @@ private fun smoothstep(x: Float): Float {
     return c * c * (3f - 2f * c)
 }
 
-private fun motionOf(base: String): EmojiMotion = when {
+internal fun motionOf(base: String): EmojiMotion = when {
     base in HEARTS -> EmojiMotion.Heartbeat
     base in KISSES -> EmojiMotion.KissBlow
+    base in HUG -> EmojiMotion.Hug
     // Couples with a heart between them too
     base in LOVE || '❤' in base -> EmojiMotion.Love
     base in BLUSH -> EmojiMotion.Blush
@@ -531,7 +540,7 @@ private fun motionOf(base: String): EmojiMotion = when {
 }
 
 /** [emoji] without its variation selectors and skin tones, to look it up. */
-private fun baseOf(emoji: String): String {
+internal fun baseOf(emoji: String): String {
     val base = StringBuilder(emoji.length)
     var i = 0
     while (i < emoji.length) {
@@ -549,7 +558,8 @@ private val HEARTS = setOf(
 )
 private const val KISS_MARK = "💋"
 private val KISSES = setOf("😘", "😚", "😗", "😙", "😽", KISS_MARK)
-private val LOVE = setOf("😍", "🥰", "😻", "🤗", "🫶", "🫂", "💑", "💏")
+private val LOVE = setOf("😍", "🥰", "😻", "🫶", "💑", "💏")
+private val HUG = setOf("🤗", "🫂")
 private val BLUSH = setOf("😊", "☺", "🤭")
 private val JOY = setOf("😀", "😃", "😄", "😁", "😸", "😺")
 private val LAUGH = setOf("😂", "🤣", "😆", "😹")
@@ -587,7 +597,7 @@ private val FLUSHED = setOf("😳")
 // ---- The burst around them --------------------------------------------------------------------
 
 private enum class BurstStyle(val count: Int, val tapCount: Int) {
-    Hearts(9, 14), HeartBeats(12, 20), KissHearts(6, 10), Blush(5, 8), Flushed(2, 2), Confetti(22, 34),
+    Hearts(9, 14), HeartBeats(12, 20), KissHearts(6, 10), Hug(7, 11), Blush(5, 8), Flushed(2, 2), Confetti(22, 34),
     Sparkles(9, 14), Twinkle(2, 4), LaughTears(6, 10), SobTears(16, 24), CryTears(3, 5), Sweat(2, 3),
     Sigh(3, 5), Dots(3, 3), Question(1, 3), Ripples(3, 4), Embers(12, 18), Rage(9, 13)
 }
@@ -655,6 +665,7 @@ private fun burstStyleOf(base: String, motion: EmojiMotion): BurstStyle? = when 
     EmojiMotion.Heartbeat -> BurstStyle.HeartBeats
     EmojiMotion.KissBlow -> BurstStyle.KissHearts
     EmojiMotion.Love -> BurstStyle.Hearts
+    EmojiMotion.Hug -> BurstStyle.Hug
     EmojiMotion.Blush -> BurstStyle.Blush
     EmojiMotion.Laugh -> if (base in LAUGH_TEARS) BurstStyle.LaughTears else null
     EmojiMotion.Nervous -> if (base == SWEAT_SMILE) BurstStyle.Sweat else null
@@ -734,6 +745,15 @@ private fun particlesFor(
                 life = rnd(0.5f, 0.62f), gravity = -22f,
                 dx = if (base == KISS_MARK) 0f else 0.2f, dy = if (base == KISS_MARK) 0f else 0.14f
             )
+            // A warm glow as it squeezes, and a few hearts floating up
+            BurstStyle.Hug -> if (i == 0) {
+                particle(ParticleShape.Aura, size = 50f, start = 0.15f, life = 0.65f, color = HugGlowColor)
+            } else {
+                particle(
+                    ParticleShape.Heart, angle = UP + rnd(-0.9f, 0.9f), distance = rnd(40f, 80f), size = rnd(9f, 15f),
+                    spin = rnd(-30f, 30f), start = 0.28f + i * 0.05f, life = 0.5f, gravity = -16f
+                )
+            }
             // Rosy cheeks, and a few tiny hearts
             BurstStyle.Blush -> if (i < 2) {
                 particle(
@@ -829,6 +849,7 @@ private fun rnd(from: Float, until: Float): Float = from + Random.nextFloat() * 
 private fun colorsOf(style: BurstStyle, base: String): List<Color> = when (style) {
     BurstStyle.Hearts, BurstStyle.HeartBeats -> heartColorsOf(base)
     BurstStyle.KissHearts -> HeartColors
+    BurstStyle.Hug -> HugColors
     BurstStyle.Blush -> BlushColors
     BurstStyle.Flushed -> FlushColors
     BurstStyle.Confetti -> ConfettiColors
@@ -870,6 +891,8 @@ private val SighColors = listOf(Color(0xFFB0BEC5), Color(0xFFCFD8DC), Color(0xFF
 private val DotColors = listOf(Color(0xFF9AA0A6))
 private val RippleColors = listOf(Color(0xFF8AB4F8), Color(0xFFA7C7FA))
 private val RageColor = Color(0xFFFF3B30)
+private val HugColors = listOf(Color(0xFFFF8FB1), Color(0xFFFFB74D), Color(0xFFFF6B9A))
+private val HugGlowColor = Color(0xFFFFB3C7)
 private const val QUESTION_MARK = "❓"
 
 /** Draws [state]'s burst around this element; nothing clips it, so it flies past the edges. */
@@ -1010,7 +1033,7 @@ private val BackOut = CubicBezierEasing(0.34f, 1.56f, 0.64f, 1f)
 /** Each emoji of a message starts its animation this much after the one before. */
 private const val STAGGER_MS = 110
 private const val BURST_MS = 1500
-private const val LIFE_DONE = 1_000_000f
+internal const val LIFE_DONE = 1_000_000f
 
 private val PI_F = PI.toFloat()
 private val UP = -PI_F / 2f

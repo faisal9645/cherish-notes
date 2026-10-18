@@ -48,6 +48,7 @@ import androidx.compose.material.icons.outlined.HourglassTop
 import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material.icons.rounded.ArrowDownward
 import androidx.compose.material.icons.rounded.AutoAwesome
+import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.Call
 import androidx.compose.material.icons.rounded.CheckBox
 import androidx.compose.material.icons.rounded.CheckBoxOutlineBlank
@@ -210,6 +211,8 @@ fun ChatScreen(
     var showMoodPicker by remember { mutableStateOf(false) }
     var showScheduleSheet by remember { mutableStateOf(false) }
     var showScheduledList by remember { mutableStateOf(false) }
+    // The calendar in chat search
+    var showJumpToDate by remember { mutableStateOf(false) }
     val view = LocalView.current
 
     // Long-press focus view (message lifted over the dimmed, blurred chat)
@@ -1235,6 +1238,15 @@ fun ChatScreen(
                 },
                 actions = {
                     if (uiState.isSearching) {
+                        // Jump to a day: the chat's first message that day
+                        IconButton(
+                            onClick = { showJumpToDate = true },
+                            modifier = Modifier
+                                .size(40.dp)
+                                .testTag("chat_search_calendar")
+                        ) {
+                            Icon(Icons.Rounded.CalendarMonth, contentDescription = "Jump to date", modifier = Modifier.size(22.dp))
+                        }
                         IconButton(
                             onClick = { viewModel.setSearching(false) },
                             modifier = Modifier.size(40.dp)
@@ -2951,6 +2963,25 @@ fun ChatScreen(
                 }
             },
             onDismiss = { viewModel.closeFullScreenMedia() }
+        )
+    }
+
+    // The calendar in chat search: pick a day and the chat jumps to it
+    if (showJumpToDate) {
+        JumpToDateDialog(
+            onPick = { year, month, dayOfMonth ->
+                showJumpToDate = false
+                viewModel.jumpToDate(year, month, dayOfMonth) { result ->
+                    when (result) {
+                        DateJumpResult.OlderChatHidden ->
+                            CherishToast.show("Older chat is hidden. Use Recover All in settings to see it.", long = true)
+                        DateJumpResult.NoMessages -> CherishToast.show("No messages from that day")
+                        DateJumpResult.NextDayFound -> CherishToast.show("No messages that day, so here are the next ones")
+                        DateJumpResult.Found -> Unit
+                    }
+                }
+            },
+            onDismiss = { showJumpToDate = false }
         )
     }
 

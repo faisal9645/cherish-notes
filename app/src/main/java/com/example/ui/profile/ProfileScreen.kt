@@ -122,12 +122,16 @@ private fun SettingsSection(
     title: String,
     icon: androidx.compose.ui.graphics.vector.ImageVector? = null,
     modifier: Modifier = Modifier,
+    // At the end of the title row: e.g. one edit button for the whole section
+    action: (@Composable () -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit
 ) {
     Column(modifier = modifier.fillMaxWidth()) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(horizontal = 4.dp, vertical = 6.dp)
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 4.dp, vertical = 6.dp)
         ) {
             if (icon != null) {
                 Icon(
@@ -142,8 +146,10 @@ private fun SettingsSection(
                 text = title,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.weight(1f)
             )
+            action?.invoke()
         }
         Spacer(modifier = Modifier.height(4.dp))
         Card(
@@ -472,7 +478,26 @@ fun ProfileScreen(
             // 2. Couple Connection & Credentials Section
             SettingsSection(
                 title = "Couple Connection",
-                icon = Icons.Rounded.Favorite
+                icon = Icons.Rounded.Favorite,
+                // One edit for all of it: username, partner's account and passcode, together
+                action = {
+                    Box(
+                        modifier = Modifier
+                            .size(32.dp)
+                            .pressScaleTarget()
+                            .clip(CircleShape)
+                            .springClickable { showPairDialog = true }
+                            .testTag("edit_couple_connection_button"),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Edit,
+                            contentDescription = "Edit couple connection",
+                            tint = primaryAccent,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
             ) {
                 ListItem(
                     modifier = Modifier.clickable { showPairDialog = true },
@@ -482,11 +507,6 @@ fun ProfileScreen(
                     },
                     leadingContent = {
                         Icon(Icons.Rounded.Person, contentDescription = null, tint = primaryAccent)
-                    },
-                    trailingContent = {
-                        IconButton(onClick = { showPairDialog = true }) {
-                            Icon(Icons.Rounded.Edit, contentDescription = "Edit login credentials", tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
                     }
                 )
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), thickness = 0.6.dp)
@@ -501,11 +521,6 @@ fun ProfileScreen(
                     },
                     leadingContent = {
                         Icon(Icons.Rounded.Favorite, contentDescription = null, tint = HeartRed)
-                    },
-                    trailingContent = {
-                        IconButton(onClick = { showPairDialog = true }) {
-                            Icon(Icons.Rounded.Edit, contentDescription = "Edit credentials", tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
                     }
                 )
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), thickness = 0.6.dp)
@@ -515,11 +530,6 @@ fun ProfileScreen(
                     supportingContent = { Text(uiState.coupleKey.removePrefix("COUPLE_").removePrefix("couple_").ifBlank { "CHERISH-FOREVER" }, fontSize = 13.sp) },
                     leadingContent = {
                         Icon(Icons.Rounded.Key, contentDescription = null, tint = primaryAccent)
-                    },
-                    trailingContent = {
-                        IconButton(onClick = { showPairDialog = true }) {
-                            Icon(Icons.Rounded.Edit, contentDescription = "Edit passcode", tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
                     }
                 )
             }

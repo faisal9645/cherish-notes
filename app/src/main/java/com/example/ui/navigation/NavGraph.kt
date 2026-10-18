@@ -211,7 +211,11 @@ fun CherishNavGraph(
     // or playing behind Notes: viewers, sheets and dialogs close, recording and playback stop.
     // Other screens are left for the chat with no transition, so their dialogs go at once too.
     LaunchedEffect(isDisguiseActive) {
-        if (!isDisguiseActive) return@LaunchedEffect
+        if (!isDisguiseActive) {
+            // Back from Notes: the chat's round video notes play their silent previews again
+            com.example.ui.components.resumeVideoNotePreviews()
+            return@LaunchedEffect
+        }
         sharedChatViewModel.onSecretAppHidden()
         com.example.ui.components.stopAllVideoNotes()
         com.example.ui.chat.ReadAloud.stop()

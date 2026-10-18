@@ -1248,6 +1248,58 @@ class ChatViewModel(
         return true
     }
 
+    /**
+     * The calendar in chat search: closes the search and jumps to the first message of that day
+     * (from its 6 AM, like the chat's days), or of the next day with messages. A day before today
+     * needs "Recover all", as "Show in chat" does; earlier pages load until the chat reaches it.
+     */
+    fun jumpToDate(year: Int, month: Int, dayOfMonth: Int, onResult: (DateJumpResult) -> Unit) {
+        val todayStart = chatRepository.getStartOfToday()
+        // Today's date picked before 6 AM is still today's chat
+        val dayStart = java.util.Calendar.getInstance().apply {
+            clear()
+            set(year, month, dayOfMonth, 6, 0)
+        }.timeInMillis.coerceAtMost(todayStart)
+        if (dayStart < todayStart) {
+            val recovered = securityPreferences.isAllGalleryRecovered() || securityPreferences.isShowPreviousChatsEnabled()
+            if (!recovered) {
+                onResult(DateJumpResult.OlderChatHidden)
+                return
+            }
+            securityPreferences.revealSecretHistory()
+            securityPreferences.setShowPreviousChatsEnabled(true)
+        }
+        // The whole chat, not just what was searched or starred
+        setSearching(false)
+        _uiState.update { it.copy(filterStarredOnly = false) }
+        viewModelScope.launch {
+            // Earlier pages, until the chat reaches back to that day (or its history ends)
+            var pages = 0
+            while (pages++ < MAX_PAGES_TO_FIND_MESSAGE && !chatRepository.isQueryExhausted) {
+                val oldest = _uiState.value.messages.minOfOrNull { it.timestamp } ?: break
+                if (oldest <= dayStart) break
+                chatRepository.loadMoreMessages()
+                kotlinx.coroutines.delay(150)
+                kotlinx.coroutines.withTimeoutOrNull(10_000L) {
+                    while (chatRepository.isLoadingMore) kotlinx.coroutines.delay(150)
+                }
+            }
+            val clearedBefore = _uiState.value.temporaryClearTimestamp
+            val target = _uiState.value.messages
+                .filter { !it.isDeleted && it.timestamp >= dayStart && it.timestamp > clearedBefore }
+                .minByOrNull { it.timestamp }
+            if (target == null) {
+                onResult(DateJumpResult.NoMessages)
+                return@launch
+            }
+            _uiState.update { it.copy(targetScrollMessageId = target.id) }
+            onResult(
+                if (com.example.util.ChatTimeFormatter.isSameDay(target.timestamp, dayStart)) DateJumpResult.Found
+                else DateJumpResult.NextDayFound
+            )
+        }
+    }
+
     /** Loads earlier pages of chat until [messageId] is among them (or the history ends). */
     private fun loadHistoryUntil(messageId: String) {
         viewModelScope.launch {

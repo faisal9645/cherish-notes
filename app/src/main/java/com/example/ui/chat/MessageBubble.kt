@@ -175,6 +175,8 @@ fun MessageBubble(
     val view = androidx.compose.ui.platform.LocalView.current
     val context = androidx.compose.ui.platform.LocalContext.current
     var showBurstHeart by remember { mutableStateOf(false) }
+    // A tap on a text message plays its emojis again
+    var emojiReplay by remember { mutableIntStateOf(0) }
     val heartScale = remember { Animatable(0f) }
     val heartAlpha = remember { Animatable(0f) }
     val heartBurst = rememberHeartBurstState()
@@ -462,6 +464,8 @@ fun MessageBubble(
                                 onLongClick = { onBubbleLongPress(androidx.compose.ui.geometry.Offset.Zero) },
                                 onDoubleClick = { triggerHeartBurst() },
                                 onPlayingChanged = { isPlayingVideoNote = it },
+                                // In view, it plays by itself, muted, at this size, with no buttons
+                                silentPreview = true,
                                 modifier = Modifier.fillMaxSize()
                             )
                         }
@@ -649,6 +653,8 @@ fun MessageBubble(
                                         if (docUrl.isNotBlank()) {
                                             com.example.util.DocumentHelper.downloadDocument(context, docUrl, fileName)
                                         }
+                                    } else {
+                                        emojiReplay++
                                     }
                                 },
                                 onPress = trackPress,
@@ -1333,16 +1339,26 @@ fun MessageBubble(
                             }
                         }
                     } else {
-                        EmojiText(
-                            text = message.text,
-                            color = textColor,
-                            // ChatGPT's reading size in private chat (2sp bigger); both follow Settings
-                            style = if (isPrivateMode) {
-                                chatText.applyTo(MaterialTheme.typography.bodyLarge, extraSp = 2)
-                            } else chatText.applyTo(MaterialTheme.typography.bodyMedium),
-                            fontStyle = if (message.isDeleted) FontStyle.Italic else FontStyle.Normal,
-                            largeWhenEmojiOnly = true
-                        )
+                        if (isPrivateMode) {
+                            // ChatGPT's reading size in private chat (2sp bigger, following Settings)
+                            EmojiText(
+                                text = message.text,
+                                color = textColor,
+                                style = chatText.applyTo(MaterialTheme.typography.bodyLarge, extraSp = 2),
+                                fontStyle = if (message.isDeleted) FontStyle.Italic else FontStyle.Normal,
+                                largeWhenEmojiOnly = true
+                            )
+                        } else {
+                            // Its emojis come alive as it arrives, and again on a tap: a heart beats, 🤗 hugs...
+                            AnimatedEmojiText(
+                                text = message.text,
+                                color = textColor,
+                                style = chatText.applyTo(MaterialTheme.typography.bodyMedium),
+                                fontStyle = if (message.isDeleted) FontStyle.Italic else FontStyle.Normal,
+                                playOnArrival = isFreshArrival,
+                                replay = emojiReplay
+                            )
+                        }
 
                         val youtubeVideoId = remember(message.text) {
                             YouTubeHelper.extractVideoId(message.text)

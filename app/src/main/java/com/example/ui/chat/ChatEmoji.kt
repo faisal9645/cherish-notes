@@ -2,6 +2,7 @@ package com.example.ui.chat
 
 import android.graphics.Paint
 import android.util.LruCache
+import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -93,16 +94,7 @@ private fun buildEmojiContent(raw: String, emojiScale: Float, largeWhenEmojiOnly
     if (emojiCount == 0) return EmojiContent(AnnotatedString(raw), hasEmoji = false)
 
     val emojiOnly = tokens.all { it.isEmoji || it.text.isBlank() }
-    val scale = if (largeWhenEmojiOnly && emojiOnly && emojiCount <= 6) {
-        when (emojiCount) {
-            1 -> 2.8f
-            2 -> 2.1f
-            3 -> 1.8f
-            else -> 1.5f
-        }
-    } else {
-        emojiScale
-    }
+    val scale = if (largeWhenEmojiOnly && emojiOnly && emojiCount <= 6) largeEmojiScale(emojiCount) else emojiScale
 
     val text = buildAnnotatedString {
         tokens.forEach { token ->
@@ -120,6 +112,47 @@ private fun buildEmojiContent(raw: String, emojiScale: Float, largeWhenEmojiOnly
     }
     return EmojiContent(text, hasEmoji = true)
 }
+
+/** How much bigger a message of just [count] (up to 6) emojis draws them. */
+private fun largeEmojiScale(count: Int): Float = when (count) {
+    1 -> 2.8f
+    2 -> 2.1f
+    3 -> 1.8f
+    else -> 1.5f
+}
+
+/** A message's text with each emoji in its own inline slot ([inlineEmojiId]), so they can move. */
+internal class InlineEmojiText(val text: AnnotatedString, val emojis: List<String>, val scale: Float)
+
+/**
+ * [raw] with its emojis (in the chat skin tone) as inline slots, at the size EmojiText draws them
+ * ([emojiScale], or larger for a message of just a few emojis); null with no emojis, or so many
+ * that moving them all isn't worth it.
+ */
+internal fun inlineEmojiText(raw: String, emojiScale: Float = 1.3f): InlineEmojiText? {
+    val tokens = tokenize(raw)
+    val emojiCount = tokens.count { it.isEmoji }
+    if (emojiCount == 0 || emojiCount > MAX_INLINE_EMOJIS) return null
+    val emojiOnly = tokens.all { it.isEmoji || it.text.isBlank() }
+    val scale = if (emojiOnly && emojiCount <= 6) largeEmojiScale(emojiCount) else emojiScale
+    val emojis = ArrayList<String>(emojiCount)
+    val text = buildAnnotatedString {
+        tokens.forEach { token ->
+            if (token.isEmoji) {
+                val shown = withFairSkinTone(token.text)
+                appendInlineContent(inlineEmojiId(emojis.size), shown)
+                emojis += shown
+            } else {
+                append(token.text)
+            }
+        }
+    }
+    return InlineEmojiText(text, emojis, scale)
+}
+
+internal fun inlineEmojiId(index: Int): String = "emoji_$index"
+
+private const val MAX_INLINE_EMOJIS = 24
 
 // ---- Emoji detection --------------------------------------------------------------------------
 

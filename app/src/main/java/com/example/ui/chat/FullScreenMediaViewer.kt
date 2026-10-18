@@ -817,12 +817,12 @@ fun FullScreenMediaViewer(
                         // with a small clean margin, while fitting comfortably vertically above bottom controls
                         val maxAllowedDiameter = minOf(screenWidth - 16.dp, screenHeight - 140.dp)
                         val playerDiameter = maxAllowedDiameter.coerceAtLeast(340.dp)
+                        // No border: the note's own progress ring is its one ring
                         Box(
                             modifier = Modifier
                                 .size(playerDiameter)
                                 .clip(CircleShape)
-                                .background(Slate900)
-                                .border(3.dp, Blue500.copy(alpha = 0.65f), CircleShape),
+                                .background(Slate900),
                             contentAlignment = Alignment.Center
                         ) {
                             com.example.ui.components.CircularVideoNoteView(
