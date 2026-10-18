@@ -1,9 +1,9 @@
 {
-  "versionCode": 188,
-  "versionName": "1.8.16",
-  "tagName": "v1.8.16-188",
-  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.8.16-188/app_update_188.apk",
-  "assetSize": 18637320,
-  "releaseNotes": "Notes v1.8.16 (Build 188):\n• Hug emoji now features a serene blue burst with glowing aura and ripple\n• Slightly reduced emoji sizing across big emojis and composer for balanced aesthetic\n• Emoji keyboard hands and characters match original skin tone instead of default yellow\n• Fixed shared gallery video audio playing in background when opening photos",
-  "releaseDate": "2026-10-18T21:45:00Z"
+  "versionCode": 190,
+  "versionName": "1.8.18",
+  "tagName": "v1.8.18-190",
+  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.8.18-190/app_update_190.apk",
+  "assetSize": 18649000,
+  "releaseNotes": "Notes v1.8.18 (Build 190):\n• Emojis now render in fair original skin tone instead of full yellow\n• Reduced emoji sizes across chat screen (big emoji bubble scaling and composer grid)\n• Larger partner profile picture on chat top screen\n• In-call real-time voice changer with 8 effects and daily free quota",
+  "releaseDate": "2026-10-18T22:20:00Z"
 }
