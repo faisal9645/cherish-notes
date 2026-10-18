@@ -29,20 +29,31 @@ import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.VolumeUp
+import androidx.compose.material.icons.rounded.AutoFixHigh
 import androidx.compose.material.icons.rounded.BluetoothAudio
 import androidx.compose.material.icons.rounded.Call
 import androidx.compose.material.icons.rounded.CallEnd
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Headphones
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material.icons.rounded.MicOff
 import androidx.compose.material.icons.rounded.PhoneInTalk
 import androidx.compose.material.icons.rounded.SignalCellularAlt1Bar
+import androidx.compose.material.icons.rounded.Timer
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -88,11 +99,21 @@ fun CallScreen(
     onToggleMute: () -> Unit,
     onToggleSpeaker: () -> Unit,
     onSelectRoute: (AudioRoute) -> Unit,
+    onSelectVoiceEffect: (VoiceChangerEffect) -> Unit = {},
     onMinimize: () -> Unit,
     onRetry: () -> Unit = {},
     onDismiss: () -> Unit = {}
 ) {
     val colors = MaterialTheme.colorScheme
+    var showVoiceChangerSheet by remember { mutableStateOf(false) }
+
+    if (showVoiceChangerSheet) {
+        VoiceChangerModalSheet(
+            state = state,
+            onSelectEffect = onSelectVoiceEffect,
+            onDismiss = { showVoiceChangerSheet = false }
+        )
+    }
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -183,6 +204,7 @@ fun CallScreen(
                 onToggleMute = onToggleMute,
                 onToggleSpeaker = onToggleSpeaker,
                 onSelectRoute = onSelectRoute,
+                onOpenVoiceChanger = { showVoiceChangerSheet = true },
                 onRetry = onRetry,
                 onDismiss = onDismiss
             )
@@ -375,6 +397,7 @@ private fun CallControls(
     onToggleMute: () -> Unit,
     onToggleSpeaker: () -> Unit,
     onSelectRoute: (AudioRoute) -> Unit,
+    onOpenVoiceChanger: () -> Unit,
     onRetry: () -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -395,6 +418,10 @@ private fun CallControls(
                     active = state.isMuted,
                     onClick = onToggleMute,
                     tag = "call_mute"
+                )
+                VoiceChangerControl(
+                    state = state,
+                    onClick = onOpenVoiceChanger
                 )
                 AudioRouteControl(state, onToggleSpeaker, onSelectRoute)
             }
@@ -497,4 +524,334 @@ private fun routeLabel(route: AudioRoute): String = when (route) {
     AudioRoute.SPEAKER -> "Speaker"
     AudioRoute.BLUETOOTH -> "Bluetooth"
     AudioRoute.WIRED -> "Headset"
+}
+
+fun formatQuotaSeconds(seconds: Int): String {
+    val mins = seconds / 60
+    val secs = seconds % 60
+    return "%02d:%02d".format(mins, secs)
+}
+
+@Composable
+private fun VoiceChangerControl(
+    state: CallUiState,
+    onClick: () -> Unit
+) {
+    val colors = MaterialTheme.colorScheme
+    val isActive = state.voiceEffect != VoiceChangerEffect.NONE
+    val quotaSecs = state.voiceChangerRemainingSeconds
+    val label = if (isActive) state.voiceEffect.title else "Voice FX"
+
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Box(contentAlignment = Alignment.TopEnd) {
+            IconButton(
+                onClick = onClick,
+                modifier = Modifier
+                    .size(62.dp)
+                    .clip(CircleShape)
+                    .background(
+                        if (isActive) colors.primary else colors.surfaceVariant
+                    )
+                    .semantics { contentDescription = "Voice Changer: $label" }
+                    .testTag("call_voice_changer")
+            ) {
+                if (isActive) {
+                    Text(state.voiceEffect.emoji, fontSize = 24.sp)
+                } else {
+                    Icon(
+                        Icons.Rounded.AutoFixHigh,
+                        contentDescription = null,
+                        tint = colors.onSurface,
+                        modifier = Modifier.size(26.dp)
+                    )
+                }
+            }
+
+            Surface(
+                shape = RoundedCornerShape(10.dp),
+                color = if (quotaSecs > 30) colors.primaryContainer else WarningAmber,
+                border = BorderStroke(1.dp, if (isActive) colors.primary else colors.outline.copy(alpha = 0.3f)),
+                shadowElevation = 2.dp,
+                modifier = Modifier.padding(top = 0.dp)
+            ) {
+                Text(
+                    text = formatQuotaSeconds(quotaSecs),
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = if (quotaSecs > 30) colors.onPrimaryContainer else Color.White,
+                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                )
+            }
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = label,
+            fontSize = 13.sp,
+            fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal,
+            color = if (isActive) colors.primary else colors.onBackground
+        )
+    }
+}
+
+@Composable
+private fun VoiceChangerModalSheet(
+    state: CallUiState,
+    onSelectEffect: (VoiceChangerEffect) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val colors = MaterialTheme.colorScheme
+    val quotaSecs = state.voiceChangerRemainingSeconds
+    val totalQuota = SecurityPreferences.DAILY_VOICE_CHANGER_QUOTA_SECONDS
+    val quotaFraction = (quotaSecs.toFloat() / totalQuota.toFloat()).coerceIn(0f, 1f)
+    var alertMsg by remember { mutableStateOf<String?>(null) }
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.55f))
+                .clickable(
+                    interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                    indication = null,
+                    onClick = onDismiss
+                ),
+            contentAlignment = Alignment.BottomCenter
+        ) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(
+                        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                        indication = null,
+                        onClick = {}
+                    ),
+                shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+                color = colors.surface,
+                shadowElevation = 16.dp
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp, vertical = 16.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.CenterHorizontally)
+                            .size(width = 38.dp, height = 4.dp)
+                            .clip(CircleShape)
+                            .background(colors.onSurfaceVariant.copy(alpha = 0.3f))
+                    )
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                "Voice Changer",
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = colors.onSurface
+                            )
+                            if (state.voiceEffect != VoiceChangerEffect.NONE) {
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Surface(
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = AnswerGreen.copy(alpha = 0.15f)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(6.dp)
+                                                .clip(CircleShape)
+                                                .background(AnswerGreen)
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text(
+                                            "Active",
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = AnswerGreen
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                        IconButton(
+                            onClick = onDismiss,
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(Icons.Rounded.Close, contentDescription = "Close", tint = colors.onSurfaceVariant)
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Surface(
+                        shape = RoundedCornerShape(16.dp),
+                        color = colors.surfaceVariant.copy(alpha = 0.65f),
+                        border = BorderStroke(
+                            1.dp,
+                            if (quotaSecs > 0) colors.primary.copy(alpha = 0.25f) else WarningAmber.copy(alpha = 0.4f)
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(14.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        Icons.Rounded.Timer,
+                                        contentDescription = null,
+                                        tint = if (quotaSecs > 0) colors.primary else WarningAmber,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        "Free Daily Quota",
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = colors.onSurface
+                                    )
+                                }
+                                Text(
+                                    text = "${formatQuotaSeconds(quotaSecs)} / 05:00",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (quotaSecs > 0) colors.primary else WarningAmber
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                            LinearProgressIndicator(
+                                progress = { quotaFraction },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(6.dp)
+                                    .clip(CircleShape),
+                                color = if (quotaSecs > 30) colors.primary else WarningAmber,
+                                trackColor = colors.onSurface.copy(alpha = 0.1f)
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = if (quotaSecs > 0) {
+                                    "Quota counts down only while speaking with an effect active. Resets daily at 6:00 AM."
+                                } else {
+                                    "Daily free quota exhausted. Resets tomorrow at 6:00 AM."
+                                },
+                                fontSize = 11.sp,
+                                color = if (quotaSecs > 0) colors.onSurfaceVariant else WarningAmber
+                            )
+                        }
+                    }
+
+                    if (alertMsg != null) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = WarningAmber.copy(alpha = 0.15f),
+                            border = BorderStroke(1.dp, WarningAmber.copy(alpha = 0.4f)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = alertMsg.orEmpty(),
+                                fontSize = 12.sp,
+                                color = WarningAmber,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    LazyVerticalGrid(
+                        columns = GridCells.Fixed(2),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(290.dp)
+                    ) {
+                        items(VoiceChangerEffect.entries.toTypedArray()) { effect ->
+                            val isSelected = state.voiceEffect == effect
+                            val isDisabled = effect != VoiceChangerEffect.NONE && quotaSecs <= 0
+
+                            Surface(
+                                shape = RoundedCornerShape(16.dp),
+                                color = when {
+                                    isSelected -> colors.primary.copy(alpha = 0.16f)
+                                    isDisabled -> colors.surfaceVariant.copy(alpha = 0.35f)
+                                    else -> colors.surfaceVariant.copy(alpha = 0.5f)
+                                },
+                                border = BorderStroke(
+                                    width = if (isSelected) 2.dp else 1.dp,
+                                    color = when {
+                                        isSelected -> colors.primary
+                                        isDisabled -> Color.Transparent
+                                        else -> colors.outline.copy(alpha = 0.2f)
+                                    }
+                                ),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .clickable {
+                                        if (isDisabled) {
+                                            alertMsg = "Daily quota reached! Normal voice will remain active until 6 AM."
+                                        } else {
+                                            alertMsg = null
+                                            onSelectEffect(effect)
+                                        }
+                                    }
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(effect.emoji, fontSize = 28.sp)
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Text(
+                                                text = effect.title,
+                                                fontSize = 13.5.sp,
+                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.SemiBold,
+                                                color = if (isDisabled) colors.onSurface.copy(alpha = 0.4f) else colors.onSurface
+                                            )
+                                            if (isSelected) {
+                                                Spacer(modifier = Modifier.width(4.dp))
+                                                Icon(
+                                                    Icons.Rounded.Check,
+                                                    contentDescription = "Selected",
+                                                    tint = colors.primary,
+                                                    modifier = Modifier.size(16.dp)
+                                                )
+                                            }
+                                        }
+                                        Text(
+                                            text = if (isDisabled) "Quota used" else effect.subtitle,
+                                            fontSize = 10.5.sp,
+                                            color = if (isDisabled) WarningAmber else colors.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+                }
+            }
+        }
+    }
 }

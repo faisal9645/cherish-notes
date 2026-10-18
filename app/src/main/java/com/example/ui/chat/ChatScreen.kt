@@ -4132,14 +4132,14 @@ private fun ChatPartnerHeaderContent(
     val isMedium = screenWidthDp in 370..405 && fontScale <= 1.05f
 
     val avatarSize = when {
-        isCompact -> 35.dp
-        isMedium -> 38.dp
-        else -> 42.dp
+        isCompact -> 44.dp
+        isMedium -> 48.dp
+        else -> 52.dp
     }
     val avatarSpacer = when {
-        isCompact -> 3.dp
-        isMedium -> 4.dp
-        else -> 6.dp
+        isCompact -> 6.dp
+        isMedium -> 8.dp
+        else -> 9.dp
     }
     val nameFontSize = when {
         isCompact -> 15.sp

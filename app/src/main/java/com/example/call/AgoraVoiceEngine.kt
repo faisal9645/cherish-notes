@@ -42,6 +42,7 @@ class AgoraVoiceEngine(private val context: Context) {
     @Volatile private var isLowDataMode: Boolean = false
     /** This call moved to the speech profile for a bad network (until the next call joins). */
     @Volatile private var downgradedForNetwork = false
+    @Volatile private var currentVoiceEffect: VoiceChangerEffect = VoiceChangerEffect.NONE
 
     private val eventHandler = object : IRtcEngineEventHandler() {
         override fun onJoinChannelSuccess(channel: String?, uid: Int, elapsed: Int) {
@@ -245,6 +246,9 @@ class AgoraVoiceEngine(private val context: Context) {
         } catch (e: Throwable) {
             Log.w(TAG, "setDefaultAudioRoutetoSpeakerphone failed: ${e.message}")
         }
+
+        // Apply voice changer effect
+        applyVoiceChanger(rtc, currentVoiceEffect)
     }
 
     private fun applyAudioMode(rtc: RtcEngine, mode: String) {
@@ -283,6 +287,43 @@ class AgoraVoiceEngine(private val context: Context) {
             Log.i(TAG, "Low data mode set to $enabled (profile=$profile)")
         } catch (e: Throwable) {
             Log.w(TAG, "setLowDataMode failed: ${e.message}")
+        }
+    }
+
+    /** Sets the in-call real-time voice changer effect. */
+    fun setVoiceChanger(effect: VoiceChangerEffect) {
+        currentVoiceEffect = effect
+        val rtc = engine ?: return
+        applyVoiceChanger(rtc, effect)
+    }
+
+    private fun applyVoiceChanger(rtc: RtcEngine, effect: VoiceChangerEffect) {
+        try {
+            if (effect == VoiceChangerEffect.NONE) {
+                try { rtc.setAudioEffectPreset(Constants.AUDIO_EFFECT_OFF) } catch (_: Throwable) {}
+                try { rtc.setVoiceBeautifierPreset(Constants.VOICE_BEAUTIFIER_OFF) } catch (_: Throwable) {}
+                try { rtc.setLocalVoicePitch(1.0) } catch (_: Throwable) {}
+                Log.i(TAG, "Voice changer reset to natural voice (NONE)")
+            } else {
+                if (effect.agoraPreset != 0) {
+                    try {
+                        val res = rtc.setAudioEffectPreset(effect.agoraPreset)
+                        Log.i(TAG, "Applied audioEffectPreset ${effect.agoraPreset}, result: $res")
+                    } catch (e: Throwable) {
+                        Log.w(TAG, "setAudioEffectPreset failed: ${e.message}")
+                    }
+                } else {
+                    try { rtc.setAudioEffectPreset(Constants.AUDIO_EFFECT_OFF) } catch (_: Throwable) {}
+                }
+                try {
+                    val pitchRes = rtc.setLocalVoicePitch(effect.pitchMultiplier)
+                    Log.i(TAG, "Applied localVoicePitch ${effect.pitchMultiplier}, result: $pitchRes")
+                } catch (e: Throwable) {
+                    Log.w(TAG, "setLocalVoicePitch failed: ${e.message}")
+                }
+            }
+        } catch (e: Throwable) {
+            Log.e(TAG, "applyVoiceChanger failed: ${e.message}", e)
         }
     }
 
@@ -438,7 +479,11 @@ class AgoraVoiceEngine(private val context: Context) {
     /** Leaves the current call channel and stops recording without destroying the native engine. */
     fun stop() {
         activeListener = null
+        currentVoiceEffect = VoiceChangerEffect.NONE
         val rtc = engine ?: return
+        try {
+            applyVoiceChanger(rtc, VoiceChangerEffect.NONE)
+        } catch (_: Throwable) {}
         try {
             rtc.stopAudioRecording()
         } catch (e: Throwable) {

@@ -106,6 +106,25 @@ data class CallInvite(
     val ringUntil: Long
 )
 
+/** Voice modifier effects available in real-time during live calls. */
+enum class VoiceChangerEffect(
+    val id: String,
+    val title: String,
+    val subtitle: String,
+    val emoji: String,
+    val agoraPreset: Int,
+    val pitchMultiplier: Double
+) {
+    NONE("none", "Normal", "Natural clear voice", "🎙️", 0, 1.0),
+    CHIPMUNK("chipmunk", "Chipmunk", "High & cute pitch", "🐿️", 0x02010500 /* VOICE_CHANGER_EFFECT_GIRL */, 1.45),
+    DEEP_MONSTER("deep_monster", "Monster", "Deep & powerful rumble", "👹", 0x02010700 /* VOICE_CHANGER_EFFECT_HULK */, 0.65),
+    KID("kid", "Kid", "Playful bright tone", "🧒", 0x02010300 /* VOICE_CHANGER_EFFECT_BOY */, 1.25),
+    BARITONE("baritone", "Baritone", "Smooth low resonance", "🧔", 0x02010100 /* VOICE_CHANGER_EFFECT_UNCLE */, 0.82),
+    ROBOT("robot", "Robot", "Futuristic android effect", "🤖", 0x02010200 /* VOICE_CHANGER_EFFECT_OLDMAN */, 0.90),
+    STUDIO("studio", "Studio Mic", "Warm acoustic radio tone", "🎧", 0x02020300 /* ROOM_ACOUSTICS_STUDIO */, 1.0),
+    ETHEREAL("ethereal", "Ethereal Echo", "Dreamy cavern space", "✨", 0x02020700 /* ROOM_ACOUSTICS_ETHEREAL */, 1.0)
+}
+
 /** What the call screen shows. */
 @Immutable
 data class CallUiState(
@@ -128,7 +147,9 @@ data class CallUiState(
     val isOnHold: Boolean = false,
     val peerReconnecting: Boolean = false,
     val errorMessage: String? = null,
-    val remoteVolume: Int = 0
+    val remoteVolume: Int = 0,
+    val voiceEffect: VoiceChangerEffect = VoiceChangerEffect.NONE,
+    val voiceChangerRemainingSeconds: Int = 300
 ) {
     val isLive: Boolean
         get() = phase == CallPhase.CONNECTING || phase == CallPhase.CONNECTED || phase == CallPhase.RECONNECTING

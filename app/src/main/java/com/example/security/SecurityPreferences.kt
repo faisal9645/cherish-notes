@@ -746,6 +746,34 @@ class SecurityPreferences(private val context: Context) {
         _monthlyFreeCallMinutesRemaining.value = getMonthlyCallMinutesRemaining()
     }
 
+    // --- DAILY VOICE CHANGER FREE QUOTA ---
+    // 300 seconds (5 minutes) daily free quota, resets every day at 6:00 AM (logical day)
+    fun getDailyVoiceChangerRemainingSeconds(): Int {
+        val dateKey = "vc_secs_" + getTodayLogicalDate()
+        val used = prefs.getInt(dateKey, 0)
+        return (DAILY_VOICE_CHANGER_QUOTA_SECONDS - used).coerceAtLeast(0)
+    }
+
+    fun consumeVoiceChangerSeconds(seconds: Int = 1): Int {
+        if (seconds <= 0) return getDailyVoiceChangerRemainingSeconds()
+        val dateKey = "vc_secs_" + getTodayLogicalDate()
+        val current = prefs.getInt(dateKey, 0)
+        val newUsed = (current + seconds).coerceAtMost(DAILY_VOICE_CHANGER_QUOTA_SECONDS)
+        prefs.edit().putInt(dateKey, newUsed).apply()
+        val rem = (DAILY_VOICE_CHANGER_QUOTA_SECONDS - newUsed).coerceAtLeast(0)
+        _dailyVoiceChangerRemainingSeconds.value = rem
+        return rem
+    }
+
+    private val _dailyVoiceChangerRemainingSeconds = MutableStateFlow(getDailyVoiceChangerRemainingSeconds())
+    val dailyVoiceChangerRemainingSeconds: StateFlow<Int> = _dailyVoiceChangerRemainingSeconds.asStateFlow()
+
+    fun refreshDailyVoiceChangerQuota(): Int {
+        val rem = getDailyVoiceChangerRemainingSeconds()
+        _dailyVoiceChangerRemainingSeconds.value = rem
+        return rem
+    }
+
     fun ensurePreferencesMigrated(currentVersionCode: Int) {
         val lastSeenVersion = prefs.getInt(KEY_LAST_SEEN_APP_VERSION, 0)
         if (lastSeenVersion < currentVersionCode) {
@@ -1046,6 +1074,7 @@ class SecurityPreferences(private val context: Context) {
         private const val KEY_SEEN_CALL_RECORDING_NOTICE = "seen_call_recording_notice"
         private const val KEY_LAST_SEEN_APP_VERSION = "last_seen_app_version_code"
         private const val KEY_DAILY_FREE_CALL_MINUTES = "daily_free_call_minutes"
+        const val DAILY_VOICE_CHANGER_QUOTA_SECONDS = 300 // 5 minutes free daily voice effects
         private const val KEY_CALL_AI_NOISE_MODE = "call_ai_noise_mode"
         private const val KEY_CALL_LOW_DATA_MODE = "call_low_data_mode"
         private const val KEY_CALL_DEFAULT_AUDIO_OUTPUT = "call_default_audio_output"

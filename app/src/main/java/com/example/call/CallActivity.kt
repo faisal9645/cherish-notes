@@ -91,6 +91,7 @@ class CallActivity : ComponentActivity() {
                     onToggleMute = { CallManager.toggleMute() },
                     onToggleSpeaker = { CallManager.toggleSpeaker() },
                     onSelectRoute = { CallManager.setRoute(it) },
+                    onSelectVoiceEffect = { CallManager.setVoiceEffect(it) },
                     onMinimize = { moveTaskToBack(true) },
                     onRetry = {
                         withPermissions(ACTION_OUTGOING, null)

@@ -117,6 +117,7 @@ object CallManager {
 
     private var screenOffReceiverRegistered = false
     private var quotaAlertJob: Job? = null
+    private var voiceQuotaJob: Job? = null
     private var alerted5Min = false
     private var alerted1Min = false
 
@@ -550,6 +551,48 @@ object CallManager {
         audio.maximizeCallVolume(next == AudioRoute.SPEAKER)
     }
 
+    fun setVoiceEffect(effect: VoiceChangerEffect) = post {
+        if (effect != VoiceChangerEffect.NONE) {
+            val remaining = app.securityPreferences.getDailyVoiceChangerRemainingSeconds()
+            if (remaining <= 0) {
+                vibrateDevice(90L)
+                _state.update { it.copy(voiceEffect = VoiceChangerEffect.NONE, voiceChangerRemainingSeconds = 0) }
+                engine.setVoiceChanger(VoiceChangerEffect.NONE)
+                return@post
+            }
+        }
+        _state.update {
+            it.copy(
+                voiceEffect = effect,
+                voiceChangerRemainingSeconds = app.securityPreferences.getDailyVoiceChangerRemainingSeconds()
+            )
+        }
+        engine.setVoiceChanger(effect)
+        if (effect != VoiceChangerEffect.NONE && _state.value.phase == CallPhase.CONNECTED) {
+            startVoiceChangerQuotaMonitor()
+        } else {
+            voiceQuotaJob?.cancel()
+            voiceQuotaJob = null
+        }
+    }
+
+    private fun startVoiceChangerQuotaMonitor() {
+        voiceQuotaJob?.cancel()
+        voiceQuotaJob = scope.launch {
+            while (_state.value.phase == CallPhase.CONNECTED && _state.value.voiceEffect != VoiceChangerEffect.NONE) {
+                delay(1000L)
+                val remaining = app.securityPreferences.consumeVoiceChangerSeconds(1)
+                _state.update { it.copy(voiceChangerRemainingSeconds = remaining) }
+                if (remaining <= 0) {
+                    _state.update { it.copy(voiceEffect = VoiceChangerEffect.NONE, voiceChangerRemainingSeconds = 0) }
+                    engine.setVoiceChanger(VoiceChangerEffect.NONE)
+                    vibrateDevice(150L)
+                    break
+                }
+            }
+        }
+    }
+
     // ---------- While the app is open: ringing without a push ----------
 
     /**
@@ -632,7 +675,9 @@ object CallManager {
         peerPhotoUrl = peerPhoto(),
         route = AudioRoute.EARPIECE,
         bluetoothAvailable = audio.hasBluetoothHeadset(),
-        wiredAvailable = audio.hasWiredHeadset()
+        wiredAvailable = audio.hasWiredHeadset(),
+        voiceEffect = VoiceChangerEffect.NONE,
+        voiceChangerRemainingSeconds = app.securityPreferences.getDailyVoiceChangerRemainingSeconds()
     )
 
     private fun setPhase(phase: CallPhase) {
@@ -788,6 +833,11 @@ object CallManager {
 
         // Start daily call quota warning alert monitor (5m and 1m warnings)
         startQuotaAlertMonitor()
+
+        // Start voice changer quota countdown if an effect is active when connected
+        if (_state.value.voiceEffect != VoiceChangerEffect.NONE) {
+            startVoiceChangerQuotaMonitor()
+        }
 
         // Start in-app automatic call recording when Auto-Call Recording is enabled in Settings
         val currentCallId = callId
@@ -997,6 +1047,7 @@ object CallManager {
         cancelCallJobs()
         unregisterScreenOffReceiver()
         stopRingback()
+        engine.setVoiceChanger(VoiceChangerEffect.NONE)
         engine.stop()
         audio.stop()
         VoicePlayerHelper.callInProgress = false
@@ -1074,6 +1125,7 @@ object CallManager {
         callerNameHint = null
         localJoined = false
         remoteJoined = false
+        engine.setVoiceChanger(VoiceChangerEffect.NONE)
         _state.value = CallUiState()
     }
 
@@ -1181,6 +1233,8 @@ object CallManager {
     private fun cancelCallJobs() {
         quotaAlertJob?.cancel()
         quotaAlertJob = null
+        voiceQuotaJob?.cancel()
+        voiceQuotaJob = null
         docJob?.cancel()
         ringTimeoutJob?.cancel()
         connectTimeoutJob?.cancel()
