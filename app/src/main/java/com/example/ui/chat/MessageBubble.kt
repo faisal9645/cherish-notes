@@ -417,7 +417,7 @@ fun MessageBubble(
 
                 var isPlayingVideoNote by remember { mutableStateOf(false) }
                 val screenWidth = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp.dp
-                val restingCircleSize = 235.dp
+                val restingCircleSize = 260.dp
                 // Playing, it grows to the width of the screen, like Telegram: past the chat's side
                 // margins (required size), centred on the screen
                 val expandedCircleSize = screenWidth - 16.dp
@@ -466,6 +466,7 @@ fun MessageBubble(
                                 onPlayingChanged = { isPlayingVideoNote = it },
                                 // In view, it plays by itself, muted, at this size, with no buttons
                                 silentPreview = true,
+                                posterUrl = remember(message) { message.thumbnailFor(videoUrl).takeIf { it != videoUrl && it.isNotBlank() } },
                                 modifier = Modifier.fillMaxSize()
                             )
                         }
@@ -816,6 +817,7 @@ fun MessageBubble(
                                 durationSeconds = message.durationSeconds,
                                 onExpandClick = openBigVideo,
                                 shape = RoundedCornerShape(12.dp),
+                                posterUrl = remember(message) { message.thumbnailFor(videoUrl).takeIf { it != videoUrl && it.isNotBlank() } },
                                 modifier = Modifier
                                     .padding(vertical = 2.dp)
                                     .fillMaxWidth()

@@ -86,7 +86,7 @@ internal fun bigEmojisIn(text: String): List<String>? {
 
 private class EmojiContent(val text: AnnotatedString, val hasEmoji: Boolean)
 
-private class EmojiToken(val text: String, val isEmoji: Boolean)
+internal class EmojiToken(val text: String, val isEmoji: Boolean)
 
 private fun buildEmojiContent(raw: String, emojiScale: Float, largeWhenEmojiOnly: Boolean): EmojiContent {
     val tokens = tokenize(raw)
@@ -209,7 +209,7 @@ private fun emojiEnd(text: String, start: Int): Int {
     return end
 }
 
-private fun tokenize(text: String): List<EmojiToken> {
+internal fun tokenize(text: String): List<EmojiToken> {
     val tokens = ArrayList<EmojiToken>()
     val plain = StringBuilder()
     var i = 0

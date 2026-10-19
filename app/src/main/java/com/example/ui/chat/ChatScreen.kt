@@ -1019,7 +1019,22 @@ fun ChatScreen(
     val chatTextStyle = remember(uiState.chatTextSize, uiState.chatFont) {
         ChatTextStyle(uiState.chatTextSize, ChatFont.of(uiState.chatFont))
     }
-    CompositionLocalProvider(LocalChatTextStyle provides chatTextStyle) {
+    // Which of us is him and which her (told the same way as on the couple card), for the 🫂 hug
+    val hugCouple = remember(myUser?.id, myUser?.displayName, myUser?.email, myUser?.partnerId, myUser?.partnerEmail, partner?.id, partner?.displayName, partner?.email, partnerName) {
+        val me = myUser
+        val iAmHer = me != null && com.example.ui.home.herUserId(
+            com.example.ui.home.LovePerson(
+                id = me.id, name = me.displayName, photoUrl = null, birthday = null,
+                isOnline = false, lastSeen = 0L, email = me.email
+            ),
+            com.example.ui.home.LovePerson(
+                id = partner?.id ?: me.partnerId.orEmpty(), name = partner?.displayName.orEmpty(), photoUrl = null,
+                birthday = null, isOnline = false, lastSeen = 0L, email = partner?.email ?: me.partnerEmail
+            )
+        ) == me.id
+        HugCouple(iAmHim = !iAmHer, partnerName = partnerName.takeUnless { it == "My Partner" }.orEmpty())
+    }
+    CompositionLocalProvider(LocalChatTextStyle provides chatTextStyle, LocalHugCouple provides hugCouple) {
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -2629,7 +2644,7 @@ fun ChatScreen(
             onMoreReactions = { viewModel.setSelectedMessageForActions(live) },
             onDismissed = { focusedMessage = null }
         ) {
-            CompositionLocalProvider(LocalChatTextStyle provides chatTextStyle) {
+            CompositionLocalProvider(LocalChatTextStyle provides chatTextStyle, LocalHugCouple provides hugCouple) {
                 MessageBubble(
                     message = live,
                     isFromMe = focusedIsFromMe,
@@ -3030,6 +3045,23 @@ fun ChatScreen(
         )
     }
 
+    // Every few days while this phone (Xiaomi, Vivo, Samsung...) still holds back pushes to a closed
+    // Notes: the switches to turn on, so messages and calls always arrive. Never over Private mode
+    var showDeliverySetup by remember { mutableStateOf(false) }
+    val canPromptDelivery = uiState.chatExperienceMode != com.example.ui.chat.ChatExperienceMode.PRIVATE &&
+        !uiState.isStealthCurtainActive
+    LaunchedEffect(canPromptDelivery) {
+        if (!canPromptDelivery) return@LaunchedEffect
+        kotlinx.coroutines.delay(2_500L)
+        if (com.example.notifications.BackgroundDelivery.shouldPrompt(context)) {
+            com.example.notifications.BackgroundDelivery.onPrompted(context)
+            showDeliverySetup = true
+        }
+    }
+    if (showDeliverySetup) {
+        com.example.ui.components.DeliverySetupSheet(onDismiss = { showDeliverySetup = false })
+    }
+
     // Full Profile Picture View (opens full picture view without navigating to settings)
     if (showFullProfilePicViewer) {
         val photoUrl = partner?.photoUrl
@@ -3039,6 +3071,8 @@ fun ChatScreen(
                 mediaUrl = photoUrl,
                 allMediaUrls = listOf(photoUrl),
                 openFrom = openFrom,
+                // Breathes like their avatar in the top bar, while they're online or typing
+                breathing = partnerPresence.isOnline || partnerPresence.isTyping || partnerPresence.isRecordingAudio,
                 onDismiss = {
                     val app = context.applicationContext as? com.example.CherishApplication
                     app?.securityPreferences?.isMediaViewerActive = false

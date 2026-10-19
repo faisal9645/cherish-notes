@@ -10,7 +10,10 @@ import androidx.compose.foundation.text.InlineTextContent
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -43,7 +46,13 @@ internal fun AnimatedEmojiText(
     modifier: Modifier = Modifier
 ) {
     val content = remember(text) { inlineEmojiText(text) }
-    if (content == null) {
+    // Plain text until its emojis first play (on arrival, or a tap): a row scrolling past is as
+    // light as any text, without a slot to lay out for each emoji
+    var hasPlayed by remember { mutableStateOf(playOnArrival) }
+    LaunchedEffect(replay) {
+        if (replay > 0) hasPlayed = true
+    }
+    if (content == null || !hasPlayed) {
         EmojiText(text = text, modifier = modifier, color = color, fontStyle = fontStyle, style = style, largeWhenEmojiOnly = true)
         return
     }

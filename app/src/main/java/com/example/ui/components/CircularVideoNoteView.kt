@@ -183,7 +183,10 @@ fun CircularVideoNoteView(
     // In the chat: when it's the one most in view and no note plays with sound, it plays where it
     // is, muted and looping, at its size, with no ring or buttons; a tap plays it from the start
     // with sound (like Telegram)
-    silentPreview: Boolean = false
+    silentPreview: Boolean = false,
+    // The small poster uploaded with it: shown until it plays, so scrolling past doesn't download
+    // the whole video to make a still frame
+    posterUrl: String? = null
 ) {
     val isRound = shape == CircleShape
     val context = LocalContext.current
@@ -483,6 +486,9 @@ fun CircularVideoNoteView(
                 localVideoFile = initialCached
             }
 
+            // Its poster shows instead; the video is fetched only to play
+            if (posterUrl != null) return@LaunchedEffect
+
             val bitmap = VideoThumbnailHelper.getThumbnail(context, videoUrl)
             if (bitmap != null) {
                 thumbnailBitmap = bitmap
@@ -628,6 +634,16 @@ fun CircularVideoNoteView(
             if (bmp != null) {
                 Image(
                     bitmap = bmp.asImageBitmap(),
+                    contentDescription = "Video note thumbnail",
+                    contentScale = if (cropToFill) ContentScale.Crop else ContentScale.Fit,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .clip(shape)
+                )
+            } else if (posterUrl != null) {
+                // The uploaded poster (small, and cached)
+                coil.compose.AsyncImage(
+                    model = posterUrl,
                     contentDescription = "Video note thumbnail",
                     contentScale = if (cropToFill) ContentScale.Crop else ContentScale.Fit,
                     modifier = Modifier

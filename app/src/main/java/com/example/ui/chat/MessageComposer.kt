@@ -13,6 +13,12 @@ import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.input.OffsetMapping
+import androidx.compose.ui.text.input.TransformedText
+import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.unit.em
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.foundation.BorderStroke
@@ -383,20 +389,73 @@ fun MessageComposer(
         if (isDark) darkSurface(NavyRaised, Neutral800) else Gray200
     }
 
+    // Type center dynamic emoji sizing: single/few emojis typed in the input box appear delightfully large and prominent
+    val inputTokens = remember(text) { tokenize(text) }
+    val inputEmojiCount = remember(inputTokens) { inputTokens.count { it.isEmoji } }
+    val isInputEmojiOnly = remember(inputTokens, inputEmojiCount) {
+        inputEmojiCount > 0 && inputTokens.all { it.isEmoji || it.text.isBlank() }
+    }
+    val composerFontSize = remember(isInputEmojiOnly, inputEmojiCount, chatText) {
+        when {
+            isInputEmojiOnly && inputEmojiCount == 1 -> 34.sp
+            isInputEmojiOnly && inputEmojiCount in 2..3 -> 28.sp
+            isInputEmojiOnly && inputEmojiCount in 4..8 -> 24.sp
+            else -> chatText.fontSize()
+        }
+    }
+    val privateComposerFontSize = remember(isInputEmojiOnly, inputEmojiCount, chatText) {
+        when {
+            isInputEmojiOnly && inputEmojiCount == 1 -> 34.sp
+            isInputEmojiOnly && inputEmojiCount in 2..3 -> 28.sp
+            isInputEmojiOnly && inputEmojiCount in 4..8 -> 24.sp
+            else -> chatText.fontSize(extraSp = 2)
+        }
+    }
+    val emojiVisualTransformation = remember(isInputEmojiOnly, inputEmojiCount) {
+        VisualTransformation { original ->
+            val raw = original.text
+            if (raw.isEmpty()) return@VisualTransformation TransformedText(original, OffsetMapping.Identity)
+            val tokens = tokenize(raw)
+            if (tokens.none { it.isEmoji }) return@VisualTransformation TransformedText(original, OffsetMapping.Identity)
+
+            val emojiOnly = tokens.all { it.isEmoji || it.text.isBlank() }
+            val count = tokens.count { it.isEmoji }
+            val emojiScale = when {
+                emojiOnly && count in 1..3 -> 1.15f
+                emojiOnly && count in 4..8 -> 1.20f
+                else -> 1.35f
+            }
+            val builder = AnnotatedString.Builder()
+            tokens.forEach { token ->
+                if (token.isEmoji) {
+                    builder.withStyle(SpanStyle(fontSize = emojiScale.em)) {
+                        append(token.text)
+                    }
+                } else {
+                    builder.append(token.text)
+                }
+            }
+            TransformedText(builder.toAnnotatedString(), OffsetMapping.Identity)
+        }
+    }
+
     // Comprehensive emoji categories like WhatsApp / Telegram
     val emojiTabs = remember { listOf("💕", "😊", "👤", "🐾", "🍔", "⚽", "💡", "🏳️") }
     val emojiCategories = remember {
         listOf(
-            // 0: Couple / Love & Deep Intimacy (lying on chest, forehead kiss, bed cuddles, kisses & romance)
+            // 0: Couple / Love & Deep Intimacy (girl & boy romance, kissing, cuddles & devotion)
             listOf(
-                // Forehead kisses, tender kisses, lying on chest, deep cuddles, tongue
-                "👅", "😚", "🫂", "🛌", "🛏️", "💋", "😘", "😙", "😗", "💏🏻", "👩🏻‍❤️‍💋‍👨🏻",
-                "🧑🏻‍❤️‍💋‍🧑🏻", "👩🏻‍❤️‍💋‍👩🏻", "👨🏻‍❤️‍💋‍👨🏻", "👄", "🫦", "🫠", "🥰", "😍", "🤱🏻", "💆🏻",
-                "💆🏻‍♂️", "💆🏻‍♀️", "😴", "💤", "🥱", "🥺", "🥹", "🤤", "🥵", "😳",
-                "🫣", "🤭", "🤫", "🫶🏻", "🫰🏻", "🫀", "🤲🏻", "🫳🏻", "🫴🏻", "🤝🏻",
-                "👫🏻", "🧑🏻‍🤝‍🧑🏻", "💑🏻", "👩🏻‍❤️‍👨🏻", "🧑🏻‍❤️‍🧑🏻", "👩🏻‍❤️‍👩🏻", "👨🏻‍❤️‍👨🏻", "👭🏻", "👬🏻", "👣",
+                // Girl & Boy kisses & couple intimacy (girl kissing boy, girl kissing girl, cuddles)
+                "👩🏻‍❤️‍💋‍👨🏻", "👩🏻‍❤️‍💋‍👩🏻", "👧🏻‍❤️‍💋‍👦🏻", "👧🏻‍❤️‍💋‍👧🏻", "👩🏻‍❤️‍👨🏻", "👩🏻‍❤️‍👩🏻", "👧🏻‍❤️‍👦🏻", "👧🏻‍❤️‍👧🏻",
+                "👩🏻", "👧🏻", "👸🏻", "👰🏻‍♀️", "💃🏻", "💋", "😘", "😚",
+                "😗", "😙", "💏🏻", "👨🏻‍❤️‍💋‍👨🏻", "👨🏻‍❤️‍👨🏻", "🧑🏻‍❤️‍💋‍🧑🏻", "🫂", "🥰",
+                "😍", "👅", "👄", "🫦", "🫠", "🛌", "🛏️", "🤱🏻",
+                "💆🏻‍♀️", "💆🏻‍♂️", "😴", "💤", "🥱", "🥺", "🥹", "🤤",
+                "🥵", "😳", "🫣", "🤭", "🤫", "🫶🏻", "🫰🏻", "🫀",
+                "🤲🏻", "🫳🏻", "🫴🏻", "🤝🏻", "👫🏻", "👭🏻", "👬🏻", "🧑🏻‍🤝‍🧑🏻",
+                "💑🏻", "👣",
                 // Romantic date nights, bath, intimacy & gifts
-                "🛁", "🧖🏻", "🧖🏻‍♀️", "🧖🏻‍♂️", "🕯️", "🍷", "🥂", "🍾", "🍫", "🍓",
+                "🛁", "🧖🏻‍♀️", "🧖🏻", "🧖🏻‍♂️", "🕯️", "🍷", "🥂", "🍾", "🍫", "🍓",
                 "🍒", "🧁", "🍯", "🧸", "🏩", "💒", "💍", "💌", "🔐", "🗝️",
                 "🔒", "♾️", "🕊️", "🌙", "🪐", "🌟", "✨", "💫", "🪽", "🪶",
                 "🎀", "🪞", "🪔", "🌹", "🥀", "💐", "🌷", "🌸", "🌺", "🌼",
@@ -420,16 +479,19 @@ fun MessageComposer(
                 "👻", "👽", "👾", "🤖", "😺", "😸", "😹", "😻", "😼", "😽",
                 "🙀", "😿", "😾", "🙈", "🙉", "🙊"
             ),
-            // 2: People & Hands
+            // 2: People & Hands (with full fair-skin girl and boy representation)
             listOf(
                 "👋🏻", "🤚🏻", "🖐🏻", "✋🏻", "🖖🏻", "🫱🏻", "🫲🏻", "🫳🏻", "🫴🏻", "👌🏻",
                 "🤌🏻", "🤏🏻", "✌🏻", "🤞🏻", "🫰🏻", "🤟🏻", "🤘🏻", "🤙🏻", "👈🏻", "👉🏻",
                 "👆🏻", "🖕🏻", "👇🏻", "☝🏻", "🫵🏻", "👍🏻", "👎🏻", "✊🏻", "👊🏻", "🤛🏻",
                 "🤜🏻", "👏🏻", "🙌🏻", "🫶🏻", "👐🏻", "🤲🏻", "🤝🏻", "🙏🏻", "✍🏻", "💅🏻",
                 "🤳🏻", "💪🏻", "🦾", "🦿", "🦵🏻", "🦶🏻", "👂🏻", "🦻🏻", "👃🏻", "🧠",
-                "👶🏻", "🧒🏻", "👦🏻", "👧🏻", "🧑🏻", "👱🏻", "👨🏻", "🧔🏻", "👩🏻", "🧓🏻",
-                "👴🏻", "👵🏻", "🙍🏻", "🙎🏻", "🙅🏻", "🙆🏻", "💁🏻", "🙋🏻", "🧏🏻", "🙇🏻",
-                "🤦🏻", "🤷🏻", "👮🏻", "🕵🏻", "💂🏻", "🥷🏻", "👷🏻", "🫅🏻", "🤴🏻", "👸🏻"
+                "👧🏻", "👩🏻", "👸🏻", "👰🏻‍♀️", "🧕🏻", "💃🏻", "👱🏻‍♀️", "👩🏻‍🦰", "👩🏻‍🦱", "👩🏻‍🦳",
+                "👶🏻", "🧒🏻", "👦🏻", "🧑🏻", "👱🏻", "👨🏻", "🧔🏻", "🧓🏻", "👵🏻", "👴🏻",
+                "💁🏻‍♀️", "💁🏻‍♂️", "🙆🏻‍♀️", "🙆🏻‍♂️", "🙅🏻‍♀️", "🙅🏻‍♂️", "🙋🏻‍♀️", "🙋🏻‍♂️", "🧏🏻‍♀️", "🧏🏻‍♂️",
+                "🙇🏻‍♀️", "🙇🏻‍♂️", "🤦🏻‍♀️", "🤦🏻‍♂️", "🤷🏻‍♀️", "🤷🏻‍♂️", "🙎🏻‍♀️", "🙎🏻‍♂️", "🙍🏻‍♀️", "🙍🏻‍♂️",
+                "💆🏻‍♀️", "💆🏻‍♂️", "💇🏻‍♀️", "💇🏻‍♂️", "🧖🏻‍♀️", "🧖🏻‍♂️", "👮🏻‍♀️", "👮🏻‍♂️", "🕵🏻‍♀️", "🕵🏻‍♂️",
+                "💂🏻‍♀️", "💂🏻‍♂️", "👷🏻‍♀️", "👷🏻‍♂️", "🥷🏻", "🫅🏻", "🤴🏻"
             ),
             // 3: Animals & Nature
             listOf(
@@ -817,8 +879,8 @@ fun MessageComposer(
                             val inputTextStyle = TextStyle(
                                 fontFamily = chatText.font.family ?: LocalTextStyle.current.fontFamily,
                                 color = if (isDark) Neutral200 else InkBlack,
-                                fontSize = chatText.fontSize(extraSp = 2),
-                                lineHeight = chatText.fontSize(extraSp = 2) * 1.375f,
+                                fontSize = privateComposerFontSize,
+                                lineHeight = privateComposerFontSize * 1.375f,
                                 platformStyle = PlatformTextStyle(includeFontPadding = false)
                             )
 
@@ -826,6 +888,7 @@ fun MessageComposer(
                                 value = text,
                                 onValueChange = onTextChanged,
                                 textStyle = inputTextStyle,
+                                visualTransformation = emojiVisualTransformation,
                                 cursorBrush = SolidColor(if (isDark) Neutral200 else InkBlack),
                                 maxLines = 5,
                                 modifier = Modifier
@@ -924,9 +987,10 @@ fun MessageComposer(
                                 textStyle = TextStyle(
                                     fontFamily = chatText.font.family ?: LocalTextStyle.current.fontFamily,
                                     color = if (isDark) Color.White else Slate900,
-                                    fontSize = chatText.fontSize(),
-                                    lineHeight = chatText.fontSize() * 1.3f
+                                    fontSize = composerFontSize,
+                                    lineHeight = composerFontSize * 1.3f
                                 ),
+                                visualTransformation = emojiVisualTransformation,
                                 cursorBrush = SolidColor(DayBluePrimary),
                                 maxLines = 5,
                                 modifier = Modifier
@@ -1463,7 +1527,7 @@ fun MessageComposer(
                                             .padding(vertical = 4.dp),
                                         contentAlignment = Alignment.Center
                                     ) {
-                                        Text(text = displayEmoji, fontSize = 21.sp)
+                                        Text(text = displayEmoji, fontSize = 24.sp)
                                     }
                                 }
                             }
@@ -1622,7 +1686,7 @@ private fun EmojiAttachmentPanel(
                                 .padding(vertical = 4.dp),
                             contentAlignment = Alignment.Center
                         ) {
-                            Text(text = displayEmoji, fontSize = 19.sp)
+                            Text(text = displayEmoji, fontSize = 22.sp)
                         }
                     }
                 }

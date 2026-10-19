@@ -14,6 +14,7 @@ import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.ChevronLeft
 import androidx.compose.material.icons.rounded.ChevronRight
+import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -36,6 +37,9 @@ import java.util.Calendar
 import java.util.Locale
 import com.example.ui.components.lazyFadingEdges
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import kotlinx.coroutines.launch
 
 /** "yyyy-MM" moved by [offset] months. */
 private fun shiftMonth(month: String, offset: Int): String {
@@ -110,6 +114,29 @@ fun SynchronicityScreen(
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back")
+                    }
+                },
+                actions = {
+                    // What the numbers might whisper, always up here however many moments there are
+                    val meaningsTip = rememberTooltipState(isPersistent = true)
+                    val tipScope = rememberCoroutineScope()
+                    TooltipBox(
+                        positionProvider = TooltipDefaults.rememberRichTooltipPositionProvider(),
+                        state = meaningsTip,
+                        tooltip = {
+                            RichTooltip(
+                                title = { Text("What the numbers might whisper", fontWeight = FontWeight.Bold) }
+                            ) {
+                                NumberMeanings(state.patterns)
+                            }
+                        }
+                    ) {
+                        IconButton(
+                            onClick = { tipScope.launch { meaningsTip.show() } },
+                            modifier = Modifier.testTag("synchronicity_meanings")
+                        ) {
+                            Icon(Icons.Rounded.Info, contentDescription = "What the numbers might whisper")
+                        }
                     }
                 }
             )
@@ -238,7 +265,7 @@ fun SynchronicityScreen(
                             MomentRow(
                                 moment = moment,
                                 who = whoSaw(moment, state.myId, partnerName, privateMode),
-                                whenLabel = timeLabel(moment.seenAt),
+                                whenLabel = momentTimeLabel(moment),
                                 canEdit = moment.createdBy == state.myId,
                                 onClick = { editing = moment },
                                 // Moments slide into place, and fade in and out, as they're added or deleted
@@ -249,28 +276,6 @@ fun SynchronicityScreen(
                 }
             }
 
-            item(key = "meanings") {
-                Card(
-                    shape = RoundedCornerShape(20.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.06f)),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text("What the numbers might whisper", fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                        Text(
-                            "Sweet meanings, just for fun — not predictions.",
-                            fontSize = 11.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        state.patterns.forEach { pattern ->
-                            Row {
-                                Text(pattern, fontWeight = FontWeight.Bold, fontSize = 13.sp, modifier = Modifier.width(58.dp))
-                                Text(SyncPatterns.meaning(pattern), fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                        }
-                    }
-                }
-            }
         }
     }
 
@@ -291,6 +296,25 @@ fun SynchronicityScreen(
             onDismiss = { editing = null },
             onChanged = onChanged
         )
+    }
+}
+
+/** Each of our numbers with its sweet (just-for-fun) meaning, for the top bar's tooltip. */
+@Composable
+private fun NumberMeanings(patterns: List<String>) {
+    Column(
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+        modifier = Modifier
+            .heightIn(max = 380.dp)
+            .verticalScroll(rememberScrollState())
+    ) {
+        Text("Sweet meanings, just for fun — not predictions.", fontSize = 11.sp)
+        patterns.forEach { pattern ->
+            Row {
+                Text(pattern, fontWeight = FontWeight.Bold, fontSize = 13.sp, modifier = Modifier.width(58.dp))
+                Text(SyncPatterns.meaning(pattern), fontSize = 13.sp)
+            }
+        }
     }
 }
 

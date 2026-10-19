@@ -6,9 +6,11 @@ import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.offset
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material3.LocalTextStyle
@@ -124,11 +126,17 @@ internal fun BigEmoji(
     val typedSp = LocalChatTextStyle.current.fontSize().value
     val bases = remember(emojis) { emojis.map(::baseOf) }
     val motions = remember(bases) { bases.map(::motionOf) }
-    val lifeMs = remember(motions) {
-        motions.withIndex().maxOf { (index, motion) -> index * STAGGER_MS + motion.durationMs }.toFloat()
+    // A lone 🫂 is a whole hug, the two of us (see HugScene)
+    val hugScene = remember(emojis) { isHugScene(emojis) }
+    val lifeMs = remember(motions, hugScene) {
+        if (hugScene) HUG_SCENE_MS.toFloat()
+        else motions.withIndex().maxOf { (index, motion) -> index * STAGGER_MS + motion.durationMs }.toFloat()
     }
-    // How far into the emojis' own animation, in ms; past its end when not playing
-    val life = remember { Animatable(LIFE_DONE) }
+    // How far into the emojis' own animation, in ms; past its end when not playing. A hug just sent
+    // or received waits at its start, the two of us still apart
+    val life = remember { Animatable(if (hugScene && entrance != BigEmojiEntrance.None) 0f else LIFE_DONE) }
+    // A hug played again (a tap, or coming into view) starts already in each other's arms
+    val replayFrom = if (hugScene) HUG_EMBRACED else 0f
     val burst = remember { EmojiBurstState() }
     val heart = rememberVectorPainter(Icons.Rounded.Favorite)
     val flight = remember { Animatable(if (entrance == BigEmojiEntrance.FlyFromComposer) 0f else 1f) }
@@ -138,14 +146,20 @@ internal fun BigEmoji(
     val origin = remember { ComposerTextAnchor.origin }
     var slotCenter by remember { mutableStateOf(Offset.Unspecified) }
     var isPlaced by remember { mutableStateOf(false) }
+    // Landed (or never flying): where it sits isn't needed any more, so scrolling skips it
+    var hasLanded by remember { mutableStateOf(entrance != BigEmojiEntrance.FlyFromComposer) }
 
-    suspend fun play(strong: Boolean, withBurst: Boolean = true) {
+    suspend fun play(strong: Boolean, withBurst: Boolean = true, from: Float = 0f) {
         coroutineScope {
             launch {
-                life.snapTo(0f)
-                life.animateTo(lifeMs, tween(lifeMs.roundToInt(), easing = LinearEasing))
+                life.snapTo(from * lifeMs)
+                life.animateTo(lifeMs, tween(((1f - from) * lifeMs).roundToInt(), easing = LinearEasing))
             }
-            if (withBurst) launch { burst.burst(bases, motions, strong, glyphScale) }
+            if (withBurst) launch {
+                // The hug's hearts float up with its first squeeze
+                if (hugScene) delay(hugBurstDelayMs(from))
+                burst.burst(bases, motions, strong, glyphScale)
+            }
         }
     }
 
@@ -154,6 +168,7 @@ internal fun BigEmoji(
             BigEmojiEntrance.FlyFromComposer -> {
                 snapshotFlow { slotCenter }.first { it.isSpecified }
                 flight.animateTo(1f, tween(FLIGHT_MS, easing = LinearEasing))
+                hasLanded = true
                 play(strong = false)
             }
             BigEmojiEntrance.PopIn -> {
@@ -165,7 +180,7 @@ internal fun BigEmoji(
             BigEmojiEntrance.None -> {
                 snapshotFlow { isPlaced }.first { it }
                 delay(150)
-                play(strong = false, withBurst = false)
+                play(strong = false, withBurst = false, from = replayFrom)
             }
         }
     }
@@ -179,7 +194,7 @@ internal fun BigEmoji(
         } else {
             view.chatHaptic(ChatHaptic.Tick)
         }
-        play(strong = true)
+        play(strong = true, from = replayFrom)
     }
 
     Column(
@@ -188,16 +203,21 @@ internal fun BigEmoji(
     ) {
         Box(
             modifier = Modifier
-                .onGloballyPositioned { coordinates ->
-                    if (!isPlaced) isPlaced = true
-                    if (flight.value < 1f) {
-                        val position = coordinates.positionInRoot()
-                        slotCenter = Offset(
-                            position.x + coordinates.size.width / 2f,
-                            position.y + coordinates.size.height / 2f
-                        )
+                // Where it sits: only until it's placed and has landed, not on every frame of
+                // every scroll after
+                .then(
+                    if (isPlaced && hasLanded) Modifier
+                    else Modifier.onGloballyPositioned { coordinates ->
+                        if (!isPlaced) isPlaced = true
+                        if (flight.value < 1f) {
+                            val position = coordinates.positionInRoot()
+                            slotCenter = Offset(
+                                position.x + coordinates.size.width / 2f,
+                                position.y + coordinates.size.height / 2f
+                            )
+                        }
                     }
-                }
+                )
                 // The burst flies out past the emojis' edges
                 .emojiBurst(burst, heart),
             contentAlignment = Alignment.Center
@@ -213,7 +233,7 @@ internal fun BigEmoji(
                         }
                         // Telegram's send: out of the message box's text at the size it was typed,
                         // up first and then across to its place, growing as it goes
-                        val startScale = typedSp / fontSize.value
+                        val startScale = if (hugScene) typedSp.sp.toPx() * 1.2f / size.width else typedSp / fontSize.value
                         val typedHalfWidth = size.width * startScale / 2f
                         val from = if (origin.isSpecified) {
                             Offset(origin.x + typedHalfWidth, origin.y)
@@ -234,26 +254,39 @@ internal fun BigEmoji(
                     }
                 }
             ) {
-                emojis.forEachIndexed { index, emoji ->
-                    val motion = motions[index]
-                    Text(
-                        text = emoji,
-                        fontSize = fontSize,
-                        // A fixed line height would cut the big emojis
-                        style = LocalTextStyle.current.copy(lineHeight = TextUnit.Unspecified),
-                        modifier = Modifier.graphicsLayer {
-                            emojiMotion(motion, (life.value - index * STAGGER_MS) / motion.durationMs, density * glyphScale)
-                        }
-                    )
+                if (hugScene) {
+                    HugScene(progress = { life.value / lifeMs }, isFromMe = isFromMe)
+                } else {
+                    emojis.forEachIndexed { index, emoji ->
+                        val motion = motions[index]
+                        Text(
+                            text = emoji,
+                            fontSize = fontSize,
+                            // A fixed line height would cut the big emojis
+                            style = LocalTextStyle.current.copy(lineHeight = TextUnit.Unspecified),
+                            modifier = Modifier.graphicsLayer {
+                                emojiMotion(motion, (life.value - index * STAGGER_MS) / motion.durationMs, density * glyphScale)
+                            }
+                        )
+                    }
                 }
             }
         }
-        Box(
-            modifier = Modifier.graphicsLayer {
-                alpha = minOf(((flight.value - 0.7f) / 0.3f).coerceIn(0f, 1f), (pop.value * 2f).coerceIn(0f, 1f))
-            }
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            footer()
+            // Who hugged whom, by the time
+            if (hugScene) {
+                HugCaption(progress = { life.value / lifeMs }, isFromMe = isFromMe, modifier = Modifier.offset(y = (-4).dp))
+            }
+            Box(
+                modifier = Modifier.graphicsLayer {
+                    alpha = minOf(((flight.value - 0.7f) / 0.3f).coerceIn(0f, 1f), (pop.value * 2f).coerceIn(0f, 1f))
+                }
+            ) {
+                footer()
+            }
         }
     }
 }
@@ -304,13 +337,15 @@ internal fun GraphicsLayerScope.emojiMotion(motion: EmojiMotion, t: Float, unit:
             scaleY = s
         }
         EmojiMotion.Hug -> {
-            // Opens its arms wide, then wraps tight in a warm, blissful cuddle with head tilt
-            val open = pulse(t, 0.12f, 0.06f) + 0.6f * pulse(t, 0.48f, 0.06f)
-            val squeeze = pulse(t, 0.32f, 0.08f) + 0.85f * pulse(t, 0.64f, 0.08f)
-            scaleX = 1f + 0.08f * open - 0.14f * squeeze
-            scaleY = 1f + 0.02f * open + 0.09f * squeeze
-            rotationZ = -8f * squeeze + 4f * sin(t * 2.5f * PI_F) * fade
-            translationY = 2f * unit * squeeze
+            // Leans in and holds on, rocking softly side to side, with two gentle squeezes, then
+            // lets go: the emoji keeps its shape, nothing is squashed out of it
+            val held = hold(t, 0.18f, 0.8f)
+            val squeeze = 0.8f * pulse(t, 0.36f, 0.07f) + 0.6f * pulse(t, 0.6f, 0.07f)
+            val rock = sin((t - 0.18f).coerceAtLeast(0f) * 3f * PI_F) * held
+            scaleX = 1f + 0.06f * held - 0.05f * squeeze
+            scaleY = 1f + 0.06f * held + 0.03f * squeeze
+            rotationZ = 5f * rock
+            translationY = -3f * unit * held
         }
         EmojiMotion.Blush -> {
             // Bashful: shrinks a little and tilts away, swaying shyly
@@ -559,7 +594,11 @@ private val HEARTS = setOf(
 )
 private const val KISS_MARK = "💋"
 private val KISSES = setOf("😘", "😚", "😗", "😙", "😽", KISS_MARK)
-private val LOVE = setOf("😍", "🥰", "😻", "🫶", "💑", "💏")
+private val LOVE = setOf(
+    "😍", "🥰", "😻", "🫶", "💑", "💏",
+    "👩‍❤️‍💋‍👨", "👩‍❤️‍💋‍👩", "👨‍❤️‍💋‍👨", "🧑‍❤️‍💋‍🧑", "👧‍❤️‍💋‍👦", "👧‍❤️‍💋‍👧",
+    "👩‍❤️‍👨", "👩‍❤️‍👩", "👨‍❤️‍👨", "🧑‍❤️‍🧑", "👧‍❤️‍👦", "👧‍❤️‍👧"
+)
 private val HUG = setOf("🤗", "🫂")
 private val BLUSH = setOf("😊", "☺", "🤭")
 private val JOY = setOf("😀", "😃", "😄", "😁", "😸", "😺")
@@ -746,15 +785,13 @@ private fun particlesFor(
                 life = rnd(0.5f, 0.62f), gravity = -22f,
                 dx = if (base == KISS_MARK) 0f else 0.2f, dy = if (base == KISS_MARK) 0f else 0.14f
             )
-            // A serene embrace: glowing blue aura behind, soft cheeks, blue ripple, and sweet sparkles
-            BurstStyle.Hug -> when (i) {
-                0 -> particle(ParticleShape.Aura, size = 52f, start = 0.12f, life = 0.75f, color = HugGlowColor)
-                1 -> particle(ParticleShape.Glow, size = 17f, start = 0.18f, life = 0.70f, dx = -0.24f, dy = 0.08f, color = HugCheekColor)
-                2 -> particle(ParticleShape.Glow, size = 17f, start = 0.18f, life = 0.70f, dx = 0.24f, dy = 0.08f, color = HugCheekColor)
-                3 -> particle(ParticleShape.Ring, distance = 58f, size = 2.5f, start = 0.28f, life = 0.50f, color = HugGlowColor)
-                4 -> particle(ParticleShape.Sparkle, angle = UP + rnd(-0.7f, 0.7f), distance = rnd(35f, 65f), size = rnd(10f, 14f), spin = rnd(-40f, 40f), start = 0.32f, life = 0.50f, color = HugColors[1])
-                else -> particle(ParticleShape.Heart, angle = UP + rnd(-0.6f, 0.6f), distance = rnd(30f, 60f), size = rnd(9f, 13f), spin = rnd(-25f, 25f), start = 0.34f, life = 0.50f, gravity = -14f, color = HugColors[0])
-            }
+            // Little hearts floating up from over their heads, one squeeze after another. Nothing
+            // glows on or behind the two of them: they keep the emoji's own colours (as in build 180)
+            BurstStyle.Hug -> particle(
+                ParticleShape.Heart, angle = UP + rnd(-0.7f, 0.7f), distance = rnd(34f, 64f), size = rnd(9f, 14f),
+                spin = rnd(-25f, 25f), start = (if (i % 2 == 0) 0.3f else 0.52f) + rnd(0f, 0.08f), life = 0.45f,
+                gravity = -14f, dy = -0.42f
+            )
             // Rosy cheeks, and a few tiny hearts
             BurstStyle.Blush -> if (i < 2) {
                 particle(
@@ -893,9 +930,8 @@ private val DotColors = listOf(Color(0xFF9AA0A6))
 private val RippleColors = listOf(Color(0xFF8AB4F8), Color(0xFFA7C7FA))
 private val RageColor = Color(0xFFFF3B30)
 // The hug in 🫂's own colours: vibrant blue, sky blue, and soft light blue burst
+// The hug's hearts, in 🫂's own blue and sky blue
 private val HugColors = listOf(Color(0xFF2F6FD6), Color(0xFF6EC1F2), Color(0xFFA9DDFB))
-private val HugGlowColor = Color(0xFFBFE6FF)
-private val HugCheekColor = Color(0xFF6EC1F2)
 private const val QUESTION_MARK = "❓"
 
 /** Draws [state]'s burst around this element; nothing clips it, so it flies past the edges. */

@@ -303,6 +303,7 @@ class AgoraVoiceEngine(private val context: Context) {
                 try { rtc.setAudioEffectPreset(Constants.AUDIO_EFFECT_OFF) } catch (_: Throwable) {}
                 try { rtc.setVoiceBeautifierPreset(Constants.VOICE_BEAUTIFIER_OFF) } catch (_: Throwable) {}
                 try { rtc.setLocalVoicePitch(1.0) } catch (_: Throwable) {}
+                setVoiceFormant(rtc, 0.0)
                 Log.i(TAG, "Voice changer reset to natural voice (NONE)")
             } else {
                 if (effect.agoraPreset != 0) {
@@ -321,9 +322,25 @@ class AgoraVoiceEngine(private val context: Context) {
                 } catch (e: Throwable) {
                     Log.w(TAG, "setLocalVoicePitch failed: ${e.message}")
                 }
+                setVoiceFormant(rtc, effect.formantRatio)
             }
         } catch (e: Throwable) {
             Log.e(TAG, "applyVoiceChanger failed: ${e.message}", e)
+        }
+    }
+
+    /**
+     * The voice's resonances ([ratio] -1..1, 0 natural): with the pitch, a man's voice comes out a
+     * woman's (Lady, Girl). Looked up at run time: not every Agora build has it, and without it
+     * only the pitch changes.
+     */
+    private fun setVoiceFormant(rtc: RtcEngine, ratio: Double) {
+        try {
+            val method = rtc.javaClass.getMethod("setLocalVoiceFormant", Double::class.javaPrimitiveType)
+            val res = method.invoke(rtc, ratio.coerceIn(-1.0, 1.0))
+            Log.i(TAG, "Applied localVoiceFormant $ratio, result: $res")
+        } catch (e: Throwable) {
+            if (ratio != 0.0) Log.w(TAG, "Voice formant unavailable: ${e.message}")
         }
     }
 

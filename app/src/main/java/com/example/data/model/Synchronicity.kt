@@ -18,6 +18,8 @@ data class SyncMoment(
     val seenAt: Long,
     /** The 6 AM day it was seen ("yyyy-MM-dd"), worked out on the recording phone in its own time zone. */
     val periodDate: String,
+    /** Recorded later without remembering the time: it was sometime on [periodDate] ([seenAt] is that day's noon). */
+    val timeUnknown: Boolean = false,
     /** Still on this phone only, waiting to reach the server. */
     val isPending: Boolean = false
 )

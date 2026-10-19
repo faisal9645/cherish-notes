@@ -202,9 +202,16 @@ class SynchronicityRepository(
     /**
      * Saves a sighting seen at [seenAt] (now, or earlier when it's recorded later; never in the
      * future). [momentId] is made once per "Record" sheet: pressing Save again or retrying after an
-     * error writes the same document, never a second moment.
+     * error writes the same document, never a second moment. With [timeUnknown], only its day is
+     * known.
      */
-    suspend fun recordMoment(momentId: String, pattern: String, note: String, seenAt: Long): SaveResult {
+    suspend fun recordMoment(
+        momentId: String,
+        pattern: String,
+        note: String,
+        seenAt: Long,
+        timeUnknown: Boolean = false
+    ): SaveResult {
         val coupleId = coupleId() ?: return SaveResult.Failed("Log in to record moments")
         val userId = authRepository.getCurrentUserId().ifBlank { null } ?: return SaveResult.Failed("Log in to record moments")
         val clean = SyncPatterns.normalize(pattern) ?: return SaveResult.Failed("Pick a number first")
@@ -224,7 +231,8 @@ class SynchronicityRepository(
             "seenAt" to seen,
             "periodDate" to day,
             "periodMonth" to day.take(7),
-            "timeZone" to TimeZone.getDefault().id
+            "timeZone" to TimeZone.getDefault().id,
+            "timeUnknown" to timeUnknown
         )
         return try {
             val confirmed = withTimeoutOrNull(SERVER_WAIT_MS) {
@@ -253,7 +261,13 @@ class SynchronicityRepository(
      * Changes one of my own moments later: the number, when it was seen (its day moves with it) and
      * the note. False if it was refused.
      */
-    suspend fun updateMoment(moment: SyncMoment, pattern: String, note: String, seenAt: Long): Boolean {
+    suspend fun updateMoment(
+        moment: SyncMoment,
+        pattern: String,
+        note: String,
+        seenAt: Long,
+        timeUnknown: Boolean = false
+    ): Boolean {
         val coupleId = coupleId() ?: return false
         if (moment.createdBy != authRepository.getCurrentUserId()) return false
         val clean = SyncPatterns.normalize(pattern) ?: return false
@@ -269,6 +283,7 @@ class SynchronicityRepository(
                         "seenAt" to seen,
                         "periodDate" to day,
                         "periodMonth" to day.take(7),
+                        "timeUnknown" to timeUnknown,
                         "editedAt" to FieldValue.serverTimestamp()
                     )
                 ).await()
@@ -471,6 +486,7 @@ class SynchronicityRepository(
             createdBy = getString("createdBy").orEmpty(),
             seenAt = getLong("seenAt") ?: getLong("clientCreatedAt") ?: getTimestamp("createdAt")?.toDate()?.time ?: 0L,
             periodDate = periodDate,
+            timeUnknown = getBoolean("timeUnknown") == true,
             isPending = metadata.hasPendingWrites()
         )
     }

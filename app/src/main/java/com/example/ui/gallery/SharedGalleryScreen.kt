@@ -894,6 +894,9 @@ fun SharedGalleryScreen(
                                             }
                                     ) {
                                         val isVideoItem = item.isVideo
+                                        // Zoomed out to the smallest tiles: just the photos (Delete and Show in chat
+                                        // are a long-press or the photo's viewer away), and a small play mark on videos
+                                        val isCompactTile = gridColumnCount >= COMPACT_TILE_COLUMNS
 
                                         // Small tiles show the ~10 KB thumbnail; two big columns, the full photo
                                         GalleryTileImage(
@@ -908,7 +911,7 @@ fun SharedGalleryScreen(
                                             Box(
                                                 modifier = Modifier
                                                     .align(Alignment.Center)
-                                                    .size(36.dp)
+                                                    .size(if (isCompactTile) 22.dp else 36.dp)
                                                     .background(Color.Black.copy(alpha = 0.55f), CircleShape),
                                                 contentAlignment = Alignment.Center
                                             ) {
@@ -916,12 +919,12 @@ fun SharedGalleryScreen(
                                                     imageVector = Icons.Rounded.PlayArrow,
                                                     contentDescription = "Video Note",
                                                     tint = Color.White,
-                                                    modifier = Modifier.size(22.dp)
+                                                    modifier = Modifier.size(if (isCompactTile) 14.dp else 22.dp)
                                                 )
                                             }
 
                                             // Video Note Pill
-                                            Surface(
+                                            if (!isCompactTile) Surface(
                                                 shape = RoundedCornerShape(8.dp),
                                                 color = Color.Black.copy(alpha = 0.65f),
                                                 modifier = Modifier
@@ -961,7 +964,7 @@ fun SharedGalleryScreen(
                                         }
 
                                         // Overlay "Show in chat" button on bottom edge (when not in multi-selection mode)
-                                        if (!isSelectionMode) {
+                                        if (!isSelectionMode && !isCompactTile) {
                                             Box(
                                                 modifier = Modifier
                                                     .align(Alignment.BottomEnd)
@@ -2009,6 +2012,9 @@ private val MEDIA_KIND_EMPTY_WORDS = listOf("photos or videos", "photos", "video
 private const val FROM_ANYONE = 0
 private const val FROM_ME = 1
 private const val FROM_PARTNER = 2
+
+/** From this many columns (the smallest tiles) the Media tab shows only the photos, no buttons on them. */
+private const val COMPACT_TILE_COLUMNS = 5
 
 private fun mediaKindOf(item: GalleryMediaItem): Int = when {
     !item.isVideo -> MEDIA_PHOTOS

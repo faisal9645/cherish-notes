@@ -95,11 +95,11 @@ class SynchronicityViewModel(
     /** A new id for one "Record" sheet (kept while it's open, so a retry can't make a second moment). */
     fun newMomentId(): String = UUID.randomUUID().toString()
 
-    suspend fun record(momentId: String, pattern: String, note: String, seenAt: Long) =
-        repository.recordMoment(momentId, pattern, note, seenAt)
+    suspend fun record(momentId: String, pattern: String, note: String, seenAt: Long, timeUnknown: Boolean = false) =
+        repository.recordMoment(momentId, pattern, note, seenAt, timeUnknown)
 
-    suspend fun update(moment: SyncMoment, pattern: String, note: String, seenAt: Long) =
-        repository.updateMoment(moment, pattern, note, seenAt)
+    suspend fun update(moment: SyncMoment, pattern: String, note: String, seenAt: Long, timeUnknown: Boolean = false) =
+        repository.updateMoment(moment, pattern, note, seenAt, timeUnknown)
 
     suspend fun delete(moment: SyncMoment) = repository.deleteMoment(moment)
 

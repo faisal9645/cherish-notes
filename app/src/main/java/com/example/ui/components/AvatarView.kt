@@ -55,6 +55,40 @@ object AvatarCache {
     }
 }
 
+/** How much an avatar grows at the top of a breath. */
+internal const val AVATAR_BREATH_SCALE = 0.042f
+
+/**
+ * An avatar's breath, 0..1, while [alive] (online or typing) and not with system animations off.
+ * Read it only while drawing, so nothing recomposes for it.
+ */
+@Composable
+internal fun rememberAvatarBreath(alive: Boolean): () -> Float {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val breathPhase = androidx.compose.runtime.remember { Animatable(0f) }
+    LaunchedEffect(alive) {
+        breathPhase.snapTo(0f)
+        if (alive && !context.areAnimationsDisabled()) {
+            breathPhase.animateTo(
+                targetValue = (2.0 * Math.PI).toFloat(),
+                animationSpec = infiniteRepeatable(
+                    animation = tween(3500, easing = LinearEasing),
+                    repeatMode = RepeatMode.Restart
+                )
+            )
+        }
+    }
+    // Organic 3.5-second sinusoidal breathing curve: smooth expansion & spring-damped relaxation
+    return androidx.compose.runtime.remember(breathPhase) {
+        {
+            val phaseD = breathPhase.value.toDouble()
+            val rawCos = (1.0 - kotlin.math.cos(phaseD)) / 2.0
+            val dampened = rawCos * (1.0 - 0.06 * kotlin.math.sin(phaseD))
+            dampened.toFloat().coerceIn(0f, 1f)
+        }
+    }
+}
+
 @Composable
 fun AvatarView(
     photoUrl: String?,
@@ -76,29 +110,7 @@ fun AvatarView(
     }
 
     val isAlive = isOnline || isTyping
-    // The breath runs only while they're online or typing (and not with system animations off), and
-    // only drawing reads it, so an avatar never recomposes for it
-    val context = androidx.compose.ui.platform.LocalContext.current
-    val breathPhase = androidx.compose.runtime.remember { Animatable(0f) }
-    LaunchedEffect(isAlive) {
-        breathPhase.snapTo(0f)
-        if (isAlive && !context.areAnimationsDisabled()) {
-            breathPhase.animateTo(
-                targetValue = (2.0 * Math.PI).toFloat(),
-                animationSpec = infiniteRepeatable(
-                    animation = tween(3500, easing = LinearEasing),
-                    repeatMode = RepeatMode.Restart
-                )
-            )
-        }
-    }
-    // Organic 3.5-second sinusoidal breathing curve: smooth expansion & spring-damped relaxation
-    val breathProgress = {
-        val phaseD = breathPhase.value.toDouble()
-        val rawCos = (1.0 - kotlin.math.cos(phaseD)) / 2.0
-        val dampened = rawCos * (1.0 - 0.06 * kotlin.math.sin(phaseD))
-        dampened.toFloat().coerceIn(0f, 1f)
-    }
+    val breathProgress = rememberAvatarBreath(isAlive)
 
     Box(
         modifier = modifier.size(size),
@@ -111,8 +123,8 @@ fun AvatarView(
                     .size((size - 4.dp).coerceAtLeast(24.dp))
                     .graphicsLayer {
                         val breath = breathProgress()
-                        scaleX = 1f + 0.042f * breath
-                        scaleY = 1f + 0.042f * breath
+                        scaleX = 1f + AVATAR_BREATH_SCALE * breath
+                        scaleY = 1f + AVATAR_BREATH_SCALE * breath
                         alpha = if (isAlive) 0.72f + 0.28f * breath else 1f
                     }
                     .border(
@@ -126,8 +138,8 @@ fun AvatarView(
                     .size(size)
                     .graphicsLayer {
                         val breath = breathProgress()
-                        scaleX = 1f + 0.042f * breath
-                        scaleY = 1f + 0.042f * breath
+                        scaleX = 1f + AVATAR_BREATH_SCALE * breath
+                        scaleY = 1f + AVATAR_BREATH_SCALE * breath
                     }
             })
                 .clip(CircleShape)

@@ -113,9 +113,14 @@ enum class VoiceChangerEffect(
     val subtitle: String,
     val emoji: String,
     val agoraPreset: Int,
-    val pitchMultiplier: Double
+    val pitchMultiplier: Double,
+    // Moves the voice's resonances up too (0 leaves them), so a raised voice sounds like a woman's
+    // rather than a sped-up one; where this Agora build can't, the pitch alone changes
+    val formantRatio: Double = 0.0
 ) {
     NONE("none", "Normal", "Natural clear voice", "🎙️", 0, 1.0),
+    LADY("lady", "Lady", "Soft, grown-up woman's voice", "👩", 0, 1.26, formantRatio = 0.3),
+    GIRL("girl", "Girl", "Sweet young girl's voice", "👧", 0, 1.38, formantRatio = 0.45),
     CHIPMUNK("chipmunk", "Chipmunk", "High & cute pitch", "🐿️", 0x02010500 /* VOICE_CHANGER_EFFECT_GIRL */, 1.45),
     DEEP_MONSTER("deep_monster", "Monster", "Deep & powerful rumble", "👹", 0x02010700 /* VOICE_CHANGER_EFFECT_HULK */, 0.65),
     KID("kid", "Kid", "Playful bright tone", "🧒", 0x02010300 /* VOICE_CHANGER_EFFECT_BOY */, 1.25),

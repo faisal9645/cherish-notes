@@ -51,12 +51,33 @@ class MainActivity : FragmentActivity() {
     /** Whether the secret app may be what's on screen; stays true until Notes has been drawn. */
     private var secretAppOnScreen = false
 
+    /** Cherish (not Notes) was on screen when the activity paused. */
+    private var cherishOnScreenAtPause = false
+
+    // The phone locked (or its screen timed out) with Cherish on screen: the app goes to the
+    // background, so unlocking shows the home screen, neither Notes nor Cherish
+    private val screenOffReceiver = object : android.content.BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: android.content.Intent?) {
+            if (intent?.action == android.content.Intent.ACTION_SCREEN_OFF) leaveIfLockedInCherish()
+        }
+    }
+
     /** Drawn over everything in the window while PrivacyShield is up, so previews show nothing. */
     private var privacyCover: View? = null
     private var privacyCoverColor = android.graphics.Color.WHITE
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        try {
+            ContextCompat.registerReceiver(
+                this,
+                screenOffReceiver,
+                android.content.IntentFilter(android.content.Intent.ACTION_SCREEN_OFF),
+                ContextCompat.RECEIVER_NOT_EXPORTED
+            )
+        } catch (e: Exception) {
+            Log.w("MainActivity", "Couldn't watch for the screen locking", e)
+        }
         // The auto-backup starts once the first screen is on screen, so it never holds up opening
         // the app. (The battery isn't watched continuously: it's read once when the app opens, in
         // onResume, and refreshed every few minutes only while the Love & Us tab is on screen.)
@@ -202,6 +223,8 @@ class MainActivity : FragmentActivity() {
                 intent.getBooleanExtra("from_call_ended", false) ||
                 intent.hasExtra("conversationId")
         if (isFromNotification) {
+            // Its alert was seen, even if only Notes opens: the partner's next message alerts again
+            app.authRepository.markMessageAlertSeen()
             val isDiscreet = intent.getBooleanExtra("is_discreet", false)
             if (isDiscreet) {
                 // Disguised notification: keep or restore safe Notes disguise
@@ -519,13 +542,37 @@ class MainActivity : FragmentActivity() {
     }
 
     override fun onPause() {
+        cherishOnScreenAtPause = !app.securityPreferences.isDisguiseActive()
         coverSecretApp()
         super.onPause()
+    }
+
+    /**
+     * Locked with Cherish on screen (see screenOffReceiver): off to the background. Not with a call
+     * on or just ended, nor from a photo picker or the camera opened from the chat.
+     */
+    private fun leaveIfLockedInCherish() {
+        if (isFinishing || isChangingConfigurations) return
+        val cherishShown = if (lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)) {
+            !app.securityPreferences.isDisguiseActive()
+        } else {
+            cherishOnScreenAtPause
+        }
+        if (!cherishShown) return
+        if (com.example.call.CallManager.hasActiveCall() ||
+            com.example.call.CallManager.isCallScreenVisible ||
+            app.securityPreferences.wasInCallRecently() ||
+            app.securityPreferences.isExternalPickerActive) return
+        cherishOnScreenAtPause = false
+        moveTaskToBack(true)
     }
 
     override fun onStop() {
         super.onStop()
         if (isChangingConfigurations) return
+        // Stopped by the screen going off (it may beat the screen-off broadcast)
+        val isInteractive = (getSystemService(POWER_SERVICE) as? android.os.PowerManager)?.isInteractive != false
+        if (!isInteractive) leaveIfLockedInCherish() else cherishOnScreenAtPause = false
         app.authRepository.onAppForegroundStateChanged(false)
         // Re-disguise ONLY when the user truly leaves the app (activity stopped without active picker/viewer),
         // and disguise mode is enabled in user settings. The call screen covering the chat isn't leaving
@@ -548,6 +595,9 @@ class MainActivity : FragmentActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
+        try {
+            unregisterReceiver(screenOffReceiver)
+        } catch (_: Exception) {}
         if (privacyCover != null) PrivacyShield.onChange = null
         batteryHelper.stop()
         app.authRepository.onAppForegroundStateChanged(false)

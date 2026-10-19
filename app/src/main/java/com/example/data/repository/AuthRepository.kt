@@ -513,6 +513,25 @@ class AuthRepository(private val context: Context) {
     }
 
     /**
+     * This phone's message alert was seen (tapped or swiped away), even without going into Cherish:
+     * the partner's next message alerts it again (one alert until then, see the pushPartner
+     * function), instead of staying quiet until Cherish is opened. The write, or null.
+     */
+    fun markMessageAlertSeen(): com.google.android.gms.tasks.Task<Void>? {
+        val uid = getCurrentUserId()
+        if (uid.isBlank()) return null
+        return try {
+            userDocument(uid)?.set(
+                mapOf("chatSeenAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()),
+                com.google.firebase.firestore.SetOptions.merge()
+            )
+        } catch (e: Exception) {
+            Log.w("AuthRepository", "Couldn't mark the message alert seen", e)
+            null
+        }
+    }
+
+    /**
      * Acknowledges that a received heartbeat trigger was felt on this phone.
      * This signals the sender's phone to play the reciprocal flutter haptic and display living response.
      */

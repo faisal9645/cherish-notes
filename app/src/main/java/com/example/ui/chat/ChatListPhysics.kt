@@ -12,15 +12,21 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.composed
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.onPlaced
+import androidx.compose.ui.graphics.GraphicsLayerScope
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.Measurable
+import androidx.compose.ui.layout.MeasureResult
+import androidx.compose.ui.layout.MeasureScope
 import androidx.compose.ui.layout.positionInParent
+import androidx.compose.ui.node.LayoutAwareModifierNode
+import androidx.compose.ui.node.LayoutModifierNode
+import androidx.compose.ui.node.ModifierNodeElement
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
@@ -106,15 +112,40 @@ fun Modifier.chatListTouchAnchor(physics: ChatListPhysics): Modifier = pointerIn
     }
 }
 
-/** On each message row: trails, squashes and settles with the list's springs. */
-fun Modifier.chatRowSpring(physics: ChatListPhysics): Modifier = composed {
-    val center = remember { mutableFloatStateOf(0f) }
-    this
-        .onPlaced { coordinates ->
-            center.floatValue = coordinates.positionInParent().y + coordinates.size.height / 2f
+/**
+ * On each message row: trails, squashes and settles with the list's springs. A plain modifier node
+ * (not `composed`), so a row coming into view while scrolling costs no extra composition.
+ */
+fun Modifier.chatRowSpring(physics: ChatListPhysics): Modifier = this then ChatRowSpringElement(physics)
+
+private data class ChatRowSpringElement(val physics: ChatListPhysics) : ModifierNodeElement<ChatRowSpringNode>() {
+    override fun create() = ChatRowSpringNode(physics)
+
+    override fun update(node: ChatRowSpringNode) {
+        node.physics = physics
+    }
+}
+
+private class ChatRowSpringNode(var physics: ChatListPhysics) :
+    Modifier.Node(), LayoutModifierNode, LayoutAwareModifierNode {
+
+    // The row's middle in the list (px from its top)
+    private var centerY = 0f
+
+    // Read while drawing, so the springs move the row without measuring or composing it again
+    private val springLayer: GraphicsLayerScope.() -> Unit = {
+        translationY = physics.offsetFor(centerY)
+        scaleY = physics.squashY()
+    }
+
+    override fun MeasureScope.measure(measurable: Measurable, constraints: Constraints): MeasureResult {
+        val placeable = measurable.measure(constraints)
+        return layout(placeable.width, placeable.height) {
+            placeable.placeWithLayer(0, 0, layerBlock = springLayer)
         }
-        .graphicsLayer {
-            translationY = physics.offsetFor(center.floatValue)
-            scaleY = physics.squashY()
-        }
+    }
+
+    override fun onPlaced(coordinates: LayoutCoordinates) {
+        centerY = coordinates.positionInParent().y + coordinates.size.height / 2f
+    }
 }

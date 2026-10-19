@@ -207,6 +207,9 @@ fun ProfileScreen(
     
     var isBatteryOptimizationIgnored by remember { mutableStateOf(NotificationHelper.isBatteryOptimizationIgnored(context)) }
     var isCallScreenAllowed by remember { mutableStateOf(com.example.notifications.BackgroundDelivery.isCallScreenAllowed(context)) }
+    // The switches this phone (Xiaomi, Vivo, Samsung...) still needs on for pushes to reach a closed Notes
+    var deliveryMissing by remember { mutableStateOf(com.example.notifications.BackgroundDelivery.missingCount(context)) }
+    var showDeliverySetup by remember { mutableStateOf(false) }
 
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
@@ -216,6 +219,7 @@ fun ProfileScreen(
                 viewModel.checkDigitalWellbeingStatus(context)
                 isBatteryOptimizationIgnored = NotificationHelper.isBatteryOptimizationIgnored(context)
                 isCallScreenAllowed = com.example.notifications.BackgroundDelivery.isCallScreenAllowed(context)
+                deliveryMissing = com.example.notifications.BackgroundDelivery.missingCount(context)
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -1212,18 +1216,16 @@ fun ProfileScreen(
 
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), thickness = 0.6.dp)
 
-                // --- SUBSECTION 4: NOTIFICATIONS WHEN CLOSED (battery and Auto-start; nothing runs in the background) ---
-                val hasAutoStart = remember { com.example.notifications.BackgroundDelivery.hasAutoStartSetting() }
+                // --- SUBSECTION 4: NOTIFICATIONS WHEN CLOSED (this phone's battery and start-up switches; nothing runs in the background) ---
                 ListItem(
                     headlineContent = { Text("Notifications When Closed", fontSize = 15.sp, fontWeight = FontWeight.SemiBold) },
                     supportingContent = {
                         Text(
-                            when {
-                                !isBatteryOptimizationIgnored ->
-                                    "Messages and calls come as push notifications, like WhatsApp: nothing keeps running. If they don't arrive while Cherish is closed, this phone is holding them back: tap Allow."
-                                hasAutoStart ->
-                                    "Messages and calls come as push notifications, like WhatsApp: nothing keeps running. If they still don't arrive while Cherish is closed, turn on Auto-start for it too."
-                                else -> "Messages and calls come as push notifications, like WhatsApp: nothing keeps running."
+                            if (deliveryMissing == 0) {
+                                "Messages and calls come as push notifications, like WhatsApp: nothing keeps running. All set on this phone."
+                            } else {
+                                "Messages and calls come as push notifications, like WhatsApp. This phone holds them back while Notes is closed until " +
+                                    (if (deliveryMissing == 1) "1 switch is" else "$deliveryMissing switches are") + " on: tap Set up."
                             },
                             fontSize = 13.sp
                         )
@@ -1232,28 +1234,22 @@ fun ProfileScreen(
                         Icon(Icons.Rounded.NotificationsActive, contentDescription = null, tint = primaryAccent)
                     },
                     trailingContent = {
-                        Column(horizontalAlignment = Alignment.End) {
-                            if (!isBatteryOptimizationIgnored) {
-                                CherishTonalButton(
-                                    onClick = { com.example.notifications.BackgroundDelivery.requestUnrestricted(context) },
-                                    shape = RoundedCornerShape(16.dp),
-                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 2.dp)
-                                ) {
-                                    Text("Allow", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                                }
-                            }
-                            if (hasAutoStart) {
-                                TextButton(
-                                    onClick = { com.example.notifications.BackgroundDelivery.openAutoStart(context) },
-                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
-                                ) {
-                                    Text("Auto-start", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                                }
-                            }
+                        CherishTonalButton(
+                            onClick = { showDeliverySetup = true },
+                            shape = RoundedCornerShape(16.dp),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 2.dp)
+                        ) {
+                            Text(if (deliveryMissing == 0) "Check" else "Set up", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                         }
                     },
                     modifier = Modifier.testTag("notifications_when_closed")
                 )
+                if (showDeliverySetup) {
+                    com.example.ui.components.DeliverySetupSheet(onDismiss = {
+                        showDeliverySetup = false
+                        deliveryMissing = com.example.notifications.BackgroundDelivery.missingCount(context)
+                    })
+                }
 
                 if (partner != null) {
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), thickness = 0.6.dp)

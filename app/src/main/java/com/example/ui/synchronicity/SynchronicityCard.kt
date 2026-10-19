@@ -110,16 +110,24 @@ internal fun dayLabel(periodDate: String, today: String): String = when (periodD
     }
 }
 
-/** "Today, 11:11 AM", "Yesterday, 11:11 PM" or "Oct 3, 4:44 PM" for when it was seen. */
-internal fun seenLabel(seenAt: Long, today: String): String {
+/**
+ * "Today, 11:11 AM", "Yesterday, 11:11 PM" or "Oct 3, 4:44 PM" for when it was seen; "Sometime
+ * today", "Sometime yesterday" or "Sometime on Oct 3" when [timeUnknown].
+ */
+internal fun seenLabel(seenAt: Long, today: String, timeUnknown: Boolean = false): String {
     val day = SynchronicityRepository.dayKey(seenAt)
     val time = timeLabel(seenAt)
+    val date = SimpleDateFormat("MMM d", Locale.getDefault()).format(Date(seenAt))
     return when (day) {
-        today -> "Today, $time"
-        SynchronicityRepository.previousDay(today) -> "Yesterday, $time"
-        else -> SimpleDateFormat("MMM d", Locale.getDefault()).format(Date(seenAt)) + ", $time"
+        today -> if (timeUnknown) "Sometime today" else "Today, $time"
+        SynchronicityRepository.previousDay(today) -> if (timeUnknown) "Sometime yesterday" else "Yesterday, $time"
+        else -> if (timeUnknown) "Sometime on $date" else "$date, $time"
     }
 }
+
+/** A moment's time in a day's list: "11:11 AM", or "Sometime that day" when it isn't known. */
+internal fun momentTimeLabel(moment: SyncMoment): String =
+    if (moment.timeUnknown) "Sometime that day" else timeLabel(moment.seenAt)
 
 /** The last two times a clock showed this time pattern (11:11 AM and PM), for "I saw it then". */
 internal fun recentOccurrences(pattern: String, now: Long = System.currentTimeMillis()): List<Long> {
@@ -341,7 +349,7 @@ fun SynchronicityCard(
                     MomentRow(
                         moment = moment,
                         who = whoSaw(moment, state.myId, partnerName, privateMode),
-                        whenLabel = seenLabel(moment.seenAt, state.today),
+                        whenLabel = seenLabel(moment.seenAt, state.today, moment.timeUnknown),
                         canEdit = moment.createdBy == state.myId,
                         onClick = { editing = moment }
                     )
@@ -583,6 +591,8 @@ internal fun RecordMomentSheet(
     var note by remember { mutableStateOf(editing?.note.orEmpty()) }
     // Null means "just now" (taken when Save is pressed)
     var seenAt by remember { mutableStateOf(editing?.seenAt) }
+    // An earlier day whose time isn't remembered: sometime that day ([seenAt] is its noon)
+    var timeUnknown by remember { mutableStateOf(editing?.timeUnknown == true) }
     var isSaving by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var showDatePicker by remember { mutableStateOf(false) }
@@ -670,26 +680,32 @@ internal fun RecordMomentSheet(
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 CherishFilterChip(
                     selected = seenAt == null,
-                    onClick = { seenAt = null },
+                    onClick = {
+                        seenAt = null
+                        timeUnknown = false
+                    },
                     label = { Text("Just now") },
                     colors = syncChipColors(),
                     modifier = Modifier.testTag("synchronicity_when_now")
                 )
                 quickTimes.forEach { time ->
                     CherishFilterChip(
-                        selected = seenAt == time,
-                        onClick = { seenAt = time },
+                        selected = seenAt == time && !timeUnknown,
+                        onClick = {
+                            seenAt = time
+                            timeUnknown = false
+                        },
                         label = { Text(seenLabel(time, state.today)) },
                         colors = syncChipColors()
                     )
                 }
                 // A time picked earlier (or the one being edited) that isn't a quick choice
                 val picked = seenAt
-                if (picked != null && picked !in quickTimes) {
+                if (picked != null && (picked !in quickTimes || timeUnknown)) {
                     CherishFilterChip(
                         selected = true,
                         onClick = { showDatePicker = true },
-                        label = { Text(seenLabel(picked, state.today)) },
+                        label = { Text(seenLabel(picked, state.today, timeUnknown)) },
                         colors = syncChipColors()
                     )
                 }
@@ -729,8 +745,9 @@ internal fun RecordMomentSheet(
                     error = null
                     scope.launch {
                         val time = seenAt ?: System.currentTimeMillis()
+                        val unknownTime = seenAt != null && timeUnknown
                         if (editing == null) {
-                            when (val result = viewModel.record(momentId, chosen, note, time)) {
+                            when (val result = viewModel.record(momentId, chosen, note, time, unknownTime)) {
                                 SynchronicityRepository.SaveResult.Saved -> {
                                     view.performHapticFeedback(
                                         if (android.os.Build.VERSION.SDK_INT >= 30) HapticFeedbackConstants.CONFIRM
@@ -749,7 +766,7 @@ internal fun RecordMomentSheet(
                                     isSaving = false
                                 }
                             }
-                        } else if (viewModel.update(editing, chosen, note, time)) {
+                        } else if (viewModel.update(editing, chosen, note, time, unknownTime)) {
                             onChanged()
                             onDismiss()
                         } else {
@@ -820,21 +837,40 @@ internal fun RecordMomentSheet(
             initialMinute = start.get(Calendar.MINUTE),
             is24Hour = DateFormat.is24HourFormat(context)
         )
+        // That day at this hour and minute, on this phone's clock
+        fun pickedDayAt(hour: Int, minute: Int): Long {
+            val utc = Calendar.getInstance(TimeZone.getTimeZone("UTC")).apply { timeInMillis = dateUtc }
+            return Calendar.getInstance().apply {
+                set(utc.get(Calendar.YEAR), utc.get(Calendar.MONTH), utc.get(Calendar.DAY_OF_MONTH), hour, minute, 0)
+                set(Calendar.MILLISECOND, 0)
+            }.timeInMillis
+        }
         CherishAlertDialog(
             onDismissRequest = { pickedDateUtc = null },
             title = { Text("The time you saw it") },
-            text = { TimePicker(state = timeState) },
+            text = {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    TimePicker(state = timeState)
+                    // Only the day is remembered: it's kept as sometime that day
+                    OutlinedButton(
+                        onClick = {
+                            seenAt = pickedDayAt(12, 0).coerceAtMost(System.currentTimeMillis())
+                            timeUnknown = true
+                            error = null
+                            pickedDateUtc = null
+                        },
+                        modifier = Modifier.testTag("synchronicity_time_unknown")
+                    ) { Text("I don't remember the time") }
+                }
+            },
             confirmButton = {
                 TextButton(onClick = {
-                    val utc = Calendar.getInstance(TimeZone.getTimeZone("UTC")).apply { timeInMillis = dateUtc }
-                    val chosen = Calendar.getInstance().apply {
-                        set(utc.get(Calendar.YEAR), utc.get(Calendar.MONTH), utc.get(Calendar.DAY_OF_MONTH), timeState.hour, timeState.minute, 0)
-                        set(Calendar.MILLISECOND, 0)
-                    }.timeInMillis
+                    val chosen = pickedDayAt(timeState.hour, timeState.minute)
                     if (chosen > System.currentTimeMillis()) {
                         error = "That time hasn't come yet. Pick an earlier one."
                     } else {
                         seenAt = chosen
+                        timeUnknown = false
                         error = null
                     }
                     pickedDateUtc = null

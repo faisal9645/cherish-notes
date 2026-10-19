@@ -91,7 +91,9 @@ import com.example.ui.theme.Gray400
 import com.example.ui.theme.Slate900
 import com.example.ui.components.CherishAlertDialog
 import com.example.ui.components.CherishButton
+import com.example.ui.components.AVATAR_BREATH_SCALE
 import com.example.ui.components.pressScaleTarget
+import com.example.ui.components.rememberAvatarBreath
 import com.example.ui.components.springClickable
 import androidx.compose.material.icons.automirrored.rounded.Chat
 
@@ -116,6 +118,8 @@ fun FullScreenMediaViewer(
     circularMediaUrls: Set<String> = emptySet(),
     // When each one was sent, by its URL (see mediaTimesOf): shown under the count
     mediaTimes: Map<String, Long> = emptyMap(),
+    // A profile photo: it breathes like their avatar in the chat's top bar (while they're online)
+    breathing: Boolean = false,
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
@@ -221,6 +225,7 @@ fun FullScreenMediaViewer(
 
     val scale = scaleAnim.value
     val offset = Offset(offsetXAnim.value, offsetYAnim.value)
+    val breath = rememberAvatarBreath(breathing)
 
     val filmstripListState = rememberLazyListState()
 
@@ -889,8 +894,12 @@ fun FullScreenMediaViewer(
                                 .clip(RoundedCornerShape(dismissCornerRadius))
                                 .graphicsLayer {
                                     if (page == pagerState.currentPage) {
-                                        scaleX = scaleAnim.value * dismissScale
-                                        scaleY = scaleAnim.value * dismissScale
+                                        // The breath settles as soon as the photo is zoomed or pulled down
+                                        val calm = (1f - (scaleAnim.value - 1f).coerceAtLeast(0f) / 0.05f).coerceIn(0f, 1f) *
+                                            (1f - dismissProgress)
+                                        val breathScale = 1f + AVATAR_BREATH_SCALE * breath() * calm
+                                        scaleX = scaleAnim.value * dismissScale * breathScale
+                                        scaleY = scaleAnim.value * dismissScale * breathScale
                                         translationX = offsetXAnim.value
                                         translationY = offsetYAnim.value + swipeOffsetY
                                     }
