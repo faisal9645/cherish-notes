@@ -49,6 +49,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -280,10 +281,10 @@ internal fun GlassWindowTouchLayer(
     )
 
     BoxWithConstraints(modifier = modifier) {
-        val w = maxWidth.value
-        val h = maxHeight.value
-        val wPx = constraints.maxWidth.toFloat()
-        val hPx = constraints.maxHeight.toFloat()
+        val density = LocalDensity.current
+        val wPx = with(density) { maxWidth.toPx() }
+        val hPx = with(density) { maxHeight.toPx() }
+        val closeThresholdPx = with(density) { 140.dp.toPx() }
 
         val myPosPx = myTouch?.let { Offset(it.x * wPx, it.y * hPx) }
         val partnerPosPx = if (partnerLive && partnerTouch != null) {
@@ -291,7 +292,7 @@ internal fun GlassWindowTouchLayer(
         } else null
 
         val areFingersClose = if (myPosPx != null && partnerPosPx != null) {
-            (myPosPx - partnerPosPx).getDistance() < 140.dp.value * (wPx / w.coerceAtLeast(1f))
+            (myPosPx - partnerPosPx).getDistance() < closeThresholdPx
         } else false
 
         Canvas(modifier = Modifier.fillMaxSize()) {

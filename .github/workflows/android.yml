@@ -48,9 +48,10 @@ jobs:
           STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
+          set -o pipefail
           ./gradlew assembleRelease --no-daemon --stacktrace 2>&1 | tee build.log || {
             echo "=== GRADLE BUILD FAILED. LOG TAIL: ==="
-            tail -n 120 build.log
+            tail -n 150 build.log
             exit 1
           }
 
