@@ -1433,7 +1433,7 @@ fun FullScreenMediaViewer(
 
             if (showKissPadInViewer) {
                 val appAuth = (context.applicationContext as? CherishApplication)?.authRepository
-                val pTouch by (appAuth?.kissTouch ?: kotlinx.coroutines.flow.MutableStateFlow(null)).collectAsState()
+                val pTouch by (appAuth?.partnerKissTouch ?: kotlinx.coroutines.flow.MutableStateFlow(null)).collectAsState()
                 KissPadDialog(
                     partnerName = partnerName ?: "Partner",
                     partnerTouch = pTouch,
