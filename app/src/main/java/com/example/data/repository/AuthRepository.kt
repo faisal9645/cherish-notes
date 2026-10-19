@@ -285,6 +285,7 @@ class AuthRepository(private val context: Context) {
             // notifications arrive even when the app is closed
             ensureFirebaseAuth {
                 updateFcmToken(localUser.id)
+                syncAppVersion(localUser.id)
                 listenToCurrentUser(localUser.id)
                 connectPartnerListenerOnce()
                 if (com.example.CherishApplication.isAppInForeground || wasForegroundThisProcess) {
@@ -803,7 +804,9 @@ class AuthRepository(private val context: Context) {
                         "isOnline" to true,
                         "online" to true,
                         "lastSeen" to System.currentTimeMillis(),
-                        "timeZone" to currentTz
+                        "timeZone" to currentTz,
+                        "appVersionCode" to com.example.BuildConfig.VERSION_CODE,
+                        "appVersionName" to com.example.BuildConfig.VERSION_NAME
                     )
                     userDocRef.set(updates, com.google.firebase.firestore.SetOptions.merge()).await()
                     updateFcmToken(uid)
@@ -909,7 +912,9 @@ class AuthRepository(private val context: Context) {
                         "isOnline" to true,
                         "online" to true,
                         "lastSeen" to System.currentTimeMillis(),
-                        "password" to pass
+                        "password" to pass,
+                        "appVersionCode" to com.example.BuildConfig.VERSION_CODE,
+                        "appVersionName" to com.example.BuildConfig.VERSION_NAME
                     )
                     userDocRef.set(updates, com.google.firebase.firestore.SetOptions.merge())
 
@@ -1556,6 +1561,8 @@ class AuthRepository(private val context: Context) {
                             "timeZone" to TimeZone.getDefault().id,
                             "notificationStatus" to currentNotif,
                             "notificationPermission" to currentSysPerm,
+                            "appVersionCode" to com.example.BuildConfig.VERSION_CODE,
+                            "appVersionName" to com.example.BuildConfig.VERSION_NAME,
                             // In Cherish: the partner's next message may alert this phone once it's left
                             "chatSeenAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
                         )
@@ -1605,7 +1612,9 @@ class AuthRepository(private val context: Context) {
                 "lastSeen" to System.currentTimeMillis(),
                 "timeZone" to currentTz,
                 "notificationStatus" to currentNotif,
-                "notificationPermission" to currentSysPerm
+                "notificationPermission" to currentSysPerm,
+                "appVersionCode" to com.example.BuildConfig.VERSION_CODE,
+                "appVersionName" to com.example.BuildConfig.VERSION_NAME
             )
             // Entering Cherish, or leaving it (opening only Notes doesn't count): the partner's next
             // message may alert this phone again (one alert until then, see the pushPartner function)
@@ -1832,6 +1841,8 @@ class AuthRepository(private val context: Context) {
             val lastHeartbeatSync = (snapshot.get("lastHeartbeatSync") as? Number)?.toLong() ?: 0L
             val timeZone = snapshot.getString("timeZone")
             val notificationStatus = snapshot.getString("notificationStatus")
+            val appVersionCode = (snapshot.get("appVersionCode") as? Number)?.toInt()
+            val appVersionName = snapshot.getString("appVersionName")
             val notifPerm = (snapshot.get("notificationPermission") as? Boolean)
                 ?: try { snapshot.getBoolean("notificationPermission") } catch (_: Exception) { null }
                 ?: true
@@ -1867,7 +1878,9 @@ class AuthRepository(private val context: Context) {
                 heartbeatStreak = heartbeatStreak,
                 lastHeartbeatSync = lastHeartbeatSync,
                 timeZone = timeZone,
-                notificationStatus = notificationStatus
+                notificationStatus = notificationStatus,
+                appVersionCode = appVersionCode,
+                appVersionName = appVersionName
             ).apply {
                 notificationPermission = notifPerm
             }
@@ -2023,6 +2036,11 @@ class AuthRepository(private val context: Context) {
                 }
                 if (docNotifPerm != null && partner.notificationPermission != docNotifPerm) {
                     partner.notificationPermission = docNotifPerm
+                }
+                val docVerCode = (doc.get("appVersionCode") as? Number)?.toInt()
+                val docVerName = doc.getString("appVersionName")
+                if (docVerCode != null && partner.appVersionCode != docVerCode) {
+                    partner = partner.copy(appVersionCode = docVerCode, appVersionName = docVerName ?: partner.appVersionName)
                 }
                 val now = System.currentTimeMillis()
                 if (!doc.metadata.isFromCache) {
@@ -2194,6 +2212,22 @@ class AuthRepository(private val context: Context) {
         }
     }
 
+    fun syncAppVersion(targetUid: String = getCurrentUserId()) {
+        val uid = targetUid.trim().ifBlank { getCurrentUserId() }
+        if (uid.isBlank()) return
+        ensureFirebaseAuth {
+            try {
+                val updates = mapOf<String, Any>(
+                    "appVersionCode" to com.example.BuildConfig.VERSION_CODE,
+                    "appVersionName" to com.example.BuildConfig.VERSION_NAME
+                )
+                userDocument(uid)?.set(updates, com.google.firebase.firestore.SetOptions.merge())
+            } catch (e: Exception) {
+                Log.w("AuthRepository", "Failed to sync app version", e)
+            }
+        }
+    }
+
     /**
      * Saves [token] (this phone's push address) everywhere the server looks for [uid]'s: the
      * profile, the same id with or without "user_", and this partner's slot on the couple record.
@@ -2301,6 +2335,8 @@ class AuthRepository(private val context: Context) {
             .putString("timeZone", user.timeZone ?: TimeZone.getDefault().id)
             .putString("notificationStatus", user.notificationStatus ?: "OPEN")
             .putBoolean("notificationPermission", user.notificationPermission ?: true)
+            .putInt("appVersionCode", user.appVersionCode ?: com.example.BuildConfig.VERSION_CODE)
+            .putString("appVersionName", user.appVersionName ?: com.example.BuildConfig.VERSION_NAME)
             .apply()
     }
 
@@ -2322,6 +2358,8 @@ class AuthRepository(private val context: Context) {
             val timeZone = prefs.getString("timeZone", null)?.trim()?.ifBlank { null } ?: TimeZone.getDefault().id
             val notificationStatus = prefs.getString("notificationStatus", "OPEN") ?: "OPEN"
             val notificationPermission = prefs.getBoolean("notificationPermission", true)
+            val appVerCode = prefs.getInt("appVersionCode", com.example.BuildConfig.VERSION_CODE)
+            val appVerName = prefs.getString("appVersionName", com.example.BuildConfig.VERSION_NAME) ?: com.example.BuildConfig.VERSION_NAME
             val defaultName = uid.removePrefix("user_").replaceFirstChar { it.uppercase() }
             val user = User(
                 id = uid,
@@ -2336,7 +2374,9 @@ class AuthRepository(private val context: Context) {
                 checkAfterNote = note.ifBlank { null },
                 checkAfterActive = active,
                 timeZone = timeZone,
-                notificationStatus = notificationStatus
+                notificationStatus = notificationStatus,
+                appVersionCode = com.example.BuildConfig.VERSION_CODE,
+                appVersionName = com.example.BuildConfig.VERSION_NAME
             ).apply {
                 this.notificationPermission = notificationPermission
             }

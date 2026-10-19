@@ -130,8 +130,9 @@ internal fun BigEmoji(
     val motions = remember(bases) { bases.map(::motionOf) }
     // A lone 🫂 is a whole hug, the two of us (see HugScene)
     val hugScene = remember(emojis) { isHugScene(emojis) }
-    val lifeMs = remember(motions, hugScene) {
-        if (hugScene) HUG_SCENE_MS.toFloat()
+    val lifeMs = remember(motions, hugScene, hugLevel) {
+        // A hug lasts by how tight it was let go (see hugSceneMs)
+        if (hugScene) hugSceneMs(hugLevel).toFloat()
         else motions.withIndex().maxOf { (index, motion) -> index * STAGGER_MS + motion.durationMs }.toFloat()
     }
     // How far into the emojis' own animation, in ms; past its end when not playing. A hug just sent
@@ -169,7 +170,7 @@ internal fun BigEmoji(
             }
             if (withBurst) launch {
                 // The hug's hearts float up with its first squeeze
-                if (hugScene) delay((hugBurstDelayMs(from) * slow).toLong())
+                if (hugScene) delay((hugBurstDelayMs(from, hugLevel) * slow).toLong())
                 burst.burst(bases, motions, strong, glyphScale, durationMs = (BURST_MS * slow).roundToInt())
             }
         }
@@ -181,6 +182,8 @@ internal fun BigEmoji(
                 snapshotFlow { slotCenter }.first { it.isSpecified }
                 flight.animateTo(1f, tween((FLIGHT_MS * slow).roundToInt(), easing = LinearEasing))
                 hasLanded = true
+                // The hug I let go of: each squeeze felt here too, as it's seen
+                if (hugScene) feelHug(from = 0f)
                 play(strong = false)
             }
             BigEmojiEntrance.PopIn -> {
@@ -290,21 +293,12 @@ internal fun BigEmoji(
                 }
             }
         }
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        Box(
+            modifier = Modifier.graphicsLayer {
+                alpha = minOf(((flight.value - 0.7f) / 0.3f).coerceIn(0f, 1f), (pop.value * 2f).coerceIn(0f, 1f))
+            }
         ) {
-            // Who hugged whom, by the time
-            if (hugScene) {
-                HugCaption(progress = { life.value / lifeMs }, isFromMe = isFromMe, modifier = Modifier.offset(y = (-4).dp), level = hugLevel)
-            }
-            Box(
-                modifier = Modifier.graphicsLayer {
-                    alpha = minOf(((flight.value - 0.7f) / 0.3f).coerceIn(0f, 1f), (pop.value * 2f).coerceIn(0f, 1f))
-                }
-            ) {
-                footer()
-            }
+            footer()
         }
     }
 }

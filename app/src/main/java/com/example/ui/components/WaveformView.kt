@@ -222,15 +222,16 @@ fun WaveformView(
             )
         }
 
-        // Draw an elastic magnifying droplet playhead dot
+        // Draw an elastic magnifying droplet playhead dot: bigger and haloed while playing, so where
+        // it's up to stands out from the played bars (the same colour)
         if (!isRecording && (progress in 0.005f..0.995f || isDragging)) {
             val currentScale = dropletScale.value
             val currentElevation = dropletElevation.value
-            val baseRadius = 3.5.dp.toPx()
+            val baseRadius = (if (isPlaying) 5.dp else 3.5.dp).toPx()
             val effectiveRadius = baseRadius * currentScale
 
-            // Glowing halo when scrubbing
-            if (currentScale > 1.1f) {
+            // Glowing halo while playing or scrubbing
+            if (isPlaying || currentScale > 1.1f) {
                 drawCircle(
                     color = activeColor.copy(alpha = 0.28f),
                     radius = effectiveRadius * 1.8f,

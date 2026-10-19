@@ -316,12 +316,12 @@ fun CherishNavGraph(
                 if (toOrder > fromOrder) {
                     slideIntoContainer(
                         towards = AnimatedContentTransitionScope.SlideDirection.Left,
-                        animationSpec = tween(320, easing = FastOutSlowInEasing)
+                        animationSpec = TabSlide
                     )
                 } else {
                     slideIntoContainer(
                         towards = AnimatedContentTransitionScope.SlideDirection.Right,
-                        animationSpec = tween(320, easing = FastOutSlowInEasing)
+                        animationSpec = TabSlide
                     )
                 }
             } else {
@@ -340,12 +340,12 @@ fun CherishNavGraph(
                 if (toOrder > fromOrder) {
                     slideOutOfContainer(
                         towards = AnimatedContentTransitionScope.SlideDirection.Left,
-                        animationSpec = tween(320, easing = FastOutSlowInEasing)
+                        animationSpec = TabSlide
                     )
                 } else {
                     slideOutOfContainer(
                         towards = AnimatedContentTransitionScope.SlideDirection.Right,
-                        animationSpec = tween(320, easing = FastOutSlowInEasing)
+                        animationSpec = TabSlide
                     )
                 }
             } else {
@@ -364,12 +364,12 @@ fun CherishNavGraph(
                 if (toOrder > fromOrder) {
                     slideIntoContainer(
                         towards = AnimatedContentTransitionScope.SlideDirection.Left,
-                        animationSpec = tween(320, easing = FastOutSlowInEasing)
+                        animationSpec = TabSlide
                     )
                 } else {
                     slideIntoContainer(
                         towards = AnimatedContentTransitionScope.SlideDirection.Right,
-                        animationSpec = tween(320, easing = FastOutSlowInEasing)
+                        animationSpec = TabSlide
                     )
                 }
             } else {
@@ -388,12 +388,12 @@ fun CherishNavGraph(
                 if (toOrder > fromOrder) {
                     slideOutOfContainer(
                         towards = AnimatedContentTransitionScope.SlideDirection.Left,
-                        animationSpec = tween(320, easing = FastOutSlowInEasing)
+                        animationSpec = TabSlide
                     )
                 } else {
                     slideOutOfContainer(
                         towards = AnimatedContentTransitionScope.SlideDirection.Right,
-                        animationSpec = tween(320, easing = FastOutSlowInEasing)
+                        animationSpec = TabSlide
                     )
                 }
             } else {
@@ -817,6 +817,64 @@ fun CherishNavGraph(
                         )
                     }
 
+                    val partnerUser = profileViewModel.uiState.collectAsState().value.partnerUser
+                    if (partnerUser != null && partnerUser.id.isNotBlank()) {
+                        val pName = partnerUser.displayName.ifBlank { "Partner" }
+                        val pCode = partnerUser.appVersionCode
+                        val targetBuild = if (updateState.latestBuild > 0) updateState.latestBuild else com.example.BuildConfig.VERSION_CODE
+                        val isPartnerLatest = pCode != null && pCode >= targetBuild
+
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(28.dp)
+                                        .clip(androidx.compose.foundation.shape.CircleShape)
+                                        .background(
+                                            if (pCode == null) MaterialTheme.colorScheme.surfaceVariant
+                                            else if (isPartnerLatest) Color(0xFF4CAF50).copy(alpha = 0.15f)
+                                            else Color(0xFFFFA000).copy(alpha = 0.15f)
+                                        ),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = if (isPartnerLatest) Icons.Rounded.CheckCircle else Icons.Rounded.SystemUpdate,
+                                        contentDescription = null,
+                                        tint = if (pCode == null) MaterialTheme.colorScheme.onSurfaceVariant else if (isPartnerLatest) Color(0xFF4CAF50) else Color(0xFFFFA000),
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "$pName's App",
+                                        fontWeight = FontWeight.SemiBold,
+                                        fontSize = 12.sp,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Text(
+                                        text = when {
+                                            pCode == null -> "Version not synced yet"
+                                            isPartnerLatest -> "Installed latest build ($pCode) ✨"
+                                            else -> "On build $pCode • Needs update to $targetBuild"
+                                        },
+                                        fontSize = 11.sp,
+                                        color = if (pCode != null && !isPartnerLatest) Color(0xFFFFA000) else MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+                    }
+
                     Spacer(modifier = Modifier.height(14.dp))
 
                     if (updateState.isChecking) {
@@ -969,6 +1027,16 @@ fun CherishNavGraph(
 
     } // End of Box
 } // End of CherishNavGraph
+
+/**
+ * Between the tabs (Love & Us, chat, settings): a fluid slide that follows a spring, quick at first
+ * and settling softly without a bounce, rather than a fixed-length tween.
+ */
+private val TabSlide = spring(
+    dampingRatio = Spring.DampingRatioNoBouncy,
+    stiffness = Spring.StiffnessMediumLow,
+    visibilityThreshold = IntOffset.VisibilityThreshold
+)
 
 private fun getTabOrder(route: String?): Int {
     return when (route) {

@@ -74,7 +74,10 @@ data class UpdateCheckState(
     val latestBuild: Int = com.example.BuildConfig.VERSION_CODE,
     val downloadUrl: String? = null,
     val releaseNotes: String = "",
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
+    val partnerVersion: String? = null,
+    val partnerBuild: Int? = null,
+    val partnerName: String? = null
 )
 
 class ProfileViewModel(
@@ -312,6 +315,13 @@ class ProfileViewModel(
         viewModelScope.launch {
             authRepository.partnerUserState.collect { partner ->
                 _uiState.update { it.copy(partnerUser = partner) }
+                _updateState.update { current ->
+                    current.copy(
+                        partnerVersion = partner?.appVersionName,
+                        partnerBuild = partner?.appVersionCode,
+                        partnerName = partner?.displayName?.ifBlank { null }
+                    )
+                }
             }
         }
 
@@ -642,12 +652,19 @@ class ProfileViewModel(
 
         val otaManager = com.example.update.OtaUpdateManager.getInstance(context)
         val currentVer = com.example.BuildConfig.VERSION_NAME
+        val partner = authRepository.partnerUserState.value
+        val pVer = partner?.appVersionName
+        val pBuild = partner?.appVersionCode
+        val pName = partner?.displayName?.ifBlank { null }
 
         _updateState.value = UpdateCheckState(
             isChecking = true,
             showDialog = true,
             currentVersion = currentVer,
-            latestVersion = currentVer
+            latestVersion = currentVer,
+            partnerVersion = pVer,
+            partnerBuild = pBuild,
+            partnerName = pName
         )
 
         viewModelScope.launch {
@@ -668,7 +685,10 @@ class ProfileViewModel(
                         latestVersion = info.latestVersionName.ifBlank { "v$currentVer" },
                         latestBuild = info.latestVersionCode,
                         downloadUrl = info.downloadUrl,
-                        releaseNotes = info.releaseNotes
+                        releaseNotes = info.releaseNotes,
+                        partnerVersion = pVer,
+                        partnerBuild = pBuild,
+                        partnerName = pName
                     )
                 } else {
                     _updateState.value = UpdateCheckState(
@@ -679,7 +699,10 @@ class ProfileViewModel(
                         latestVersion = info.latestVersionName.ifBlank { currentVer },
                         latestBuild = info.latestVersionCode.takeIf { it > 0 } ?: currentBuild,
                         downloadUrl = info.downloadUrl,
-                        releaseNotes = "You are on the latest version of Cherish: $currentVer (build $currentBuild). All features and OTA updates are active ✨"
+                        releaseNotes = "You are on the latest version of Cherish: $currentVer (build $currentBuild). All features and OTA updates are active ✨",
+                        partnerVersion = pVer,
+                        partnerBuild = pBuild,
+                        partnerName = pName
                     )
                 }
             } else {
@@ -691,7 +714,10 @@ class ProfileViewModel(
                     currentVersion = currentVer,
                     latestVersion = currentVer,
                     releaseNotes = if (errorMsg != null) "Could not connect to update service. Please check your internet connection." else "Your app is up to date (Version $currentVer).",
-                    errorMessage = errorMsg
+                    errorMessage = errorMsg,
+                    partnerVersion = pVer,
+                    partnerBuild = pBuild,
+                    partnerName = pName
                 )
             }
         }

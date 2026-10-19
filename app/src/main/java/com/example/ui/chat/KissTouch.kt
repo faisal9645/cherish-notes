@@ -50,6 +50,7 @@ import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -65,30 +66,43 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.layout.LayoutCoordinates
 import com.example.data.model.KissTouch
 import com.example.security.SecurityPreferences
-import com.example.util.HeartbeatHapticHelper
 import kotlinx.coroutines.delay
 import kotlin.random.Random
 
 /*
- * Kisses, felt. A long press of lips (or a thumb) on the chat's background stamps a soft rosy
- * kiss there, which blooms on the partner's screen at the same spot, with a gentle "mwah" buzz.
- * And on the kiss pad (a long press on their photo, or it opens by itself when they're kissing),
- * lips held to the screen show live on the other phone: both held at once is a kiss both phones
- * feel, a soft "mwah" again and again, for as long as it lasts.
+ * Kisses, felt. Lips (or a thumb) held on the chat's background kiss the partner live, at the same
+ * spot on their screen ("Shali is kissing you… kiss back"), and stamp a soft rosy kiss there that
+ * blooms on theirs too. On the kiss pad (a long press on their photo, or it opens by itself when
+ * they start kissing), lips held to the screen show live on the other phone: both held at once is a
+ * long kiss both phones feel, for as long as it lasts. A kiss buzzes like a kiss, never like the
+ * heartbeat's two beats.
  */
 
 // ---- Felt -----------------------------------------------------------------------------------
 
-/** A gentle kiss: two soft touches, "mwah". */
+/** A kiss: lips pressing softly in, a fuller press, then the little "mwah" as they part. */
 internal fun Context.vibrateKiss() {
     if (!SecurityPreferences.getInstance(this).isHapticFeedbackEnabled()) return
-    vibrateWave(longArrayOf(0, 35, 70, 60), intArrayOf(0, 110, 0, 170), inHand = false)
+    vibrateWave(longArrayOf(0, 120, 15, 90, 60, 22), intArrayOf(0, 45, 0, 90, 0, 255), inHand = false)
 }
 
-/** Both kissing at once: a fuller "mwah", repeated while it lasts. */
-private fun Context.vibrateConnectedKiss() {
+/** Both kissing at once: a long, slow kiss that swells and settles before parting, again and again. */
+private fun Context.vibrateLongKiss() {
     if (!SecurityPreferences.getInstance(this).isHapticFeedbackEnabled()) return
-    vibrateWave(longArrayOf(0, 45, 80, 90, 120, 60), intArrayOf(0, 140, 0, 230, 0, 120), inHand = false)
+    vibrateWave(longArrayOf(0, 160, 10, 220, 10, 160, 80, 24), intArrayOf(0, 40, 0, 80, 0, 55, 0, 230), inHand = false)
+}
+
+/** How often a long kiss is felt again while both keep kissing. */
+private const val LONG_KISS_EVERY_MS = 1_400L
+
+/** Keeps the screen on while [on]: a long, still kiss sends no touches, so the phone would sleep. */
+@Composable
+private fun KeepScreenOnWhile(on: Boolean) {
+    val view = LocalView.current
+    DisposableEffect(view, on) {
+        if (on) view.keepScreenOn = true
+        onDispose { if (on) view.keepScreenOn = false }
+    }
 }
 
 // ---- Seen on this phone ---------------------------------------------------------------------
@@ -222,12 +236,11 @@ internal object ChatLongPress {
 }
 
 /**
- * Glass Window Touch Layer:
- * Ethereal real-time presence layer rendered over the chat screen.
- * - Displays a warm, translucent frosted glass halo with breathing ripples under finger.
- * - Mirrors the partner's live touch at (1 - x, y) as if touching opposite sides of a pane of glass.
- * - When both partners touch at once, draws a glowing celestial energy connection, intensifies halos,
- *   and triggers synchronized reciprocal heartbeat vibrations on both phones!
+ * A live kiss through the chat screen:
+ * - A warm, translucent glow with breathing ripples under the lips (or thumb) held on the chat.
+ * - The partner's, live at the same spot they're kissing (where their kiss then blooms too).
+ * - Both at once: a glowing bridge between them, and a long kiss felt on both phones (a kiss's
+ *   own buzz, not the heartbeat's).
  */
 @Composable
 internal fun GlassWindowTouchLayer(
@@ -250,20 +263,15 @@ internal fun GlassWindowTouchLayer(
     }
 
     val connected = myTouch != null && partnerLive
-    val hapticHelper = remember { HeartbeatHapticHelper(context) }
-
-    // Synchronized reciprocal heartbeat vibrations while both are touching the glass
+    // Felt: a kiss as theirs arrives, and while both kiss, a long kiss again and again
+    LaunchedEffect(partnerLive) { if (partnerLive && myTouch == null) context.vibrateKiss() }
     LaunchedEffect(connected) {
-        if (connected) {
-            hapticHelper.startHeartbeat()
-        } else {
-            hapticHelper.stopHeartbeat()
+        while (connected) {
+            context.vibrateLongKiss()
+            delay(LONG_KISS_EVERY_MS)
         }
     }
-
-    DisposableEffect(Unit) {
-        onDispose { hapticHelper.stopHeartbeat() }
-    }
+    KeepScreenOnWhile(myTouch != null || partnerLive)
 
     // Don't render or consume layout if neither is touching
     if (myTouch == null && !partnerLive) return
@@ -289,8 +297,9 @@ internal fun GlassWindowTouchLayer(
         val closeThresholdPx = with(density) { 140.dp.toPx() }
 
         val myPosPx = myTouch?.let { Offset(it.x * wPx, it.y * hPx) }
+        // Where they're kissing, as on their screen (their kiss blooms there when they let go)
         val partnerPosPx = if (partnerLive && partnerTouch != null) {
-            Offset((1f - partnerTouch.x) * wPx, partnerTouch.y * hPx)
+            Offset(partnerTouch.x * wPx, partnerTouch.y * hPx)
         } else null
 
         val areFingersClose = if (myPosPx != null && partnerPosPx != null) {
@@ -373,10 +382,10 @@ internal fun GlassWindowTouchLayer(
                 modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
             ) {
                 val statusText = when {
-                    areFingersClose -> "Fingers meeting through the glass 💕"
-                    connected -> "Touching hands through the glass ✨"
-                    partnerLive -> "$firstName is touching the screen… touch back 💫"
-                    else -> "Holding your hand against the glass…"
+                    areFingersClose -> "Lips together 💋"
+                    connected -> "You're kissing $firstName 💋"
+                    partnerLive -> "$firstName is kissing you… kiss back 💋"
+                    else -> "Kissing $firstName… waiting for a kiss back"
                 }
                 Text(
                     text = statusText,
@@ -560,12 +569,12 @@ internal fun KissPadDialog(
         partnerLive = false
     }
     val connected = myTouch != null && partnerLive
-    // Felt: a soft touch as their lips arrive, and while both kiss, a "mwah" again and again
+    // Felt: a kiss as their lips arrive, and while both kiss, a long kiss again and again
     LaunchedEffect(partnerLive) { if (partnerLive && myTouch == null) context.vibrateKiss() }
     LaunchedEffect(connected) {
         while (connected) {
-            context.vibrateConnectedKiss()
-            delay(1_150)
+            context.vibrateLongKiss()
+            delay(LONG_KISS_EVERY_MS)
         }
     }
     DisposableEffect(Unit) { onDispose { onTouch(null, null) } }
@@ -589,6 +598,8 @@ internal fun KissPadDialog(
             decorFitsSystemWindows = false
         )
     ) {
+        // However long the kiss, the screen stays on
+        KeepScreenOnWhile(true)
         Box(
             modifier = Modifier
                 .fillMaxSize()

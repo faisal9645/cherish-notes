@@ -17,7 +17,6 @@ import android.net.Uri
 import android.util.Log
 import com.example.CherishApplication
 import com.example.audio.VoicePlayerHelper
-import com.example.notifications.BackgroundDelivery
 import com.google.firebase.storage.FirebaseStorage
 import io.agora.rtc2.Constants
 import kotlinx.coroutines.CancellationException
@@ -358,9 +357,11 @@ object CallManager {
                 CallNotifications.showIncoming(app, invite)
             }
         } else if (!CherishApplication.isAppInForeground && !secPrefs.getCallMaskingStyle().equals("discreet", ignoreCase = true)) {
-            // Out of the app or app closed: attempt direct activity launch if allowed or device is locked/sleeping.
-            // Note: CallNotifications.showIncoming(app, invite) was already posted above with fullScreenIntent!
-            if (BackgroundDelivery.canOpenCallScreen(app) || com.example.notifications.NotificationHelper.isDeviceLockedOrSleeping(app)) {
+            // Out of the app or app closed, its ringing notification (posted above) does it by what
+            // the phone is doing: in another app it shows as a banner with Answer and Decline, never
+            // the call screen over it as well; locked or asleep, the call screen comes up. That one
+            // is also opened from here, as some phones hold back a notification's full screen
+            if (com.example.notifications.NotificationHelper.isDeviceLockedOrSleeping(app)) {
                 try {
                     val intent = CallActivity.incomingIntent(app, invite).apply {
                         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)

@@ -86,6 +86,7 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -424,14 +425,14 @@ fun MessageComposer(
         listOf(
             // 0: Couple / Love & Deep Intimacy (man & woman romance, sweet kisses, cuddles & devotion)
             listOf(
-                // Man & woman kisses and couples (8 a row), with 🫂 in the right-hand column
-                "👩🏻‍❤️‍💋‍👨🏻", "👨🏻‍❤️‍💋‍👩🏻", "👩🏻‍❤️‍👨🏻", "👨🏻‍❤️‍👩🏻", "💏🏻", "💑🏻", "👫🏻", "🫂",
-                "👸🏻", "👰🏻‍♀️", "💃🏻", "🧚🏻‍♀️", "🧜🏻‍♀️", "💇🏻‍♀️", "💆🏻‍♀️", "🧖🏻‍♀️",
-                "👩🏻", "👧🏻", "💋", "😘", "😚", "😗", "😙", "🥰",
-                "😍", "👅", "👄", "🫦", "🫠", "🛌", "🛏️", "🤱🏻",
-                "💆🏻‍♂️", "😴", "💤", "🥱", "🥺", "🥹", "🤤", "🥵",
-                "😳", "🫣", "🤭", "🤫", "🫶🏻", "🫰🏻", "🫀", "🤲🏻",
-                "🫳🏻", "🫴🏻", "🤝🏻", "👣",
+                // Her and him (her on the left, never two boys or two girls), 8 a row, with 🫂 in
+                // the third row's sixth place
+                "👩🏻‍❤️‍💋‍👨🏻", "👩🏻‍❤️‍👨🏻", "👫🏻", "👸🏻", "👰🏻‍♀️", "💃🏻", "🧚🏻‍♀️", "🧜🏻‍♀️",
+                "💇🏻‍♀️", "💆🏻‍♀️", "🧖🏻‍♀️", "👩🏻", "👧🏻", "💋", "😘", "😚",
+                "😗", "😙", "🥰", "😍", "👅", "🫂", "👄", "🫦",
+                "🫠", "🛌", "🛏️", "🤱🏻", "💆🏻‍♂️", "😴", "💤", "🥱",
+                "🥺", "🥹", "🤤", "🥵", "😳", "🫣", "🤭", "🤫",
+                "🫶🏻", "🫰🏻", "🫀", "🤲🏻", "🫳🏻", "🫴🏻", "🤝🏻", "👣",
                 // Romantic date nights, bath, intimacy & gifts
                 "🛁", "🧖🏻", "🧖🏻‍♂️", "🕯️", "🍷", "🥂", "🍾", "🍫", "🍓",
                 "🍒", "🧁", "🍯", "🧸", "🏩", "💒", "💍", "💌", "🔐", "🗝️",
@@ -1510,7 +1511,7 @@ fun MessageComposer(
                                             .padding(vertical = 4.dp),
                                         contentAlignment = Alignment.Center
                                     ) {
-                                        Text(text = displayEmoji, fontSize = 24.sp)
+                                        Text(text = displayEmoji, fontSize = 24.sp, maxLines = 1, softWrap = false, modifier = Modifier.fitToCell())
                                     }
                                 }
                             }
@@ -1669,10 +1670,30 @@ private fun EmojiAttachmentPanel(
                                 .padding(vertical = 4.dp),
                             contentAlignment = Alignment.Center
                         ) {
-                            Text(text = displayEmoji, fontSize = 22.sp)
+                            Text(text = displayEmoji, fontSize = 22.sp, maxLines = 1, softWrap = false, modifier = Modifier.fitToCell())
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+/**
+ * Shrinks an emoji the phone draws wider than its cell until it fits: a couple the phone can't
+ * join into one picture comes out as her, a heart and him side by side, and would be cut off.
+ */
+private fun Modifier.fitToCell(): Modifier = layout { measurable, constraints ->
+    val placeable = measurable.measure(constraints.copy(minWidth = 0, maxWidth = Constraints.Infinity))
+    val width = placeable.width.coerceAtMost(constraints.maxWidth)
+    val scale = width.toFloat() / placeable.width.coerceAtLeast(1)
+    layout(width, placeable.height) {
+        if (scale >= 1f) {
+            placeable.place(0, 0)
+        } else {
+            placeable.placeWithLayer((width - placeable.width) / 2, 0) {
+                scaleX = scale
+                scaleY = scale
             }
         }
     }

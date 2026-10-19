@@ -265,15 +265,17 @@ private val glyphPaint = Paint()
 /**
  * Adds or normalizes the fair skin tone on hands, gestures, and people in the emoji sequence.
  * Replaces default yellow or other tones with the soft, natural fair original skin tone (0x1F3FB).
+ * A couple is shown as her and him (see [asHerAndHim]).
  */
 @Synchronized
 internal fun withFairSkinTone(emoji: String): String {
     toneCache.get(emoji)?.let { return it }
+    val source = asHerAndHim(emoji)
     var hasBase = false
     var hasOtherTone = false
     var i = 0
-    while (i < emoji.length) {
-        val cp = emoji.codePointAt(i)
+    while (i < source.length) {
+        val cp = source.codePointAt(i)
         if (isSkinTone(cp) && cp != FAIR_SKIN_TONE) {
             hasOtherTone = true
         }
@@ -281,13 +283,13 @@ internal fun withFairSkinTone(emoji: String): String {
         i += Character.charCount(cp)
     }
     if (!hasBase && !hasOtherTone) {
-        toneCache.put(emoji, emoji)
-        return emoji
+        toneCache.put(emoji, source)
+        return source
     }
-    val toned = StringBuilder(emoji.length + 8)
+    val toned = StringBuilder(source.length + 8)
     i = 0
-    while (i < emoji.length) {
-        val cp = emoji.codePointAt(i)
+    while (i < source.length) {
+        val cp = source.codePointAt(i)
         i += Character.charCount(cp)
         if (isSkinTone(cp)) {
             // Normalize any existing non-fair skin tone to fair skin tone
@@ -296,9 +298,9 @@ internal fun withFairSkinTone(emoji: String): String {
             toned.appendCodePoint(cp)
             if (isModifierBase(cp)) {
                 // Skin tone sequences don't use the emoji variation selector
-                if (i < emoji.length && emoji[i].code == 0xFE0F) i++
+                if (i < source.length && source[i].code == 0xFE0F) i++
                 // If next character is not already a skin tone, insert FAIR_SKIN_TONE
-                if (i >= emoji.length || !isSkinTone(emoji.codePointAt(i))) {
+                if (i >= source.length || !isSkinTone(source.codePointAt(i))) {
                     toned.appendCodePoint(FAIR_SKIN_TONE)
                 }
             }
@@ -307,4 +309,52 @@ internal fun withFairSkinTone(emoji: String): String {
     val result = toned.toString()
     toneCache.put(emoji, result)
     return result
+}
+
+// ---- Couples: her and him ---------------------------------------------------------------------
+
+/**
+ * A couple emoji as the two of us: her on the left and him on the right, like everywhere in the
+ * app. Never two men, two women, or two unnamed people (which phones draw as two boys or girls).
+ */
+private fun asHerAndHim(emoji: String): String {
+    // Its people and joiners, without skin tones or variation selectors
+    val key = StringBuilder(emoji.length)
+    var i = 0
+    while (i < emoji.length) {
+        val cp = emoji.codePointAt(i)
+        i += Character.charCount(cp)
+        if (!isSkinTone(cp) && cp != 0xFE0F) key.appendCodePoint(cp)
+    }
+    return HER_AND_HIM[key.toString()] ?: emoji
+}
+
+/** Every other kind of couple (by its people, without tones), to the same one as her and him. */
+private val HER_AND_HIM: Map<String, String> = run {
+    fun of(vararg codePoints: Int) = String(codePoints, 0, codePoints.size)
+    val man = of(0x1F468)
+    val woman = of(0x1F469)
+    val person = of(0x1F9D1)
+    val heart = of(0x2764)
+    val kissMark = of(0x1F48B)
+    val handshake = of(0x1F91D)
+    val zwj = of(0x200D)
+    val kiss = woman + zwj + heart + of(0xFE0F) + zwj + kissMark + zwj + man
+    val inLove = woman + zwj + heart + of(0xFE0F) + zwj + man
+    // Woman and man holding hands, one picture (the joined form is only for two skin tones)
+    val holdingHands = of(0x1F46B)
+    val couples = HashMap<String, String>()
+    val people = listOf(man, woman, person)
+    for (first in people) for (second in people) {
+        if (first != woman || second != man) {
+            couples[first + zwj + heart + zwj + kissMark + zwj + second] = kiss
+            couples[first + zwj + heart + zwj + second] = inLove
+        }
+        couples[first + zwj + handshake + zwj + second] = holdingHands
+    }
+    couples[of(0x1F48F)] = kiss // 💏
+    couples[of(0x1F491)] = inLove // 💑
+    couples[of(0x1F46C)] = holdingHands // 👬
+    couples[of(0x1F46D)] = holdingHands // 👭
+    couples
 }

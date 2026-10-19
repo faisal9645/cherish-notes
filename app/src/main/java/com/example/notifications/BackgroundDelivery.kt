@@ -56,7 +56,11 @@ object BackgroundDelivery {
         NotificationHelper.requestIgnoreBatteryOptimization(context)
     }
 
-    /** Android lets the call screen come up by itself, over other apps ("Display over other apps"). */
+    /**
+     * Android lets the app bring its call screen up by itself ("Display over other apps"): on a locked
+     * phone, as some phones hold back a call notification's full screen. In another app a call is its
+     * notification's banner instead (see CallManager.onIncomingInvite).
+     */
     fun canOpenCallScreen(context: Context): Boolean =
         Build.VERSION.SDK_INT < Build.VERSION_CODES.M || Settings.canDrawOverlays(context)
 
@@ -259,7 +263,7 @@ object BackgroundDelivery {
         if (maker != Maker.XIAOMI) {
             steps += Step(
                 "overlay", "Display over other apps",
-                "Lets the call screen open by itself while you're using another app.",
+                "Lets the call screen open by itself on a locked phone. In another app, a call rings as a banner.",
                 isOn = canOpenCallScreen(context),
                 required = false,
                 open = { openSettingsPage(it, Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, packageUri(it))) }

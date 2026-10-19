@@ -1,9 +1,9 @@
 {
-  "versionCode": 195,
-  "versionName": "1.8.23",
-  "tagName": "v1.8.23-195",
-  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.8.23-195/app_update_195.apk",
+  "versionCode": 196,
+  "versionName": "1.8.24",
+  "tagName": "v1.8.24-196",
+  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.8.24-196/app_update_196.apk",
   "assetSize": 18824704,
-  "releaseNotes": "Notes v1.8.23 (Build 195):\n• Display Name Only: Username editing removed; your display name shows on the Both of Us card on both phones\n• Real Couple Hug: Original 🫂 blues, him taller and broader, her head on his shoulder, in a smaller hug\n• Couple Emojis: Man & woman pairings kept, boy & girl pairings removed, 🫂 at the top right of the tray\n• Steady Emoji Size: Emojis in the message box stay the size they are sent at\n• Voice Note Progress: See where a voice note is up to while it plays\n• Profile Photo Breathes Even When Offline\n• Softer Grey Timestamps\n• Fixed: Get Every Call When Closed setup button",
-  "releaseDate": "2026-10-19T12:33:15Z"
+  "releaseNotes": "Notes v1.8.24 (Build 196):\n• Partner App Version Status: Know in real time if your partner has installed the latest update in Profile, Device Sessions, and Update Dialog\n• Clean 🫂 Hug Animation: Removed caption text chips for a cleaner and more intimate hug display\n• Instant Version Sync: Seamless OTA version sync on launch and presence beats\n• Edge-to-Edge and Layout Refinements across chat and audio components",
+  "releaseDate": "2026-10-19T13:19:00Z"
 }

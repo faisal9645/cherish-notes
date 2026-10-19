@@ -2358,6 +2358,98 @@ fun ProfileScreen(
                 modifier = Modifier.fillMaxWidth()
             )
 
+            val partnerUser = uiState.partnerUser
+            if (partnerUser != null && partnerUser.id.isNotBlank()) {
+                val partnerName = partnerUser.displayName.ifBlank { "Partner" }
+                val partnerBuild = partnerUser.appVersionCode
+                val partnerVerName = partnerUser.appVersionName
+                val currentBuild = com.example.BuildConfig.VERSION_CODE
+                val latestBuild = maxOf(currentBuild, updateState.latestBuild)
+                val isPartnerLatest = partnerBuild != null && partnerBuild >= latestBuild
+
+                Spacer(modifier = Modifier.height(10.dp))
+                Surface(
+                    shape = RoundedCornerShape(14.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                    border = BorderStroke(
+                        1.dp,
+                        if (partnerBuild == null) MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
+                        else if (isPartnerLatest) Emerald500.copy(alpha = 0.35f)
+                        else Amber500.copy(alpha = 0.4f)
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                            Box(
+                                modifier = Modifier
+                                    .size(32.dp)
+                                    .clip(CircleShape)
+                                    .background(
+                                        if (partnerBuild == null) MaterialTheme.colorScheme.surfaceVariant
+                                        else if (isPartnerLatest) Emerald500.copy(alpha = 0.15f)
+                                        else Amber500.copy(alpha = 0.15f)
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = if (isPartnerLatest) Icons.Rounded.CheckCircle else Icons.Rounded.SystemUpdate,
+                                    contentDescription = null,
+                                    tint = if (partnerBuild == null) MaterialTheme.colorScheme.onSurfaceVariant else if (isPartnerLatest) Emerald500 else Amber500,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column {
+                                Text(
+                                    text = "$partnerName's App",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = when {
+                                        partnerBuild == null -> "Waiting for $partnerName to open app"
+                                        isPartnerLatest -> "v${partnerVerName ?: com.example.BuildConfig.VERSION_NAME} (build $partnerBuild)"
+                                        else -> "v${partnerVerName ?: "older"} (build $partnerBuild) • Update available"
+                                    },
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = when {
+                                partnerBuild == null -> MaterialTheme.colorScheme.surfaceVariant
+                                isPartnerLatest -> Emerald500.copy(alpha = 0.15f)
+                                else -> Amber500.copy(alpha = 0.15f)
+                            }
+                        ) {
+                            Text(
+                                text = when {
+                                    partnerBuild == null -> "Waiting"
+                                    isPartnerLatest -> "Latest ✨"
+                                    else -> "Needs Update ⚠️"
+                                },
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = when {
+                                    partnerBuild == null -> MaterialTheme.colorScheme.onSurfaceVariant
+                                    isPartnerLatest -> Emerald500
+                                    else -> Amber500
+                                },
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            )
+                        }
+                    }
+                }
+            }
+
             CherishButton(
                 onClick = {
                     viewModel.logout()

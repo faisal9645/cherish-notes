@@ -295,13 +295,15 @@ fun ChatScreen(
         }
     }
 
-    // Automatically open Heartbeat Touch dialog when partner starts heartbeat touching
+    // Automatically open Heartbeat Touch dialog when partner starts heartbeat touching: never over
+    // Notes, and never over a kiss (each keeps its own screen and its own feel)
     LaunchedEffect(Unit) {
         viewModel.partnerPresence
             .map { it.isHeartTouching }
             .distinctUntilChanged()
             .collect { touching ->
-                if (touching && !showHeartbeatTouch) {
+                val behindNotes = com.example.CherishApplication.instance.securityPreferences.isDisguiseActive.value
+                if (touching && !showHeartbeatTouch && !showKissPad && !behindNotes) {
                     showHeartbeatTouch = true
                 }
             }
@@ -608,7 +610,7 @@ fun ChatScreen(
             val isHug = incoming.bigEmojis()?.let { isHugScene(it) } == true
             if (isHug) {
                 val lvl = incoming.hugSqueeze() ?: PLAIN_HUG_LEVEL
-                val peaks = hugSqueezePeaks(lvl).map { (it * HUG_SCENE_MS).toLong() }
+                val peaks = hugSqueezePeaks(lvl).map { (it * hugSceneMs(lvl)).toLong() }
                 context.vibrateHugSqueezes(lvl, peaks)
             } else {
                 view.chatHaptic(ChatHaptic.Receive)
@@ -890,8 +892,15 @@ fun ChatScreen(
         kissBlooms += KissBloom(kiss.id, kiss.x, kiss.y, fromMe = false)
         context.vibrateKiss()
     }
-    // Partner's live touch on the glass
+    // Partner's live kiss (lips held on the chat or on their kiss pad)
     val partnerKissTouch by viewModel.partnerKissTouch.collectAsState()
+    // They started kissing: the kiss pad opens here too, to kiss them back face to face. Only with
+    // the chat in front of me (never over Notes, Private mode or the curtain), never over a heartbeat
+    // touch, and once per kiss (closed, it stays closed until their next one)
+    val partnerStartedKissing = partnerKissTouch != null
+    LaunchedEffect(partnerStartedKissing, isChatInView) {
+        if (partnerStartedKissing && isChatInView && kissesAllowed && !showHeartbeatTouch) showKissPad = true
+    }
     var currentGlassTouch by remember { mutableStateOf<Offset?>(null) }
     // My lips (or thumb) held on the chat's background: a kiss there, blooming on theirs too
     val onKissHold = remember {
@@ -963,6 +972,7 @@ fun ChatScreen(
         showAttachmentSheet = false
         showChatMenu = false
         showHeartbeatTouch = false
+        showKissPad = false
         showMoodPicker = false
         showGoodnightCard = false
         showGoodnightStars = false
@@ -2669,11 +2679,11 @@ fun ChatScreen(
         modifier = Modifier.fillMaxSize()
     )
 
-    // Glass Window Touch (Touch on the screen, feel them on yours in real-time)
+    // A live kiss through the screen: mine, and theirs where they're kissing (only where kisses show)
     GlassWindowTouchLayer(
         partnerName = partnerName,
         myTouch = currentGlassTouch,
-        partnerTouch = partnerKissTouch,
+        partnerTouch = if (kissesAllowed && isChatInView) partnerKissTouch else null,
         modifier = Modifier.fillMaxSize()
     )
 

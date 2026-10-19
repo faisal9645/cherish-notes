@@ -773,9 +773,11 @@ fun MessageBubble(
 
                                 // When there is no text caption, overlay the time & read status pill on the photo
                                 if (isGenericPhotoText) {
+                                    val chip = timeChipColors()
                                     Surface(
                                         shape = RoundedCornerShape(12.dp),
-                                        color = Color.Black.copy(alpha = 0.58f),
+                                        color = chip.background,
+                                        border = chip.border,
                                         modifier = Modifier
                                             .align(Alignment.BottomEnd)
                                             .padding(6.dp)
@@ -788,7 +790,7 @@ fun MessageBubble(
                                                 Icon(
                                                     imageVector = Icons.Rounded.PushPin,
                                                     contentDescription = "Pinned",
-                                                    tint = Color.White.copy(alpha = 0.9f),
+                                                    tint = chip.content.copy(alpha = 0.9f),
                                                     modifier = Modifier.size(11.dp).padding(end = 4.dp)
                                                 )
                                             }
@@ -803,17 +805,17 @@ fun MessageBubble(
                                             Text(
                                                 text = formatMessageTime(message.timestamp),
                                                 fontSize = 10.sp,
-                                                color = Color.White.copy(alpha = 0.95f),
+                                                color = chip.content.copy(alpha = 0.95f),
                                                 fontWeight = FontWeight.Medium
                                             )
                                             if (isFromMe) {
                                                 Spacer(modifier = Modifier.width(3.dp))
                                                 MessageStatusTicks(message.getTypedStatus()) { status ->
                                                     when (status) {
-                                                        MessageStatus.SENDING -> Icon(Icons.Rounded.AccessTime, "Sending", tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(10.dp))
-                                                        MessageStatus.SENT -> Icon(Icons.Rounded.Check, "Sent", tint = Color.White.copy(alpha = 0.8f), modifier = Modifier.size(11.dp))
-                                                        MessageStatus.DELIVERED -> Icon(Icons.Rounded.DoneAll, "Delivered", tint = Color.White.copy(alpha = 0.9f), modifier = Modifier.size(12.dp))
-                                                        MessageStatus.READ -> Icon(Icons.Rounded.DoneAll, "Read", tint = Color(0xFF60A5FA), modifier = Modifier.size(12.dp))
+                                                        MessageStatus.SENDING -> Icon(Icons.Rounded.AccessTime, "Sending", tint = chip.content.copy(alpha = 0.6f), modifier = Modifier.size(10.dp))
+                                                        MessageStatus.SENT -> Icon(Icons.Rounded.Check, "Sent", tint = chip.content.copy(alpha = 0.8f), modifier = Modifier.size(11.dp))
+                                                        MessageStatus.DELIVERED -> Icon(Icons.Rounded.DoneAll, "Delivered", tint = chip.content.copy(alpha = 0.9f), modifier = Modifier.size(12.dp))
+                                                        MessageStatus.READ -> Icon(Icons.Rounded.DoneAll, "Read", tint = chip.read, modifier = Modifier.size(12.dp))
                                                     }
                                                 }
                                             }
@@ -1072,8 +1074,8 @@ fun MessageBubble(
                                             if (partnerHearing != null && isFromMe && !isPlayingAudio) {
                                                 // My partner is hearing it right now
                                                 PartnerHearingLabel(isVideo = false, playing = partnerHearing, color = durationColor)
-                                            } else if (isPlayingAudio && message.durationSeconds > 0) {
-                                                // Where it's up to while it plays, counting up: "0:07 / 0:15"
+                                            } else if ((isPlayingAudio || audioProgress() > 0f) && message.durationSeconds > 0) {
+                                                // Where it's up to while it plays (and paused part way), counting up: "0:07 / 0:15"
                                                 val total = message.durationSeconds
                                                 val elapsed = (audioProgress() * total).toInt().coerceIn(0, total)
                                                 Text(
@@ -1670,15 +1672,37 @@ fun MessageBubble(
 }
 }
 
-/** How dark the time's pill is (and the hug's caption beside it at night): a soft grey. */
+/** How dark the time's pill is at night: a soft grey. */
 internal const val TIME_CHIP_ALPHA = 0.55f
 
-/** The time (with pin, star and ticks) in a small grey pill: under a round video note or a big emoji. */
+/** A time pill's colours, and the chips beside it: [read] is the read ticks where they're coloured. */
+@Immutable
+internal class TimeChipColors(val background: Color, val content: Color, val border: BorderStroke?, val read: Color)
+
+/** White with a soft border by day (never grey), a soft dark grey at night. */
+@Composable
+internal fun timeChipColors(): TimeChipColors {
+    val scheme = MaterialTheme.colorScheme
+    return if (scheme.surface.luminance() < 0.5f) {
+        TimeChipColors(Color.Black.copy(alpha = TIME_CHIP_ALPHA), Color.White, border = null, read = Color(0xFF60A5FA))
+    } else {
+        TimeChipColors(
+            background = scheme.surface.copy(alpha = 0.90f),
+            content = scheme.onSurface,
+            border = BorderStroke(0.7.dp, scheme.outlineVariant.copy(alpha = 0.6f)),
+            read = Blue600
+        )
+    }
+}
+
+/** The time (with pin, star and ticks) in a small pill: under a round video note or a big emoji. */
 @Composable
 private fun FloatingTimeChip(message: Message, isFromMe: Boolean, modifier: Modifier = Modifier) {
+    val chip = timeChipColors()
     Surface(
         shape = RoundedCornerShape(12.dp),
-        color = Color.Black.copy(alpha = TIME_CHIP_ALPHA),
+        color = chip.background,
+        border = chip.border,
         modifier = modifier
     ) {
         Row(
@@ -1689,7 +1713,7 @@ private fun FloatingTimeChip(message: Message, isFromMe: Boolean, modifier: Modi
                 Icon(
                     imageVector = Icons.Rounded.PushPin,
                     contentDescription = "Pinned",
-                    tint = Color.White.copy(alpha = 0.85f),
+                    tint = chip.content.copy(alpha = 0.85f),
                     modifier = Modifier.size(10.dp).padding(end = 2.dp)
                 )
             }
@@ -1704,17 +1728,17 @@ private fun FloatingTimeChip(message: Message, isFromMe: Boolean, modifier: Modi
             Text(
                 text = formatMessageTime(message.timestamp),
                 fontSize = 10.sp,
-                color = Color.White,
+                color = chip.content,
                 fontWeight = FontWeight.Medium
             )
             if (isFromMe) {
                 Spacer(modifier = Modifier.width(3.dp))
                 MessageStatusTicks(message.getTypedStatus()) { status ->
                     when (status) {
-                        MessageStatus.SENDING -> Icon(Icons.Rounded.AccessTime, "Sending", tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(10.dp))
-                        MessageStatus.SENT -> Icon(Icons.Rounded.Check, "Sent", tint = Color.White.copy(alpha = 0.8f), modifier = Modifier.size(10.dp))
-                        MessageStatus.DELIVERED -> Icon(Icons.Rounded.DoneAll, "Delivered", tint = Color.White.copy(alpha = 0.9f), modifier = Modifier.size(11.dp))
-                        MessageStatus.READ -> Icon(Icons.Rounded.DoneAll, "Read", tint = Color.White, modifier = Modifier.size(11.dp))
+                        MessageStatus.SENDING -> Icon(Icons.Rounded.AccessTime, "Sending", tint = chip.content.copy(alpha = 0.6f), modifier = Modifier.size(10.dp))
+                        MessageStatus.SENT -> Icon(Icons.Rounded.Check, "Sent", tint = chip.content.copy(alpha = 0.8f), modifier = Modifier.size(10.dp))
+                        MessageStatus.DELIVERED -> Icon(Icons.Rounded.DoneAll, "Delivered", tint = chip.content.copy(alpha = 0.9f), modifier = Modifier.size(11.dp))
+                        MessageStatus.READ -> Icon(Icons.Rounded.DoneAll, "Read", tint = chip.content, modifier = Modifier.size(11.dp))
                     }
                 }
             }

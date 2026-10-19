@@ -67,14 +67,28 @@ internal object HugPlayedTracker {
 /** A message of nothing but 🫂 is shown as the hug. */
 internal fun isHugScene(emojis: List<String>): Boolean = emojis.size == 1 && baseOf(emojis[0]) == PEOPLE_HUGGING
 
+/** A light hug's length; tighter ones hold on longer (see [hugSceneMs]). */
 internal const val HUG_SCENE_MS = 2400
+
+/**
+ * How long a hug plays, by how tight it was let go ([level], null for a plain 🫂): a deeper hug
+ * holds on longer, so its two or three squeezes come unhurried, each felt as it's seen.
+ */
+internal fun hugSceneMs(level: Float?): Int {
+    val l = level ?: PLAIN_HUG_LEVEL
+    return when {
+        l < 0.35f -> HUG_SCENE_MS
+        l < 0.67f -> HUG_SCENE_MS + 500
+        else -> HUG_SCENE_MS + 1_000
+    }
+}
 
 /** Where a hug plays again from (a tap, or coming into view): already in each other's arms. */
 internal const val HUG_EMBRACED = 0.5f
 
 /** How long the hearts wait, played from [from], to float up with the first squeeze. */
-internal fun hugBurstDelayMs(from: Float): Long =
-    ((FIRST_SQUEEZE - from) * HUG_SCENE_MS - HUG_HEARTS_LEAD_MS).toLong().coerceAtLeast(0L)
+internal fun hugBurstDelayMs(from: Float, level: Float?): Long =
+    ((FIRST_SQUEEZE - from) * hugSceneMs(level) - HUG_HEARTS_LEAD_MS).toLong().coerceAtLeast(0L)
 
 @Composable
 internal fun HugScene(
@@ -100,45 +114,10 @@ internal fun HugScene(
     )
 }
 
-/** "You hugged Shali" or "Shali hugged you", in a chip like the time's, once they're hugging. Soft in day mode. */
+/** Caption previously showing "You hugged Shali", removed per user request. */
 @Composable
 internal fun HugCaption(progress: () -> Float, isFromMe: Boolean, modifier: Modifier = Modifier, level: Float? = null) {
-    val couple = LocalHugCouple.current
-    val text = remember(couple, isFromMe, level) {
-        val name = couple.partnerName.trim().substringBefore(' ')
-        // How tight, when it was held: "You hugged Shali tight"
-        val how = level?.let { " " + HugStrength.of(it).adverb }.orEmpty()
-        when {
-            isFromMe -> "You hugged " + name.ifBlank { if (couple.iAmHim) "her" else "him" } + how
-            name.isNotBlank() -> "$name hugged you$how"
-            couple.iAmHim -> "She hugged you$how"
-            else -> "He hugged you$how"
-        }
-    }
-    val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
-    val chipBg = if (isDark) {
-        Color.Black.copy(alpha = TIME_CHIP_ALPHA)
-    } else {
-        MaterialTheme.colorScheme.surface.copy(alpha = 0.90f)
-    }
-    val chipTextColor = if (isDark) Color.White else MaterialTheme.colorScheme.onSurface
-    val chipBorder = if (isDark) null else BorderStroke(0.7.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
-
-    Surface(
-        shape = RoundedCornerShape(12.dp),
-        color = chipBg,
-        border = chipBorder,
-        modifier = modifier.graphicsLayer { alpha = ease((progress() - 0.36f) / 0.12f) }
-    ) {
-        Text(
-            text = text,
-            fontSize = 10.sp,
-            color = chipTextColor,
-            fontWeight = FontWeight.Medium,
-            maxLines = 1,
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-        )
-    }
+    // No-op: hug caption text removed
 }
 
 private enum class HugFigure(

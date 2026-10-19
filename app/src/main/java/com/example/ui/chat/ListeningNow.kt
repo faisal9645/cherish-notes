@@ -106,11 +106,12 @@ internal fun PartnerHearingLabel(isVideo: Boolean, playing: Boolean, color: Colo
 /** The same, in a chip like the time's, under a video note. */
 @Composable
 internal fun PartnerHearingChip(playing: Boolean, modifier: Modifier = Modifier) {
-    Surface(shape = RoundedCornerShape(12.dp), color = Color.Black.copy(alpha = TIME_CHIP_ALPHA), modifier = modifier) {
+    val chip = timeChipColors()
+    Surface(shape = RoundedCornerShape(12.dp), color = chip.background, border = chip.border, modifier = modifier) {
         PartnerHearingLabel(
             isVideo = true,
             playing = playing,
-            color = Color.White,
+            color = chip.content,
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
         )
     }
