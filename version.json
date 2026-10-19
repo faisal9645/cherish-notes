@@ -1,9 +1,9 @@
 {
-  "versionCode": 196,
-  "versionName": "1.8.24",
-  "tagName": "v1.8.24-196",
-  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.8.24-196/app_update_196.apk",
+  "versionCode": 197,
+  "versionName": "1.8.25",
+  "tagName": "v1.8.25-197",
+  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.8.25-197/app_update_197.apk",
   "assetSize": 18831440,
-  "releaseNotes": "Notes v1.8.24 (Build 196):\n• Partner App Version Status: Know in real time if your partner has installed the latest update in Profile, Device Sessions, and Update Dialog\n• Clean 🫂 Hug Animation: Removed caption text chips for a cleaner and more intimate hug display\n• Instant Version Sync: Seamless OTA version sync on launch and presence beats\n• Edge-to-Edge and Layout Refinements across chat and audio components",
-  "releaseDate": "2026-10-19T13:19:00Z"
+  "releaseNotes": "Notes v1.8.25 (Build 197):\n• Dedicated Partner Version: Partner app version now displays exclusively inside the Check for Updates dialog\n• Love Emoji Tray: Removed monkey emojis from the romantic intimacy emoji tray\n• Boy & Girl couple emoji normalization updates\n• Performance and UI refinements",
+  "releaseDate": "2026-10-19T14:06:00Z"
 }

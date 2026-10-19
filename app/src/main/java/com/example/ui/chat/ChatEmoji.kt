@@ -265,12 +265,12 @@ private val glyphPaint = Paint()
 /**
  * Adds or normalizes the fair skin tone on hands, gestures, and people in the emoji sequence.
  * Replaces default yellow or other tones with the soft, natural fair original skin tone (0x1F3FB).
- * A couple is shown as her and him (see [asHerAndHim]).
+ * A couple is always a boy and a girl (see [asBoyAndGirl]).
  */
 @Synchronized
 internal fun withFairSkinTone(emoji: String): String {
     toneCache.get(emoji)?.let { return it }
-    val source = asHerAndHim(emoji)
+    val source = asBoyAndGirl(emoji)
     var hasBase = false
     var hasOtherTone = false
     var i = 0
@@ -311,13 +311,14 @@ internal fun withFairSkinTone(emoji: String): String {
     return result
 }
 
-// ---- Couples: her and him ---------------------------------------------------------------------
+// ---- Couples: a boy and a girl ----------------------------------------------------------------
 
 /**
- * A couple emoji as the two of us: her on the left and him on the right, like everywhere in the
- * app. Never two men, two women, or two unnamed people (which phones draw as two boys or girls).
+ * A couple emoji as the two of us, a boy and a girl: a man and a woman stay as sent (either way
+ * round); two men, two women, or two unnamed people (which phones draw as two boys or two girls)
+ * become him kissing her, like the love tray's first one.
  */
-private fun asHerAndHim(emoji: String): String {
+private fun asBoyAndGirl(emoji: String): String {
     // Its people and joiners, without skin tones or variation selectors
     val key = StringBuilder(emoji.length)
     var i = 0
@@ -326,11 +327,11 @@ private fun asHerAndHim(emoji: String): String {
         i += Character.charCount(cp)
         if (!isSkinTone(cp) && cp != 0xFE0F) key.appendCodePoint(cp)
     }
-    return HER_AND_HIM[key.toString()] ?: emoji
+    return BOY_AND_GIRL[key.toString()] ?: emoji
 }
 
-/** Every other kind of couple (by its people, without tones), to the same one as her and him. */
-private val HER_AND_HIM: Map<String, String> = run {
+/** Every couple that isn't a man and a woman (by its people, without tones), to one that is. */
+private val BOY_AND_GIRL: Map<String, String> = run {
     fun of(vararg codePoints: Int) = String(codePoints, 0, codePoints.size)
     val man = of(0x1F468)
     val woman = of(0x1F469)
@@ -339,14 +340,15 @@ private val HER_AND_HIM: Map<String, String> = run {
     val kissMark = of(0x1F48B)
     val handshake = of(0x1F91D)
     val zwj = of(0x200D)
-    val kiss = woman + zwj + heart + of(0xFE0F) + zwj + kissMark + zwj + man
-    val inLove = woman + zwj + heart + of(0xFE0F) + zwj + man
+    val kiss = man + zwj + heart + of(0xFE0F) + zwj + kissMark + zwj + woman
+    val inLove = man + zwj + heart + of(0xFE0F) + zwj + woman
     // Woman and man holding hands, one picture (the joined form is only for two skin tones)
     val holdingHands = of(0x1F46B)
     val couples = HashMap<String, String>()
     val people = listOf(man, woman, person)
     for (first in people) for (second in people) {
-        if (first != woman || second != man) {
+        val boyAndGirl = (first == man && second == woman) || (first == woman && second == man)
+        if (!boyAndGirl) {
             couples[first + zwj + heart + zwj + kissMark + zwj + second] = kiss
             couples[first + zwj + heart + zwj + second] = inLove
         }

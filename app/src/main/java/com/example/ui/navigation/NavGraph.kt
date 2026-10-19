@@ -821,6 +821,7 @@ fun CherishNavGraph(
                     if (partnerUser != null && partnerUser.id.isNotBlank()) {
                         val pName = partnerUser.displayName.ifBlank { "Partner" }
                         val pCode = partnerUser.appVersionCode
+                        val pVerName = partnerUser.appVersionName
                         val targetBuild = if (updateState.latestBuild > 0) updateState.latestBuild else com.example.BuildConfig.VERSION_CODE
                         val isPartnerLatest = pCode != null && pCode >= targetBuild
 
@@ -863,9 +864,9 @@ fun CherishNavGraph(
                                     )
                                     Text(
                                         text = when {
-                                            pCode == null -> "Version not synced yet"
-                                            isPartnerLatest -> "Installed latest build ($pCode) ✨"
-                                            else -> "On build $pCode • Needs update to $targetBuild"
+                                            pCode == null -> "Waiting for $pName to open app"
+                                            isPartnerLatest -> "v${pVerName ?: com.example.BuildConfig.VERSION_NAME} (build $pCode) ✨"
+                                            else -> "v${pVerName ?: "older"} (build $pCode) • Needs update to $targetBuild"
                                         },
                                         fontSize = 11.sp,
                                         color = if (pCode != null && !isPartnerLatest) Color(0xFFFFA000) else MaterialTheme.colorScheme.onSurfaceVariant
