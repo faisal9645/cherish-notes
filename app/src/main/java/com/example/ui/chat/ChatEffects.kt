@@ -146,11 +146,20 @@ fun Context.vibrateWave(timings: LongArray, amplitudes: IntArray, inHand: Boolea
             } else {
                 VibrationEffect.createWaveform(timings, -1)
             }
-            if (Build.VERSION.SDK_INT >= 33) {
-                val usage = if (inHand) VibrationAttributes.USAGE_TOUCH else VibrationAttributes.USAGE_MEDIA
-                vibrator.vibrate(effect, VibrationAttributes.createForUsage(usage))
-            } else {
-                vibrator.vibrate(effect)
+            try {
+                if (Build.VERSION.SDK_INT >= 33) {
+                    val usage = if (inHand) VibrationAttributes.USAGE_TOUCH else VibrationAttributes.USAGE_COMMUNICATION_REQUEST
+                    vibrator.vibrate(effect, VibrationAttributes.createForUsage(usage))
+                } else {
+                    vibrator.vibrate(effect)
+                }
+            } catch (_: Exception) {
+                try {
+                    vibrator.vibrate(effect)
+                } catch (_: Exception) {
+                    @Suppress("DEPRECATION")
+                    vibrator.vibrate(timings, -1)
+                }
             }
         } else {
             @Suppress("DEPRECATION")

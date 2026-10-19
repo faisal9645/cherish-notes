@@ -136,7 +136,9 @@ internal fun HugHoldButton(onSend: (level: Float) -> Unit, modifier: Modifier = 
                     // Slid off the button: no hug
                     if (up != null) {
                         up.consume()
-                        onSend(pressure.value.coerceAtLeast(HUG_TAP_LEVEL))
+                        val lvl = pressure.value.coerceAtLeast(HUG_TAP_LEVEL)
+                        context.vibrateHugRelease(lvl)
+                        onSend(lvl)
                     }
                     scope.launch { pressure.animateTo(0f, spring(dampingRatio = 0.5f, stiffness = 400f)) }
                 }
@@ -223,3 +225,59 @@ internal fun android.content.Context.vibrateHugSqueezes(level: Float, peaksMs: L
     }
     vibrateWave(timings.toLongArray(), amplitudes.toIntArray(), inHand = false)
 }
+
+/**
+ * Tactile release haptic when letting go of the hug button.
+ * Specifically tuned for Vivo and all Android devices with multi-layer fallback.
+ */
+internal fun android.content.Context.vibrateHugRelease(level: Float) {
+    if (!com.example.security.SecurityPreferences.getInstance(this).isHapticFeedbackEnabled()) return
+    val lvl = level.coerceIn(0f, 1f)
+    val ms = (35 + 55 * lvl).toLong()
+    val strength = (130 + 125 * lvl).toInt().coerceIn(1, 255)
+    try {
+        val vibrator = if (android.os.Build.VERSION.SDK_INT >= 31) {
+            getSystemService(android.os.VibratorManager::class.java)?.defaultVibrator
+        } else {
+            @Suppress("DEPRECATION")
+            getSystemService(android.content.Context.VIBRATOR_SERVICE) as? android.os.Vibrator
+        } ?: return
+        if (!vibrator.hasVibrator()) return
+
+        if (android.os.Build.VERSION.SDK_INT >= 26) {
+            val timings = longArrayOf(0, ms / 2, 15, ms)
+            val amplitudes = intArrayOf(0, (strength * 0.6f).toInt().coerceIn(1, 255), 0, strength)
+            val effect = if (vibrator.hasAmplitudeControl()) {
+                android.os.VibrationEffect.createWaveform(timings, amplitudes, -1)
+            } else {
+                android.os.VibrationEffect.createWaveform(timings, -1)
+            }
+            try {
+                if (android.os.Build.VERSION.SDK_INT >= 33) {
+                    val attrs = android.os.VibrationAttributes.Builder()
+                        .setUsage(android.os.VibrationAttributes.USAGE_TOUCH)
+                        .build()
+                    vibrator.vibrate(effect, attrs)
+                } else {
+                    vibrator.vibrate(effect)
+                }
+            } catch (_: Exception) {
+                try {
+                    vibrator.vibrate(effect)
+                } catch (_: Exception) {
+                    @Suppress("DEPRECATION")
+                    vibrator.vibrate(timings, -1)
+                }
+            }
+        } else {
+            @Suppress("DEPRECATION")
+            vibrator.vibrate(longArrayOf(0, ms / 2, 15, ms), -1)
+        }
+    } catch (_: Exception) {
+        try {
+            @Suppress("DEPRECATION")
+            (getSystemService(android.content.Context.VIBRATOR_SERVICE) as? android.os.Vibrator)?.vibrate(50)
+        } catch (_: Exception) {}
+    }
+}
+

@@ -1103,9 +1103,16 @@ class AuthRepository(private val context: Context) {
         saveLocalUserSession(updatedUser)
 
         return try {
+            val isDisguised = securityPrefs.isDisguiseActive.value
+            val shouldBeOnline = isAppInForeground && !isDisguised
             val updates = mutableMapOf<String, Any?>()
             updates["displayName"] = displayName
             updates["statusMessage"] = statusMessage
+            if (shouldBeOnline) {
+                updates["isOnline"] = true
+                updates["online"] = true
+                updates["lastSeen"] = System.currentTimeMillis()
+            }
             if (removePhoto) {
                 updates["photoUrl"] = com.google.firebase.firestore.FieldValue.delete()
             } else if (photoUrl != null) {
@@ -1140,6 +1147,9 @@ class AuthRepository(private val context: Context) {
                     )
                 } catch (_: Exception) {}
             }
+
+            lastFirestoreOnlineWritten = null
+            updatePresence()
 
             Result.success(Unit)
         } catch (e: Exception) {
@@ -1425,9 +1435,16 @@ class AuthRepository(private val context: Context) {
         if (fs != null) {
             try {
                 // 1. Update user document
+                val isDisguised = securityPrefs.isDisguiseActive.value
+                val shouldBeOnline = isAppInForeground && !isDisguised
                 val userUpdates = mutableMapOf<String, Any>(
                     "displayName" to cleanUser
                 )
+                if (shouldBeOnline) {
+                    userUpdates["isOnline"] = true
+                    userUpdates["online"] = true
+                    userUpdates["lastSeen"] = System.currentTimeMillis()
+                }
                 if (partnerEmail != null) {
                     userUpdates["partnerEmail"] = partnerEmail
                 }
@@ -1483,6 +1500,9 @@ class AuthRepository(private val context: Context) {
                 Log.w("AuthRepository", "Failed syncing updated couple credentials: ${e.message}")
             }
         }
+
+        lastFirestoreOnlineWritten = null
+        updatePresence()
 
         return Result.success(updatedUser)
     }
@@ -1995,11 +2015,8 @@ class AuthRepository(private val context: Context) {
                         partnerPresenceReceivedAt = now
                     } else if (step == 0L && partnerPresenceReceivedAt > 0L && (now - partnerPresenceReceivedAt) <= User.ONLINE_WINDOW_MS) {
                         partnerPresenceReceivedAt = now
-                    } else if (step != 0L && clockDiff <= 300_000L) {
-                        // A first copy, or a new lastSeen after a while (just came online), within 5
-                        // minutes of this phone's clock (covers new logins & cross-country clock drift).
-                        // Not some other field changing on a profile whose beats stopped: that's no
-                        // sign of life
+                    } else if (clockDiff <= 300_000L) {
+                        // A first copy, a new lastSeen, or a live profile update within 5 minutes of this phone's clock
                         partnerPresenceReceivedAt = now
                     } else {
                         partnerPresenceReceivedAt = 0L

@@ -608,7 +608,8 @@ fun ChatScreen(
             val isHug = incoming.bigEmojis()?.let { isHugScene(it) } == true
             if (isHug) {
                 val lvl = incoming.hugSqueeze() ?: PLAIN_HUG_LEVEL
-                context.vibrateHugSqueezes(lvl, hugSqueezePeaks(lvl))
+                val peaks = hugSqueezePeaks(lvl).map { (it * HUG_SCENE_MS).toLong() }
+                context.vibrateHugSqueezes(lvl, peaks)
             } else {
                 view.chatHaptic(ChatHaptic.Receive)
             }
@@ -3229,6 +3230,9 @@ fun ChatScreen(
                 breathing = partnerPresence.isOnline || partnerPresence.isTyping || partnerPresence.isRecordingAudio,
                 isProfilePhoto = true,
                 partnerName = partnerName,
+                onOpenKissScreen = {
+                    showKissPad = true
+                },
                 onDismiss = {
                     val app = context.applicationContext as? com.example.CherishApplication
                     app?.securityPreferences?.isMediaViewerActive = false
@@ -3310,6 +3314,36 @@ fun ChatScreen(
                                 Spacer(Modifier.width(8.dp))
                                 Text(
                                     text = "Kiss ${partnerName.trim().substringBefore(' ')}",
+                                    color = Color.White,
+                                    fontSize = 13.5.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+
+                        // Romantic Kiss Screen button inside profile view
+                        Surface(
+                            shape = RoundedCornerShape(20.dp),
+                            color = Color(0xFF6B1832).copy(alpha = 0.88f),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE0475F).copy(alpha = 0.6f)),
+                            modifier = Modifier
+                                .padding(top = 8.dp)
+                                .pressScaleTarget()
+                                .springClickable {
+                                    val app = context.applicationContext as? com.example.CherishApplication
+                                    app?.securityPreferences?.isMediaViewerActive = false
+                                    showFullProfilePicViewer = false
+                                    showKissPad = true
+                                }
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                            ) {
+                                Text("👄", fontSize = 16.sp)
+                                Spacer(Modifier.width(8.dp))
+                                Text(
+                                    text = "Kiss Screen 💋",
                                     color = Color.White,
                                     fontSize = 13.5.sp,
                                     fontWeight = FontWeight.Bold

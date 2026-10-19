@@ -76,6 +76,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import com.example.ui.theme.RoseGoldPrimary
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -122,11 +123,13 @@ fun FullScreenMediaViewer(
     breathing: Boolean = false,
     isProfilePhoto: Boolean = false,
     partnerName: String? = null,
+    onOpenKissScreen: (() -> Unit)? = null,
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
+    var showKissPadInViewer by remember { mutableStateOf(false) }
     var profileKisses by remember { mutableStateOf<List<KissBloom>>(emptyList()) }
     var kissFeedbackText by remember { mutableStateOf<String?>(null) }
 
@@ -1291,29 +1294,66 @@ fun FullScreenMediaViewer(
                             }
                         }
 
-                        // Romantic Kiss Profile button
-                        Surface(
-                            shape = RoundedCornerShape(24.dp),
-                            color = Color(0xFFE0475F).copy(alpha = 0.88f),
-                            border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.45f)),
-                            modifier = Modifier
-                                .padding(bottom = 12.dp)
-                                .pressScaleTarget()
-                                .springClickable { kissProfile() }
-                                .testTag("kiss_profile_button")
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(bottom = 12.dp)
                         ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.padding(horizontal = 18.dp, vertical = 9.dp)
+                            // Romantic Kiss Profile button
+                            Surface(
+                                shape = RoundedCornerShape(24.dp),
+                                color = Color(0xFFE0475F).copy(alpha = 0.88f),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.45f)),
+                                modifier = Modifier
+                                    .pressScaleTarget()
+                                    .springClickable { kissProfile() }
+                                    .testTag("kiss_profile_button")
                             ) {
-                                Text("💋", fontSize = 18.sp)
-                                Spacer(Modifier.width(8.dp))
-                                Text(
-                                    text = "Kiss ${partnerName?.trim()?.substringBefore(' ') ?: "Profile"}",
-                                    color = Color.White,
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 9.dp)
+                                ) {
+                                    Text("💋", fontSize = 17.sp)
+                                    Spacer(Modifier.width(6.dp))
+                                    Text(
+                                        text = "Kiss ${partnerName?.trim()?.substringBefore(' ') ?: "Profile"}",
+                                        color = Color.White,
+                                        fontSize = 13.5.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+
+                            // Full Kiss Screen button & indication
+                            Surface(
+                                shape = RoundedCornerShape(24.dp),
+                                color = Color(0xFF6B1832).copy(alpha = 0.92f),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE0475F).copy(alpha = 0.65f)),
+                                modifier = Modifier
+                                    .pressScaleTarget()
+                                    .springClickable {
+                                        if (onOpenKissScreen != null) {
+                                            closeAnimated()
+                                            onOpenKissScreen()
+                                        } else {
+                                            showKissPadInViewer = true
+                                        }
+                                    }
+                                    .testTag("kiss_screen_button")
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 9.dp)
+                                ) {
+                                    Text("👄", fontSize = 17.sp)
+                                    Spacer(Modifier.width(6.dp))
+                                    Text(
+                                        text = "Kiss Screen 💋",
+                                        color = Color.White,
+                                        fontSize = 13.5.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
                             }
                         }
                     }
@@ -1390,6 +1430,17 @@ fun FullScreenMediaViewer(
             }
 
             SecretWindowGuard(ownDialogOpen = showDeleteConfirmDialog)
+
+            if (showKissPadInViewer) {
+                val appAuth = (context.applicationContext as? CherishApplication)?.authRepository
+                val pTouch by (appAuth?.kissTouch ?: kotlinx.coroutines.flow.MutableStateFlow(null)).collectAsState()
+                KissPadDialog(
+                    partnerName = partnerName ?: "Partner",
+                    partnerTouch = pTouch,
+                    onTouch = { x, y -> appAuth?.setKissTouch(x, y) },
+                    onDismiss = { showKissPadInViewer = false }
+                )
+            }
         }
     }
 }

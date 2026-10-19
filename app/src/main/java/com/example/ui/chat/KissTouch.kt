@@ -56,6 +56,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Surface
@@ -582,7 +584,10 @@ internal fun KissPadDialog(
             onTouch(null, null)
             onDismiss()
         },
-        properties = DialogProperties(usePlatformDefaultWidth = false)
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            decorFitsSystemWindows = false
+        )
     ) {
         Box(
             modifier = Modifier
@@ -640,7 +645,8 @@ internal fun KissPadDialog(
                 },
                 modifier = Modifier
                     .align(Alignment.TopEnd)
-                    .padding(24.dp)
+                    .statusBarsPadding()
+                    .padding(20.dp)
                     .size(44.dp)
                     .background(Color.White.copy(alpha = 0.15f), CircleShape)
             ) {
@@ -650,7 +656,8 @@ internal fun KissPadDialog(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(horizontal = 28.dp, vertical = 56.dp)
+                    .navigationBarsPadding()
+                    .padding(horizontal = 28.dp, vertical = 28.dp)
             ) {
                 Text(text = "Kiss", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
                 Text(
