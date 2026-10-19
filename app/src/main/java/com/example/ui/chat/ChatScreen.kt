@@ -1946,11 +1946,6 @@ fun ChatScreen(
                         }
                     }
                 }
-                // The messages' springs (the iMessage feel, with a slight jelly squash at speed): they
-                // trail a hair behind while scrolling and settle. Read only while drawing, so scrolling
-                // never recomposes the chat
-                val listPhysics = rememberChatListPhysics(calm = LocalChatNight.current)
-
                 // Swipe up on chat screen immediately opens the keyboard
                 val swipeUpToOpenKeyboardConnection = remember(isImeVisible) {
                     object : NestedScrollConnection {
@@ -2001,8 +1996,6 @@ fun ChatScreen(
                         .weight(1f)
                         .fillMaxWidth()
                         .nestedScroll(swipeUpToOpenKeyboardConnection)
-                        .nestedScroll(listPhysics.nestedScroll)
-                        .chatListTouchAnchor(listPhysics)
                         // Lips (or a thumb) held on the background: a kiss there (see KissTouch)
                         .glassTouchOnHold(
                             enabled = kissesAllowed && !isSelectionMode,
@@ -2020,7 +2013,6 @@ fun ChatScreen(
                             listCoords = { kissListCoords[0] }
                         )
                         .onSizeChanged { newSize ->
-                            listPhysics.viewportHeight = newSize.height.toFloat()
                             val prevHeight = lastLazyColumnHeight
                             lastLazyColumnHeight = newSize.height
                             if (prevHeight > 0 && prevHeight != newSize.height && reversedChatRowItems.isNotEmpty()) {
@@ -2105,7 +2097,6 @@ fun ChatScreen(
                                     fadeOutSpec = tween(180)
                                 )
                                 .fillMaxWidth()
-                                .chatRowSpring(listPhysics)
                         ) {
                             ChatMessageRow(
                                 message = message,

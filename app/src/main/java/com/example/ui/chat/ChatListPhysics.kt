@@ -42,118 +42,31 @@ import kotlin.math.abs
  */
 @Stable
 class ChatListPhysics internal constructor(
-    private val scope: CoroutineScope,
-    private val enabled: Boolean,
-    private val maxLagPx: Float,
-    // At night (see NightCalm) the springs are softer: they swing less and settle slower
+    private val scope: CoroutineScope? = null,
+    private val enabled: Boolean = false,
+    private val maxLagPx: Float = 0f,
     private val calm: Boolean = false,
 ) {
-    /** How far a message at the far end of the list trails behind the scroll, in px (signed). */
-    private val lag = Animatable(0f)
-
-    /** Where the finger is (or last was) in the list, in px from its top; NaN before any touch. */
     internal var anchorY by mutableFloatStateOf(Float.NaN)
-
-    /** The list's height in px. */
     var viewportHeight by mutableFloatStateOf(0f)
 
-    /** Gives the list's scroll to the springs (put on the LazyColumn, before its own scrolling). */
-    val nestedScroll: NestedScrollConnection = object : NestedScrollConnection {
-        override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
-            if (enabled && consumed.y != 0f) pull(-consumed.y * LAG_PER_PX)
-            return Offset.Zero
-        }
-    }
+    val nestedScroll: NestedScrollConnection = object : NestedScrollConnection {}
 
-    private fun pull(by: Float) {
-        scope.launch {
-            // The springs keep their swing between pulls, so a fling and its settling are one motion
-            val velocity = lag.velocity
-            lag.snapTo((lag.value + by).coerceIn(-maxLagPx, maxLagPx))
-            lag.animateTo(
-                0f,
-                if (calm) spring(dampingRatio = 0.85f, stiffness = 170f) else spring(dampingRatio = 0.62f, stiffness = 300f),
-                initialVelocity = velocity
-            )
-        }
-    }
+    fun offsetFor(centerY: Float): Float = 0f
 
-    /** How far a message centred at [centerY] (px from the list's top) is displaced right now. */
-    fun offsetFor(centerY: Float): Float {
-        val height = viewportHeight
-        if (!enabled || height <= 0f) return 0f
-        val anchor = if (anchorY.isNaN()) height else anchorY
-        return lag.value * (abs(centerY - anchor) / height).coerceAtMost(1f)
-    }
-
-    /** The messages squash a little at speed (up to 3%), like jelly, and round out as they settle. */
-    fun squashY(): Float =
-        if (!enabled || maxLagPx <= 0f) 1f else 1f - (abs(lag.value) / maxLagPx).coerceIn(0f, 1f) * 0.03f
-
-    private companion object {
-        /** How much each px of scroll pulls the far messages behind (balanced by the spring). */
-        const val LAG_PER_PX = 0.4f
-    }
+    fun squashY(): Float = 1f
 }
 
 @Composable
 fun rememberChatListPhysics(calm: Boolean = false): ChatListPhysics {
-    val scope = rememberCoroutineScope()
-    val context = LocalContext.current
-    val maxLagPx = with(LocalDensity.current) { (if (calm) 14.dp else 22.dp).toPx() }
-    return remember(scope, calm) {
-        ChatListPhysics(scope, enabled = !context.areAnimationsDisabled(), maxLagPx = maxLagPx, calm = calm)
-    }
+    return remember { ChatListPhysics() }
 }
 
-/** On the message list: remembers where the finger is, without taking any touches from the list. */
-fun Modifier.chatListTouchAnchor(physics: ChatListPhysics): Modifier = pointerInput(physics) {
-    awaitEachGesture {
-        val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
-        physics.anchorY = down.position.y
-        while (true) {
-            val event = awaitPointerEvent(PointerEventPass.Initial)
-            val change = event.changes.firstOrNull { it.id == down.id } ?: break
-            physics.anchorY = change.position.y
-            if (!change.pressed) break
-        }
-    }
-}
+/** On the message list: neutral touch anchor. */
+fun Modifier.chatListTouchAnchor(physics: ChatListPhysics? = null): Modifier = this
 
 /**
- * On each message row: trails, squashes and settles with the list's springs. A plain modifier node
- * (not `composed`), so a row coming into view while scrolling costs no extra composition.
+ * On each message row: returns this directly to remove rubber/spring effect while scrolling.
  */
-fun Modifier.chatRowSpring(physics: ChatListPhysics): Modifier = this then ChatRowSpringElement(physics)
+fun Modifier.chatRowSpring(physics: ChatListPhysics? = null): Modifier = this
 
-private data class ChatRowSpringElement(val physics: ChatListPhysics) : ModifierNodeElement<ChatRowSpringNode>() {
-    override fun create() = ChatRowSpringNode(physics)
-
-    override fun update(node: ChatRowSpringNode) {
-        node.physics = physics
-    }
-}
-
-private class ChatRowSpringNode(var physics: ChatListPhysics) :
-    Modifier.Node(), LayoutModifierNode, LayoutAwareModifierNode {
-
-    // The row's middle in the list (px from its top)
-    private var centerY = 0f
-
-    // Read while drawing, so the springs move the row without measuring or composing it again
-    private val springLayer: GraphicsLayerScope.() -> Unit = {
-        translationY = physics.offsetFor(centerY)
-        scaleY = physics.squashY()
-    }
-
-    override fun MeasureScope.measure(measurable: Measurable, constraints: Constraints): MeasureResult {
-        val placeable = measurable.measure(constraints)
-        return layout(placeable.width, placeable.height) {
-            placeable.placeWithLayer(0, 0, layerBlock = springLayer)
-        }
-    }
-
-    override fun onPlaced(coordinates: LayoutCoordinates) {
-        centerY = coordinates.positionInParent().y + coordinates.size.height / 2f
-    }
-}
