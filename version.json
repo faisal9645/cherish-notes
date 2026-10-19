@@ -1,9 +1,9 @@
 {
-  "versionCode": 193,
-  "versionName": "1.8.21",
-  "tagName": "v1.8.21-193",
-  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.8.21-193/app_update_193.apk",
-  "assetSize": 18826488,
-  "releaseNotes": "Notes v1.8.21 (Build 193):\n• Full-View Edge-to-Edge Kiss Screen: Completely borderless immersive kiss screen with status and gesture bar insets\n• Profile Photo Kiss Screen Indication: Direct access to kiss screen and photo kisses from full profile photo viewer\n• Vivo Hug Release Vibration: Dedicated tactile release haptics and robust Vivo vibration driver support\n• Couple Emojis & Beautiful Girl Emojis: Curated heterosexual couple pairings and gorgeous girl emojis in typing center\n• Instant Presence Sync: Seamless online/offline status preservation when changing or updating username",
-  "releaseDate": "2026-10-19T11:05:00Z"
+  "versionCode": 194,
+  "versionName": "1.8.22",
+  "tagName": "v1.8.22-194",
+  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.8.22-194/app_update_194.apk",
+  "assetSize": 18827360,
+  "releaseNotes": "Notes v1.8.22 (Build 194):\n• Crisp 1:1 Chat Scrolling: Removed all rubber-band lag and jelly squash spring physics for smooth, responsive scrolling\n• Full-View Edge-to-Edge Kiss Screen with safe system bar insets\n• Profile Photo Kiss Screen Indication: Quick access from full profile photo viewer\n• Vivo Hug Release Vibration: Dedicated tactile release haptics and robust Vivo vibration driver support\n• Curated Emojis: Heterosexual couple pairings and beautiful girl emojis\n• Instant Presence Sync: Seamless online/offline status preservation during username updates",
+  "releaseDate": "2026-10-19T11:18:00Z"
 }
