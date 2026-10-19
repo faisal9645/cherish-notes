@@ -197,10 +197,13 @@ fun DeviceSessionsScreen(
                             SessionDetailRow("Device Name", detailSession.deviceName)
                             SessionDetailRow("Status", if (detailSession.isCurrent) "Active Now (Primary Device)" else detailSession.ipOrLocation)
                             SessionDetailRow("Operating System", if (detailSession.isCurrent) "Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})" else detailSession.platform)
-                            SessionDetailRow("App Version", if (detailSession.isCurrent) "Cherish v${com.example.BuildConfig.VERSION_NAME} (${com.example.BuildConfig.VERSION_CODE})" else "Cherish v${partnerUser?.appVersionName ?: com.example.BuildConfig.VERSION_NAME} (build ${partnerUser?.appVersionCode ?: "—"})")
-                            if (!detailSession.isCurrent && partnerUser?.appVersionCode != null) {
-                                val isPartnerLatest = partnerUser.appVersionCode >= com.example.BuildConfig.VERSION_CODE
-                                SessionDetailRow("Update Status", if (isPartnerLatest) "Installed Latest Version ✨" else "Update Available (Installed Build ${partnerUser.appVersionCode}) ⚠️")
+                            val pUser = partnerUser
+                            val pCode = pUser?.appVersionCode
+                            val pVer = pUser?.appVersionName
+                            SessionDetailRow("App Version", if (detailSession.isCurrent) "Cherish v${com.example.BuildConfig.VERSION_NAME} (${com.example.BuildConfig.VERSION_CODE})" else "Cherish v${pVer ?: com.example.BuildConfig.VERSION_NAME} (build ${pCode ?: "—"})")
+                            if (!detailSession.isCurrent && pCode != null) {
+                                val isPartnerLatest = pCode >= com.example.BuildConfig.VERSION_CODE
+                                SessionDetailRow("Update Status", if (isPartnerLatest) "Installed Latest Version ✨" else "Update Available (Installed Build $pCode) ⚠️")
                             }
                             SessionDetailRow("Security", "Encrypted in transit (TLS)")
                             SessionDetailRow("Session Token", "SES-${detailSession.id.hashCode().toString().takeLast(6).uppercase()}-VAULT")
@@ -406,20 +409,25 @@ fun DeviceSessionsScreen(
                                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                                         )
                                     }
-                                } else if (partnerUser?.appVersionCode != null) {
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    val isPartnerLatest = partnerUser.appVersionCode >= com.example.BuildConfig.VERSION_CODE
-                                    Surface(
-                                        shape = RoundedCornerShape(8.dp),
-                                        color = if (isPartnerLatest) Green800.copy(alpha = 0.2f) else RoseGoldPrimary.copy(alpha = 0.2f)
-                                    ) {
-                                        Text(
-                                            if (isPartnerLatest) "v${partnerUser.appVersionName ?: ""} Latest ✨" else "Build ${partnerUser.appVersionCode} ⚠️",
-                                            color = if (isPartnerLatest) (if (isDark) darkTone(Blue300) else Green800) else Red700,
-                                            fontSize = 9.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                        )
+                                } else {
+                                    val pUser = partnerUser
+                                    val pCode = pUser?.appVersionCode
+                                    val pVer = pUser?.appVersionName
+                                    if (pCode != null) {
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        val isPartnerLatest = pCode >= com.example.BuildConfig.VERSION_CODE
+                                        Surface(
+                                            shape = RoundedCornerShape(8.dp),
+                                            color = if (isPartnerLatest) Green800.copy(alpha = 0.2f) else RoseGoldPrimary.copy(alpha = 0.2f)
+                                        ) {
+                                            Text(
+                                                if (isPartnerLatest) "v${pVer ?: ""} Latest ✨" else "Build $pCode ⚠️",
+                                                color = if (isPartnerLatest) (if (isDark) darkTone(Blue300) else Green800) else Red700,
+                                                fontSize = 9.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                            )
+                                        }
                                     }
                                 }
                             }
