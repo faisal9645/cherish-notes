@@ -147,6 +147,8 @@ fun MessageComposer(
     onRecordVideoNote: () -> Unit = {},
     // Long-press on send: send this text later (e.g. "Good morning" at 7 AM)
     onScheduleText: (() -> Unit)? = null,
+    // The 🫂 button (with nothing typed): hold to squeeze, let go to send that tight, see HugSqueeze
+    onSendHug: ((level: Float) -> Unit)? = null,
     myPhotoUrl: String? = null,
     myName: String = "Me",
     placeholder: String = "Message your love...",
@@ -1005,6 +1007,11 @@ fun MessageComposer(
                                     .onGloballyPositioned { ComposerTextAnchor.update(it) }
                                     .testTag("composer_text_input")
                             )
+                        }
+
+                        // Right inside pill: 🫂 hold to hug (only with nothing typed, so it never crowds the text)
+                        if (onSendHug != null && text.isEmpty()) {
+                            HugHoldButton(onSend = onSendHug, modifier = Modifier.testTag("composer_hug_button"))
                         }
 
                         // Right inside pill: 📎 Attachment button

@@ -71,7 +71,9 @@ internal fun HugScene(
     // How far through the hug, 0-1 (past 1 at rest, in each other's arms); only drawing reads it
     progress: () -> Float,
     isFromMe: Boolean,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    // How tight it was sent, held on the 🫂 button (0-1; null for a plain 🫂), see HugSqueeze
+    level: Float? = null
 ) {
     val couple = LocalHugCouple.current
     val heart = rememberVectorPainter(Icons.Rounded.Favorite)
@@ -83,22 +85,24 @@ internal fun HugScene(
             .size(HUG_SCENE_WIDTH, HUG_SCENE_HEIGHT)
             .semantics { contentDescription = PEOPLE_HUGGING }
             .drawBehind {
-                drawHug(progress().coerceIn(0f, 1f), left = partner, right = me, rightHugs = isFromMe, heart, path)
+                drawHug(progress().coerceIn(0f, 1f), left = partner, right = me, rightHugs = isFromMe, heart, path, level ?: PLAIN_HUG_LEVEL)
             }
     )
 }
 
 /** "You hugged Shali" or "Shali hugged you", in a chip like the time's, once they're hugging. */
 @Composable
-internal fun HugCaption(progress: () -> Float, isFromMe: Boolean, modifier: Modifier = Modifier) {
+internal fun HugCaption(progress: () -> Float, isFromMe: Boolean, modifier: Modifier = Modifier, level: Float? = null) {
     val couple = LocalHugCouple.current
-    val text = remember(couple, isFromMe) {
+    val text = remember(couple, isFromMe, level) {
         val name = couple.partnerName.trim().substringBefore(' ')
+        // How tight, when it was held: "You hugged Shali tight"
+        val how = level?.let { " " + HugStrength.of(it).adverb }.orEmpty()
         when {
-            isFromMe -> "You hugged " + name.ifBlank { if (couple.iAmHim) "her" else "him" }
-            name.isNotBlank() -> "$name hugged you"
-            couple.iAmHim -> "She hugged you"
-            else -> "He hugged you"
+            isFromMe -> "You hugged " + name.ifBlank { if (couple.iAmHim) "her" else "him" } + how
+            name.isNotBlank() -> "$name hugged you$how"
+            couple.iAmHim -> "She hugged you$how"
+            else -> "He hugged you$how"
         }
     }
     Surface(
@@ -133,7 +137,9 @@ private fun DrawScope.drawHug(
     right: HugFigure,
     rightHugs: Boolean,
     heart: VectorPainter,
-    path: Path
+    path: Path,
+    // How tight (0-1): harder squeezes, one more for a deep one, and they hold each other closer
+    level: Float
 ) {
     val u = size.width / SCENE_UNITS_WIDE
     // The one who sent it walks over, an arm opening on the way, and wraps it round the other, who
@@ -144,7 +150,12 @@ private fun DrawScope.drawHug(
     val wrap = ease((t - 0.30f) / 0.12f)
     val nestle = ease((t - 0.34f) / 0.12f)
     val hugBack = ease((t - 0.40f) / 0.10f)
-    val squeeze = bump(t, FIRST_SQUEEZE, 0.05f) + 0.8f * bump(t, 0.76f, 0.05f)
+    val power = 0.6f + 1.6f * level
+    val squeeze = power * hugSqueezePeaks(level).withIndex().sumOf { (i, peak) ->
+        ((if (i == 0) 1f else 0.85f) * bump(t, peak, 0.05f)).toDouble()
+    }.toFloat()
+    // A tight hug holds them closer together
+    val snug = 2.5f * level * nestle
     val rock = if (t > HUG_EMBRACED) {
         val r = (t - HUG_EMBRACED) / (1f - HUG_EMBRACED)
         3f * sin(r * 2f * HugPi) * sin(r * HugPi)
@@ -158,8 +169,8 @@ private fun DrawScope.drawHug(
     val huggerFacing = if (rightHugs) -1f else 1f
     val huggedFacing = -huggerFacing
     // Where each stands: a little into each other once hugging, the hugger far off at first
-    val huggerX = 60f - huggerFacing * (14f - 1.5f * squeeze + 24f * (1f - walk))
-    val huggedX = 60f - huggedFacing * (14f - 1.5f * squeeze + 5f * (1f - meet))
+    val huggerX = 60f - huggerFacing * (14f - snug - 1.5f * squeeze + 24f * (1f - walk))
+    val huggedX = 60f - huggedFacing * (14f - snug - 1.5f * squeeze + 5f * (1f - meet))
     // A bounce in each step, leaning into the walk
     val huggerLift = 3f * abs(sin(walk * 3f * HugPi))
     val huggerLean = huggerFacing * (7f * sin(walk * HugPi) + 2f * nestle)
@@ -303,6 +314,13 @@ private const val SCENE_UNITS_WIDE = 120f
 private val HUG_SCENE_WIDTH = 126.dp
 private val HUG_SCENE_HEIGHT = 105.dp
 private const val FIRST_SQUEEZE = 0.6f
+
+/** A plain 🫂 (not held) hugs like a warm hold. */
+private const val PLAIN_HUG_LEVEL = 0.5f
+
+/** When each squeeze is tightest (parts of the hug): two, and a third for a deep tight squeeze. */
+internal fun hugSqueezePeaks(level: Float?): List<Float> =
+    if ((level ?: PLAIN_HUG_LEVEL) >= 0.67f) listOf(FIRST_SQUEEZE, 0.76f, 0.88f) else listOf(FIRST_SQUEEZE, 0.76f)
 // The hug's burst hearts set off 0.3 of the way through the burst (1.5 s)
 private const val HUG_HEARTS_LEAD_MS = 450f
 // Between his blue and her sky blue

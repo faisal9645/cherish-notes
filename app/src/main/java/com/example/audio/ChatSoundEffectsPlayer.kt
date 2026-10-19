@@ -139,8 +139,9 @@ class ChatSoundEffectsPlayer private constructor(
         if (!securityPreferences.isChatSoundsEnabled()) return
         // Never play sounds while user is inside the Notes disguise
         if (securityPreferences.isDisguiseActive.value || securityPreferences.isDisguiseActive()) return
-        // Settings > sound volume (0 = silent)
-        val volume = securityPreferences.getAppSoundVolume() / 100f
+        // Settings > sound volume (0 = silent); quieter at night (see NightCalm)
+        val night = if (com.example.util.NightCalm.isNight()) com.example.util.NightCalm.QUIETER else 1f
+        val volume = securityPreferences.getAppSoundVolume() / 100f * night
         if (volume <= 0f) return
 
         // Respect user's device silent / vibrate mode

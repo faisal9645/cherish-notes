@@ -65,10 +65,12 @@ internal fun AnimatedEmojiText(
     }
     // How far into the emojis' animation, in ms; past its end when still
     val life = remember { Animatable(LIFE_DONE) }
+    // Slower at night (see NightCalm)
+    val slow = if (LocalChatNight.current) com.example.util.NightCalm.SLOWER else 1f
 
     suspend fun play() {
         life.snapTo(0f)
-        life.animateTo(lifeMs, tween(lifeMs.roundToInt(), easing = LinearEasing))
+        life.animateTo(lifeMs, tween((lifeMs * slow).roundToInt(), easing = LinearEasing))
     }
     LaunchedEffect(Unit) {
         if (playOnArrival) {

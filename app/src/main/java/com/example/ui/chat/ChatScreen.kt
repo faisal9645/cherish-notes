@@ -174,6 +174,25 @@ fun ChatScreen(
     val uiState by viewModel.uiState.collectAsState()
     val partnerPresence by viewModel.partnerPresence.collectAsState()
     val isPartnerTouching = partnerPresence.isHeartTouching || uiState.isPartnerHeartTouching
+    // My partner playing one of my voice notes (or a video note) right now: shown on it, its
+    // waveform moving as they hear it (timed by listeningClock, which only that message reads), and
+    // in the header. Not once it should have ended, nor while they're out of Cherish
+    val partnerListeningNow by viewModel.partnerListening.collectAsState()
+    val listeningClock = remember { mutableLongStateOf(0L) }
+    var listeningOver by remember { mutableStateOf<com.example.data.model.PartnerListening?>(null) }
+    LaunchedEffect(partnerListeningNow) {
+        val heard = partnerListeningNow ?: return@LaunchedEffect
+        while (heard.isCurrent()) {
+            listeningClock.longValue = android.os.SystemClock.elapsedRealtime()
+            delay(if (heard.playing && !heard.isVideo) 60L else 1_000L)
+        }
+        listeningOver = heard
+    }
+    val partnerListening = partnerListeningNow?.takeIf {
+        it != listeningOver && partnerPresence.isOnline &&
+            uiState.chatExperienceMode != com.example.ui.chat.ChatExperienceMode.PRIVATE
+    }
+    val hearingStatus = partnerListening?.let { listeningStatus(it.isVideo, it.playing) }
     val listState = rememberLazyListState(
         initialFirstVisibleItemIndex = viewModel.savedScrollIndex,
         initialFirstVisibleItemScrollOffset = viewModel.savedScrollOffset
@@ -208,6 +227,12 @@ fun ChatScreen(
     val callState by com.example.call.CallManager.state.collectAsState()
     var showVideoNoteRecorder by remember { mutableStateOf(false) }
     var showHeartbeatTouch by remember { mutableStateOf(false) }
+    // Kisses (see KissTouch): the ones blooming on the chat now, and the kiss pad
+    val kissBlooms = remember { mutableStateListOf<KissBloom>() }
+    var showKissPad by remember { mutableStateOf(false) }
+    // Where the message list and the whole chat are, to place a kiss on the chat
+    val kissListCoords = remember { arrayOfNulls<androidx.compose.ui.layout.LayoutCoordinates>(1) }
+    val kissRootCoords = remember { arrayOfNulls<androidx.compose.ui.layout.LayoutCoordinates>(1) }
     var showMoodPicker by remember { mutableStateOf(false) }
     var showScheduleSheet by remember { mutableStateOf(false) }
     var showScheduledList by remember { mutableStateOf(false) }
@@ -655,6 +680,8 @@ fun ChatScreen(
             },
             reply = { message -> viewModel.setReplyingTo(message) },
             longPress = { message, bounds ->
+                // Its menu, not a kiss on the chat (see kissOnHold)
+                ChatLongPress.onMessageAt = android.os.SystemClock.uptimeMillis()
                 latestKeyboardController.value?.hide()
                 focusedBounds = bounds
                 focusedMessage = message
@@ -818,6 +845,60 @@ fun ChatScreen(
             delay(7_000)
         } finally {
             showGoodnightStars = false
+        }
+    }
+
+    // Once we've both said goodnight, a starry night behind the messages until morning (on both
+    // phones, from the same messages); the first message of the morning brings a small sunrise
+    var skyClock by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(60_000L)
+            skyClock = System.currentTimeMillis()
+        }
+    }
+    val bothSaidGoodnightTonight = remember(uiState.messages, currentUserId, skyClock) {
+        bothSaidGoodnight(uiState.messages, currentUserId, skyClock)
+    }
+    val morningFirstMessage = remember(uiState.messages, skyClock) { firstMorningMessage(uiState.messages, skyClock) }
+    var showSunrise by remember { mutableStateOf(false) }
+    LaunchedEffect(morningFirstMessage?.id, isChatInView) {
+        if (morningFirstMessage == null || !isChatInView || isSunriseShown(context)) return@LaunchedEffect
+        delay(500)
+        markSunriseShown(context)
+        showSunrise = true
+    }
+
+    // My partner kissed the chat: it blooms here at the same spot (once; one sent while the chat was
+    // closed still blooms when it's opened a little later). Never over Private mode or the curtain
+    val partnerKissStamp by viewModel.partnerKiss.collectAsState()
+    val kissesAllowed = uiState.chatExperienceMode != com.example.ui.chat.ChatExperienceMode.PRIVATE &&
+        !uiState.isStealthCurtainActive
+    LaunchedEffect(partnerKissStamp?.id, isChatInView, kissesAllowed) {
+        val kiss = partnerKissStamp ?: return@LaunchedEffect
+        if (!isChatInView || !kissesAllowed || isKissSeen(context, kiss.id)) return@LaunchedEffect
+        if (System.currentTimeMillis() - kiss.atMs > KISS_WAITS_MS) return@LaunchedEffect
+        markKissSeen(context, kiss.id)
+        delay(250)
+        kissBlooms += KissBloom(kiss.id, kiss.x, kiss.y, fromMe = false)
+        context.vibrateKiss()
+    }
+    // Partner's live touch on the glass
+    val partnerKissTouch by viewModel.partnerKissTouch.collectAsState()
+    var currentGlassTouch by remember { mutableStateOf<Offset?>(null) }
+    // My lips (or thumb) held on the chat's background: a kiss there, blooming on theirs too
+    val onKissHold = remember {
+        { local: Offset ->
+            val list = kissListCoords[0]
+            val root = kissRootCoords[0]
+            if (list != null && root != null && list.isAttached && root.isAttached && root.size.width > 0 && root.size.height > 0) {
+                val at = root.localPositionOf(list, local)
+                val x = (at.x / root.size.width).coerceIn(0f, 1f)
+                val y = (at.y / root.size.height).coerceIn(0f, 1f)
+                kissBlooms += KissBloom(java.util.UUID.randomUUID().toString(), x, y, fromMe = true)
+                context.vibrateKiss()
+                viewModel.sendKiss(x, y)
+            }
         }
     }
 
@@ -1034,11 +1115,14 @@ fun ChatScreen(
         ) == me.id
         HugCouple(iAmHim = !iAmHer, partnerName = partnerName.takeUnless { it == "My Partner" }.orEmpty())
     }
-    CompositionLocalProvider(LocalChatTextStyle provides chatTextStyle, LocalHugCouple provides hugCouple) {
+    // From 11 PM: the same colours, but slower, softer motion and quieter sounds (see NightCalm)
+    val isNight = rememberIsNight()
+    CompositionLocalProvider(LocalChatTextStyle provides chatTextStyle, LocalHugCouple provides hugCouple, LocalChatNight provides isNight) {
     Box(
         modifier = Modifier
             .fillMaxSize()
             .onSizeChanged { chatScreenSize = it }
+            .onGloballyPositioned { kissRootCoords[0] = it }
             .graphicsLayer {
                 // The chat blurs behind the long-press focus view (Android 12+)
                 if (android.os.Build.VERSION.SDK_INT >= 31) {
@@ -1050,6 +1134,12 @@ fun ChatScreen(
     if (showWallpaper) {
         ChatWallpaper(
             chatBgTheme = uiState.chatBgTheme,
+            modifier = Modifier.fillMaxSize()
+        )
+        NightSky(
+            starry = bothSaidGoodnightTonight && !showSunrise,
+            sunrise = showSunrise,
+            onSunriseDone = { showSunrise = false },
             modifier = Modifier.fillMaxSize()
         )
     }
@@ -1201,6 +1291,7 @@ fun ChatScreen(
                         } else {
                             ChatPartnerHeaderContent(
                                 presenceFlow = viewModel.partnerPresence,
+                                hearingStatus = hearingStatus,
                                 fallbackPartnerName = partnerName,
                                 myTimeZone = uiState.currentUser?.timeZone,
                                 isDark = isDark,
@@ -1208,6 +1299,12 @@ fun ChatScreen(
                                     val app = context.applicationContext as? com.example.CherishApplication
                                     app?.securityPreferences?.isMediaViewerActive = true
                                     showFullProfilePicViewer = true
+                                },
+                                onAvatarLongPress = {
+                                    if (kissesAllowed) {
+                                        view.chatHaptic(ChatHaptic.LongPress)
+                                        showKissPad = true
+                                    }
                                 },
                                 onMoodClick = { showMoodPicker = true }
                             )
@@ -1845,7 +1942,7 @@ fun ChatScreen(
                 // The messages' springs (the iMessage feel, with a slight jelly squash at speed): they
                 // trail a hair behind while scrolling and settle. Read only while drawing, so scrolling
                 // never recomposes the chat
-                val listPhysics = rememberChatListPhysics()
+                val listPhysics = rememberChatListPhysics(calm = LocalChatNight.current)
 
                 // Swipe up on chat screen immediately opens the keyboard
                 val swipeUpToOpenKeyboardConnection = remember(isImeVisible) {
@@ -1899,6 +1996,22 @@ fun ChatScreen(
                         .nestedScroll(swipeUpToOpenKeyboardConnection)
                         .nestedScroll(listPhysics.nestedScroll)
                         .chatListTouchAnchor(listPhysics)
+                        // Lips (or a thumb) held on the background: a kiss there (see KissTouch)
+                        .glassTouchOnHold(
+                            enabled = kissesAllowed && !isSelectionMode,
+                            onGlassTouch = { normX, normY ->
+                                if (normX != null && normY != null) {
+                                    currentGlassTouch = Offset(normX, normY)
+                                    viewModel.setKissTouch(normX, normY)
+                                } else {
+                                    currentGlassTouch = null
+                                    viewModel.setKissTouch(null, null)
+                                }
+                            },
+                            onKissStamp = onKissHold,
+                            rootCoords = { kissRootCoords[0] },
+                            listCoords = { kissListCoords[0] }
+                        )
                         .onSizeChanged { newSize ->
                             listPhysics.viewportHeight = newSize.height.toFloat()
                             val prevHeight = lastLazyColumnHeight
@@ -1969,6 +2082,8 @@ fun ChatScreen(
                                 message.timestamp >= chatOpenedAt - 2_000L &&
                                 message.id !in initialMessageIds && landedMessageIds.add(message.id)
                         }
+                        // Mine, and my partner is hearing it right now
+                        val hearing = partnerListening?.takeIf { isFromMe && it.messageId == message.id }
                         Box(
                             modifier = Modifier
                                 // A deleted message fades out and its neighbours glide together to
@@ -1998,7 +2113,14 @@ fun ChatScreen(
                                 isSelectionMode = isSelectionMode,
                                 isSelected = isSelectionMode && message.id in selectedItemIds,
                                 isPlayingAudio = currentPlayingId == message.id && isAudioPlaying,
-                                audioProgress = { if (currentPlayingIdState.value == message.id) audioProgressState.value else 0f },
+                                audioProgress = {
+                                    when {
+                                        currentPlayingIdState.value == message.id -> audioProgressState.value
+                                        hearing != null -> hearing.progress(listeningClock.longValue)
+                                        else -> 0f
+                                    }
+                                },
+                                partnerHearing = hearing?.playing,
                                 gallerySize = uiState.gallerySize,
                                 voicePlaybackSpeed = uiState.voicePlaybackSpeed,
                                 senderPhotoUrl = if (isFromMe) uiState.currentUser?.photoUrl else uiState.partnerUser?.photoUrl,
@@ -2541,6 +2663,22 @@ fun ChatScreen(
         }
     }
 
+    // Kisses on the chat, mine and theirs, blooming over the messages (taking no touches)
+    KissStampLayer(
+        blooms = kissBlooms,
+        partnerName = partnerName,
+        onDone = { kissBlooms.remove(it) },
+        modifier = Modifier.fillMaxSize()
+    )
+
+    // Glass Window Touch (Touch on the screen, feel them on yours in real-time)
+    GlassWindowTouchLayer(
+        partnerName = partnerName,
+        myTouch = currentGlassTouch,
+        partnerTouch = partnerKissTouch,
+        modifier = Modifier.fillMaxSize()
+    )
+
     if (partnerFeltKey != 0L) {
         key(partnerFeltKey) {
             PartnerFeltOverlay(partnerName = partnerName, onDone = { partnerFeltKey = 0L })
@@ -2644,7 +2782,7 @@ fun ChatScreen(
             onMoreReactions = { viewModel.setSelectedMessageForActions(live) },
             onDismissed = { focusedMessage = null }
         ) {
-            CompositionLocalProvider(LocalChatTextStyle provides chatTextStyle, LocalHugCouple provides hugCouple) {
+            CompositionLocalProvider(LocalChatTextStyle provides chatTextStyle, LocalHugCouple provides hugCouple, LocalChatNight provides isNight) {
                 MessageBubble(
                     message = live,
                     isFromMe = focusedIsFromMe,
@@ -2733,6 +2871,16 @@ fun ChatScreen(
             onSendVideoNote = { file, dur ->
                 viewModel.sendVideoNote(file, dur)
             }
+        )
+    }
+
+    // The kiss pad: lips to lips, felt on both phones when both kiss at once (see KissTouch)
+    if (showKissPad) {
+        KissPadDialog(
+            partnerName = partnerName,
+            partnerTouch = partnerKissTouch,
+            onTouch = { x, y -> viewModel.setKissTouch(x, y) },
+            onDismiss = { showKissPad = false }
         )
     }
 
@@ -3677,7 +3825,9 @@ private fun ChatMessageRow(
     isLastReadMessage: Boolean = false,
     partnerPhotoUrl: String? = null,
     partnerName: String = "Partner",
-    isTodayChatOnly: Boolean = false
+    isTodayChatOnly: Boolean = false,
+    // Mine, and my partner is hearing it right now (false: paused), see ListeningNow
+    partnerHearing: Boolean? = null
 ) {
     Column(modifier = modifier.fillMaxWidth()) {
         if (isFirstOfDay) {
@@ -3703,8 +3853,14 @@ private fun ChatMessageRow(
         val isBigEmoji = remember(message, isPrivate) { !isPrivate && message.bigEmojis() != null }
         val landsWithSpring = isFreshArrival && !isBigEmoji
         val landing = remember(message.id) { Animatable(if (landsWithSpring) 0f else 1f) }
+        val isNight = LocalChatNight.current
         LaunchedEffect(message.id) {
-            if (landsWithSpring) landing.animateTo(1f, spring(dampingRatio = 0.62f, stiffness = 420f))
+            if (landsWithSpring) {
+                landing.animateTo(
+                    1f,
+                    if (isNight) spring(dampingRatio = 0.9f, stiffness = 170f) else spring(dampingRatio = 0.62f, stiffness = 420f)
+                )
+            }
         }
 
         // Jump-to-message highlight: a soft wash of colour across the row (no outlines) and a
@@ -3816,6 +3972,7 @@ private fun ChatMessageRow(
                         isFromMe = isFromMe,
                         isPlayingAudio = isPlayingAudio,
                         audioProgress = audioProgress,
+                        partnerHearing = partnerHearing,
                         gallerySize = gallerySize,
                         onPlayAudio = { actions.playAudio(message) },
                         onSeekAudio = { progress -> actions.seekAudio(message, progress) },
@@ -4131,6 +4288,7 @@ fun StealthDisguiseNotesView(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun ChatPartnerHeaderContent(
     presenceFlow: StateFlow<PartnerPresenceState>,
@@ -4138,7 +4296,11 @@ private fun ChatPartnerHeaderContent(
     myTimeZone: String?,
     isDark: Boolean,
     onAvatarClick: () -> Unit,
-    onMoodClick: () -> Unit
+    onMoodClick: () -> Unit,
+    // "listening to your voice note…" while they hear one of mine (see ListeningNow)
+    hearingStatus: String? = null,
+    // A long press on their photo: the kiss pad (see KissTouch)
+    onAvatarLongPress: () -> Unit = {}
 ) {
     val presence by presenceFlow.collectAsState()
     val isPartnerOnline = presence.isOnline
@@ -4202,10 +4364,12 @@ private fun ChatPartnerHeaderContent(
     ) {
         Box(
             modifier = Modifier
-                .clickable(
+                .combinedClickable(
                     interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
-                    indication = null
-                ) { onAvatarClick() }
+                    indication = null,
+                    onLongClick = onAvatarLongPress,
+                    onClick = onAvatarClick
+                )
         ) {
             AvatarView(
                 photoUrl = presence.photoUrl,
@@ -4267,6 +4431,7 @@ private fun ChatPartnerHeaderContent(
                 }
                 presence.isRecordingAudio -> "recording audio..."
                 presence.isTyping -> "typing..."
+                hearingStatus != null -> hearingStatus
                 isPartnerOnline -> "Online"
                 else -> {
                     val lastSeen = presence.lastSeen
@@ -4311,7 +4476,7 @@ private fun ChatPartnerHeaderContent(
                 overflow = TextOverflow.Ellipsis,
                 color = if (partnerHasCheckAfter) {
                     Blue500
-                } else if (presence.isRecordingAudio || presence.isTyping || isPartnerOnline) {
+                } else if (presence.isRecordingAudio || presence.isTyping || hearingStatus != null || isPartnerOnline) {
                     OnlineGreen
                 } else {
                     MaterialTheme.colorScheme.onSurfaceVariant
@@ -4949,6 +5114,12 @@ private fun ChatBottomComposerBar(
         onPickVideo = onPickVideo,
         onPickDocument = onPickDocument,
         onScheduleText = onScheduleText,
+        // Not behind the stealth curtain (it looks like notes there)
+        onSendHug = if (uiState.isStealthCurtainActive) null else { level ->
+            onSendHaptic()
+            onUnreadJumpDone()
+            viewModel.sendHugSqueeze(level)
+        },
         onRecordVideoNote = onRecordVideoNote,
         myPhotoUrl = myUser?.photoUrl,
         myName = myUser?.displayName ?: "Me",

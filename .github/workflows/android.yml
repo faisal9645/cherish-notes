@@ -47,8 +47,12 @@ jobs:
         env:
           STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-          KEYSTORE_PATH: ${{ secrets.KEYSTORE_PATH }}
-        run: ./gradlew assembleRelease --no-daemon --stacktrace
+        run: |
+          ./gradlew assembleRelease --no-daemon --stacktrace 2>&1 | tee build.log || {
+            echo "=== GRADLE BUILD FAILED. LOG TAIL: ==="
+            tail -n 120 build.log
+            exit 1
+          }
 
       - name: Prepare Single OTA Asset
         run: |

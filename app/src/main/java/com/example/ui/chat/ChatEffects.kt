@@ -125,6 +125,40 @@ fun Context.vibrateHeartbeat() {
     } catch (_: Exception) {}
 }
 
+/**
+ * A pattern of buzzes: [timings] alternate off and on (ms, starting with off), [amplitudes] 0-255
+ * for each (plain buzzes where the phone can't vary strength). [inHand]: feedback for a touch (it
+ * follows the phone's touch-vibration setting on Android 13+); otherwise something felt, like a
+ * hug or a kiss arriving.
+ */
+fun Context.vibrateWave(timings: LongArray, amplitudes: IntArray, inHand: Boolean = true) {
+    try {
+        val vibrator = if (Build.VERSION.SDK_INT >= 31) {
+            getSystemService(VibratorManager::class.java)?.defaultVibrator
+        } else {
+            @Suppress("DEPRECATION")
+            getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+        } ?: return
+        if (!vibrator.hasVibrator() || timings.isEmpty()) return
+        if (Build.VERSION.SDK_INT >= 26) {
+            val effect = if (vibrator.hasAmplitudeControl()) {
+                VibrationEffect.createWaveform(timings, amplitudes.map { it.coerceIn(0, 255) }.toIntArray(), -1)
+            } else {
+                VibrationEffect.createWaveform(timings, -1)
+            }
+            if (Build.VERSION.SDK_INT >= 33) {
+                val usage = if (inHand) VibrationAttributes.USAGE_TOUCH else VibrationAttributes.USAGE_MEDIA
+                vibrator.vibrate(effect, VibrationAttributes.createForUsage(usage))
+            } else {
+                vibrator.vibrate(effect)
+            }
+        } else {
+            @Suppress("DEPRECATION")
+            vibrator.vibrate(timings, -1)
+        }
+    } catch (_: Exception) {}
+}
+
 /** True when animations are switched off (accessibility "Remove animations" / developer options). */
 fun Context.areAnimationsDisabled(): Boolean =
     Settings.Global.getFloat(contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f

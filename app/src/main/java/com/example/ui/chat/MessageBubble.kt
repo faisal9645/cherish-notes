@@ -114,7 +114,10 @@ fun MessageBubble(
     partnerPhotoUrl: String? = null,
     partnerName: String = "Partner",
     // Arrived while the chat is open (a big emoji then flies or pops in)
-    isFreshArrival: Boolean = false
+    isFreshArrival: Boolean = false,
+    // My voice or video note that my partner is playing right now (false: they paused it), see
+    // ListeningNow; its progress comes in [audioProgress]
+    partnerHearing: Boolean? = null
 ) {
     // Private chat looks like the ChatGPT app: mine in a rounded blue bubble, my partner's as plain
     // text with a row of small actions under it
@@ -463,7 +466,11 @@ fun MessageBubble(
                                 onExpandClick = openBigVideoNote,
                                 onLongClick = { onBubbleLongPress(androidx.compose.ui.geometry.Offset.Zero) },
                                 onDoubleClick = { triggerHeartBurst() },
-                                onPlayingChanged = { isPlayingVideoNote = it },
+                                onPlayingChanged = {
+                                    isPlayingVideoNote = it
+                                    // Watching my partner's with its sound: their phone shows "watching…"
+                                    if (!isFromMe) VideoNoteWatching.report(message, it)
+                                },
                                 // In view, it plays by itself, muted, at this size, with no buttons
                                 silentPreview = true,
                                 posterUrl = remember(message) { message.thumbnailFor(videoUrl).takeIf { it != videoUrl && it.isNotBlank() } },
@@ -491,14 +498,24 @@ fun MessageBubble(
                     }
 
                     // Align status chip closely against bottom edge of circular video
-                    FloatingTimeChip(
-                        message = message,
-                        isFromMe = isFromMe,
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier
                             .offset(y = (-10).dp)
                             .zIndex(1f)
                             .padding(horizontal = 6.dp)
-                    )
+                    ) {
+                        // My partner watching it right now
+                        if (partnerHearing != null && isFromMe) {
+                            PartnerHearingChip(playing = partnerHearing)
+                            Spacer(modifier = Modifier.width(4.dp))
+                        }
+                        FloatingTimeChip(message = message, isFromMe = isFromMe)
+                    }
+                }
+                DisposableEffect(message.id) {
+                    // Scrolled away or gone while it played: no longer watching
+                    onDispose { if (!isFromMe) VideoNoteWatching.report(message, false) }
                 }
             } else if (bigEmojis != null) {
                 // Telegram-style big emoji: no bubble, just the emojis, which come alive when they
@@ -532,6 +549,8 @@ fun MessageBubble(
                             else -> BigEmojiEntrance.PopIn
                         },
                         replay = bigEmojiReplay,
+                        // A 🫂 held on the hug button plays as tight as it was sent
+                        hugLevel = remember(message.effect) { message.hugSqueeze() },
                         footer = {
                             FloatingTimeChip(message = message, isFromMe = isFromMe, modifier = Modifier.offset(y = (-4).dp))
                         }
@@ -1019,7 +1038,8 @@ fun MessageBubble(
                                 WaveformView(
                                     amplitudes = message.waveform.map { it.toFloat() },
                                     progress = audioProgress(),
-                                    isPlaying = isPlayingAudio,
+                                    // Moving as my partner hears it, too
+                                    isPlaying = isPlayingAudio || partnerHearing == true,
                                     isRecording = false,
                                     activeColor = if (isPrivateMode) textColor 
                                                   else if (isFromMe) Color.White 
@@ -1043,14 +1063,20 @@ fun MessageBubble(
                                             verticalAlignment = Alignment.CenterVertically,
                                             modifier = Modifier.height(18.dp)
                                         ) {
-                                            Text(
-                                                text = "${message.durationSeconds} sec",
-                                                fontSize = 11.sp,
-                                                fontWeight = FontWeight.Medium,
-                                                color = if (isPrivateMode) textColor.copy(alpha = 0.8f) 
-                                                        else if (isFromMe) Color.White.copy(alpha = 0.9f) 
-                                                        else (if (isDark) darkTone(Slate300) else Slate900)
-                                            )
+                                            val durationColor = if (isPrivateMode) textColor.copy(alpha = 0.8f)
+                                                else if (isFromMe) Color.White.copy(alpha = 0.9f)
+                                                else (if (isDark) darkTone(Slate300) else Slate900)
+                                            if (partnerHearing != null && isFromMe && !isPlayingAudio) {
+                                                // My partner is hearing it right now
+                                                PartnerHearingLabel(isVideo = false, playing = partnerHearing, color = durationColor)
+                                            } else {
+                                                Text(
+                                                    text = "${message.durationSeconds} sec",
+                                                    fontSize = 11.sp,
+                                                    fontWeight = FontWeight.Medium,
+                                                    color = durationColor
+                                                )
+                                            }
                                             if (isPlayingAudio && onToggleVoiceSpeed != null) {
                                                 Spacer(modifier = Modifier.width(6.dp))
                                                 Box(

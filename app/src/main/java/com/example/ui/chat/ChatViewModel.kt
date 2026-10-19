@@ -124,6 +124,27 @@ class ChatViewModel(
     private val _partnerPresence = MutableStateFlow(PartnerPresenceState())
     val partnerPresence: StateFlow<PartnerPresenceState> = _partnerPresence.asStateFlow()
 
+    /** My partner playing one of my voice notes (or watching a video note) right now, see ListeningNow. */
+    val partnerListening: StateFlow<com.example.data.model.PartnerListening?> = authRepository.partnerListening
+
+    /** My partner's latest kiss on the chat, and their lips on the kiss pad right now (see KissTouch). */
+    val partnerKiss: StateFlow<com.example.data.model.KissStamp?> = authRepository.partnerKiss
+    val partnerKissTouch: StateFlow<com.example.data.model.KissTouch?> = authRepository.partnerKissTouch
+
+    private var lastKissSentAt = 0L
+
+    /** A kiss stamped on the chat at [x], [y] (parts of the screen): it blooms on my partner's too. */
+    fun sendKiss(x: Float, y: Float) {
+        val now = android.os.SystemClock.elapsedRealtime()
+        // A flurry of kisses is one write a second at most
+        if (now - lastKissSentAt < KISS_EVERY_MS) return
+        lastKissSentAt = now
+        authRepository.sendKiss(x, y)
+    }
+
+    /** My lips held on the kiss pad (parts of it), or let go (null). */
+    fun setKissTouch(x: Float?, y: Float?) = authRepository.setKissTouch(x, y)
+
     private val _uiState = MutableStateFlow(
         ChatUiState(
             gallerySize = securityPreferences.getImageGallerySize(),
@@ -261,6 +282,36 @@ class ChatViewModel(
                     )
                 }
             }
+        }
+
+        // Playing one of my partner's voice notes, or watching their video note with its sound:
+        // their phone shows it live ("listening…"). Saved only when it starts, pauses, jumps or
+        // stops, a moment after it settles (a drag along the waveform is one save)
+        viewModelScope.launch {
+            combine(voicePlayerHelper.anchor, VideoNoteWatching.now) { anchor, watching -> anchor to watching }
+                .distinctUntilChanged()
+                .collectLatest { (anchor, watching) ->
+                    kotlinx.coroutines.delay(LISTENING_SETTLE_MS)
+                    val myId = _uiState.value.currentUser?.id
+                    val now = System.currentTimeMillis()
+                    val heard = anchor?.let { a -> _uiState.value.messages.find { it.id == a.trackId } }
+                    val value = when {
+                        anchor != null && heard != null && myId != null && heard.senderId != myId ->
+                            com.example.data.model.PartnerListening.toMap(
+                                anchor.trackId, isVideo = false,
+                                // It played on while this waited
+                                positionMs = anchor.positionMs + if (anchor.playing) (LISTENING_SETTLE_MS * anchor.speed).toLong() else 0L,
+                                durationMs = anchor.durationMs, speed = anchor.speed, playing = anchor.playing, atMs = now
+                            )
+                        watching != null ->
+                            com.example.data.model.PartnerListening.toMap(
+                                watching.messageId, isVideo = true, positionMs = 0L,
+                                durationMs = watching.durationMs, speed = 1f, playing = true, atMs = now
+                            )
+                        else -> null
+                    }
+                    authRepository.setListening(value)
+                }
         }
 
         viewModelScope.launch {
@@ -1059,6 +1110,17 @@ class ChatViewModel(
         }
     }
 
+    /**
+     * A hug held on the 🫂 button, [level] tight (0 a light embrace, 1 a deep tight squeeze): a 🫂
+     * that plays that tight on both phones (see HugSqueeze).
+     */
+    fun sendHugSqueeze(level: Float) {
+        soundEffectsPlayer.playSound(ChatSoundEffectsPlayer.SoundType.SENT)
+        viewModelScope.launch {
+            chatRepository.sendMessage(text = "🫂", effect = hugEffect(level))
+        }
+    }
+
     fun sendHug() {
         viewModelScope.launch {
             chatRepository.sendMessage(text = "Sending you the biggest hug \uD83E\uDD17\uD83D\uDC9B")
@@ -1455,9 +1517,13 @@ class ChatViewModel(
         voiceRecorderHelper.cancelRecording()
         authRepository.setTyping(false)
         authRepository.setRecordingAudio(false)
+        authRepository.setListening(null)
+        authRepository.setKissTouch(null, null)
     }
 
     private companion object {
+        const val LISTENING_SETTLE_MS = 300L
+        const val KISS_EVERY_MS = 1_000L
         const val TYPING_IDLE_TIMEOUT_MS = 5_000L
         const val MAX_PAGES_TO_FIND_MESSAGE = 20
         /** How much of a video's progress bar is making it smaller (the rest is uploading). */

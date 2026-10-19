@@ -26,12 +26,16 @@ import java.util.concurrent.atomic.AtomicInteger
  * and single-notification consolidation (prevents multiple spam notifications).
  */
 object NotificationHelper {
-    // New id notes_sync_channel_v3 ensures clean channel creation with high importance, sound and vibration
-    const val CHANNEL_MESSAGES_ID = "notes_sync_channel_v3"
+    // The partner's messages ring with their own soft chime (the same bells as the chat's "received"
+    // sound), so it's them without looking; a channel's sound is set once, hence the new id
+    const val CHANNEL_MESSAGES_ID = "notes_sync_channel_v4"
     private const val CHANNEL_MESSAGES_NAME = "Notes & Messages"
+    // From 11 PM (see NightCalm): the same chime, quieter and gentler, and a lighter buzz
+    const val CHANNEL_MESSAGES_NIGHT_ID = "notes_sync_night_v1"
+    private const val CHANNEL_MESSAGES_NIGHT_NAME = "Notes & Messages (night)"
     const val CHANNEL_REMINDERS_ID = "notes_reminders_channel_v2"
     private const val CHANNEL_REMINDERS_NAME = "Note Reminders"
-    private val OLD_CHANNEL_IDS = listOf("notes_sync_channel", "notes_reminders_channel", "notes_sync_channel_v2")
+    private val OLD_CHANNEL_IDS = listOf("notes_sync_channel", "notes_reminders_channel", "notes_sync_channel_v2", "notes_sync_channel_v3")
     @Volatile private var oldChannelsRemoved = false
     const val NOTIFICATION_ID_MESSAGE = 1001
 
@@ -58,6 +62,16 @@ object NotificationHelper {
         }
     }
 
+    /** The partner's messages' channel right now: the quiet night one from 11 PM to 6 AM. */
+    fun messagesChannelId(): String =
+        if (com.example.util.NightCalm.isNight()) CHANNEL_MESSAGES_NIGHT_ID else CHANNEL_MESSAGES_ID
+
+    /** Their chime ([night]: the softer one). */
+    private fun chimeUri(context: Context, night: Boolean): android.net.Uri =
+        android.net.Uri.parse(
+            "android.resource://${context.packageName}/" + (if (night) R.raw.partner_chime_night else R.raw.partner_chime)
+        )
+
     fun createNotificationChannels(context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             // Shown on the lock screen; when the phone hides notification content there, each
@@ -78,7 +92,21 @@ object NotificationHelper {
                 vibrationPattern = longArrayOf(0, 250, 200, 250)
                 enableLights(true)
                 setShowBadge(true)
-                setSound(soundUri, audioAttributes)
+                setSound(chimeUri(context, night = false), audioAttributes)
+                lockscreenVisibility = android.app.Notification.VISIBILITY_PRIVATE
+            }
+
+            val nightMessagesChannel = NotificationChannel(
+                CHANNEL_MESSAGES_NIGHT_ID,
+                CHANNEL_MESSAGES_NIGHT_NAME,
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = "Discreet sync notifications, quieter at night"
+                enableVibration(true)
+                vibrationPattern = longArrayOf(0, 140)
+                enableLights(true)
+                setShowBadge(true)
+                setSound(chimeUri(context, night = true), audioAttributes)
                 lockscreenVisibility = android.app.Notification.VISIBILITY_PRIVATE
             }
 
@@ -97,6 +125,7 @@ object NotificationHelper {
 
             val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
             manager?.createNotificationChannel(messagesChannel)
+            manager?.createNotificationChannel(nightMessagesChannel)
             manager?.createNotificationChannel(remindersChannel)
             if (!oldChannelsRemoved) {
                 oldChannelsRemoved = true
@@ -325,9 +354,7 @@ object NotificationHelper {
         // Ensure channel is created before building the notification so it never drops
         createNotificationChannels(context)
 
-        val soundUri = android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_NOTIFICATION)
-
-        val notificationBuilder = NotificationCompat.Builder(context, CHANNEL_MESSAGES_ID)
+        val notificationBuilder = NotificationCompat.Builder(context, messagesChannelId())
             .setSmallIcon(R.drawable.ic_stat_notes)
             .apply {
                 if (appIcon != null) setLargeIcon(appIcon)
@@ -354,12 +381,13 @@ object NotificationHelper {
             .setDeleteIntent(getDismissIntent(context))
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(NotificationCompat.CATEGORY_MESSAGE)
-            .setDefaults(NotificationCompat.DEFAULT_ALL)
-            .setSound(soundUri)
-            .setVibrate(longArrayOf(0, 250, 200, 250))
+            .setDefaults(NotificationCompat.DEFAULT_LIGHTS)
+            // Before Android 8 (no channels): their chime, softer at night
+            .setSound(chimeUri(context, night = com.example.util.NightCalm.isNight()))
+            .setVibrate(if (com.example.util.NightCalm.isNight()) longArrayOf(0, 140) else longArrayOf(0, 250, 200, 250))
             // On the lock screen too (masked there when the phone hides notification content)
             .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
-            .setPublicVersion(lockScreenVersion(context, CHANNEL_MESSAGES_ID, prefs))
+            .setPublicVersion(lockScreenVersion(context, messagesChannelId(), prefs))
 
         val notification = notificationBuilder.build()
 
@@ -432,7 +460,7 @@ object NotificationHelper {
         }
         isNotificationAlertTriggered.set(true)
 
-        val notification = NotificationCompat.Builder(context, CHANNEL_MESSAGES_ID)
+        val notification = NotificationCompat.Builder(context, messagesChannelId())
             .setSmallIcon(R.drawable.ic_stat_notes)
             .apply {
                 if (appIcon != null) setLargeIcon(appIcon)
@@ -457,7 +485,7 @@ object NotificationHelper {
             .setVibrate(longArrayOf(0, 100, 150, 100, 450, 100, 150, 100))
             .setCategory(NotificationCompat.CATEGORY_EVENT)
             .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
-            .setPublicVersion(lockScreenVersion(context, CHANNEL_MESSAGES_ID, prefs))
+            .setPublicVersion(lockScreenVersion(context, messagesChannelId(), prefs))
             .build()
 
         try {
@@ -503,7 +531,7 @@ object NotificationHelper {
         val subText = if (isDiscreet || maskedTitle.equals("Notes", ignoreCase = true)) null else "Cherish"
 
         val appIcon = getAppIconBitmap(context)
-        val notification = NotificationCompat.Builder(context, CHANNEL_MESSAGES_ID)
+        val notification = NotificationCompat.Builder(context, messagesChannelId())
             .setSmallIcon(R.drawable.ic_stat_notes)
             .apply {
                 if (appIcon != null) setLargeIcon(appIcon)
@@ -524,7 +552,7 @@ object NotificationHelper {
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(NotificationCompat.CATEGORY_SOCIAL)
             .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
-            .setPublicVersion(lockScreenVersion(context, CHANNEL_MESSAGES_ID, prefs))
+            .setPublicVersion(lockScreenVersion(context, messagesChannelId(), prefs))
             .build()
 
         try {
@@ -676,7 +704,7 @@ object NotificationHelper {
         }
 
         val appIcon = getAppIconBitmap(context)
-        val notification = NotificationCompat.Builder(context, CHANNEL_MESSAGES_ID)
+        val notification = NotificationCompat.Builder(context, messagesChannelId())
             .setSmallIcon(R.drawable.ic_stat_notes)
             .apply {
                 if (appIcon != null) setLargeIcon(appIcon)
@@ -696,7 +724,7 @@ object NotificationHelper {
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
             .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
-            .setPublicVersion(lockScreenVersion(context, CHANNEL_MESSAGES_ID, prefs))
+            .setPublicVersion(lockScreenVersion(context, messagesChannelId(), prefs))
             .build()
 
         try {

@@ -230,6 +230,21 @@ class AuthRepository(private val context: Context) {
     private val _partnerUserState = MutableStateFlow<User?>(null)
     val partnerUserState: StateFlow<User?> = _partnerUserState.asStateFlow()
 
+    /** The partner playing one of my voice notes (or watching a video note) right now, or null. */
+    private val _partnerListening = MutableStateFlow<com.example.data.model.PartnerListening?>(null)
+    val partnerListening: StateFlow<com.example.data.model.PartnerListening?> = _partnerListening.asStateFlow()
+    // Their "listening" as last read, so their other profile changes don't move it
+    @Volatile private var partnerListeningRaw: Any? = null
+
+    /** The partner's latest kiss stamped on the chat, and their lips held on the kiss pad right now. */
+    private val _partnerKiss = MutableStateFlow<com.example.data.model.KissStamp?>(null)
+    val partnerKiss: StateFlow<com.example.data.model.KissStamp?> = _partnerKiss.asStateFlow()
+    private val _partnerKissTouch = MutableStateFlow<com.example.data.model.KissTouch?>(null)
+    val partnerKissTouch: StateFlow<com.example.data.model.KissTouch?> = _partnerKissTouch.asStateFlow()
+    // As last read, so only a change counts (each refresh of a held kiss is one)
+    @Volatile private var partnerKissRaw: Any? = null
+    @Volatile private var partnerKissTouchRaw: Any? = null
+
     fun getUserDocRef(uid: String?): com.google.firebase.firestore.DocumentReference? {
         val clean = uid?.trim()?.ifBlank { null } ?: return null
         return firestore?.collection("users")?.document(clean)
@@ -1602,6 +1617,74 @@ class AuthRepository(private val context: Context) {
         // No-op: only isTyping boolean is written to Firestore to save costs
     }
 
+    /** A kiss stamped on the chat at [x], [y] (parts of the screen): it blooms on the partner's phone. */
+    fun sendKiss(x: Float, y: Float) {
+        val uid = getCurrentUserId()
+        if (uid.isBlank()) return
+        val now = System.currentTimeMillis()
+        try {
+            userDocument(uid)?.set(
+                mapOf(com.example.data.model.KissStamp.FIELD to com.example.data.model.KissStamp.toMap(java.util.UUID.randomUUID().toString(), x, y, now)),
+                com.google.firebase.firestore.SetOptions.merge()
+            )
+        } catch (e: Exception) {
+            Log.w("AuthRepository", "Couldn't send the kiss", e)
+        }
+    }
+
+    private var kissTouchJob: kotlinx.coroutines.Job? = null
+
+    /**
+     * My lips held on the kiss pad at [x], [y] (parts of the pad), or let go (null): saved now and
+     * again every few seconds while held, so the partner's phone knows (see KissTouch).
+     */
+    fun setKissTouch(x: Float?, y: Float?) {
+        kissTouchJob?.cancel()
+        kissTouchJob = null
+        val uid = getCurrentUserId()
+        if (uid.isBlank()) return
+        fun save(value: Any) {
+            try {
+                userDocument(uid)?.set(
+                    mapOf(com.example.data.model.KissTouch.FIELD to value),
+                    com.google.firebase.firestore.SetOptions.merge()
+                )
+            } catch (_: Exception) {}
+        }
+        if (x == null || y == null) {
+            save(com.google.firebase.firestore.FieldValue.delete())
+            return
+        }
+        save(com.example.data.model.KissTouch.toMap(x, y, System.currentTimeMillis()))
+        kissTouchJob = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+            while (isActive) {
+                kotlinx.coroutines.delay(com.example.data.model.KissTouch.REFRESH_MS)
+                save(com.example.data.model.KissTouch.toMap(x, y, System.currentTimeMillis()))
+            }
+        }
+    }
+
+    // What this phone last saved as "listening", so nothing is written twice
+    @Volatile private var listeningWritten: Map<String, Any>? = null
+
+    /**
+     * I'm playing one of the partner's voice notes (or watching a video note): where I am in it,
+     * saved only when it starts, pauses, jumps or stops ([value] null), see PartnerListening.
+     */
+    fun setListening(value: Map<String, Any>?) {
+        val uid = getCurrentUserId()
+        if (uid.isBlank() || value == listeningWritten) return
+        listeningWritten = value
+        try {
+            userDocument(uid)?.set(
+                mapOf(com.example.data.model.PartnerListening.FIELD to (value ?: com.google.firebase.firestore.FieldValue.delete())),
+                com.google.firebase.firestore.SetOptions.merge()
+            )
+        } catch (e: Exception) {
+            Log.w("AuthRepository", "Couldn't save listening", e)
+        }
+    }
+
     fun setRecordingAudio(recording: Boolean) {
         val uid = getCurrentUserId()
         try {
@@ -1933,6 +2016,24 @@ class AuthRepository(private val context: Context) {
                 (doc.get("chatSeenAt") as? com.google.firebase.Timestamp)?.toDate()?.time?.let { seenAt ->
                     if (seenAt > partnerChatSeenAt) partnerChatSeenAt = seenAt
                 }
+            }
+            // Playing one of my voice notes right now: read again only when it changes, so it's
+            // timed from when it arrived
+            val listening = if (partner != null) doc.get(com.example.data.model.PartnerListening.FIELD) else null
+            if (listening != partnerListeningRaw) {
+                partnerListeningRaw = listening
+                _partnerListening.value = com.example.data.model.PartnerListening.fromMap(listening)
+            }
+            // A kiss stamped on the chat, and lips held on the kiss pad
+            val kiss = if (partner != null) doc.get(com.example.data.model.KissStamp.FIELD) else null
+            if (kiss != partnerKissRaw) {
+                partnerKissRaw = kiss
+                _partnerKiss.value = com.example.data.model.KissStamp.fromMap(kiss)
+            }
+            val kissTouch = if (partner != null) doc.get(com.example.data.model.KissTouch.FIELD) else null
+            if (kissTouch != partnerKissTouchRaw) {
+                partnerKissTouchRaw = kissTouch
+                _partnerKissTouch.value = com.example.data.model.KissTouch.fromMap(kissTouch)
             }
             _partnerUserState.value = partner
             handlePartnerCheckAfterReminder(partner)

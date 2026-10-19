@@ -110,6 +110,8 @@ internal fun BigEmoji(
     // Goes up by one on each tap: plays the animation again, with a bigger burst
     replay: Int,
     modifier: Modifier = Modifier,
+    // A 🫂 held on the hug button: how tight (0-1), see HugSqueeze; null for any other
+    hugLevel: Float? = null,
     // Under the emojis (the time), shown once they have landed
     footer: @Composable () -> Unit = {}
 ) {
@@ -137,6 +139,8 @@ internal fun BigEmoji(
     val life = remember { Animatable(if (hugScene && entrance != BigEmojiEntrance.None) 0f else LIFE_DONE) }
     // A hug played again (a tap, or coming into view) starts already in each other's arms
     val replayFrom = if (hugScene) HUG_EMBRACED else 0f
+    // At night it all plays slower and softer (see NightCalm)
+    val slow = if (LocalChatNight.current) com.example.util.NightCalm.SLOWER else 1f
     val burst = remember { EmojiBurstState() }
     val heart = rememberVectorPainter(Icons.Rounded.Favorite)
     val flight = remember { Animatable(if (entrance == BigEmojiEntrance.FlyFromComposer) 0f else 1f) }
@@ -149,16 +153,24 @@ internal fun BigEmoji(
     // Landed (or never flying): where it sits isn't needed any more, so scrolling skips it
     var hasLanded by remember { mutableStateOf(entrance != BigEmojiEntrance.FlyFromComposer) }
 
+    /** A held hug, felt: a buzz with each squeeze, as tight as it was sent, playing from [from]. */
+    fun feelHug(from: Float) {
+        val level = hugLevel ?: return
+        if (!com.example.security.SecurityPreferences.getInstance(context).isHapticFeedbackEnabled()) return
+        val peaks = hugSqueezePeaks(level).filter { it > from }.map { ((it - from) * lifeMs * slow).toLong() }
+        context.vibrateHugSqueezes(level, peaks)
+    }
+
     suspend fun play(strong: Boolean, withBurst: Boolean = true, from: Float = 0f) {
         coroutineScope {
             launch {
                 life.snapTo(from * lifeMs)
-                life.animateTo(lifeMs, tween(((1f - from) * lifeMs).roundToInt(), easing = LinearEasing))
+                life.animateTo(lifeMs, tween(((1f - from) * lifeMs * slow).roundToInt(), easing = LinearEasing))
             }
             if (withBurst) launch {
                 // The hug's hearts float up with its first squeeze
-                if (hugScene) delay(hugBurstDelayMs(from))
-                burst.burst(bases, motions, strong, glyphScale)
+                if (hugScene) delay((hugBurstDelayMs(from) * slow).toLong())
+                burst.burst(bases, motions, strong, glyphScale, durationMs = (BURST_MS * slow).roundToInt())
             }
         }
     }
@@ -167,13 +179,17 @@ internal fun BigEmoji(
         when (entrance) {
             BigEmojiEntrance.FlyFromComposer -> {
                 snapshotFlow { slotCenter }.first { it.isSpecified }
-                flight.animateTo(1f, tween(FLIGHT_MS, easing = LinearEasing))
+                flight.animateTo(1f, tween((FLIGHT_MS * slow).roundToInt(), easing = LinearEasing))
                 hasLanded = true
                 play(strong = false)
             }
             BigEmojiEntrance.PopIn -> {
-                launch { pop.animateTo(1f, spring(dampingRatio = 0.45f, stiffness = 420f)) }
+                launch {
+                    pop.animateTo(1f, if (slow > 1f) spring(dampingRatio = 0.6f, stiffness = 240f) else spring(dampingRatio = 0.45f, stiffness = 420f))
+                }
                 delay(90)
+                // A held hug arriving: each squeeze is felt
+                if (hugScene) feelHug(from = 0f)
                 play(strong = false)
             }
             // Already in the chat: it moves once as it comes into view, without the burst
@@ -186,8 +202,10 @@ internal fun BigEmoji(
     }
     LaunchedEffect(replay) {
         if (replay == 0) return@LaunchedEffect
-        // A heart beats in the hand too, and a hug squeezes
-        if (EmojiMotion.Heartbeat in motions || EmojiMotion.Hug in motions) {
+        // A heart beats in the hand too, and a hug squeezes (a held one as tight as it was sent)
+        if (hugScene && hugLevel != null) {
+            feelHug(from = replayFrom)
+        } else if (EmojiMotion.Heartbeat in motions || EmojiMotion.Hug in motions) {
             if (com.example.security.SecurityPreferences.getInstance(context).isHapticFeedbackEnabled()) {
                 context.vibrateHeartbeat()
             }
@@ -255,7 +273,7 @@ internal fun BigEmoji(
                 }
             ) {
                 if (hugScene) {
-                    HugScene(progress = { life.value / lifeMs }, isFromMe = isFromMe)
+                    HugScene(progress = { life.value / lifeMs }, isFromMe = isFromMe, level = hugLevel)
                 } else {
                     emojis.forEachIndexed { index, emoji ->
                         val motion = motions[index]
@@ -278,7 +296,7 @@ internal fun BigEmoji(
         ) {
             // Who hugged whom, by the time
             if (hugScene) {
-                HugCaption(progress = { life.value / lifeMs }, isFromMe = isFromMe, modifier = Modifier.offset(y = (-4).dp))
+                HugCaption(progress = { life.value / lifeMs }, isFromMe = isFromMe, modifier = Modifier.offset(y = (-4).dp), level = hugLevel)
             }
             Box(
                 modifier = Modifier.graphicsLayer {
@@ -678,7 +696,7 @@ private class EmojiBurstState {
     val path = Path()
     val glyphPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { textAlign = Paint.Align.CENTER }
 
-    suspend fun burst(bases: List<String>, motions: List<EmojiMotion>, strong: Boolean, scale: Float) {
+    suspend fun burst(bases: List<String>, motions: List<EmojiMotion>, strong: Boolean, scale: Float, durationMs: Int = BURST_MS) {
         val made = ArrayList<Particle>()
         bases.forEachIndexed { index, base ->
             // A tap on one without a burst of its own still sparkles
@@ -697,7 +715,7 @@ private class EmojiBurstState {
         if (made.isEmpty()) return
         particles = made
         progress.snapTo(0f)
-        progress.animateTo(1f, tween(BURST_MS, easing = LinearEasing))
+        progress.animateTo(1f, tween(durationMs, easing = LinearEasing))
     }
 }
 

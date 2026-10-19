@@ -239,7 +239,7 @@ private class Star(val x: Float, val y: Float, val radius: Float, val phase: Flo
 
 /** Softly twinkling stars over the whole area. */
 @Composable
-private fun TwinklingStars(modifier: Modifier = Modifier, count: Int = 60, brightness: Float = 1f) {
+internal fun TwinklingStars(modifier: Modifier = Modifier, count: Int = 60, brightness: Float = 1f, periodMs: Int = 2600) {
     val stars = remember {
         val random = Random(42)
         List(count) {
@@ -252,7 +252,7 @@ private fun TwinklingStars(modifier: Modifier = Modifier, count: Int = 60, brigh
         val t by transition.animateFloat(
             initialValue = 0f,
             targetValue = 1f,
-            animationSpec = infiniteRepeatable(tween(2600, easing = LinearEasing), RepeatMode.Restart),
+            animationSpec = infiniteRepeatable(tween(periodMs, easing = LinearEasing), RepeatMode.Restart),
             label = "twinkle_time"
         )
         t

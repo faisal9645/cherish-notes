@@ -43,6 +43,23 @@ class VoicePlayerHelper(private val context: Context) {
     private val _playbackSpeed = MutableStateFlow(1.0f)
     val playbackSpeed: StateFlow<Float> = _playbackSpeed.asStateFlow()
 
+    /** Where the current track is, as of its last start, pause, jump or speed change (null: nothing). */
+    data class Anchor(val trackId: String, val playing: Boolean, val positionMs: Long, val durationMs: Long, val speed: Float)
+
+    private val _anchor = MutableStateFlow<Anchor?>(null)
+    /** Changes only when playing doesn't simply go on: for telling the other phone ("listening…"). */
+    val anchor: StateFlow<Anchor?> = _anchor.asStateFlow()
+
+    private fun publishAnchor() {
+        val id = _currentTrackId.value
+        val mp = mediaPlayer
+        _anchor.value = if (id == null || mp == null) null else try {
+            Anchor(id, _isPlaying.value, mp.currentPosition.toLong(), mp.duration.toLong().coerceAtLeast(0L), _playbackSpeed.value)
+        } catch (_: Exception) {
+            null
+        }
+    }
+
     /** Where the current track plays from (a URL or a local path), to restart it on another output. */
     private var currentSource: String? = null
     private var currentOnCompletion: () -> Unit = {}
@@ -94,6 +111,7 @@ class VoicePlayerHelper(private val context: Context) {
                 mediaPlayer?.let { mp ->
                     if (mp.isPlaying) {
                         mp.playbackParams = mp.playbackParams.setSpeed(speed)
+                        publishAnchor()
                     }
                 }
             } catch (e: Exception) {
@@ -119,6 +137,7 @@ class VoicePlayerHelper(private val context: Context) {
                 _isPlaying.value = true
                 mediaPlayer?.let { startProgressTracker(it) }
                 watchProximity(true)
+                publishAnchor()
                 return
             } catch (e: Exception) {
                 Log.e("VoicePlayerHelper", "Failed to resume audio, restarting", e)
@@ -197,6 +216,7 @@ class VoicePlayerHelper(private val context: Context) {
             _isPlaying.value = true
             startProgressTracker(mp)
             watchProximity(true)
+            publishAnchor()
         }
         player.setOnCompletionListener { mp ->
             if (mediaPlayer !== mp) return@setOnCompletionListener
@@ -204,6 +224,7 @@ class VoicePlayerHelper(private val context: Context) {
             _playbackProgress.value = 0f
             _currentPositionSec.value = 0
             _currentTrackId.value = null
+            _anchor.value = null
             progressJob?.cancel()
             currentOnCompletion()
             // Nothing played on after it: back to the speaker
@@ -245,6 +266,9 @@ class VoicePlayerHelper(private val context: Context) {
                     mp.seekTo(targetMs)
                     _playbackProgress.value = progress.coerceIn(0f, 1f)
                     _currentPositionSec.value = targetMs / 1000
+                    _anchor.value = _currentTrackId.value?.let { id ->
+                        Anchor(id, _isPlaying.value, targetMs.toLong(), duration.toLong(), _playbackSpeed.value)
+                    }
                 }
             }
         } catch (e: Exception) {
@@ -259,6 +283,7 @@ class VoicePlayerHelper(private val context: Context) {
         progressJob?.cancel()
         _isPlaying.value = false
         watchProximity(false)
+        publishAnchor()
     }
 
     fun stop() {
@@ -279,6 +304,7 @@ class VoicePlayerHelper(private val context: Context) {
         mediaPlayer = null
         _isPlaying.value = false
         _currentTrackId.value = null
+        _anchor.value = null
         _playbackProgress.value = 0f
         _currentPositionSec.value = 0
         if (!keepEarpiece) watchProximity(false)

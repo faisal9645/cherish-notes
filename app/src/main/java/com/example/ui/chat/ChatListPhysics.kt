@@ -45,6 +45,8 @@ class ChatListPhysics internal constructor(
     private val scope: CoroutineScope,
     private val enabled: Boolean,
     private val maxLagPx: Float,
+    // At night (see NightCalm) the springs are softer: they swing less and settle slower
+    private val calm: Boolean = false,
 ) {
     /** How far a message at the far end of the list trails behind the scroll, in px (signed). */
     private val lag = Animatable(0f)
@@ -68,7 +70,11 @@ class ChatListPhysics internal constructor(
             // The springs keep their swing between pulls, so a fling and its settling are one motion
             val velocity = lag.velocity
             lag.snapTo((lag.value + by).coerceIn(-maxLagPx, maxLagPx))
-            lag.animateTo(0f, spring(dampingRatio = 0.62f, stiffness = 300f), initialVelocity = velocity)
+            lag.animateTo(
+                0f,
+                if (calm) spring(dampingRatio = 0.85f, stiffness = 170f) else spring(dampingRatio = 0.62f, stiffness = 300f),
+                initialVelocity = velocity
+            )
         }
     }
 
@@ -91,11 +97,13 @@ class ChatListPhysics internal constructor(
 }
 
 @Composable
-fun rememberChatListPhysics(): ChatListPhysics {
+fun rememberChatListPhysics(calm: Boolean = false): ChatListPhysics {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
-    val maxLagPx = with(LocalDensity.current) { 22.dp.toPx() }
-    return remember(scope) { ChatListPhysics(scope, enabled = !context.areAnimationsDisabled(), maxLagPx = maxLagPx) }
+    val maxLagPx = with(LocalDensity.current) { (if (calm) 14.dp else 22.dp).toPx() }
+    return remember(scope, calm) {
+        ChatListPhysics(scope, enabled = !context.areAnimationsDisabled(), maxLagPx = maxLagPx, calm = calm)
+    }
 }
 
 /** On the message list: remembers where the finger is, without taking any touches from the list. */
