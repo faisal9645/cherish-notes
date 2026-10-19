@@ -1,9 +1,9 @@
 {
-  "versionCode": 190,
-  "versionName": "1.8.18",
-  "tagName": "v1.8.18-190",
-  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.8.18-190/app_update_190.apk",
-  "assetSize": 18649000,
-  "releaseNotes": "Notes v1.8.18 (Build 190):\n• Emojis now render in fair original skin tone instead of full yellow\n• Reduced emoji sizes across chat screen (big emoji bubble scaling and composer grid)\n• Larger partner profile picture on chat top screen\n• In-call real-time voice changer with 8 effects and daily free quota",
-  "releaseDate": "2026-10-18T22:20:00Z"
+  "versionCode": 192,
+  "versionName": "1.8.20",
+  "tagName": "v1.8.20-192",
+  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.8.20-192/app_update_192.apk",
+  "assetSize": 18821880,
+  "releaseNotes": "Notes v1.8.20 (Build 192):\n• Glass Window Touch: Real-time ethereal touch presence directly on chat screen with concentric ripples\n• Reciprocal synchronized heartbeat hum vibration when both partners touch together\n• Dynamic touch badge and lasting blooming kisses\n• Enhanced voice changer effects and optimizations",
+  "releaseDate": "2026-10-19T09:40:00Z"
 }
