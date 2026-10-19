@@ -45,14 +45,14 @@ import kotlin.math.max
 import kotlin.math.sin
 
 /*
- * A 🫂 sent on its own is a real hug: him in 🫂's deep blue, her in romantic rose pink (with her hair up
- * in a bun), my partner on the left and me on the right, as in the chat. Whoever sent it walks over
- * with an arm open and wraps it round the other's back; the other steps in and hugs back, a hand on
- * their back. Heads lean together, they squeeze and rock, and stay in each other's arms. Next
- * to the time it says who hugged whom.
+ * A 🫂 sent on its own is a real hug: him in 🫂's deep blue, taller and broader, her in its sky blue
+ * (with her hair up in a bun), my partner on the left and me on the right, as in the chat. Whoever
+ * sent it walks over with an arm open and wraps it round the other's back; the other steps in and
+ * hugs back, a hand on their back. Heads lean together, hers on his shoulder, they squeeze and rock,
+ * and stay in each other's arms. Next to the time it says who hugged whom.
  */
 
-/** Which of us is him (the deep blue) and which her (the rose pink), and my partner's name. */
+/** Which of us is him (the deep blue) and which her (the sky blue), and my partner's name. */
 @Immutable
 internal data class HugCouple(val iAmHim: Boolean, val partnerName: String)
 
@@ -117,7 +117,7 @@ internal fun HugCaption(progress: () -> Float, isFromMe: Boolean, modifier: Modi
     }
     val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
     val chipBg = if (isDark) {
-        Color.Black.copy(alpha = 0.65f)
+        Color.Black.copy(alpha = TIME_CHIP_ALPHA)
     } else {
         MaterialTheme.colorScheme.surface.copy(alpha = 0.90f)
     }
@@ -141,10 +141,20 @@ internal fun HugCaption(progress: () -> Float, isFromMe: Boolean, modifier: Modi
     }
 }
 
-private enum class HugFigure(val color: Color, val shade: Color, val shoulders: Float, val head: Float) {
-    // 🫂's couple colors: him in handsome deep blue, her in lovely romantic rose pink
-    Him(Color(0xFF2F6FD6), Color(0xFF1F4FA3), shoulders = 22f, head = 13f),
-    Her(Color(0xFFFF5286), Color(0xFFD81B60), shoulders = 19f, head = 12.5f)
+private enum class HugFigure(
+    val color: Color,
+    val shade: Color,
+    // Half the shoulders' width, the head's radius, and the top of the shoulders (scene units)
+    val shoulders: Float,
+    val head: Float,
+    val top: Float,
+    // How the shoulders round off: 0 square, 1 soft and sloping
+    val softness: Float
+) {
+    // 🫂's own blues: him the deep blue, taller and broader with square shoulders; her the sky
+    // blue, slighter and shorter, with soft shoulders
+    Him(Color(0xFF2F6FD6), Color(0xFF1F4FA3), shoulders = 23f, head = 13.5f, top = 46f, softness = 0.15f),
+    Her(Color(0xFF6EC1F2), Color(0xFF3F9FDB), shoulders = 18f, head = 12f, top = 51f, softness = 0.85f)
 }
 
 /**
@@ -223,27 +233,28 @@ private fun DrawScope.drawHug(
 
     rotate(rock, pivot = Offset(60f * u, 100f * u)) {
         // The one being hugged is behind; their arm, hanging by their side at first, goes round
-        // the hugger behind the hugger's body. The hugger's other hand holds their back
+        // the hugger behind the hugger's body. The hugger's other hand holds their back. Arms and
+        // hands sit at each one's own height: his arm comes over her shoulder, hers round his back
         rotate(huggedLean, pivot = Offset(huggedX * u, 100f * u)) {
             drawFigure(hugged, huggedX, huggedFacing, lift = 0f, nestle, squeeze, u, path)
-            val shoulder = Offset(huggedX + huggedFacing * hugged.shoulders * 0.5f, 58f)
-            val down = Offset(shoulder.x + huggedFacing * 3f, 86f)
-            val hand = lerp(down, Offset(huggerBack, 64f), hugBack)
+            val shoulder = Offset(huggedX + huggedFacing * hugged.shoulders * 0.5f, hugged.top + 10f)
+            val down = Offset(shoulder.x + huggedFacing * 3f, hugged.top + 38f)
+            val hand = lerp(down, Offset(huggerBack, hugger.top + 16f), hugBack)
             drawArm(path, shoulder, hand, hugged, u)
-            drawHand(Offset(huggedBack + huggedFacing * 2f, 76f), hugger, pop(ease((wrap - 0.5f) / 0.5f)), u)
+            drawHand(Offset(huggedBack + huggedFacing * 2f, hugged.top + 28f), hugger, pop(ease((wrap - 0.5f) / 0.5f)), u)
         }
         // The hugger in front, their arm over the other's shoulder and round their back, and the
         // other's hand on their back, hugging back
         rotate(huggerLean, pivot = Offset(huggerX * u, 100f * u)) {
             drawFigure(hugger, huggerX, huggerFacing, huggerLift, nestle, squeeze, u, path)
-            val shoulder = Offset(huggerX + huggerFacing * hugger.shoulders * 0.5f, 58f - huggerLift)
-            val down = Offset(shoulder.x + huggerFacing * 3f, 86f)
-            val open = Offset(shoulder.x + huggerFacing * 17f, 50f - huggerLift)
-            val around = Offset(huggedBack, 63f - 2f * squeeze)
+            val shoulder = Offset(huggerX + huggerFacing * hugger.shoulders * 0.5f, hugger.top + 10f - huggerLift)
+            val down = Offset(shoulder.x + huggerFacing * 3f, hugger.top + 38f)
+            val open = Offset(shoulder.x + huggerFacing * 17f, hugger.top + 2f - huggerLift)
+            val around = Offset(huggedBack, hugged.top + 15f - 2f * squeeze)
             val hand = if (wrap <= 0f) lerp(down, open, reach) else lerp(open, around, wrap)
             drawArm(path, shoulder, hand, hugger, u, sag = 1f + 6f * wrap)
             drawHand(hand, hugger, 1f, u)
-            drawHand(Offset(huggerBack, 64f), hugged, pop(ease((hugBack - 0.4f) / 0.6f)), u)
+            drawHand(Offset(huggerBack, hugger.top + 16f), hugged, pop(ease((hugBack - 0.4f) / 0.6f)), u)
         }
         // A heart over their heads as they come together, beating with the squeezes
         val heartIn = ease((t - 0.44f) / 0.08f)
@@ -251,7 +262,7 @@ private fun DrawScope.drawHug(
         if (heartIn > 0f && heartOut < 1f) {
             drawHeart(
                 heart,
-                center = Offset(60f * u, (12f - 6f * heartOut) * u),
+                center = Offset(60f * u, (9f - 6f * heartOut) * u),
                 size = (13f + 4f * squeeze) * pop(heartIn) * u,
                 rotation = 0f,
                 color = HugHeartColor,
@@ -273,13 +284,16 @@ private fun DrawScope.drawFigure(
     path: Path
 ) {
     val half = figure.shoulders
-    val top = 48f - lift
-    // The body: round shoulders down to the bottom edge, a shade deeper lower down
+    val top = figure.top - lift
+    // The body: shoulders (square for him, soft for her) down to the bottom edge, a shade deeper
+    // lower down
+    val drop = 2f + 6f * figure.softness
+    val reach = 0.75f - 0.3f * figure.softness
     path.reset()
     path.moveTo((x - half) * u, 100f * u)
     path.lineTo((x - half) * u, (top + 18f) * u)
-    path.cubicTo((x - half) * u, (top + 5f) * u, (x - half * 0.6f) * u, top * u, x * u, top * u)
-    path.cubicTo((x + half * 0.6f) * u, top * u, (x + half) * u, (top + 5f) * u, (x + half) * u, (top + 18f) * u)
+    path.cubicTo((x - half) * u, (top + drop) * u, (x - half * reach) * u, top * u, x * u, top * u)
+    path.cubicTo((x + half * reach) * u, top * u, (x + half) * u, (top + drop) * u, (x + half) * u, (top + 18f) * u)
     path.lineTo((x + half) * u, 100f * u)
     path.close()
     drawPath(
@@ -291,10 +305,11 @@ private fun DrawScope.drawFigure(
         )
     )
 
-    // The head leans towards the other, and nestles in as they hug
+    // The head leans towards the other, and nestles in as they hug: hers further, onto his shoulder
     val r = figure.head
-    val headX = x + facing * (2f + 2.5f * nestle)
-    val headY = 33f - lift + 1.5f * nestle + squeeze
+    val lean = if (figure == HugFigure.Her) 3.5f else 2.5f
+    val headX = x + facing * (2f + lean * nestle)
+    val headY = top - HEAD_GAP - r + 1.5f * nestle + squeeze
     val head = Offset(headX * u, headY * u)
     if (figure == HugFigure.Her) {
         // Her hair: up in a bun, and down over her back
@@ -353,8 +368,11 @@ private fun bump(t: Float, center: Float, width: Float): Float {
 
 private const val PEOPLE_HUGGING = "🫂"
 private const val SCENE_UNITS_WIDE = 120f
-private val HUG_SCENE_WIDTH = 126.dp
-private val HUG_SCENE_HEIGHT = 105.dp
+// Between the head and the shoulders, in scene units
+private const val HEAD_GAP = 2f
+// Two people side by side, kept near a lone big emoji's size (48sp)
+private val HUG_SCENE_WIDTH = 96.dp
+private val HUG_SCENE_HEIGHT = 80.dp
 private const val FIRST_SQUEEZE = 0.6f
 
 /** A plain 🫂 (not held) hugs like a warm hold. */
@@ -371,6 +389,6 @@ internal fun hugSqueezePeaks(level: Float?): List<Float> {
 }
 // The hug's burst hearts set off 0.3 of the way through the burst (1.5 s)
 private const val HUG_HEARTS_LEAD_MS = 450f
-// Romantic glowing rose heart over their heads
-private val HugHeartColor = Color(0xFFFF4081)
+// Between his blue and her sky blue
+private val HugHeartColor = Color(0xFF4A97E8)
 private val HugPi = PI.toFloat()

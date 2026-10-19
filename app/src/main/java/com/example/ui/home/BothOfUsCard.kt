@@ -495,15 +495,15 @@ fun BothOfUsCard(
 
                 Spacer(modifier = Modifier.height(6.dp))
 
-                // Our names, a handwritten signature: "shali & faisal" in pink and blue
+                // Our display names as we set them, a handwritten signature in pink and blue
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
                     Icon(Icons.Rounded.FavoriteBorder, contentDescription = null, tint = pink, modifier = Modifier.size(15.dp))
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
                         text = buildAnnotatedString {
-                            withStyle(SpanStyle(color = pink)) { append(left.name.lowercase()) }
+                            withStyle(SpanStyle(color = pink)) { append(left.name.ifBlank { "love" }) }
                             append("  &  ")
-                            withStyle(SpanStyle(color = blue)) { append(right.name.lowercase()) }
+                            withStyle(SpanStyle(color = blue)) { append(right.name.ifBlank { "love" }) }
                         },
                         style = TextStyle(
                             fontFamily = SignatureFont,

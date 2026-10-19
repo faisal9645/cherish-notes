@@ -251,7 +251,7 @@ internal fun BigEmoji(
                         }
                         // Telegram's send: out of the message box's text at the size it was typed,
                         // up first and then across to its place, growing as it goes
-                        val startScale = if (hugScene) typedSp.sp.toPx() * 1.2f / size.width else typedSp / fontSize.value
+                        val startScale = if (hugScene) typedSp.sp.toPx() * 1.2f / size.width else typedSp * TEXT_EMOJI_SCALE / fontSize.value
                         val typedHalfWidth = size.width * startScale / 2f
                         val from = if (origin.isSpecified) {
                             Offset(origin.x + typedHalfWidth, origin.y)

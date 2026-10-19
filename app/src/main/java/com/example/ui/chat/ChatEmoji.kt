@@ -30,6 +30,9 @@ import androidx.compose.ui.unit.em
 /** Unicode "light skin tone" modifier (Fitzpatrick type 1-2). */
 private const val FAIR_SKIN_TONE = 0x1F3FB
 
+/** How much bigger than the words an emoji among them is: in a message, and in the message box. */
+internal const val TEXT_EMOJI_SCALE = 1.08f
+
 /**
  * Text with chat emoji styling. [emojiScale] enlarges emojis relative to the text; with
  * [largeWhenEmojiOnly], a message of just a few emojis is shown larger still.
@@ -45,7 +48,7 @@ fun EmojiText(
     style: TextStyle = LocalTextStyle.current,
     maxLines: Int = Int.MAX_VALUE,
     overflow: TextOverflow = TextOverflow.Clip,
-    emojiScale: Float = 1.08f,
+    emojiScale: Float = TEXT_EMOJI_SCALE,
     largeWhenEmojiOnly: Boolean = false
 ) {
     val content = remember(text, emojiScale, largeWhenEmojiOnly) {
@@ -129,7 +132,7 @@ internal class InlineEmojiText(val text: AnnotatedString, val emojis: List<Strin
  * ([emojiScale], or larger for a message of just a few emojis); null with no emojis, or so many
  * that moving them all isn't worth it.
  */
-internal fun inlineEmojiText(raw: String, emojiScale: Float = 1.08f): InlineEmojiText? {
+internal fun inlineEmojiText(raw: String, emojiScale: Float = TEXT_EMOJI_SCALE): InlineEmojiText? {
     val tokens = tokenize(raw)
     val emojiCount = tokens.count { it.isEmoji }
     if (emojiCount == 0 || emojiCount > MAX_INLINE_EMOJIS) return null

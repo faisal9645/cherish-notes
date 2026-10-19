@@ -245,6 +245,11 @@ class AuthRepository(private val context: Context) {
     @Volatile private var partnerKissRaw: Any? = null
     @Volatile private var partnerKissTouchRaw: Any? = null
 
+    // The partner's name from their own profile (the display name they chose), which wins; and the
+    // couple room's copy of it, used until their profile is read or when it has no name
+    @Volatile private var partnerProfileName: String? = null
+    @Volatile private var partnerRoomName: String? = null
+
     fun getUserDocRef(uid: String?): com.google.firebase.firestore.DocumentReference? {
         val clean = uid?.trim()?.ifBlank { null } ?: return null
         return firestore?.collection("users")?.document(clean)
@@ -344,6 +349,16 @@ class AuthRepository(private val context: Context) {
     private fun userDocument(uid: String) =
         if (uid.isBlank()) null else firestore?.collection("users")?.document(uid)
 
+    /** The same user, however the id was written ("user_" or not, any case). */
+    private fun sameUserId(a: String?, b: String?): Boolean {
+        val id = a?.removePrefix("user_")?.trim()?.lowercase()
+        return !id.isNullOrEmpty() && id == b?.removePrefix("user_")?.trim()?.lowercase()
+    }
+
+    /** Whether [uid] has the couple room's first place (partner1), or would take it while it's empty. */
+    private fun isFirstPartner(p1Id: String?, p2Id: String?, uid: String): Boolean =
+        sameUserId(p1Id, uid) || (p1Id.isNullOrBlank() && !sameUserId(p2Id, uid))
+
     fun setInChatTab(inChat: Boolean) {
         isActivelyInChatTab = inChat
         updatePresence()
@@ -423,13 +438,21 @@ class AuthRepository(private val context: Context) {
                     securityPrefs.setCoupleSecretKey(cleanPasscode.uppercase())
                 }
 
-                // Keep partner displayName synchronized in local state if available from couple space
-                val isP1 = p1 == currentUid
-                val partnerNameFromCouple = if (isP1) snapshot.getString("partner2Name") else snapshot.getString("partner1Name")
-                if (!partnerNameFromCouple.isNullOrBlank()) {
+                // The partner's name as the couple room has it: only until their own profile gives
+                // theirs (the display name they chose), which the room's copy can lag behind
+                val isP1 = isFirstPartner(p1, p2, currentUid)
+                val partnerNameFromCouple = (if (isP1) snapshot.getString("partner2Name") else snapshot.getString("partner1Name"))
+                    ?.trim()?.ifBlank { null }
+                partnerRoomName = partnerNameFromCouple
+                if (partnerNameFromCouple != null && partnerProfileName == null) {
                     val currentPartner = _partnerUserState.value
                     if (currentPartner != null && currentPartner.displayName != partnerNameFromCouple) {
-                        _partnerUserState.value = currentPartner.copy(displayName = partnerNameFromCouple)
+                        // copy() leaves out what's kept outside the constructor, like presence
+                        _partnerUserState.value = currentPartner.copy(displayName = partnerNameFromCouple).also {
+                            it.presenceReceivedAt = currentPartner.presenceReceivedAt
+                            it.heartbeatTouchReceivedAt = currentPartner.heartbeatTouchReceivedAt
+                            it.notificationPermission = currentPartner.notificationPermission
+                        }
                     } else if (currentPartner == null && !otherId.isNullOrBlank()) {
                         _partnerUserState.value = User(id = otherId, displayName = partnerNameFromCouple)
                     }
@@ -1120,7 +1143,7 @@ class AuthRepository(private val context: Context) {
             }
             userDocument(uid)?.set(updates as Map<String, Any>, com.google.firebase.firestore.SetOptions.merge())
 
-            // Update existing couple room with the new username so partner sees it
+            // Update existing couple room with the new display name so partner sees it
             val coupleId = current.coupleId?.trim()?.ifBlank { null } ?: getSavedCoupleId()
             if (!coupleId.isNullOrBlank() && coupleId != "couple_default") {
                 val coupleRef = getCoupleDocRef(coupleId)
@@ -1128,8 +1151,8 @@ class AuthRepository(private val context: Context) {
                     try {
                         val coupleSnap = coupleRef.get().await()
                         if (coupleSnap.exists()) {
-                            val p1Id = coupleSnap.getString("partner1Id")
-                            val coupleField = if (p1Id == uid) "partner1Name" else "partner2Name"
+                            val isP1 = isFirstPartner(coupleSnap.getString("partner1Id"), coupleSnap.getString("partner2Id"), uid)
+                            val coupleField = if (isP1) "partner1Name" else "partner2Name"
                             coupleRef.set(mapOf(coupleField to displayName, "updatedAt" to System.currentTimeMillis()), com.google.firebase.firestore.SetOptions.merge())
                         }
                     } catch (e: Exception) {
@@ -1374,8 +1397,8 @@ class AuthRepository(private val context: Context) {
         }
     }
 
+    /** The partner's account and our passcode. My name stays my display name (see [updateProfile]). */
     suspend fun updateExistingCoupleCredentials(
-        newUsername: String,
         partnerName: String,
         newSecretCode: String
     ): Result<User> {
@@ -1386,7 +1409,7 @@ class AuthRepository(private val context: Context) {
         val existingCoupleId = currentUser.coupleId?.trim()?.ifBlank { null }
             ?: getSavedCoupleId().takeIf { it != "couple_default" }
 
-        val cleanUser = newUsername.trim().ifBlank { currentUser.displayName.ifBlank { "Me" } }
+        val cleanUser = currentUser.displayName.ifBlank { "Me" }
         val cleanPartner = partnerName.trim().removeSuffix("@cherish.app")
         val cleanKey = newSecretCode.trim()
             .removePrefix("COUPLE_")
@@ -1395,11 +1418,7 @@ class AuthRepository(private val context: Context) {
 
         // If no existing couple room exists yet, pair with partner
         if (existingCoupleId.isNullOrBlank()) {
-            val pairRes = pairWithPartner(cleanPartner, if (cleanKey.isNotBlank()) cleanKey else "CHERISH-FOREVER")
-            if (cleanUser != currentUser.displayName && cleanUser.isNotBlank()) {
-                updateProfile(cleanUser, currentUser.statusMessage, null, false)
-            }
-            return pairRes
+            return pairWithPartner(cleanPartner, if (cleanKey.isNotBlank()) cleanKey else "CHERISH-FOREVER")
         }
 
         val coupleRef = getCoupleDocRef(existingCoupleId)
@@ -1412,7 +1431,6 @@ class AuthRepository(private val context: Context) {
 
         // Keep existing coupleId intact so messages, gallery, notes and call history remain intact
         val updatedUser = currentUser.copy(
-            displayName = cleanUser,
             partnerEmail = partnerEmail,
             coupleId = existingCoupleId
         )
@@ -1437,9 +1455,7 @@ class AuthRepository(private val context: Context) {
                 // 1. Update user document
                 val isDisguised = securityPrefs.isDisguiseActive.value
                 val shouldBeOnline = isAppInForeground && !isDisguised
-                val userUpdates = mutableMapOf<String, Any>(
-                    "displayName" to cleanUser
-                )
+                val userUpdates = mutableMapOf<String, Any>()
                 if (shouldBeOnline) {
                     userUpdates["isOnline"] = true
                     userUpdates["online"] = true
@@ -1464,17 +1480,15 @@ class AuthRepository(private val context: Context) {
                         val p1Id = coupleSnap.getString("partner1Id")
                         val p2Id = coupleSnap.getString("partner2Id")
                         val p1Name = coupleSnap.getString("partner1Name")
+                        val isP1 = isFirstPartner(p1Id, p2Id, uid) ||
+                            (!sameUserId(p2Id, uid) && p1Name.equals(currentUser.displayName, ignoreCase = true))
 
-                        if (p1Id == uid || (p1Id.isNullOrBlank() && p2Id != uid) || p1Name.equals(currentUser.displayName, ignoreCase = true)) {
-                            coupleUpdates["partner1Name"] = cleanUser
-                            if (cleanPartner.isNotBlank()) {
-                                coupleUpdates["partner2Name"] = cleanPartner
-                            }
-                        } else {
-                            coupleUpdates["partner2Name"] = cleanUser
-                            if (cleanPartner.isNotBlank()) {
-                                coupleUpdates["partner1Name"] = cleanPartner
-                            }
+                        coupleUpdates[if (isP1) "partner1Name" else "partner2Name"] = cleanUser
+                        // Their name is the display name they set: the account typed here only
+                        // stands in for it while their place is still empty
+                        val theirPlaceTaken = !(if (isP1) p2Id else p1Id).isNullOrBlank()
+                        if (cleanPartner.isNotBlank() && !theirPlaceTaken) {
+                            coupleUpdates[if (isP1) "partner2Name" else "partner1Name"] = cleanPartner
                         }
                     } else {
                         coupleUpdates["partner1Id"] = uid
@@ -1942,6 +1956,7 @@ class AuthRepository(private val context: Context) {
         if (currentListeningPartnerId == cleanPartnerId) return
         partnerListener?.remove()
         currentListeningPartnerId = cleanPartnerId
+        partnerProfileName = null
         val docRef = getUserDocRef(cleanPartnerId) ?: return
         partnerListener = docRef.addSnapshotListener { snapshot, error ->
                 if (error != null) {
@@ -1980,6 +1995,12 @@ class AuthRepository(private val context: Context) {
         try {
             var partner = parseUserSnapshot(doc)
             if (partner != null) {
+                // Their name as they set it; the couple room's copy only when their profile has none
+                partnerProfileName = partner.displayName.trim().ifBlank { null }
+                val roomName = partnerRoomName
+                if (partnerProfileName == null && roomName != null) {
+                    partner = partner.copy(displayName = roomName)
+                }
                 val boolOnline = (doc.get("isOnline") as? Boolean)
                     ?: (doc.get("online") as? Boolean)
                     ?: try { doc.getBoolean("isOnline") ?: doc.getBoolean("online") } catch (_: Exception) { null }
@@ -2236,6 +2257,8 @@ class AuthRepository(private val context: Context) {
         partnerServerLastSeen = null
         partnerPresenceReceivedAt = 0L
         partnerChatSeenAt = 0L
+        partnerProfileName = null
+        partnerRoomName = null
 
         // Clear FCM push token from Firestore and delete locally so next login starts clean
         if (oldUid.isNotBlank()) {

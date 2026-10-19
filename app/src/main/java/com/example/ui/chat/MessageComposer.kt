@@ -393,46 +393,20 @@ fun MessageComposer(
         if (isDark) darkSurface(NavyRaised, Neutral800) else Gray200
     }
 
-    // Type center dynamic emoji sizing: single/few emojis typed in the input box appear delightfully large and prominent
-    val inputTokens = remember(text) { tokenize(text) }
-    val inputEmojiCount = remember(inputTokens) { inputTokens.count { it.isEmoji } }
-    val isInputEmojiOnly = remember(inputTokens, inputEmojiCount) {
-        inputEmojiCount > 0 && inputTokens.all { it.isEmoji || it.text.isBlank() }
-    }
-    val composerFontSize = remember(isInputEmojiOnly, inputEmojiCount, chatText) {
-        when {
-            isInputEmojiOnly && inputEmojiCount == 1 -> 34.sp
-            isInputEmojiOnly && inputEmojiCount in 2..3 -> 28.sp
-            isInputEmojiOnly && inputEmojiCount in 4..8 -> 24.sp
-            else -> chatText.fontSize()
-        }
-    }
-    val privateComposerFontSize = remember(isInputEmojiOnly, inputEmojiCount, chatText) {
-        when {
-            isInputEmojiOnly && inputEmojiCount == 1 -> 34.sp
-            isInputEmojiOnly && inputEmojiCount in 2..3 -> 28.sp
-            isInputEmojiOnly && inputEmojiCount in 4..8 -> 24.sp
-            else -> chatText.fontSize(extraSp = 2)
-        }
-    }
-    val emojiVisualTransformation = remember(isInputEmojiOnly, inputEmojiCount) {
+    // Emojis in the message box: the size they'll be in the sent message, the same however many
+    // there are (picked or typed), so nothing jumps while typing
+    val composerFontSize = chatText.fontSize()
+    val privateComposerFontSize = chatText.fontSize(extraSp = 2)
+    val emojiVisualTransformation = remember {
         VisualTransformation { original ->
             val raw = original.text
             if (raw.isEmpty()) return@VisualTransformation TransformedText(original, OffsetMapping.Identity)
             val tokens = tokenize(raw)
             if (tokens.none { it.isEmoji }) return@VisualTransformation TransformedText(original, OffsetMapping.Identity)
-
-            val emojiOnly = tokens.all { it.isEmoji || it.text.isBlank() }
-            val count = tokens.count { it.isEmoji }
-            val emojiScale = when {
-                emojiOnly && count in 1..3 -> 1.15f
-                emojiOnly && count in 4..8 -> 1.20f
-                else -> 1.35f
-            }
             val annotated = buildAnnotatedString {
                 tokens.forEach { token ->
                     if (token.isEmoji) {
-                        withStyle(SpanStyle(fontSize = emojiScale.em)) {
+                        withStyle(SpanStyle(fontSize = TEXT_EMOJI_SCALE.em)) {
                             append(token.text)
                         }
                     } else {
@@ -448,16 +422,16 @@ fun MessageComposer(
     val emojiTabs = remember { listOf("💕", "😊", "👤", "🐾", "🍔", "⚽", "💡", "🏳️") }
     val emojiCategories = remember {
         listOf(
-            // 0: Couple / Love & Deep Intimacy (man & girl romance, sweet kisses, cuddles & devotion)
+            // 0: Couple / Love & Deep Intimacy (man & woman romance, sweet kisses, cuddles & devotion)
             listOf(
-                // Girl & Boy kisses & couple intimacy (man kissing girl, girl kissing man, cuddles)
-                "👩🏻‍❤️‍💋‍👨🏻", "👨🏻‍❤️‍💋‍👩🏻", "👧🏻‍❤️‍💋‍👦🏻", "👦🏻‍❤️‍💋‍👧🏻", "👩🏻‍❤️‍👨🏻", "👨🏻‍❤️‍👩🏻", "👧🏻‍❤️‍👦🏻", "👦🏻‍❤️‍👧🏻",
+                // Man & woman kisses and couples (8 a row), with 🫂 in the right-hand column
+                "👩🏻‍❤️‍💋‍👨🏻", "👨🏻‍❤️‍💋‍👩🏻", "👩🏻‍❤️‍👨🏻", "👨🏻‍❤️‍👩🏻", "💏🏻", "💑🏻", "👫🏻", "🫂",
                 "👸🏻", "👰🏻‍♀️", "💃🏻", "🧚🏻‍♀️", "🧜🏻‍♀️", "💇🏻‍♀️", "💆🏻‍♀️", "🧖🏻‍♀️",
-                "👩🏻", "👧🏻", "💋", "😘", "😚", "😗", "😙", "💏🏻",
-                "🫂", "🥰", "😍", "👅", "👄", "🫦", "🫠", "🛌",
-                "🛏️", "🤱🏻", "💆🏻‍♂️", "😴", "💤", "🥱", "🥺", "🥹",
-                "🤤", "🥵", "😳", "🫣", "🤭", "🤫", "🫶🏻", "🫰🏻",
-                "🫀", "🤲🏻", "🫳🏻", "🫴🏻", "🤝🏻", "👫🏻", "💑🏻", "👣",
+                "👩🏻", "👧🏻", "💋", "😘", "😚", "😗", "😙", "🥰",
+                "😍", "👅", "👄", "🫦", "🫠", "🛌", "🛏️", "🤱🏻",
+                "💆🏻‍♂️", "😴", "💤", "🥱", "🥺", "🥹", "🤤", "🥵",
+                "😳", "🫣", "🤭", "🤫", "🫶🏻", "🫰🏻", "🫀", "🤲🏻",
+                "🫳🏻", "🫴🏻", "🤝🏻", "👣",
                 // Romantic date nights, bath, intimacy & gifts
                 "🛁", "🧖🏻", "🧖🏻‍♂️", "🕯️", "🍷", "🥂", "🍾", "🍫", "🍓",
                 "🍒", "🧁", "🍯", "🧸", "🏩", "💒", "💍", "💌", "🔐", "🗝️",

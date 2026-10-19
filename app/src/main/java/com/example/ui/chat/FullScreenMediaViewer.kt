@@ -119,7 +119,7 @@ fun FullScreenMediaViewer(
     circularMediaUrls: Set<String> = emptySet(),
     // When each one was sent, by its URL (see mediaTimesOf): shown under the count
     mediaTimes: Map<String, Long> = emptyMap(),
-    // A profile photo: it breathes like their avatar in the chat's top bar (while they're online)
+    // A profile photo: it breathes like their avatar in the chat's top bar
     breathing: Boolean = false,
     isProfilePhoto: Boolean = false,
     partnerName: String? = null,

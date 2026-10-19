@@ -106,14 +106,13 @@ class ProfileViewModel(
         }
     }
 
+    /** The partner's account and our passcode. My name is my display name, changed in Edit Profile. */
     fun updateLoginCredentials(
-        username: String,
         partnerName: String,
         coupleSecretCode: String,
         onResult: (Boolean) -> Unit = {}
     ) {
         viewModelScope.launch {
-            val cleanUser = username.trim().ifBlank { _uiState.value.currentUser?.displayName ?: "Me" }
             val cleanPartner = partnerName.trim()
             val cleanCode = coupleSecretCode.trim()
                 .removePrefix("COUPLE_")
@@ -125,14 +124,11 @@ class ProfileViewModel(
                 ?: authRepository.getSavedCoupleId().takeIf { it != "couple_default" }
 
             val result = if (!existingCoupleId.isNullOrBlank()) {
-                authRepository.updateExistingCoupleCredentials(cleanUser, cleanPartner, cleanCode)
+                authRepository.updateExistingCoupleCredentials(cleanPartner, cleanCode)
+            } else if (cleanPartner.isNotBlank()) {
+                authRepository.pairWithPartner(cleanPartner, cleanCode)
             } else {
-                authRepository.updateProfile(cleanUser, _uiState.value.currentUser?.statusMessage ?: "", null, false)
-                if (cleanPartner.isNotBlank()) {
-                    authRepository.pairWithPartner(cleanPartner, cleanCode)
-                } else {
-                    Result.success(authRepository.currentUserState.value ?: com.example.data.model.User())
-                }
+                Result.success(authRepository.currentUserState.value ?: com.example.data.model.User())
             }
 
             securityPreferences.setCoupleSecretKey(cleanCode)
@@ -626,8 +622,7 @@ class ProfileViewModel(
                 .uppercase()
             val existingCoupleId = _uiState.value.currentUser?.coupleId?.trim()?.ifBlank { null }
             if (!existingCoupleId.isNullOrBlank()) {
-                val currentName = _uiState.value.currentUser?.displayName ?: "Me"
-                authRepository.updateExistingCoupleCredentials(currentName, partnerEmail, cleanCode)
+                authRepository.updateExistingCoupleCredentials(partnerEmail, cleanCode)
             } else {
                 authRepository.pairWithPartner(partnerEmail, cleanCode)
             }

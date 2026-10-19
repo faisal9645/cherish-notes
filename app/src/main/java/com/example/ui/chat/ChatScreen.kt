@@ -3217,8 +3217,8 @@ fun ChatScreen(
                 mediaUrl = photoUrl,
                 allMediaUrls = listOf(photoUrl),
                 openFrom = openFrom,
-                // Breathes like their avatar in the top bar, while they're online or typing
-                breathing = partnerPresence.isOnline || partnerPresence.isTyping || partnerPresence.isRecordingAudio,
+                // Always breathes, online or not (their avatar in the top bar only while online)
+                breathing = true,
                 isProfilePhoto = true,
                 partnerName = partnerName,
                 onOpenKissScreen = {

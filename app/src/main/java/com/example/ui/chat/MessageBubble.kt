@@ -1072,6 +1072,17 @@ fun MessageBubble(
                                             if (partnerHearing != null && isFromMe && !isPlayingAudio) {
                                                 // My partner is hearing it right now
                                                 PartnerHearingLabel(isVideo = false, playing = partnerHearing, color = durationColor)
+                                            } else if (isPlayingAudio && message.durationSeconds > 0) {
+                                                // Where it's up to while it plays, counting up: "0:07 / 0:15"
+                                                val total = message.durationSeconds
+                                                val elapsed = (audioProgress() * total).toInt().coerceIn(0, total)
+                                                Text(
+                                                    text = com.example.util.formatRecordingLength(elapsed) + " / " + com.example.util.formatRecordingLength(total),
+                                                    fontSize = 11.sp,
+                                                    fontWeight = FontWeight.Medium,
+                                                    color = durationColor,
+                                                    style = LocalTextStyle.current.steadyDigits
+                                                )
                                             } else {
                                                 Text(
                                                     text = "${message.durationSeconds} sec",
@@ -1659,12 +1670,15 @@ fun MessageBubble(
 }
 }
 
-/** The time (with pin, star and ticks) in a small dark pill: under a round video note or a big emoji. */
+/** How dark the time's pill is (and the hug's caption beside it at night): a soft grey. */
+internal const val TIME_CHIP_ALPHA = 0.55f
+
+/** The time (with pin, star and ticks) in a small grey pill: under a round video note or a big emoji. */
 @Composable
 private fun FloatingTimeChip(message: Message, isFromMe: Boolean, modifier: Modifier = Modifier) {
     Surface(
         shape = RoundedCornerShape(12.dp),
-        color = Color.Black.copy(alpha = 0.65f),
+        color = Color.Black.copy(alpha = TIME_CHIP_ALPHA),
         modifier = modifier
     ) {
         Row(

@@ -175,7 +175,7 @@ private enum class SettingsPage(
     val subtitle: String,
     val icon: androidx.compose.ui.graphics.vector.ImageVector
 ) {
-    Account("Account & Couple", "Username, partner, passcode and check-after", Icons.Rounded.Favorite),
+    Account("Account & Couple", "Partner, passcode and check-after", Icons.Rounded.Favorite),
     Privacy("Privacy", "Stealth vault, app lock, security audit and devices", Icons.Rounded.Security),
     Chats("Chats", "Theme, wallpaper, text size, font and chat mode", Icons.Rounded.ChatBubble),
     Notifications("Notifications", "Alerts, badges and reminders", Icons.Rounded.Notifications),
@@ -547,7 +547,7 @@ fun ProfileScreen(
             SettingsSection(
                 title = "Couple Connection",
                 icon = Icons.Rounded.Favorite,
-                // One edit for all of it: username, partner's account and passcode, together
+                // One edit for both: partner's account and passcode, together (my name is in Edit Profile)
                 action = {
                     Box(
                         modifier = Modifier
@@ -567,17 +567,6 @@ fun ProfileScreen(
                     }
                 }
             ) {
-                ListItem(
-                    modifier = Modifier.clickable { showPairDialog = true },
-                    headlineContent = { Text("My Username", fontSize = 15.sp, fontWeight = FontWeight.SemiBold) },
-                    supportingContent = {
-                        Text(user?.displayName?.ifBlank { "Me" } ?: "Me", fontSize = 13.sp)
-                    },
-                    leadingContent = {
-                        Icon(Icons.Rounded.Person, contentDescription = null, tint = primaryAccent)
-                    }
-                )
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), thickness = 0.6.dp)
                 ListItem(
                     modifier = Modifier.clickable { showPairDialog = true },
                     headlineContent = { Text("Partner's Account", fontSize = 15.sp, fontWeight = FontWeight.SemiBold) },
@@ -1244,12 +1233,6 @@ fun ProfileScreen(
                     },
                     modifier = Modifier.testTag("notifications_when_closed")
                 )
-                if (showDeliverySetup) {
-                    com.example.ui.components.DeliverySetupSheet(onDismiss = {
-                        showDeliverySetup = false
-                        deliveryMissing = com.example.notifications.BackgroundDelivery.missingCount(context)
-                    })
-                }
 
                 if (partner != null) {
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), thickness = 0.6.dp)
@@ -2522,6 +2505,14 @@ fun ProfileScreen(
         )
     }
 
+    // Get every message and call: opened from Notifications or from Calls, so it lives outside the pages
+    if (showDeliverySetup) {
+        com.example.ui.components.DeliverySetupSheet(onDismiss = {
+            showDeliverySetup = false
+            deliveryMissing = com.example.notifications.BackgroundDelivery.missingCount(context)
+        })
+    }
+
     // Edit Profile Dialog
     if (showEditProfileDialog) {
         var nameInput by remember { mutableStateOf(user?.displayName ?: "") }
@@ -2800,7 +2791,6 @@ fun ProfileScreen(
 
     // User Login Settings Dialog
     if (showPairDialog) {
-        var usernameInput by remember { mutableStateOf(user?.displayName ?: "") }
         var partnerEmailInput by remember {
             mutableStateOf(
                 user?.partnerEmail?.removeSuffix("@cherish.app")
@@ -2826,18 +2816,9 @@ fun ProfileScreen(
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text(
-                        "Update your username and shared couple connection credentials.",
+                        "Update your partner's account and shared couple passcode. Your name is your display name, in Edit Profile.",
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    OutlinedTextField(
-                        value = usernameInput,
-                        onValueChange = { usernameInput = it },
-                        label = { Text("My Username") },
-                        placeholder = { Text("e.g. Faisal or Shali") },
-                        singleLine = true,
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.fillMaxWidth().testTag("edit_my_username_input")
                     )
                     OutlinedTextField(
                         value = partnerEmailInput,
@@ -2862,7 +2843,7 @@ fun ProfileScreen(
             confirmButton = {
                 CherishButton(
                     onClick = {
-                        viewModel.updateLoginCredentials(usernameInput, partnerEmailInput, coupleKeyInput) { success ->
+                        viewModel.updateLoginCredentials(partnerEmailInput, coupleKeyInput) { success ->
                             CherishToast.show(if (success) "Login settings updated successfully! ✨" else "Update failed")
                         }
                         showPairDialog = false
