@@ -50,10 +50,21 @@ jobs:
         run: |
           set -o pipefail
           ./gradlew assembleRelease --no-daemon --stacktrace 2>&1 | tee build.log || {
+            ERR_MSG=$(grep -E 'e: |FAILURE:|Caused by:' build.log | head -n 10 | tr '\n' ' | ')
+            if [ -z "$ERR_MSG" ]; then ERR_MSG=$(tail -n 20 build.log | tr '\n' ' | '); fi
+            echo "::error title=GradleBuildFailure::$ERR_MSG"
             echo "=== GRADLE BUILD FAILED. LOG TAIL: ==="
             tail -n 150 build.log
             exit 1
           }
+
+      - name: Upload Build Log on Failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gradle-build-log
+          path: build.log
+          retention-days: 1
 
       - name: Prepare Single OTA Asset
         run: |
