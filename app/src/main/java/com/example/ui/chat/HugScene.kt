@@ -1,11 +1,13 @@
 package com.example.ui.chat
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Favorite
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -27,6 +29,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.VectorPainter
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.semantics.contentDescription
@@ -34,6 +37,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import java.util.Collections
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.exp
@@ -41,18 +45,24 @@ import kotlin.math.max
 import kotlin.math.sin
 
 /*
- * A 🫂 sent on its own is a real hug: him in 🫂's deep blue, her in its sky blue (with her hair up
+ * A 🫂 sent on its own is a real hug: him in 🫂's deep blue, her in romantic rose pink (with her hair up
  * in a bun), my partner on the left and me on the right, as in the chat. Whoever sent it walks over
  * with an arm open and wraps it round the other's back; the other steps in and hugs back, a hand on
- * their back. Heads lean together, they squeeze twice and rock, and stay in each other's arms. Next
+ * their back. Heads lean together, they squeeze and rock, and stay in each other's arms. Next
  * to the time it says who hugged whom.
  */
 
-/** Which of us is him (the deep blue) and which her (the sky blue), and my partner's name. */
+/** Which of us is him (the deep blue) and which her (the rose pink), and my partner's name. */
 @Immutable
 internal data class HugCouple(val iAmHim: Boolean, val partnerName: String)
 
 internal val LocalHugCouple = staticCompositionLocalOf { HugCouple(iAmHim = true, partnerName = "") }
+
+/** Tracks which incoming hugs have already played their entrance so new ones play on receipt automatically. */
+internal object HugPlayedTracker {
+    private val played = Collections.synchronizedSet(HashSet<String>())
+    fun shouldPlay(id: String): Boolean = played.add(id)
+}
 
 /** A message of nothing but 🫂 is shown as the hug. */
 internal fun isHugScene(emojis: List<String>): Boolean = emojis.size == 1 && baseOf(emojis[0]) == PEOPLE_HUGGING
@@ -90,7 +100,7 @@ internal fun HugScene(
     )
 }
 
-/** "You hugged Shali" or "Shali hugged you", in a chip like the time's, once they're hugging. */
+/** "You hugged Shali" or "Shali hugged you", in a chip like the time's, once they're hugging. Soft in day mode. */
 @Composable
 internal fun HugCaption(progress: () -> Float, isFromMe: Boolean, modifier: Modifier = Modifier, level: Float? = null) {
     val couple = LocalHugCouple.current
@@ -105,15 +115,25 @@ internal fun HugCaption(progress: () -> Float, isFromMe: Boolean, modifier: Modi
             else -> "He hugged you$how"
         }
     }
+    val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+    val chipBg = if (isDark) {
+        Color.Black.copy(alpha = 0.65f)
+    } else {
+        MaterialTheme.colorScheme.surface.copy(alpha = 0.90f)
+    }
+    val chipTextColor = if (isDark) Color.White else MaterialTheme.colorScheme.onSurface
+    val chipBorder = if (isDark) null else BorderStroke(0.7.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
+
     Surface(
         shape = RoundedCornerShape(12.dp),
-        color = Color.Black.copy(alpha = 0.65f),
+        color = chipBg,
+        border = chipBorder,
         modifier = modifier.graphicsLayer { alpha = ease((progress() - 0.36f) / 0.12f) }
     ) {
         Text(
             text = text,
             fontSize = 10.sp,
-            color = Color.White,
+            color = chipTextColor,
             fontWeight = FontWeight.Medium,
             maxLines = 1,
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
@@ -122,9 +142,9 @@ internal fun HugCaption(progress: () -> Float, isFromMe: Boolean, modifier: Modi
 }
 
 private enum class HugFigure(val color: Color, val shade: Color, val shoulders: Float, val head: Float) {
-    // 🫂's own blues: him the deep blue and broader, her the sky blue
+    // 🫂's couple colors: him in handsome deep blue, her in lovely romantic rose pink
     Him(Color(0xFF2F6FD6), Color(0xFF1F4FA3), shoulders = 22f, head = 13f),
-    Her(Color(0xFF6EC1F2), Color(0xFF3F9FDB), shoulders = 19f, head = 12.5f)
+    Her(Color(0xFFFF5286), Color(0xFFD81B60), shoulders = 19f, head = 12.5f)
 }
 
 /**
@@ -143,22 +163,44 @@ private fun DrawScope.drawHug(
 ) {
     val u = size.width / SCENE_UNITS_WIDE
     // The one who sent it walks over, an arm opening on the way, and wraps it round the other, who
-    // steps in to meet them and hugs back; their heads lean together, two squeezes, a soft rock
+    // steps in to meet them and hugs back; their heads lean together, squeezes, a soft rock
     val walk = ease((t - 0.04f) / 0.32f)
     val reach = ease((t - 0.08f) / 0.24f)
     val meet = ease((t - 0.26f) / 0.14f)
     val wrap = ease((t - 0.30f) / 0.12f)
     val nestle = ease((t - 0.34f) / 0.12f)
     val hugBack = ease((t - 0.40f) / 0.10f)
-    val power = 0.6f + 1.6f * level
+
+    // Dynamic squeeze power based on gentle, warm, tight
+    val power = when {
+        level < 0.35f -> 0.55f + 0.35f * (level / 0.35f) // Gentle
+        level < 0.67f -> 0.95f + 0.55f * ((level - 0.35f) / 0.32f) // Warm
+        else -> 1.55f + 0.95f * ((level - 0.67f) / 0.33f) // Tight / Deep
+    }
     val squeeze = power * hugSqueezePeaks(level).withIndex().sumOf { (i, peak) ->
-        ((if (i == 0) 1f else 0.85f) * bump(t, peak, 0.05f)).toDouble()
+        val weight = when {
+            level < 0.35f -> 0.75f
+            level < 0.67f -> if (i == 0) 1f else 0.85f
+            else -> if (i == 0) 1.15f else if (i == 1) 1.0f else 0.9f
+        }
+        (weight * bump(t, peak, if (level < 0.35f) 0.06f else 0.05f)).toDouble()
     }.toFloat()
-    // A tight hug holds them closer together
-    val snug = 2.5f * level * nestle
+
+    // Squeeze proximity matching gentle, warm, tight
+    val snug = when {
+        level < 0.35f -> 1.2f * nestle
+        level < 0.67f -> 2.6f * nestle
+        else -> 4.5f * nestle
+    }
+
     val rock = if (t > HUG_EMBRACED) {
         val r = (t - HUG_EMBRACED) / (1f - HUG_EMBRACED)
-        3f * sin(r * 2f * HugPi) * sin(r * HugPi)
+        val rockAmp = when {
+            level < 0.35f -> 1.8f // Gentle slow sway
+            level < 0.67f -> 3.2f // Warm comforting rock
+            else -> 4.2f // Tight passionate rock
+        }
+        rockAmp * sin(r * 2f * HugPi) * sin(r * HugPi)
     } else {
         0f
     }
@@ -316,13 +358,19 @@ private val HUG_SCENE_HEIGHT = 105.dp
 private const val FIRST_SQUEEZE = 0.6f
 
 /** A plain 🫂 (not held) hugs like a warm hold. */
-private const val PLAIN_HUG_LEVEL = 0.5f
+internal const val PLAIN_HUG_LEVEL = 0.5f
 
-/** When each squeeze is tightest (parts of the hug): two, and a third for a deep tight squeeze. */
-internal fun hugSqueezePeaks(level: Float?): List<Float> =
-    if ((level ?: PLAIN_HUG_LEVEL) >= 0.67f) listOf(FIRST_SQUEEZE, 0.76f, 0.88f) else listOf(FIRST_SQUEEZE, 0.76f)
+/** When each squeeze is tightest: 1 for gentle, 2 for warm, and 3 for deep tight squeeze. */
+internal fun hugSqueezePeaks(level: Float?): List<Float> {
+    val l = level ?: PLAIN_HUG_LEVEL
+    return when {
+        l < 0.35f -> listOf(FIRST_SQUEEZE) // Gentle: 1 tender squeeze
+        l < 0.67f -> listOf(FIRST_SQUEEZE, 0.76f) // Warm: 2 comforting squeezes
+        else -> listOf(FIRST_SQUEEZE, 0.76f, 0.88f) // Tight: 3 deep tight squeezes
+    }
+}
 // The hug's burst hearts set off 0.3 of the way through the burst (1.5 s)
 private const val HUG_HEARTS_LEAD_MS = 450f
-// Between his blue and her sky blue
-private val HugHeartColor = Color(0xFF4A97E8)
+// Romantic glowing rose heart over their heads
+private val HugHeartColor = Color(0xFFFF4081)
 private val HugPi = PI.toFloat()

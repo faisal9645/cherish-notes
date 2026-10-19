@@ -1216,16 +1216,16 @@ fun ProfileScreen(
 
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), thickness = 0.6.dp)
 
-                // --- SUBSECTION 4: NOTIFICATIONS WHEN CLOSED (this phone's battery and start-up switches; nothing runs in the background) ---
+                // --- SUBSECTION 4: GET EVERY MESSAGE & CALL (this phone's battery and start-up switches; nothing runs in the background) ---
                 ListItem(
-                    headlineContent = { Text("Notifications When Closed", fontSize = 15.sp, fontWeight = FontWeight.SemiBold) },
+                    headlineContent = { Text("Get Every Message & Call", fontSize = 15.sp, fontWeight = FontWeight.SemiBold) },
                     supportingContent = {
                         Text(
                             if (deliveryMissing == 0) {
-                                "Messages and calls come as push notifications, like WhatsApp: nothing keeps running. All set on this phone."
+                                "Messages and calls arrive reliably when Notes is closed. All background switches are configured on this phone."
                             } else {
-                                "Messages and calls come as push notifications, like WhatsApp. This phone holds them back while Notes is closed until " +
-                                    (if (deliveryMissing == 1) "1 switch is" else "$deliveryMissing switches are") + " on: tap Set up."
+                                "Ensure background switches are on so messages and calls reach this phone immediately when closed. " +
+                                    (if (deliveryMissing == 1) "1 switch is" else "$deliveryMissing switches are") + " needed: tap Set up."
                             },
                             fontSize = 13.sp
                         )
@@ -1464,6 +1464,36 @@ fun ProfileScreen(
                         }
                     },
                     modifier = Modifier.testTag("incoming_call_screen")
+                )
+
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), thickness = 0.6.dp)
+
+                // Get Every Call When Closed (Reliable Call Delivery)
+                ListItem(
+                    headlineContent = { Text("Get Every Call When Closed", fontSize = 15.sp, fontWeight = FontWeight.SemiBold) },
+                    supportingContent = {
+                        Text(
+                            if (deliveryMissing == 0) {
+                                "Incoming calls ring reliably even when Notes is closed. All background switches are configured."
+                            } else {
+                                "Ensure background switches are on so incoming calls ring immediately when closed. Tap Set up."
+                            },
+                            fontSize = 13.sp
+                        )
+                    },
+                    leadingContent = {
+                        Icon(Icons.Rounded.NotificationsActive, contentDescription = null, tint = primaryAccent)
+                    },
+                    trailingContent = {
+                        CherishTonalButton(
+                            onClick = { showDeliverySetup = true },
+                            shape = RoundedCornerShape(16.dp),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 2.dp)
+                        ) {
+                            Text(if (deliveryMissing == 0) "Check" else "Set up", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        }
+                    },
+                    modifier = Modifier.testTag("calls_when_closed")
                 )
 
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), thickness = 0.6.dp)

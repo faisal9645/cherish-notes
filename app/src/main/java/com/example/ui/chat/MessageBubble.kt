@@ -540,10 +540,13 @@ fun MessageBubble(
                         }
                         .testTag("message_bubble_${message.id}")
                 ) {
+                    val isHug = bigEmojis.size == 1 && isHugScene(bigEmojis)
+                    val isRecentIncomingHug = !isFromMe && isHug && (isFreshArrival || (System.currentTimeMillis() - message.timestamp < 120_000L && HugPlayedTracker.shouldPlay(message.id)))
                     BigEmoji(
                         emojis = bigEmojis,
                         isFromMe = isFromMe,
                         entrance = when {
+                            isRecentIncomingHug -> BigEmojiEntrance.PopIn
                             !isFreshArrival -> BigEmojiEntrance.None
                             isFromMe -> BigEmojiEntrance.FlyFromComposer
                             else -> BigEmojiEntrance.PopIn

@@ -120,10 +120,32 @@ fun FullScreenMediaViewer(
     mediaTimes: Map<String, Long> = emptyMap(),
     // A profile photo: it breathes like their avatar in the chat's top bar (while they're online)
     breathing: Boolean = false,
+    isProfilePhoto: Boolean = false,
+    partnerName: String? = null,
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+
+    var profileKisses by remember { mutableStateOf<List<KissBloom>>(emptyList()) }
+    var kissFeedbackText by remember { mutableStateOf<String?>(null) }
+
+    fun kissProfile(atFraction: Offset = Offset(0.5f, 0.45f)) {
+        val bloom = KissBloom(java.util.UUID.randomUUID().toString(), atFraction.x, atFraction.y, fromMe = true)
+        profileKisses = profileKisses + bloom
+        context.vibrateKiss()
+        val name = partnerName?.trim()?.substringBefore(' ') ?: "Partner"
+        kissFeedbackText = "Kissed $name 💋"
+        scope.launch {
+            try {
+                (context.applicationContext as? CherishApplication)?.authRepository?.sendKiss(atFraction.x, atFraction.y)
+            } catch (_: Exception) {}
+            delay(2400)
+            if (kissFeedbackText?.contains("Kissed") == true) {
+                kissFeedbackText = null
+            }
+        }
+    }
 
     // Opened from a photo in the chat or gallery: it grows out of that photo into full screen and
     // shrinks back into it when closed. Otherwise it zooms out of the point that was tapped
@@ -974,6 +996,16 @@ fun FullScreenMediaViewer(
                 }
             }
 
+            // Kisses blooming on the profile photo
+            if (isProfilePhoto || breathing) {
+                KissStampLayer(
+                    blooms = profileKisses,
+                    partnerName = partnerName ?: "Partner",
+                    onDone = { bloom -> profileKisses = profileKisses.filter { it.id != bloom.id } },
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+
             // Top App Bar: Counter, Delete, Download, Share, Close
             AnimatedVisibility(
                 visible = isChromeVisible,
@@ -1233,6 +1265,55 @@ fun FullScreenMediaViewer(
                                         }
                                     }
                                 }
+                            }
+                        }
+                    }
+
+                    if (isProfilePhoto || breathing) {
+                        AnimatedVisibility(
+                            visible = kissFeedbackText != null,
+                            enter = fadeIn() + scaleIn(),
+                            exit = fadeOut() + scaleOut()
+                        ) {
+                            Surface(
+                                shape = RoundedCornerShape(16.dp),
+                                color = Color.Black.copy(alpha = 0.78f),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE0475F).copy(alpha = 0.6f)),
+                                modifier = Modifier.padding(bottom = 8.dp)
+                            ) {
+                                Text(
+                                    text = kissFeedbackText.orEmpty(),
+                                    color = Color.White,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
+                                )
+                            }
+                        }
+
+                        // Romantic Kiss Profile button
+                        Surface(
+                            shape = RoundedCornerShape(24.dp),
+                            color = Color(0xFFE0475F).copy(alpha = 0.88f),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.45f)),
+                            modifier = Modifier
+                                .padding(bottom = 12.dp)
+                                .pressScaleTarget()
+                                .springClickable { kissProfile() }
+                                .testTag("kiss_profile_button")
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(horizontal = 18.dp, vertical = 9.dp)
+                            ) {
+                                Text("💋", fontSize = 18.sp)
+                                Spacer(Modifier.width(8.dp))
+                                Text(
+                                    text = "Kiss ${partnerName?.trim()?.substringBefore(' ') ?: "Profile"}",
+                                    color = Color.White,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
                             }
                         }
                     }

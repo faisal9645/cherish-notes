@@ -605,7 +605,13 @@ fun ChatScreen(
             newestIncomingSeenAt = incoming.timestamp
         } else if (incoming.timestamp > newestIncomingSeenAt) {
             newestIncomingSeenAt = incoming.timestamp
-            view.chatHaptic(ChatHaptic.Receive)
+            val isHug = incoming.bigEmojis()?.let { isHugScene(it) } == true
+            if (isHug) {
+                val lvl = incoming.hugSqueeze() ?: PLAIN_HUG_LEVEL
+                context.vibrateHugSqueezes(lvl, hugSqueezePeaks(lvl))
+            } else {
+                view.chatHaptic(ChatHaptic.Receive)
+            }
             if (listState.firstVisibleItemIndex > 1) unseenIncomingCount++
         }
     }
@@ -3221,6 +3227,8 @@ fun ChatScreen(
                 openFrom = openFrom,
                 // Breathes like their avatar in the top bar, while they're online or typing
                 breathing = partnerPresence.isOnline || partnerPresence.isTyping || partnerPresence.isRecordingAudio,
+                isProfilePhoto = true,
+                partnerName = partnerName,
                 onDismiss = {
                     val app = context.applicationContext as? com.example.CherishApplication
                     app?.securityPreferences?.isMediaViewerActive = false
@@ -3279,7 +3287,37 @@ fun ChatScreen(
                             fontSize = 13.sp,
                             color = if (isPartnerOnline) OnlineGreen else MaterialTheme.colorScheme.onSurfaceVariant
                         )
-                        Spacer(modifier = Modifier.height(20.dp))
+
+                        // Romantic Kiss action inside profile view
+                        Surface(
+                            shape = RoundedCornerShape(20.dp),
+                            color = Color(0xFFE0475F).copy(alpha = 0.88f),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.45f)),
+                            modifier = Modifier
+                                .padding(top = 14.dp)
+                                .pressScaleTarget()
+                                .springClickable {
+                                    context.vibrateKiss()
+                                    viewModel.sendKiss(0.5f, 0.5f)
+                                    kissBlooms += KissBloom(java.util.UUID.randomUUID().toString(), 0.5f, 0.5f, fromMe = true)
+                                }
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                            ) {
+                                Text("💋", fontSize = 16.sp)
+                                Spacer(Modifier.width(8.dp))
+                                Text(
+                                    text = "Kiss ${partnerName.trim().substringBefore(' ')}",
+                                    color = Color.White,
+                                    fontSize = 13.5.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(16.dp))
                         CherishButton(
                             onClick = {
                                 val app = context.applicationContext as? com.example.CherishApplication

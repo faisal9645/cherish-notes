@@ -155,7 +155,7 @@ internal fun BigEmoji(
 
     /** A held hug, felt: a buzz with each squeeze, as tight as it was sent, playing from [from]. */
     fun feelHug(from: Float) {
-        val level = hugLevel ?: return
+        val level = hugLevel ?: PLAIN_HUG_LEVEL
         if (!com.example.security.SecurityPreferences.getInstance(context).isHapticFeedbackEnabled()) return
         val peaks = hugSqueezePeaks(level).filter { it > from }.map { ((it - from) * lifeMs * slow).toLong() }
         context.vibrateHugSqueezes(level, peaks)
@@ -188,7 +188,7 @@ internal fun BigEmoji(
                     pop.animateTo(1f, if (slow > 1f) spring(dampingRatio = 0.6f, stiffness = 240f) else spring(dampingRatio = 0.45f, stiffness = 420f))
                 }
                 delay(90)
-                // A held hug arriving: each squeeze is felt
+                // A hug arriving: each squeeze is felt immediately upon arrival
                 if (hugScene) feelHug(from = 0f)
                 play(strong = false)
             }
@@ -202,8 +202,8 @@ internal fun BigEmoji(
     }
     LaunchedEffect(replay) {
         if (replay == 0) return@LaunchedEffect
-        // A heart beats in the hand too, and a hug squeezes (a held one as tight as it was sent)
-        if (hugScene && hugLevel != null) {
+        // A heart beats in the hand too, and a hug squeezes (as tight as it was sent)
+        if (hugScene) {
             feelHug(from = replayFrom)
         } else if (EmojiMotion.Heartbeat in motions || EmojiMotion.Hug in motions) {
             if (com.example.security.SecurityPreferences.getInstance(context).isHapticFeedbackEnabled()) {
