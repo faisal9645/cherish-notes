@@ -1,9 +1,9 @@
 {
-  "versionCode": 197,
-  "versionName": "1.8.25",
-  "tagName": "v1.8.25-197",
-  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.8.25-197/app_update_197.apk",
-  "assetSize": 18829056,
-  "releaseNotes": "Notes v1.8.25 (Build 197):\n• Dedicated Partner Version: Partner app version now displays exclusively inside the Check for Updates dialog\n• Love Emoji Tray: Removed monkey emojis from the romantic intimacy emoji tray\n• Boy & Girl couple emoji normalization updates\n• Performance and UI refinements",
-  "releaseDate": "2026-10-19T14:06:00Z"
+  "versionCode": 198,
+  "versionName": "1.8.26",
+  "tagName": "v1.8.26-198",
+  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.8.26-198/app_update_198.apk",
+  "assetSize": 18830900,
+  "releaseNotes": "Notes v1.8.26 (Build 198):\n• Reliable Call Ringing: One clear ringtone that always plays when ringing is on, heard over music\n• Incoming Call Privacy: Normal shows your partner's name and photo, Discreet keeps it disguised\n• Calls answered outside the app close back to where you were\n• Hugs play and vibrate only inside Cherish\n• Kiss Screen: Kisses show at the same spot on both phones; the close button no longer kisses\n• Styled-hair boy in every couple emoji, no bald-looking men",
+  "releaseDate": "2026-10-19T15:06:10Z"
 }
