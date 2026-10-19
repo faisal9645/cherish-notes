@@ -88,8 +88,11 @@ class CallService : Service() {
             Log.w(TAG, "Couldn't ring from the app", e)
             ringingCallId = null
             stopSelf()
-            // The notification rings by itself instead
-            if (stillRinging && invite != null) CallNotifications.showRingingNotification(this, invite)
+            // The notification rings by itself instead (and alone, not over the app's ringing)
+            if (stillRinging && invite != null) {
+                CallRinger.stop(this)
+                CallNotifications.showRingingNotification(this, invite)
+            }
             return false
         }
         if (!stillRinging || invite == null) {

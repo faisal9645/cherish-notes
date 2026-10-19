@@ -609,9 +609,15 @@ fun ChatScreen(
             newestIncomingSeenAt = incoming.timestamp
             val isHug = incoming.bigEmojis()?.let { isHugScene(it) } == true
             if (isHug) {
-                val lvl = incoming.hugSqueeze() ?: PLAIN_HUG_LEVEL
-                val peaks = hugSqueezePeaks(lvl).map { (it * hugSceneMs(lvl)).toLong() }
-                context.vibrateHugSqueezes(lvl, peaks)
+                // A hug is felt only inside Cherish: behind Notes (or with the app away) it waits, and
+                // plays with its squeezes when Cherish is open again (see BigEmoji)
+                val inCherish = com.example.CherishApplication.isAppInForeground &&
+                    !com.example.CherishApplication.instance.securityPreferences.isDisguiseActive()
+                if (inCherish) {
+                    val lvl = incoming.hugSqueeze() ?: PLAIN_HUG_LEVEL
+                    val peaks = hugSqueezePeaks(lvl).map { (it * hugSceneMs(lvl)).toLong() }
+                    context.vibrateHugSqueezes(lvl, peaks)
+                }
             } else {
                 view.chatHaptic(ChatHaptic.Receive)
             }
@@ -902,6 +908,8 @@ fun ChatScreen(
         if (partnerStartedKissing && isChatInView && kissesAllowed && !showHeartbeatTouch) showKissPad = true
     }
     var currentGlassTouch by remember { mutableStateOf<Offset?>(null) }
+    // Where my held kiss is, sent as it moves (not on every finger move, see KissSpotSender)
+    val kissSpot = remember { KissSpotSender { x, y -> viewModel.setKissTouch(x, y) } }
     // My lips (or thumb) held on the chat's background: a kiss there, blooming on theirs too
     val onKissHold = remember {
         { local: Offset ->
@@ -2012,10 +2020,10 @@ fun ChatScreen(
                             onGlassTouch = { normX, normY ->
                                 if (normX != null && normY != null) {
                                     currentGlassTouch = Offset(normX, normY)
-                                    viewModel.setKissTouch(normX, normY)
+                                    kissSpot.at(normX, normY)
                                 } else {
                                     currentGlassTouch = null
-                                    viewModel.setKissTouch(null, null)
+                                    kissSpot.letGo()
                                 }
                             },
                             onKissStamp = onKissHold,

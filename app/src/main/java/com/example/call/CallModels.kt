@@ -123,8 +123,8 @@ enum class VoiceChangerEffect(
     GIRL("girl", "Girl", "Sweet young girl's voice", "👧", 0, 1.38, formantRatio = 0.45),
     CHIPMUNK("chipmunk", "Chipmunk", "High & cute pitch", "🐿️", 0x02010500 /* VOICE_CHANGER_EFFECT_GIRL */, 1.45),
     DEEP_MONSTER("deep_monster", "Monster", "Deep & powerful rumble", "👹", 0x02010700 /* VOICE_CHANGER_EFFECT_HULK */, 0.65),
-    KID("kid", "Kid", "Playful bright tone", "🧒", 0x02010300 /* VOICE_CHANGER_EFFECT_BOY */, 1.25),
-    BARITONE("baritone", "Baritone", "Smooth low resonance", "🧔", 0x02010100 /* VOICE_CHANGER_EFFECT_UNCLE */, 0.82),
+    KID("kid", "Kid", "Playful bright tone", "🧸", 0x02010300 /* VOICE_CHANGER_EFFECT_BOY */, 1.25),
+    BARITONE("baritone", "Baritone", "Smooth low resonance", "🧑", 0x02010100 /* VOICE_CHANGER_EFFECT_UNCLE */, 0.82),
     ROBOT("robot", "Robot", "Futuristic android effect", "🤖", 0x02010200 /* VOICE_CHANGER_EFFECT_OLDMAN */, 0.90),
     STUDIO("studio", "Studio Mic", "Warm acoustic radio tone", "🎧", 0x02020300 /* ROOM_ACOUSTICS_STUDIO */, 1.0),
     ETHEREAL("ethereal", "Ethereal Echo", "Dreamy cavern space", "✨", 0x02020700 /* ROOM_ACOUSTICS_ETHEREAL */, 1.0)
@@ -163,12 +163,13 @@ data class CallUiState(
 /** Whether calls may show who's calling, following the app's own privacy settings. */
 object CallPrivacy {
     /**
-     * Not with hidden notification content in Notes disguise (the same rule as message
-     * notifications), and never in Private Mode, which shows no identity at all.
+     * As Settings > Incoming Call Privacy says: Normal shows their name and photo on the call
+     * screen and its notification, Discreet doesn't (its lock screen alert is disguised too, see
+     * CallNotifications). Never in Private Mode, which shows no identity at all.
      */
     fun showIdentity(context: Context): Boolean {
         val prefs = SecurityPreferences.getInstance(context)
-        val discreet = prefs.isHideNotificationContent() && prefs.isDisguiseModeEnabled()
+        val discreet = prefs.getCallMaskingStyle().equals("discreet", ignoreCase = true)
         val privateMode = prefs.getChatExperienceMode() == ChatExperienceMode.PRIVATE
         return !discreet && !privateMode
     }

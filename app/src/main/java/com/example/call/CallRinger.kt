@@ -2,6 +2,7 @@ package com.example.call
 
 import android.content.Context
 import android.media.AudioAttributes
+import android.media.AudioFocusRequest
 import android.media.AudioManager
 import android.media.Ringtone
 import android.media.RingtoneManager
@@ -39,17 +40,45 @@ internal object CallRinger {
      */
     private var vibrating: Vibrator? = null
     private var wakeLock: android.os.PowerManager.WakeLock? = null
+    /** Ringing now (started and not stopped), so a second start doesn't restart the ringtone. */
+    @Volatile private var active = false
+    // While the ringtone should be heard: where from, which of the phone's sounds is playing, and
+    // how many checks in a row found it quiet
+    private var ringContext: Context? = null
+    private var uriIndex = 0
+    private var quietChecks = 0
+    private var focus: AudioFocusRequest? = null
 
-    /** Plays the ringtone again when it ends, where it can't loop by itself or when looped playback stalls. */
+    /**
+     * Keeps the ringtone heard: plays it again when it ends (where it can't loop by itself, or when
+     * looped playback stalls), and moves to the phone's next sound when one won't play at all.
+     */
     private val replay = object : Runnable {
         override fun run() {
-            val current = ringtone ?: return
-            try {
-                if (!current.isPlaying) current.play()
-            } catch (_: Exception) {}
+            val context = ringContext ?: return
+            val current = ringtone
+            if (current != null && current.isPlaying) {
+                quietChecks = 0
+            } else {
+                quietChecks++
+                if (current == null || quietChecks >= 3) {
+                    try {
+                        current?.stop()
+                    } catch (_: Exception) {}
+                    ringtone = playRingtone(context, uriIndex + 1)
+                    quietChecks = 0
+                } else {
+                    try {
+                        current.play()
+                    } catch (_: Exception) {}
+                }
+            }
             handler.postDelayed(this, 1_000L)
         }
     }
+
+    /** Ringing already (from the call screen or the ringing service). */
+    fun isRinging(): Boolean = active
 
     @Synchronized
     fun start(caller: Context, withRingtone: Boolean) {
@@ -59,6 +88,7 @@ internal object CallRinger {
         val mode = (context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager)?.ringerMode
             ?: AudioManager.RINGER_MODE_NORMAL
         if (mode == AudioManager.RINGER_MODE_SILENT) return
+        active = true
 
         // Hold CPU and screen wakelock so device wakes up and stays awake to ring and vibrate while screen is off/locked
         try {
@@ -78,25 +108,15 @@ internal object CallRinger {
         } catch (_: Exception) {}
 
         if (withRingtone && mode == AudioManager.RINGER_MODE_NORMAL) {
-            try {
-                // The phone's ringtone as the system keeps a copy of it (readable without any
-                // permission), else the file it was chosen from
-                val uri = RingtoneManager.getActualDefaultRingtoneUri(context, RingtoneManager.TYPE_RINGTONE)
-                    ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
-                    ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
-                    ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
-                    ?: android.provider.Settings.System.DEFAULT_RINGTONE_URI
-                ringtone = RingtoneManager.getRingtone(context, uri)?.apply {
-                    audioAttributes = ATTRIBUTES
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) isLooping = true
-                    play()
-                }
-                // Watchdog replay ensuring continuous ringing even across OEMs that stop after 1 track cycle
-                handler.removeCallbacks(replay)
-                handler.postDelayed(replay, 1_000L)
-            } catch (e: Exception) {
-                Log.w(TAG, "Ringtone unavailable", e)
-            }
+            // Heard over music or a video: they pause while it rings
+            takeFocus(context)
+            ringContext = context
+            uriIndex = 0
+            quietChecks = 0
+            ringtone = playRingtone(context, 0)
+            // Watchdog replay ensuring continuous ringing even across OEMs that stop after 1 track cycle
+            handler.removeCallbacks(replay)
+            handler.postDelayed(replay, 1_000L)
         }
         val vibrator = vibrator(context) ?: return
         try {
@@ -116,13 +136,16 @@ internal object CallRinger {
 
     @Synchronized
     fun stop(context: Context) {
+        active = false
         handler.removeCallbacks(replay)
+        ringContext = null
         ringtone?.let {
             try {
                 it.stop()
             } catch (_: Exception) {}
         }
         ringtone = null
+        releaseFocus(context)
         vibrating?.let {
             try {
                 it.cancel()
@@ -133,6 +156,58 @@ internal object CallRinger {
             wakeLock?.takeIf { it.isHeld }?.release()
         } catch (_: Exception) {}
         wakeLock = null
+    }
+
+    /**
+     * The phone's ringtone, from the first of its sounds that plays (from [from] on, round again):
+     * the system's own copy of the ringtone first, readable without any permission; then the file
+     * it was chosen from (which can need one), then its notification and alarm sounds.
+     */
+    private fun playRingtone(context: Context, from: Int): Ringtone? {
+        val uris = listOfNotNull(
+            android.provider.Settings.System.DEFAULT_RINGTONE_URI,
+            RingtoneManager.getActualDefaultRingtoneUri(context, RingtoneManager.TYPE_RINGTONE),
+            RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION),
+            RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
+        ).distinct()
+        if (uris.isEmpty()) return null
+        for (step in uris.indices) {
+            val index = (from + step) % uris.size
+            try {
+                val tone = RingtoneManager.getRingtone(context, uris[index]) ?: continue
+                tone.audioAttributes = ATTRIBUTES
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) tone.isLooping = true
+                tone.play()
+                uriIndex = index
+                return tone
+            } catch (e: Exception) {
+                Log.w(TAG, "Ringtone ${uris[index]} unavailable", e)
+            }
+        }
+        return null
+    }
+
+    private fun takeFocus(context: Context) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+        val audio = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager ?: return
+        try {
+            val request = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)
+                .setAudioAttributes(ATTRIBUTES)
+                .build()
+            audio.requestAudioFocus(request)
+            focus = request
+        } catch (e: Exception) {
+            Log.w(TAG, "Audio focus unavailable", e)
+        }
+    }
+
+    private fun releaseFocus(context: Context) {
+        val request = focus ?: return
+        focus = null
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+        try {
+            (context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager)?.abandonAudioFocusRequest(request)
+        } catch (_: Exception) {}
     }
 
     private fun vibrator(context: Context): Vibrator? =

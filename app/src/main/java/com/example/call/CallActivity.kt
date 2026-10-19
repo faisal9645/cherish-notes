@@ -120,20 +120,27 @@ class CallActivity : ComponentActivity() {
         }
     }
 
+    /**
+     * The call is over: back to the chat when it began inside Cherish. One that rang out of the app
+     * (over another app, or a locked phone) just closes, back to where the phone was, never opening
+     * Notes or Cherish (see CallManager.returnsToCherish).
+     */
     private fun dismissAndReturnToCherish() {
         app.securityPreferences.lastCallEndedAt = android.os.SystemClock.elapsedRealtime()
-        app.securityPreferences.revealSecretApp()
-        try {
-            val intent = Intent(this, com.example.MainActivity::class.java).apply {
-                action = Intent.ACTION_MAIN
-                addCategory(Intent.CATEGORY_LAUNCHER)
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED or Intent.FLAG_ACTIVITY_SINGLE_TOP
-                putExtra("open_chat", true)
-                putExtra("from_call_ended", true)
+        if (CallManager.returnsToCherish) {
+            app.securityPreferences.revealSecretApp()
+            try {
+                val intent = Intent(this, com.example.MainActivity::class.java).apply {
+                    action = Intent.ACTION_MAIN
+                    addCategory(Intent.CATEGORY_LAUNCHER)
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED or Intent.FLAG_ACTIVITY_SINGLE_TOP
+                    putExtra("open_chat", true)
+                    putExtra("from_call_ended", true)
+                }
+                startActivity(intent)
+            } catch (e: Exception) {
+                Log.w("CallActivity", "Failed to bring MainActivity to front", e)
             }
-            startActivity(intent)
-        } catch (e: Exception) {
-            Log.w("CallActivity", "Failed to bring MainActivity to front", e)
         }
         finish()
     }

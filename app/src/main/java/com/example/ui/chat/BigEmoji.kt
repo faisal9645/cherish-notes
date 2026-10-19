@@ -154,9 +154,15 @@ internal fun BigEmoji(
     // Landed (or never flying): where it sits isn't needed any more, so scrolling skips it
     var hasLanded by remember { mutableStateOf(entrance != BigEmojiEntrance.FlyFromComposer) }
 
-    /** A held hug, felt: a buzz with each squeeze, as tight as it was sent, playing from [from]. */
+    val lifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle
+
+    /**
+     * A held hug, felt: a buzz with each squeeze, as tight as it was sent, playing from [from].
+     * Only inside Cherish, never behind Notes or with the app closed.
+     */
     fun feelHug(from: Float) {
         val level = hugLevel ?: PLAIN_HUG_LEVEL
+        if (!isInCherish(context, lifecycle)) return
         if (!com.example.security.SecurityPreferences.getInstance(context).isHapticFeedbackEnabled()) return
         val peaks = hugSqueezePeaks(level).filter { it > from }.map { ((it - from) * lifeMs * slow).toLong() }
         context.vibrateHugSqueezes(level, peaks)
@@ -187,6 +193,9 @@ internal fun BigEmoji(
                 play(strong = false)
             }
             BigEmojiEntrance.PopIn -> {
+                // A hug pops in, plays and is felt only inside Cherish: one that arrived behind Notes
+                // (or with the app away) waits until Cherish is open again
+                if (hugScene) awaitInCherish(context, lifecycle)
                 launch {
                     pop.animateTo(1f, if (slow > 1f) spring(dampingRatio = 0.6f, stiffness = 240f) else spring(dampingRatio = 0.45f, stiffness = 420f))
                 }
@@ -585,6 +594,20 @@ internal fun motionOf(base: String): EmojiMotion = when {
     base in CHEER -> EmojiMotion.Cheer
     base in SPARKLE -> EmojiMotion.Sparkle
     else -> EmojiMotion.Jelly
+}
+
+/** Cherish is on screen: the app open, and not hidden behind Notes. */
+private fun isInCherish(context: android.content.Context, lifecycle: androidx.lifecycle.Lifecycle): Boolean =
+    !com.example.security.SecurityPreferences.getInstance(context).isDisguiseActive() &&
+        lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)
+
+/** Waits until Cherish is on screen (see [isInCherish]). */
+private suspend fun awaitInCherish(context: android.content.Context, lifecycle: androidx.lifecycle.Lifecycle) {
+    kotlinx.coroutines.flow.combine(
+        com.example.security.SecurityPreferences.getInstance(context).isDisguiseActive,
+        lifecycle.currentStateFlow
+    ) { behindNotes, state -> !behindNotes && state.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED) }
+        .first { it }
 }
 
 /** [emoji] without its variation selectors and skin tones, to look it up. */

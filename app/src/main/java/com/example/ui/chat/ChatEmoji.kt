@@ -314,9 +314,10 @@ internal fun withFairSkinTone(emoji: String): String {
 // ---- Couples: a boy and a girl ----------------------------------------------------------------
 
 /**
- * A couple emoji as the two of us, a boy and a girl: a man and a woman stay as sent (either way
- * round); two men, two women, or two unnamed people (which phones draw as two boys or two girls)
- * become him kissing her, like the love tray's first one.
+ * A couple emoji as the two of us, the boy always with his styled hair (🧑: a man 👨 or a boy 👦
+ * looks bald on some phones) and the girl as 👩. Her first stays her first; anything else (him
+ * first, two boys, two girls, two unnamed people) becomes him kissing her, like the love tray's
+ * first one. A man or boy on his own (old, bearded or bald too) shows as the boy with his hair.
  */
 private fun asBoyAndGirl(emoji: String): String {
     // Its people and joiners, without skin tones or variation selectors
@@ -330,33 +331,42 @@ private fun asBoyAndGirl(emoji: String): String {
     return BOY_AND_GIRL[key.toString()] ?: emoji
 }
 
-/** Every couple that isn't a man and a woman (by its people, without tones), to one that is. */
+/** Every couple and man (by its people, without tones) to the boy, with his hair, and the girl. */
 private val BOY_AND_GIRL: Map<String, String> = run {
     fun of(vararg codePoints: Int) = String(codePoints, 0, codePoints.size)
     val man = of(0x1F468)
     val woman = of(0x1F469)
-    val person = of(0x1F9D1)
+    val boy = of(0x1F9D1)
+    val kid = of(0x1F466)
+    val girl = of(0x1F467)
+    val bald = of(0x1F9B2)
     val heart = of(0x2764)
     val kissMark = of(0x1F48B)
     val handshake = of(0x1F91D)
     val zwj = of(0x200D)
-    val kiss = man + zwj + heart + of(0xFE0F) + zwj + kissMark + zwj + woman
-    val inLove = man + zwj + heart + of(0xFE0F) + zwj + woman
+    fun kiss(first: String, second: String) = first + zwj + heart + of(0xFE0F) + zwj + kissMark + zwj + second
+    fun inLove(first: String, second: String) = first + zwj + heart + of(0xFE0F) + zwj + second
     // Woman and man holding hands, one picture (the joined form is only for two skin tones)
     val holdingHands = of(0x1F46B)
     val couples = HashMap<String, String>()
-    val people = listOf(man, woman, person)
+    val girls = setOf(woman, girl)
+    val people = listOf(man, woman, boy, kid, girl)
     for (first in people) for (second in people) {
-        val boyAndGirl = (first == man && second == woman) || (first == woman && second == man)
-        if (!boyAndGirl) {
-            couples[first + zwj + heart + zwj + kissMark + zwj + second] = kiss
-            couples[first + zwj + heart + zwj + second] = inLove
-        }
+        val herFirst = first in girls && second !in girls
+        couples[first + zwj + heart + zwj + kissMark + zwj + second] = if (herFirst) kiss(woman, boy) else kiss(boy, woman)
+        couples[first + zwj + heart + zwj + second] = if (herFirst) inLove(woman, boy) else inLove(boy, woman)
         couples[first + zwj + handshake + zwj + second] = holdingHands
     }
-    couples[of(0x1F48F)] = kiss // 💏
-    couples[of(0x1F491)] = inLove // 💑
+    couples[of(0x1F48F)] = kiss(boy, woman) // 💏
+    couples[of(0x1F491)] = inLove(boy, woman) // 💑
     couples[of(0x1F46C)] = holdingHands // 👬
     couples[of(0x1F46D)] = holdingHands // 👭
+    // No bald-looking boy or man anywhere: the boy, with his styled hair
+    val oldMan = of(0x1F474)
+    val beard = of(0x1F9D4)
+    for (him in listOf(man, kid, oldMan, beard, beard + zwj + of(0x2642), man + zwj + bald, boy + zwj + bald)) {
+        couples[him] = boy
+    }
+    couples[woman + zwj + bald] = woman
     couples
 }

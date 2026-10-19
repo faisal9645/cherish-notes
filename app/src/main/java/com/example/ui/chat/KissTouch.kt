@@ -63,7 +63,10 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Surface
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import com.example.data.model.KissTouch
 import com.example.security.SecurityPreferences
 import kotlinx.coroutines.delay
@@ -94,6 +97,36 @@ private fun Context.vibrateLongKiss() {
 
 /** How often a long kiss is felt again while both keep kissing. */
 private const val LONG_KISS_EVERY_MS = 1_400L
+
+/**
+ * Sends where a held kiss is to the other phone ([send]; null, null when let go): at once when it
+ * starts, then again only once it has moved a little, and not more than every [KISS_MOVE_SEND_MS],
+ * so their screen shows it at the same spot without a save on every finger move.
+ */
+internal class KissSpotSender(private val send: (x: Float?, y: Float?) -> Unit) {
+    private var sentX = 0f
+    private var sentY = 0f
+    private var sentAt = 0L
+
+    fun at(x: Float, y: Float) {
+        val now = android.os.SystemClock.uptimeMillis()
+        val moved = kotlin.math.abs(x - sentX) > KISS_MOVE_FRACTION || kotlin.math.abs(y - sentY) > KISS_MOVE_FRACTION
+        if (sentAt == 0L || (moved && now - sentAt >= KISS_MOVE_SEND_MS)) {
+            sentX = x
+            sentY = y
+            sentAt = now
+            send(x, y)
+        }
+    }
+
+    fun letGo() {
+        sentAt = 0L
+        send(null, null)
+    }
+}
+
+private const val KISS_MOVE_SEND_MS = 300L
+private const val KISS_MOVE_FRACTION = 0.03f
 
 /** Keeps the screen on while [on]: a long, still kiss sends no touches, so the phone would sleep. */
 @Composable
@@ -547,8 +580,8 @@ private const val KISS_EXTRA_HOLD_MS = 250L
 // ---- The kiss pad: lips to lips -------------------------------------------------------------
 
 /**
- * Lips held to the screen show live on the partner's phone (theirs show here, mirrored, as if
- * face to face); both held at once is a kiss both phones feel. [partnerTouch]: their lips on their
+ * Lips held to the screen show live on the partner's phone, at the same spot (theirs show here at
+ * theirs); both held at once is a kiss both phones feel. [partnerTouch]: their lips on their
  * pad right now; [onTouch]: mine (parts of the pad), or null when I let go.
  */
 @Composable
@@ -585,8 +618,10 @@ internal fun KissPadDialog(
         animationSpec = infiniteRepeatable(tween(if (connected) 575 else 1_400, easing = FastOutSlowInEasing), RepeatMode.Reverse),
         label = "kiss_glow_value"
     )
-    val meet = remember { Animatable(0f) }
-    LaunchedEffect(connected) { meet.animateTo(if (connected) 1f else 0f, spring(dampingRatio = 0.7f, stiffness = 120f)) }
+    val spot = remember { KissSpotSender(onTouch) }
+    // The close button (with room round it): a touch there closes, never kisses or buzzes
+    val closeArea = remember { arrayOf(Rect.Zero) }
+    val closeRoom = with(LocalDensity.current) { 28.dp.toPx() }
 
     Dialog(
         onDismissRequest = {
@@ -607,43 +642,46 @@ internal fun KissPadDialog(
                 .pointerInput(Unit) {
                     awaitEachGesture {
                         val down = awaitFirstDown(requireUnconsumed = false)
+                        if (closeArea[0].inflate(closeRoom).contains(down.position)) return@awaitEachGesture
                         val at = Offset(down.position.x / size.width, down.position.y / size.height)
                         myTouch = at
-                        onTouch(at.x, at.y)
+                        spot.at(at.x, at.y)
                         context.vibrateKiss()
                         try {
                             while (true) {
                                 val event = awaitPointerEvent()
                                 if (event.changes.none { it.pressed }) break
                                 event.changes.firstOrNull { it.pressed }?.let {
-                                    myTouch = Offset(it.position.x / size.width, it.position.y / size.height)
+                                    val moved = Offset(it.position.x / size.width, it.position.y / size.height)
+                                    myTouch = moved
+                                    spot.at(moved.x, moved.y)
                                 }
                             }
                         } finally {
                             myTouch = null
-                            onTouch(null, null)
+                            spot.letGo()
                         }
                     }
                 }
         ) {
             val path = remember { Path() }
             Canvas(modifier = Modifier.fillMaxSize()) {
-                // Their lips, mirrored (face to face), and mine; drawn closer together as they meet
-                val mine = myTouch
-                val theirs = if (partnerLive && partnerTouch != null) Offset(1f - partnerTouch.x, partnerTouch.y) else null
-                val m = meet.value
+                // Their lips at the same spot they're kissing on their screen, and mine where I am
+                val mine = myTouch?.let { Offset(it.x * size.width, it.y * size.height) }
+                val theirs = if (partnerLive && partnerTouch != null) Offset(partnerTouch.x * size.width, partnerTouch.y * size.height) else null
                 val middle = Offset(size.width / 2f, size.height * 0.46f)
-                fun place(p: Offset) = Offset(p.x * size.width, p.y * size.height) * (1f - m) + middle * m
-                if (connected) {
+                if (connected && mine != null && theirs != null) {
+                    // A glow round the two kisses
+                    val between = (mine + theirs) / 2f
                     drawCircle(
-                        Brush.radialGradient(listOf(LipBlush.copy(alpha = 0.45f * glow), Color.Transparent), center = middle, radius = size.width * 0.75f),
+                        Brush.radialGradient(listOf(LipBlush.copy(alpha = 0.45f * glow), Color.Transparent), center = between, radius = size.width * 0.75f),
                         radius = size.width * 0.75f,
-                        center = middle
+                        center = between
                     )
                 }
                 val lips = size.width * 0.42f
-                if (theirs != null) drawLips(path, place(theirs) + Offset(0f, -lips * 0.12f * m), lips * (0.9f + 0.1f * glow), 0.85f)
-                if (mine != null) drawLips(path, place(mine) + Offset(0f, lips * 0.12f * m), lips * (0.9f + 0.1f * glow), 1f)
+                if (theirs != null) drawLips(path, theirs, lips * (0.9f + 0.1f * glow), 0.85f)
+                if (mine != null) drawLips(path, mine, lips * (0.9f + 0.1f * glow), 1f)
                 if (mine == null && theirs == null) {
                     // Where to press: a faint print
                     drawLips(path, middle, lips, 0.22f + 0.1f * glow)
@@ -659,6 +697,7 @@ internal fun KissPadDialog(
                     .statusBarsPadding()
                     .padding(20.dp)
                     .size(44.dp)
+                    .onGloballyPositioned { closeArea[0] = it.boundsInRoot() }
                     .background(Color.White.copy(alpha = 0.15f), CircleShape)
             ) {
                 Icon(Icons.Rounded.Close, contentDescription = "Close", tint = Color.White)

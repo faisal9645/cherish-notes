@@ -165,12 +165,18 @@ object CallNotifications {
         createChannels(context)
         if (shownCallId == invite.callId && (CallService.isRingingFor(invite.callId) || isIncomingShown(context))) return
         shownCallId = invite.callId
-        val silenced = silencedCallId == invite.callId
-        // Post notification immediately so incoming call screen / heads-up banner shows with 0 delay
-        showRingingNotification(context, invite)
-        if (!silenced) {
-            ringFromApp(context, invite)
-            CallService.startRinging(context, invite)
+        if (silencedCallId == invite.callId) {
+            showRingingNotification(context, invite)
+            return
+        }
+        // Shown at once (the banner, or the call screen on a locked phone, with no delay) and rung by
+        // the app alone, one ringtone: never the notification's own as well. Where the ringing
+        // service can't start, the notification rings by itself instead
+        notify(context, ID_INCOMING, buildIncoming(context, invite, Ringing.APP))
+        ringFromApp(context, invite)
+        if (!CallService.startRinging(context, invite)) {
+            CallRinger.stop(context)
+            showRingingNotification(context, invite)
         }
     }
 
@@ -188,8 +194,10 @@ object CallNotifications {
         val isMasked = prefs.getCallMaskingStyle().equals("discreet", ignoreCase = true)
         val silenced = ringing == Ringing.QUIET
         val channelId = when (ringing) {
-            Ringing.NOTIFICATION, Ringing.APP -> if (prefs.isCallRingingEnabled()) CHANNEL_INCOMING else CHANNEL_INCOMING_SILENT
-            Ringing.QUIET -> CHANNEL_INCOMING_QUIET
+            // Ringing by itself: its own ringtone (with Call Notification Ringing on) or vibration
+            Ringing.NOTIFICATION -> if (prefs.isCallRingingEnabled()) CHANNEL_INCOMING else CHANNEL_INCOMING_SILENT
+            // The app rings (CallRinger), so the notification makes no sound of its own; or quietened
+            Ringing.APP, Ringing.QUIET -> CHANNEL_INCOMING_QUIET
         }
         val remaining = invite.ringUntil - System.currentTimeMillis()
         val ringFor = if (remaining < 25_000L) 75_000L else remaining.coerceAtMost(90_000L)
@@ -284,7 +292,7 @@ object CallNotifications {
                 }
             }
         }
-        if (ringing != Ringing.QUIET) {
+        if (ringing == Ringing.NOTIFICATION) {
             // Rings (or vibrates) like a call until it's answered, declined, called off or rings out
             notification.flags = notification.flags or Notification.FLAG_INSISTENT
         }
@@ -296,7 +304,8 @@ object CallNotifications {
      * from the ringing service. Not once it was quietened.
      */
     fun ringFromApp(context: Context, invite: CallInvite) {
-        if (silencedCallId == invite.callId) return
+        // Quietened, or ringing already (the call screen, then its service): not started over
+        if (silencedCallId == invite.callId || CallRinger.isRinging()) return
         CallRinger.start(context, withRingtone = SecurityPreferences.getInstance(context).isCallRingingEnabled())
     }
 

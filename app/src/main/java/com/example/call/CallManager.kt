@@ -202,6 +202,14 @@ object CallManager {
         return phase != CallPhase.IDLE && phase != CallPhase.ENDED
     }
 
+    /**
+     * The last call began inside Cherish (placed from it, or rang while it was open and not hidden
+     * behind Notes): its call screen goes back to Cherish when it's over. One that rang out of the
+     * app (over another app, or on a locked phone) just closes, back to wherever the phone was.
+     */
+    @Volatile var returnsToCherish = false
+        private set
+
     private fun post(block: () -> Unit) {
         if (Looper.myLooper() == Looper.getMainLooper()) block() else mainHandler.post(block)
     }
@@ -223,6 +231,7 @@ object CallManager {
         }
         val id = CallRepository.newCallId()
         beginCall(couple, me, id, outgoing = true)
+        returnsToCherish = true
         _state.value = freshState(id, outgoing = true).copy(phase = CallPhase.STARTING)
         CallService.start(app)
         audio.start(audioListener)
@@ -344,6 +353,7 @@ object CallManager {
         val secPrefs = app.securityPreferences
         val isForegroundAndUndisguised = CherishApplication.isAppInForeground && !secPrefs.isDisguiseActive()
         ringFor(invite, me, if (isForegroundAndUndisguised) RingAt.CALL_SCREEN else RingAt.NOTIFICATION)
+        returnsToCherish = isForegroundAndUndisguised
         // When inside Cherish app (in foreground and disguise not actively displayed), launch the call screen immediately
         if (isForegroundAndUndisguised) {
             try {
@@ -416,6 +426,8 @@ object CallManager {
             if (me.isBlank() || (myCouple != null && !isSameCouple(fromNotification.coupleId, myCouple))) return@post
             seenCalls += fromNotification.callId
             ringFor(fromNotification, me, RingAt.NOWHERE)
+            // Answered from its notification, the app not running for it: out of the app
+            returnsToCherish = false
         }
         if (_state.value.phase != CallPhase.INCOMING_RINGING) return@post
         val couple = coupleId ?: return@post
