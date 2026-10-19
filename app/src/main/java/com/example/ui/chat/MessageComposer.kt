@@ -15,6 +15,8 @@ import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.input.OffsetMapping
 import androidx.compose.ui.text.input.TransformedText
 import androidx.compose.ui.text.input.VisualTransformation
@@ -427,17 +429,18 @@ fun MessageComposer(
                 emojiOnly && count in 4..8 -> 1.20f
                 else -> 1.35f
             }
-            val builder = AnnotatedString.Builder()
-            tokens.forEach { token ->
-                if (token.isEmoji) {
-                    builder.withStyle(SpanStyle(fontSize = emojiScale.em)) {
+            val annotated = buildAnnotatedString {
+                tokens.forEach { token ->
+                    if (token.isEmoji) {
+                        withStyle(SpanStyle(fontSize = emojiScale.em)) {
+                            append(token.text)
+                        }
+                    } else {
                         append(token.text)
                     }
-                } else {
-                    builder.append(token.text)
                 }
             }
-            TransformedText(builder.toAnnotatedString(), OffsetMapping.Identity)
+            TransformedText(annotated, OffsetMapping.Identity)
         }
     }
 
