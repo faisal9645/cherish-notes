@@ -56,12 +56,20 @@ jobs:
 
       - name: Prepare Single OTA Asset
         run: |
-          VERSION_CODE=$(grep -oP 'versionCode\s*=\s*\K[0-9]+' app/build.gradle.kts)
-          if [ -f app/build/outputs/apk/release/app-release.apk ]; then
-            mv app/build/outputs/apk/release/app-release.apk app/build/outputs/apk/release/app_update_${VERSION_CODE}.apk
+          VERSION_CODE=$(grep -oP 'versionCode\s*=\s*\K[0-9]+' app/build.gradle.kts | head -n 1)
+          echo "Target VERSION_CODE is $VERSION_CODE"
+          ls -la app/build/outputs/apk/release/ || true
+          APK_FILE=$(find app/build/outputs/apk/release -type f -name "*.apk" | head -n 1)
+          if [ -n "$APK_FILE" ]; then
+            echo "Found release APK: $APK_FILE"
+            cp "$APK_FILE" "app/build/outputs/apk/release/app_update_${VERSION_CODE}.apk"
+          else
+            echo "ERROR: No APK found in app/build/outputs/apk/release!"
+            exit 1
           fi
           # Remove any other APKs in directory so only the single update APK exists
-          find app/build/outputs/apk/release -type f ! -name "app_update_${VERSION_CODE}.apk" -name "*.apk" -delete
+          find app/build/outputs/apk/release -type f ! -name "app_update_${VERSION_CODE}.apk" -name "*.apk" -delete || true
+          ls -la app/build/outputs/apk/release/
 
       - name: Upload Release APK Artifact
         uses: actions/upload-artifact@v4
@@ -74,8 +82,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          VERSION_NAME=$(grep -oP 'versionName\s*=\s*"\K[^"]+' app/build.gradle.kts)
-          VERSION_CODE=$(grep -oP 'versionCode\s*=\s*\K[0-9]+' app/build.gradle.kts)
+          VERSION_NAME=$(grep -oP 'versionName\s*=\s*"\K[^"]+' app/build.gradle.kts | head -n 1)
+          VERSION_CODE=$(grep -oP 'versionCode\s*=\s*\K[0-9]+' app/build.gradle.kts | head -n 1)
           TAG_NAME="v${VERSION_NAME}-${VERSION_CODE}"
           UPDATE_APK="app/build/outputs/apk/release/app_update_${VERSION_CODE}.apk"
 
