@@ -1159,26 +1159,25 @@ fun SharedGalleryScreen(
                                                         text = if (msg.senderId == currentUserId) "Voice note by You" else "Voice note by ${msg.senderName}",
                                                         fontWeight = FontWeight.SemiBold,
                                                         fontSize = 13.sp,
-                                                        color = MaterialTheme.colorScheme.onSurface
+                                                        color = MaterialTheme.colorScheme.onSurface,
+                                                        maxLines = 1,
+                                                        overflow = TextOverflow.Ellipsis
                                                     )
                                                     Spacer(modifier = Modifier.height(2.dp))
-                                                    Row(
-                                                        verticalAlignment = Alignment.CenterVertically,
-                                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                                    ) {
-                                                        Text(
-                                                            text = formatGalleryDateTime(msg.timestamp),
-                                                            fontSize = 11.sp,
-                                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                                        )
-                                                        val isVoicePlayed = remember(playedIds, msg.id, msg.isAudioPlayed) {
-                                                            msg.isAudioPlayed || playedIds.contains(msg.id)
-                                                        }
-                                                        PlayedStatusBadge(
-                                                            isPlayed = isVoicePlayed,
-                                                            onToggle = { toggleItemPlayed(msg.id) }
-                                                        )
+                                                    Text(
+                                                        text = formatGalleryDateTime(msg.timestamp),
+                                                        fontSize = 11.sp,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                        maxLines = 1
+                                                    )
+                                                    Spacer(modifier = Modifier.height(4.dp))
+                                                    val isVoicePlayed = remember(playedIds, msg.id, msg.isAudioPlayed) {
+                                                        msg.isAudioPlayed || playedIds.contains(msg.id)
                                                     }
+                                                    PlayedStatusBadge(
+                                                        isPlayed = isVoicePlayed,
+                                                        onToggle = { toggleItemPlayed(msg.id) }
+                                                    )
                                                 }
 
                                                 // Show in chat button
@@ -2696,10 +2695,12 @@ private fun PlayedStatusBadge(
             )
             Spacer(modifier = Modifier.width(5.dp))
             Text(
-                text = if (isPlayed) "Already played" else "Not yet",
+                text = if (isPlayed) "Already listened" else "Not yet",
                 fontSize = 10.5.sp,
                 fontWeight = FontWeight.Bold,
-                color = if (isPlayed) Color(0xFF059669) else Color(0xFFD97706)
+                color = if (isPlayed) Color(0xFF059669) else Color(0xFFD97706),
+                maxLines = 1,
+                softWrap = false
             )
         }
     }

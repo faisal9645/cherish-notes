@@ -173,14 +173,11 @@ object CallNotifications {
             return
         }
         // Shown at once (the banner, or the call screen on a locked phone, with no delay) and rung by
-        // the app alone, one ringtone: never the notification's own as well. Where the ringing
-        // service can't start, the notification rings by itself instead
-        notify(context, ID_INCOMING, buildIncoming(context, invite, Ringing.APP))
+        // the app alone, one ringtone: never the notification's own as well.
         ringFromApp(context, invite)
-        if (!CallService.startRinging(context, invite)) {
-            CallRinger.stop(context)
-            showRingingNotification(context, invite)
-        }
+        CallService.startRinging(context, invite)
+        val ringingMode = if (CallRinger.isRinging()) Ringing.APP else Ringing.NOTIFICATION
+        notify(context, ID_INCOMING, buildIncoming(context, invite, ringingMode))
     }
 
     /** The notification shows the call and rings by itself (the app's ringing service isn't up). */

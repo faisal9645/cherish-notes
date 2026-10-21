@@ -34,13 +34,13 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.isImeVisible
-import androidx.compose.ui.input.pointer.changedToUp
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -51,27 +51,27 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.ui.draw.rotate
-import androidx.compose.ui.draw.scale
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.Backspace
 import androidx.compose.material.icons.outlined.History
-import androidx.compose.material.icons.rounded.SwapVert
+import androidx.compose.material.icons.rounded.ArrowDownward
+import androidx.compose.material.icons.rounded.ArrowDropDown
+import androidx.compose.material.icons.rounded.ArrowUpward
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.ScrollableTabRow
-import androidx.compose.material3.Tab
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -80,21 +80,27 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.changedToUp
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.security.SecurityPreferences
@@ -115,13 +121,17 @@ import kotlin.math.tan
 
 /**
  * Authentic Samsung One UI Calculator Disguise Screen.
- * Faithful recreation of the official Samsung Galaxy Calculator app:
- * - Pure AMOLED Dark Mode theme with One UI buttons & toolbar
- * - Full calculation engine with live result preview & order of operations
- * - Expandable Scientific Mode (trig, powers, logs, rad/deg)
- * - Complete Unit Converter (Length, Area, Weight, Temp, Volume, Speed, Time, Data)
- * - History Bottom Sheet
- * - Stealth Passcode / PIN unlock & long-press '=' unlock
+ * Exact replication of official Samsung Galaxy Calculator app:
+ * - Accurate Day & Night palettes: circular light grey (#F2F3F5) / dark (#212123) buttons,
+ *   green operators (#278829 / #2BB532), coral C (#FF6565), solid green = button (#35A324 / #2BB532).
+ * - Exact expression styling: operators colored Samsung green, numbers black/white.
+ * - Live evaluation result preview without '= ' prefix.
+ * - Exact One UI spring touch physics and micro-animations on all keys.
+ * - Portrait inline history view (Screenshot 4) with bold green answer and capsule 'Clear history' button.
+ * - Full-screen Unit Converter (Screenshot 1) with category chips, unit dropdowns, and 4x4 keypad.
+ * - Scientific calculator panel with trig, logs, powers.
+ * - Stealth passcode / PIN unlock & hold '=' unlock.
+ * - Permanent software keyboard suppression in decoy mode.
  */
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
@@ -142,8 +152,8 @@ fun CalculatorDisguiseScreen(
     var isScientificActive by remember { mutableStateOf(false) }
 
     val history = remember { mutableStateListOf<Pair<String, String>>() }
-    var showHistorySheet by remember { mutableStateOf(false) }
-    var showUnitConverterSheet by remember { mutableStateOf(false) }
+    var showHistoryInline by remember { mutableStateOf(false) }
+    var showUnitConverterScreen by remember { mutableStateOf(false) }
 
     // Secret unlock transition state
     var isUnlockingSecret by remember { mutableStateOf(false) }
@@ -151,7 +161,7 @@ fun CalculatorDisguiseScreen(
     var equalsCenter by remember { mutableStateOf<Offset?>(null) }
     var toolbarCenter by remember { mutableStateOf<Offset?>(null) }
 
-    // Focus & keyboard clearance: software keyboard will never be shown in Calculator decoy
+    // Focus & keyboard suppression: keyboard will never be shown in Calculator decoy
     val keyboardController = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
     val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
     val isImeVisible = WindowInsets.isImeVisible
@@ -254,12 +264,12 @@ fun CalculatorDisguiseScreen(
         return false
     }
 
-    // Android back button / back gesture: immediately closes / minimizes calculator
+    // Android back button / back gesture
     BackHandler(enabled = true) {
-        if (showHistorySheet) {
-            showHistorySheet = false
-        } else if (showUnitConverterSheet) {
-            showUnitConverterSheet = false
+        if (showUnitConverterScreen) {
+            showUnitConverterScreen = false
+        } else if (showHistoryInline) {
+            showHistoryInline = false
         } else {
             expression = "0"
             historyEquation = ""
@@ -284,7 +294,7 @@ fun CalculatorDisguiseScreen(
         else -> isSystemDark
     }
 
-    // Dynamic System Bar Icons matching Samsung Calculator & permanent keyboard suppression
+    // Dynamic System Bar Icons matching Samsung Calculator
     val window = (context as? Activity)?.window
     DisposableEffect(isDark) {
         if (window != null) {
@@ -296,24 +306,23 @@ fun CalculatorDisguiseScreen(
         onDispose {}
     }
 
+    // Precise Samsung One UI Colors (matching Screenshots 1, 2, 3, 4)
     val bgMain = if (isDark) Color(0xFF000000) else Color(0xFFFFFFFF)
-    val numberBtnBg = if (isDark) Color(0xFF262628) else Color(0xFFF2F2F4)
-    val numberBtnText = if (isDark) Color.White else Color(0xFF111111)
-    val greenBtnBg = Color(0xFF2E7D32) // Official Samsung forest green in both Day and Night modes
-    val greenBtnText = Color.White
-    val clearRedText = Color(0xFFFF6565) // Coral red for "C"
-    val equalsText = if (isDark) Color(0xFF101010) else Color.White
-    val vibrantGreen = if (isDark) Color(0xFF2EB85C) else Color(0xFF249448)
+    val keyCircleBg = if (isDark) Color(0xFF212123) else Color(0xFFF2F3F5)
+    val numberBtnText = if (isDark) Color(0xFFFFFFFF) else Color(0xFF1E1E1E)
+    val operatorTextColor = if (isDark) Color(0xFF2BB532) else Color(0xFF278829) // Samsung Forest Green in Day
+    val clearRedText = Color(0xFFFF6565) // Samsung Coral Red for "C"
+    val equalsCircleBg = if (isDark) Color(0xFF2BB532) else Color(0xFF35A324) // Solid Green Circle for "="
+    val equalsText = Color.White
     val dividerColor = if (isDark) Color(0xFF1E1E20) else Color(0xFFE5E5EA)
-    val iconMuted = if (isDark) Color(0xFF8E8E93) else Color(0xFF5A5A5E)
-    val primaryText = if (isDark) Color.White else Color(0xFF111111)
+    val iconMuted = if (isDark) Color(0xFF8E8E93) else Color(0xFF767678)
+    val primaryText = if (isDark) Color(0xFFFFFFFF) else Color(0xFF1E1E1E)
     val secondaryText = if (isDark) Color(0xFF8E8E93) else Color(0xFF767678)
-    val scientificKeyBg = if (isDark) Color(0xFF18181A) else Color(0xFFF2F2F4)
-    val scientificKeyText = if (isDark) Color(0xFFE5E5EA) else Color(0xFF1C1C1E)
-    val sheetBg = if (isDark) Color(0xFF1C1C1E) else Color(0xFFFFFFFF)
-    val sheetItemDivider = if (isDark) Color(0xFF2C2C2E) else Color(0xFFE5E5EA)
+    val scientificKeyBg = if (isDark) Color(0xFF18181A) else Color(0xFFF2F3F5)
+    val scientificKeyText = if (isDark) Color(0xFFE5E5EA) else Color(0xFF1E1E1E)
+    val chipActiveBg = if (isDark) Color(0xFF212123) else Color(0xFFF0F1F3)
 
-    // Live preview evaluation
+    // Live preview evaluation (e.g. "1260")
     val liveResult = remember(expression, isDegMode) {
         if (!isEvaluated && expression.any { it in "+−×÷^%!√" || it.isLetter() }) {
             evaluateSamsungExpression(expression, isDegMode).getOrNull()
@@ -363,7 +372,6 @@ fun CalculatorDisguiseScreen(
         }
         val trimmed = expression.trimEnd()
         if (trimmed.endsWith("+") || trimmed.endsWith("−") || trimmed.endsWith("×") || trimmed.endsWith("÷")) {
-            // Replace trailing operator
             val withoutOp = trimmed.dropLast(1).trimEnd()
             expression = if (withoutOp.isNotEmpty()) "$withoutOp $op " else "$op "
         } else {
@@ -414,7 +422,6 @@ fun CalculatorDisguiseScreen(
             expression = if (expression.startsWith("−")) expression.removePrefix("−") else "−$expression"
             return
         }
-        // Toggle sign of current trailing number
         val regex = Regex("""(.*?)([−\-]?)(\d+(?:\.\d+)?)$""")
         val match = regex.find(expression)
         if (match != null) {
@@ -447,7 +454,6 @@ fun CalculatorDisguiseScreen(
             return
         }
         if (expression.length > 1) {
-            // Drop trailing spaces and operators cleanly
             var s = expression
             if (s.endsWith(" ")) s = s.trimEnd()
             s = s.dropLast(1).trimEnd()
@@ -527,567 +533,1064 @@ fun CalculatorDisguiseScreen(
         val scientificKeyHeight = if (isVerySmallScreen) 28.dp else if (isCompactScreen) 32.dp else 36.dp
         val horizontalPad = if (isCompactScreen) 14.dp else 20.dp
 
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .statusBarsPadding()
-                .navigationBarsPadding()
-                .padding(horizontal = horizontalPad)
-                .padding(bottom = if (isCompactScreen) 4.dp else 8.dp),
-            verticalArrangement = Arrangement.Bottom
-        ) {
-            // Expanding top space: absorbs all upper space, pinning the calculator display & keypad
-            // directly to the bottom of the screen like the original Samsung One UI Calculator
-            Spacer(modifier = Modifier.weight(1f))
-
-            // Display Section (Samsung One UI layout) with horizontal scroll
+        if (showUnitConverterScreen) {
+            // Full-screen Samsung Unit Converter (Screenshot 1)
+            SamsungUnitConverterScreen(
+                isDark = isDark,
+                bgMain = bgMain,
+                keyCircleBg = keyCircleBg,
+                numberBtnText = numberBtnText,
+                operatorTextColor = operatorTextColor,
+                clearRedText = clearRedText,
+                primaryText = primaryText,
+                secondaryText = secondaryText,
+                dividerColor = dividerColor,
+                chipActiveBg = chipActiveBg,
+                onClose = { showUnitConverterScreen = false }
+            )
+        } else {
             Column(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 6.dp, vertical = if (isCompactScreen) 4.dp else 8.dp),
-                horizontalAlignment = Alignment.End
+                    .fillMaxSize()
+                    .statusBarsPadding()
+                    .navigationBarsPadding()
+                    .padding(horizontal = horizontalPad)
+                    .padding(bottom = if (isCompactScreen) 4.dp else 8.dp),
+                verticalArrangement = Arrangement.Bottom
             ) {
-                // Secondary line: past evaluated equation or empty
-                AnimatedVisibility(
-                    visible = historyEquation.isNotEmpty(),
-                    enter = fadeIn() + expandVertically(),
-                    exit = fadeOut() + shrinkVertically()
-                ) {
-                    Text(
-                        text = historyEquation,
-                        fontSize = if (isCompactScreen) 16.sp else 20.sp,
-                        color = secondaryText,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        textAlign = TextAlign.End,
-                        fontFamily = FontFamily.SansSerif
-                    )
-                }
+                // Expanding top space: absorbs all upper space, pinning calculator display & keypad
+                // directly to the bottom like the official Samsung Galaxy Calculator
+                Spacer(modifier = Modifier.weight(1f))
 
-                Spacer(modifier = Modifier.height(if (isCompactScreen) 2.dp else 6.dp))
-
-                // Primary line: current formula or final answer with dynamic font sizing & horizontal scroll
-                val primaryFontSize = when {
-                    isCompactScreen -> when {
-                        expression.length > 15 -> 24.sp
-                        expression.length > 11 -> 30.sp
-                        expression.length > 8 -> 36.sp
-                        else -> 46.sp
-                    }
-                    else -> when {
-                        expression.length > 15 -> 30.sp
-                        expression.length > 11 -> 40.sp
-                        expression.length > 8 -> 48.sp
-                        else -> 58.sp
-                    }
-                }
-
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(displayScrollState),
-                    horizontalArrangement = Arrangement.End
-                ) {
-                    Text(
-                        text = expression,
-                        fontSize = primaryFontSize,
-                        fontWeight = FontWeight.Normal,
-                        color = primaryText,
-                        maxLines = 1,
-                        textAlign = TextAlign.End,
-                        fontFamily = FontFamily.SansSerif
-                    )
-                }
-
-                // Live result preview (shows '= 60' in real time)
-                AnimatedVisibility(
-                    visible = liveResult != null && !isEvaluated,
-                    enter = fadeIn(),
-                    exit = fadeOut()
-                ) {
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(
-                        text = "= ${liveResult.orEmpty()}",
-                        fontSize = if (isCompactScreen) 20.sp else 24.sp,
-                        fontWeight = FontWeight.Normal,
-                        color = secondaryText,
-                        textAlign = TextAlign.End,
-                        fontFamily = FontFamily.SansSerif
-                    )
-                }
-            }
-
-            // Samsung One UI Toolbar
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 4.dp, vertical = 4.dp)
-                    .onGloballyPositioned { coordinates ->
-                        toolbarCenter = coordinates.boundsInRoot().center
-                    },
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(16.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    // History icon (tap opens history sheet)
-                    IconButton(
-                        onClick = { showHistorySheet = true },
-                        modifier = Modifier.size(38.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Outlined.History,
-                            contentDescription = "History",
-                            tint = iconMuted,
-                            modifier = Modifier.size(22.dp)
-                        )
-                    }
-
-                    // Unit Converter icon
-                    IconButton(
-                        onClick = { showUnitConverterSheet = true },
-                        modifier = Modifier.size(38.dp)
-                    ) {
-                        RulerIcon(color = iconMuted)
-                    }
-
-                    // Scientific calculator toggle with rotation animation
-                    IconButton(
-                        onClick = {
-                            isScientificActive = !isScientificActive
-                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                        },
-                        modifier = Modifier
-                            .size(38.dp)
-                            .rotate(sciIconRotation)
-                    ) {
-                        ScientificSquareIcon(
-                            color = if (isScientificActive) vibrantGreen else iconMuted
-                        )
-                    }
-                }
-
-                // Green backspace button on right
-                val hasContent = expression != "0" || historyEquation.isNotEmpty()
-                IconButton(
-                    onClick = { onBackspace() },
-                    modifier = Modifier
-                        .size(38.dp)
-                        .pointerInput(Unit) {
-                            detectTapGestures(
-                                onTap = { onBackspace() },
-                                onLongPress = {
-                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    onClear()
-                                }
-                            )
-                        }
-                ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Rounded.Backspace,
-                        contentDescription = "Backspace",
-                        tint = if (hasContent) vibrantGreen else iconMuted.copy(alpha = 0.35f),
-                        modifier = Modifier.size(24.dp)
-                    )
-                }
-            }
-
-            HorizontalDivider(
-                color = dividerColor,
-                thickness = 0.8.dp,
-                modifier = Modifier.padding(vertical = if (isCompactScreen) 6.dp else 10.dp)
-            )
-
-            // Scientific Keypad Panel (Animated Expansion)
-            AnimatedVisibility(
-                visible = isScientificActive,
-                enter = fadeIn() + expandVertically(),
-                exit = fadeOut() + shrinkVertically()
-            ) {
+                // Display Section (Samsung One UI layout) with horizontal scroll
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(bottom = if (isCompactScreen) 6.dp else 10.dp),
-                    verticalArrangement = Arrangement.spacedBy(if (isCompactScreen) 6.dp else 8.dp)
+                        .padding(horizontal = 6.dp, vertical = if (isCompactScreen) 4.dp else 8.dp),
+                    horizontalAlignment = Alignment.End
                 ) {
-                    // Scientific Row 1: RAD/DEG, sin, cos, tan
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(if (isCompactScreen) 6.dp else 8.dp)
+                    // Secondary line: past evaluated equation
+                    AnimatedVisibility(
+                        visible = historyEquation.isNotEmpty(),
+                        enter = fadeIn() + expandVertically(),
+                        exit = fadeOut() + shrinkVertically()
                     ) {
-                        ScientificKey(
-                            text = if (isDegMode) "deg" else "rad",
-                            isActive = isDegMode,
-                            activeColor = vibrantGreen,
-                            bgColor = scientificKeyBg,
-                            textColor = scientificKeyText,
-                            keyHeight = scientificKeyHeight,
-                            modifier = Modifier.weight(1f),
-                            onClick = {
-                                isDegMode = !isDegMode
-                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                            }
-                        )
-                        ScientificKey(text = "sin", bgColor = scientificKeyBg, textColor = scientificKeyText, keyHeight = scientificKeyHeight, modifier = Modifier.weight(1f), onClick = { onScientificFn("sin") })
-                        ScientificKey(text = "cos", bgColor = scientificKeyBg, textColor = scientificKeyText, keyHeight = scientificKeyHeight, modifier = Modifier.weight(1f), onClick = { onScientificFn("cos") })
-                        ScientificKey(text = "tan", bgColor = scientificKeyBg, textColor = scientificKeyText, keyHeight = scientificKeyHeight, modifier = Modifier.weight(1f), onClick = { onScientificFn("tan") })
-                    }
-
-                    // Scientific Row 2: ln, log, 1/x, e^x
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(if (isCompactScreen) 6.dp else 8.dp)
-                    ) {
-                        ScientificKey(text = "ln", bgColor = scientificKeyBg, textColor = scientificKeyText, keyHeight = scientificKeyHeight, modifier = Modifier.weight(1f), onClick = { onScientificFn("ln") })
-                        ScientificKey(text = "log", bgColor = scientificKeyBg, textColor = scientificKeyText, keyHeight = scientificKeyHeight, modifier = Modifier.weight(1f), onClick = { onScientificFn("log") })
-                        ScientificKey(text = "1/x", bgColor = scientificKeyBg, textColor = scientificKeyText, keyHeight = scientificKeyHeight, modifier = Modifier.weight(1f), onClick = { onScientificFn("1/") })
-                        ScientificKey(text = "eˣ", bgColor = scientificKeyBg, textColor = scientificKeyText, keyHeight = scientificKeyHeight, modifier = Modifier.weight(1f), onClick = { onScientificFn("e^") })
-                    }
-
-                    // Scientific Row 3: x², xʸ, |x|, π
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(if (isCompactScreen) 6.dp else 8.dp)
-                    ) {
-                        ScientificKey(
-                            text = "x²",
-                            bgColor = scientificKeyBg,
-                            textColor = scientificKeyText,
-                            keyHeight = scientificKeyHeight,
-                            modifier = Modifier.weight(1f),
-                            onClick = {
-                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                expression += "^2"
-                            }
-                        )
-                        ScientificKey(
-                            text = "xʸ",
-                            bgColor = scientificKeyBg,
-                            textColor = scientificKeyText,
-                            keyHeight = scientificKeyHeight,
-                            modifier = Modifier.weight(1f),
-                            onClick = { onOperator("^") }
-                        )
-                        ScientificKey(text = "|x|", bgColor = scientificKeyBg, textColor = scientificKeyText, keyHeight = scientificKeyHeight, modifier = Modifier.weight(1f), onClick = { onScientificFn("abs") })
-                        ScientificKey(
-                            text = "π",
-                            bgColor = scientificKeyBg,
-                            textColor = scientificKeyText,
-                            keyHeight = scientificKeyHeight,
-                            modifier = Modifier.weight(1f),
-                            onClick = {
-                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                if (expression == "0" || isEvaluated) {
-                                    expression = "π"
-                                    isEvaluated = false
-                                } else expression += "π"
-                            }
+                        Text(
+                            text = historyEquation,
+                            fontSize = if (isCompactScreen) 16.sp else 20.sp,
+                            color = secondaryText,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            textAlign = TextAlign.End,
+                            fontFamily = FontFamily.SansSerif
                         )
                     }
 
-                    // Scientific Row 4: √, e, !, ( )
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(if (isCompactScreen) 6.dp else 8.dp)
-                    ) {
-                        ScientificKey(text = "√", bgColor = scientificKeyBg, textColor = scientificKeyText, keyHeight = scientificKeyHeight, modifier = Modifier.weight(1f), onClick = { onScientificFn("√") })
-                        ScientificKey(
-                            text = "e",
-                            bgColor = scientificKeyBg,
-                            textColor = scientificKeyText,
-                            keyHeight = scientificKeyHeight,
-                            modifier = Modifier.weight(1f),
-                            onClick = {
-                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                if (expression == "0" || isEvaluated) {
-                                    expression = "e"
-                                    isEvaluated = false
-                                } else expression += "e"
-                            }
-                        )
-                        ScientificKey(
-                            text = "!",
-                            bgColor = scientificKeyBg,
-                            textColor = scientificKeyText,
-                            keyHeight = scientificKeyHeight,
-                            modifier = Modifier.weight(1f),
-                            onClick = {
-                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                expression += "!"
-                            }
-                        )
-                        ScientificKey(text = "( )", bgColor = scientificKeyBg, textColor = scientificKeyText, keyHeight = scientificKeyHeight, modifier = Modifier.weight(1f), onClick = { onParenthesis() })
-                    }
-                }
-            }
+                    Spacer(modifier = Modifier.height(if (isCompactScreen) 2.dp else 6.dp))
 
-            // Samsung One UI Keypad Grid: 4 columns x 5 rows
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = if (isCompactScreen) 8.dp else 16.dp),
-                verticalArrangement = Arrangement.spacedBy(keypadSpacing)
-            ) {
-                // Row 1: C (green with coral red C), ( ), %, ÷
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(keypadSpacing)
-                ) {
-                    SamsungRoundKey(
-                        text = "C",
-                        bgColor = greenBtnBg,
-                        textColor = clearRedText,
-                        modifier = Modifier.weight(1f),
-                        onClick = { onClear() }
-                    )
-                    SamsungRoundKey(
-                        text = "( )",
-                        bgColor = greenBtnBg,
-                        textColor = greenBtnText,
-                        modifier = Modifier.weight(1f),
-                        onClick = { onParenthesis() }
-                    )
-                    SamsungRoundKey(
-                        text = "%",
-                        bgColor = greenBtnBg,
-                        textColor = greenBtnText,
-                        modifier = Modifier.weight(1f),
-                        onClick = { onPercentage() }
-                    )
-                    SamsungRoundKey(
-                        text = "÷",
-                        bgColor = greenBtnBg,
-                        textColor = greenBtnText,
-                        modifier = Modifier.weight(1f),
-                        onClick = { onOperator("÷") }
-                    )
-                }
-
-                // Row 2: 7, 8, 9, ×
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(keypadSpacing)
-                ) {
-                    SamsungRoundKey(text = "7", bgColor = numberBtnBg, textColor = numberBtnText, modifier = Modifier.weight(1f), onClick = { onDigit("7") })
-                    SamsungRoundKey(text = "8", bgColor = numberBtnBg, textColor = numberBtnText, modifier = Modifier.weight(1f), onClick = { onDigit("8") })
-                    SamsungRoundKey(text = "9", bgColor = numberBtnBg, textColor = numberBtnText, modifier = Modifier.weight(1f), onClick = { onDigit("9") })
-                    SamsungRoundKey(text = "×", bgColor = greenBtnBg, textColor = greenBtnText, modifier = Modifier.weight(1f), onClick = { onOperator("×") })
-                }
-
-                // Row 3: 4, 5, 6, −
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(keypadSpacing)
-                ) {
-                    SamsungRoundKey(text = "4", bgColor = numberBtnBg, textColor = numberBtnText, modifier = Modifier.weight(1f), onClick = { onDigit("4") })
-                    SamsungRoundKey(text = "5", bgColor = numberBtnBg, textColor = numberBtnText, modifier = Modifier.weight(1f), onClick = { onDigit("5") })
-                    SamsungRoundKey(text = "6", bgColor = numberBtnBg, textColor = numberBtnText, modifier = Modifier.weight(1f), onClick = { onDigit("6") })
-                    SamsungRoundKey(text = "−", bgColor = greenBtnBg, textColor = greenBtnText, modifier = Modifier.weight(1f), onClick = { onOperator("−") })
-                }
-
-                // Row 4: 1, 2, 3, +
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(keypadSpacing)
-                ) {
-                    SamsungRoundKey(text = "1", bgColor = numberBtnBg, textColor = numberBtnText, modifier = Modifier.weight(1f), onClick = { onDigit("1") })
-                    SamsungRoundKey(text = "2", bgColor = numberBtnBg, textColor = numberBtnText, modifier = Modifier.weight(1f), onClick = { onDigit("2") })
-                    SamsungRoundKey(text = "3", bgColor = numberBtnBg, textColor = numberBtnText, modifier = Modifier.weight(1f), onClick = { onDigit("3") })
-                    SamsungRoundKey(text = "+", bgColor = greenBtnBg, textColor = greenBtnText, modifier = Modifier.weight(1f), onClick = { onOperator("+") })
-                }
-
-                // Row 5: +/-, 0, ., = (Black = on green circle)
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(keypadSpacing)
-                ) {
-                    SamsungRoundKey(
-                        text = "+/-",
-                        bgColor = numberBtnBg,
-                        textColor = numberBtnText,
-                        modifier = Modifier.weight(1f),
-                        onClick = { onPlusMinus() }
-                    )
-                    SamsungRoundKey(text = "0", bgColor = numberBtnBg, textColor = numberBtnText, modifier = Modifier.weight(1f), onClick = { onDigit("0") })
-                    SamsungRoundKey(
-                        text = ".",
-                        bgColor = numberBtnBg,
-                        textColor = numberBtnText,
-                        modifier = Modifier.weight(1f),
-                        onClick = { onDecimal() }
-                    )
-                    val equalsHoldSec = securityPreferences.getEqualsHoldDuration()
-                    SamsungRoundKey(
-                        text = "=",
-                        bgColor = greenBtnBg,
-                        textColor = equalsText,
-                        modifier = Modifier
-                            .weight(1f)
-                            .onGloballyPositioned { coordinates ->
-                                equalsCenter = coordinates.boundsInRoot().center
-                            },
-                        customHoldDurationMs = equalsHoldSec * 1000L,
-                        onClick = { onEquals() },
-                        onLongClick = {
-                            triggerSecretUnlock(equalsCenter)
+                    // Primary line: current expression with green operators & numbers in primaryText (Screenshot 3 & 4)
+                    val primaryFontSize = when {
+                        isCompactScreen -> when {
+                            expression.length > 15 -> 24.sp
+                            expression.length > 11 -> 30.sp
+                            expression.length > 8 -> 36.sp
+                            else -> 46.sp
                         }
-                    )
-                }
-            }
-        }
-    }
+                        else -> when {
+                            expression.length > 15 -> 30.sp
+                            expression.length > 11 -> 40.sp
+                            expression.length > 8 -> 48.sp
+                            else -> 58.sp
+                        }
+                    }
 
-    // Calculation History Bottom Sheet
-    if (showHistorySheet) {
-        val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-        ModalBottomSheet(
-            onDismissRequest = { showHistorySheet = false },
-            sheetState = sheetState,
-            containerColor = sheetBg
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 24.dp, vertical = 8.dp)
-            ) {
+                    val annotatedExpression = remember(expression, primaryText, operatorTextColor) {
+                        buildAnnotatedString {
+                            for (ch in expression) {
+                                if (ch in "+−×÷%()^√") {
+                                    withStyle(SpanStyle(color = operatorTextColor, fontWeight = FontWeight.Normal)) {
+                                        append(ch)
+                                    }
+                                } else {
+                                    withStyle(SpanStyle(color = primaryText, fontWeight = FontWeight.Normal)) {
+                                        append(ch)
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(displayScrollState),
+                        horizontalArrangement = Arrangement.End
+                    ) {
+                        Text(
+                            text = annotatedExpression,
+                            fontSize = primaryFontSize,
+                            fontWeight = FontWeight.Normal,
+                            maxLines = 1,
+                            textAlign = TextAlign.End,
+                            fontFamily = FontFamily.SansSerif
+                        )
+                    }
+
+                    // Live result preview (clean number without '= ', e.g. "1260" - Screenshot 3)
+                    AnimatedVisibility(
+                        visible = liveResult != null && !isEvaluated,
+                        enter = fadeIn(),
+                        exit = fadeOut()
+                    ) {
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = liveResult.orEmpty(),
+                            fontSize = if (isCompactScreen) 20.sp else 24.sp,
+                            fontWeight = FontWeight.Normal,
+                            color = secondaryText,
+                            textAlign = TextAlign.End,
+                            fontFamily = FontFamily.SansSerif
+                        )
+                    }
+                }
+
+                // Samsung One UI Toolbar (Screenshot 3 & 4)
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 4.dp, vertical = 4.dp)
+                        .onGloballyPositioned { coordinates ->
+                            toolbarCenter = coordinates.boundsInRoot().center
+                        },
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text("History", fontSize = 20.sp, fontWeight = FontWeight.SemiBold, color = primaryText)
-                    if (history.isNotEmpty()) {
-                        TextButton(onClick = { history.clear() }) {
-                            Text("Clear history", color = vibrantGreen)
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // History icon (toggles portrait inline history view)
+                        IconButton(
+                            onClick = {
+                                showHistoryInline = !showHistoryInline
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            },
+                            modifier = Modifier.size(38.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.History,
+                                contentDescription = "History",
+                                tint = if (showHistoryInline) operatorTextColor else iconMuted,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
+
+                        // Unit Converter icon (opens Screenshot 1 converter)
+                        IconButton(
+                            onClick = {
+                                showUnitConverterScreen = true
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            },
+                            modifier = Modifier.size(38.dp)
+                        ) {
+                            RulerIcon(color = iconMuted)
+                        }
+
+                        // Scientific calculator toggle with rotation animation
+                        IconButton(
+                            onClick = {
+                                isScientificActive = !isScientificActive
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            },
+                            modifier = Modifier
+                                .size(38.dp)
+                                .rotate(sciIconRotation)
+                        ) {
+                            ScientificSquareIcon(
+                                color = if (isScientificActive) operatorTextColor else iconMuted
+                            )
                         }
                     }
-                }
-                Spacer(modifier = Modifier.height(14.dp))
 
-                if (history.isEmpty()) {
-                    Box(
+                    // Green backspace button on right
+                    val hasContent = expression != "0" || historyEquation.isNotEmpty()
+                    IconButton(
+                        onClick = { onBackspace() },
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 48.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            "No history",
-                            color = iconMuted,
-                            fontSize = 15.sp
-                        )
-                    }
-                } else {
-                    LazyColumn(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(340.dp),
-                        verticalArrangement = Arrangement.spacedBy(16.dp)
-                    ) {
-                        items(history) { (eq, res) ->
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable {
-                                        expression = res
-                                        historyEquation = eq
-                                        isEvaluated = true
-                                        showHistorySheet = false
+                            .size(38.dp)
+                            .pointerInput(Unit) {
+                                detectTapGestures(
+                                    onTap = { onBackspace() },
+                                    onLongPress = {
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        onClear()
                                     }
-                                    .padding(vertical = 6.dp),
-                                horizontalAlignment = Alignment.End
-                            ) {
-                                Text(eq, fontSize = 16.sp, color = secondaryText)
-                                Text("= $res", fontSize = 24.sp, fontWeight = FontWeight.Normal, color = primaryText)
-                            }
-                            HorizontalDivider(color = sheetItemDivider, thickness = 0.8.dp)
-                        }
-                    }
-                }
-                Spacer(modifier = Modifier.height(16.dp))
-            }
-        }
-    }
-
-    // Comprehensive Samsung Unit Converter Bottom Sheet
-    if (showUnitConverterSheet) {
-        val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-        var selectedCategoryIndex by remember { mutableStateOf(0) }
-        val categories = listOf("Length", "Area", "Weight", "Temperature", "Volume", "Speed", "Time", "Data")
-
-        val currentVal = expression.replace(",", "").replace(" ", "").toDoubleOrNull() ?: 1.0
-
-        ModalBottomSheet(
-            onDismissRequest = { showUnitConverterSheet = false },
-            sheetState = sheetState,
-            containerColor = sheetBg
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 8.dp)
-            ) {
-                Text(
-                    "Unit converter",
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = primaryText
-                )
-                Spacer(modifier = Modifier.height(12.dp))
-
-                ScrollableTabRow(
-                    selectedTabIndex = selectedCategoryIndex,
-                    containerColor = sheetBg,
-                    contentColor = vibrantGreen,
-                    edgePadding = 0.dp
-                ) {
-                    categories.forEachIndexed { index, title ->
-                        Tab(
-                            selected = selectedCategoryIndex == index,
-                            onClick = { selectedCategoryIndex = index },
-                            text = {
-                                Text(
-                                    title,
-                                    color = if (selectedCategoryIndex == index) vibrantGreen else iconMuted,
-                                    fontSize = 14.sp
                                 )
                             }
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Rounded.Backspace,
+                            contentDescription = "Backspace",
+                            tint = if (hasContent) operatorTextColor else iconMuted.copy(alpha = 0.35f),
+                            modifier = Modifier.size(24.dp)
                         )
                     }
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
+                HorizontalDivider(
+                    color = dividerColor,
+                    thickness = 0.8.dp,
+                    modifier = Modifier.padding(vertical = if (isCompactScreen) 6.dp else 10.dp)
+                )
 
-                // Unit Conversion Matrix
-                val rows = remember(selectedCategoryIndex, currentVal) {
-                    getUnitConversions(selectedCategoryIndex, currentVal)
-                }
-
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(360.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                // Scientific Keypad Panel (Animated Expansion)
+                AnimatedVisibility(
+                    visible = isScientificActive && !showHistoryInline,
+                    enter = fadeIn() + expandVertically(),
+                    exit = fadeOut() + shrinkVertically()
                 ) {
-                    items(rows) { (unitName, convertedVal) ->
-                        UnitRow(unit = unitName, value = convertedVal, isDark = isDark)
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = if (isCompactScreen) 6.dp else 10.dp),
+                        verticalArrangement = Arrangement.spacedBy(if (isCompactScreen) 6.dp else 8.dp)
+                    ) {
+                        // Scientific Row 1: RAD/DEG, sin, cos, tan
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(if (isCompactScreen) 6.dp else 8.dp)
+                        ) {
+                            ScientificKey(
+                                text = if (isDegMode) "deg" else "rad",
+                                isActive = isDegMode,
+                                activeColor = operatorTextColor,
+                                bgColor = scientificKeyBg,
+                                textColor = scientificKeyText,
+                                keyHeight = scientificKeyHeight,
+                                modifier = Modifier.weight(1f),
+                                onClick = {
+                                    isDegMode = !isDegMode
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                }
+                            )
+                            ScientificKey(text = "sin", bgColor = scientificKeyBg, textColor = scientificKeyText, keyHeight = scientificKeyHeight, modifier = Modifier.weight(1f), onClick = { onScientificFn("sin") })
+                            ScientificKey(text = "cos", bgColor = scientificKeyBg, textColor = scientificKeyText, keyHeight = scientificKeyHeight, modifier = Modifier.weight(1f), onClick = { onScientificFn("cos") })
+                            ScientificKey(text = "tan", bgColor = scientificKeyBg, textColor = scientificKeyText, keyHeight = scientificKeyHeight, modifier = Modifier.weight(1f), onClick = { onScientificFn("tan") })
+                        }
+
+                        // Scientific Row 2: ln, log, 1/x, e^x
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(if (isCompactScreen) 6.dp else 8.dp)
+                        ) {
+                            ScientificKey(text = "ln", bgColor = scientificKeyBg, textColor = scientificKeyText, keyHeight = scientificKeyHeight, modifier = Modifier.weight(1f), onClick = { onScientificFn("ln") })
+                            ScientificKey(text = "log", bgColor = scientificKeyBg, textColor = scientificKeyText, keyHeight = scientificKeyHeight, modifier = Modifier.weight(1f), onClick = { onScientificFn("log") })
+                            ScientificKey(text = "1/x", bgColor = scientificKeyBg, textColor = scientificKeyText, keyHeight = scientificKeyHeight, modifier = Modifier.weight(1f), onClick = { onScientificFn("1/") })
+                            ScientificKey(text = "eˣ", bgColor = scientificKeyBg, textColor = scientificKeyText, keyHeight = scientificKeyHeight, modifier = Modifier.weight(1f), onClick = { onScientificFn("e^") })
+                        }
+
+                        // Scientific Row 3: x², xʸ, |x|, π
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(if (isCompactScreen) 6.dp else 8.dp)
+                        ) {
+                            ScientificKey(
+                                text = "x²",
+                                bgColor = scientificKeyBg,
+                                textColor = scientificKeyText,
+                                keyHeight = scientificKeyHeight,
+                                modifier = Modifier.weight(1f),
+                                onClick = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    expression += "^2"
+                                }
+                            )
+                            ScientificKey(
+                                text = "xʸ",
+                                bgColor = scientificKeyBg,
+                                textColor = scientificKeyText,
+                                keyHeight = scientificKeyHeight,
+                                modifier = Modifier.weight(1f),
+                                onClick = { onOperator("^") }
+                            )
+                            ScientificKey(text = "|x|", bgColor = scientificKeyBg, textColor = scientificKeyText, keyHeight = scientificKeyHeight, modifier = Modifier.weight(1f), onClick = { onScientificFn("abs") })
+                            ScientificKey(
+                                text = "π",
+                                bgColor = scientificKeyBg,
+                                textColor = scientificKeyText,
+                                keyHeight = scientificKeyHeight,
+                                modifier = Modifier.weight(1f),
+                                onClick = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    if (expression == "0" || isEvaluated) {
+                                        expression = "π"
+                                        isEvaluated = false
+                                    } else expression += "π"
+                                }
+                            )
+                        }
+
+                        // Scientific Row 4: √, e, !, ( )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(if (isCompactScreen) 6.dp else 8.dp)
+                        ) {
+                            ScientificKey(text = "√", bgColor = scientificKeyBg, textColor = scientificKeyText, keyHeight = scientificKeyHeight, modifier = Modifier.weight(1f), onClick = { onScientificFn("√") })
+                            ScientificKey(
+                                text = "e",
+                                bgColor = scientificKeyBg,
+                                textColor = scientificKeyText,
+                                keyHeight = scientificKeyHeight,
+                                modifier = Modifier.weight(1f),
+                                onClick = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    if (expression == "0" || isEvaluated) {
+                                        expression = "e"
+                                        isEvaluated = false
+                                    } else expression += "e"
+                                }
+                            )
+                            ScientificKey(
+                                text = "!",
+                                bgColor = scientificKeyBg,
+                                textColor = scientificKeyText,
+                                keyHeight = scientificKeyHeight,
+                                modifier = Modifier.weight(1f),
+                                onClick = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    expression += "!"
+                                }
+                            )
+                            ScientificKey(text = "( )", bgColor = scientificKeyBg, textColor = scientificKeyText, keyHeight = scientificKeyHeight, modifier = Modifier.weight(1f), onClick = { onParenthesis() })
+                        }
                     }
                 }
 
-                Spacer(modifier = Modifier.height(20.dp))
+                if (showHistoryInline) {
+                    // Inline History View (Screenshot 4)
+                    // The left 3 columns are replaced by the History list and 'Clear history' pill button,
+                    // while the right column keeps the 5 operator keys (÷, ×, −, +, =)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 280.dp, max = 360.dp)
+                            .padding(bottom = if (isCompactScreen) 8.dp else 16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(keypadSpacing)
+                    ) {
+                        // Left 3 columns: history list and clear button
+                        Column(
+                            modifier = Modifier
+                                .weight(3f)
+                                .fillMaxHeight(),
+                            verticalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            if (history.isEmpty()) {
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .fillMaxWidth(),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = "No history",
+                                        color = iconMuted,
+                                        fontSize = 15.sp,
+                                        fontFamily = FontFamily.SansSerif
+                                    )
+                                }
+                            } else {
+                                LazyColumn(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .fillMaxWidth()
+                                        .padding(end = 8.dp),
+                                    verticalArrangement = Arrangement.spacedBy(14.dp),
+                                    reverseLayout = false
+                                ) {
+                                    items(history) { (eq, res) ->
+                                        Column(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clickable {
+                                                    expression = res
+                                                    historyEquation = eq
+                                                    isEvaluated = true
+                                                    showHistoryInline = false
+                                                }
+                                                .padding(vertical = 4.dp),
+                                            horizontalAlignment = Alignment.End
+                                        ) {
+                                            Text(
+                                                text = eq,
+                                                fontSize = 16.sp,
+                                                color = secondaryText,
+                                                textAlign = TextAlign.End,
+                                                fontFamily = FontFamily.SansSerif
+                                            )
+                                            Spacer(modifier = Modifier.height(2.dp))
+                                            Text(
+                                                text = "= $res",
+                                                fontSize = 20.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = operatorTextColor,
+                                                textAlign = TextAlign.End,
+                                                fontFamily = FontFamily.SansSerif
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Capsule 'Clear history' button at bottom-left (Screenshot 4)
+                            Surface(
+                                shape = RoundedCornerShape(20.dp),
+                                color = keyCircleBg,
+                                modifier = Modifier
+                                    .padding(top = 8.dp)
+                                    .clickable {
+                                        history.clear()
+                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    }
+                            ) {
+                                Text(
+                                    text = "Clear history",
+                                    color = numberBtnText,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    modifier = Modifier.padding(horizontal = 22.dp, vertical = 10.dp),
+                                    fontFamily = FontFamily.SansSerif
+                                )
+                            }
+                        }
+
+                        // Thin vertical divider line
+                        Box(
+                            modifier = Modifier
+                                .width(0.8.dp)
+                                .fillMaxHeight()
+                                .background(dividerColor)
+                        )
+
+                        // Right 1 column: operators (÷, ×, −, +, =)
+                        Column(
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxHeight(),
+                            verticalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            SamsungRoundKey(
+                                text = "÷",
+                                bgColor = keyCircleBg,
+                                textColor = operatorTextColor,
+                                onClick = { onOperator("÷") }
+                            )
+                            SamsungRoundKey(
+                                text = "×",
+                                bgColor = keyCircleBg,
+                                textColor = operatorTextColor,
+                                onClick = { onOperator("×") }
+                            )
+                            SamsungRoundKey(
+                                text = "−",
+                                bgColor = keyCircleBg,
+                                textColor = operatorTextColor,
+                                onClick = { onOperator("−") }
+                            )
+                            SamsungRoundKey(
+                                text = "+",
+                                bgColor = keyCircleBg,
+                                textColor = operatorTextColor,
+                                onClick = { onOperator("+") }
+                            )
+                            val equalsHoldSec = securityPreferences.getEqualsHoldDuration()
+                            SamsungRoundKey(
+                                text = "=",
+                                bgColor = equalsCircleBg,
+                                textColor = equalsText,
+                                modifier = Modifier.onGloballyPositioned { coordinates ->
+                                    equalsCenter = coordinates.boundsInRoot().center
+                                },
+                                customHoldDurationMs = equalsHoldSec * 1000L,
+                                onClick = { onEquals() },
+                                onLongClick = { triggerSecretUnlock(equalsCenter) }
+                            )
+                        }
+                    }
+                } else {
+                    // Standard Samsung One UI Keypad Grid: 4 columns x 5 rows (Screenshot 3)
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = if (isCompactScreen) 8.dp else 16.dp),
+                        verticalArrangement = Arrangement.spacedBy(keypadSpacing)
+                    ) {
+                        // Row 1: C (coral text), ( ), %, ÷ (all keys light grey / dark background, green text)
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(keypadSpacing)
+                        ) {
+                            SamsungRoundKey(
+                                text = "C",
+                                bgColor = keyCircleBg,
+                                textColor = clearRedText,
+                                modifier = Modifier.weight(1f),
+                                onClick = { onClear() }
+                            )
+                            SamsungRoundKey(
+                                text = "( )",
+                                bgColor = keyCircleBg,
+                                textColor = operatorTextColor,
+                                modifier = Modifier.weight(1f),
+                                onClick = { onParenthesis() }
+                            )
+                            SamsungRoundKey(
+                                text = "%",
+                                bgColor = keyCircleBg,
+                                textColor = operatorTextColor,
+                                modifier = Modifier.weight(1f),
+                                onClick = { onPercentage() }
+                            )
+                            SamsungRoundKey(
+                                text = "÷",
+                                bgColor = keyCircleBg,
+                                textColor = operatorTextColor,
+                                modifier = Modifier.weight(1f),
+                                onClick = { onOperator("÷") }
+                            )
+                        }
+
+                        // Row 2: 7, 8, 9, ×
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(keypadSpacing)
+                        ) {
+                            SamsungRoundKey(text = "7", bgColor = keyCircleBg, textColor = numberBtnText, modifier = Modifier.weight(1f), onClick = { onDigit("7") })
+                            SamsungRoundKey(text = "8", bgColor = keyCircleBg, textColor = numberBtnText, modifier = Modifier.weight(1f), onClick = { onDigit("8") })
+                            SamsungRoundKey(text = "9", bgColor = keyCircleBg, textColor = numberBtnText, modifier = Modifier.weight(1f), onClick = { onDigit("9") })
+                            SamsungRoundKey(text = "×", bgColor = keyCircleBg, textColor = operatorTextColor, modifier = Modifier.weight(1f), onClick = { onOperator("×") })
+                        }
+
+                        // Row 3: 4, 5, 6, −
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(keypadSpacing)
+                        ) {
+                            SamsungRoundKey(text = "4", bgColor = keyCircleBg, textColor = numberBtnText, modifier = Modifier.weight(1f), onClick = { onDigit("4") })
+                            SamsungRoundKey(text = "5", bgColor = keyCircleBg, textColor = numberBtnText, modifier = Modifier.weight(1f), onClick = { onDigit("5") })
+                            SamsungRoundKey(text = "6", bgColor = keyCircleBg, textColor = numberBtnText, modifier = Modifier.weight(1f), onClick = { onDigit("6") })
+                            SamsungRoundKey(text = "−", bgColor = keyCircleBg, textColor = operatorTextColor, modifier = Modifier.weight(1f), onClick = { onOperator("−") })
+                        }
+
+                        // Row 4: 1, 2, 3, +
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(keypadSpacing)
+                        ) {
+                            SamsungRoundKey(text = "1", bgColor = keyCircleBg, textColor = numberBtnText, modifier = Modifier.weight(1f), onClick = { onDigit("1") })
+                            SamsungRoundKey(text = "2", bgColor = keyCircleBg, textColor = numberBtnText, modifier = Modifier.weight(1f), onClick = { onDigit("2") })
+                            SamsungRoundKey(text = "3", bgColor = keyCircleBg, textColor = numberBtnText, modifier = Modifier.weight(1f), onClick = { onDigit("3") })
+                            SamsungRoundKey(text = "+", bgColor = keyCircleBg, textColor = operatorTextColor, modifier = Modifier.weight(1f), onClick = { onOperator("+") })
+                        }
+
+                        // Row 5: +/-, 0, ., = (solid green circle for =)
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(keypadSpacing)
+                        ) {
+                            SamsungRoundKey(
+                                text = "+/-",
+                                bgColor = keyCircleBg,
+                                textColor = numberBtnText,
+                                modifier = Modifier.weight(1f),
+                                onClick = { onPlusMinus() }
+                            )
+                            SamsungRoundKey(text = "0", bgColor = keyCircleBg, textColor = numberBtnText, modifier = Modifier.weight(1f), onClick = { onDigit("0") })
+                            SamsungRoundKey(
+                                text = ".",
+                                bgColor = keyCircleBg,
+                                textColor = numberBtnText,
+                                modifier = Modifier.weight(1f),
+                                onClick = { onDecimal() }
+                            )
+                            val equalsHoldSec = securityPreferences.getEqualsHoldDuration()
+                            SamsungRoundKey(
+                                text = "=",
+                                bgColor = equalsCircleBg,
+                                textColor = equalsText,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .onGloballyPositioned { coordinates ->
+                                        equalsCenter = coordinates.boundsInRoot().center
+                                    },
+                                customHoldDurationMs = equalsHoldSec * 1000L,
+                                onClick = { onEquals() },
+                                onLongClick = {
+                                    triggerSecretUnlock(equalsCenter)
+                                }
+                            )
+                        }
+                    }
+                }
             }
         }
     }
 }
 
 /**
- * Authentic circular key for Samsung One UI Calculator with spring press animation and responsive font scaling.
+ * Full-screen Samsung Unit Converter (Screenshot 1).
+ * Features:
+ * - Top bar: `<  Unit converter`
+ * - Category pill row: Area, Length, Temperature, Volume, Mass, Data, Speed, Time
+ * - Two conversion rows with dropdown selectors and huge number font + small unit abbreviation
+ * - Keypad 4x4: 7 8 9 ⌫ / 4 5 6 C / 1 2 3 ↑ / +/- 0 . ↓
+ */
+@Composable
+private fun SamsungUnitConverterScreen(
+    isDark: Boolean,
+    bgMain: Color,
+    keyCircleBg: Color,
+    numberBtnText: Color,
+    operatorTextColor: Color,
+    clearRedText: Color,
+    primaryText: Color,
+    secondaryText: Color,
+    dividerColor: Color,
+    chipActiveBg: Color,
+    onClose: () -> Unit
+) {
+    val haptic = LocalHapticFeedback.current
+    var selectedCategoryIndex by remember { mutableIntStateOf(0) }
+    val categories = listOf("Area", "Length", "Temperature", "Volume", "Mass", "Data", "Speed", "Time")
+
+    val unitSpecs = remember(selectedCategoryIndex) {
+        getCategoryUnitSpecs(selectedCategoryIndex)
+    }
+
+    var topUnitIndex by remember(selectedCategoryIndex) { mutableIntStateOf(0) }
+    var bottomUnitIndex by remember(selectedCategoryIndex) { mutableIntStateOf(if (unitSpecs.size > 1) 1 else 0) }
+
+    var activeRow by remember { mutableIntStateOf(0) } // 0 = top, 1 = bottom
+    var topRawInput by remember { mutableStateOf("10") }
+    var bottomRawInput by remember { mutableStateOf("0.1") }
+
+    var showTopDropdown by remember { mutableStateOf(false) }
+    var showBottomDropdown by remember { mutableStateOf(false) }
+
+    fun recomputeConversion(sourceRow: Int) {
+        val topSpec = unitSpecs.getOrNull(topUnitIndex) ?: return
+        val bottomSpec = unitSpecs.getOrNull(bottomUnitIndex) ?: return
+
+        if (sourceRow == 0) {
+            val v = topRawInput.toDoubleOrNull() ?: 0.0
+            val converted = convertUnits(selectedCategoryIndex, v, topSpec, bottomSpec)
+            bottomRawInput = formatUnitResult(converted)
+        } else {
+            val v = bottomRawInput.toDoubleOrNull() ?: 0.0
+            val converted = convertUnits(selectedCategoryIndex, v, bottomSpec, topSpec)
+            topRawInput = formatUnitResult(converted)
+        }
+    }
+
+    LaunchedEffect(selectedCategoryIndex, topUnitIndex, bottomUnitIndex) {
+        recomputeConversion(activeRow)
+    }
+
+    fun onConverterDigit(d: String) {
+        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+        if (activeRow == 0) {
+            topRawInput = if (topRawInput == "0") d else topRawInput + d
+            recomputeConversion(0)
+        } else {
+            bottomRawInput = if (bottomRawInput == "0") d else bottomRawInput + d
+            recomputeConversion(1)
+        }
+    }
+
+    fun onConverterDecimal() {
+        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+        if (activeRow == 0) {
+            if (!topRawInput.contains(".")) {
+                topRawInput = if (topRawInput.isEmpty()) "0." else "$topRawInput."
+                recomputeConversion(0)
+            }
+        } else {
+            if (!bottomRawInput.contains(".")) {
+                bottomRawInput = if (bottomRawInput.isEmpty()) "0." else "$bottomRawInput."
+                recomputeConversion(1)
+            }
+        }
+    }
+
+    fun onConverterClear() {
+        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+        if (activeRow == 0) {
+            topRawInput = "0"
+            recomputeConversion(0)
+        } else {
+            bottomRawInput = "0"
+            recomputeConversion(1)
+        }
+    }
+
+    fun onConverterBackspace() {
+        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+        if (activeRow == 0) {
+            topRawInput = if (topRawInput.length > 1) topRawInput.dropLast(1) else "0"
+            recomputeConversion(0)
+        } else {
+            bottomRawInput = if (bottomRawInput.length > 1) bottomRawInput.dropLast(1) else "0"
+            recomputeConversion(1)
+        }
+    }
+
+    fun onConverterPlusMinus() {
+        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+        if (activeRow == 0) {
+            topRawInput = if (topRawInput.startsWith("-")) topRawInput.removePrefix("-") else if (topRawInput == "0") "0" else "-$topRawInput"
+            recomputeConversion(0)
+        } else {
+            bottomRawInput = if (bottomRawInput.startsWith("-")) bottomRawInput.removePrefix("-") else if (bottomRawInput == "0") "0" else "-$bottomRawInput"
+            recomputeConversion(1)
+        }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(bgMain)
+            .statusBarsPadding()
+            .navigationBarsPadding()
+            .padding(horizontal = 20.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.SpaceBetween
+    ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            // Header: <  Unit converter (Screenshot 1)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(
+                    onClick = onClose,
+                    modifier = Modifier.size(38.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+                        contentDescription = "Back",
+                        tint = primaryText,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = "Unit converter",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = primaryText,
+                    fontFamily = FontFamily.SansSerif
+                )
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // Categories horizontal pill scroll
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                categories.forEachIndexed { idx, title ->
+                    val isSelected = selectedCategoryIndex == idx
+                    Surface(
+                        shape = RoundedCornerShape(18.dp),
+                        color = if (isSelected) chipActiveBg else Color.Transparent,
+                        modifier = Modifier.clickable {
+                            selectedCategoryIndex = idx
+                            topUnitIndex = 0
+                            bottomUnitIndex = 1
+                            topRawInput = "10"
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        }
+                    ) {
+                        Text(
+                            text = title,
+                            color = if (isSelected) primaryText else secondaryText,
+                            fontSize = 14.sp,
+                            fontWeight = if (isSelected) FontWeight.Medium else FontWeight.Normal,
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                            fontFamily = FontFamily.SansSerif
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Unit 1 Row: Dropdown selector on left + large number on right (Screenshot 1)
+            val topSpec = unitSpecs.getOrNull(topUnitIndex) ?: UnitSpec("Are", "a", 100.0)
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { activeRow = 0 }
+                    .padding(vertical = 8.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .clickable { showTopDropdown = true }
+                                .padding(vertical = 4.dp)
+                        ) {
+                            Text(
+                                text = topSpec.name,
+                                fontSize = 16.sp,
+                                color = primaryText,
+                                fontFamily = FontFamily.SansSerif
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Icon(
+                                imageVector = Icons.Rounded.ArrowDropDown,
+                                contentDescription = "Select unit",
+                                tint = primaryText,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        DropdownMenu(
+                            expanded = showTopDropdown,
+                            onDismissRequest = { showTopDropdown = false }
+                        ) {
+                            unitSpecs.forEachIndexed { index, spec ->
+                                DropdownMenuItem(
+                                    text = { Text("${spec.name} (${spec.symbol})") },
+                                    onClick = {
+                                        topUnitIndex = index
+                                        showTopDropdown = false
+                                        recomputeConversion(activeRow)
+                                    }
+                                )
+                            }
+                        }
+                    }
+
+                    Row(
+                        verticalAlignment = Alignment.Bottom,
+                        horizontalArrangement = Arrangement.End
+                    ) {
+                        Text(
+                            text = topRawInput,
+                            fontSize = 32.sp,
+                            fontWeight = FontWeight.Normal,
+                            color = if (activeRow == 0) primaryText else secondaryText,
+                            fontFamily = FontFamily.SansSerif
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = topSpec.symbol,
+                            fontSize = 18.sp,
+                            color = secondaryText,
+                            modifier = Modifier.padding(bottom = 4.dp),
+                            fontFamily = FontFamily.SansSerif
+                        )
+                    }
+                }
+                HorizontalDivider(color = dividerColor, thickness = 0.8.dp, modifier = Modifier.padding(top = 10.dp))
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Unit 2 Row: Dropdown selector on left + large number on right (Screenshot 1)
+            val bottomSpec = unitSpecs.getOrNull(bottomUnitIndex) ?: UnitSpec("Hectare", "ha", 10000.0)
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { activeRow = 1 }
+                    .padding(vertical = 8.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .clickable { showBottomDropdown = true }
+                                .padding(vertical = 4.dp)
+                        ) {
+                            Text(
+                                text = bottomSpec.name,
+                                fontSize = 16.sp,
+                                color = primaryText,
+                                fontFamily = FontFamily.SansSerif
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Icon(
+                                imageVector = Icons.Rounded.ArrowDropDown,
+                                contentDescription = "Select unit",
+                                tint = primaryText,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        DropdownMenu(
+                            expanded = showBottomDropdown,
+                            onDismissRequest = { showBottomDropdown = false }
+                        ) {
+                            unitSpecs.forEachIndexed { index, spec ->
+                                DropdownMenuItem(
+                                    text = { Text("${spec.name} (${spec.symbol})") },
+                                    onClick = {
+                                        bottomUnitIndex = index
+                                        showBottomDropdown = false
+                                        recomputeConversion(activeRow)
+                                    }
+                                )
+                            }
+                        }
+                    }
+
+                    Row(
+                        verticalAlignment = Alignment.Bottom,
+                        horizontalArrangement = Arrangement.End
+                    ) {
+                        Text(
+                            text = bottomRawInput,
+                            fontSize = 32.sp,
+                            fontWeight = FontWeight.Normal,
+                            color = if (activeRow == 1) primaryText else secondaryText,
+                            fontFamily = FontFamily.SansSerif
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = bottomSpec.symbol,
+                            fontSize = 18.sp,
+                            color = secondaryText,
+                            modifier = Modifier.padding(bottom = 4.dp),
+                            fontFamily = FontFamily.SansSerif
+                        )
+                    }
+                }
+                HorizontalDivider(color = dividerColor, thickness = 0.8.dp, modifier = Modifier.padding(top = 10.dp))
+            }
+        }
+
+        // Dedicated 4x4 Keypad at bottom (Screenshot 1):
+        // Row 1: 7, 8, 9, ⌫
+        // Row 2: 4, 5, 6, C
+        // Row 3: 1, 2, 3, ↑
+        // Row 4: +/-, 0, ., ↓
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            // Keypad Row 1
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                SamsungRoundKey(text = "7", bgColor = keyCircleBg, textColor = numberBtnText, modifier = Modifier.weight(1f), onClick = { onConverterDigit("7") })
+                SamsungRoundKey(text = "8", bgColor = keyCircleBg, textColor = numberBtnText, modifier = Modifier.weight(1f), onClick = { onConverterDigit("8") })
+                SamsungRoundKey(text = "9", bgColor = keyCircleBg, textColor = numberBtnText, modifier = Modifier.weight(1f), onClick = { onConverterDigit("9") })
+                SamsungRoundKey(
+                    icon = {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Rounded.Backspace,
+                            contentDescription = "Backspace",
+                            tint = operatorTextColor,
+                            modifier = Modifier.size(24.dp)
+                        )
+                    },
+                    bgColor = keyCircleBg,
+                    textColor = operatorTextColor,
+                    modifier = Modifier.weight(1f),
+                    onClick = { onConverterBackspace() }
+                )
+            }
+
+            // Keypad Row 2
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                SamsungRoundKey(text = "4", bgColor = keyCircleBg, textColor = numberBtnText, modifier = Modifier.weight(1f), onClick = { onConverterDigit("4") })
+                SamsungRoundKey(text = "5", bgColor = keyCircleBg, textColor = numberBtnText, modifier = Modifier.weight(1f), onClick = { onConverterDigit("5") })
+                SamsungRoundKey(text = "6", bgColor = keyCircleBg, textColor = numberBtnText, modifier = Modifier.weight(1f), onClick = { onConverterDigit("6") })
+                SamsungRoundKey(text = "C", bgColor = keyCircleBg, textColor = clearRedText, modifier = Modifier.weight(1f), onClick = { onConverterClear() })
+            }
+
+            // Keypad Row 3
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                SamsungRoundKey(text = "1", bgColor = keyCircleBg, textColor = numberBtnText, modifier = Modifier.weight(1f), onClick = { onConverterDigit("1") })
+                SamsungRoundKey(text = "2", bgColor = keyCircleBg, textColor = numberBtnText, modifier = Modifier.weight(1f), onClick = { onConverterDigit("2") })
+                SamsungRoundKey(text = "3", bgColor = keyCircleBg, textColor = numberBtnText, modifier = Modifier.weight(1f), onClick = { onConverterDigit("3") })
+                SamsungRoundKey(
+                    icon = {
+                        Icon(
+                            imageVector = Icons.Rounded.ArrowUpward,
+                            contentDescription = "Up",
+                            tint = operatorTextColor,
+                            modifier = Modifier.size(26.dp)
+                        )
+                    },
+                    bgColor = keyCircleBg,
+                    textColor = operatorTextColor,
+                    modifier = Modifier.weight(1f),
+                    onClick = {
+                        activeRow = 0
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    }
+                )
+            }
+
+            // Keypad Row 4
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                SamsungRoundKey(text = "+/-", bgColor = keyCircleBg, textColor = numberBtnText, modifier = Modifier.weight(1f), onClick = { onConverterPlusMinus() })
+                SamsungRoundKey(text = "0", bgColor = keyCircleBg, textColor = numberBtnText, modifier = Modifier.weight(1f), onClick = { onConverterDigit("0") })
+                SamsungRoundKey(text = ".", bgColor = keyCircleBg, textColor = numberBtnText, modifier = Modifier.weight(1f), onClick = { onConverterDecimal() })
+                SamsungRoundKey(
+                    icon = {
+                        Icon(
+                            imageVector = Icons.Rounded.ArrowDownward,
+                            contentDescription = "Down",
+                            tint = operatorTextColor,
+                            modifier = Modifier.size(26.dp)
+                        )
+                    },
+                    bgColor = keyCircleBg,
+                    textColor = operatorTextColor,
+                    modifier = Modifier.weight(1f),
+                    onClick = {
+                        activeRow = 1
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    }
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Authentic circular key for Samsung One UI Calculator with spring press physics and responsive font scaling.
  */
 @Composable
 private fun SamsungRoundKey(
-    text: String,
+    text: String? = null,
+    icon: (@Composable () -> Unit)? = null,
     bgColor: Color,
     textColor: Color,
     modifier: Modifier = Modifier,
@@ -1097,9 +1600,9 @@ private fun SamsungRoundKey(
 ) {
     var isPressed by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.92f else 1.0f,
+        targetValue = if (isPressed) 0.90f else 1.0f,
         animationSpec = spring(
-            dampingRatio = 0.65f,
+            dampingRatio = 0.58f,
             stiffness = Spring.StiffnessMediumLow
         ),
         label = "round_btn_scale"
@@ -1113,7 +1616,7 @@ private fun SamsungRoundKey(
             .scale(scale)
             .aspectRatio(1f)
             .clip(CircleShape)
-            .background(if (isPressed) bgColor.copy(alpha = 0.82f) else bgColor)
+            .background(if (isPressed) bgColor.copy(alpha = 0.78f) else bgColor)
             .pointerInput(customHoldDurationMs, currentOnLongClick) {
                 if (customHoldDurationMs != null && customHoldDurationMs > 0L && currentOnLongClick != null) {
                     awaitEachGesture {
@@ -1154,21 +1657,25 @@ private fun SamsungRoundKey(
         contentAlignment = Alignment.Center
     ) {
         val btnW = maxWidth
-        val fontSize = when {
-            text.length > 2 -> (btnW.value * 0.32f).coerceIn(13f, 20f).sp
-            text == "=" || text == "C" || text == "%" -> (btnW.value * 0.44f).coerceIn(19f, 28f).sp
-            else -> (btnW.value * 0.46f).coerceIn(21f, 29f).sp
-        }
+        if (icon != null) {
+            icon()
+        } else if (text != null) {
+            val fontSize = when {
+                text.length > 2 -> (btnW.value * 0.32f).coerceIn(13f, 20f).sp
+                text == "=" || text == "C" || text == "%" -> (btnW.value * 0.44f).coerceIn(19f, 28f).sp
+                else -> (btnW.value * 0.46f).coerceIn(21f, 29f).sp
+            }
 
-        Text(
-            text = text,
-            fontSize = fontSize,
-            fontWeight = FontWeight.Normal,
-            color = textColor,
-            fontFamily = FontFamily.SansSerif,
-            maxLines = 1,
-            softWrap = false
-        )
+            Text(
+                text = text,
+                fontSize = fontSize,
+                fontWeight = FontWeight.Normal,
+                color = textColor,
+                fontFamily = FontFamily.SansSerif,
+                maxLines = 1,
+                softWrap = false
+            )
+        }
     }
 }
 
@@ -1182,8 +1689,8 @@ private fun ScientificKey(
     modifier: Modifier = Modifier,
     keyHeight: androidx.compose.ui.unit.Dp = 36.dp,
     isActive: Boolean = false,
-    activeColor: Color = Color(0xFF2EB85C),
-    textColor: Color = Color(0xFFE5E5EA),
+    activeColor: Color = Color(0xFF278829),
+    textColor: Color = Color(0xFF1E1E1E),
     onClick: () -> Unit
 ) {
     var isPressed by remember { mutableStateOf(false) }
@@ -1303,117 +1810,106 @@ private fun ScientificSquareIcon(color: Color, modifier: Modifier = Modifier) {
     }
 }
 
-@Composable
-private fun UnitRow(unit: String, value: String, isDark: Boolean = true) {
-    val subColor = if (isDark) Color(0xFF8E8E93) else Color(0xFF767678)
-    val mainColor = if (isDark) Color.White else Color(0xFF111111)
-    val divColor = if (isDark) Color(0xFF2C2C2E) else Color(0xFFE5E5EA)
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 10.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(unit, fontSize = 16.sp, color = subColor)
-        Text(value, fontSize = 18.sp, fontWeight = FontWeight.Medium, color = mainColor)
-    }
-    HorizontalDivider(color = divColor, thickness = 0.8.dp)
-}
+private data class UnitSpec(val name: String, val symbol: String, val factorToBase: Double)
 
-/**
- * Unit conversion calculator helper.
- */
-private fun getUnitConversions(categoryIndex: Int, value: Double): List<Pair<String, String>> {
-    val df = DecimalFormat("#,##0.####", DecimalFormatSymbols(Locale.US))
-    return when (categoryIndex) {
-        0 -> { // Length (base: meter)
-            val m = value
-            listOf(
-                "Meter (m)" to df.format(m),
-                "Centimeter (cm)" to df.format(m * 100.0),
-                "Millimeter (mm)" to df.format(m * 1000.0),
-                "Kilometer (km)" to df.format(m / 1000.0),
-                "Inch (in)" to df.format(m * 39.3701),
-                "Foot (ft)" to df.format(m * 3.28084),
-                "Yard (yd)" to df.format(m * 1.09361),
-                "Mile (mi)" to df.format(m / 1609.34)
-            )
-        }
-        1 -> { // Area (base: m²)
-            val m2 = value
-            listOf(
-                "Square meter (m²)" to df.format(m2),
-                "Square foot (ft²)" to df.format(m2 * 10.7639),
-                "Acre (ac)" to df.format(m2 / 4046.86),
-                "Hectare (ha)" to df.format(m2 / 10000.0),
-                "Square kilometer (km²)" to df.format(m2 / 1_000_000.0),
-                "Square inch (in²)" to df.format(m2 * 1550.0)
-            )
-        }
-        2 -> { // Weight (base: kg)
-            val kg = value
-            listOf(
-                "Kilogram (kg)" to df.format(kg),
-                "Gram (g)" to df.format(kg * 1000.0),
-                "Milligram (mg)" to df.format(kg * 1_000_000.0),
-                "Pound (lb)" to df.format(kg * 2.20462),
-                "Ounce (oz)" to df.format(kg * 35.274),
-                "Tonne (t)" to df.format(kg / 1000.0)
-            )
-        }
-        3 -> { // Temperature
-            val c = value
-            listOf(
-                "Celsius (°C)" to df.format(c),
-                "Fahrenheit (°F)" to df.format((c * 9.0 / 5.0) + 32.0),
-                "Kelvin (K)" to df.format(c + 273.15)
-            )
-        }
-        4 -> { // Volume (base: L)
-            val l = value
-            listOf(
-                "Liter (L)" to df.format(l),
-                "Milliliter (mL)" to df.format(l * 1000.0),
-                "Gallon (US gal)" to df.format(l / 3.78541),
-                "Quart (US qt)" to df.format(l / 0.946353),
-                "Pint (US pt)" to df.format(l / 0.473176),
-                "Fluid ounce (fl oz)" to df.format(l * 33.814),
-                "Cubic meter (m³)" to df.format(l / 1000.0)
-            )
-        }
-        5 -> { // Speed (base: km/h)
-            val kmh = value
-            listOf(
-                "Kilometer/hour (km/h)" to df.format(kmh),
-                "Meter/second (m/s)" to df.format(kmh / 3.6),
-                "Mile/hour (mph)" to df.format(kmh / 1.60934),
-                "Knot (kn)" to df.format(kmh / 1.852)
-            )
-        }
-        6 -> { // Time (base: s)
-            val s = value
-            listOf(
-                "Second (s)" to df.format(s),
-                "Minute (min)" to df.format(s / 60.0),
-                "Hour (h)" to df.format(s / 3600.0),
-                "Day (d)" to df.format(s / 86400.0),
-                "Week (wk)" to df.format(s / 604800.0),
-                "Millisecond (ms)" to df.format(s * 1000.0)
-            )
-        }
-        7 -> { // Data (base: MB)
-            val mb = value
-            listOf(
-                "Megabyte (MB)" to df.format(mb),
-                "Kilobyte (KB)" to df.format(mb * 1024.0),
-                "Gigabyte (GB)" to df.format(mb / 1024.0),
-                "Terabyte (TB)" to df.format(mb / (1024.0 * 1024.0)),
-                "Byte (B)" to df.format(mb * 1024.0 * 1024.0)
-            )
-        }
+private fun getCategoryUnitSpecs(catIndex: Int): List<UnitSpec> {
+    return when (catIndex) {
+        0 -> listOf( // Area (base: m²)
+            UnitSpec("Are", "a", 100.0),
+            UnitSpec("Hectare", "ha", 10000.0),
+            UnitSpec("Square meter", "m²", 1.0),
+            UnitSpec("Square kilometer", "km²", 1_000_000.0),
+            UnitSpec("Acre", "ac", 4046.8564224),
+            UnitSpec("Square foot", "ft²", 0.09290304),
+            UnitSpec("Square inch", "in²", 0.00064516),
+            UnitSpec("Square yard", "yd²", 0.83612736)
+        )
+        1 -> listOf( // Length (base: m)
+            UnitSpec("Meter", "m", 1.0),
+            UnitSpec("Centimeter", "cm", 0.01),
+            UnitSpec("Millimeter", "mm", 0.001),
+            UnitSpec("Kilometer", "km", 1000.0),
+            UnitSpec("Inch", "in", 0.0254),
+            UnitSpec("Foot", "ft", 0.3048),
+            UnitSpec("Yard", "yd", 0.9144),
+            UnitSpec("Mile", "mi", 1609.344)
+        )
+        2 -> listOf( // Temperature
+            UnitSpec("Celsius", "°C", 1.0),
+            UnitSpec("Fahrenheit", "°F", 1.0),
+            UnitSpec("Kelvin", "K", 1.0)
+        )
+        3 -> listOf( // Volume (base: L)
+            UnitSpec("Liter", "L", 1.0),
+            UnitSpec("Milliliter", "mL", 0.001),
+            UnitSpec("Gallon (US)", "gal", 3.78541),
+            UnitSpec("Quart", "qt", 0.946353),
+            UnitSpec("Pint", "pt", 0.473176),
+            UnitSpec("Fluid ounce", "fl oz", 0.0295735),
+            UnitSpec("Cubic meter", "m³", 1000.0)
+        )
+        4 -> listOf( // Mass (base: kg)
+            UnitSpec("Kilogram", "kg", 1.0),
+            UnitSpec("Gram", "g", 0.001),
+            UnitSpec("Milligram", "mg", 0.000001),
+            UnitSpec("Pound", "lb", 0.45359237),
+            UnitSpec("Ounce", "oz", 0.0283495),
+            UnitSpec("Tonne", "t", 1000.0)
+        )
+        5 -> listOf( // Data (base: MB)
+            UnitSpec("Megabyte", "MB", 1.0),
+            UnitSpec("Kilobyte", "KB", 1.0 / 1024.0),
+            UnitSpec("Gigabyte", "GB", 1024.0),
+            UnitSpec("Terabyte", "TB", 1024.0 * 1024.0),
+            UnitSpec("Byte", "B", 1.0 / (1024.0 * 1024.0))
+        )
+        6 -> listOf( // Speed (base: km/h)
+            UnitSpec("Kilometer/hour", "km/h", 1.0),
+            UnitSpec("Meter/second", "m/s", 3.6),
+            UnitSpec("Mile/hour", "mph", 1.60934),
+            UnitSpec("Knot", "kn", 1.852)
+        )
+        7 -> listOf( // Time (base: s)
+            UnitSpec("Second", "s", 1.0),
+            UnitSpec("Minute", "min", 60.0),
+            UnitSpec("Hour", "h", 3600.0),
+            UnitSpec("Day", "d", 86400.0),
+            UnitSpec("Week", "wk", 604800.0)
+        )
         else -> emptyList()
     }
+}
+
+private fun convertUnits(catIndex: Int, value: Double, from: UnitSpec, to: UnitSpec): Double {
+    if (from.symbol == to.symbol) return value
+    if (catIndex == 2) { // Temperature
+        val c = when (from.symbol) {
+            "°C" -> value
+            "°F" -> (value - 32.0) * 5.0 / 9.0
+            "K" -> value - 273.15
+            else -> value
+        }
+        return when (to.symbol) {
+            "°C" -> c
+            "°F" -> (c * 9.0 / 5.0) + 32.0
+            "K" -> c + 273.15
+            else -> c
+        }
+    }
+    val inBase = value * from.factorToBase
+    return inBase / to.factorToBase
+}
+
+private fun formatUnitResult(v: Double): String {
+    if (v.isNaN() || v.isInfinite()) return "0"
+    val absV = abs(v)
+    if (absV == 0.0) return "0"
+    val df = if (absV >= 100000 || (absV < 0.0001 && absV > 0.0)) {
+        DecimalFormat("0.####E0", DecimalFormatSymbols(Locale.US))
+    } else {
+        DecimalFormat("#,##0.######", DecimalFormatSymbols(Locale.US))
+    }
+    return df.format(v)
 }
 
 /**
@@ -1430,14 +1926,12 @@ fun evaluateSamsungExpression(rawExpr: String, isDeg: Boolean): Result<String> {
             .replace("π", Math.PI.toString())
             .replace("e", Math.E.toString())
 
-        // Trim trailing operators if user is typing
         var trimmed = clean.trim()
         while (trimmed.endsWith("+") || trimmed.endsWith("-") || trimmed.endsWith("*") || trimmed.endsWith("/") || trimmed.endsWith("^")) {
             trimmed = trimmed.dropLast(1).trim()
         }
         if (trimmed.isBlank()) return@runCatching "0"
 
-        // Handle percentages in addition/subtraction: e.g. 100 + 10% -> 100 + (100 * 10 / 100)
         val percentAddSub = Regex("""(\d+(?:\.\d+)?)\s*([\+\-])\s*(\d+(?:\.\d+)?)%""")
         while (percentAddSub.containsMatchIn(trimmed)) {
             trimmed = percentAddSub.replace(trimmed) { match ->
@@ -1447,10 +1941,8 @@ fun evaluateSamsungExpression(rawExpr: String, isDeg: Boolean): Result<String> {
                 "$base $op ($base * $pct / 100)"
             }
         }
-        // Handle remaining percentage: 50% -> (50 / 100)
         trimmed = trimmed.replace(Regex("""(\d+(?:\.\d+)?)%"""), "($1 / 100)")
 
-        // Parse and calculate
         val parser = SamsungExpressionParser(trimmed, isDeg)
         val value = parser.parse()
 

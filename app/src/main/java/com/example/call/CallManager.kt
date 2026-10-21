@@ -317,19 +317,14 @@ object CallManager {
                 CallNotifications.showIncoming(app, invite)
             }
         } else if (!CherishApplication.isAppInForeground && !secPrefs.getCallMaskingStyle().equals("discreet", ignoreCase = true)) {
-            // Out of the app or app closed, its ringing notification (posted above) does it by what
-            // the phone is doing: in another app it shows as a banner with Answer and Decline, never
-            // the call screen over it as well; locked or asleep, the call screen comes up. That one
-            // is also opened from here, as some phones hold back a notification's full screen
-            if (com.example.notifications.NotificationHelper.isDeviceLockedOrSleeping(app)) {
-                try {
-                    val intent = CallActivity.incomingIntent(app, invite).apply {
-                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-                    }
-                    app.startActivity(intent)
-                } catch (e: Exception) {
-                    Log.w(TAG, "Couldn't open the call screen directly", e)
+            // Locked, asleep or idle: launch CallActivity directly over lockscreen/idle screen
+            try {
+                val intent = CallActivity.incomingIntent(app, invite).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
                 }
+                app.startActivity(intent)
+            } catch (e: Exception) {
+                Log.w(TAG, "Couldn't open the call screen directly, fullScreenIntent will handle it", e)
             }
         }
     }

@@ -48,7 +48,7 @@ class CherishFirebaseMessagingService : FirebaseMessagingService() {
                         android.os.PowerManager.ACQUIRE_CAUSES_WAKEUP or
                         android.os.PowerManager.ON_AFTER_RELEASE,
                         "cherish:fcm_call_incoming_wake"
-                    )?.acquire(25_000L)
+                    )?.acquire(45_000L)
                 } catch (_: Exception) {
                     try {
                         val pm = applicationContext.getSystemService(android.content.Context.POWER_SERVICE) as? android.os.PowerManager

@@ -681,10 +681,10 @@ fun ProfileScreen(
                                 modifier = Modifier.size(24.dp).clip(RoundedCornerShape(6.dp))
                             )
                         } else {
-                            Icon(
-                                imageVector = Icons.Rounded.EditNote,
-                                contentDescription = null,
-                                tint = primaryAccent
+                            androidx.compose.foundation.Image(
+                                painter = painterResource(id = com.example.R.mipmap.ic_launcher),
+                                contentDescription = "Notes App",
+                                modifier = Modifier.size(24.dp).clip(RoundedCornerShape(6.dp))
                             )
                         }
                     },
@@ -757,11 +757,10 @@ fun ProfileScreen(
                                         modifier = Modifier.size(19.dp).clip(RoundedCornerShape(5.dp))
                                     )
                                 } else {
-                                    Icon(
-                                        imageVector = icon,
-                                        contentDescription = null,
-                                        tint = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier.size(17.dp)
+                                    androidx.compose.foundation.Image(
+                                        painter = painterResource(id = com.example.R.mipmap.ic_launcher),
+                                        contentDescription = "Notes App",
+                                        modifier = Modifier.size(19.dp).clip(RoundedCornerShape(5.dp))
                                     )
                                 }
                                 Spacer(modifier = Modifier.width(6.dp))
