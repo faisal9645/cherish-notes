@@ -77,6 +77,19 @@ class CherishApplication : Application(), coil.ImageLoaderFactory {
     /** When the app was last left (for the app lock); 0 while it's open. */
     @Volatile private var leftAppAt = 0L
 
+    /**
+     * When the app went to the background while something held Cherish open (a photo picker or the
+     * camera from the chat, a call that just ended); 0 otherwise. Away from there for long, or the
+     * phone locked meanwhile, it was leaving after all.
+     */
+    @Volatile private var heldOpenSince = 0L
+
+    /** The phone locked while the app was away with Cherish held open: the app lock counts from then. */
+    fun onScreenLockedWhileAway() {
+        val since = heldOpenSince
+        if (!isAppInForeground && since > 0L && leftAppAt == 0L) leftAppAt = since
+    }
+
     override fun onCreate() {
         super.onCreate()
         instance = this
@@ -225,10 +238,10 @@ class CherishApplication : Application(), coil.ImageLoaderFactory {
         androidx.lifecycle.ProcessLifecycleOwner.get().lifecycle.addObserver(
             androidx.lifecycle.LifecycleEventObserver { _, event ->
                 if (event == androidx.lifecycle.Lifecycle.Event.ON_STOP) {
-                    // Leaving for a photo picker, the camera, full-screen player or call doesn't count
+                    // Leaving for a photo picker, the camera or a call doesn't count (a full-screen
+                    // video or the Watch Party is inside the app: leaving from there does)
                     val leftForReal = !securityPreferences.ignoreNextPause &&
                         !securityPreferences.isExternalPickerActive &&
-                        !securityPreferences.isTheaterModeActive &&
                         !securityPreferences.wasInCallRecently() &&
                         !com.example.call.CallManager.hasActiveCall() &&
                         !com.example.call.CallManager.isCallScreenVisible
@@ -236,13 +249,27 @@ class CherishApplication : Application(), coil.ImageLoaderFactory {
                     if (securityPreferences.isDisguiseModeEnabled() && leftForReal) {
                         securityPreferences.reDisguise()
                     }
-                    leftAppAt = if (leftForReal) android.os.SystemClock.elapsedRealtime() else 0L
+                    val now = android.os.SystemClock.elapsedRealtime()
+                    leftAppAt = if (leftForReal) now else 0L
+                    heldOpenSince = if (leftForReal) 0L else now
                     if (leftForReal) {
                         kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
                             com.example.util.StorageOptimizer.pruneStaleCaches(this@CherishApplication)
                         }
                     }
                 } else if (event == androidx.lifecycle.Lifecycle.Event.ON_START) {
+                    // Back after a long trip out from a picker, the camera or a call that had ended
+                    // (going home from there): it was leaving, so Cherish is hidden and locked as such
+                    val heldSince = heldOpenSince
+                    heldOpenSince = 0L
+                    if (heldSince > 0L &&
+                        android.os.SystemClock.elapsedRealtime() - heldSince >= HELD_OPEN_TRIP_MAX_MS &&
+                        !com.example.call.CallManager.hasActiveCall() &&
+                        !com.example.call.CallManager.isCallScreenVisible
+                    ) {
+                        if (securityPreferences.isDisguiseModeEnabled()) securityPreferences.forceDisguise()
+                        if (leftAppAt == 0L) leftAppAt = heldSince
+                    }
                     // App lock: asks for the PIN again once away longer than the chosen time
                     val left = leftAppAt
                     leftAppAt = 0L
@@ -319,6 +346,9 @@ class CherishApplication : Application(), coil.ImageLoaderFactory {
     }
 
     companion object {
+        /** Longer than this out on a picker, the camera or after a call, and it counts as having left. */
+        private const val HELD_OPEN_TRIP_MAX_MS = 2L * 60 * 1000
+
         lateinit var instance: CherishApplication
             private set
 

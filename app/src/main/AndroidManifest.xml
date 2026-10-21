@@ -65,12 +65,55 @@
             android:hardwareAccelerated="true"
             android:launchMode="singleTop"
             android:label="@string/app_name"
-            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|smallestScreenSize"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|smallestScreenSize|uiMode"
             android:windowSoftInputMode="adjustResize"
             android:theme="@style/Theme.MyApplication">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
             </intent-filter>
+        </activity>
+
+        <!-- Default Notes Launcher Alias -->
+        <activity-alias
+            android:name=".NotesAlias"
+            android:targetActivity=".MainActivity"
+            android:icon="@mipmap/ic_launcher"
+            android:roundIcon="@mipmap/ic_launcher_round"
+            android:label="@string/app_name"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <!-- Samsung Calculator Decoy Launcher Alias -->
+        <activity-alias
+            android:name=".CalculatorAlias"
+            android:targetActivity=".MainActivity"
+            android:icon="@mipmap/ic_calculator_launcher"
+            android:roundIcon="@mipmap/ic_calculator_launcher"
+            android:label="@string/calculator_name"
+            android:enabled="false"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <!-- "Share to Notes": no screen of its own, never opens the app (see ShareReceiverActivity);
+             turned off while the app is the Calculator -->
+        <activity
+            android:name=".share.ShareReceiverActivity"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:icon="@mipmap/ic_launcher"
+            android:roundIcon="@mipmap/ic_launcher_round"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
             <!-- Handle all shared text / links -->
             <intent-filter>
                 <action android:name="android.intent.action.SEND" />
@@ -114,36 +157,6 @@
                 <data android:mimeType="*/*" />
             </intent-filter>
         </activity>
-
-        <!-- Default Notes Launcher Alias -->
-        <activity-alias
-            android:name=".NotesAlias"
-            android:targetActivity=".MainActivity"
-            android:icon="@mipmap/ic_launcher"
-            android:roundIcon="@mipmap/ic_launcher_round"
-            android:label="@string/app_name"
-            android:enabled="true"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity-alias>
-
-        <!-- Samsung Calculator Decoy Launcher Alias -->
-        <activity-alias
-            android:name=".CalculatorAlias"
-            android:targetActivity=".MainActivity"
-            android:icon="@mipmap/ic_calculator_launcher"
-            android:roundIcon="@mipmap/ic_calculator_launcher"
-            android:label="Calculator"
-            android:enabled="false"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity-alias>
 
         <!-- The call screen: its own task, so it can show over the lock screen without the chat
              and never appears in recent apps -->

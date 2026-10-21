@@ -73,7 +73,6 @@ fun NoteEditorScreen(
     onShare: ((NoteEntity) -> Unit)? = null,
     onToast: (String) -> Unit
 ) {
-    BackHandler(onBack = onDismiss)
     val context = LocalContext.current
     val isDark = isAppInDark()
 
@@ -135,6 +134,29 @@ fun NoteEditorScreen(
     }
     val charCount = remember(content) { content.length }
 
+    // Leaving the editor keeps what was written (like a real notes app): an empty note is dropped,
+    // anything with a title, text or a checklist is saved. Save and the back button both end here.
+    val saveAndExit: () -> Unit = {
+        val finalTitle = title.trim()
+        val finalContent = content.trim()
+        if (finalTitle.isEmpty() && finalContent.isEmpty() && checklistItems.isEmpty()) {
+            onDismiss()
+        } else {
+            onSave(
+                initialNote?.id,
+                if (finalTitle.isEmpty()) "Untitled" else finalTitle,
+                content,
+                category,
+                colorHex,
+                checklistItems,
+                isPinned,
+                reminderTime
+            )
+            onDismiss()
+        }
+    }
+    BackHandler(onBack = saveAndExit)
+
     Scaffold(
         topBar = {
             Column(
@@ -151,7 +173,7 @@ fun NoteEditorScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    IconButton(onClick = onDismiss) {
+                    IconButton(onClick = saveAndExit) {
                         Icon(
                             Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Back",
@@ -375,26 +397,7 @@ fun NoteEditorScreen(
                                     .height(42.dp)
                                     .clip(RoundedCornerShape(14.dp))
                                     .background(editorTheme.accentPrimary)
-                                    .clickable {
-                                        val finalTitle = title.trim()
-                                        val finalContent = content.trim()
-                                        if (finalTitle.isEmpty() && finalContent.isEmpty() && checklistItems.isEmpty()) {
-                                            onToast("Empty note discarded")
-                                            onDismiss()
-                                            return@clickable
-                                        }
-                                        onSave(
-                                            initialNote?.id,
-                                            if (finalTitle.isEmpty()) "Untitled" else finalTitle,
-                                            content,
-                                            category,
-                                            colorHex,
-                                            checklistItems,
-                                            isPinned,
-                                            reminderTime
-                                        )
-                                        onDismiss()
-                                    }
+                                    .clickable { saveAndExit() }
                                     .testTag("note_editor_save_button")
                                     .padding(horizontal = 20.dp),
                                 contentAlignment = Alignment.Center

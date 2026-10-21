@@ -320,6 +320,11 @@ class NotesDisguiseViewModel(
             type = "text/plain"
         }
         val chooser = Intent.createChooser(sendIntent, "Share Note")
+        // Not back into Notes itself
+        chooser.putExtra(
+            Intent.EXTRA_EXCLUDE_COMPONENTS,
+            arrayOf(android.content.ComponentName(context, com.example.share.ShareReceiverActivity::class.java))
+        )
         chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         context.startActivity(chooser)
     }

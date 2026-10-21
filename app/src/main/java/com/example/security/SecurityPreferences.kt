@@ -99,8 +99,18 @@ class SecurityPreferences(private val context: Context) {
         val valid = if (style == DISGUISE_STYLE_CALCULATOR) DISGUISE_STYLE_CALCULATOR else DISGUISE_STYLE_NOTES
         prefs.edit().putString(KEY_DISGUISE_STYLE, valid).apply()
         _disguiseStyle.value = valid
+        _isCalculatorDecoy.value = isCalculatorDecoy()
         syncLauncherIcon(valid)
     }
+
+    /**
+     * The app is the Calculator right now: its icon, and what hides Cherish. With Disguise Mode off
+     * the icon is Notes whatever style was picked, so the decoy is Notes too.
+     */
+    fun isCalculatorDecoy(): Boolean = isDisguiseModeEnabled() && getDisguiseStyle() == DISGUISE_STYLE_CALCULATOR
+
+    private val _isCalculatorDecoy = MutableStateFlow(isCalculatorDecoy())
+    val calculatorDecoy: StateFlow<Boolean> = _isCalculatorDecoy.asStateFlow()
 
     fun syncLauncherIcon(style: String = getDisguiseStyle()) {
         try {
@@ -136,6 +146,17 @@ class SecurityPreferences(private val context: Context) {
             if (pm.getComponentEnabledSetting(notesComp) != targetNotes) {
                 pm.setComponentEnabledSetting(notesComp, targetNotes, android.content.pm.PackageManager.DONT_KILL_APP)
             }
+            // "Share to Notes" is offered only while the app is Notes (a calculator taking shares
+            // would stand out in every share sheet)
+            val shareComp = android.content.ComponentName(context, "com.example.share.ShareReceiverActivity")
+            val targetShare = if (isCalc) {
+                android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DISABLED
+            } else {
+                android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_ENABLED
+            }
+            if (pm.getComponentEnabledSetting(shareComp) != targetShare) {
+                pm.setComponentEnabledSetting(shareComp, targetShare, android.content.pm.PackageManager.DONT_KILL_APP)
+            }
         } catch (_: Throwable) {}
     }
 
@@ -147,6 +168,7 @@ class SecurityPreferences(private val context: Context) {
         } else {
             _hasRevealedSecretAppInSession.value = true
         }
+        _isCalculatorDecoy.value = isCalculatorDecoy()
         syncLauncherIcon()
     }
 
@@ -162,7 +184,9 @@ class SecurityPreferences(private val context: Context) {
 
     fun reDisguise() {
         if (!isDisguiseModeEnabled()) return
-        if (ignoreNextPause || isTheaterModeActive || isExternalPickerActive || wasInCallRecently()) return
+        // A full-screen video or Watch Party never leaves the app, so it doesn't hold Cherish open
+        // here: going home from it hides Cherish like going home from anywhere else
+        if (ignoreNextPause || isExternalPickerActive || wasInCallRecently()) return
         if (com.example.call.CallManager.hasActiveCall() || com.example.call.CallManager.isCallScreenVisible) return
         isMediaViewerActive = false
         _hasRevealedSecretAppInSession.value = false
@@ -189,6 +213,8 @@ class SecurityPreferences(private val context: Context) {
         ignoreNextPause = false
         _hasRevealedSecretAppInSession.value = false
         _isDisguiseActive.value = true
+        // Hidden during a call: the call ending doesn't bring Cherish back
+        try { com.example.call.CallManager.cancelReturnToCherish() } catch (_: Throwable) {}
         try {
             val app = context.applicationContext as? com.example.CherishApplication
             app?.authRepository?.updatePresence()

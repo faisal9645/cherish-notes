@@ -212,8 +212,8 @@ fun NotesDisguiseScreen(
             if (activity != null && com.example.security.BiometricHelper.isDeviceLockOrBiometricAvailable(context)) {
                 com.example.security.BiometricHelper.showDeviceLockOrBiometricPrompt(
                     activity = activity,
-                    title = "Confirm Phone Lock / Fingerprint",
-                    subtitle = "Verify device credentials to open secret space",
+                    title = "Confirm it's you",
+                    subtitle = "Use your fingerprint or screen lock",
                     onSuccess = {
                         coroutineScope.launch {
                             delay(250)
@@ -643,13 +643,7 @@ fun NotesDisguiseScreen(
                                     )
                             )
 
-                            // Circular loader ring
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(66.dp),
-                                color = darkTone(DayBluePrimary),
-                                strokeWidth = 3.5.dp,
-                                trackColor = darkTone(DayBluePrimary).copy(alpha = 0.2f)
-                            )
+                            // (No loading ring: a Notes button that spins looks like it's doing something)
                         }
 
                         Box(
@@ -697,23 +691,13 @@ fun NotesDisguiseScreen(
                                 },
                             contentAlignment = Alignment.Center
                         ) {
-                            if (isUnlockingAnimationPlaying) {
-                                Icon(
-                                    imageVector = Icons.Default.LockOpen,
-                                    contentDescription = "Secret Unlocked",
-                                    tint = Color.White,
-                                    modifier = Modifier
-                                        .size(28.dp)
-                                        .scale(0.85f + (unlockAnimProgress.value * 0.25f))
-                                )
-                            } else {
-                                Icon(
-                                    imageVector = Icons.Default.Add,
-                                    contentDescription = "Add Note",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(28.dp)
-                                )
-                            }
+                            // Always the + of a notes app (never a lock), also while it opens
+                            Icon(
+                                imageVector = Icons.Default.Add,
+                                contentDescription = "Add Note",
+                                tint = Color.White,
+                                modifier = Modifier.size(28.dp)
+                            )
                         }
                     }
                 }
@@ -949,70 +933,8 @@ fun NotesDisguiseScreen(
             )
         }
 
-        // Satisfying secret opening transition overlay once hold completes
-        if (isUnlockingAnimationPlaying) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = unlockAnimProgress.value * 0.35f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
-                ) {
-                    Surface(
-                        shape = CircleShape,
-                        color = MaterialTheme.colorScheme.surface,
-                        shadowElevation = 14.dp,
-                        modifier = Modifier
-                            .size(72.dp)
-                            .scale(0.82f + (unlockAnimProgress.value * 0.28f))
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(notesHorizontalGradient),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.LockOpen,
-                                contentDescription = null,
-                                tint = Color.White,
-                                modifier = Modifier.size(34.dp)
-                            )
-                        }
-                    }
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Surface(
-                        shape = RoundedCornerShape(20.dp),
-                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f),
-                        shadowElevation = 6.dp,
-                        modifier = Modifier.graphicsLayer {
-                            alpha = unlockAnimProgress.value
-                        }
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 20.dp, vertical = 9.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(16.dp),
-                                color = darkTone(DayBluePrimary),
-                                strokeWidth = 2.2.dp
-                            )
-                            Text(
-                                text = "Opening Cherish...",
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                        }
-                    }
-                }
-            }
-        }
+        // Opening shows nothing but the bloom on the + button: no name, no lock, no "loading" pill
+        // (also behind the fingerprint prompt, when that's asked for)
     }
 }
 

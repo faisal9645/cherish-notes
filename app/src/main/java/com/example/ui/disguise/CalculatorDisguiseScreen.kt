@@ -12,12 +12,15 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.togetherWith
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -133,6 +136,104 @@ import kotlin.math.tan
  * - Stealth passcode / PIN unlock & hold '=' unlock.
  * - Permanent software keyboard suppression in decoy mode.
  */
+/** The calculator's past results, kept on the phone so they're still there next time (like Samsung's). */
+private object CalculatorHistoryStore {
+    private const val PREFS = "calculator_history"
+    private const val KEY = "entries"
+    private var loaded = false
+
+    val entries = androidx.compose.runtime.mutableStateListOf<Pair<String, String>>()
+
+    fun load(context: Context) {
+        if (loaded) return
+        loaded = true
+        val raw = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY, null) ?: return
+        runCatching {
+            val array = org.json.JSONArray(raw)
+            val list = (0 until array.length()).map { i ->
+                val o = array.getJSONObject(i)
+                o.getString("e") to o.getString("r")
+            }
+            entries.clear()
+            entries.addAll(list)
+        }
+    }
+
+    fun save(context: Context) {
+        val array = org.json.JSONArray()
+        entries.take(100).forEach { (e, r) -> array.put(org.json.JSONObject().put("e", e).put("r", r)) }
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(KEY, array.toString()).apply()
+    }
+}
+
+/** The display line, with the "=" count it belongs to (a new count animates in as a result). */
+private data class CalcLine(val text: androidx.compose.ui.text.AnnotatedString, val generation: Int)
+
+/**
+ * The sum as shown: each number's whole part in groups of three ("12345.678" -> "12,345.678"),
+ * as Samsung's calculator does while typing. Only for showing; the sum itself has no separators.
+ */
+private fun groupDigitsForDisplay(expression: String): String {
+    val source = expression.replace(",", "")
+    val out = StringBuilder(source.length + 8)
+    var i = 0
+    while (i < source.length) {
+        val c = source[i]
+        if (c.isDigit()) {
+            // A run of digits: group it unless it's the part after a decimal point
+            val start = i
+            while (i < source.length && source[i].isDigit()) i++
+            val run = source.substring(start, i)
+            val afterPoint = start > 0 && source[start - 1] == '.'
+            if (afterPoint || run.length <= 3) {
+                out.append(run)
+            } else {
+                val firstGroup = run.length % 3
+                if (firstGroup > 0) out.append(run, 0, firstGroup)
+                var j = firstGroup
+                while (j < run.length) {
+                    if (j > 0) out.append(',')
+                    out.append(run, j, j + 3)
+                    j += 3
+                }
+            }
+        } else {
+            out.append(c)
+            i++
+        }
+    }
+    return out.toString()
+}
+
+/** A thin cursor after the last digit, blinking about twice a second like a text field's. */
+@Composable
+private fun BlinkingCursor(color: Color, height: androidx.compose.ui.unit.Dp) {
+    val transition = androidx.compose.animation.core.rememberInfiniteTransition(label = "calc_cursor")
+    val alpha by transition.animateFloat(
+        initialValue = 1f,
+        targetValue = 0f,
+        animationSpec = androidx.compose.animation.core.infiniteRepeatable(
+            animation = androidx.compose.animation.core.keyframes {
+                durationMillis = 1000
+                1f at 0
+                1f at 499
+                0f at 500
+                0f at 999
+            },
+            repeatMode = androidx.compose.animation.core.RepeatMode.Restart
+        ),
+        label = "calc_cursor_alpha"
+    )
+    Box(
+        modifier = Modifier
+            .padding(start = 2.dp)
+            .width(2.dp)
+            .height(height)
+            .graphicsLayer { this.alpha = alpha }
+            .background(color)
+    )
+}
+
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 fun CalculatorDisguiseScreen(
@@ -148,10 +249,14 @@ fun CalculatorDisguiseScreen(
     var expression by remember { mutableStateOf("0") }
     var historyEquation by remember { mutableStateOf("") }
     var isEvaluated by remember { mutableStateOf(false) }
+    // Goes up with each "=": the result slides up into place, the sum moves out above it
+    var evalCount by remember { mutableIntStateOf(0) }
     var isDegMode by remember { mutableStateOf(true) }
     var isScientificActive by remember { mutableStateOf(false) }
 
-    val history = remember { mutableStateListOf<Pair<String, String>>() }
+    // Kept across opens and restarts, like a real calculator
+    val history = CalculatorHistoryStore.entries
+    LaunchedEffect(Unit) { CalculatorHistoryStore.load(context) }
     var showHistoryInline by remember { mutableStateOf(false) }
     var showUnitConverterScreen by remember { mutableStateOf(false) }
 
@@ -210,8 +315,8 @@ fun CalculatorDisguiseScreen(
             if (activity != null && com.example.security.BiometricHelper.isDeviceLockOrBiometricAvailable(context)) {
                 com.example.security.BiometricHelper.showDeviceLockOrBiometricPrompt(
                     activity = activity,
-                    title = "Confirm Phone Lock / Fingerprint",
-                    subtitle = "Verify device credentials to open secret space",
+                    title = "Confirm it's you",
+                    subtitle = "Use your fingerprint or screen lock",
                     onSuccess = {
                         coroutineScope.launch {
                             delay(250)
@@ -221,7 +326,10 @@ fun CalculatorDisguiseScreen(
                         }
                     },
                     onError = {
+                        // Cancelled: close the reveal circle so the calculator shows again (not a
+                        // blank cut-out onto the hidden app)
                         isUnlockingSecret = false
+                        coroutineScope.launch { unlockAnimProgress.snapTo(0f) }
                     }
                 )
                 return
@@ -301,9 +409,26 @@ fun CalculatorDisguiseScreen(
             val insetsController = androidx.core.view.WindowCompat.getInsetsController(window, window.decorView)
             insetsController.isAppearanceLightStatusBars = !isDark
             insetsController.isAppearanceLightNavigationBars = !isDark
-            window.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN)
         }
         onDispose {}
+    }
+
+    // The calculator never raises the keyboard; the chat underneath still needs it to resize the
+    // layout, so the soft-input mode is put back to adjustResize when the calculator leaves.
+    val activity = remember(context) {
+        var c: Context? = context
+        while (c is ContextWrapper) { if (c is Activity) break; c = c.baseContext }
+        c as? Activity
+    }
+    DisposableEffect(window) {
+        window?.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN)
+        // A basic calculator shows upright; its five key rows don't fit a short landscape screen
+        val previousOrientation = activity?.requestedOrientation
+        activity?.requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+        onDispose {
+            window?.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
+            previousOrientation?.let { activity?.requestedOrientation = it }
+        }
     }
 
     // Precise Samsung One UI Colors (matching Screenshots 1, 2, 3, 4)
@@ -330,12 +455,24 @@ fun CalculatorDisguiseScreen(
     }
 
     fun onDigit(digit: String) {
-        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+        haptic.performHapticFeedback(HapticFeedbackType.KeyboardTap)
         if (isEvaluated) {
             expression = digit
             historyEquation = ""
             isEvaluated = false
         } else {
+            // Samsung's limits: 15 digits in a number, 10 after its decimal point
+            val number = expression.takeLastWhile { it.isDigit() || it == '.' }
+            val digitsInNumber = number.count { it.isDigit() }
+            val afterPoint = number.substringAfter('.', "").length
+            if (number.contains('.') && afterPoint >= 10) {
+                android.widget.Toast.makeText(context, "Can't enter more than 10 digits after decimal point.", android.widget.Toast.LENGTH_SHORT).show()
+                return
+            }
+            if (digitsInNumber >= 15) {
+                android.widget.Toast.makeText(context, "Can't enter more than 15 digits.", android.widget.Toast.LENGTH_SHORT).show()
+                return
+            }
             if (expression == "0") {
                 expression = digit
             } else {
@@ -345,7 +482,7 @@ fun CalculatorDisguiseScreen(
     }
 
     fun onDecimal() {
-        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+        haptic.performHapticFeedback(HapticFeedbackType.KeyboardTap)
         if (isEvaluated) {
             expression = "0."
             historyEquation = ""
@@ -363,7 +500,7 @@ fun CalculatorDisguiseScreen(
     }
 
     fun onOperator(op: String) {
-        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+        haptic.performHapticFeedback(HapticFeedbackType.KeyboardTap)
         if (isEvaluated) {
             isEvaluated = false
             historyEquation = ""
@@ -380,7 +517,7 @@ fun CalculatorDisguiseScreen(
     }
 
     fun onParenthesis() {
-        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+        haptic.performHapticFeedback(HapticFeedbackType.KeyboardTap)
         if (isEvaluated) {
             expression = "("
             historyEquation = ""
@@ -404,7 +541,7 @@ fun CalculatorDisguiseScreen(
     }
 
     fun onPercentage() {
-        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+        haptic.performHapticFeedback(HapticFeedbackType.KeyboardTap)
         if (isEvaluated) {
             expression = "$expression%"
             isEvaluated = false
@@ -417,7 +554,7 @@ fun CalculatorDisguiseScreen(
     }
 
     fun onPlusMinus() {
-        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+        haptic.performHapticFeedback(HapticFeedbackType.KeyboardTap)
         if (isEvaluated) {
             expression = if (expression.startsWith("−")) expression.removePrefix("−") else "−$expression"
             return
@@ -439,14 +576,14 @@ fun CalculatorDisguiseScreen(
     }
 
     fun onClear() {
-        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+        haptic.performHapticFeedback(HapticFeedbackType.KeyboardTap)
         expression = "0"
         historyEquation = ""
         isEvaluated = false
     }
 
     fun onBackspace() {
-        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+        haptic.performHapticFeedback(HapticFeedbackType.KeyboardTap)
         if (isEvaluated) {
             expression = "0"
             historyEquation = ""
@@ -464,7 +601,7 @@ fun CalculatorDisguiseScreen(
     }
 
     fun onScientificFn(fn: String) {
-        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+        haptic.performHapticFeedback(HapticFeedbackType.KeyboardTap)
         if (isEvaluated) {
             expression = if (fn in listOf("π", "e")) fn else "$fn("
             historyEquation = ""
@@ -497,16 +634,21 @@ fun CalculatorDisguiseScreen(
         }
 
         val evalResult = evaluateSamsungExpression(expression, isDegMode)
-        evalResult.onSuccess { res ->
-            history.add(0, expression to res)
-            historyEquation = expression
-            expression = res
-            isEvaluated = true
-        }.onFailure {
-            historyEquation = expression
-            expression = it.message ?: "Error"
-            isEvaluated = true
+        val res = evalResult.getOrNull()
+        if (res == null || res == "Invalid input") {
+            // Like Samsung: the sum stays as typed and a short message says why
+            val message = if (evalResult.exceptionOrNull() is ArithmeticException) "Can't divide by 0." else "Invalid format used."
+            android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_SHORT).show()
+            return
         }
+        history.add(0, expression to res)
+        if (history.size > 100) history.removeAt(history.lastIndex)
+        CalculatorHistoryStore.save(context)
+        historyEquation = expression
+        // Kept without separators (they're added when shown), so it carries on cleanly
+        expression = res.replace(",", "")
+        isEvaluated = true
+        evalCount++
     }
 
     val displayScrollState = rememberScrollState()
@@ -604,9 +746,11 @@ fun CalculatorDisguiseScreen(
                         }
                     }
 
-                    val annotatedExpression = remember(expression, primaryText, operatorTextColor) {
+                    // Numbers show with thousands separators as they're typed ("1,234"), like Samsung
+                    val shownExpression = remember(expression) { groupDigitsForDisplay(expression) }
+                    val annotatedExpression = remember(shownExpression, primaryText, operatorTextColor) {
                         buildAnnotatedString {
-                            for (ch in expression) {
+                            for (ch in shownExpression) {
                                 if (ch in "+−×÷%()^√") {
                                     withStyle(SpanStyle(color = operatorTextColor, fontWeight = FontWeight.Normal)) {
                                         append(ch)
@@ -619,21 +763,46 @@ fun CalculatorDisguiseScreen(
                             }
                         }
                     }
+                    // The digits shrink smoothly as the sum grows, instead of jumping a size
+                    val animatedFontSize by animateFloatAsState(
+                        targetValue = primaryFontSize.value,
+                        animationSpec = tween(180, easing = FastOutSlowInEasing),
+                        label = "calc_font_size"
+                    )
 
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .horizontalScroll(displayScrollState),
-                        horizontalArrangement = Arrangement.End
+                        horizontalArrangement = Arrangement.End,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            text = annotatedExpression,
-                            fontSize = primaryFontSize,
-                            fontWeight = FontWeight.Normal,
-                            maxLines = 1,
-                            textAlign = TextAlign.End,
-                            fontFamily = FontFamily.SansSerif
-                        )
+                        // On "=" the result rises into place and the sum moves up out of the way; typing
+                        // within one sum just updates it (the key only changes with each "=")
+                        androidx.compose.animation.AnimatedContent(
+                            targetState = CalcLine(annotatedExpression, evalCount),
+                            contentKey = { it.generation },
+                            transitionSpec = {
+                                (androidx.compose.animation.slideInVertically(tween(260, easing = FastOutSlowInEasing)) { it / 2 } +
+                                    fadeIn(tween(220))) togetherWith
+                                    (androidx.compose.animation.slideOutVertically(tween(220, easing = FastOutSlowInEasing)) { -it / 2 } +
+                                        fadeOut(tween(160)))
+                            },
+                            label = "calc_result"
+                        ) { line ->
+                            Text(
+                                text = line.text,
+                                fontSize = animatedFontSize.sp,
+                                fontWeight = FontWeight.Normal,
+                                maxLines = 1,
+                                textAlign = TextAlign.End,
+                                fontFamily = FontFamily.SansSerif
+                            )
+                        }
+                        // Samsung's green cursor, blinking while a sum is being typed
+                        if (!isEvaluated) {
+                            BlinkingCursor(color = operatorTextColor, height = (animatedFontSize * 1.05f).dp)
+                        }
                     }
 
                     // Live result preview (clean number without '= ', e.g. "1260" - Screenshot 3)
@@ -673,7 +842,7 @@ fun CalculatorDisguiseScreen(
                         IconButton(
                             onClick = {
                                 showHistoryInline = !showHistoryInline
-                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                haptic.performHapticFeedback(HapticFeedbackType.KeyboardTap)
                             },
                             modifier = Modifier.size(38.dp)
                         ) {
@@ -689,7 +858,7 @@ fun CalculatorDisguiseScreen(
                         IconButton(
                             onClick = {
                                 showUnitConverterScreen = true
-                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                haptic.performHapticFeedback(HapticFeedbackType.KeyboardTap)
                             },
                             modifier = Modifier.size(38.dp)
                         ) {
@@ -700,7 +869,7 @@ fun CalculatorDisguiseScreen(
                         IconButton(
                             onClick = {
                                 isScientificActive = !isScientificActive
-                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                haptic.performHapticFeedback(HapticFeedbackType.KeyboardTap)
                             },
                             modifier = Modifier
                                 .size(38.dp)
@@ -714,18 +883,29 @@ fun CalculatorDisguiseScreen(
 
                     // Green backspace button on right
                     val hasContent = expression != "0" || historyEquation.isNotEmpty()
-                    IconButton(
-                        onClick = { onBackspace() },
+                    // A tap deletes one; held, it keeps deleting, faster the longer it's held (as
+                    // Samsung's does; "C" is what clears everything)
+                    val backspaceAction by androidx.compose.runtime.rememberUpdatedState({ onBackspace() })
+                    Box(
+                        contentAlignment = Alignment.Center,
                         modifier = Modifier
                             .size(38.dp)
+                            .clip(CircleShape)
                             .pointerInput(Unit) {
-                                detectTapGestures(
-                                    onTap = { onBackspace() },
-                                    onLongPress = {
-                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                        onClear()
+                                awaitEachGesture {
+                                    awaitFirstDown()
+                                    backspaceAction()
+                                    var gap = 380L
+                                    while (true) {
+                                        val ended = withTimeoutOrNull(gap) {
+                                            waitForUpOrCancellation()
+                                            true
+                                        } ?: false
+                                        if (ended) break
+                                        backspaceAction()
+                                        gap = (gap * 0.75).toLong().coerceAtLeast(45L)
                                     }
-                                )
+                                }
                             }
                     ) {
                         Icon(
@@ -770,7 +950,7 @@ fun CalculatorDisguiseScreen(
                                 modifier = Modifier.weight(1f),
                                 onClick = {
                                     isDegMode = !isDegMode
-                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    haptic.performHapticFeedback(HapticFeedbackType.KeyboardTap)
                                 }
                             )
                             ScientificKey(text = "sin", bgColor = scientificKeyBg, textColor = scientificKeyText, keyHeight = scientificKeyHeight, modifier = Modifier.weight(1f), onClick = { onScientificFn("sin") })
@@ -801,7 +981,7 @@ fun CalculatorDisguiseScreen(
                                 keyHeight = scientificKeyHeight,
                                 modifier = Modifier.weight(1f),
                                 onClick = {
-                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    haptic.performHapticFeedback(HapticFeedbackType.KeyboardTap)
                                     expression += "^2"
                                 }
                             )
@@ -821,7 +1001,7 @@ fun CalculatorDisguiseScreen(
                                 keyHeight = scientificKeyHeight,
                                 modifier = Modifier.weight(1f),
                                 onClick = {
-                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    haptic.performHapticFeedback(HapticFeedbackType.KeyboardTap)
                                     if (expression == "0" || isEvaluated) {
                                         expression = "π"
                                         isEvaluated = false
@@ -843,7 +1023,7 @@ fun CalculatorDisguiseScreen(
                                 keyHeight = scientificKeyHeight,
                                 modifier = Modifier.weight(1f),
                                 onClick = {
-                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    haptic.performHapticFeedback(HapticFeedbackType.KeyboardTap)
                                     if (expression == "0" || isEvaluated) {
                                         expression = "e"
                                         isEvaluated = false
@@ -857,7 +1037,7 @@ fun CalculatorDisguiseScreen(
                                 keyHeight = scientificKeyHeight,
                                 modifier = Modifier.weight(1f),
                                 onClick = {
-                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    haptic.performHapticFeedback(HapticFeedbackType.KeyboardTap)
                                     expression += "!"
                                 }
                             )
@@ -912,7 +1092,7 @@ fun CalculatorDisguiseScreen(
                                             modifier = Modifier
                                                 .fillMaxWidth()
                                                 .clickable {
-                                                    expression = res
+                                                    expression = res.replace(",", "")
                                                     historyEquation = eq
                                                     isEvaluated = true
                                                     showHistoryInline = false
@@ -949,7 +1129,8 @@ fun CalculatorDisguiseScreen(
                                     .padding(top = 8.dp)
                                     .clickable {
                                         history.clear()
-                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                        CalculatorHistoryStore.save(context)
+                                        haptic.performHapticFeedback(HapticFeedbackType.KeyboardTap)
                                     }
                             ) {
                                 Text(
@@ -1196,7 +1377,7 @@ private fun SamsungUnitConverterScreen(
     }
 
     fun onConverterDigit(d: String) {
-        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+        haptic.performHapticFeedback(HapticFeedbackType.KeyboardTap)
         if (activeRow == 0) {
             topRawInput = if (topRawInput == "0") d else topRawInput + d
             recomputeConversion(0)
@@ -1207,7 +1388,7 @@ private fun SamsungUnitConverterScreen(
     }
 
     fun onConverterDecimal() {
-        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+        haptic.performHapticFeedback(HapticFeedbackType.KeyboardTap)
         if (activeRow == 0) {
             if (!topRawInput.contains(".")) {
                 topRawInput = if (topRawInput.isEmpty()) "0." else "$topRawInput."
@@ -1222,7 +1403,7 @@ private fun SamsungUnitConverterScreen(
     }
 
     fun onConverterClear() {
-        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+        haptic.performHapticFeedback(HapticFeedbackType.KeyboardTap)
         if (activeRow == 0) {
             topRawInput = "0"
             recomputeConversion(0)
@@ -1233,7 +1414,7 @@ private fun SamsungUnitConverterScreen(
     }
 
     fun onConverterBackspace() {
-        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+        haptic.performHapticFeedback(HapticFeedbackType.KeyboardTap)
         if (activeRow == 0) {
             topRawInput = if (topRawInput.length > 1) topRawInput.dropLast(1) else "0"
             recomputeConversion(0)
@@ -1244,7 +1425,7 @@ private fun SamsungUnitConverterScreen(
     }
 
     fun onConverterPlusMinus() {
-        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+        haptic.performHapticFeedback(HapticFeedbackType.KeyboardTap)
         if (activeRow == 0) {
             topRawInput = if (topRawInput.startsWith("-")) topRawInput.removePrefix("-") else if (topRawInput == "0") "0" else "-$topRawInput"
             recomputeConversion(0)
@@ -1311,7 +1492,7 @@ private fun SamsungUnitConverterScreen(
                             topUnitIndex = 0
                             bottomUnitIndex = 1
                             topRawInput = "10"
-                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            haptic.performHapticFeedback(HapticFeedbackType.KeyboardTap)
                         }
                     ) {
                         Text(
@@ -1549,7 +1730,7 @@ private fun SamsungUnitConverterScreen(
                     modifier = Modifier.weight(1f),
                     onClick = {
                         activeRow = 0
-                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        haptic.performHapticFeedback(HapticFeedbackType.KeyboardTap)
                     }
                 )
             }
@@ -1576,7 +1757,7 @@ private fun SamsungUnitConverterScreen(
                     modifier = Modifier.weight(1f),
                     onClick = {
                         activeRow = 1
-                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        haptic.performHapticFeedback(HapticFeedbackType.KeyboardTap)
                     }
                 )
             }
@@ -1599,13 +1780,21 @@ private fun SamsungRoundKey(
     onLongClick: (() -> Unit)? = null
 ) {
     var isPressed by remember { mutableStateOf(false) }
+    // One UI key feel: it presses in at once without a wobble, then settles back with a light spring
     val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.90f else 1.0f,
-        animationSpec = spring(
-            dampingRatio = 0.58f,
-            stiffness = Spring.StiffnessMediumLow
-        ),
+        targetValue = if (isPressed) 0.92f else 1.0f,
+        animationSpec = if (isPressed) {
+            spring(dampingRatio = 1f, stiffness = Spring.StiffnessHigh)
+        } else {
+            spring(dampingRatio = 0.62f, stiffness = Spring.StiffnessMedium)
+        },
         label = "round_btn_scale"
+    )
+    // The key darkens as it's pressed and fades back after, rather than switching shade at once
+    val pressShade by animateFloatAsState(
+        targetValue = if (isPressed) 1f else 0f,
+        animationSpec = tween(durationMillis = if (isPressed) 60 else 220, easing = FastOutSlowInEasing),
+        label = "round_btn_shade"
     )
 
     val currentOnClick by androidx.compose.runtime.rememberUpdatedState(onClick)
@@ -1616,7 +1805,7 @@ private fun SamsungRoundKey(
             .scale(scale)
             .aspectRatio(1f)
             .clip(CircleShape)
-            .background(if (isPressed) bgColor.copy(alpha = 0.78f) else bgColor)
+            .background(bgColor.copy(alpha = bgColor.alpha * (1f - 0.22f * pressShade)))
             .pointerInput(customHoldDurationMs, currentOnLongClick) {
                 if (customHoldDurationMs != null && customHoldDurationMs > 0L && currentOnLongClick != null) {
                     awaitEachGesture {
@@ -1695,13 +1884,20 @@ private fun ScientificKey(
 ) {
     var isPressed by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.93f else 1.0f,
-        animationSpec = spring(
-            dampingRatio = 0.7f,
-            stiffness = Spring.StiffnessMedium
-        ),
+        targetValue = if (isPressed) 0.94f else 1.0f,
+        animationSpec = if (isPressed) {
+            spring(dampingRatio = 1f, stiffness = Spring.StiffnessHigh)
+        } else {
+            spring(dampingRatio = 0.65f, stiffness = Spring.StiffnessMedium)
+        },
         label = "sci_key_scale"
     )
+    val pressShade by animateFloatAsState(
+        targetValue = if (isPressed) 1f else 0f,
+        animationSpec = tween(durationMillis = if (isPressed) 60 else 220, easing = FastOutSlowInEasing),
+        label = "sci_key_shade"
+    )
+    val currentOnClick by androidx.compose.runtime.rememberUpdatedState(onClick)
 
     Box(
         modifier = modifier
@@ -1710,8 +1906,7 @@ private fun ScientificKey(
             .clip(RoundedCornerShape(10.dp))
             .background(
                 if (isActive) activeColor.copy(alpha = 0.25f)
-                else if (isPressed) bgColor.copy(alpha = 0.8f)
-                else bgColor
+                else bgColor.copy(alpha = bgColor.alpha * (1f - 0.2f * pressShade))
             )
             .pointerInput(Unit) {
                 detectTapGestures(
@@ -1720,7 +1915,7 @@ private fun ScientificKey(
                         tryAwaitRelease()
                         isPressed = false
                     },
-                    onTap = { onClick() }
+                    onTap = { currentOnClick() }
                 )
             },
         contentAlignment = Alignment.Center
@@ -1923,25 +2118,33 @@ fun evaluateSamsungExpression(rawExpr: String, isDeg: Boolean): Result<String> {
             .replace("×", "*")
             .replace("÷", "/")
             .replace("−", "-")
-            .replace("π", Math.PI.toString())
-            .replace("e", Math.E.toString())
+            // A result carried on is shown with thousands separators ("2,000"); strip them, and all
+            // spaces, so continuing from it ("2,000 + 1") parses
+            .replace(",", "")
+            .replace(" ", "")
 
-        var trimmed = clean.trim()
+        // Expand scientific notation from an earlier result ("1.5e12", "2e-3") to plain digits, so
+        // its 'e' is never mistaken for Euler's number
+        clean = Regex("""(\d+(?:\.\d+)?)[eE]([+-]?\d+)""").replace(clean) { match ->
+            java.math.BigDecimal(match.groupValues[1]).scaleByPowerOfTen(match.groupValues[2].toInt()).toPlainString()
+        }
+
+        var trimmed = clean
         while (trimmed.endsWith("+") || trimmed.endsWith("-") || trimmed.endsWith("*") || trimmed.endsWith("/") || trimmed.endsWith("^")) {
-            trimmed = trimmed.dropLast(1).trim()
+            trimmed = trimmed.dropLast(1)
         }
         if (trimmed.isBlank()) return@runCatching "0"
 
-        val percentAddSub = Regex("""(\d+(?:\.\d+)?)\s*([\+\-])\s*(\d+(?:\.\d+)?)%""")
+        val percentAddSub = Regex("""(\d+(?:\.\d+)?)([\+\-])(\d+(?:\.\d+)?)%""")
         while (percentAddSub.containsMatchIn(trimmed)) {
             trimmed = percentAddSub.replace(trimmed) { match ->
                 val base = match.groupValues[1]
                 val op = match.groupValues[2]
                 val pct = match.groupValues[3]
-                "$base $op ($base * $pct / 100)"
+                "$base$op($base*$pct/100)"
             }
         }
-        trimmed = trimmed.replace(Regex("""(\d+(?:\.\d+)?)%"""), "($1 / 100)")
+        trimmed = trimmed.replace(Regex("""(\d+(?:\.\d+)?)%"""), "($1/100)")
 
         val parser = SamsungExpressionParser(trimmed, isDeg)
         val value = parser.parse()
@@ -1953,16 +2156,20 @@ fun evaluateSamsungExpression(rawExpr: String, isDeg: Boolean): Result<String> {
 private fun formatSamsungResult(value: Double): String {
     if (value.isNaN()) return "Invalid input"
     if (value.isInfinite()) return if (value > 0) "Infinity" else "-Infinity"
-    if (abs(value) == 0.0) return "0"
 
-    val absVal = abs(value)
-    if (absVal >= 1e12 || (absVal < 1e-9 && absVal > 0.0)) {
+    // Clear floating-point dust: sin(180°) reads 0 (not 1.2e-16), 0.1 + 0.2 reads 0.3
+    var v = value
+    v = if (abs(v) < 1e-13) 0.0 else java.math.BigDecimal(v).round(java.math.MathContext(12)).toDouble()
+    if (v == 0.0) return "0"
+
+    val absVal = abs(v)
+    if (absVal >= 1e12 || absVal < 1e-9) {
         val df = DecimalFormat("0.######E0", DecimalFormatSymbols(Locale.US))
-        return df.format(value).replace("E", "e")
+        return df.format(v).replace("E", "e")
     }
 
     val df = DecimalFormat("#,##0.##########", DecimalFormatSymbols(Locale.US))
-    var res = df.format(value)
+    var res = df.format(v)
     if (res == "-0" || res == "-0.0") res = "0"
     return res
 }
@@ -2030,20 +2237,34 @@ private class SamsungExpressionParser(private val expr: String, private val isDe
         } else if ((ch in '0'.code..'9'.code) || ch == '.'.code) {
             while ((ch in '0'.code..'9'.code) || ch == '.'.code) nextChar()
             x = expr.substring(startPos, this.pos).toDoubleOrNull() ?: 0.0
-        } else if (ch in 'a'.code..'z'.code || ch == '√'.code) {
-            while (ch in 'a'.code..'z'.code || ch == '√'.code) nextChar()
+        } else if (ch == 'π'.code) {
+            nextChar()
+            x = Math.PI
+        } else if (ch == '√'.code) {
+            nextChar()
+            val arg = parseFactor()
+            x = if (arg < 0) throw IllegalArgumentException("Invalid input") else sqrt(arg)
+        } else if (ch in 'a'.code..'z'.code) {
+            while (ch in 'a'.code..'z'.code) nextChar()
             val fn = expr.substring(startPos, this.pos)
-            x = parseFactor()
-            x = when (fn) {
-                "sqrt", "√" -> if (x < 0) throw IllegalArgumentException("Invalid input") else sqrt(x)
-                "sin" -> sin(if (isDeg) Math.toRadians(x) else x)
-                "cos" -> cos(if (isDeg) Math.toRadians(x) else x)
-                "tan" -> tan(if (isDeg) Math.toRadians(x) else x)
-                "ln" -> if (x <= 0) throw IllegalArgumentException("Invalid input") else ln(x)
-                "log" -> if (x <= 0) throw IllegalArgumentException("Invalid input") else log10(x)
-                "abs" -> abs(x)
-                "exp" -> exp(x)
-                else -> throw IllegalArgumentException("Unknown function: $fn")
+            // Euler's number and pi are values, not functions: they take no argument
+            if (fn == "e") {
+                x = Math.E
+            } else if (fn == "pi") {
+                x = Math.PI
+            } else {
+                val arg = parseFactor()
+                x = when (fn) {
+                    "sqrt" -> if (arg < 0) throw IllegalArgumentException("Invalid input") else sqrt(arg)
+                    "sin" -> sin(if (isDeg) Math.toRadians(arg) else arg)
+                    "cos" -> cos(if (isDeg) Math.toRadians(arg) else arg)
+                    "tan" -> tan(if (isDeg) Math.toRadians(arg) else arg)
+                    "ln" -> if (arg <= 0) throw IllegalArgumentException("Invalid input") else ln(arg)
+                    "log" -> if (arg <= 0) throw IllegalArgumentException("Invalid input") else log10(arg)
+                    "abs" -> abs(arg)
+                    "exp" -> exp(arg)
+                    else -> throw IllegalArgumentException("Unknown function: $fn")
+                }
             }
         } else {
             throw IllegalArgumentException("Syntax error")
@@ -2056,6 +2277,12 @@ private class SamsungExpressionParser(private val expr: String, private val isDe
             val n = x.toInt()
             for (i in 2..n) fact *= i
             x = fact
+        }
+
+        // Implicit multiplication when a value sits straight against the next one, with no operator:
+        // 2π, 2(3), (1)(2), 2√9, 2sin(30). A letter here begins another value or function.
+        while (ch == '('.code || ch == 'π'.code || ch == '√'.code || ch in 'a'.code..'z'.code) {
+            x *= parseFactor()
         }
 
         return x

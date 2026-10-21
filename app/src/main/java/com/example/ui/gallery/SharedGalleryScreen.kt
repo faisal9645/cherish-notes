@@ -21,6 +21,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
@@ -243,9 +245,9 @@ fun SharedGalleryScreen(
                 val newState = GalleryPlayedManager.togglePlayed(context, id)
                 playedIds = GalleryPlayedManager.getPlayedIds(context)
                 if (newState) {
-                    CherishToast.show("Marked as Already played ✓")
+                    CherishToast.show("Marked listened ✓")
                 } else {
-                    CherishToast.show("Marked as Not yet")
+                    CherishToast.show("Marked not listened")
                 }
             }
         }
@@ -953,21 +955,13 @@ fun SharedGalleryScreen(
                                                     verticalAlignment = Alignment.CenterVertically,
                                                     modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
                                                 ) {
+                                                    // Just the colour, no words: green watched, amber not yet
                                                     Box(
                                                         modifier = Modifier
-                                                            .size(5.dp)
+                                                            .size(7.dp)
                                                             .clip(CircleShape)
                                                             .background(if (isVideoPlayed) Color(0xFF10B981) else Color(0xFFF59E0B))
                                                     )
-                                                    if (!isCompactTile) {
-                                                        Spacer(modifier = Modifier.width(3.dp))
-                                                        Text(
-                                                            text = if (isVideoPlayed) "Played" else "Not yet",
-                                                            fontSize = 9.sp,
-                                                            fontWeight = FontWeight.Bold,
-                                                            color = Color.White
-                                                        )
-                                                    }
                                                 }
                                             }
 
@@ -1097,14 +1091,15 @@ fun SharedGalleryScreen(
                             }
                             EmptyGalleryNotice(emptyText, isLoading = phase == 0)
                         } else {
+                            val voiceSections = remember(voiceMessages) { galleryMonthSections(voiceMessages) { it.timestamp } }
                             GalleryLazyColumn(
-                                dateAt = { voiceMessages.getOrNull(it)?.timestamp },
+                                dateAt = { voiceSections.dateAt(it) },
                                 modifier = Modifier
                                     .fillMaxSize()
                                     .padding(horizontal = 16.dp, vertical = 12.dp),
                                 verticalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
-                                items(voiceMessages, key = { it.id }) { msg ->
+                                monthSections(voiceSections, key = { it.id }) { msg ->
                                     val isThisPlaying = (currentTrackId == msg.id && isVoicePlaying)
                                     val isThisActive = (currentTrackId == msg.id)
                                     val duration = if (msg.durationSeconds > 0) msg.durationSeconds
@@ -1224,7 +1219,7 @@ fun SharedGalleryScreen(
                                                     onClick = {
                                                         markItemPlayed(msg.id)
                                                         msg.mediaUrl?.let { url ->
-                                                            voicePlayerHelper.playAudio(msg.id, url)
+                                                            voicePlayerHelper.playAudio(msg.id, url, durationHintSec = duration)
                                                         }
                                                     },
                                                     modifier = Modifier
@@ -1246,7 +1241,8 @@ fun SharedGalleryScreen(
                                                 Column(modifier = Modifier.weight(1f)) {
                                                     WaveformView(
                                                         amplitudes = msg.waveform.map { it.toFloat() },
-                                                        progress = if (isThisActive) voiceProgress else 0f,
+                                                        // Read while drawing, so playback doesn't recompose the gallery
+                                                        progressProvider = { if (currentTrackId == msg.id) voiceProgress else 0f },
                                                         isPlaying = isThisPlaying,
                                                         isRecording = false,
                                                         activeColor = RoseGoldPrimary,
@@ -1311,14 +1307,15 @@ fun SharedGalleryScreen(
                             }
                             EmptyGalleryNotice(emptyText, isLoading = phase == 0)
                         } else {
+                            val linkSections = remember(extractedLinks) { galleryMonthSections(extractedLinks) { it.timestamp } }
                             GalleryLazyColumn(
-                                dateAt = { extractedLinks.getOrNull(it)?.timestamp },
+                                dateAt = { linkSections.dateAt(it) },
                                 modifier = Modifier
                                     .fillMaxSize()
                                     .padding(horizontal = 16.dp, vertical = 12.dp),
                                 verticalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
-                                items(extractedLinks, key = { "${it.messageId}_${it.url}" }) { item ->
+                                monthSections(linkSections, key = { "${it.messageId}_${it.url}" }) { item ->
                                     val ytVideoId = remember(item.url) {
                                         com.example.ui.chat.YouTubeHelper.extractVideoId(item.url)
                                     }
@@ -1624,14 +1621,15 @@ fun SharedGalleryScreen(
                             }
                             EmptyGalleryNotice(emptyText, isLoading = phase == 0)
                         } else {
+                            val starredSections = remember(starredMessages) { galleryMonthSections(starredMessages) { it.timestamp } }
                             GalleryLazyColumn(
-                                dateAt = { starredMessages.getOrNull(it)?.timestamp },
+                                dateAt = { starredSections.dateAt(it) },
                                 modifier = Modifier
                                     .fillMaxSize()
                                     .padding(horizontal = 16.dp, vertical = 12.dp),
                                 verticalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
-                                items(starredMessages, key = { it.id }) { msg ->
+                                monthSections(starredSections, key = { it.id }) { msg ->
                                     Surface(
                                         shape = RoundedCornerShape(16.dp),
                                         color = MaterialTheme.colorScheme.surface,
@@ -1777,14 +1775,15 @@ fun SharedGalleryScreen(
                             }
                             EmptyGalleryNotice(emptyText, isLoading = phase == 0)
                         } else {
+                            val callSections = remember(callHistoryItems) { galleryMonthSections(callHistoryItems) { it.timestamp } }
                             GalleryLazyColumn(
-                                dateAt = { callHistoryItems.getOrNull(it)?.timestamp },
+                                dateAt = { callSections.dateAt(it) },
                                 modifier = Modifier
                                     .fillMaxSize()
                                     .padding(horizontal = 16.dp, vertical = 12.dp),
                                 verticalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
-                                items(callHistoryItems, key = { it.id }) { msg ->
+                                monthSections(callSections, key = { it.id }) { msg ->
                                     val isRecording = msg.getTypedType() == MessageType.CALL_RECORDING ||
                                         !msg.recordingPath.isNullOrBlank() ||
                                         msg.recordingPaths.isNotEmpty() ||
@@ -2172,6 +2171,42 @@ private fun getDomainBadgeColor(host: String): Color {
 private fun galleryByMonth(items: List<GalleryMediaItem>): List<Pair<String, List<GalleryMediaItem>>> {
     val format = SimpleDateFormat("MMMM yyyy", Locale.getDefault())
     return items.groupBy { format.format(Date(it.timestamp)) }.toList()
+}
+
+/**
+ * A list tab's items in month sections ("October 2026"), like the Media tab: each month has a
+ * header that stays at the top while you scroll through it. [dateAt] gives the date at a list row,
+ * counting the header rows, for the scrollbar.
+ */
+private class GallerySections<T>(val groups: List<Pair<String, List<T>>>, timestampOf: (T) -> Long) {
+    private val rowDates: List<Long> = buildList {
+        groups.forEach { (_, monthItems) ->
+            add(monthItems.firstOrNull()?.let(timestampOf) ?: 0L)
+            monthItems.forEach { add(timestampOf(it)) }
+        }
+    }
+
+    fun dateAt(index: Int): Long? = rowDates.getOrNull(index)
+}
+
+private fun <T> galleryMonthSections(items: List<T>, timestampOf: (T) -> Long): GallerySections<T> {
+    val format = SimpleDateFormat("MMMM yyyy", Locale.getDefault())
+    return GallerySections(items.groupBy { format.format(Date(timestampOf(it))) }.toList(), timestampOf)
+}
+
+/** Emits [sections] month by month: a sticky month header, then that month's items. */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+private fun <T> LazyListScope.monthSections(
+    sections: GallerySections<T>,
+    key: (T) -> Any,
+    itemContent: @Composable androidx.compose.foundation.lazy.LazyItemScope.(T) -> Unit
+) {
+    sections.groups.forEach { (month, monthItems) ->
+        stickyHeader(key = "month_$month") {
+            GalleryMonthHeader(month = month, count = monthItems.size)
+        }
+        items(monthItems, key = key) { item -> itemContent(item) }
+    }
 }
 
 /** Photos and videos from today's date in earlier years, newest first. */
@@ -2673,34 +2708,25 @@ private fun PlayedStatusBadge(
     onToggle: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    // Just the colour: green once listened, amber not yet (no words). Tap still toggles it.
     Surface(
         onClick = onToggle,
-        shape = RoundedCornerShape(8.dp),
+        shape = CircleShape,
         color = if (isPlayed) Color(0xFF10B981).copy(alpha = 0.14f) else Color(0xFFF59E0B).copy(alpha = 0.14f),
         border = BorderStroke(
             0.8.dp,
             if (isPlayed) Color(0xFF10B981).copy(alpha = 0.40f) else Color(0xFFF59E0B).copy(alpha = 0.40f)
         ),
-        modifier = modifier.height(24.dp)
+        modifier = modifier
+            .size(22.dp)
+            .semantics { contentDescription = if (isPlayed) "Listened" else "Not listened yet" }
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
-        ) {
+        Box(contentAlignment = Alignment.Center) {
             Box(
                 modifier = Modifier
-                    .size(6.dp)
+                    .size(8.dp)
                     .clip(CircleShape)
                     .background(if (isPlayed) Color(0xFF10B981) else Color(0xFFF59E0B))
-            )
-            Spacer(modifier = Modifier.width(5.dp))
-            Text(
-                text = if (isPlayed) "Already listened" else "Not yet",
-                fontSize = 10.5.sp,
-                fontWeight = FontWeight.Bold,
-                color = if (isPlayed) Color(0xFF059669) else Color(0xFFD97706),
-                maxLines = 1,
-                softWrap = false
             )
         }
     }

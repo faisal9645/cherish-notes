@@ -25,6 +25,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.material3.*
 import androidx.compose.material.icons.Icons
@@ -94,7 +95,7 @@ fun CherishNavGraph(
     modifier: Modifier = Modifier
 ) {
     val isDisguiseActive by app.securityPreferences.isDisguiseActive.collectAsState()
-    val disguiseStyle by app.securityPreferences.disguiseStyle.collectAsState()
+    val isCalculatorDecoy by app.securityPreferences.calculatorDecoy.collectAsState()
     val hasRevealedSecretApp by app.securityPreferences.hasRevealedSecretAppInSession.collectAsState()
     val isAppLocked by app.securityPreferences.isAppLocked.collectAsState()
     val currentUserState by app.authRepository.currentUserState.collectAsState()
@@ -194,12 +195,12 @@ fun CherishNavGraph(
         label = "app_reveal_scale"
     )
 
-    val notesDisguiseViewModel = remember {
+    val notesDisguiseViewModel = viewModel {
         NotesDisguiseViewModel(app.notesRepository)
     }
 
     // Share a single ChatViewModel instance across Chat and its sub-screens
-    val sharedChatViewModel = remember {
+    val sharedChatViewModel = viewModel {
         ChatViewModel(
             app.authRepository,
             app.chatRepository,
@@ -236,19 +237,19 @@ fun CherishNavGraph(
     // Issue 12: All ViewModels hoisted here so they survive tab switching.
     // Creating VMs inside composable{} lambdas destroys and recreates them on
     // every navigation, causing Firestore re-requests and scroll position resets.
-    val homeViewModel = remember {
+    val homeViewModel = viewModel {
         HomeViewModel(app.authRepository, app.chatRepository, app.coupleFeaturesRepository)
     }
-    val memoriesViewModel = remember {
+    val memoriesViewModel = viewModel {
         MemoriesViewModel(app.coupleFeaturesRepository, app.mediaRepository)
     }
-    val importantDatesViewModel = remember {
+    val importantDatesViewModel = viewModel {
         ImportantDatesViewModel(app.coupleFeaturesRepository)
     }
-    val notesViewModel = remember {
+    val notesViewModel = viewModel {
         SharedNotesViewModel(app.coupleFeaturesRepository)
     }
-    val profileViewModel = remember {
+    val profileViewModel = viewModel {
         ProfileViewModel(
             app.authRepository,
             app.mediaRepository,
@@ -256,13 +257,13 @@ fun CherishNavGraph(
             app.googleDriveBackupManager
         )
     }
-    val lifetimeViewModel = remember {
+    val lifetimeViewModel = viewModel {
         LifetimeJourneyViewModel(app.coupleFeaturesRepository)
     }
-    val synchronicityViewModel = remember {
+    val synchronicityViewModel = viewModel {
         com.example.ui.synchronicity.SynchronicityViewModel(app.synchronicityRepository, app.authRepository, app.securityPreferences)
     }
-    val backupViewModel = remember {
+    val backupViewModel = viewModel {
         GoogleDriveBackupViewModel(app.googleDriveBackupManager)
     }
 
@@ -405,7 +406,7 @@ fun CherishNavGraph(
         }
     ) {
         composable(Screen.Auth.route) {
-            val authViewModel = remember { AuthViewModel(app.authRepository) }
+            val authViewModel = viewModel { AuthViewModel(app.authRepository) }
             AuthScreen(
                 viewModel = authViewModel,
                 onAuthSuccess = {
@@ -672,6 +673,16 @@ fun CherishNavGraph(
         }
         }
 
+        // Behind Notes or the Calculator the secret app takes no touch at all, whatever the screen
+        // on top leaves empty (a tap there must never reach the chat's call button or its photos)
+        if (isDisguiseActive) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .pointerInput(Unit) {}
+            )
+        }
+
         // The Watch Party above every screen (full screen, in the chat's bar, or small elsewhere);
         // the lock and Notes cover it, and nothing of it is kept running behind them
         LaunchedEffect(navController) {
@@ -742,7 +753,7 @@ fun CherishNavGraph(
             }
         }
 
-        if (disguiseStyle == com.example.security.SecurityPreferences.DISGUISE_STYLE_CALCULATOR) {
+        if (isCalculatorDecoy) {
             CalculatorDisguiseScreen(
                 securityPreferences = app.securityPreferences,
                 onSecretGestureTriggered = { onUnlockSecret() },

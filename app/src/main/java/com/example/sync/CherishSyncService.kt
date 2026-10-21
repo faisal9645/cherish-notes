@@ -260,10 +260,10 @@ class CherishSyncService : Service() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 CHANNEL_ID,
-                "Notes Sync",
+                "Background sync",
                 NotificationManager.IMPORTANCE_MIN
             ).apply {
-                description = "Keeps notes, checklists and reminders up to date"
+                description = "Keeps everything up to date"
                 setShowBadge(false)
                 enableVibration(false)
                 enableLights(false)

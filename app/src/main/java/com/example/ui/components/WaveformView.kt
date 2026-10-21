@@ -4,9 +4,6 @@ import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.material3.MaterialTheme
@@ -14,20 +11,24 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import kotlin.math.PI
+import kotlin.math.abs
 import kotlin.math.sin
 
 /**
- * Audio Waveform Visualizer for voice notes:
- * - Provides live dynamic visual feedback during voice recording (organic soundwave ripple & real-time amplitudes)
- * - Provides interactive playback visualizer (played progress, active/inactive ridges, current playhead bounce)
- * - Supports drag-to-scrub and tap-to-seek during playback with an Elastic Magnifying Droplet under the fingertip
+ * A voice note's waveform:
+ * - While recording, the bars ripple with the live sound.
+ * - While playing, the bars hold still (the voice's own shape) and the played part fills in as it
+ *   goes, with a dot at the playhead; [progressProvider] is read only while drawing, so playback
+ *   redraws the wave without recomposing the message around it.
+ * - A tap seeks there; a sideways drag scrubs, and the note jumps there on release. A vertical swipe
+ *   starting on the wave is left to the list, so scrolling never seeks or starts a note by accident.
  */
 @Composable
 fun WaveformView(
@@ -39,7 +40,8 @@ fun WaveformView(
     inactiveColor: Color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f),
     onSeek: ((Float) -> Unit)? = null,
     height: Dp = 36.dp,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    progressProvider: (() -> Float)? = null
 ) {
     val coroutineScope = rememberCoroutineScope()
     val safeAmplitudes = remember(amplitudes) {
@@ -47,22 +49,25 @@ fun WaveformView(
             (amplitudes as? List<*>)?.mapNotNull { (it as? Number)?.toFloat() } ?: emptyList()
         }.getOrDefault(emptyList())
     }
+    val latestProgress by rememberUpdatedState(progress)
+    val latestProvider by rememberUpdatedState(progressProvider)
+    val latestOnSeek by rememberUpdatedState(onSeek)
 
-    // Elastic droplet magnifying physics while scrubbing
+    // Under the finger while scrubbing (null otherwise): the wave follows it, and seeks on release
+    var dragFraction by remember { mutableStateOf<Float?>(null) }
+
+    // The playhead droplet swells while it's being dragged
     val dropletScale = remember { Animatable(1f) }
-    val dropletElevation = remember { Animatable(0f) }
-    var isDragging by remember { mutableStateOf(false) }
 
-    // Live continuous animation only active during recording or playback to conserve CPU and battery;
-    // pause completely when the app is hidden or screen is paused
+    // Live ripple only while recording (and only while the app is on screen)
     val isForeground = rememberAppIsResumed()
-    val wavePhase = if ((isRecording || isPlaying) && isForeground) {
+    val wavePhase = if (isRecording && isForeground) {
         val transition = rememberInfiniteTransition(label = "waveform_motion")
         val phase by transition.animateFloat(
             initialValue = 0f,
             targetValue = (2 * PI).toFloat(),
             animationSpec = infiniteRepeatable(
-                animation = tween(durationMillis = if (isRecording) 1100 else 1500, easing = LinearEasing),
+                animation = tween(durationMillis = 1100, easing = LinearEasing),
                 repeatMode = RepeatMode.Restart
             ),
             label = "wave_phase"
@@ -72,92 +77,60 @@ fun WaveformView(
         0f
     }
 
-    val playheadPulse = if (isPlaying && isForeground) {
-        val transition = rememberInfiniteTransition(label = "waveform_pulse")
-        val pulse by transition.animateFloat(
-            initialValue = 0.88f,
-            targetValue = 1.22f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(durationMillis = 650, easing = FastOutSlowInEasing),
-                repeatMode = RepeatMode.Reverse
-            ),
-            label = "playhead_pulse"
-        )
-        pulse
-    } else {
-        1.0f
-    }
-
-    fun startScrubbingPhysics() {
-        isDragging = true
-        coroutineScope.launch {
-            dropletScale.animateTo(
-                targetValue = 2.15f,
-                animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioMediumBouncy,
-                    stiffness = Spring.StiffnessLow
-                )
-            )
-        }
-        coroutineScope.launch {
-            dropletElevation.animateTo(
-                targetValue = 8f,
-                animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioMediumBouncy,
-                    stiffness = Spring.StiffnessLow
-                )
-            )
-        }
-    }
-
-    fun endScrubbingPhysics() {
-        isDragging = false
-        coroutineScope.launch {
-            dropletScale.animateTo(
-                targetValue = 1f,
-                animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioMediumBouncy,
-                    stiffness = Spring.StiffnessMedium
-                )
-            )
-        }
-        coroutineScope.launch {
-            dropletElevation.animateTo(
-                targetValue = 0f,
-                animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioMediumBouncy,
-                    stiffness = Spring.StiffnessMedium
-                )
-            )
-        }
-    }
-
     val gestureModifier = if (onSeek != null && !isRecording) {
-        Modifier.pointerInput(onSeek) {
+        Modifier.pointerInput(Unit) {
             awaitEachGesture {
                 val down = awaitFirstDown(requireUnconsumed = false)
-                startScrubbingPhysics()
-                val width = size.width.toFloat()
-                if (width > 0f) {
-                    val fraction = (down.position.x / width).coerceIn(0f, 1f)
-                    onSeek(fraction)
+                val slop = viewConfiguration.touchSlop
+                val longPressMs = viewConfiguration.longPressTimeoutMillis
+                val pointerId = down.id
+                var dragging = false
+                var travelX = 0f
+                var travelY = 0f
+                fun fractionAt(x: Float): Float {
+                    val w = size.width.toFloat()
+                    return if (w > 0f) (x / w).coerceIn(0f, 1f) else 0f
                 }
-                val dragPointerId = down.id
                 while (true) {
                     val event = awaitPointerEvent()
-                    val change = event.changes.firstOrNull { it.id == dragPointerId } ?: break
+                    val change = event.changes.firstOrNull { it.id == pointerId } ?: break
                     if (!change.pressed) {
+                        if (dragging) {
+                            val f = dragFraction ?: fractionAt(change.position.x)
+                            latestOnSeek?.invoke(f)
+                            change.consume()
+                        } else if (!change.isConsumed && change.uptimeMillis - down.uptimeMillis < longPressMs) {
+                            // A plain tap: jump there
+                            latestOnSeek?.invoke(fractionAt(change.position.x))
+                            change.consume()
+                        }
                         break
                     }
-                    if (change.positionChange() != Offset.Zero) {
-                        change.consume()
-                        if (width > 0f) {
-                            val fraction = (change.position.x / width).coerceIn(0f, 1f)
-                            onSeek(fraction)
+                    if (!dragging) {
+                        // Someone else (the list scrolling, a long-press menu) took it
+                        if (change.isConsumed) break
+                        val delta = change.positionChange()
+                        travelX += delta.x
+                        travelY += delta.y
+                        if (abs(travelY) > slop && abs(travelY) > abs(travelX)) break // a scroll
+                        if (abs(travelX) > slop) {
+                            dragging = true
+                            coroutineScope.launch {
+                                dropletScale.animateTo(1.9f, spring(dampingRatio = 0.6f, stiffness = Spring.StiffnessMediumLow))
+                            }
                         }
                     }
+                    if (dragging) {
+                        change.consume()
+                        dragFraction = fractionAt(change.position.x)
+                    }
                 }
-                endScrubbingPhysics()
+                if (dragging) {
+                    dragFraction = null
+                    coroutineScope.launch {
+                        dropletScale.animateTo(1f, spring(dampingRatio = 0.7f, stiffness = Spring.StiffnessMedium))
+                    }
+                }
             }
         }
     } else {
@@ -170,18 +143,16 @@ fun WaveformView(
             .height(height)
             .then(gestureModifier)
     ) {
+        val shownProgress = (dragFraction ?: latestProvider?.invoke() ?: latestProgress).coerceIn(0f, 1f)
         val centerY = size.height / 2f
-        val playedX = size.width * progress.coerceIn(0f, 1f)
+        val playedX = size.width * shownProgress
 
-        // Number of bars adapts cleanly based on width: approx 36 bars
         val totalBars = 36
         val barWidth = 3.dp.toPx()
         val step = size.width / totalBars.toFloat()
 
         for (i in 0 until totalBars) {
             val x = i * step + (step / 2f)
-
-            // Calculate base amplitude
             val rawAmp = if (safeAmplitudes.isNotEmpty()) {
                 val idx = ((i.toFloat() / totalBars) * safeAmplitudes.size).toInt()
                     .coerceIn(0, safeAmplitudes.lastIndex)
@@ -189,30 +160,15 @@ fun WaveformView(
             } else {
                 (sin(i * 0.42f) * 0.32f + 0.62f).coerceIn(0.18f, 1f)
             }
-
-            // Apply live feedback dynamics
-            val amp = when {
-                isRecording -> {
-                    // Dynamic live soundwave ripple during active recording
-                    val waveFlutter = (sin(wavePhase + i * 0.48f) * 0.18f)
-                    (rawAmp + waveFlutter).coerceIn(0.18f, 1f)
-                }
-                isPlaying -> {
-                    // The whole wave sways while it plays, and the bars at the playhead bounce
-                    val sway = sin(wavePhase + i * 0.55f) * 0.12f
-                    val distToPlayhead = kotlin.math.abs(x - playedX)
-                    val bounce = if (distToPlayhead < step * 2f) rawAmp * (playheadPulse - 1f) else 0f
-                    (rawAmp + sway + bounce).coerceIn(0.15f, 1f)
-                }
-                else -> rawAmp
+            val amp = if (isRecording) {
+                (rawAmp + sin(wavePhase + i * 0.48f) * 0.18f).coerceIn(0.18f, 1f)
+            } else {
+                rawAmp
             }
-
             val barH = (size.height * amp * 0.92f).coerceAtLeast(barWidth)
             val isPlayed = x <= playedX || isRecording
-            val color = if (isPlayed) activeColor else inactiveColor
-
             drawLine(
-                color = color,
+                color = if (isPlayed) activeColor else inactiveColor,
                 start = Offset(x, centerY - barH / 2f),
                 end = Offset(x, centerY + barH / 2f),
                 strokeWidth = barWidth,
@@ -220,38 +176,15 @@ fun WaveformView(
             )
         }
 
-        // Draw an elastic magnifying droplet playhead dot: bigger and haloed while playing, so where
-        // it's up to stands out from the played bars (the same colour)
-        if (!isRecording && (progress in 0.005f..0.995f || isDragging)) {
-            val currentScale = dropletScale.value
-            val currentElevation = dropletElevation.value
-            val baseRadius = (if (isPlaying) 5.dp else 3.5.dp).toPx()
-            val effectiveRadius = baseRadius * currentScale
-
-            // Glowing halo while playing or scrubbing
-            if (isPlaying || currentScale > 1.1f) {
-                drawCircle(
-                    color = activeColor.copy(alpha = 0.28f),
-                    radius = effectiveRadius * 1.8f,
-                    center = Offset(playedX, centerY - currentElevation.dp.toPx())
-                )
+        // The playhead: shown once it has started (or while dragging), larger while it plays
+        val dragging = dragFraction != null
+        if (!isRecording && (shownProgress in 0.005f..0.995f || dragging)) {
+            val baseRadius = (if (isPlaying || dragging) 5.dp else 3.5.dp).toPx()
+            val radius = baseRadius * dropletScale.value
+            if (dragging) {
+                drawCircle(color = activeColor.copy(alpha = 0.25f), radius = radius * 1.8f, center = Offset(playedX, centerY))
             }
-
-            // Magnifying Droplet Playhead
-            drawCircle(
-                color = activeColor,
-                radius = effectiveRadius,
-                center = Offset(playedX, centerY - currentElevation.dp.toPx())
-            )
-
-            // Droplet specular highlight
-            if (currentScale > 1.2f) {
-                drawCircle(
-                    color = Color.White.copy(alpha = 0.75f),
-                    radius = effectiveRadius * 0.35f,
-                    center = Offset(playedX - effectiveRadius * 0.3f, (centerY - currentElevation.dp.toPx()) - effectiveRadius * 0.3f)
-                )
-            }
+            drawCircle(color = activeColor, radius = radius, center = Offset(playedX, centerY))
         }
     }
 }

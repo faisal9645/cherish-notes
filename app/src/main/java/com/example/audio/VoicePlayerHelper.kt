@@ -68,6 +68,18 @@ class VoicePlayerHelper(private val context: Context) {
 
     /** Where the current track plays from (a URL or a local path), to restart it on another output. */
     private var currentSource: String? = null
+
+    /** The track's length from its message (ms), used when the player itself reports none. */
+    private var durationHintMs: Int = 0
+
+    /** The track's length: the player's own when it knows it, else the message's, else the cache's. */
+    private fun effectiveDurationMs(player: MediaPlayer?): Int {
+        val own = try { player?.duration ?: 0 } catch (_: Exception) { 0 }
+        if (own > 0) return own
+        if (durationHintMs > 0) return durationHintMs
+        val cached = _currentTrackId.value?.let { getTrackDuration(it) } ?: 0
+        return cached * 1000
+    }
     private var currentOnCompletion: () -> Unit = {}
 
     // ---- Raise to ear: near the face a voice note plays through the earpiece, screen off ----
@@ -126,7 +138,7 @@ class VoicePlayerHelper(private val context: Context) {
         }
     }
 
-    fun playAudio(messageId: String, audioUriOrUrl: String, onCompletion: () -> Unit = {}) {
+    fun playAudio(messageId: String, audioUriOrUrl: String, durationHintSec: Int = 0, onCompletion: () -> Unit = {}) {
         // Nothing plays over a voice call (it would also change the call's audio routing)
         if (callInProgress) return
 
@@ -159,6 +171,7 @@ class VoicePlayerHelper(private val context: Context) {
 
         // Case 3: Start new audio or switch tracks (keeping the earpiece if it's at the ear)
         stopPlayback(keepEarpiece = true)
+        durationHintMs = (durationHintSec.coerceAtLeast(0)) * 1000
         _currentTrackId.value = messageId
         _isPlaying.value = true // Set immediately so icon changes to Pause/Loading instantly
         currentOnCompletion = onCompletion
@@ -223,10 +236,10 @@ class VoicePlayerHelper(private val context: Context) {
                 return@setOnPreparedListener
             }
             isPrepared = true
-            val durationMs = mp.duration
-            if (durationMs > 0) {
-                recordTrackDuration(messageId, (durationMs + 500) / 1000)
+            if (mp.duration > 0) {
+                recordTrackDuration(messageId, (mp.duration + 500) / 1000)
             }
+            val durationMs = effectiveDurationMs(mp)
 
             val pending = pendingSeekProgress
             val seekTargetMs = if (pending != null && durationMs > 0) {
@@ -303,17 +316,21 @@ class VoicePlayerHelper(private val context: Context) {
         progressJob = scope.launch {
             while (isActive && _isPlaying.value) {
                 try {
-                    if (!isScrubbing && isPrepared && player.isPlaying) {
-                        val duration = player.duration
+                    // While a seek is still landing the player reports the old spot: wait for it,
+                    // so the timer and the wave never jump back
+                    if (!isScrubbing && !isSeeking && isPrepared && player.isPlaying) {
+                        if (player.duration > 0) {
+                            _currentTrackId.value?.let { id -> recordTrackDuration(id, (player.duration + 500) / 1000) }
+                        }
+                        val pos = player.currentPosition
+                        _currentPositionSec.value = pos / 1000
+                        val duration = effectiveDurationMs(player)
                         if (duration > 0) {
-                            _currentTrackId.value?.let { id -> recordTrackDuration(id, (duration + 500) / 1000) }
-                            val pos = player.currentPosition
                             _playbackProgress.value = (pos.toFloat() / duration.toFloat()).coerceIn(0f, 1f)
-                            _currentPositionSec.value = pos / 1000
                         }
                     }
                 } catch (_: Exception) {}
-                delay(50)
+                delay(33)
             }
         }
     }
@@ -324,7 +341,7 @@ class VoicePlayerHelper(private val context: Context) {
         val mp = mediaPlayer
         if (mp != null && isPrepared) {
             try {
-                val duration = mp.duration
+                val duration = effectiveDurationMs(mp)
                 if (duration > 0) {
                     val targetMs = (duration * clamped).toInt()
                     _currentPositionSec.value = targetMs / 1000

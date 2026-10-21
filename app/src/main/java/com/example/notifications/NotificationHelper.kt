@@ -28,12 +28,12 @@ import java.util.concurrent.atomic.AtomicInteger
 object NotificationHelper {
     // Notifications use the system default notification sound
     const val CHANNEL_MESSAGES_ID = "notes_sync_channel_v5"
-    private const val CHANNEL_MESSAGES_NAME = "Notes & Messages"
+    private const val CHANNEL_MESSAGES_NAME = "Sync"
     // From 11 PM (see NightCalm): lighter vibration pattern
     const val CHANNEL_MESSAGES_NIGHT_ID = "notes_sync_night_v2"
-    private const val CHANNEL_MESSAGES_NIGHT_NAME = "Notes & Messages (night)"
+    private const val CHANNEL_MESSAGES_NIGHT_NAME = "Sync (night)"
     const val CHANNEL_REMINDERS_ID = "notes_reminders_channel_v2"
-    private const val CHANNEL_REMINDERS_NAME = "Note Reminders"
+    private const val CHANNEL_REMINDERS_NAME = "Reminders"
     private val OLD_CHANNEL_IDS = listOf(
         "notes_sync_channel",
         "notes_reminders_channel",
@@ -95,7 +95,7 @@ object NotificationHelper {
                 CHANNEL_MESSAGES_NAME,
                 NotificationManager.IMPORTANCE_HIGH
             ).apply {
-                description = "Discreet sync and reminder notifications"
+                description = "Sync updates"
                 enableVibration(true)
                 vibrationPattern = longArrayOf(0, 250, 200, 250)
                 enableLights(true)
@@ -109,7 +109,7 @@ object NotificationHelper {
                 CHANNEL_MESSAGES_NIGHT_NAME,
                 NotificationManager.IMPORTANCE_HIGH
             ).apply {
-                description = "Discreet sync notifications, quieter at night"
+                description = "Sync updates, quieter at night"
                 enableVibration(true)
                 vibrationPattern = longArrayOf(0, 140)
                 enableLights(true)
@@ -123,7 +123,7 @@ object NotificationHelper {
                 CHANNEL_REMINDERS_NAME,
                 NotificationManager.IMPORTANCE_HIGH
             ).apply {
-                description = "Time-sensitive alerts for scheduled note reminders"
+                description = "Scheduled reminders"
                 enableVibration(true)
                 setShowBadge(true)
                 enableLights(true)
@@ -779,6 +779,8 @@ object NotificationHelper {
         // notifications switch)
         val prefs = SecurityPreferences.getInstance(context)
         if (!prefs.isNoteRemindersEnabled()) return
+        // While the app is the Calculator there are no notes to remind about (Notes keeps them)
+        if (prefs.isCalculatorDecoy()) return
 
         val notifId = noteId.hashCode()
         activeNoteReminderIds.add(notifId)

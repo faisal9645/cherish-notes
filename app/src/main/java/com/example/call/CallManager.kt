@@ -160,6 +160,11 @@ object CallManager {
     @Volatile var returnsToCherish = false
         private set
 
+    /** Cherish was hidden during the call (emergency exit, or opened from its icon): stay hidden after it. */
+    fun cancelReturnToCherish() {
+        returnsToCherish = false
+    }
+
     private fun post(block: () -> Unit) {
         if (Looper.myLooper() == Looper.getMainLooper()) block() else mainHandler.post(block)
     }
@@ -941,8 +946,9 @@ object CallManager {
     private fun finish(reason: CallEndReason, serverReason: String?, errorMessage: String? = null) {
         val phase = _state.value.phase
         if (phase == CallPhase.IDLE || phase == CallPhase.ENDED) return
+        // Ending never opens Cherish by itself: only a call that began in it goes back to it (the
+        // call screen does that, see CallActivity and returnsToCherish)
         app.securityPreferences.lastCallEndedAt = SystemClock.elapsedRealtime()
-        app.securityPreferences.revealSecretApp()
         val endedCouple = coupleId
         val endedCall = callId
         val me = myUserId

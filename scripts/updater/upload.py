@@ -255,9 +255,11 @@ def release_notes(version_name: str, version_code: int, custom_notes: str = None
         return f"Notes v{version_name} (Build {version_code}):\n{custom_notes}"
     return (
         f"Notes v{version_name} (Build {version_code}):\n"
-        "\u2022 Smoother scrolling and swipe gestures\n"
-        "\u2022 Attachments load faster with small previews\n"
-        "\u2022 Filter attachments by type, and drag the handle to jump through months\n"
+        "\u2022 Notes save automatically when you go back\n"
+        "\u2022 Reminders open the right note\n"
+        "\u2022 Sharing to Notes saves a note\n"
+        "\u2022 Attachments grouped by month\n"
+        "\u2022 Smoother audio playback and lighter memory use\n"
         "\u2022 Bug fixes and improvements"
     )
 

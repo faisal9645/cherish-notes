@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Calculator icon, back layer: the same light top-to-bottom shade as the original artwork,
+     filling the whole canvas so the launcher's own shape (squircle, circle...) cuts it -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path android:pathData="M0,0h108v108h-108z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="linear"
+                android:startX="54"
+                android:startY="18"
+                android:endX="54"
+                android:endY="90"
+                android:startColor="#FFF4F9FD"
+                android:endColor="#FFC3C5CE" />
+        </aapt:attr>
+    </path>
+</vector>

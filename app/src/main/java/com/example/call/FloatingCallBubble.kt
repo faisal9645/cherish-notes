@@ -66,13 +66,20 @@ fun FloatingCallBubble(
     modifier: Modifier = Modifier
 ) {
     val callState by CallManager.state.collectAsState()
+    val context = LocalContext.current
+    // Never over Notes, the Calculator or the lock: the partner's photo and a call timer would give
+    // Cherish away (the call goes on; its notification is in the shade)
+    val securityPreferences = remember(context) { com.example.security.SecurityPreferences.getInstance(context) }
+    val isDisguised by securityPreferences.isDisguiseActive.collectAsState()
+    val isLocked by securityPreferences.isAppLocked.collectAsState()
     val isVisible = CallManager.hasActiveCall() &&
         !CallManager.isCallScreenVisible &&
+        !isDisguised &&
+        !isLocked &&
         callState.phase != CallPhase.INCOMING_RINGING &&
         callState.phase != CallPhase.ENDED &&
         callState.phase != CallPhase.IDLE
 
-    val context = LocalContext.current
     val density = LocalDensity.current
     val config = LocalConfiguration.current
 

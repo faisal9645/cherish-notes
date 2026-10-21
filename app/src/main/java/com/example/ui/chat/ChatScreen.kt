@@ -1638,6 +1638,8 @@ fun ChatScreen(
                         }
                         .windowInsetsPadding(WindowInsets.navigationBars.union(WindowInsets.ime))
                 ) {
+                // Shared to "Notes" from other apps: waits here to be sent or dropped
+                PendingSharesBar()
                 ChatBottomComposerBar(
                     composerState = composerState,
                     viewModel = viewModel,

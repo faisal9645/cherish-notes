@@ -56,8 +56,8 @@ object CallNotifications {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager ?: return
         val ringtone = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
-        val incoming = NotificationChannel(CHANNEL_INCOMING, "Calls", NotificationManager.IMPORTANCE_HIGH).apply {
-            description = "Rings when someone calls"
+        val incoming = NotificationChannel(CHANNEL_INCOMING, "Priority alerts", NotificationManager.IMPORTANCE_HIGH).apply {
+            description = "Time-sensitive alerts that ring"
             // The phone's own ringtone, at its ringer volume; silent and vibrate modes apply
             setSound(
                 ringtone,
@@ -71,30 +71,30 @@ object CallNotifications {
             lockscreenVisibility = Notification.VISIBILITY_PUBLIC
             setShowBadge(false)
         }
-        val incomingSilent = NotificationChannel(CHANNEL_INCOMING_SILENT, "Silent calls", NotificationManager.IMPORTANCE_HIGH).apply {
-            description = "Silent incoming calls without ringtone"
+        val incomingSilent = NotificationChannel(CHANNEL_INCOMING_SILENT, "Priority alerts (silent)", NotificationManager.IMPORTANCE_HIGH).apply {
+            description = "Time-sensitive alerts without sound"
             setSound(null, null)
             enableVibration(true)
             vibrationPattern = longArrayOf(0, 900, 700, 900, 700)
             lockscreenVisibility = Notification.VISIBILITY_PUBLIC
             setShowBadge(false)
         }
-        val incomingQuiet = NotificationChannel(CHANNEL_INCOMING_QUIET, "Incoming calls", NotificationManager.IMPORTANCE_HIGH).apply {
-            description = "Shows who's calling while the app rings"
+        val incomingQuiet = NotificationChannel(CHANNEL_INCOMING_QUIET, "Priority alerts (quiet)", NotificationManager.IMPORTANCE_HIGH).apply {
+            description = "Shown while the app sounds an alert"
             setSound(null, null)
             enableVibration(false)
             lockscreenVisibility = Notification.VISIBILITY_PUBLIC
             setShowBadge(false)
         }
-        val ongoing = NotificationChannel(CHANNEL_ONGOING, "Call in progress", NotificationManager.IMPORTANCE_LOW).apply {
-            description = "Shown while a call is on"
+        val ongoing = NotificationChannel(CHANNEL_ONGOING, "Ongoing activity", NotificationManager.IMPORTANCE_LOW).apply {
+            description = "Shown while something is in progress"
             setSound(null, null)
             enableVibration(false)
             lockscreenVisibility = Notification.VISIBILITY_PRIVATE
             setShowBadge(false)
         }
-        val missed = NotificationChannel(CHANNEL_MISSED, "Missed calls", NotificationManager.IMPORTANCE_DEFAULT).apply {
-            description = "Calls you didn't answer"
+        val missed = NotificationChannel(CHANNEL_MISSED, "Missed alerts", NotificationManager.IMPORTANCE_DEFAULT).apply {
+            description = "Alerts you didn't see"
             lockscreenVisibility = Notification.VISIBILITY_PRIVATE
         }
         manager.createNotificationChannels(listOf(incoming, incomingSilent, incomingQuiet, ongoing, missed))

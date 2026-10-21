@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Calculator icon, front layer: the original artwork's keys at the same size and spacing
+     (+ and − on dark circles, = on a green capsule), placed in the inner 72dp the launcher
+     shows and inside the 66dp safe circle, so no launcher shape clips them -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- "+" key -->
+    <path
+        android:fillColor="#FF303030"
+        android:pathData="M27,39.65625a12.65625,12.65625 0,1 0,25.3125 0a12.65625,12.65625 0,1 0,-25.3125 0z" />
+    <path
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="2.8125"
+        android:strokeLineCap="round"
+        android:pathData="M34.59375,39.65625H44.71875M39.65625,34.59375V44.71875" />
+
+    <!-- "−" key -->
+    <path
+        android:fillColor="#FF303030"
+        android:pathData="M27,68.203125a12.65625,12.65625 0,1 0,25.3125 0a12.65625,12.65625 0,1 0,-25.3125 0z" />
+    <path
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="2.8125"
+        android:strokeLineCap="round"
+        android:pathData="M34.9453125,67.921875H44.2265625" />
+
+    <!-- "=" capsule -->
+    <path android:pathData="M55.546875,39.65625a12.65625,12.65625 0,0 1,25.3125 0v28.546875a12.65625,12.65625 0,0 1,-25.3125 0z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="linear"
+                android:startX="68.203125"
+                android:startY="27"
+                android:endX="68.203125"
+                android:endY="80.859375"
+                android:startColor="#FF16C702"
+                android:endColor="#FF14B401" />
+        </aapt:attr>
+    </path>
+    <path
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="2.953125"
+        android:strokeLineCap="round"
+        android:pathData="M63.4921875,50.90625H72.7734375M63.4921875,56.953125H72.7734375" />
+</vector>

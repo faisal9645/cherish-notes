@@ -1040,9 +1040,13 @@ fun MessageBubble(
                             Spacer(modifier = Modifier.width(10.dp))
 
                             Column(modifier = Modifier.weight(1f)) {
+                                // Progress is read where it's drawn (the wave) or by second (the
+                                // timer), so playing doesn't recompose this whole message 30 times a second
+                                val latestAudioProgress by rememberUpdatedState(audioProgress)
+                                val hasAudioProgress by remember { derivedStateOf { latestAudioProgress() > 0f } }
                                 WaveformView(
                                     amplitudes = message.waveform.map { it.toFloat() },
-                                    progress = audioProgress(),
+                                    progressProvider = { latestAudioProgress() },
                                     // Moving as my partner hears it, too
                                     isPlaying = isPlayingAudio || partnerHearing == true,
                                     isRecording = false,
@@ -1095,10 +1099,12 @@ fun MessageBubble(
                                             if (partnerHearing != null && isFromMe && !isPlayingAudio) {
                                                 // My partner is hearing it right now
                                                 PartnerHearingLabel(isVideo = false, playing = partnerHearing, color = durationColor)
-                                            } else if (isPlayingAudio || audioProgress() > 0f) {
+                                            } else if (isPlayingAudio || hasAudioProgress) {
                                                 // Where it's up to while it plays (and paused part way), counting up: "0:07 / 0:15"
                                                 val total = if (effectiveTotal > 0) effectiveTotal else 1
-                                                val elapsed = (audioProgress() * total).toInt().coerceIn(0, total)
+                                                val elapsed by remember(total) {
+                                                    derivedStateOf { (latestAudioProgress() * total).toInt().coerceIn(0, total) }
+                                                }
                                                 Text(
                                                     text = com.example.util.formatRecordingLength(elapsed) + " / " + com.example.util.formatRecordingLength(total),
                                                     fontSize = 11.sp,
@@ -1114,7 +1120,7 @@ fun MessageBubble(
                                                     color = durationColor
                                                 )
                                             }
-                                            if ((isPlayingAudio || audioProgress() > 0f) && onToggleVoiceSpeed != null) {
+                                            if ((isPlayingAudio || hasAudioProgress) && onToggleVoiceSpeed != null) {
                                                 Spacer(modifier = Modifier.width(6.dp))
                                                 Box(
                                                     modifier = Modifier

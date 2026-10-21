@@ -981,7 +981,13 @@ class ChatViewModel(
         if (message != null && message.senderId != myId && !message.isAudioPlayed) {
             chatRepository.markAudioPlayed(messageId)
         }
-        voicePlayerHelper.playAudio(messageId, audioUrl, onCompletion = { playNextVoiceNote(messageId) })
+        voicePlayerHelper.playAudio(
+            messageId,
+            audioUrl,
+            onCompletion = { playNextVoiceNote(messageId) },
+            // Its recorded length, for when the player can't read one from the stream
+            durationHintSec = message?.durationSeconds ?: 0
+        )
     }
 
     /** When a voice note ends, the next message plays on if it's another voice note from the same person. */

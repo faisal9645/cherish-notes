@@ -104,24 +104,16 @@ class MainActivity : FragmentActivity() {
         setHighRefreshRate()
         // Screenshots inside the app are allowed; only previews (recent apps) hide the secret chat
         // (see setSecretAppOnScreen and PrivacyShield)
-        val isFromNotification = intent?.getBooleanExtra("from_notification", false) == true ||
-                intent?.getBooleanExtra("open_chat", false) == true ||
-                intent?.hasExtra("conversationId") == true
-        val isExternalShare = intent?.action == android.content.Intent.ACTION_SEND ||
-                intent?.action == android.content.Intent.ACTION_SEND_MULTIPLE
-
-        val targetComponent = intent?.component?.className ?: ""
-        if (targetComponent.endsWith("CalculatorAlias")) {
-            app.securityPreferences.setDisguiseStyle(com.example.security.SecurityPreferences.DISGUISE_STYLE_CALCULATOR)
-            app.securityPreferences.forceDisguise()
-        } else if (targetComponent.endsWith("NotesAlias")) {
-            app.securityPreferences.setDisguiseStyle(com.example.security.SecurityPreferences.DISGUISE_STYLE_NOTES)
-            app.securityPreferences.forceDisguise()
-        } else if (!isFromNotification && !isExternalShare && app.securityPreferences.isDisguiseModeEnabled()) {
-            app.securityPreferences.forceDisguise()
+        // Only a fresh launch (the icon, a notification, the call screen) decides what shows. Being
+        // rebuilt (dark mode switching on, display size) or reopened from Recents after Android
+        // closed the app replays the launch's intent: that must neither reveal Cherish nor hide an
+        // open chat (an app started again from scratch is behind Notes anyway)
+        val isFreshLaunch = savedInstanceState == null &&
+            ((intent?.flags ?: 0) and android.content.Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) == 0
+        if (isFreshLaunch) {
+            intent?.let { applyLaunch(it) }
+            handleNotificationIntent(intent)
         }
-        handleNotificationIntent(intent)
-        handleShareIntent(intent)
 
         // The recents screen must never show the secret chat: its card goes blank while the chat
         // is open, and shows the Notes screen like any notes app otherwise
@@ -129,11 +121,11 @@ class MainActivity : FragmentActivity() {
             repeatOnLifecycle(Lifecycle.State.RESUMED) {
                 kotlinx.coroutines.flow.combine(
                     app.securityPreferences.isDisguiseActive,
-                    app.securityPreferences.disguiseStyle
-                ) { disguised, style ->
-                    Pair(disguised, style)
-                }.collectLatest { (disguised, style) ->
-                    val isCalc = disguised && style == com.example.security.SecurityPreferences.DISGUISE_STYLE_CALCULATOR
+                    app.securityPreferences.calculatorDecoy
+                ) { disguised, calculator ->
+                    Pair(disguised, calculator)
+                }.collectLatest { (disguised, calculator) ->
+                    val isCalc = disguised && calculator
                     updateTaskDescription(isCalc)
                     if (disguised) {
                         // Only once Notes/Calculator has been drawn over the chat
@@ -223,25 +215,37 @@ class MainActivity : FragmentActivity() {
     override fun onNewIntent(intent: android.content.Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
+        applyLaunch(intent)
+        handleNotificationIntent(intent)
+    }
+
+    /**
+     * What a launch shows: the icon opens Notes or the Calculator (with Disguise Mode off, Cherish
+     * itself, the app lock still asking first); anything else that isn't a notification opens behind
+     * the disguise. Notifications decide for themselves (handleNotificationIntent).
+     */
+    private fun applyLaunch(intent: android.content.Intent) {
+        val prefs = app.securityPreferences
         val isFromNotification = intent.getBooleanExtra("from_notification", false) ||
                 intent.getBooleanExtra("open_chat", false) ||
                 intent.hasExtra("conversationId")
-        val isExternalShare = intent.action == android.content.Intent.ACTION_SEND ||
-                intent.action == android.content.Intent.ACTION_SEND_MULTIPLE
-
         val targetComponent = intent.component?.className ?: ""
-        if (targetComponent.endsWith("CalculatorAlias")) {
-            app.securityPreferences.setDisguiseStyle(com.example.security.SecurityPreferences.DISGUISE_STYLE_CALCULATOR)
-            app.securityPreferences.forceDisguise()
-        } else if (targetComponent.endsWith("NotesAlias")) {
-            app.securityPreferences.setDisguiseStyle(com.example.security.SecurityPreferences.DISGUISE_STYLE_NOTES)
-            app.securityPreferences.forceDisguise()
-        } else if (!isFromNotification && !isExternalShare && app.securityPreferences.isDisguiseModeEnabled()) {
-            app.securityPreferences.forceDisguise()
+        val fromIcon = targetComponent.endsWith("CalculatorAlias") || targetComponent.endsWith("NotesAlias")
+        if (fromIcon) {
+            if (prefs.isDisguiseModeEnabled()) {
+                prefs.setDisguiseStyle(
+                    if (targetComponent.endsWith("CalculatorAlias")) com.example.security.SecurityPreferences.DISGUISE_STYLE_CALCULATOR
+                    else com.example.security.SecurityPreferences.DISGUISE_STYLE_NOTES
+                )
+                prefs.forceDisguise()
+            } else {
+                // Not the style: with Disguise Mode off the icon is Notes whatever was picked, and
+                // the pick is kept for when it's turned back on
+                prefs.revealSecretApp()
+            }
+        } else if (!isFromNotification && prefs.isDisguiseModeEnabled()) {
+            prefs.forceDisguise()
         }
-
-        handleNotificationIntent(intent)
-        handleShareIntent(intent)
     }
 
     private fun handleNotificationIntent(intent: android.content.Intent?) {
@@ -250,8 +254,12 @@ class MainActivity : FragmentActivity() {
         if (!openNoteId.isNullOrBlank()) {
             com.example.notifications.NotificationHelper.cancelNoteReminderNotification(this, openNoteId)
             com.example.notifications.NotificationHelper.clearNotifications(this)
-            app.securityPreferences.reDisguise()
-            app.pendingNoteIdFlow.value = openNoteId
+            // A note's reminder always opens Notes with that note: also with Disguise Mode off, or
+            // just after a call (nothing that holds Cherish open applies here)
+            app.securityPreferences.forceDisguise()
+            if (!app.securityPreferences.isCalculatorDecoy()) {
+                app.pendingNoteIdFlow.value = openNoteId
+            }
             return
         }
         com.example.notifications.NotificationHelper.clearNotifications(this)
@@ -277,162 +285,6 @@ class MainActivity : FragmentActivity() {
         }
     }
 
-    private fun queryFileName(uri: Uri): String? {
-        var name: String? = null
-        if (uri.scheme == "content") {
-            try {
-                contentResolver.query(uri, null, null, null, null)?.use { cursor ->
-                    if (cursor.moveToFirst()) {
-                        val nameIndex = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
-                        if (nameIndex != -1) {
-                            name = cursor.getString(nameIndex)
-                        }
-                    }
-                }
-            } catch (_: Exception) {}
-        }
-        if (name == null) {
-            name = uri.path?.substringAfterLast('/')
-        }
-        return name
-    }
-
-    private fun handleShareIntent(intent: android.content.Intent?) {
-        if (intent == null) return
-        val action = intent.action ?: return
-        if (action != android.content.Intent.ACTION_SEND && action != android.content.Intent.ACTION_SEND_MULTIPLE) return
-
-        // Keep app safely disguised inside Notes (never expose secret chat on external share)
-        app.securityPreferences.forceDisguise()
-
-        val uris = mutableListOf<Uri>()
-
-        // 1. Collect all URIs from ClipData (standard on Android 10+)
-        intent.clipData?.let { clipData ->
-            for (i in 0 until clipData.itemCount) {
-                clipData.getItemAt(i)?.uri?.let { uri ->
-                    if (!uris.contains(uri)) uris.add(uri)
-                }
-            }
-        }
-
-        // 2. Collect from EXTRA_STREAM or intent.data
-        if (action == android.content.Intent.ACTION_SEND) {
-            val singleUri = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                intent.getParcelableExtra(android.content.Intent.EXTRA_STREAM, Uri::class.java)
-            } else {
-                @Suppress("DEPRECATION")
-                intent.getParcelableExtra(android.content.Intent.EXTRA_STREAM)
-            } ?: intent.data
-            if (singleUri != null && !uris.contains(singleUri)) {
-                uris.add(singleUri)
-            }
-        } else if (action == android.content.Intent.ACTION_SEND_MULTIPLE) {
-            val streamUris = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                intent.getParcelableArrayListExtra(android.content.Intent.EXTRA_STREAM, Uri::class.java)
-            } else {
-                @Suppress("DEPRECATION")
-                intent.getParcelableArrayListExtra(android.content.Intent.EXTRA_STREAM)
-            }
-            streamUris?.forEach { uri ->
-                if (!uris.contains(uri)) uris.add(uri)
-            }
-        }
-
-        if (uris.isNotEmpty()) {
-            val total = uris.size
-            Toast.makeText(this, "Saving to Notes...", Toast.LENGTH_SHORT).show()
-            lifecycleScope.launch {
-                try {
-                    val coupleId = app.chatRepository.getConversationId()
-                    var sentCount = 0
-
-                    for (uri in uris) {
-                        try {
-                            val resolvedMime = try {
-                                contentResolver.getType(uri)
-                            } catch (_: Exception) { null }
-                                ?: intent.type
-                                ?: "application/octet-stream"
-
-                            val isImage = resolvedMime.startsWith("image/")
-                            val isVideo = resolvedMime.startsWith("video/")
-                            val isAudio = resolvedMime.startsWith("audio/")
-
-                            val fileName = queryFileName(uri)
-                            val preparedFile = if (isImage) {
-                                app.mediaRepository.compressAndPrepareImage(uri)
-                            } else {
-                                app.mediaRepository.copyToCache(uri, fileName)
-                            }
-
-                            val msgType = when {
-                                isImage -> MessageType.IMAGE
-                                isVideo -> MessageType.VIDEO
-                                isAudio -> MessageType.AUDIO
-                                else -> MessageType.DOCUMENT
-                            }
-
-                            val defaultText = when {
-                                isImage -> "Sent a photo"
-                                isVideo -> "Sent a video"
-                                isAudio -> "Voice note"
-                                else -> fileName ?: preparedFile.name
-                            }
-
-                            val extraCaption = if (total == 1) {
-                                intent.getStringExtra(android.content.Intent.EXTRA_TEXT)?.takeIf { it.isNotBlank() && !it.startsWith("http") }
-                            } else null
-
-                            val uploadedUrl = app.mediaRepository.uploadFile(preparedFile, msgType, coupleId).getOrNull()
-
-                            app.chatRepository.sendMessage(
-                                text = extraCaption ?: defaultText,
-                                type = msgType,
-                                mediaUrl = uploadedUrl ?: Uri.fromFile(preparedFile).toString(),
-                                mediaName = fileName ?: preparedFile.name,
-                                mediaSize = preparedFile.length()
-                            )
-                            sentCount++
-                        } catch (itemEx: Exception) {
-                            Log.e("MainActivity", "Failed to share URI $uri", itemEx)
-                        }
-                    }
-
-                    if (sentCount > 0) {
-                        Toast.makeText(this@MainActivity, "Saved to Notes ✨", Toast.LENGTH_SHORT).show()
-                    } else {
-                        Toast.makeText(this@MainActivity, "Could not save to Notes", Toast.LENGTH_SHORT).show()
-                    }
-                } catch (e: Exception) {
-                    Log.e("MainActivity", "Error in handleShareIntent", e)
-                }
-            }
-        } else {
-            // Text or link sharing without attachment URI
-            val sharedText = intent.getStringExtra(android.content.Intent.EXTRA_TEXT)
-                ?: intent.getStringExtra(android.content.Intent.EXTRA_SUBJECT)
-            if (!sharedText.isNullOrBlank()) {
-                val textToSend = if (sharedText.contains("youtube.com") || sharedText.contains("youtu.be")) {
-                    val urlRegex = "(?i)\\b((?:https?://|www\\d{0,3}[.]|[a-z0-9.\\-]+[.][a-z]{2,4}/)(?:[^\\s()<>]+|\\((?:[^\\s()<>]+|(?:\\([^\\s()<>]+\\)))*\\))+(?:\\((?:[^\\s()<>]+|(?:\\([^\\s()<>]+\\)))*\\)|[^\\s`!()\\[\\]{};:'\".,<>?«»“”‘’]))".toRegex()
-                    val match = urlRegex.find(sharedText)
-                    match?.value ?: sharedText
-                } else {
-                    sharedText
-                }
-
-                lifecycleScope.launch {
-                    try {
-                        app.chatRepository.sendMessage(textToSend.trim())
-                        Toast.makeText(this@MainActivity, "Saved to Notes ✨", Toast.LENGTH_SHORT).show()
-                    } catch (e: Exception) {
-                        Log.e("MainActivity", "Failed to share text", e)
-                    }
-                }
-            }
-        }
-    }
-
     /** Adds the privacy cover above all content; PrivacyShield shows and hides it without waiting for a frame. */
     private fun installPrivacyCover() {
         val cover = View(this).apply {
@@ -445,11 +297,16 @@ class MainActivity : FragmentActivity() {
             ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
         )
         privacyCover = cover
-        PrivacyShield.onChange = { raised ->
+        val callback: (Boolean) -> Unit = { raised ->
             if (raised) cover.setBackgroundColor(privacyCoverColor)
             cover.visibility = if (raised) View.VISIBLE else View.GONE
         }
+        privacyCoverCallback = callback
+        PrivacyShield.onChange = callback
     }
+
+    /** This screen's own cover hook, so closing another copy of the screen never takes this one's away. */
+    private var privacyCoverCallback: ((Boolean) -> Unit)? = null
 
     /** Covers the chat when the app is on its way out (home, recent apps, another app). */
     private fun coverSecretApp() {
@@ -494,9 +351,7 @@ class MainActivity : FragmentActivity() {
             app.authRepository.updateFcmToken(currentUid)
         }
         app.securityPreferences.ignoreNextPause = false
-        if (app.securityPreferences.wasInCallRecently()) {
-            app.securityPreferences.revealSecretApp()
-        }
+        // (A call ending never reveals Cherish here: only one that began in it goes back to it)
         // Ends an installer trip, or continues an update install that waited for permission
         com.example.update.OtaUpdateManager.getInstance(this).onAppResumed(this)
         // Back from the battery or Auto-start settings
@@ -570,8 +425,8 @@ class MainActivity : FragmentActivity() {
         if (com.example.call.CallManager.hasActiveCall() ||
             com.example.call.CallManager.isCallScreenVisible ||
             app.securityPreferences.wasInCallRecently()) return
+        // A full-screen video or the Watch Party doesn't hold Cherish open: going home from it hides it
         if (!app.securityPreferences.ignoreNextPause &&
-            !app.securityPreferences.isTheaterModeActive &&
             !app.securityPreferences.isExternalPickerActive &&
             app.securityPreferences.isDisguiseModeEnabled()) {
             app.securityPreferences.reDisguise()
@@ -585,21 +440,24 @@ class MainActivity : FragmentActivity() {
     }
 
     /**
-     * Locked with Cherish on screen (see screenOffReceiver): off to the background. Not with a call
-     * on or just ended, nor from a photo picker or the camera opened from the chat.
+     * The phone locked (see screenOffReceiver). Whatever was holding Cherish open behind the app (a
+     * photo picker or the camera opened from the chat, a call that just ended), locking hides it and
+     * counts as leaving for the app lock. With Cherish on screen the app also goes to the background,
+     * so unlocking shows the home screen. Not while a call is on.
      */
     private fun leaveIfLockedInCherish() {
         if (isFinishing || isChangingConfigurations) return
+        if (com.example.call.CallManager.hasActiveCall() ||
+            com.example.call.CallManager.isCallScreenVisible) return
+        val prefs = app.securityPreferences
         val cherishShown = if (lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)) {
-            !app.securityPreferences.isDisguiseActive()
+            !prefs.isDisguiseActive()
         } else {
             cherishOnScreenAtPause
         }
+        if (!prefs.isDisguiseActive() && prefs.isDisguiseModeEnabled()) prefs.forceDisguise()
+        app.onScreenLockedWhileAway()
         if (!cherishShown) return
-        if (com.example.call.CallManager.hasActiveCall() ||
-            com.example.call.CallManager.isCallScreenVisible ||
-            app.securityPreferences.wasInCallRecently() ||
-            app.securityPreferences.isExternalPickerActive) return
         cherishOnScreenAtPause = false
         moveTaskToBack(true)
     }
@@ -615,7 +473,6 @@ class MainActivity : FragmentActivity() {
         // and disguise mode is enabled in user settings. The call screen covering the chat isn't leaving
         // (going home from the call screen is: the whole app stops then, see CherishApplication).
         if (!app.securityPreferences.ignoreNextPause &&
-            !app.securityPreferences.isTheaterModeActive &&
             !app.securityPreferences.isExternalPickerActive &&
             !app.securityPreferences.wasInCallRecently() &&
             !com.example.call.CallManager.isCallScreenVisible &&
@@ -623,7 +480,7 @@ class MainActivity : FragmentActivity() {
             app.securityPreferences.isDisguiseModeEnabled()) {
             app.securityPreferences.reDisguise()
         }
-        if (!app.securityPreferences.isTheaterModeActive && !app.securityPreferences.isExternalPickerActive) {
+        if (!app.securityPreferences.isExternalPickerActive) {
             app.securityPreferences.ignoreNextPause = false
         }
         app.googleDriveBackupManager.flushPendingBackup()
@@ -635,7 +492,7 @@ class MainActivity : FragmentActivity() {
         try {
             unregisterReceiver(screenOffReceiver)
         } catch (_: Exception) {}
-        if (privacyCover != null) PrivacyShield.onChange = null
+        if (privacyCoverCallback != null && PrivacyShield.onChange === privacyCoverCallback) PrivacyShield.onChange = null
         batteryHelper.stop()
         app.authRepository.onAppForegroundStateChanged(false)
     }
