@@ -381,6 +381,7 @@ class AuthRepository(private val context: Context) {
             startHeartbeat()
             kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
                 updateNotificationStatus()
+                updateDisguiseSettings(securityPrefs.isDisguiseModeEnabled(), securityPrefs.getDisguiseStyle())
             }
         } else {
             heartbeatJob?.cancel()
@@ -445,7 +446,7 @@ class AuthRepository(private val context: Context) {
                 val partnerNameFromCouple = (if (isP1) snapshot.getString("partner2Name") else snapshot.getString("partner1Name"))
                     ?.trim()?.ifBlank { null }
                 partnerRoomName = partnerNameFromCouple
-                if (partnerNameFromCouple != null && partnerProfileName == null) {
+                if (partnerNameFromCouple != null && (partnerProfileName == null || _partnerUserState.value?.displayName.isNullOrBlank())) {
                     val currentPartner = _partnerUserState.value
                     if (currentPartner != null && currentPartner.displayName != partnerNameFromCouple) {
                         // copy() leaves out what's kept outside the constructor, like presence
@@ -1146,7 +1147,7 @@ class AuthRepository(private val context: Context) {
             } else if (photoUrl != null) {
                 updates["photoUrl"] = photoUrl
             }
-            userDocument(uid)?.set(updates as Map<String, Any>, com.google.firebase.firestore.SetOptions.merge())
+            userDocument(uid)?.set(updates as Map<String, Any>, com.google.firebase.firestore.SetOptions.merge())?.await()
 
             // Update existing couple room with the new display name so partner sees it
             val coupleId = current.coupleId?.trim()?.ifBlank { null } ?: getSavedCoupleId()
@@ -1158,7 +1159,13 @@ class AuthRepository(private val context: Context) {
                         if (coupleSnap.exists()) {
                             val isP1 = isFirstPartner(coupleSnap.getString("partner1Id"), coupleSnap.getString("partner2Id"), uid)
                             val coupleField = if (isP1) "partner1Name" else "partner2Name"
-                            coupleRef.set(mapOf(coupleField to displayName, "updatedAt" to System.currentTimeMillis()), com.google.firebase.firestore.SetOptions.merge())
+                            coupleRef.set(
+                                mapOf(
+                                    coupleField to displayName,
+                                    "updatedAt" to System.currentTimeMillis()
+                                ),
+                                com.google.firebase.firestore.SetOptions.merge()
+                            ).await()
                         }
                     } catch (e: Exception) {
                         Log.w("AuthRepository", "Couple name sync in updateProfile: ${e.message}")
@@ -1172,7 +1179,7 @@ class AuthRepository(private val context: Context) {
                     userDocument(partnerId)?.set(
                         mapOf("partnerName" to displayName),
                         com.google.firebase.firestore.SetOptions.merge()
-                    )
+                    )?.await()
                 } catch (_: Exception) {}
             }
 
@@ -1234,6 +1241,28 @@ class AuthRepository(private val context: Context) {
             )
             Result.success(Unit)
         } catch (e: Exception) {
+            Result.success(Unit)
+        }
+    }
+
+    suspend fun updateDisguiseSettings(enabled: Boolean, style: String): Result<Unit> {
+        val uid = getCurrentUserId()
+        if (uid.isBlank()) return Result.success(Unit)
+        val current = _currentUserState.value ?: User(id = uid)
+        val updated = current.copy(isDisguiseEnabled = enabled, disguiseStyle = style)
+        _currentUserState.value = updated
+        saveLocalUserSession(updated)
+        return try {
+            userDocument(uid)?.set(
+                mapOf(
+                    "isDisguiseEnabled" to enabled,
+                    "disguiseStyle" to style
+                ),
+                com.google.firebase.firestore.SetOptions.merge()
+            )?.await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Log.w("AuthRepository", "Failed to update disguise settings in Firestore", e)
             Result.success(Unit)
         }
     }
@@ -1795,10 +1824,15 @@ class AuthRepository(private val context: Context) {
         try {
             val user = snapshot.toObject(User::class.java)
             if (user != null) {
+                val directDisplayName = snapshot.getString("displayName")?.trim()?.ifBlank { null }
+                    ?: snapshot.getString("name")?.trim()?.ifBlank { null }
+                val resolvedUser = if (!directDisplayName.isNullOrBlank() && user.displayName != directDisplayName) {
+                    user.copy(displayName = directDisplayName)
+                } else user
                 val docPerm = (snapshot.get("notificationPermission") as? Boolean)
                     ?: try { snapshot.getBoolean("notificationPermission") } catch (_: Throwable) { null }
-                if (docPerm != null) user.notificationPermission = docPerm
-                return user
+                if (docPerm != null) resolvedUser.notificationPermission = docPerm
+                return resolvedUser
             }
         } catch (e: Throwable) {
             Log.w("AuthRepository", "Failed to deserialize User via reflection: ${e.message}")
@@ -1843,6 +1877,8 @@ class AuthRepository(private val context: Context) {
             val notificationStatus = snapshot.getString("notificationStatus")
             val appVersionCode = (snapshot.get("appVersionCode") as? Number)?.toInt()
             val appVersionName = snapshot.getString("appVersionName")
+            val isDisguiseEnabled = (snapshot.get("isDisguiseEnabled") as? Boolean) ?: true
+            val disguiseStyle = snapshot.getString("disguiseStyle") ?: "notes"
             val notifPerm = (snapshot.get("notificationPermission") as? Boolean)
                 ?: try { snapshot.getBoolean("notificationPermission") } catch (_: Exception) { null }
                 ?: true
@@ -1880,7 +1916,9 @@ class AuthRepository(private val context: Context) {
                 timeZone = timeZone,
                 notificationStatus = notificationStatus,
                 appVersionCode = appVersionCode,
-                appVersionName = appVersionName
+                appVersionName = appVersionName,
+                isDisguiseEnabled = isDisguiseEnabled,
+                disguiseStyle = disguiseStyle
             ).apply {
                 notificationPermission = notifPerm
             }
@@ -2009,10 +2047,17 @@ class AuthRepository(private val context: Context) {
             var partner = parseUserSnapshot(doc)
             if (partner != null) {
                 // Their name as they set it; the couple room's copy only when their profile has none
-                partnerProfileName = partner.displayName.trim().ifBlank { null }
-                val roomName = partnerRoomName
-                if (partnerProfileName == null && roomName != null) {
-                    partner = partner.copy(displayName = roomName)
+                val directName = doc.getString("displayName")?.trim()?.ifBlank { null }
+                    ?: doc.getString("name")?.trim()?.ifBlank { null }
+                    ?: partner.displayName.trim().ifBlank { null }
+                if (!directName.isNullOrBlank()) {
+                    partnerProfileName = directName
+                    partner = partner.copy(displayName = directName)
+                } else {
+                    val roomName = partnerRoomName
+                    if (partnerProfileName == null && roomName != null) {
+                        partner = partner.copy(displayName = roomName)
+                    }
                 }
                 val boolOnline = (doc.get("isOnline") as? Boolean)
                     ?: (doc.get("online") as? Boolean)

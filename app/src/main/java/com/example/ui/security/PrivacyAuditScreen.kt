@@ -9,6 +9,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.Calculate
 import androidx.compose.material.icons.rounded.EditNote
 import androidx.compose.material.icons.rounded.Fingerprint
 import androidx.compose.material.icons.rounded.Key
@@ -64,14 +65,36 @@ fun PrivacyAuditScreen(
         else -> "on restart"
     }
 
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val app = context.applicationContext as? com.example.CherishApplication
+    val partner by (app?.authRepository?.partnerUserState ?: kotlinx.coroutines.flow.MutableStateFlow(null)).collectAsState()
+    val partnerDisguiseOn = partner?.isDisguiseEnabled ?: true
+    val partnerIsCalc = partner?.disguiseStyle == SecurityPreferences.DISGUISE_STYLE_CALCULATOR
+    val partnerName = partner?.displayName?.ifBlank { "Partner" } ?: "Partner"
+
+    val isCalc = securityPreferences.getDisguiseStyle() == SecurityPreferences.DISGUISE_STYLE_CALCULATOR
     val checks = listOf(
         PrivacyCheckItem(
             id = "disguise",
-            title = "Disguise as Notes",
-            description = "The app opens as a Notes app; the chat needs your secret unlock",
+            title = if (isCalc) "My Disguise: Calculator" else "My Disguise: Notes",
+            description = if (isCalc) {
+                "Your app opens as a Calculator; the chat needs your secret unlock"
+            } else {
+                "Your app opens as a Notes app; the chat needs your secret unlock"
+            },
             isPassed = auditScore.isDisguiseOn,
-            actionText = if (auditScore.isDisguiseOn) "On" else "Off",
-            icon = Icons.Rounded.EditNote
+            actionText = if (auditScore.isDisguiseOn) (if (isCalc) "Calculator" else "Notes") else "Off",
+            icon = if (isCalc) Icons.Rounded.Calculate else Icons.Rounded.EditNote
+        ),
+        PrivacyCheckItem(
+            id = "partner_disguise",
+            title = "$partnerName's Disguise",
+            description = if (!partnerDisguiseOn) "$partnerName's disguise mode is currently off"
+                          else if (partnerIsCalc) "$partnerName is protected with Samsung Calculator disguise"
+                          else "$partnerName is protected with Notes App disguise",
+            isPassed = partnerDisguiseOn,
+            actionText = if (!partnerDisguiseOn) "Off" else if (partnerIsCalc) "Calculator" else "Notes",
+            icon = if (partnerIsCalc) Icons.Rounded.Calculate else Icons.Rounded.EditNote
         ),
         PrivacyCheckItem(
             id = "app_lock",

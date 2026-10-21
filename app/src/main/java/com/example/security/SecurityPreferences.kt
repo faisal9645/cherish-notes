@@ -90,6 +90,55 @@ class SecurityPreferences(private val context: Context) {
 
     fun isDisguiseModeEnabled(): Boolean = prefs.getBoolean(KEY_DISGUISE_ENABLED, true)
 
+    private val _disguiseStyle = MutableStateFlow(getDisguiseStyle())
+    val disguiseStyle: StateFlow<String> = _disguiseStyle.asStateFlow()
+
+    fun getDisguiseStyle(): String = prefs.getString(KEY_DISGUISE_STYLE, DISGUISE_STYLE_NOTES) ?: DISGUISE_STYLE_NOTES
+
+    fun setDisguiseStyle(style: String) {
+        val valid = if (style == DISGUISE_STYLE_CALCULATOR) DISGUISE_STYLE_CALCULATOR else DISGUISE_STYLE_NOTES
+        prefs.edit().putString(KEY_DISGUISE_STYLE, valid).apply()
+        _disguiseStyle.value = valid
+        syncLauncherIcon(valid)
+    }
+
+    fun syncLauncherIcon(style: String = getDisguiseStyle()) {
+        try {
+            val pm = context.packageManager
+            val mainComp = android.content.ComponentName(context, "com.example.MainActivity")
+            val notesComp = android.content.ComponentName(context, "com.example.NotesAlias")
+            val calcComp = android.content.ComponentName(context, "com.example.CalculatorAlias")
+
+            // Crucial: MainActivity must ALWAYS remain enabled so activity-alias targets work
+            if (pm.getComponentEnabledSetting(mainComp) != android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_ENABLED) {
+                pm.setComponentEnabledSetting(
+                    mainComp,
+                    android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
+                    android.content.pm.PackageManager.DONT_KILL_APP
+                )
+            }
+
+            val isCalc = isDisguiseModeEnabled() && style == DISGUISE_STYLE_CALCULATOR
+            val targetCalc = if (isCalc) {
+                android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_ENABLED
+            } else {
+                android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DISABLED
+            }
+            val targetNotes = if (isCalc) {
+                android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DISABLED
+            } else {
+                android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_ENABLED
+            }
+
+            if (pm.getComponentEnabledSetting(calcComp) != targetCalc) {
+                pm.setComponentEnabledSetting(calcComp, targetCalc, android.content.pm.PackageManager.DONT_KILL_APP)
+            }
+            if (pm.getComponentEnabledSetting(notesComp) != targetNotes) {
+                pm.setComponentEnabledSetting(notesComp, targetNotes, android.content.pm.PackageManager.DONT_KILL_APP)
+            }
+        } catch (_: Throwable) {}
+    }
+
     fun setDisguiseModeEnabled(enabled: Boolean) {
         prefs.edit().putBoolean(KEY_DISGUISE_ENABLED, enabled).apply()
         _isDisguiseActive.value = enabled
@@ -98,6 +147,7 @@ class SecurityPreferences(private val context: Context) {
         } else {
             _hasRevealedSecretAppInSession.value = true
         }
+        syncLauncherIcon()
     }
 
     fun revealSecretApp() {
@@ -310,6 +360,25 @@ class SecurityPreferences(private val context: Context) {
         if (trimmed.equals(saved, ignoreCase = true)) return true
         if (hasPin() && verifyPin(trimmed)) return true
         return false
+    }
+
+    fun getCalculatorPasscode(): String {
+        val saved = prefs.getString(KEY_CALCULATOR_PASSCODE, null)
+        if (saved.isNullOrBlank()) {
+            return "1234"
+        }
+        return saved
+    }
+
+    fun setCalculatorPasscode(passcode: String) {
+        val clean = passcode.trim()
+        prefs.edit().putString(KEY_CALCULATOR_PASSCODE, if (clean.isBlank()) "1234" else clean).apply()
+    }
+
+    fun verifyCalculatorPasscode(code: String): Boolean {
+        val trimmed = code.trim().replace(",", "").replace(" ", "")
+        val saved = getCalculatorPasscode().trim()
+        return trimmed == saved
     }
 
     fun isAppLockEnabled(): Boolean = prefs.getBoolean(KEY_APP_LOCK_ENABLED, false)
@@ -595,6 +664,12 @@ class SecurityPreferences(private val context: Context) {
         prefs.edit().putInt(KEY_PLUS_HOLD_DURATION, seconds.coerceIn(0, 10)).apply()
     }
 
+    fun getEqualsHoldDuration(): Int = prefs.getInt(KEY_EQUALS_HOLD_DURATION, 2)
+
+    fun setEqualsHoldDuration(seconds: Int) {
+        prefs.edit().putInt(KEY_EQUALS_HOLD_DURATION, seconds.coerceIn(1, 10)).apply()
+    }
+
     // Require phone screen lock (PIN, Password, Pattern) or fingerprint before revealing secret chat
     fun isRequirePhoneLockAfterHold(): Boolean = prefs.getBoolean(KEY_REQUIRE_PHONE_LOCK_AFTER_HOLD, false)
 
@@ -804,15 +879,36 @@ class SecurityPreferences(private val context: Context) {
     fun setAppSoundVolume(volume: Int) = prefs.edit().putInt(KEY_APP_SOUND_VOLUME, volume.coerceIn(0, 100)).apply()
 
     /** What a masked (hidden-content / disguised) notification says. */
-    fun getMaskedNotificationTitle(): String =
-        prefs.getString(KEY_MASKED_NOTIFICATION_TITLE, null)?.ifBlank { null } ?: DEFAULT_MASKED_TITLE
-    fun getMaskedNotificationText(): String =
-        prefs.getString(KEY_MASKED_NOTIFICATION_TEXT, null)?.ifBlank { null } ?: DEFAULT_MASKED_TEXT
-    fun setMaskedNotificationText(title: String, text: String) {
-        prefs.edit()
-            .putString(KEY_MASKED_NOTIFICATION_TITLE, title.trim())
-            .putString(KEY_MASKED_NOTIFICATION_TEXT, text.trim())
-            .apply()
+    fun getMaskedNotificationTitle(style: String = getDisguiseStyle()): String {
+        return if (style == DISGUISE_STYLE_CALCULATOR) {
+            val custom = prefs.getString(KEY_MASKED_TITLE_CALCULATOR, null)?.ifBlank { null }
+            custom ?: "Calculator"
+        } else {
+            val custom = prefs.getString(KEY_MASKED_NOTIFICATION_TITLE, null)?.ifBlank { null }
+            custom ?: DEFAULT_MASKED_TITLE
+        }
+    }
+
+    fun getMaskedNotificationText(style: String = getDisguiseStyle()): String {
+        return if (style == DISGUISE_STYLE_CALCULATOR) {
+            val custom = prefs.getString(KEY_MASKED_TEXT_CALCULATOR, null)?.ifBlank { null }
+            custom ?: "Calculation history updated"
+        } else {
+            val custom = prefs.getString(KEY_MASKED_NOTIFICATION_TEXT, null)?.ifBlank { null }
+            custom ?: DEFAULT_MASKED_TEXT
+        }
+    }
+
+    fun setMaskedNotificationText(title: String, text: String, style: String = getDisguiseStyle()) {
+        val editor = prefs.edit()
+        if (style == DISGUISE_STYLE_CALCULATOR) {
+            editor.putString(KEY_MASKED_TITLE_CALCULATOR, title.trim())
+                .putString(KEY_MASKED_TEXT_CALCULATOR, text.trim())
+        } else {
+            editor.putString(KEY_MASKED_NOTIFICATION_TITLE, title.trim())
+                .putString(KEY_MASKED_NOTIFICATION_TEXT, text.trim())
+        }
+        editor.apply()
     }
 
     fun isAutoPlayMedia(): Boolean = prefs.getBoolean(KEY_AUTOPLAY_MEDIA, true)
@@ -1010,9 +1106,14 @@ class SecurityPreferences(private val context: Context) {
     }
 
     companion object {
+        const val DISGUISE_STYLE_NOTES = "notes"
+        const val DISGUISE_STYLE_CALCULATOR = "calculator"
+        private const val KEY_DISGUISE_STYLE = "disguise_style"
+
         private const val EXTERNAL_PICKER_IN_APP_MS = 2L * 60 * 1000
         private const val KEY_DISGUISE_ENABLED = "disguise_enabled"
         private const val KEY_DISGUISE_PASSCODE = "disguise_passcode"
+        private const val KEY_CALCULATOR_PASSCODE = "calculator_passcode"
         private const val KEY_APP_LOCK_ENABLED = "app_lock_enabled"
         private const val KEY_BIOMETRIC_ENABLED = "biometric_enabled"
         private const val KEY_SCREENSHOT_PROTECTION = "screenshot_protection"
@@ -1027,6 +1128,7 @@ class SecurityPreferences(private val context: Context) {
         // Trigger & gallery keys
         private const val KEY_KEYWORD_TRIGGER_ENABLED = "keyword_trigger_enabled"
         private const val KEY_PLUS_HOLD_DURATION = "plus_hold_duration_sec"
+        private const val KEY_EQUALS_HOLD_DURATION = "equals_hold_duration_sec"
         private const val KEY_IMAGE_GALLERY_SIZE = "image_gallery_size"
         private const val KEY_HAPTIC_FEEDBACK_ENABLED = "haptic_feedback_enabled"
         private const val KEY_HAPTIC_SEND = "haptic_on_send"
@@ -1036,6 +1138,8 @@ class SecurityPreferences(private val context: Context) {
         private const val KEY_APP_SOUND_VOLUME = "app_sound_volume"
         private const val KEY_MASKED_NOTIFICATION_TITLE = "masked_notification_title"
         private const val KEY_MASKED_NOTIFICATION_TEXT = "masked_notification_text"
+        private const val KEY_MASKED_TITLE_CALCULATOR = "masked_notification_title_calculator"
+        private const val KEY_MASKED_TEXT_CALCULATOR = "masked_notification_text_calculator"
         const val DEFAULT_MASKED_TITLE = "Notes"
         const val DEFAULT_MASKED_TEXT = "Checklist reminder updated"
         private const val KEY_AUTOPLAY_MEDIA = "autoplay_media"

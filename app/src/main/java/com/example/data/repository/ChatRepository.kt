@@ -785,6 +785,23 @@ class ChatRepository(
             null
         } ?: return null
         if (message.id.isBlank()) message.id = id
+        if (message.durationSeconds <= 0) {
+            val num = (get("durationSeconds") as? Number)?.toInt()
+                ?: (get("duration") as? Number)?.toInt()
+            if (num != null && num > 0) {
+                message.durationSeconds = num
+            } else {
+                val parsed = Regex("""\((\d+)\s*s\)""").find(message.text)?.groupValues?.get(1)?.toIntOrNull()
+                if (parsed != null && parsed > 0) {
+                    message.durationSeconds = parsed
+                } else if (message.waveform.isNotEmpty()) {
+                    message.durationSeconds = (message.waveform.size / 10).coerceAtLeast(1)
+                }
+            }
+        }
+        if (message.durationSeconds > 0) {
+            com.example.audio.VoicePlayerHelper.recordTrackDuration(message.id, message.durationSeconds)
+        }
         message.isStarred = flag("isStarred", "starred") ?: message.isStarred
         message.isPinned = flag("isPinned", "pinned") ?: message.isPinned
         message.isEdited = flag("isEdited", "edited") ?: message.isEdited

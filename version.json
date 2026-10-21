@@ -1,9 +1,9 @@
 {
-  "versionCode": 198,
-  "versionName": "1.8.26",
-  "tagName": "v1.8.26-198",
-  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.8.26-198/app_update_198.apk",
-  "assetSize": 18830900,
-  "releaseNotes": "Notes v1.8.26 (Build 198):\n• Reliable Call Ringing: One clear ringtone that always plays when ringing is on, heard over music\n• Incoming Call Privacy: Normal shows your partner's name and photo, Discreet keeps it disguised\n• Calls answered outside the app close back to where you were\n• Hugs play and vibrate only inside Cherish\n• Kiss Screen: Kisses show at the same spot on both phones; the close button no longer kisses\n• Styled-hair boy in every couple emoji, no bald-looking men",
-  "releaseDate": "2026-10-19T15:06:10Z"
+  "versionCode": 200,
+  "versionName": "1.8.28",
+  "tagName": "v1.8.28-200",
+  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.8.28-200/app_update_200.apk",
+  "assetSize": 19137864,
+  "releaseNotes": "Notes v1.8.28 (Build 200):\n\u2022 Calculator Decoy: Adjustable '=' button long-press unlock duration (1s\u20135s) in Profile Settings\n\u2022 Streamlined Decoy Unlock: Exclusively number passcode and '=' long-press unlock; other secret gestures removed\n\u2022 Decoy Keyboard Suppression: Software keyboard completely suppressed on calculator screen\n\u2022 Samsung One UI Day/Night Theme: Authentic bottom alignment and official color system\n\u2022 Voice & Audio: Smooth voice chat timing and improved chat scroll performance",
+  "releaseDate": "2026-10-21T16:56:10Z"
 }

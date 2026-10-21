@@ -169,84 +169,99 @@ fun HeartbeatTouchDialog(
         label = "glow_alpha"
     )
 
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    var isVisible by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        isVisible = true
+    }
+
+    val dismissDialog = {
+        onTouchChanged(false)
+        onDismiss()
+    }
+
     Dialog(
-        onDismissRequest = {
-            onTouchChanged(false)
-            onDismiss()
-        },
-        properties = DialogProperties(usePlatformDefaultWidth = false)
+        onDismissRequest = dismissDialog,
+        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(
-                            Color(0xFF0F0814),
-                            Color(0xFF1E0E1B),
-                            Color(0xFF0D040A)
+        AnimatedVisibility(
+            visible = isVisible,
+            enter = fadeIn(tween(220)) + scaleIn(initialScale = 0.94f, animationSpec = tween(220)),
+            exit = fadeOut(tween(180)) + scaleOut(targetScale = 0.94f, animationSpec = tween(180))
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                Color(0xFF0F0814),
+                                Color(0xFF1E0E1B),
+                                Color(0xFF0D040A)
+                            )
                         )
                     )
-                )
-                .pointerInput(Unit) {
-                    awaitEachGesture {
-                        awaitFirstDown(requireUnconsumed = false)
-                        isMeTouching = true
-                        onTouchChanged(true)
-                        try {
-                            while (true) {
-                                val event = awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Main)
-                                val anyPressed = event.changes.any { it.pressed }
-                                if (!anyPressed) break
+                    .pointerInput(Unit) {
+                        awaitEachGesture {
+                            val down = awaitFirstDown(requireUnconsumed = false)
+                            // Exclude touches in top-right corner to prevent close button tap from triggering touch pulse
+                            val closeAreaPx = with(density) { 96.dp.toPx() }
+                            if (down.position.y < closeAreaPx && down.position.x > size.width - closeAreaPx) {
+                                return@awaitEachGesture
                             }
-                        } finally {
-                            isMeTouching = false
-                            onTouchChanged(false)
+                            isMeTouching = true
+                            onTouchChanged(true)
+                            try {
+                                while (true) {
+                                    val event = awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Main)
+                                    val anyPressed = event.changes.any { it.pressed }
+                                    if (!anyPressed) break
+                                }
+                            } finally {
+                                isMeTouching = false
+                                onTouchChanged(false)
+                            }
                         }
-                    }
-                },
-            contentAlignment = Alignment.Center
-        ) {
-            // Background Ambient Glow
-            val glowColor = (if (isConnected) HeartbeatBlue else HeartbeatPink).copy(alpha = glowAlpha * 0.45f)
-            Canvas(modifier = Modifier.fillMaxSize()) {
-                val center = Offset(size.width / 2f, size.height / 2f)
-                val radius = size.width * (if (isConnected) 0.70f else 0.4f)
-                drawCircle(
-                    brush = Brush.radialGradient(
-                        colors = listOf(
-                            glowColor,
-                            Color.Transparent
-                        ),
-                        center = center,
-                        radius = radius
-                    ),
-                    radius = radius,
-                    center = center
-                )
-            }
-
-            // Hearts rising from behind the big heart while both are holding
-            FloatingHeartsStream(
-                active = isConnected,
-                origin = heartCenter,
-                modifier = Modifier.fillMaxSize()
-            )
-
-            // Close button top end
-            IconButton(
-                onClick = {
-                    onTouchChanged(false)
-                    onDismiss()
-                },
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(24.dp)
-                    .size(44.dp)
-                    .background(Color.White.copy(alpha = 0.15f), CircleShape)
+                    },
+                contentAlignment = Alignment.Center
             ) {
-                Icon(Icons.Rounded.Close, contentDescription = "Close", tint = Color.White)
-            }
+                // Background Ambient Glow
+                val glowColor = (if (isConnected) HeartbeatBlue else HeartbeatPink).copy(alpha = glowAlpha * 0.45f)
+                Canvas(modifier = Modifier.fillMaxSize()) {
+                    val center = Offset(size.width / 2f, size.height / 2f)
+                    val radius = size.width * (if (isConnected) 0.70f else 0.4f)
+                    drawCircle(
+                        brush = Brush.radialGradient(
+                            colors = listOf(
+                                glowColor,
+                                Color.Transparent
+                            ),
+                            center = center,
+                            radius = radius
+                        ),
+                        radius = radius,
+                        center = center
+                    )
+                }
+
+                // Hearts rising from behind the big heart while both are holding
+                FloatingHeartsStream(
+                    active = isConnected,
+                    origin = heartCenter,
+                    modifier = Modifier.fillMaxSize()
+                )
+
+                // Close button top end
+                IconButton(
+                    onClick = dismissDialog,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(24.dp)
+                        .size(44.dp)
+                        .background(Color.White.copy(alpha = 0.15f), CircleShape)
+                ) {
+                    Icon(Icons.Rounded.Close, contentDescription = "Close", tint = Color.White)
+                }
 
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -476,6 +491,7 @@ fun HeartbeatTouchDialog(
                     lineHeight = 17.sp
                 )
             }
+        }
         }
     }
 }

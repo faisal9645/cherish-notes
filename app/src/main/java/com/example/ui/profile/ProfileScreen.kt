@@ -41,10 +41,12 @@ import androidx.compose.material.icons.rounded.CloudDone
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Devices
 import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.Calculate
 import androidx.compose.material.icons.rounded.EditNote
 import androidx.compose.material.icons.automirrored.rounded.ExitToApp
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.Fingerprint
+import androidx.compose.material.icons.rounded.SwapHoriz
 import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.rounded.HourglassTop
 import androidx.compose.material.icons.rounded.Key
@@ -83,6 +85,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.example.notifications.NotificationHelper
+import com.example.security.SecurityPreferences
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -622,11 +625,25 @@ fun ProfileScreen(
                 )
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), thickness = 0.6.dp)
 
-                // Notes Disguise Toggle
+                // Disguise Decoy App Toggle
                 ListItem(
-                    headlineContent = { Text("Disguise as Notes App", fontSize = 15.sp, fontWeight = FontWeight.SemiBold) },
-                    supportingContent = { Text("Opens as functional notes app with secret unlock gesture", fontSize = 13.sp) },
-                    leadingContent = { Icon(Icons.Rounded.EditNote, contentDescription = null, tint = primaryAccent) },
+                    headlineContent = { Text("Disguise Mode", fontSize = 15.sp, fontWeight = FontWeight.SemiBold) },
+                    supportingContent = { Text("Opens as functional notes app or calculator with secret unlock", fontSize = 13.sp) },
+                    leadingContent = {
+                        if (uiState.disguiseStyle == SecurityPreferences.DISGUISE_STYLE_CALCULATOR) {
+                            androidx.compose.foundation.Image(
+                                painter = painterResource(id = com.example.R.drawable.ic_samsung_calculator),
+                                contentDescription = "Samsung Calculator",
+                                modifier = Modifier.size(24.dp).clip(RoundedCornerShape(6.dp))
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.Rounded.EditNote,
+                                contentDescription = null,
+                                tint = primaryAccent
+                            )
+                        }
+                    },
                     trailingContent = {
                         CherishSwitch(
                             checked = uiState.isDisguiseModeEnabled,
@@ -635,66 +652,74 @@ fun ProfileScreen(
                     }
                 )
 
-                if (uiState.isDisguiseModeEnabled) {
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), thickness = 0.6.dp)
-                    // Keyword Trigger Enable/Disable Switch
-                    ListItem(
-                        headlineContent = { Text("Search Bar Trigger Word", fontSize = 15.sp, fontWeight = FontWeight.SemiBold) },
-                        supportingContent = { Text("Type secret word in Notes search to reveal chat", fontSize = 13.sp) },
-                        leadingContent = { Icon(Icons.Rounded.Password, contentDescription = null, tint = primaryAccent) },
-                        trailingContent = {
-                            CherishSwitch(
-                                checked = uiState.isKeywordTriggerEnabled,
-                                onCheckedChange = { viewModel.setKeywordTriggerEnabled(it) }
+                // Partner's Disguise Status Card
+                val partner = uiState.partnerUser
+                val partnerName = partner?.displayName?.ifBlank { "Partner" } ?: "Partner"
+                val partnerDisguiseOn = partner?.isDisguiseEnabled ?: true
+                val partnerDisguiseStyle = partner?.disguiseStyle ?: SecurityPreferences.DISGUISE_STYLE_NOTES
+                val isPartnerCalc = partnerDisguiseStyle == SecurityPreferences.DISGUISE_STYLE_CALCULATOR
+
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), thickness = 0.6.dp)
+
+                ListItem(
+                    headlineContent = { Text("$partnerName's Disguise", fontSize = 15.sp, fontWeight = FontWeight.SemiBold) },
+                    supportingContent = {
+                        Text(
+                            if (!partnerDisguiseOn) "Disguise mode is turned off"
+                            else if (isPartnerCalc) "Currently using Samsung Calculator"
+                            else "Currently using Notes app",
+                            fontSize = 13.sp
+                        )
+                    },
+                    leadingContent = {
+                        if (!partnerDisguiseOn) {
+                            Icon(Icons.Rounded.VisibilityOff, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        } else if (isPartnerCalc) {
+                            androidx.compose.foundation.Image(
+                                painter = painterResource(id = com.example.R.drawable.ic_samsung_calculator),
+                                contentDescription = "Samsung Calculator",
+                                modifier = Modifier.size(24.dp).clip(RoundedCornerShape(6.dp))
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.Rounded.EditNote,
+                                contentDescription = null,
+                                tint = primaryAccent
                             )
                         }
-                    )
-
-                    if (uiState.isKeywordTriggerEnabled) {
-                        ListItem(
-                            headlineContent = { Text("Custom Trigger Word", fontSize = 15.sp, fontWeight = FontWeight.SemiBold) },
-                            supportingContent = {
-                                Text(
-                                    text = "Current: " + if (isPasscodeRevealed) uiState.disguisePasscode else "••••••••",
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                            },
-                            leadingContent = {
-                                IconButton(onClick = { isPasscodeRevealed = !isPasscodeRevealed }) {
-                                    Icon(
-                                        imageVector = if (isPasscodeRevealed) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility,
-                                        contentDescription = if (isPasscodeRevealed) "Hide trigger word" else "Reveal trigger word",
-                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                            },
-                            trailingContent = {
-                                TextButton(onClick = {
-                                    newPasscodeText = uiState.disguisePasscode
-                                    isDialogPasscodeRevealed = false
-                                    showSetPasscodeDialog = true
-                                }) {
-                                    Text("Change", fontSize = 13.sp)
-                                }
-                            }
-                        )
+                    },
+                    trailingContent = {
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = if (partnerDisguiseOn) primaryAccent.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant,
+                            modifier = Modifier.padding(vertical = 4.dp)
+                        ) {
+                            Text(
+                                text = if (!partnerDisguiseOn) "Off" else if (isPartnerCalc) "Calculator" else "Notes",
+                                color = if (partnerDisguiseOn) primaryAccent else MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                            )
+                        }
                     }
+                )
 
+                if (uiState.isDisguiseModeEnabled) {
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), thickness = 0.6.dp)
 
-                    // Plus (+) Icon Long-Press Hold Duration Selector
+                    // Disguise Decoy App Selector (Notes vs Calculator)
                     ListItem(
-                        headlineContent = { Text("Hold '+' Button to Unlock", fontSize = 15.sp, fontWeight = FontWeight.SemiBold) },
+                        headlineContent = { Text("Choose Disguise App", fontSize = 15.sp, fontWeight = FontWeight.SemiBold) },
                         supportingContent = {
                             Text(
-                                if (uiState.plusHoldDurationSec > 0)
-                                    "Hold '+' for ${uiState.plusHoldDurationSec}s with haptics to reveal chat"
-                                else "Long-press unlock is disabled",
+                                if (uiState.disguiseStyle == SecurityPreferences.DISGUISE_STYLE_CALCULATOR)
+                                    "Calculator: Type passcode/PIN and press '=', or long-press '='"
+                                else "Notes App: Search trigger word or hold '+' button",
                                 fontSize = 13.sp
                             )
                         },
-                        leadingContent = { Icon(Icons.Rounded.TouchApp, contentDescription = null, tint = primaryAccent) }
+                        leadingContent = { Icon(Icons.Rounded.SwapHoriz, contentDescription = null, tint = primaryAccent) }
                     )
 
                     Row(
@@ -704,31 +729,47 @@ fun ProfileScreen(
                             .clip(RoundedCornerShape(12.dp))
                             .background(MaterialTheme.colorScheme.surfaceVariant)
                             .padding(4.dp),
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        listOf(
-                            1 to "1s",
-                            2 to "2s",
-                            3 to "3s",
-                            5 to "5s",
-                            0 to "Off"
-                        ).forEach { (duration, label) ->
-                            val isSelected = uiState.plusHoldDurationSec == duration
-                            Box(
+                        val disguiseOptions = remember {
+                            listOf(
+                                Triple(SecurityPreferences.DISGUISE_STYLE_NOTES, "Notes App", Icons.Rounded.EditNote),
+                                Triple(SecurityPreferences.DISGUISE_STYLE_CALCULATOR, "Calculator", Icons.Rounded.Calculate)
+                            )
+                        }
+                        disguiseOptions.forEach { (style, title, icon) ->
+                            val isSelected = uiState.disguiseStyle == style
+                            Row(
                                 modifier = Modifier
                                     .weight(1f)
                                     .pressScaleTarget()
                                     .clip(RoundedCornerShape(8.dp))
                                     .background(if (isSelected) primaryAccent else Color.Transparent)
-                                    .springClickable(tick = true) { viewModel.setPlusHoldDuration(duration) }
-                                    .padding(vertical = 8.dp),
-                                contentAlignment = Alignment.Center
+                                    .springClickable(tick = true) { viewModel.setDisguiseStyle(style) }
+                                    .padding(vertical = 10.dp),
+                                horizontalArrangement = Arrangement.Center,
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
+                                if (style == SecurityPreferences.DISGUISE_STYLE_CALCULATOR) {
+                                    androidx.compose.foundation.Image(
+                                        painter = painterResource(id = com.example.R.drawable.ic_samsung_calculator),
+                                        contentDescription = null,
+                                        modifier = Modifier.size(19.dp).clip(RoundedCornerShape(5.dp))
+                                    )
+                                } else {
+                                    Icon(
+                                        imageVector = icon,
+                                        contentDescription = null,
+                                        tint = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.size(17.dp)
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(6.dp))
                                 Text(
-                                    text = label,
+                                    text = title,
                                     color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
                                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                    fontSize = 12.sp
+                                    fontSize = 13.sp
                                 )
                             }
                         }
@@ -736,23 +777,225 @@ fun ProfileScreen(
 
                     Spacer(modifier = Modifier.height(4.dp))
 
-                    ListItem(
-                        headlineContent = {
-                            Text("Device Screen Lock After '+' Hold", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-                        },
-                        supportingContent = {
-                            Text("Require phone PIN/fingerprint before revealing chat", fontSize = 13.sp)
-                        },
-                        leadingContent = {
-                            Icon(Icons.Rounded.Security, contentDescription = null, tint = primaryAccent)
-                        },
-                        trailingContent = {
-                            CherishSwitch(
-                                checked = uiState.isRequirePhoneLockAfterHold,
-                                onCheckedChange = { viewModel.setRequirePhoneLockAfterHold(it) }
+                    if (uiState.disguiseStyle == SecurityPreferences.DISGUISE_STYLE_CALCULATOR) {
+                        // Calculator settings: Passcode / PIN & Device Lock
+                        ListItem(
+                            headlineContent = { Text("Secret Calculator Passcode", fontSize = 15.sp, fontWeight = FontWeight.SemiBold) },
+                            supportingContent = {
+                                Text(
+                                    text = "Current: " + (if (isPasscodeRevealed) uiState.calculatorPasscode else "••••••••") + " • Type & press '='",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            },
+                            leadingContent = {
+                                IconButton(onClick = { isPasscodeRevealed = !isPasscodeRevealed }) {
+                                    Icon(
+                                        imageVector = if (isPasscodeRevealed) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility,
+                                        contentDescription = if (isPasscodeRevealed) "Hide passcode" else "Reveal passcode",
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            },
+                            trailingContent = {
+                                TextButton(onClick = {
+                                    newPasscodeText = uiState.calculatorPasscode
+                                    isDialogPasscodeRevealed = false
+                                    showSetPasscodeDialog = true
+                                }) {
+                                    Text("Change", fontSize = 13.sp)
+                                }
+                            }
+                        )
+
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), thickness = 0.6.dp)
+
+                        // '=' Button Long-Press Hold Duration Selector
+                        ListItem(
+                            headlineContent = { Text("Hold '=' Button to Unlock", fontSize = 15.sp, fontWeight = FontWeight.SemiBold) },
+                            supportingContent = {
+                                Text(
+                                    "Hold '=' for ${uiState.equalsHoldDurationSec}s in Calculator to reveal chat",
+                                    fontSize = 13.sp
+                                )
+                            },
+                            leadingContent = { Icon(Icons.Rounded.TouchApp, contentDescription = null, tint = primaryAccent) }
+                        )
+
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 4.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(MaterialTheme.colorScheme.surfaceVariant)
+                                .padding(4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            listOf(
+                                1 to "1s",
+                                2 to "2s",
+                                3 to "3s",
+                                4 to "4s",
+                                5 to "5s"
+                            ).forEach { (duration, label) ->
+                                val isSelected = uiState.equalsHoldDurationSec == duration
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .pressScaleTarget()
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(if (isSelected) primaryAccent else Color.Transparent)
+                                        .springClickable(tick = true) { viewModel.setEqualsHoldDuration(duration) }
+                                        .padding(vertical = 8.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = label,
+                                        color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                        fontSize = 12.sp
+                                    )
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(4.dp))
+
+                        ListItem(
+                            headlineContent = {
+                                Text("Device Screen Lock After Unlock", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                            },
+                            supportingContent = {
+                                Text("Require phone PIN/fingerprint before revealing chat", fontSize = 13.sp)
+                            },
+                            leadingContent = {
+                                Icon(Icons.Rounded.Security, contentDescription = null, tint = primaryAccent)
+                            },
+                            trailingContent = {
+                                CherishSwitch(
+                                    checked = uiState.isRequirePhoneLockAfterHold,
+                                    onCheckedChange = { viewModel.setRequirePhoneLockAfterHold(it) }
+                                )
+                            }
+                        )
+                    } else {
+                        // Notes App settings: Trigger word and Hold duration
+                        ListItem(
+                            headlineContent = { Text("Search Bar Trigger Word", fontSize = 15.sp, fontWeight = FontWeight.SemiBold) },
+                            supportingContent = { Text("Type secret word in Notes search to reveal chat", fontSize = 13.sp) },
+                            leadingContent = { Icon(Icons.Rounded.Password, contentDescription = null, tint = primaryAccent) },
+                            trailingContent = {
+                                CherishSwitch(
+                                    checked = uiState.isKeywordTriggerEnabled,
+                                    onCheckedChange = { viewModel.setKeywordTriggerEnabled(it) }
+                                )
+                            }
+                        )
+
+                        if (uiState.isKeywordTriggerEnabled) {
+                            ListItem(
+                                headlineContent = { Text("Custom Trigger Word", fontSize = 15.sp, fontWeight = FontWeight.SemiBold) },
+                                supportingContent = {
+                                    Text(
+                                        text = "Current: " + if (isPasscodeRevealed) uiState.disguisePasscode else "••••••••",
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                },
+                                leadingContent = {
+                                    IconButton(onClick = { isPasscodeRevealed = !isPasscodeRevealed }) {
+                                        Icon(
+                                            imageVector = if (isPasscodeRevealed) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility,
+                                            contentDescription = if (isPasscodeRevealed) "Hide trigger word" else "Reveal trigger word",
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                },
+                                trailingContent = {
+                                    TextButton(onClick = {
+                                        newPasscodeText = uiState.disguisePasscode
+                                        isDialogPasscodeRevealed = false
+                                        showSetPasscodeDialog = true
+                                    }) {
+                                        Text("Change", fontSize = 13.sp)
+                                    }
+                                }
                             )
                         }
-                    )
+
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), thickness = 0.6.dp)
+
+                        // Plus (+) Icon Long-Press Hold Duration Selector
+                        ListItem(
+                            headlineContent = { Text("Hold '+' Button to Unlock", fontSize = 15.sp, fontWeight = FontWeight.SemiBold) },
+                            supportingContent = {
+                                Text(
+                                    if (uiState.plusHoldDurationSec > 0)
+                                        "Hold '+' for ${uiState.plusHoldDurationSec}s with haptics to reveal chat"
+                                    else "Long-press unlock is disabled",
+                                    fontSize = 13.sp
+                                )
+                            },
+                            leadingContent = { Icon(Icons.Rounded.TouchApp, contentDescription = null, tint = primaryAccent) }
+                        )
+
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 4.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(MaterialTheme.colorScheme.surfaceVariant)
+                                .padding(4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            listOf(
+                                1 to "1s",
+                                2 to "2s",
+                                3 to "3s",
+                                5 to "5s",
+                                0 to "Off"
+                            ).forEach { (duration, label) ->
+                                val isSelected = uiState.plusHoldDurationSec == duration
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .pressScaleTarget()
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(if (isSelected) primaryAccent else Color.Transparent)
+                                        .springClickable(tick = true) { viewModel.setPlusHoldDuration(duration) }
+                                        .padding(vertical = 8.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = label,
+                                        color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                        fontSize = 12.sp
+                                    )
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(4.dp))
+
+                        ListItem(
+                            headlineContent = {
+                                Text("Device Screen Lock After '+' Hold", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                            },
+                            supportingContent = {
+                                Text("Require phone PIN/fingerprint before revealing chat", fontSize = 13.sp)
+                            },
+                            leadingContent = {
+                                Icon(Icons.Rounded.Security, contentDescription = null, tint = primaryAccent)
+                            },
+                            trailingContent = {
+                                CherishSwitch(
+                                    checked = uiState.isRequirePhoneLockAfterHold,
+                                    onCheckedChange = { viewModel.setRequirePhoneLockAfterHold(it) }
+                                )
+                            }
+                        )
+                    }
 
                     Row(
                         modifier = Modifier
@@ -1067,8 +1310,12 @@ fun ProfileScreen(
 
                     // What a masked notification says
                     val maskPrefs = remember { com.example.security.SecurityPreferences.getInstance(context) }
-                    var maskedTitle by remember { mutableStateOf(maskPrefs.getMaskedNotificationTitle()) }
-                    var maskedText by remember { mutableStateOf(maskPrefs.getMaskedNotificationText()) }
+                    var maskedTitle by remember { mutableStateOf(maskPrefs.getMaskedNotificationTitle(uiState.disguiseStyle)) }
+                    var maskedText by remember { mutableStateOf(maskPrefs.getMaskedNotificationText(uiState.disguiseStyle)) }
+                    LaunchedEffect(uiState.disguiseStyle) {
+                        maskedTitle = maskPrefs.getMaskedNotificationTitle(uiState.disguiseStyle)
+                        maskedText = maskPrefs.getMaskedNotificationText(uiState.disguiseStyle)
+                    }
                     var showMaskedEditor by remember { mutableStateOf(false) }
                     ListItem(
                         headlineContent = { Text("Custom Disguise Text", fontSize = 14.sp, fontWeight = FontWeight.Medium) },
@@ -1079,11 +1326,12 @@ fun ProfileScreen(
                             .testTag("masked_notification_text")
                     )
                     if (showMaskedEditor) {
+                        val isCalcDisguise = uiState.disguiseStyle == SecurityPreferences.DISGUISE_STYLE_CALCULATOR
                         var titleInput by remember { mutableStateOf(maskedTitle) }
                         var textInput by remember { mutableStateOf(maskedText) }
                         CherishAlertDialog(
                             onDismissRequest = { showMaskedEditor = false },
-                            title = { Text("Disguised Notification") },
+                            title = { Text(if (isCalcDisguise) "Disguised Notification (Calculator)" else "Disguised Notification (Notes)") },
                             text = {
                                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                                     Text(
@@ -1094,14 +1342,14 @@ fun ProfileScreen(
                                     OutlinedTextField(
                                         value = titleInput,
                                         onValueChange = { titleInput = it.take(40) },
-                                        label = { Text("Title (e.g. Notes)") },
+                                        label = { Text(if (isCalcDisguise) "Title (e.g. Calculator)" else "Title (e.g. Notes)") },
                                         singleLine = true,
                                         modifier = Modifier.fillMaxWidth()
                                     )
                                     OutlinedTextField(
                                         value = textInput,
                                         onValueChange = { textInput = it.take(80) },
-                                        label = { Text("Text (e.g. Checklist item updated)") },
+                                        label = { Text(if (isCalcDisguise) "Text (e.g. Calculation history updated)" else "Text (e.g. Checklist item updated)") },
                                         singleLine = true,
                                         modifier = Modifier.fillMaxWidth()
                                     )
@@ -1113,12 +1361,12 @@ fun ProfileScreen(
                                     ) {
                                         Column(modifier = Modifier.padding(12.dp)) {
                                             Text(
-                                                titleInput.ifBlank { com.example.security.SecurityPreferences.DEFAULT_MASKED_TITLE },
+                                                titleInput.ifBlank { if (isCalcDisguise) "Calculator" else com.example.security.SecurityPreferences.DEFAULT_MASKED_TITLE },
                                                 fontWeight = FontWeight.SemiBold,
                                                 fontSize = 13.sp
                                             )
                                             Text(
-                                                textInput.ifBlank { com.example.security.SecurityPreferences.DEFAULT_MASKED_TEXT },
+                                                textInput.ifBlank { if (isCalcDisguise) "Calculation history updated" else com.example.security.SecurityPreferences.DEFAULT_MASKED_TEXT },
                                                 fontSize = 12.sp,
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                                             )
@@ -1128,17 +1376,17 @@ fun ProfileScreen(
                             },
                             confirmButton = {
                                 TextButton(onClick = {
-                                    maskPrefs.setMaskedNotificationText(titleInput, textInput)
-                                    maskedTitle = maskPrefs.getMaskedNotificationTitle()
-                                    maskedText = maskPrefs.getMaskedNotificationText()
+                                    maskPrefs.setMaskedNotificationText(titleInput, textInput, uiState.disguiseStyle)
+                                    maskedTitle = maskPrefs.getMaskedNotificationTitle(uiState.disguiseStyle)
+                                    maskedText = maskPrefs.getMaskedNotificationText(uiState.disguiseStyle)
                                     showMaskedEditor = false
                                 }) { Text("Save") }
                             },
                             dismissButton = {
                                 TextButton(onClick = {
-                                    maskPrefs.setMaskedNotificationText("", "")
-                                    maskedTitle = maskPrefs.getMaskedNotificationTitle()
-                                    maskedText = maskPrefs.getMaskedNotificationText()
+                                    maskPrefs.setMaskedNotificationText("", "", uiState.disguiseStyle)
+                                    maskedTitle = maskPrefs.getMaskedNotificationTitle(uiState.disguiseStyle)
+                                    maskedText = maskPrefs.getMaskedNotificationText(uiState.disguiseStyle)
                                     showMaskedEditor = false
                                 }) { Text("Reset") }
                             }
@@ -2738,11 +2986,19 @@ fun ProfileScreen(
     if (showSetPasscodeDialog) {
         CherishAlertDialog(
             onDismissRequest = { showSetPasscodeDialog = false },
-            title = { Text("Set Secret Trigger Word") },
+            title = {
+                Text(
+                    if (uiState.disguiseStyle == SecurityPreferences.DISGUISE_STYLE_CALCULATOR)
+                        "Set Calculator Passcode"
+                    else "Set Secret Trigger Word"
+                )
+            },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text(
-                        "Set your private trigger word. Typing this into the Notes search bar will immediately open Secret Chat without showing the word.",
+                        if (uiState.disguiseStyle == SecurityPreferences.DISGUISE_STYLE_CALCULATOR)
+                            "Enter the secret passcode or PIN. In the Calculator, typing this and tapping '=' (or holding '=') will reveal Cherish."
+                        else "Set your private trigger word. Typing this into the Notes search bar will immediately open Secret Chat without showing the word.",
                         fontSize = 13.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -2753,7 +3009,13 @@ fun ProfileScreen(
                                 newPasscodeText = it
                             }
                         },
-                        label = { Text("Secret Trigger Word (e.g. love)") },
+                        label = {
+                            Text(
+                                if (uiState.disguiseStyle == SecurityPreferences.DISGUISE_STYLE_CALCULATOR)
+                                    "Passcode / PIN (e.g. 1234 or love)"
+                                else "Secret Trigger Word (e.g. love)"
+                            )
+                        },
                         visualTransformation = if (isDialogPasscodeRevealed) VisualTransformation.None else PasswordVisualTransformation(),
                         trailingIcon = {
                             IconButton(onClick = { isDialogPasscodeRevealed = !isDialogPasscodeRevealed }) {
@@ -2772,13 +3034,17 @@ fun ProfileScreen(
                 CherishButton(
                     onClick = {
                         if (newPasscodeText.isNotBlank()) {
-                            viewModel.setDisguisePasscode(newPasscodeText)
+                            if (uiState.disguiseStyle == SecurityPreferences.DISGUISE_STYLE_CALCULATOR) {
+                                viewModel.setCalculatorPasscode(newPasscodeText)
+                            } else {
+                                viewModel.setDisguisePasscode(newPasscodeText)
+                            }
                             showSetPasscodeDialog = false
                         }
                     },
                     enabled = newPasscodeText.length >= 2
                 ) {
-                    Text("Save Trigger Word")
+                    Text(if (uiState.disguiseStyle == SecurityPreferences.DISGUISE_STYLE_CALCULATOR) "Save Passcode" else "Save Trigger Word")
                 }
             },
             dismissButton = {

@@ -92,9 +92,14 @@ fun HomeScreen(
         uiState.isPartnerHeartTouching
 
     var showHeartbeatTouch by remember { mutableStateOf(false) }
+    var userDismissedHeartbeatTouch by remember { mutableStateOf(false) }
     // The partner started Heartbeat Touch: open it so it can be felt together
     LaunchedEffect(isPartnerTouching) {
-        if (isPartnerTouching) showHeartbeatTouch = true
+        if (!isPartnerTouching) {
+            userDismissedHeartbeatTouch = false
+        } else if (!userDismissedHeartbeatTouch) {
+            showHeartbeatTouch = true
+        }
     }
     val currentUser = uiState.currentUser
     val partner = uiState.partnerUser
@@ -255,7 +260,10 @@ fun HomeScreen(
             if (chatViewModel != null) {
                 HeartbeatButton(
                     isPartnerTouching = isPartnerTouching,
-                    onOpenHeartbeatTouch = { showHeartbeatTouch = true },
+                    onOpenHeartbeatTouch = {
+                        userDismissedHeartbeatTouch = false
+                        showHeartbeatTouch = true
+                    },
                     onSendThinkingOfYou = { chatViewModel.sendThinkingOfYou() }
                 )
             }
@@ -335,7 +343,9 @@ fun HomeScreen(
                     email = currentUser?.email,
                     timeZone = myTz,
                     notificationStatus = currentUser?.notificationStatus,
-                    notificationPermission = currentUser?.notificationPermission ?: true
+                    notificationPermission = currentUser?.notificationPermission ?: true,
+                    isDisguiseEnabled = homeApp.securityPreferences.isDisguiseModeEnabled(),
+                    disguiseStyle = homeApp.securityPreferences.getDisguiseStyle()
                 )
             val partnerPerson = LovePerson(
                     id = partnerId,
@@ -350,7 +360,9 @@ fun HomeScreen(
                     email = partner?.email?.ifBlank { null } ?: currentUser?.partnerEmail,
                     timeZone = effectivePartnerTz,
                     notificationStatus = partner?.notificationStatus,
-                    notificationPermission = partner?.notificationPermission ?: true
+                    notificationPermission = partner?.notificationPermission ?: true,
+                    isDisguiseEnabled = partner?.isDisguiseEnabled ?: true,
+                    disguiseStyle = partner?.disguiseStyle ?: "notes"
                 )
             BothOfUsCard(
                 me = mePerson,
@@ -916,7 +928,10 @@ fun HomeScreen(
             isPartnerOnline = chatPartnerPresence?.isOnline == true || chatState?.isPartnerOnline == true || isOnline,
             onTouchChanged = { chatViewModel.setHeartbeatTouch(it) },
             onSyncHeartbeatStreak = { chatViewModel.syncHeartbeatStreak() },
-            onDismiss = { showHeartbeatTouch = false }
+            onDismiss = {
+                showHeartbeatTouch = false
+                userDismissedHeartbeatTouch = true
+            }
         )
     }
 

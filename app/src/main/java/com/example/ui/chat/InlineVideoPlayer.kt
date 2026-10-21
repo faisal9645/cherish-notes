@@ -59,12 +59,66 @@ import com.example.ui.components.CherishButton
 import com.example.ui.components.CherishTonalButton
 import com.example.ui.components.pressScaleTarget
 import com.example.ui.components.springClickable
+import java.net.HttpURLConnection
+import java.net.URL
+import org.json.JSONObject
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 object YouTubeHelper {
     private val YOUTUBE_REGEX = Regex(
         """(?:https?://)?(?:www\.|m\.)?(?:youtube\.com/(?:watch\?(?:.*&)?v=|shorts/|embed/|live/|v/)|youtu\.be/)([a-zA-Z0-9_-]{11})""",
         RegexOption.IGNORE_CASE
     )
+
+    data class YouTubeMetadata(
+        val title: String,
+        val authorName: String? = null
+    )
+
+    private val metadataCache = java.util.concurrent.ConcurrentHashMap<String, YouTubeMetadata>()
+
+    fun getCachedMetadata(context: Context, videoId: String): YouTubeMetadata? {
+        metadataCache[videoId]?.let { return it }
+        val prefs = context.getSharedPreferences("cherish_yt_meta", Context.MODE_PRIVATE)
+        val title = prefs.getString("${videoId}_title", null) ?: return null
+        val author = prefs.getString("${videoId}_author", null)
+        val meta = YouTubeMetadata(title, author)
+        metadataCache[videoId] = meta
+        return meta
+    }
+
+    suspend fun fetchMetadata(context: Context, videoId: String): YouTubeMetadata? = withContext(Dispatchers.IO) {
+        getCachedMetadata(context, videoId)?.let { return@withContext it }
+        try {
+            val endpoint = "https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=$videoId&format=json"
+            val conn = (URL(endpoint).openConnection() as HttpURLConnection).apply {
+                requestMethod = "GET"
+                connectTimeout = 4000
+                readTimeout = 4000
+                setRequestProperty("User-Agent", "Mozilla/5.0")
+                instanceFollowRedirects = true
+            }
+            if (conn.responseCode == 200) {
+                val jsonStr = conn.inputStream.bufferedReader().use { it.readText() }
+                val json = JSONObject(jsonStr)
+                val title = json.optString("title").trim()
+                val author = json.optString("author_name").trim().takeIf { it.isNotBlank() }
+                if (title.isNotBlank()) {
+                    val meta = YouTubeMetadata(title = title, authorName = author)
+                    metadataCache[videoId] = meta
+                    val prefs = context.getSharedPreferences("cherish_yt_meta", Context.MODE_PRIVATE)
+                    prefs.edit()
+                        .putString("${videoId}_title", title)
+                        .putString("${videoId}_author", author)
+                        .apply()
+                    return@withContext meta
+                }
+            }
+            conn.disconnect()
+        } catch (_: Exception) {}
+        null
+    }
 
     fun extractVideoId(text: String): String? {
         val match = YOUTUBE_REGEX.find(text)
@@ -374,6 +428,19 @@ fun InlineYouTubeCard(
 ) {
     val context = LocalContext.current
     var isPlayingInline by remember { mutableStateOf(false) }
+    var metadata by remember(videoId) {
+        mutableStateOf(YouTubeHelper.getCachedMetadata(context, videoId))
+    }
+
+    LaunchedEffect(videoId) {
+        if (metadata == null) {
+            val fetched = YouTubeHelper.fetchMetadata(context, videoId)
+            if (fetched != null) {
+                metadata = fetched
+            }
+        }
+    }
+
     // Nothing keeps playing behind Notes once the chat hides
     val isDisguised by com.example.security.SecurityPreferences.getInstance(context).isDisguiseActive.collectAsState()
     LaunchedEffect(isDisguised) { if (isDisguised) isPlayingInline = false }
@@ -401,20 +468,21 @@ fun InlineYouTubeCard(
             .clip(RoundedCornerShape(16.dp))
     ) {
         Column(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))) {
-            // Header Bar
-            Row(
+            // Header Bar & Title (Telegram style: Provider badge + Title + Action buttons)
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(Graphite850)
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically
+                    .padding(horizontal = 12.dp, vertical = 8.dp)
             ) {
-                // The title gives way (ends in "…") so the buttons always keep their room
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     Box(
                         modifier = Modifier
-                            .size(22.dp)
-                            .clip(RoundedCornerShape(8.dp))
+                            .size(20.dp)
+                            .clip(RoundedCornerShape(6.dp))
                             .background(Color.Red),
                         contentAlignment = Alignment.Center
                     ) {
@@ -422,57 +490,87 @@ fun InlineYouTubeCard(
                             imageVector = Icons.Rounded.PlayArrow,
                             contentDescription = null,
                             tint = Color.White,
-                            modifier = Modifier.size(15.dp)
+                            modifier = Modifier.size(13.dp)
                         )
                     }
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "YouTube Player",
-                        color = Color.White,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
+                        text = metadata?.authorName?.let { "$it • YouTube" } ?: "YouTube",
+                        color = Color.White.copy(alpha = 0.75f),
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
                         maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
                     )
+
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    // Same-size round buttons, each tappable only where it's drawn
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        // Expand full screen icon on top with other icons
+                        CardHeaderButton(
+                            icon = Icons.Rounded.Fullscreen,
+                            contentDescription = "Expand Fullscreen Theater",
+                            iconSize = 20.dp,
+                            modifier = Modifier.testTag("youtube_expand_fullscreen"),
+                            onClick = {
+                                isPlayingInline = false
+                                onOpenTheater(videoId)
+                            }
+                        )
+
+                        // Open the video in the YouTube app (or the browser without it)
+                        CardHeaderButton(
+                            icon = Icons.AutoMirrored.Rounded.OpenInNew,
+                            contentDescription = "Open in YouTube app",
+                            iconSize = 16.dp,
+                            modifier = Modifier.testTag("youtube_open_in_app"),
+                            onClick = {
+                                isPlayingInline = false
+                                YouTubeHelper.openInYouTube(context, videoId)
+                            }
+                        )
+                        CardHeaderButton(
+                            icon = Icons.Rounded.BookmarkBorder,
+                            contentDescription = "Save to Watch Later",
+                            modifier = Modifier.testTag("youtube_watch_later"),
+                            onClick = {
+                                val app = context.applicationContext as com.example.CherishApplication
+                                app.coupleFeaturesRepository.addWatchLaterVideo(
+                                    videoId,
+                                    metadata?.title ?: "Saved from chat"
+                                )
+                                CherishToast.show("Saved to Watch Later list")
+                            }
+                        )
+                        if (isPlayingInline) {
+                            CardHeaderButton(
+                                icon = Icons.Rounded.Close,
+                                contentDescription = "Close player",
+                                iconSize = 16.dp,
+                                modifier = Modifier.testTag("youtube_close_inline"),
+                                onClick = { isPlayingInline = false }
+                            )
+                        }
+                    }
                 }
 
-                Spacer(modifier = Modifier.width(8.dp))
-
-                // Same-size round buttons, each tappable only where it's drawn
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    // Open the video in the YouTube app (or the browser without it)
-                    CardHeaderButton(
-                        icon = Icons.AutoMirrored.Rounded.OpenInNew,
-                        contentDescription = "Open in YouTube app",
-                        iconSize = 16.dp,
-                        modifier = Modifier.testTag("youtube_open_in_app"),
-                        onClick = {
-                            isPlayingInline = false
-                            YouTubeHelper.openInYouTube(context, videoId)
-                        }
+                val title = metadata?.title
+                if (!title.isNullOrBlank()) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = title,
+                        color = Color.White,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        lineHeight = 17.sp,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
                     )
-                    CardHeaderButton(
-                        icon = Icons.Rounded.BookmarkBorder,
-                        contentDescription = "Save to Watch Later",
-                        modifier = Modifier.testTag("youtube_watch_later"),
-                        onClick = {
-                            val app = context.applicationContext as com.example.CherishApplication
-                            app.coupleFeaturesRepository.addWatchLaterVideo(videoId, "Saved from chat")
-                            CherishToast.show("Saved to Watch Later list")
-                        }
-                    )
-                    if (isPlayingInline) {
-                        CardHeaderButton(
-                            icon = Icons.Rounded.Close,
-                            contentDescription = "Close player",
-                            iconSize = 16.dp,
-                            modifier = Modifier.testTag("youtube_close_inline"),
-                            onClick = { isPlayingInline = false }
-                        )
-                    }
                 }
             }
 
@@ -565,7 +663,11 @@ fun InlineYouTubeCard(
                                 onClick = {
                                     // Watched together instead: the party's theater opens, this card stops
                                     val cherishApp = context.applicationContext as? com.example.CherishApplication
-                                    cherishApp?.coupleFeaturesRepository?.startWatchParty(videoId, "Shared video", "")
+                                    cherishApp?.coupleFeaturesRepository?.startWatchParty(
+                                        videoId,
+                                        metadata?.title ?: "Shared video",
+                                        ""
+                                    )
                                     isPlayingInline = false
                                     com.example.ui.watchparty.WatchPartyUi.openTheater()
                                 },

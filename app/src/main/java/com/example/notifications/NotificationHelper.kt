@@ -26,16 +26,22 @@ import java.util.concurrent.atomic.AtomicInteger
  * and single-notification consolidation (prevents multiple spam notifications).
  */
 object NotificationHelper {
-    // The partner's messages ring with their own soft chime (the same bells as the chat's "received"
-    // sound), so it's them without looking; a channel's sound is set once, hence the new id
-    const val CHANNEL_MESSAGES_ID = "notes_sync_channel_v4"
+    // Notifications use the system default notification sound
+    const val CHANNEL_MESSAGES_ID = "notes_sync_channel_v5"
     private const val CHANNEL_MESSAGES_NAME = "Notes & Messages"
-    // From 11 PM (see NightCalm): the same chime, quieter and gentler, and a lighter buzz
-    const val CHANNEL_MESSAGES_NIGHT_ID = "notes_sync_night_v1"
+    // From 11 PM (see NightCalm): lighter vibration pattern
+    const val CHANNEL_MESSAGES_NIGHT_ID = "notes_sync_night_v2"
     private const val CHANNEL_MESSAGES_NIGHT_NAME = "Notes & Messages (night)"
     const val CHANNEL_REMINDERS_ID = "notes_reminders_channel_v2"
     private const val CHANNEL_REMINDERS_NAME = "Note Reminders"
-    private val OLD_CHANNEL_IDS = listOf("notes_sync_channel", "notes_reminders_channel", "notes_sync_channel_v2", "notes_sync_channel_v3")
+    private val OLD_CHANNEL_IDS = listOf(
+        "notes_sync_channel",
+        "notes_reminders_channel",
+        "notes_sync_channel_v2",
+        "notes_sync_channel_v3",
+        "notes_sync_channel_v4",
+        "notes_sync_night_v1"
+    )
     @Volatile private var oldChannelsRemoved = false
     const val NOTIFICATION_ID_MESSAGE = 1001
 
@@ -45,7 +51,10 @@ object NotificationHelper {
 
     fun getAppIconBitmap(context: Context): Bitmap? {
         return try {
-            val drawable = ContextCompat.getDrawable(context, R.mipmap.ic_launcher) ?: return null
+            val prefs = SecurityPreferences.getInstance(context)
+            val isCalc = prefs.isDisguiseModeEnabled() && prefs.getDisguiseStyle() == SecurityPreferences.DISGUISE_STYLE_CALCULATOR
+            val resId = if (isCalc) R.drawable.ic_samsung_calculator else R.mipmap.ic_launcher
+            val drawable = ContextCompat.getDrawable(context, resId) ?: return null
             if (drawable is BitmapDrawable) {
                 drawable.bitmap
             } else {
@@ -66,17 +75,16 @@ object NotificationHelper {
     fun messagesChannelId(): String =
         if (com.example.util.NightCalm.isNight()) CHANNEL_MESSAGES_NIGHT_ID else CHANNEL_MESSAGES_ID
 
-    /** Their chime ([night]: the softer one). */
-    private fun chimeUri(context: Context, night: Boolean): android.net.Uri =
-        android.net.Uri.parse(
-            "android.resource://${context.packageName}/" + (if (night) R.raw.partner_chime_night else R.raw.partner_chime)
-        )
+    /** System default notification sound. */
+    private fun systemNotificationSoundUri(): android.net.Uri =
+        android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_NOTIFICATION)
+            ?: Settings.System.DEFAULT_NOTIFICATION_URI
 
     fun createNotificationChannels(context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             // Shown on the lock screen; when the phone hides notification content there, each
             // notification's masked public version is what shows (see lockScreenVersion)
-            val soundUri = android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_NOTIFICATION)
+            val soundUri = systemNotificationSoundUri()
             val audioAttributes = android.media.AudioAttributes.Builder()
                 .setUsage(android.media.AudioAttributes.USAGE_NOTIFICATION_COMMUNICATION_INSTANT)
                 .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SONIFICATION)
@@ -92,7 +100,7 @@ object NotificationHelper {
                 vibrationPattern = longArrayOf(0, 250, 200, 250)
                 enableLights(true)
                 setShowBadge(true)
-                setSound(chimeUri(context, night = false), audioAttributes)
+                setSound(soundUri, audioAttributes)
                 lockscreenVisibility = android.app.Notification.VISIBILITY_PRIVATE
             }
 
@@ -106,7 +114,7 @@ object NotificationHelper {
                 vibrationPattern = longArrayOf(0, 140)
                 enableLights(true)
                 setShowBadge(true)
-                setSound(chimeUri(context, night = true), audioAttributes)
+                setSound(soundUri, audioAttributes)
                 lockscreenVisibility = android.app.Notification.VISIBILITY_PRIVATE
             }
 
@@ -124,13 +132,13 @@ object NotificationHelper {
             }
 
             val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
-            manager?.createNotificationChannel(messagesChannel)
-            manager?.createNotificationChannel(nightMessagesChannel)
-            manager?.createNotificationChannel(remindersChannel)
             if (!oldChannelsRemoved) {
                 oldChannelsRemoved = true
                 OLD_CHANNEL_IDS.forEach { id -> runCatching { manager?.deleteNotificationChannel(id) } }
             }
+            manager?.createNotificationChannel(messagesChannel)
+            manager?.createNotificationChannel(nightMessagesChannel)
+            manager?.createNotificationChannel(remindersChannel)
         }
     }
 
@@ -138,13 +146,15 @@ object NotificationHelper {
      * What a locked phone shows instead of [channelId]'s notification when the phone hides
      * notification content on the lock screen: the app's own masked words, never who or what.
      */
-    private fun lockScreenVersion(context: Context, channelId: String, prefs: SecurityPreferences): android.app.Notification =
-        NotificationCompat.Builder(context, channelId)
-            .setSmallIcon(R.drawable.ic_stat_notes)
-            .setColor(0xFF2563FF.toInt())
+    private fun lockScreenVersion(context: Context, channelId: String, prefs: SecurityPreferences): android.app.Notification {
+        val isCalc = prefs.isDisguiseModeEnabled() && prefs.getDisguiseStyle() == SecurityPreferences.DISGUISE_STYLE_CALCULATOR
+        return NotificationCompat.Builder(context, channelId)
+            .setSmallIcon(if (isCalc) R.drawable.ic_stat_calculator else R.drawable.ic_stat_notes)
+            .setColor(if (isCalc) 0xFF2E7D32.toInt() else 0xFF2563FF.toInt())
             .setContentTitle(prefs.getMaskedNotificationTitle())
             .setContentText(prefs.getMaskedNotificationText())
             .build()
+    }
 
     /**
      * Check if user is actively inside the Cherish app so notifications never show
@@ -339,6 +349,7 @@ object NotificationHelper {
         )
 
         // When hide notification content is OFF, behave like normal chat app notifications
+        val isCalc = prefs.isDisguiseModeEnabled() && prefs.getDisguiseStyle() == SecurityPreferences.DISGUISE_STYLE_CALCULATOR
         val maskedTitle = prefs.getMaskedNotificationTitle()
         val maskedText = prefs.getMaskedNotificationText()
         val displayTitle = if (isDiscreet) maskedTitle else senderName.ifBlank { "Your Partner" }
@@ -347,23 +358,26 @@ object NotificationHelper {
         } else {
             messageText.ifBlank { "New message" }
         }
-        val subText = if (isDiscreet || maskedTitle.equals("Notes", ignoreCase = true)) null else "Cherish"
+        val subText = if (isDiscreet || maskedTitle.equals("Notes", ignoreCase = true) || maskedTitle.equals("Calculator", ignoreCase = true)) null else "Cherish"
 
         val appIcon = getAppIconBitmap(context)
 
         // Ensure channel is created before building the notification so it never drops
         createNotificationChannels(context)
 
+        val smallIconRes = if (isDiscreet && isCalc) R.drawable.ic_stat_calculator else R.drawable.ic_stat_notes
+        val accentColor = if (isDiscreet && isCalc) 0xFF2E7D32.toInt() else 0xFF2563FF.toInt()
+
         val notificationBuilder = NotificationCompat.Builder(context, messagesChannelId())
-            .setSmallIcon(R.drawable.ic_stat_notes)
+            .setSmallIcon(smallIconRes)
             .apply {
                 if (appIcon != null) setLargeIcon(appIcon)
             }
-            .setColor(0xFF2563FF.toInt())
+            .setColor(accentColor)
             .setContentTitle(displayTitle)
             .setContentText(displayText)
             .apply {
-                if (!subText.isNullOrBlank() && !subText.equals("Notes", ignoreCase = true)) {
+                if (!subText.isNullOrBlank() && !subText.equals("Notes", ignoreCase = true) && !subText.equals("Calculator", ignoreCase = true)) {
                     setSubText(subText)
                 }
             }
@@ -382,8 +396,8 @@ object NotificationHelper {
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(NotificationCompat.CATEGORY_MESSAGE)
             .setDefaults(NotificationCompat.DEFAULT_LIGHTS)
-            // Before Android 8 (no channels): their chime, softer at night
-            .setSound(chimeUri(context, night = com.example.util.NightCalm.isNight()))
+            // Default system notification sound
+            .setSound(systemNotificationSoundUri())
             .setVibrate(if (com.example.util.NightCalm.isNight()) longArrayOf(0, 140) else longArrayOf(0, 250, 200, 250))
             // On the lock screen too (masked there when the phone hides notification content)
             .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
@@ -441,11 +455,12 @@ object NotificationHelper {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
+        val isCalc = prefs.isDisguiseModeEnabled() && prefs.getDisguiseStyle() == SecurityPreferences.DISGUISE_STYLE_CALCULATOR
         val maskedTitle = prefs.getMaskedNotificationTitle()
         val maskedText = prefs.getMaskedNotificationText()
         val displayTitle = if (isDiscreet) maskedTitle else "Thinking of you"
         val displayText = if (isDiscreet) maskedText else "Sent a heartbeat \uD83D\uDC93"
-        val subText = if (isDiscreet || maskedTitle.equals("Notes", ignoreCase = true)) null else "Cherish"
+        val subText = if (isDiscreet || maskedTitle.equals("Notes", ignoreCase = true) || maskedTitle.equals("Calculator", ignoreCase = true)) null else "Cherish"
 
         val isBadgeEnabled = prefs.isBadgeNotificationEnabled()
         val appIcon = getAppIconBitmap(context)
@@ -460,12 +475,15 @@ object NotificationHelper {
         }
         isNotificationAlertTriggered.set(true)
 
+        val smallIconRes = if (isDiscreet && isCalc) R.drawable.ic_stat_calculator else R.drawable.ic_stat_notes
+        val accentColor = if (isDiscreet && isCalc) 0xFF2E7D32.toInt() else 0xFF2563FF.toInt()
+
         val notification = NotificationCompat.Builder(context, messagesChannelId())
-            .setSmallIcon(R.drawable.ic_stat_notes)
+            .setSmallIcon(smallIconRes)
             .apply {
                 if (appIcon != null) setLargeIcon(appIcon)
             }
-            .setColor(0xFF2563FF.toInt())
+            .setColor(accentColor)
             .setContentTitle(displayTitle)
             .setContentText(displayText)
             .apply {
@@ -524,19 +542,23 @@ object NotificationHelper {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
+        val isCalc = prefs.isDisguiseModeEnabled() && prefs.getDisguiseStyle() == SecurityPreferences.DISGUISE_STYLE_CALCULATOR
         val maskedTitle = prefs.getMaskedNotificationTitle()
         val maskedText = prefs.getMaskedNotificationText()
         val displayTitle = if (isDiscreet) maskedTitle else "Heartbeat Felt"
         val displayText = if (isDiscreet) maskedText else "Your partner felt your heartbeat \uD83D\uDC93"
-        val subText = if (isDiscreet || maskedTitle.equals("Notes", ignoreCase = true)) null else "Cherish"
+        val subText = if (isDiscreet || maskedTitle.equals("Notes", ignoreCase = true) || maskedTitle.equals("Calculator", ignoreCase = true)) null else "Cherish"
 
         val appIcon = getAppIconBitmap(context)
+        val smallIconRes = if (isDiscreet && isCalc) R.drawable.ic_stat_calculator else R.drawable.ic_stat_notes
+        val accentColor = if (isDiscreet && isCalc) 0xFF2E7D32.toInt() else 0xFF2563FF.toInt()
+
         val notification = NotificationCompat.Builder(context, messagesChannelId())
-            .setSmallIcon(R.drawable.ic_stat_notes)
+            .setSmallIcon(smallIconRes)
             .apply {
                 if (appIcon != null) setLargeIcon(appIcon)
             }
-            .setColor(0xFF2563FF.toInt())
+            .setColor(accentColor)
             .setContentTitle(displayTitle)
             .setContentText(displayText)
             .apply {
@@ -696,20 +718,24 @@ object NotificationHelper {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
+        val isCalc = isDisguised && prefs.getDisguiseStyle() == SecurityPreferences.DISGUISE_STYLE_CALCULATOR
         val displayTitle = if (isDisguised) prefs.getMaskedNotificationTitle() else "It's time to check"
         val displayText = if (isDisguised) {
-            "Reminder schedule completed"
+            if (isCalc) "Calculation history updated" else "Reminder schedule completed"
         } else {
             "$partnerName's check-after time has arrived"
         }
 
         val appIcon = getAppIconBitmap(context)
+        val smallIconRes = if (isCalc) R.drawable.ic_stat_calculator else R.drawable.ic_stat_notes
+        val accentColor = if (isCalc) 0xFF2E7D32.toInt() else 0xFF2563FF.toInt()
+
         val notification = NotificationCompat.Builder(context, messagesChannelId())
-            .setSmallIcon(R.drawable.ic_stat_notes)
+            .setSmallIcon(smallIconRes)
             .apply {
                 if (appIcon != null) setLargeIcon(appIcon)
             }
-            .setColor(0xFF2563FF.toInt())
+            .setColor(accentColor)
             .setContentTitle(displayTitle)
             .setContentText(displayText)
             .apply {

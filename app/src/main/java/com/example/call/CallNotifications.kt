@@ -114,10 +114,12 @@ object CallNotifications {
         decline: PendingIntent? = null,
         fullScreen: PendingIntent? = null,
         timeoutMs: Long = 0L
-    ): Notification =
-        NotificationCompat.Builder(context, channelId)
-            .setSmallIcon(R.drawable.ic_stat_notes)
-            .setColor(ACCENT)
+    ): Notification {
+        val prefs = SecurityPreferences.getInstance(context)
+        val isCalc = prefs.isDisguiseModeEnabled() && prefs.getDisguiseStyle() == SecurityPreferences.DISGUISE_STYLE_CALCULATOR
+        return NotificationCompat.Builder(context, channelId)
+            .setSmallIcon(if (isCalc) R.drawable.ic_stat_calculator else R.drawable.ic_stat_notes)
+            .setColor(if (isCalc) 0xFF2E7D32.toInt() else ACCENT)
             .setContentTitle(title)
             .setContentText(text)
             .apply {
@@ -134,6 +136,7 @@ object CallNotifications {
                 if (answer != null) addAction(0, "Answer", answer)
             }
             .build()
+    }
 
     /** The call whose ringing notification is up, and the call that was quietened (a volume key). */
     @Volatile private var shownCallId: String? = null
@@ -212,6 +215,7 @@ object CallNotifications {
         val notification = if (isMasked) {
             // Discreet: the disguised alert. It opens Notes; the call screen shows once Cherish is
             // unlocked, and answering from it asks to unlock the phone first
+            val isCalc = prefs.isDisguiseModeEnabled() && prefs.getDisguiseStyle() == SecurityPreferences.DISGUISE_STYLE_CALCULATOR
             val maskedTitle = prefs.getMaskedNotificationTitle()
             val maskedText = prefs.getMaskedNotificationText()
             val openNotesIntent = PendingIntent.getActivity(
@@ -226,15 +230,15 @@ object CallNotifications {
                 immutableFlags()
             )
             NotificationCompat.Builder(context, channelId)
-                .setSmallIcon(R.drawable.ic_stat_notes)
+                .setSmallIcon(if (isCalc) R.drawable.ic_stat_calculator else R.drawable.ic_stat_notes)
                 .apply {
                     if (appIcon != null) setLargeIcon(appIcon)
                 }
-                .setColor(ACCENT)
+                .setColor(if (isCalc) 0xFF2E7D32.toInt() else ACCENT)
                 .setContentTitle(maskedTitle)
                 .setContentText(maskedText)
                 .apply {
-                    if (!maskedTitle.equals("Notes", ignoreCase = true)) {
+                    if (!maskedTitle.equals("Notes", ignoreCase = true) && !maskedTitle.equals("Calculator", ignoreCase = true)) {
                         setSubText(maskedTitle)
                     }
                 }
@@ -415,12 +419,13 @@ object CallNotifications {
             },
             immutableFlags()
         )
+        val isCalc = isMasked && prefs.getDisguiseStyle() == SecurityPreferences.DISGUISE_STYLE_CALCULATOR
         val title = if (isMasked) prefs.getMaskedNotificationTitle() else NEUTRAL_MISSED
         val text = if (isMasked) prefs.getMaskedNotificationText() else if (showIdentity && !callerName.isNullOrBlank()) "From $callerName" else "Tap to open"
         val isRinging = prefs.isCallRingingEnabled()
         val notification = NotificationCompat.Builder(context, CHANNEL_MISSED)
-            .setSmallIcon(R.drawable.ic_stat_notes)
-            .setColor(ACCENT)
+            .setSmallIcon(if (isCalc) R.drawable.ic_stat_calculator else R.drawable.ic_stat_notes)
+            .setColor(if (isCalc) 0xFF2E7D32.toInt() else ACCENT)
             .setContentTitle(title)
             .setContentText(text)
             .apply {

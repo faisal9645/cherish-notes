@@ -153,6 +153,25 @@ class CherishApplication : Application(), coil.ImageLoaderFactory {
 
         securityPreferences = SecurityPreferences.getInstance(this)
         securityPreferences.ensurePreferencesMigrated(BuildConfig.VERSION_CODE)
+
+        // Safety rescue: Ensure MainActivity was never disabled by an older build
+        try {
+            val pm = packageManager
+            val mainComp = android.content.ComponentName(this, "com.example.MainActivity")
+            val currentState = pm.getComponentEnabledSetting(mainComp)
+            if (currentState == android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DISABLED) {
+                pm.setComponentEnabledSetting(
+                    mainComp,
+                    android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
+                    android.content.pm.PackageManager.DONT_KILL_APP
+                )
+            }
+        } catch (_: Throwable) {}
+
+        // Reconcile launcher icon asynchronously without interrupting cold start
+        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+            securityPreferences.syncLauncherIcon()
+        }
         notesRepository = NotesRepository.getInstance(this)
         authRepository = AuthRepository(this)
         chatRepository = ChatRepository(this, authRepository)
@@ -208,12 +227,12 @@ class CherishApplication : Application(), coil.ImageLoaderFactory {
                 if (event == androidx.lifecycle.Lifecycle.Event.ON_STOP) {
                     // Leaving for a photo picker, the camera, full-screen player or call doesn't count
                     val leftForReal = !securityPreferences.ignoreNextPause &&
-                        !securityPreferences.ignoreChatNavigation &&
                         !securityPreferences.isExternalPickerActive &&
                         !securityPreferences.isTheaterModeActive &&
                         !securityPreferences.wasInCallRecently() &&
                         !com.example.call.CallManager.hasActiveCall() &&
                         !com.example.call.CallManager.isCallScreenVisible
+                    securityPreferences.ignoreChatNavigation = false
                     if (securityPreferences.isDisguiseModeEnabled() && leftForReal) {
                         securityPreferences.reDisguise()
                     }

@@ -39,8 +39,11 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.Bookmark
+import androidx.compose.material.icons.rounded.BookmarkBorder
 import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.CalendarToday
 import androidx.compose.material.icons.rounded.Call
@@ -221,6 +224,32 @@ fun SharedGalleryScreen(
     val isGalleryLoading by chatViewModel.isGalleryLoading.collectAsState()
     val isAllGalleryRecovered by (app?.securityPreferences?.isAllGalleryRecovered?.collectAsState() ?: remember { mutableStateOf(false) })
     val startOfToday = remember { com.example.CherishApplication.instance.chatRepository.getStartOfToday() }
+
+    val watchLaterItems by (app?.coupleFeaturesRepository?.watchLaterFlow ?: remember { kotlinx.coroutines.flow.MutableStateFlow(emptyList()) }).collectAsState()
+    var playedIds by remember { mutableStateOf(GalleryPlayedManager.getPlayedIds(context)) }
+
+    val markItemPlayed: (String) -> Unit = remember(context) {
+        { id ->
+            if (id.isNotBlank()) {
+                GalleryPlayedManager.setPlayed(context, id, true)
+                playedIds = GalleryPlayedManager.getPlayedIds(context)
+            }
+        }
+    }
+
+    val toggleItemPlayed: (String) -> Unit = remember(context) {
+        { id ->
+            if (id.isNotBlank()) {
+                val newState = GalleryPlayedManager.togglePlayed(context, id)
+                playedIds = GalleryPlayedManager.getPlayedIds(context)
+                if (newState) {
+                    CherishToast.show("Marked as Already played ✓")
+                } else {
+                    CherishToast.show("Marked as Not yet")
+                }
+            }
+        }
+    }
 
     LaunchedEffect(isAllGalleryRecovered) {
         if (isAllGalleryRecovered) {
@@ -568,7 +597,7 @@ fun SharedGalleryScreen(
                         if (pagerState.currentPage == 0 && shownMediaItems.isNotEmpty()) {
                             IconButton(
                                 onClick = {
-                                    if (gridColumnCount < 5) gridColumnCount++
+                                    if (gridColumnCount < 6) gridColumnCount++
                                 }
                             ) {
                                 Icon(
@@ -772,7 +801,7 @@ fun SharedGalleryScreen(
                             val configuration = LocalConfiguration.current
                             val screenWidthDp = configuration.screenWidthDp.toFloat() - 8f
                             val minColumns = 2
-                            val maxColumns = 5
+                            val maxColumns = 6
                             val minThumbnailSize = screenWidthDp / maxColumns
                             val maxThumbnailSize = screenWidthDp / minColumns
 
@@ -886,6 +915,8 @@ fun SharedGalleryScreen(
                                                             toggleSelection(item.id)
                                                         } else {
                                                             tileAnchor.open()
+                                                            markItemPlayed(item.id)
+                                                            markItemPlayed(item.messageId)
                                                             selectedMediaUrl = item.mediaUrl
                                                             selectedMessageIdForViewer = item.messageId
                                                         }
@@ -907,6 +938,39 @@ fun SharedGalleryScreen(
                                         )
 
                                         if (isVideoItem) {
+                                            val isVideoPlayed = remember(playedIds, item.id, item.messageId) {
+                                                playedIds.contains(item.id) || playedIds.contains(item.messageId)
+                                            }
+                                            Surface(
+                                                onClick = { toggleItemPlayed(item.id) },
+                                                shape = RoundedCornerShape(6.dp),
+                                                color = Color.Black.copy(alpha = 0.65f),
+                                                modifier = Modifier
+                                                    .align(Alignment.TopEnd)
+                                                    .padding(4.dp)
+                                            ) {
+                                                Row(
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                                                ) {
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .size(5.dp)
+                                                            .clip(CircleShape)
+                                                            .background(if (isVideoPlayed) Color(0xFF10B981) else Color(0xFFF59E0B))
+                                                    )
+                                                    if (!isCompactTile) {
+                                                        Spacer(modifier = Modifier.width(3.dp))
+                                                        Text(
+                                                            text = if (isVideoPlayed) "Played" else "Not yet",
+                                                            fontSize = 9.sp,
+                                                            fontWeight = FontWeight.Bold,
+                                                            color = Color.White
+                                                        )
+                                                    }
+                                                }
+                                            }
+
                                             // Center Play Indicator
                                             Box(
                                                 modifier = Modifier
@@ -1043,7 +1107,11 @@ fun SharedGalleryScreen(
                                 items(voiceMessages, key = { it.id }) { msg ->
                                     val isThisPlaying = (currentTrackId == msg.id && isVoicePlaying)
                                     val isThisActive = (currentTrackId == msg.id)
-                                    val duration = if (msg.durationSeconds > 0) msg.durationSeconds else 5
+                                    val duration = if (msg.durationSeconds > 0) msg.durationSeconds
+                                        else (com.example.audio.VoicePlayerHelper.getTrackDuration(msg.id).takeIf { it > 0 }
+                                            ?: Regex("""\((\d+)\s*s\)""").find(msg.text)?.groupValues?.get(1)?.toIntOrNull()
+                                            ?: (msg.waveform.size / 10).takeIf { it > 0 }
+                                            ?: 5)
 
                                     Surface(
                                         shape = RoundedCornerShape(16.dp),
@@ -1093,11 +1161,24 @@ fun SharedGalleryScreen(
                                                         fontSize = 13.sp,
                                                         color = MaterialTheme.colorScheme.onSurface
                                                     )
-                                                    Text(
-                                                        text = formatGalleryDateTime(msg.timestamp),
-                                                        fontSize = 11.sp,
-                                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                                    )
+                                                    Spacer(modifier = Modifier.height(2.dp))
+                                                    Row(
+                                                        verticalAlignment = Alignment.CenterVertically,
+                                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                                    ) {
+                                                        Text(
+                                                            text = formatGalleryDateTime(msg.timestamp),
+                                                            fontSize = 11.sp,
+                                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                        )
+                                                        val isVoicePlayed = remember(playedIds, msg.id, msg.isAudioPlayed) {
+                                                            msg.isAudioPlayed || playedIds.contains(msg.id)
+                                                        }
+                                                        PlayedStatusBadge(
+                                                            isPlayed = isVoicePlayed,
+                                                            onToggle = { toggleItemPlayed(msg.id) }
+                                                        )
+                                                    }
                                                 }
 
                                                 // Show in chat button
@@ -1142,6 +1223,7 @@ fun SharedGalleryScreen(
                                                 // Play / Pause Button
                                                 IconButton(
                                                     onClick = {
+                                                        markItemPlayed(msg.id)
                                                         msg.mediaUrl?.let { url ->
                                                             voicePlayerHelper.playAudio(msg.id, url)
                                                         }
@@ -1238,6 +1320,24 @@ fun SharedGalleryScreen(
                                 verticalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
                                 items(extractedLinks, key = { "${it.messageId}_${it.url}" }) { item ->
+                                    val ytVideoId = remember(item.url) {
+                                        com.example.ui.chat.YouTubeHelper.extractVideoId(item.url)
+                                    }
+                                    var ytTitle by remember(item.url, ytVideoId) {
+                                        mutableStateOf(ytVideoId?.let { com.example.ui.chat.YouTubeHelper.getCachedMetadata(context, it)?.title })
+                                    }
+                                    LaunchedEffect(item.url, ytVideoId) {
+                                        if (ytVideoId != null && ytTitle.isNullOrBlank()) {
+                                            val meta = com.example.ui.chat.YouTubeHelper.fetchMetadata(context, ytVideoId)
+                                            if (meta?.title?.isNotBlank() == true) {
+                                                ytTitle = meta.title
+                                            }
+                                        }
+                                    }
+                                    val cleanText = remember(item.messageText, item.url) {
+                                        item.messageText.replace(item.url, "").trim()
+                                    }
+
                                     Surface(
                                         shape = RoundedCornerShape(16.dp),
                                         color = MaterialTheme.colorScheme.surface,
@@ -1266,32 +1366,59 @@ fun SharedGalleryScreen(
                                                     )
                                                     Spacer(modifier = Modifier.width(10.dp))
                                                 }
-                                                // Domain icon badge (WhatsApp style)
+                                                // Domain icon / thumbnail badge (WhatsApp & Telegram style)
                                                 Box(
                                                     modifier = Modifier
-                                                        .size(42.dp)
+                                                        .size(46.dp)
                                                         .clip(RoundedCornerShape(12.dp))
-                                                        .background(getDomainBadgeColor(item.host).copy(alpha = 0.12f)),
+                                                        .background((if (ytVideoId != null) Color(0xFFFF0000) else getDomainBadgeColor(item.host)).copy(alpha = 0.12f)),
                                                     contentAlignment = Alignment.Center
                                                 ) {
-                                                    Icon(
-                                                        imageVector = getDomainIcon(item.host),
-                                                        contentDescription = null,
-                                                        tint = getDomainBadgeColor(item.host),
-                                                        modifier = Modifier.size(22.dp)
-                                                    )
+                                                    if (ytVideoId != null) {
+                                                        AsyncImage(
+                                                            model = com.example.ui.chat.YouTubeHelper.getThumbnailUrl(ytVideoId),
+                                                            contentDescription = "YouTube Thumbnail",
+                                                            contentScale = ContentScale.Crop,
+                                                            modifier = Modifier.fillMaxSize()
+                                                        )
+                                                    } else {
+                                                        Icon(
+                                                            imageVector = getDomainIcon(item.host),
+                                                            contentDescription = null,
+                                                            tint = getDomainBadgeColor(item.host),
+                                                            modifier = Modifier.size(22.dp)
+                                                        )
+                                                    }
                                                 }
 
                                                 Spacer(modifier = Modifier.width(12.dp))
 
                                                 Column(modifier = Modifier.weight(1f)) {
-                                                    // Domain Host in Bold
-                                                    Text(
-                                                        text = item.host.lowercase(),
-                                                        fontWeight = FontWeight.Bold,
-                                                        fontSize = 14.sp,
-                                                        color = MaterialTheme.colorScheme.onSurface
-                                                    )
+                                                    if (!ytTitle.isNullOrBlank()) {
+                                                        Text(
+                                                            text = ytTitle!!,
+                                                            fontWeight = FontWeight.Bold,
+                                                            fontSize = 14.sp,
+                                                            color = MaterialTheme.colorScheme.onSurface,
+                                                            maxLines = 2,
+                                                            overflow = TextOverflow.Ellipsis
+                                                        )
+                                                        Spacer(modifier = Modifier.height(2.dp))
+                                                        Text(
+                                                            text = "YouTube • ${item.host.lowercase()}",
+                                                            fontSize = 11.sp,
+                                                            fontWeight = FontWeight.SemiBold,
+                                                            color = Color(0xFFFF0000)
+                                                        )
+                                                    } else {
+                                                        // Domain Host in Bold
+                                                        Text(
+                                                            text = item.host.lowercase(),
+                                                            fontWeight = FontWeight.Bold,
+                                                            fontSize = 14.sp,
+                                                            color = MaterialTheme.colorScheme.onSurface
+                                                        )
+                                                    }
                                                     Spacer(modifier = Modifier.height(2.dp))
                                                     // Full URL in accent color (clickable)
                                                     Text(
@@ -1301,6 +1428,9 @@ fun SharedGalleryScreen(
                                                         maxLines = 1,
                                                         overflow = TextOverflow.Ellipsis,
                                                         modifier = Modifier.clickable {
+                                                            val playKey = ytVideoId ?: item.url
+                                                            markItemPlayed(playKey)
+                                                            markItemPlayed(item.messageId)
                                                             try {
                                                                 val intent = Intent(Intent.ACTION_VIEW, Uri.parse(item.url)).apply {
                                                                     flags = Intent.FLAG_ACTIVITY_NEW_TASK
@@ -1312,8 +1442,6 @@ fun SharedGalleryScreen(
                                                         }
                                                     )
 
-                                                    // Optional context message caption if text has more than just the url
-                                                    val cleanText = item.messageText.replace(item.url, "").trim()
                                                     val isSuppressed = cleanText.lowercase().let { it.contains("today") && (it.contains("start") || it.contains("satrt") || it.contains("6 am") || it.contains("6am") || it.contains("6:00")) }
                                                     if (cleanText.isNotBlank() && !isSuppressed) {
                                                         Spacer(modifier = Modifier.height(4.dp))
@@ -1328,12 +1456,28 @@ fun SharedGalleryScreen(
 
                                                     Spacer(modifier = Modifier.height(6.dp))
 
-                                                    // Meta info: Date & Time + Sender
-                                                    Text(
-                                                        text = "${formatGalleryDateTime(item.timestamp)} • Sent by ${item.senderName}",
-                                                        fontSize = 11.sp,
-                                                        color = Slate400
-                                                    )
+                                                    // Meta info: Date & Time + Sender and Played Status Badge
+                                                    Row(
+                                                        modifier = Modifier.fillMaxWidth(),
+                                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                                        verticalAlignment = Alignment.CenterVertically
+                                                    ) {
+                                                        Text(
+                                                            text = "${formatGalleryDateTime(item.timestamp)} • Sent by ${item.senderName}",
+                                                            fontSize = 11.sp,
+                                                            color = Slate400,
+                                                            modifier = Modifier.weight(1f, fill = false)
+                                                        )
+                                                        Spacer(modifier = Modifier.width(8.dp))
+                                                        val playKey = ytVideoId ?: item.url
+                                                        val isItemPlayed = remember(playedIds, item.messageId, playKey) {
+                                                            playedIds.contains(playKey) || playedIds.contains(item.messageId)
+                                                        }
+                                                        PlayedStatusBadge(
+                                                            isPlayed = isItemPlayed,
+                                                            onToggle = { toggleItemPlayed(playKey) }
+                                                        )
+                                                    }
                                                 }
                                             }
 
@@ -1342,15 +1486,21 @@ fun SharedGalleryScreen(
                                                 color = MaterialTheme.colorScheme.outlineVariant
                                             )
 
-                                            // Action Buttons (Open, Copy, Show in chat)
+                                            // Action Buttons (Open, Watch Later, Copy, Show in chat, Delete)
                                             Row(
                                                 modifier = Modifier.fillMaxWidth(),
                                                 horizontalArrangement = Arrangement.SpaceBetween,
                                                 verticalAlignment = Alignment.CenterVertically
                                             ) {
-                                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                Row(
+                                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
                                                     CherishTonalButton(
                                                         onClick = {
+                                                            val playKey = ytVideoId ?: item.url
+                                                            markItemPlayed(playKey)
+                                                            markItemPlayed(item.messageId)
                                                             if (item.url.contains("youtube.com") || item.url.contains("youtu.be")) {
                                                                 onNavigateToMessage(item.messageId)
                                                             } else {
@@ -1363,12 +1513,47 @@ fun SharedGalleryScreen(
                                                             }
                                                         },
                                                         shape = RoundedCornerShape(12.dp),
-                                                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
                                                         modifier = Modifier.height(30.dp)
                                                     ) {
                                                         Icon(Icons.Rounded.OpenInBrowser, contentDescription = null, modifier = Modifier.size(13.dp))
-                                                        Spacer(modifier = Modifier.width(4.dp))
+                                                        Spacer(modifier = Modifier.width(3.dp))
                                                         Text("Open", fontSize = 11.sp)
+                                                    }
+
+                                                    // Watch Later button for YouTube and shared links
+                                                    val watchLaterKey = ytVideoId ?: item.url
+                                                    val isWatchLaterSaved = remember(watchLaterItems, watchLaterKey) {
+                                                        watchLaterItems.any { it.videoId == watchLaterKey }
+                                                    }
+                                                    CherishTonalButton(
+                                                        onClick = {
+                                                            val repo = app?.coupleFeaturesRepository
+                                                            val existing = watchLaterItems.find { it.videoId == watchLaterKey }
+                                                            if (existing != null) {
+                                                                repo?.removeWatchLaterVideo(existing.id)
+                                                                CherishToast.show("Removed from Watch Later")
+                                                            } else {
+                                                                val title = ytTitle?.takeIf { it.isNotBlank() } ?: (if (cleanText.isNotBlank()) cleanText else item.host)
+                                                                repo?.addWatchLaterVideo(watchLaterKey, title)
+                                                                CherishToast.show("Saved to Watch Later list")
+                                                            }
+                                                        },
+                                                        shape = RoundedCornerShape(12.dp),
+                                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                                                        modifier = Modifier.height(30.dp),
+                                                        colors = ButtonDefaults.filledTonalButtonColors(
+                                                            containerColor = if (isWatchLaterSaved) RoseGoldPrimary.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant,
+                                                            contentColor = if (isWatchLaterSaved) RoseGoldPrimary else MaterialTheme.colorScheme.onSurface
+                                                        )
+                                                    ) {
+                                                        Icon(
+                                                            imageVector = if (isWatchLaterSaved) Icons.Rounded.Bookmark else Icons.Rounded.BookmarkBorder,
+                                                            contentDescription = "Watch Later",
+                                                            modifier = Modifier.size(13.dp)
+                                                        )
+                                                        Spacer(modifier = Modifier.width(3.dp))
+                                                        Text(if (isWatchLaterSaved) "Saved" else "Watch Later", fontSize = 11.sp)
                                                     }
 
                                                     // Copy button
@@ -1379,39 +1564,42 @@ fun SharedGalleryScreen(
                                                             CherishToast.show("Link copied to clipboard")
                                                         },
                                                         shape = RoundedCornerShape(12.dp),
-                                                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
                                                         modifier = Modifier.height(30.dp)
                                                     ) {
                                                         Icon(Icons.Rounded.ContentCopy, contentDescription = null, modifier = Modifier.size(13.dp))
-                                                        Spacer(modifier = Modifier.width(4.dp))
+                                                        Spacer(modifier = Modifier.width(3.dp))
                                                         Text("Copy", fontSize = 11.sp)
                                                     }
                                                 }
 
-                                                // Show in chat button
-                                                CherishButton(
-                                                    onClick = { onNavigateToMessage(item.messageId) },
-                                                    shape = RoundedCornerShape(12.dp),
-                                                    colors = ButtonDefaults.buttonColors(containerColor = RoseGoldPrimary),
-                                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-                                                    modifier = Modifier.height(30.dp)
+                                                Row(
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
                                                 ) {
-                                                    Icon(Icons.AutoMirrored.Rounded.Chat, contentDescription = null, tint = Color.White, modifier = Modifier.size(13.dp))
-                                                    Spacer(modifier = Modifier.width(4.dp))
-                                                    Text("Show in chat", fontSize = 11.sp, color = Color.White, fontWeight = FontWeight.SemiBold)
-                                                }
-                                                
-                                                Spacer(modifier = Modifier.width(8.dp))
-                                                
-                                                // Delete button
-                                                IconButton(
-                                                    onClick = {
-                                                        messageToDelete = filteredMessages.find { it.id == item.messageId }
-                                                            ?: Message(id = item.messageId, senderId = currentUserId, text = item.url)
-                                                    },
-                                                    modifier = Modifier.size(30.dp)
-                                                ) {
-                                                    Icon(Icons.Rounded.DeleteOutline, contentDescription = "Delete", tint = Gray400, modifier = Modifier.size(18.dp))
+                                                    // Show in chat button
+                                                    CherishButton(
+                                                        onClick = { onNavigateToMessage(item.messageId) },
+                                                        shape = RoundedCornerShape(12.dp),
+                                                        colors = ButtonDefaults.buttonColors(containerColor = RoseGoldPrimary),
+                                                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                                        modifier = Modifier.height(30.dp)
+                                                    ) {
+                                                        Icon(Icons.AutoMirrored.Rounded.Chat, contentDescription = null, tint = Color.White, modifier = Modifier.size(13.dp))
+                                                        Spacer(modifier = Modifier.width(3.dp))
+                                                        Text("Chat", fontSize = 11.sp, color = Color.White, fontWeight = FontWeight.SemiBold)
+                                                    }
+
+                                                    // Delete button
+                                                    IconButton(
+                                                        onClick = {
+                                                            messageToDelete = filteredMessages.find { it.id == item.messageId }
+                                                                ?: Message(id = item.messageId, senderId = currentUserId, text = item.url)
+                                                        },
+                                                        modifier = Modifier.size(30.dp)
+                                                    ) {
+                                                        Icon(Icons.Rounded.DeleteOutline, contentDescription = "Delete", tint = Gray400, modifier = Modifier.size(18.dp))
+                                                    }
                                                 }
                                             }
                                         }
@@ -2436,6 +2624,83 @@ private fun GalleryScrollbar(
                     )
                 }
             }
+        }
+    }
+}
+
+/**
+ * SharedPreferences-backed tracking for played status of shared gallery items (links, videos, voice).
+ */
+object GalleryPlayedManager {
+    private const val PREFS_NAME = "cherish_gallery_played_prefs"
+    private const val KEY_PLAYED_IDS = "played_item_ids"
+
+    fun getPlayedIds(context: Context): Set<String> {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        return prefs.getStringSet(KEY_PLAYED_IDS, emptySet()) ?: emptySet()
+    }
+
+    fun isPlayed(context: Context, id: String): Boolean {
+        if (id.isBlank()) return false
+        return getPlayedIds(context).contains(id)
+    }
+
+    fun setPlayed(context: Context, id: String, played: Boolean) {
+        if (id.isBlank()) return
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val current = (prefs.getStringSet(KEY_PLAYED_IDS, emptySet()) ?: emptySet()).toMutableSet()
+        if (played) {
+            current.add(id)
+        } else {
+            current.remove(id)
+        }
+        prefs.edit().putStringSet(KEY_PLAYED_IDS, current).apply()
+    }
+
+    fun togglePlayed(context: Context, id: String): Boolean {
+        val newState = !isPlayed(context, id)
+        setPlayed(context, id, newState)
+        return newState
+    }
+}
+
+/**
+ * Modern pill badge indicating item played status ("Already played" / "Not yet").
+ * Tap toggles the played state.
+ */
+@Composable
+private fun PlayedStatusBadge(
+    isPlayed: Boolean,
+    onToggle: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        onClick = onToggle,
+        shape = RoundedCornerShape(8.dp),
+        color = if (isPlayed) Color(0xFF10B981).copy(alpha = 0.14f) else Color(0xFFF59E0B).copy(alpha = 0.14f),
+        border = BorderStroke(
+            0.8.dp,
+            if (isPlayed) Color(0xFF10B981).copy(alpha = 0.40f) else Color(0xFFF59E0B).copy(alpha = 0.40f)
+        ),
+        modifier = modifier.height(24.dp)
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(6.dp)
+                    .clip(CircleShape)
+                    .background(if (isPlayed) Color(0xFF10B981) else Color(0xFFF59E0B))
+            )
+            Spacer(modifier = Modifier.width(5.dp))
+            Text(
+                text = if (isPlayed) "Already played" else "Not yet",
+                fontSize = 10.5.sp,
+                fontWeight = FontWeight.Bold,
+                color = if (isPlayed) Color(0xFF059669) else Color(0xFFD97706)
+            )
         }
     }
 }

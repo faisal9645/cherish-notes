@@ -8,7 +8,6 @@ import android.content.pm.PackageManager
 import android.media.AudioManager
 import android.os.Build
 import android.os.Bundle
-import android.os.PowerManager
 import android.util.Log
 import android.view.KeyEvent
 import android.view.WindowManager
@@ -167,13 +166,7 @@ class CallActivity : ComponentActivity() {
             // notification rings from here
             CallNotifications.showIncoming(this, inv)
         }
-        val power = getSystemService(Context.POWER_SERVICE) as? PowerManager
-        val isSpeaking = current.phase == CallPhase.CONNECTED || current.phase == CallPhase.RECONNECTING || current.phase == CallPhase.CONNECTING
-        if (isSpeaking && power != null && !power.isInteractive) {
-            Log.i("CallActivity", "Lock button pressed on CallActivity while speaking -> hanging up")
-            CallManager.hangUp()
         }
-    }
 
     private fun handleIntent(intent: Intent) {
         val invite = inviteFrom(intent)

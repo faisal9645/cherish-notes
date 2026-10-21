@@ -20,6 +20,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.ui.res.painterResource
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -58,6 +59,7 @@ import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.DeleteSweep
 import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.EditNote
 import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FavoriteBorder
@@ -227,6 +229,7 @@ fun ChatScreen(
     val callState by com.example.call.CallManager.state.collectAsState()
     var showVideoNoteRecorder by remember { mutableStateOf(false) }
     var showHeartbeatTouch by remember { mutableStateOf(false) }
+    var userDismissedHeartbeatTouch by remember { mutableStateOf(false) }
     // Kisses (see KissTouch): the ones blooming on the chat now, and the kiss pad
     val kissBlooms = remember { mutableStateListOf<KissBloom>() }
     var showKissPad by remember { mutableStateOf(false) }
@@ -302,8 +305,11 @@ fun ChatScreen(
             .map { it.isHeartTouching }
             .distinctUntilChanged()
             .collect { touching ->
+                if (!touching) {
+                    userDismissedHeartbeatTouch = false
+                }
                 val behindNotes = com.example.CherishApplication.instance.securityPreferences.isDisguiseActive.value
-                if (touching && !showHeartbeatTouch && !showKissPad && !behindNotes) {
+                if (touching && !showHeartbeatTouch && !showKissPad && !behindNotes && !userDismissedHeartbeatTouch) {
                     showHeartbeatTouch = true
                 }
             }
@@ -469,23 +475,17 @@ fun ChatScreen(
     val imeBottom = WindowInsets.ime.getBottom(density)
 
     // Keyboard open / close scrolling:
-    // When keyboard opens (user starts typing message in bottom bar) or closes,
-    // ensure the chat list smoothly scrolls and stays anchored to the latest message in all states.
-    // Only when the keyboard opens and the newest messages are already in view: reading older ones,
-    // closing the keyboard, or a "Show in chat" jump must not pull the chat to the bottom
+    // When keyboard opens (user taps text composer), smoothly anchor the chat list to the newest message.
     LaunchedEffect(isImeVisible) {
-        if (isImeVisible && reversedChatRowItems.isNotEmpty() && listState.firstVisibleItemIndex <= 2 &&
+        if (isImeVisible && reversedChatRowItems.isNotEmpty() && listState.firstVisibleItemIndex <= 1 &&
             viewModel.uiState.value.targetScrollMessageId == null
         ) {
-            listState.scrollToItem(0, scrollOffset = 0)
-            delay(300) // after the keyboard has finished sliding up
-            if (listState.firstVisibleItemIndex <= 2) listState.scrollToItem(0, scrollOffset = 0)
+            listState.animateScrollToItem(0, scrollOffset = 0)
         }
     }
 
     // Follow the conversation when a new message lands:
-    // Guarantees that opposite user (partner) or current user chat messages
-    // trigger immediate scrolling to the last message across all states (keyboard open/closed, typing).
+    // Smoothly scroll to the newest message when sent by user or when already reading latest messages.
     val latestRowItemId = reversedChatRowItems.firstOrNull()?.message?.id
     val latestRawMessageId = uiState.messages.lastOrNull { !it.isDeleted }?.id
     val lastScrolledMessageId = remember { mutableStateOf<String?>(null) }
@@ -496,8 +496,6 @@ fun ChatScreen(
         // A "Show in chat" jump is on its way: it decides where the chat is
         if (viewModel.uiState.value.targetScrollMessageId != null) return@LaunchedEffect
         if (previousId == null) {
-            // Opening the chat, or coming back to it (from Love & Us, Settings…): where I was reading.
-            // At the newest messages before (or the first time), the newest ones, new arrivals included.
             val savedKey = viewModel.savedScrollKey
             val savedIndex = if (viewModel.savedScrollIndex > 0 && savedKey != null) {
                 reversedChatRowItems.indexOfFirst { it.message.id == savedKey }
@@ -505,68 +503,39 @@ fun ChatScreen(
             when {
                 savedIndex > 0 -> listState.scrollToItem(savedIndex, viewModel.savedScrollOffset)
                 viewModel.savedScrollIndex == 0 -> listState.scrollToItem(0, scrollOffset = 0)
-                // That message isn't shown any more: the restored place stays
             }
             return@LaunchedEffect
         }
         if (currentId == previousId) return@LaunchedEffect
 
-        // A new message: follow it if I sent it or I'm at the newest messages anyway. Someone reading
-        // older messages stays where they are (the ↓ button shows the new one).
         val state = viewModel.uiState.value
         val sentByMe = state.currentUser?.id != null &&
             state.messages.lastOrNull { !it.isDeleted }?.senderId == state.currentUser.id
-        if (!sentByMe && listState.firstVisibleItemIndex > 2) return@LaunchedEffect
-        // The older messages glide up to make room (a quick animated scroll, not a jump), while the
-        // new one lands with its spring
+        if (!sentByMe && listState.firstVisibleItemIndex > 1) return@LaunchedEffect
         listState.animateScrollToItem(0, scrollOffset = 0)
-        delay(40)
-        listState.scrollToItem(0, scrollOffset = 0)
-        delay(120)
-        listState.scrollToItem(0, scrollOffset = 0)
-        delay(260)
-        if (listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset != 0) {
-            listState.scrollToItem(0, scrollOffset = 0)
-        }
     }
 
-    // When partner starts OR stops typing/recording, ensure their last message stays fully visible and not pushed low
+    // When partner starts typing/recording, gently keep latest message in view if already at bottom
     LaunchedEffect(Unit) {
         viewModel.partnerPresence
             .map { it.isTyping to it.isRecordingAudio }
             .distinctUntilChanged()
             .collect { (typing, recording) ->
-                // Only while at the newest messages: their typing mustn't pull someone reading back down
-                if ((typing || recording) && listState.firstVisibleItemIndex <= 1) {
-                    if (reversedChatRowItems.isNotEmpty()) {
-                        delay(40)
-                        listState.scrollToItem(0, scrollOffset = 0)
-                        delay(140)
-                        listState.scrollToItem(0, scrollOffset = 0)
-                        delay(280)
-                        if (listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset != 0) {
-                            listState.scrollToItem(0, scrollOffset = 0)
-                        }
-                    }
+                if ((typing || recording) && listState.firstVisibleItemIndex == 0 && reversedChatRowItems.isNotEmpty()) {
+                    listState.animateScrollToItem(0, scrollOffset = 0)
                 }
             }
     }
 
-    // When user types in bottom bar, ensure chat remains anchored to the newest message
+    // Save draft text without interrupting scrolling or snapping scroll position on every character
     LaunchedEffect(composerState.text) {
         viewModel.draftMessageText = composerState.text
-        if (composerState.text.isNotEmpty() && listState.firstVisibleItemIndex <= 2) {
-            listState.scrollToItem(0, scrollOffset = 0)
-        }
     }
 
     // When bottom overlays appear (upload status, reply preview), keep the newest message clear of them
     LaunchedEffect(bottomOverlayHeightPx) {
-        if (bottomOverlayHeightPx > 0 && listState.firstVisibleItemIndex <= 2 && reversedChatRowItems.isNotEmpty()) {
-            delay(50)
-            if (listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset != 0) {
-                listState.scrollToItem(0, scrollOffset = 0)
-            }
+        if (bottomOverlayHeightPx > 0 && listState.firstVisibleItemIndex == 0 && reversedChatRowItems.isNotEmpty()) {
+            listState.animateScrollToItem(0, scrollOffset = 0)
         }
     }
 
@@ -663,13 +632,15 @@ fun ChatScreen(
     val rowActions = remember(viewModel) {
         ChatRowActions(
             playAudio = { message ->
-                message.mediaUrl?.let { url -> viewModel.playAudio(message.id, url) }
+                val audioUrl = message.mediaUrl ?: message.recordingPath
+                audioUrl?.let { url -> viewModel.playAudio(message.id, url) }
             },
             seekAudio = { message, progress ->
+                val audioUrl = message.mediaUrl ?: message.recordingPath
                 if (viewModel.voicePlayerHelper.currentlyPlayingId.value == message.id) {
                     viewModel.seekAudio(progress)
                 } else {
-                    message.mediaUrl?.let { url ->
+                    audioUrl?.let { url ->
                         viewModel.playAudio(message.id, url)
                         viewModel.seekAudio(progress)
                     }
@@ -1065,6 +1036,7 @@ fun ChatScreen(
         } else if (showVideoNoteRecorder) {
             showVideoNoteRecorder = false
         } else if (showHeartbeatTouch) {
+            userDismissedHeartbeatTouch = true
             showHeartbeatTouch = false
         } else if (showMoodPicker) {
             showMoodPicker = false
@@ -1087,14 +1059,18 @@ fun ChatScreen(
         if (targetId != null && reversedChatRowItems.isNotEmpty()) {
             val targetIndex = reversedChatRowItems.indexOfFirst { it.message.id == targetId }
             if (targetIndex >= 0) {
-                // Coming back from the gallery, the list lays out first (and the screen slides in)
+                // Coming back from the gallery or calendar search, the list lays out first
                 kotlinx.coroutines.withTimeoutOrNull(1_500) {
                     snapshotFlow { listState.layoutInfo.totalItemsCount }.first { it > targetIndex }
                 }
-                delay(150)
+                delay(100)
                 highlightedMessageId = targetId
-                listState.revealMessage(targetIndex)
-                kotlinx.coroutines.delay(800)
+                try {
+                    listState.scrollToItem(targetIndex)
+                } catch (_: Exception) {
+                    listState.revealMessage(targetIndex)
+                }
+                kotlinx.coroutines.delay(1200)
                 highlightedMessageId = null
                 viewModel.clearTargetScrollMessageId()
             }
@@ -1437,6 +1413,14 @@ fun ChatScreen(
                                         leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface) }
                                     )
                                     DropdownMenuItem(
+                                        text = { Text("Search by Date") },
+                                        onClick = {
+                                            showChatMenu = false
+                                            showJumpToDate = true
+                                        },
+                                        leadingIcon = { Icon(Icons.Rounded.CalendarMonth, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface) }
+                                    )
+                                    DropdownMenuItem(
                                         text = { Text("Starred messages") },
                                         onClick = {
                                             showChatMenu = false
@@ -1534,6 +1518,14 @@ fun ChatScreen(
                                             showMoodPicker = true
                                         },
                                         leadingIcon = { Icon(Icons.Rounded.Mood, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface) }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("Search by Date") },
+                                        onClick = {
+                                            showChatMenu = false
+                                            showJumpToDate = true
+                                        },
+                                        leadingIcon = { Icon(Icons.Rounded.CalendarMonth, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface) }
                                     )
                                     DropdownMenuItem(
                                         text = { Text("Starred Messages") },
@@ -1795,7 +1787,10 @@ fun ChatScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 12.dp, vertical = 4.dp)
-                        .clickable { showHeartbeatTouch = true }
+                        .clickable {
+                            userDismissedHeartbeatTouch = false
+                            showHeartbeatTouch = true
+                        }
                 ) {
                     Row(
                         modifier = Modifier
@@ -1818,7 +1813,10 @@ fun ChatScreen(
                             modifier = Modifier.weight(1f)
                         )
                         CherishTonalButton(
-                            onClick = { showHeartbeatTouch = true },
+                            onClick = {
+                                userDismissedHeartbeatTouch = false
+                                showHeartbeatTouch = true
+                            },
                             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
                             shape = RoundedCornerShape(8.dp)
                         ) {
@@ -1954,54 +1952,14 @@ fun ChatScreen(
 
                 // The typing bubble sits under the list, so as it grows the newest messages move up
                 Column(modifier = Modifier.fillMaxSize()) {
-                var lastLazyColumnHeight by remember { mutableIntStateOf(0) }
-                val density = LocalDensity.current
-                val imeBottom = WindowInsets.ime.getBottom(density)
-                LaunchedEffect(imeBottom) {
-                    if (imeBottom > 0 && reversedChatRowItems.isNotEmpty()) {
-                        if (listState.firstVisibleItemIndex <= 2) {
-                            listState.animateScrollToItem(0, scrollOffset = 0)
-                        }
-                    }
-                }
-                // Swipe up on chat screen immediately opens the keyboard
-                val swipeUpToOpenKeyboardConnection = remember(isImeVisible) {
+                // Swiping down on the chat list while keyboard is open dismisses the keyboard cleanly
+                val dismissKeyboardOnSwipeConnection = remember(isImeVisible) {
                     object : NestedScrollConnection {
-                        var accumulatedUpDrag = 0f
-
                         override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
-                            if (source == NestedScrollSource.Drag) {
-                                if (!isImeVisible) {
-                                    // Dragging finger up towards top: available.y < 0
-                                    if (available.y < 0f && listState.firstVisibleItemIndex == 0) {
-                                        accumulatedUpDrag += -available.y
-                                        if (accumulatedUpDrag > 14f) {
-                                            accumulatedUpDrag = 0f
-                                            try {
-                                                composerFocusRequester.requestFocus()
-                                                keyboardController?.show()
-                                            } catch (_: Exception) {}
-                                        }
-                                    } else if (available.y > 0f) {
-                                        accumulatedUpDrag = 0f
-                                    }
-                                } else {
-                                    // When keyboard is open, swiping down on the chat list dismisses keyboard cleanly
-                                    if (available.y > 18f && listState.firstVisibleItemIndex <= 1) {
-                                        keyboardController?.hide()
-                                    }
+                            if (source == NestedScrollSource.Drag && isImeVisible) {
+                                if (available.y > 18f && listState.firstVisibleItemIndex <= 1) {
+                                    keyboardController?.hide()
                                 }
-                            }
-                            return Offset.Zero
-                        }
-
-                        override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
-                            if (!isImeVisible && source == NestedScrollSource.Drag && available.y < -6f) {
-                                accumulatedUpDrag = 0f
-                                try {
-                                    composerFocusRequester.requestFocus()
-                                    keyboardController?.show()
-                                } catch (_: Exception) {}
                             }
                             return Offset.Zero
                         }
@@ -2013,7 +1971,7 @@ fun ChatScreen(
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxWidth()
-                        .nestedScroll(swipeUpToOpenKeyboardConnection)
+                        .nestedScroll(dismissKeyboardOnSwipeConnection)
                         // Lips (or a thumb) held on the background: a kiss there (see KissTouch)
                         .glassTouchOnHold(
                             enabled = kissesAllowed && !isSelectionMode,
@@ -2030,17 +1988,6 @@ fun ChatScreen(
                             rootCoords = { kissRootCoords[0] },
                             listCoords = { kissListCoords[0] }
                         )
-                        .onSizeChanged { newSize ->
-                            val prevHeight = lastLazyColumnHeight
-                            lastLazyColumnHeight = newSize.height
-                            if (prevHeight > 0 && prevHeight != newSize.height && reversedChatRowItems.isNotEmpty()) {
-                                if (listState.firstVisibleItemIndex <= 2) {
-                                    scope.launch {
-                                        listState.scrollToItem(0, scrollOffset = 0)
-                                    }
-                                }
-                            }
-                        }
                         .pointerInput(Unit) {
                             detectTapGestures(onDoubleTap = { onQuickDisguise() })
                         },
@@ -2908,7 +2855,10 @@ fun ChatScreen(
             isPartnerOnline = partnerPresence.isOnline || uiState.isPartnerOnline,
             onTouchChanged = { viewModel.setHeartbeatTouch(it) },
             onSyncHeartbeatStreak = { viewModel.syncHeartbeatStreak() },
-            onDismiss = { showHeartbeatTouch = false }
+            onDismiss = {
+                showHeartbeatTouch = false
+                userDismissedHeartbeatTouch = true
+            }
         )
     }
 
@@ -3155,8 +3105,8 @@ fun ChatScreen(
                         DateJumpResult.OlderChatHidden ->
                             CherishToast.show("Older chat is hidden. Use Recover All in settings to see it.", long = true)
                         DateJumpResult.NoMessages -> CherishToast.show("No messages from that day")
-                        DateJumpResult.NextDayFound -> CherishToast.show("No messages that day, so here are the next ones")
-                        DateJumpResult.Found -> Unit
+                        DateJumpResult.NextDayFound -> CherishToast.show("No messages that day, showing next available date")
+                        DateJumpResult.Found -> CherishToast.show("Jumped to date")
                     }
                 }
             },
@@ -3300,6 +3250,41 @@ fun ChatScreen(
                             fontSize = 13.sp,
                             color = if (isPartnerOnline) OnlineGreen else MaterialTheme.colorScheme.onSurfaceVariant
                         )
+
+                        val partnerDisguiseOn = partner?.isDisguiseEnabled ?: true
+                        val partnerIsCalc = partner?.disguiseStyle == "calculator"
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant,
+                            modifier = Modifier.padding(top = 8.dp)
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                            ) {
+                                if (partnerIsCalc) {
+                                    androidx.compose.foundation.Image(
+                                        painter = painterResource(id = com.example.R.drawable.ic_samsung_calculator),
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp).clip(RoundedCornerShape(4.dp))
+                                    )
+                                } else {
+                                    Icon(
+                                        imageVector = Icons.Rounded.EditNote,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = if (!partnerDisguiseOn) "Disguise: Off" else if (partnerIsCalc) "Disguise: Calculator" else "Disguise: Notes App",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
 
                         // Romantic Kiss action inside profile view
                         Surface(

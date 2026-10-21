@@ -1071,12 +1071,33 @@ fun MessageBubble(
                                             val durationColor = if (isPrivateMode) textColor.copy(alpha = 0.8f)
                                                 else if (isFromMe) Color.White.copy(alpha = 0.9f)
                                                 else (if (isDark) darkTone(Slate300) else Slate900)
+                                            val cachedTrackDuration = com.example.audio.VoicePlayerHelper.getTrackDuration(message.id)
+                                            val parsedFromText = remember(message.text) {
+                                                Regex("""\((\d+)\s*s\)""").find(message.text)?.groupValues?.get(1)?.toIntOrNull()
+                                            }
+                                            val effectiveTotal = if (message.durationSeconds > 0) message.durationSeconds
+                                                else if (cachedTrackDuration > 0) cachedTrackDuration
+                                                else if (parsedFromText != null && parsedFromText > 0) parsedFromText
+                                                else if (message.waveform.isNotEmpty()) (message.waveform.size / 10).coerceAtLeast(1)
+                                                else 0
+
+                                            LaunchedEffect(message.id, message.mediaUrl, message.recordingPath) {
+                                                if (message.durationSeconds <= 0 && cachedTrackDuration <= 0) {
+                                                    val src = message.mediaUrl ?: message.recordingPath
+                                                    if (!src.isNullOrBlank()) {
+                                                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                                            com.example.audio.VoicePlayerHelper.extractAndCacheDuration(context, message.id, src)
+                                                        }
+                                                    }
+                                                }
+                                            }
+
                                             if (partnerHearing != null && isFromMe && !isPlayingAudio) {
                                                 // My partner is hearing it right now
                                                 PartnerHearingLabel(isVideo = false, playing = partnerHearing, color = durationColor)
-                                            } else if ((isPlayingAudio || audioProgress() > 0f) && message.durationSeconds > 0) {
+                                            } else if (isPlayingAudio || audioProgress() > 0f) {
                                                 // Where it's up to while it plays (and paused part way), counting up: "0:07 / 0:15"
-                                                val total = message.durationSeconds
+                                                val total = if (effectiveTotal > 0) effectiveTotal else 1
                                                 val elapsed = (audioProgress() * total).toInt().coerceIn(0, total)
                                                 Text(
                                                     text = com.example.util.formatRecordingLength(elapsed) + " / " + com.example.util.formatRecordingLength(total),
@@ -1087,13 +1108,13 @@ fun MessageBubble(
                                                 )
                                             } else {
                                                 Text(
-                                                    text = "${message.durationSeconds} sec",
+                                                    text = if (effectiveTotal > 0) com.example.util.formatRecordingLength(effectiveTotal) else "Voice note",
                                                     fontSize = 11.sp,
                                                     fontWeight = FontWeight.Medium,
                                                     color = durationColor
                                                 )
                                             }
-                                            if (isPlayingAudio && onToggleVoiceSpeed != null) {
+                                            if ((isPlayingAudio || audioProgress() > 0f) && onToggleVoiceSpeed != null) {
                                                 Spacer(modifier = Modifier.width(6.dp))
                                                 Box(
                                                     modifier = Modifier

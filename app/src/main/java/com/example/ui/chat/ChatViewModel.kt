@@ -1311,29 +1311,35 @@ class ChatViewModel(
     }
 
     /**
-     * The calendar in chat search: closes the search and jumps to the first message of that day
-     * (from its 6 AM, like the chat's days), or of the next day with messages. A day before today
-     * needs "Recover all", as "Show in chat" does; earlier pages load until the chat reaches it.
+     * The calendar in chat search: closes the search and jumps to the first message of that day,
+     * or of the next available day with messages. Loads earlier pages until the chat reaches it.
      */
     fun jumpToDate(year: Int, month: Int, dayOfMonth: Int, onResult: (DateJumpResult) -> Unit) {
-        val todayStart = chatRepository.getStartOfToday()
-        // Today's date picked before 6 AM is still today's chat
-        val dayStart = java.util.Calendar.getInstance().apply {
+        val calStart = java.util.Calendar.getInstance().apply {
             clear()
-            set(year, month, dayOfMonth, 6, 0)
-        }.timeInMillis.coerceAtMost(todayStart)
-        if (dayStart < todayStart) {
-            val recovered = securityPreferences.isAllGalleryRecovered() || securityPreferences.isShowPreviousChatsEnabled()
-            if (!recovered) {
-                onResult(DateJumpResult.OlderChatHidden)
-                return
-            }
-            securityPreferences.revealSecretHistory()
-            securityPreferences.setShowPreviousChatsEnabled(true)
+            set(year, month, dayOfMonth, 0, 0, 0)
+            set(java.util.Calendar.MILLISECOND, 0)
         }
-        // The whole chat, not just what was searched or starred
+        val calEnd = java.util.Calendar.getInstance().apply {
+            clear()
+            set(year, month, dayOfMonth, 23, 59, 59)
+            set(java.util.Calendar.MILLISECOND, 999)
+        }
+        val dayStart = calStart.timeInMillis
+        val dayEnd = calEnd.timeInMillis
+
+        // When user explicitly searches or jumps to a date, reveal history and show older chats
+        securityPreferences.revealSecretHistory()
+        securityPreferences.setShowPreviousChatsEnabled(true)
         setSearching(false)
-        _uiState.update { it.copy(filterStarredOnly = false) }
+        _uiState.update {
+            it.copy(
+                filterStarredOnly = false,
+                showPreviousChats = true,
+                isSecretHistoryRevealed = true
+            )
+        }
+
         viewModelScope.launch {
             // Earlier pages, until the chat reaches back to that day (or its history ends)
             var pages = 0
@@ -1341,24 +1347,36 @@ class ChatViewModel(
                 val oldest = _uiState.value.messages.minOfOrNull { it.timestamp } ?: break
                 if (oldest <= dayStart) break
                 chatRepository.loadMoreMessages()
-                kotlinx.coroutines.delay(150)
-                kotlinx.coroutines.withTimeoutOrNull(10_000L) {
-                    while (chatRepository.isLoadingMore) kotlinx.coroutines.delay(150)
+                kotlinx.coroutines.delay(180)
+                kotlinx.coroutines.withTimeoutOrNull(8_000L) {
+                    while (chatRepository.isLoadingMore) kotlinx.coroutines.delay(100)
                 }
             }
+
             val clearedBefore = _uiState.value.temporaryClearTimestamp
-            val target = _uiState.value.messages
-                .filter { !it.isDeleted && it.timestamp >= dayStart && it.timestamp > clearedBefore }
+            val candidates = _uiState.value.messages
+                .filter { !it.isDeleted && it.timestamp > clearedBefore }
+
+            // 1. First look for message on the exact selected day (calendar day or 6 AM logical day)
+            val targetOnDay = candidates
+                .filter { msg ->
+                    (msg.timestamp in dayStart..dayEnd) ||
+                    com.example.util.ChatTimeFormatter.isSameDay(msg.timestamp, dayStart + 12 * 3600 * 1000L)
+                }
                 .minByOrNull { it.timestamp }
+
+            // 2. If no messages on that exact day, find the closest next messages after that day
+            val target = targetOnDay ?: candidates
+                .filter { it.timestamp >= dayStart }
+                .minByOrNull { it.timestamp }
+
             if (target == null) {
                 onResult(DateJumpResult.NoMessages)
                 return@launch
             }
-            _uiState.update { it.copy(targetScrollMessageId = target.id) }
-            onResult(
-                if (com.example.util.ChatTimeFormatter.isSameDay(target.timestamp, dayStart)) DateJumpResult.Found
-                else DateJumpResult.NextDayFound
-            )
+
+            _uiState.update { it.copy(targetScrollMessageId = target.id, showPreviousChats = true) }
+            onResult(if (targetOnDay != null) DateJumpResult.Found else DateJumpResult.NextDayFound)
         }
     }
 

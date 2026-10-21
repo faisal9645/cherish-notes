@@ -140,7 +140,9 @@ data class LovePerson(
     val email: String? = null,
     val timeZone: String? = null,
     val notificationStatus: String? = null,
-    val notificationPermission: Boolean = true
+    val notificationPermission: Boolean = true,
+    val isDisguiseEnabled: Boolean = true,
+    val disguiseStyle: String = "notes"
 )
 
 /**
@@ -1180,7 +1182,6 @@ private fun PersonDetails(
                     .height(10.dp)
                     .background(cc.hairline)
             )
-            Spacer(modifier = Modifier.width(4.dp))
             CardBattery(level = person.batteryLevel, isCharging = person.isCharging, showPercentage = person.isOnline)
         }
 

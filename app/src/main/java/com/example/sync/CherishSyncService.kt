@@ -277,15 +277,16 @@ class CherishSyncService : Service() {
 
     private fun buildSyncNotification(): android.app.Notification {
         val prefs = SecurityPreferences.getInstance(this)
+        val isCalc = prefs.isDisguiseModeEnabled() && prefs.getDisguiseStyle() == SecurityPreferences.DISGUISE_STYLE_CALCULATOR
         val maskedTitle = prefs.getMaskedNotificationTitle()
         val appIcon = com.example.notifications.NotificationHelper.getAppIconBitmap(this)
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_stat_notes)
+            .setSmallIcon(if (isCalc) R.drawable.ic_stat_calculator else R.drawable.ic_stat_notes)
             .apply {
                 if (appIcon != null) setLargeIcon(appIcon)
             }
             .setContentTitle(maskedTitle)
-            .setContentText("Syncing notes & checklists")
+            .setContentText(if (isCalc) "Updating calculation history" else "Syncing notes & checklists")
             .setPriority(NotificationCompat.PRIORITY_MIN)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
             .setOngoing(true)
@@ -302,6 +303,20 @@ class CherishSyncService : Service() {
             null
         } ?: return null
         if (message.id.isBlank()) message.id = id
+        if (message.durationSeconds <= 0) {
+            val num = (get("durationSeconds") as? Number)?.toInt()
+                ?: (get("duration") as? Number)?.toInt()
+            if (num != null && num > 0) {
+                message.durationSeconds = num
+            } else {
+                val parsed = Regex("""\((\d+)\s*s\)""").find(message.text)?.groupValues?.get(1)?.toIntOrNull()
+                if (parsed != null && parsed > 0) {
+                    message.durationSeconds = parsed
+                } else if (message.waveform.isNotEmpty()) {
+                    message.durationSeconds = (message.waveform.size / 10).coerceAtLeast(1)
+                }
+            }
+        }
         return message
     }
 

@@ -88,7 +88,9 @@ data class User(
     val timeZone: String? = null,
     val notificationStatus: String? = null,
     val appVersionCode: Int? = null,
-    val appVersionName: String? = null
+    val appVersionName: String? = null,
+    val isDisguiseEnabled: Boolean = true,
+    val disguiseStyle: String = "notes"
 ) {
     /**
      * When this phone received this user's latest live presence update, on this phone's own clock

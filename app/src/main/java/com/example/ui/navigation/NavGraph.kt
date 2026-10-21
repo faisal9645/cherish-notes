@@ -58,6 +58,7 @@ import com.example.ui.backup.CloudBackupScreen
 import com.example.ui.backup.GoogleDriveBackupViewModel
 import com.example.ui.dates.ImportantDatesScreen
 import com.example.ui.dates.ImportantDatesViewModel
+import com.example.ui.disguise.CalculatorDisguiseScreen
 import com.example.ui.disguise.NotesDisguiseScreen
 import com.example.ui.disguise.NotesDisguiseViewModel
 import com.example.ui.gallery.SharedGalleryScreen
@@ -93,6 +94,7 @@ fun CherishNavGraph(
     modifier: Modifier = Modifier
 ) {
     val isDisguiseActive by app.securityPreferences.isDisguiseActive.collectAsState()
+    val disguiseStyle by app.securityPreferences.disguiseStyle.collectAsState()
     val hasRevealedSecretApp by app.securityPreferences.hasRevealedSecretAppInSession.collectAsState()
     val isAppLocked by app.securityPreferences.isAppLocked.collectAsState()
     val currentUserState by app.authRepository.currentUserState.collectAsState()
@@ -716,7 +718,7 @@ fun CherishNavGraph(
         }
     }
 
-    // Real Notes Disguise screen - instant zero-latency snap on disguise, elegant smooth reveal on unlock
+    // Real Disguise screen (Notes or Calculator) - instant zero-latency snap on disguise, elegant smooth reveal on unlock
     AnimatedVisibility(
         visible = isDisguiseActive,
         enter = EnterTransition.None,
@@ -724,26 +726,36 @@ fun CherishNavGraph(
                scaleOut(targetScale = 1.04f, animationSpec = tween(280, easing = FastOutSlowInEasing)),
         modifier = Modifier.fillMaxSize()
     ) {
-        NotesDisguiseScreen(
-            viewModel = notesDisguiseViewModel,
-            securityPreferences = app.securityPreferences,
-            onSecretGestureTriggered = {
-                app.securityPreferences.revealSecretApp()
-                if (isUserLoggedIn) {
-                    val currentRoute = navController.currentBackStackEntry?.destination?.route
-                    if (currentRoute != Screen.Chat.route) {
-                        val popped = navController.popBackStack(Screen.Chat.route, inclusive = false)
-                        if (!popped) {
-                            navController.navigate(Screen.Chat.route) {
-                                popUpTo(0) { inclusive = false }
-                                launchSingleTop = true
-                            }
+        val onUnlockSecret: () -> Unit = {
+            app.securityPreferences.revealSecretApp()
+            if (isUserLoggedIn) {
+                val currentRoute = navController.currentBackStackEntry?.destination?.route
+                if (currentRoute != Screen.Chat.route) {
+                    val popped = navController.popBackStack(Screen.Chat.route, inclusive = false)
+                    if (!popped) {
+                        navController.navigate(Screen.Chat.route) {
+                            popUpTo(0) { inclusive = false }
+                            launchSingleTop = true
                         }
                     }
                 }
-            },
-            modifier = Modifier.fillMaxSize()
-        )
+            }
+        }
+
+        if (disguiseStyle == com.example.security.SecurityPreferences.DISGUISE_STYLE_CALCULATOR) {
+            CalculatorDisguiseScreen(
+                securityPreferences = app.securityPreferences,
+                onSecretGestureTriggered = { onUnlockSecret() },
+                modifier = Modifier.fillMaxSize()
+            )
+        } else {
+            NotesDisguiseScreen(
+                viewModel = notesDisguiseViewModel,
+                securityPreferences = app.securityPreferences,
+                onSecretGestureTriggered = { onUnlockSecret() },
+                modifier = Modifier.fillMaxSize()
+            )
+        }
     }
     // In-App OTA Updates Dialog: ONLY show inside Cherish app, NEVER inside Notes app
     if (updateState.showDialog && !isDisguiseActive) {

@@ -25,6 +25,12 @@ class VoicePlayerHelper(private val context: Context) {
     private var progressJob: Job? = null
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
+    private var isPrepared = false
+    private var pendingSeekProgress: Float? = null
+    private var isScrubbing = false
+    private var isSeeking = false
+    private var queuedSeekMs: Int? = null
+
     private val _currentTrackId = MutableStateFlow<String?>(null)
     val currentTrackId: StateFlow<String?> = _currentTrackId.asStateFlow()
 
@@ -109,7 +115,7 @@ class VoicePlayerHelper(private val context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             try {
                 mediaPlayer?.let { mp ->
-                    if (mp.isPlaying) {
+                    if (isPrepared) {
                         mp.playbackParams = mp.playbackParams.setSpeed(speed)
                         publishAnchor()
                     }
@@ -125,15 +131,22 @@ class VoicePlayerHelper(private val context: Context) {
         if (callInProgress) return
 
         // Case 1: Already active and currently playing -> PAUSE
-        if (_currentTrackId.value == messageId && _isPlaying.value && mediaPlayer != null) {
+        if (_currentTrackId.value == messageId && _isPlaying.value) {
             pause()
             return
         }
 
         // Case 2: Already active and paused -> RESUME
-        if (_currentTrackId.value == messageId && !_isPlaying.value && mediaPlayer != null) {
+        if (_currentTrackId.value == messageId && !_isPlaying.value && mediaPlayer != null && isPrepared) {
             try {
-                mediaPlayer?.start()
+                mediaPlayer?.let { mp ->
+                    mp.start()
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                        try {
+                            mp.playbackParams = mp.playbackParams.setSpeed(_playbackSpeed.value)
+                        } catch (_: Exception) {}
+                    }
+                }
                 _isPlaying.value = true
                 mediaPlayer?.let { startProgressTracker(it) }
                 watchProximity(true)
@@ -194,6 +207,9 @@ class VoicePlayerHelper(private val context: Context) {
     private fun startPlayer(messageId: String, source: String, startAtMs: Int) {
         val player = MediaPlayer()
         mediaPlayer = player
+        isPrepared = false
+        isSeeking = false
+        queuedSeekMs = null
         player.setAudioAttributes(
             AudioAttributes.Builder()
                 .setUsage(if (isAtEar) AudioAttributes.USAGE_VOICE_COMMUNICATION else AudioAttributes.USAGE_MEDIA)
@@ -206,17 +222,61 @@ class VoicePlayerHelper(private val context: Context) {
                 mp.release()
                 return@setOnPreparedListener
             }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            isPrepared = true
+            val durationMs = mp.duration
+            if (durationMs > 0) {
+                recordTrackDuration(messageId, (durationMs + 500) / 1000)
+            }
+
+            val pending = pendingSeekProgress
+            val seekTargetMs = if (pending != null && durationMs > 0) {
+                (durationMs * pending).toInt()
+            } else if (startAtMs > 0) {
+                startAtMs
+            } else 0
+            pendingSeekProgress = null
+
+            if (seekTargetMs > 0) {
                 try {
-                    mp.playbackParams = mp.playbackParams.setSpeed(_playbackSpeed.value)
+                    mp.seekTo(seekTargetMs)
+                    _playbackProgress.value = (seekTargetMs.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f)
+                    _currentPositionSec.value = seekTargetMs / 1000
                 } catch (_: Exception) {}
             }
-            if (startAtMs > 0) mp.seekTo(startAtMs)
-            mp.start()
+
+            // If user paused while preparing, stay paused at the cue point
+            if (!_isPlaying.value) {
+                publishAnchor()
+                return@setOnPreparedListener
+            }
+
+            try {
+                mp.start()
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    try {
+                        mp.playbackParams = mp.playbackParams.setSpeed(_playbackSpeed.value)
+                    } catch (_: Exception) {}
+                }
+            } catch (e: Exception) {
+                Log.e("VoicePlayerHelper", "Failed to start mediaPlayer", e)
+            }
             _isPlaying.value = true
             startProgressTracker(mp)
             watchProximity(true)
             publishAnchor()
+        }
+        player.setOnSeekCompleteListener { mp ->
+            val next = queuedSeekMs
+            if (next != null) {
+                queuedSeekMs = null
+                try {
+                    mp.seekTo(next)
+                } catch (_: Exception) {
+                    isSeeking = false
+                }
+            } else {
+                isSeeking = false
+            }
         }
         player.setOnCompletionListener { mp ->
             if (mediaPlayer !== mp) return@setOnCompletionListener
@@ -243,45 +303,57 @@ class VoicePlayerHelper(private val context: Context) {
         progressJob = scope.launch {
             while (isActive && _isPlaying.value) {
                 try {
-                    if (player.isPlaying) {
+                    if (!isScrubbing && isPrepared && player.isPlaying) {
                         val duration = player.duration
                         if (duration > 0) {
+                            _currentTrackId.value?.let { id -> recordTrackDuration(id, (duration + 500) / 1000) }
                             val pos = player.currentPosition
                             _playbackProgress.value = (pos.toFloat() / duration.toFloat()).coerceIn(0f, 1f)
                             _currentPositionSec.value = pos / 1000
                         }
                     }
                 } catch (_: Exception) {}
-                delay(60)
+                delay(50)
             }
         }
     }
 
-    fun seekTo(progress: Float) {
-        try {
-            mediaPlayer?.let { mp ->
+    fun seekTo(progress: Float, isFinal: Boolean = true) {
+        val clamped = progress.coerceIn(0f, 1f)
+        _playbackProgress.value = clamped
+        val mp = mediaPlayer
+        if (mp != null && isPrepared) {
+            try {
                 val duration = mp.duration
                 if (duration > 0) {
-                    val targetMs = (duration * progress.coerceIn(0f, 1f)).toInt()
-                    mp.seekTo(targetMs)
-                    _playbackProgress.value = progress.coerceIn(0f, 1f)
+                    val targetMs = (duration * clamped).toInt()
                     _currentPositionSec.value = targetMs / 1000
-                    _anchor.value = _currentTrackId.value?.let { id ->
-                        Anchor(id, _isPlaying.value, targetMs.toLong(), duration.toLong(), _playbackSpeed.value)
+                    if (isSeeking) {
+                        queuedSeekMs = targetMs
+                    } else {
+                        isSeeking = true
+                        mp.seekTo(targetMs)
                     }
+                    publishAnchor()
                 }
+            } catch (e: Exception) {
+                Log.w("VoicePlayerHelper", "Failed to seek audio", e)
             }
-        } catch (e: Exception) {
-            Log.e("VoicePlayerHelper", "Failed to seek audio", e)
+        } else {
+            pendingSeekProgress = clamped
         }
+        isScrubbing = !isFinal
     }
 
     fun pause() {
         try {
-            mediaPlayer?.pause()
+            if (isPrepared) {
+                mediaPlayer?.pause()
+            }
         } catch (_: Exception) {}
         progressJob?.cancel()
         _isPlaying.value = false
+        isScrubbing = false
         watchProximity(false)
         publishAnchor()
     }
@@ -302,6 +374,11 @@ class VoicePlayerHelper(private val context: Context) {
             // ignore
         }
         mediaPlayer = null
+        isPrepared = false
+        isScrubbing = false
+        isSeeking = false
+        queuedSeekMs = null
+        pendingSeekProgress = null
         _isPlaying.value = false
         _currentTrackId.value = null
         _anchor.value = null
@@ -394,6 +471,48 @@ class VoicePlayerHelper(private val context: Context) {
         /** Set while a voice call is on: voice notes and recordings don't play then. */
         @Volatile
         var callInProgress: Boolean = false
+
+        private val durationCache = java.util.concurrent.ConcurrentHashMap<String, Int>()
+
+        fun getTrackDuration(trackId: String): Int = durationCache[trackId] ?: 0
+
+        fun recordTrackDuration(trackId: String, durationSec: Int) {
+            if (durationSec > 0 && trackId.isNotBlank()) {
+                durationCache[trackId] = durationSec
+            }
+        }
+
+        fun extractAndCacheDuration(context: Context, trackId: String, source: String): Int {
+            if (trackId.isBlank() || source.isBlank()) return 0
+            val cached = durationCache[trackId]
+            if (cached != null && cached > 0) return cached
+            return try {
+                val retriever = android.media.MediaMetadataRetriever()
+                if (source.startsWith("http://") || source.startsWith("https://")) {
+                    retriever.setDataSource(source, HashMap())
+                } else if (source.startsWith("file://")) {
+                    val path = Uri.parse(source).path
+                    if (path != null && File(path).exists()) {
+                        retriever.setDataSource(path)
+                    } else {
+                        retriever.setDataSource(context, Uri.parse(source))
+                    }
+                } else if (File(source).exists()) {
+                    retriever.setDataSource(source)
+                } else {
+                    retriever.setDataSource(context, Uri.parse(source))
+                }
+                val durationMs = retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L
+                retriever.release()
+                val sec = ((durationMs + 500) / 1000).toInt()
+                if (sec > 0) {
+                    durationCache[trackId] = sec
+                }
+                sec
+            } catch (_: Exception) {
+                0
+            }
+        }
     }
 
     private fun hasHeadphones(): Boolean {

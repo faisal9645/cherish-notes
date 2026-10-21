@@ -1,9 +1,7 @@
 package com.example.call
 
-import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.content.IntentFilter
 import android.media.AudioManager
 import android.media.ToneGenerator
 import android.os.Build
@@ -113,8 +111,6 @@ object CallManager {
     private var recordingJob: Job? = null
     /** The current call's record as last read: who's recording it, for the chat line at the end. */
     private var lastRecord: CallRecord? = null
-
-    private var screenOffReceiverRegistered = false
     private var quotaAlertJob: Job? = null
     private var voiceQuotaJob: Job? = null
     private var alerted5Min = false
@@ -138,52 +134,6 @@ object CallManager {
             }
         } catch (_: Exception) {}
     }
-
-    private val screenOffReceiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context?, intent: Intent?) {
-            if (intent?.action == Intent.ACTION_SCREEN_OFF) {
-                val phase = _state.value.phase
-                val isSpeaking = phase == CallPhase.CONNECTED || phase == CallPhase.RECONNECTING || phase == CallPhase.CONNECTING
-                // Only the lock button on the call screen ends the call (that screen keeps the
-                // display on, so it can't just time out); a minimized call goes on when the
-                // screen times out
-                if (isSpeaking && isCallScreenVisible) {
-                    Log.i(TAG, "Lock button clicked while speaking on call -> cutting call")
-                    app.securityPreferences.lastCallEndedAt = SystemClock.elapsedRealtime()
-                    app.securityPreferences.revealSecretApp()
-                    hangUp()
-                }
-            }
-        }
-    }
-
-    private fun registerScreenOffReceiver() {
-        if (screenOffReceiverRegistered) return
-        try {
-            val filter = IntentFilter(Intent.ACTION_SCREEN_OFF)
-            try {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                    app.registerReceiver(screenOffReceiver, filter, Context.RECEIVER_EXPORTED)
-                } else {
-                    app.registerReceiver(screenOffReceiver, filter)
-                }
-            } catch (_: Exception) {
-                app.registerReceiver(screenOffReceiver, filter)
-            }
-            screenOffReceiverRegistered = true
-        } catch (e: Exception) {
-            Log.w(TAG, "Could not register screen off receiver", e)
-        }
-    }
-
-    private fun unregisterScreenOffReceiver() {
-        if (!screenOffReceiverRegistered) return
-        try {
-            app.unregisterReceiver(screenOffReceiver)
-        } catch (_: Exception) {}
-        screenOffReceiverRegistered = false
-    }
-
     /** Calls already rung (or declined) on this phone, so a late push or listener can't ring again. */
     private val seenCalls = LinkedHashSet<String>()
 
@@ -665,7 +615,6 @@ object CallManager {
     private fun beginCall(couple: String, me: String, id: String, outgoing: Boolean) {
         endResetJob?.cancel()
         cancelCallJobs()
-        registerScreenOffReceiver()
         coupleId = couple
         myUserId = me
         callId = id
@@ -1058,7 +1007,6 @@ object CallManager {
 
         vibrateDevice(50L)
         cancelCallJobs()
-        unregisterScreenOffReceiver()
         stopRingback()
         engine.setVoiceChanger(VoiceChangerEffect.NONE)
         engine.stop()
@@ -1128,7 +1076,6 @@ object CallManager {
 
     private fun reset() {
         cancelCallJobs()
-        unregisterScreenOffReceiver()
         activeRecordFile?.delete()
         activeRecordFile = null
         coupleId = null

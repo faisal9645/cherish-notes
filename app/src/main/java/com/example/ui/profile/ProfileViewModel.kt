@@ -22,9 +22,12 @@ data class ProfileUiState(
     val isHideNotificationContent: Boolean = true,
     val coupleKey: String = "",
     val isDisguiseModeEnabled: Boolean = true,
+    val disguiseStyle: String = com.example.security.SecurityPreferences.DISGUISE_STYLE_NOTES,
     val disguisePasscode: String = "love",
+    val calculatorPasscode: String = "1234",
     val isKeywordTriggerEnabled: Boolean = true,
     val plusHoldDurationSec: Int = 5,
+    val equalsHoldDurationSec: Int = 2,
     val isRequirePhoneLockAfterHold: Boolean = false,
     val gallerySize: String = "small",
     val isHapticEnabled: Boolean = true,
@@ -156,9 +159,12 @@ class ProfileViewModel(
             isHideNotificationContent = securityPreferences.isHideNotificationContent(),
             coupleKey = securityPreferences.getCoupleSecretKey(),
             isDisguiseModeEnabled = securityPreferences.isDisguiseModeEnabled(),
+            disguiseStyle = securityPreferences.getDisguiseStyle(),
             disguisePasscode = securityPreferences.getDisguisePasscode(),
+            calculatorPasscode = securityPreferences.getCalculatorPasscode(),
             isKeywordTriggerEnabled = securityPreferences.isKeywordTriggerEnabled(),
             plusHoldDurationSec = securityPreferences.getPlusIconHoldDuration(),
+            equalsHoldDurationSec = securityPreferences.getEqualsHoldDuration(),
             isRequirePhoneLockAfterHold = securityPreferences.isRequirePhoneLockAfterHold(),
             gallerySize = securityPreferences.getImageGallerySize(),
             isHapticEnabled = securityPreferences.isHapticFeedbackEnabled(),
@@ -194,9 +200,11 @@ class ProfileViewModel(
                 isHideNotificationContent = securityPreferences.isHideNotificationContent(),
                 coupleKey = securityPreferences.getCoupleSecretKey(),
                 isDisguiseModeEnabled = securityPreferences.isDisguiseModeEnabled(),
+                disguiseStyle = securityPreferences.getDisguiseStyle(),
                 disguisePasscode = securityPreferences.getDisguisePasscode(),
                 isKeywordTriggerEnabled = securityPreferences.isKeywordTriggerEnabled(),
                 plusHoldDurationSec = securityPreferences.getPlusIconHoldDuration(),
+                equalsHoldDurationSec = securityPreferences.getEqualsHoldDuration(),
                 isRequirePhoneLockAfterHold = securityPreferences.isRequirePhoneLockAfterHold(),
                 gallerySize = securityPreferences.getImageGallerySize(),
                 isHapticEnabled = securityPreferences.isHapticFeedbackEnabled(),
@@ -540,11 +548,27 @@ class ProfileViewModel(
     fun setDisguiseMode(enabled: Boolean) {
         securityPreferences.setDisguiseModeEnabled(enabled)
         _uiState.update { it.copy(isDisguiseModeEnabled = enabled) }
+        viewModelScope.launch {
+            authRepository.updateDisguiseSettings(enabled, _uiState.value.disguiseStyle)
+        }
+    }
+
+    fun setDisguiseStyle(style: String) {
+        securityPreferences.setDisguiseStyle(style)
+        _uiState.update { it.copy(disguiseStyle = style) }
+        viewModelScope.launch {
+            authRepository.updateDisguiseSettings(_uiState.value.isDisguiseModeEnabled, style)
+        }
     }
 
     fun setDisguisePasscode(passcode: String) {
         securityPreferences.setDisguisePasscode(passcode)
         _uiState.update { it.copy(disguisePasscode = passcode) }
+    }
+
+    fun setCalculatorPasscode(passcode: String) {
+        securityPreferences.setCalculatorPasscode(passcode)
+        _uiState.update { it.copy(calculatorPasscode = passcode) }
     }
 
     fun setKeywordTriggerEnabled(enabled: Boolean) {
@@ -555,6 +579,11 @@ class ProfileViewModel(
     fun setPlusHoldDuration(seconds: Int) {
         securityPreferences.setPlusIconHoldDuration(seconds)
         _uiState.update { it.copy(plusHoldDurationSec = seconds) }
+    }
+
+    fun setEqualsHoldDuration(seconds: Int) {
+        securityPreferences.setEqualsHoldDuration(seconds)
+        _uiState.update { it.copy(equalsHoldDurationSec = seconds) }
     }
 
     fun setRequirePhoneLockAfterHold(enabled: Boolean) {

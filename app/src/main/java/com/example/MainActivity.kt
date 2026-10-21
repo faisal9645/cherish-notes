@@ -104,9 +104,22 @@ class MainActivity : FragmentActivity() {
         setHighRefreshRate()
         // Screenshots inside the app are allowed; only previews (recent apps) hide the secret chat
         // (see setSecretAppOnScreen and PrivacyShield)
-        // Only apply default state on cold start.
-        // SecurityPreferences init already sets the default state based on isDisguiseModeEnabled().
-        // Do not force re-disguise here, as it overrides the in-memory state during Activity recreation.
+        val isFromNotification = intent?.getBooleanExtra("from_notification", false) == true ||
+                intent?.getBooleanExtra("open_chat", false) == true ||
+                intent?.hasExtra("conversationId") == true
+        val isExternalShare = intent?.action == android.content.Intent.ACTION_SEND ||
+                intent?.action == android.content.Intent.ACTION_SEND_MULTIPLE
+
+        val targetComponent = intent?.component?.className ?: ""
+        if (targetComponent.endsWith("CalculatorAlias")) {
+            app.securityPreferences.setDisguiseStyle(com.example.security.SecurityPreferences.DISGUISE_STYLE_CALCULATOR)
+            app.securityPreferences.forceDisguise()
+        } else if (targetComponent.endsWith("NotesAlias")) {
+            app.securityPreferences.setDisguiseStyle(com.example.security.SecurityPreferences.DISGUISE_STYLE_NOTES)
+            app.securityPreferences.forceDisguise()
+        } else if (!isFromNotification && !isExternalShare && app.securityPreferences.isDisguiseModeEnabled()) {
+            app.securityPreferences.forceDisguise()
+        }
         handleNotificationIntent(intent)
         handleShareIntent(intent)
 
@@ -114,9 +127,16 @@ class MainActivity : FragmentActivity() {
         // is open, and shows the Notes screen like any notes app otherwise
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.RESUMED) {
-                app.securityPreferences.isDisguiseActive.collectLatest { disguised ->
+                kotlinx.coroutines.flow.combine(
+                    app.securityPreferences.isDisguiseActive,
+                    app.securityPreferences.disguiseStyle
+                ) { disguised, style ->
+                    Pair(disguised, style)
+                }.collectLatest { (disguised, style) ->
+                    val isCalc = disguised && style == com.example.security.SecurityPreferences.DISGUISE_STYLE_CALCULATOR
+                    updateTaskDescription(isCalc)
                     if (disguised) {
-                        // Only once Notes has been drawn over the chat
+                        // Only once Notes/Calculator has been drawn over the chat
                         delay(300)
                         setSecretAppOnScreen(false)
                     } else {
@@ -203,6 +223,23 @@ class MainActivity : FragmentActivity() {
     override fun onNewIntent(intent: android.content.Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
+        val isFromNotification = intent.getBooleanExtra("from_notification", false) ||
+                intent.getBooleanExtra("open_chat", false) ||
+                intent.hasExtra("conversationId")
+        val isExternalShare = intent.action == android.content.Intent.ACTION_SEND ||
+                intent.action == android.content.Intent.ACTION_SEND_MULTIPLE
+
+        val targetComponent = intent.component?.className ?: ""
+        if (targetComponent.endsWith("CalculatorAlias")) {
+            app.securityPreferences.setDisguiseStyle(com.example.security.SecurityPreferences.DISGUISE_STYLE_CALCULATOR)
+            app.securityPreferences.forceDisguise()
+        } else if (targetComponent.endsWith("NotesAlias")) {
+            app.securityPreferences.setDisguiseStyle(com.example.security.SecurityPreferences.DISGUISE_STYLE_NOTES)
+            app.securityPreferences.forceDisguise()
+        } else if (!isFromNotification && !isExternalShare && app.securityPreferences.isDisguiseModeEnabled()) {
+            app.securityPreferences.forceDisguise()
+        }
+
         handleNotificationIntent(intent)
         handleShareIntent(intent)
     }
@@ -648,5 +685,35 @@ class MainActivity : FragmentActivity() {
                 }
             }
         } catch (_: Exception) {}
+    }
+
+
+    private fun updateTaskDescription(isCalc: Boolean) {
+        try {
+            val label = if (isCalc) "Calculator" else getString(R.string.app_name)
+            val themeMode = try { app.securityPreferences.getThemeMode() } catch (_: Exception) { 0 }
+            val isSystemDark = (resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) == android.content.res.Configuration.UI_MODE_NIGHT_YES
+            val isDark = when (themeMode) {
+                1 -> false
+                2, 3 -> true
+                else -> isSystemDark
+            }
+            val color = if (isDark) android.graphics.Color.BLACK else android.graphics.Color.WHITE
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                val iconRes = if (isCalc) R.drawable.ic_samsung_calculator else R.mipmap.ic_launcher
+                setTaskDescription(
+                    android.app.ActivityManager.TaskDescription.Builder()
+                        .setLabel(label)
+                        .setIcon(iconRes)
+                        .setPrimaryColor(color)
+                        .build()
+                )
+            } else {
+                val iconRes = if (isCalc) R.drawable.ic_samsung_calculator else R.mipmap.ic_launcher
+                val bmp = android.graphics.BitmapFactory.decodeResource(resources, iconRes)
+                @Suppress("DEPRECATION")
+                setTaskDescription(android.app.ActivityManager.TaskDescription(label, bmp, color))
+            }
+        } catch (_: Throwable) {}
     }
 }

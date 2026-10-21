@@ -2,8 +2,11 @@ package com.example.ui.components
 
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.material3.MaterialTheme
@@ -130,38 +133,33 @@ fun WaveformView(
     }
 
     val gestureModifier = if (onSeek != null && !isRecording) {
-        Modifier
-            .pointerInput(onSeek) {
-                detectTapGestures(
-                    onPress = { offset ->
-                        startScrubbingPhysics()
-                        val fraction = (offset.x / size.width).coerceIn(0f, 1f)
-                        onSeek(fraction)
-                        val released = tryAwaitRelease()
-                        endScrubbingPhysics()
+        Modifier.pointerInput(onSeek) {
+            awaitEachGesture {
+                val down = awaitFirstDown(requireUnconsumed = false)
+                startScrubbingPhysics()
+                val width = size.width.toFloat()
+                if (width > 0f) {
+                    val fraction = (down.position.x / width).coerceIn(0f, 1f)
+                    onSeek(fraction)
+                }
+                val dragPointerId = down.id
+                while (true) {
+                    val event = awaitPointerEvent()
+                    val change = event.changes.firstOrNull { it.id == dragPointerId } ?: break
+                    if (!change.pressed) {
+                        break
                     }
-                )
-            }
-            .pointerInput(onSeek) {
-                detectHorizontalDragGestures(
-                    onDragStart = { offset ->
-                        startScrubbingPhysics()
-                        val fraction = (offset.x / size.width).coerceIn(0f, 1f)
-                        onSeek(fraction)
-                    },
-                    onDragEnd = {
-                        endScrubbingPhysics()
-                    },
-                    onDragCancel = {
-                        endScrubbingPhysics()
-                    },
-                    onHorizontalDrag = { change, _ ->
+                    if (change.positionChange() != Offset.Zero) {
                         change.consume()
-                        val fraction = (change.position.x / size.width).coerceIn(0f, 1f)
-                        onSeek(fraction)
+                        if (width > 0f) {
+                            val fraction = (change.position.x / width).coerceIn(0f, 1f)
+                            onSeek(fraction)
+                        }
                     }
-                )
+                }
+                endScrubbingPhysics()
             }
+        }
     } else {
         Modifier
     }
