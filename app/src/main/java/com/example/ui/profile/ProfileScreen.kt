@@ -682,7 +682,7 @@ fun ProfileScreen(
                             )
                         } else {
                             androidx.compose.foundation.Image(
-                                painter = painterResource(id = com.example.R.mipmap.ic_launcher),
+                                painter = painterResource(id = com.example.R.drawable.ic_notes_app),
                                 contentDescription = "Notes App",
                                 modifier = Modifier.size(24.dp).clip(RoundedCornerShape(6.dp))
                             )
@@ -758,7 +758,7 @@ fun ProfileScreen(
                                     )
                                 } else {
                                     androidx.compose.foundation.Image(
-                                        painter = painterResource(id = com.example.R.mipmap.ic_launcher),
+                                        painter = painterResource(id = com.example.R.drawable.ic_notes_app),
                                         contentDescription = "Notes App",
                                         modifier = Modifier.size(19.dp).clip(RoundedCornerShape(5.dp))
                                     )
