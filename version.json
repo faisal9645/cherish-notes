@@ -1,9 +1,9 @@
 {
-  "versionCode": 212,
-  "versionName": "1.8.40",
-  "tagName": "v1.8.40-212",
-  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.8.40-212/app_update_212.apk",
-  "assetSize": 19064929,
-  "releaseNotes": "Notes v1.8.40 (Build 212):\n\u2022 Dark liquid glass message composer\n\u2022 Equal 48dp height for typing bar and voice chat icon\n\u2022 Full-view edge-to-edge goodnight starry background\n\u2022 Custom wallpaper support with 3D tilt-parallax\n\u2022 Added dual hearts \ud83d\udc95 in chat partner header\n\u2022 Deep midnight royal blue theme aesthetics",
-  "releaseDate": "2026-10-22T19:48:40Z"
+  "versionCode": 213,
+  "versionName": "1.8.41",
+  "tagName": "v1.8.41-213",
+  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.8.41-213/app_update_213.apk",
+  "assetSize": 19161497,
+  "releaseNotes": "Notes v1.8.41 (Build 213):\n\u2022 Deep obsidian dark liquid glass message composer\n\u2022 Crisp silver icons and high-contrast typing text\n\u2022 Removed whitish translucent overlays from top and bottom chat bars\n\u2022 Updated high-definition good night romantic beach wallpaper\n\u2022 Performance and UI polish",
+  "releaseDate": "2026-10-22T20:06:15Z"
 }

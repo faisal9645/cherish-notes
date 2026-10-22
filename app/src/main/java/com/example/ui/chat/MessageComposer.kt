@@ -382,7 +382,7 @@ fun MessageComposer(
         shimmerOffset = 0f
     }
 
-    val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+    val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f || com.example.ui.theme.isAppInDark()
     val isAmoled = com.example.ui.theme.LocalAmoledBlack.current
     val barBg = if (isPrivateMode) {
         if (isDark) Color.Black else Color.White
@@ -394,14 +394,15 @@ fun MessageComposer(
         else if (isDark) Neutral800
         else Neutral200
     } else {
-        if (isDark) Color(0xD90A1128) else Color(0xF2FFFFFF)
+        // Deep obsidian dark liquid glass - rich dark tone, zero whitish haze
+        Color(0xF2050814)
     }
     val pillBorder = if (isPrivateMode) {
         if (isAmoled) Neutral800
         else if (isDark) Neutral700
         else Neutral300
     } else {
-        if (isDark) Color(0x403870FF) else Color(0x1F000000)
+        Color(0x383870FF)
     }
 
     // Emojis in the message box: the size they'll be in the sent message, the same however many
@@ -611,7 +612,7 @@ fun MessageComposer(
                                 .fillMaxWidth()
                                 .heightIn(min = 48.dp)
                                 .clip(RoundedCornerShape(24.dp))
-                                .background(if (isDark) Color(0xD90A1128) else Color.White)
+                                .background(pillBg)
                                 .border(BorderStroke(1.dp, pillBorder), RoundedCornerShape(24.dp))
                                 .padding(horizontal = 8.dp, vertical = 6.dp),
                             verticalAlignment = Alignment.CenterVertically
@@ -950,7 +951,7 @@ fun MessageComposer(
                             Icon(
                                 imageVector = if (isEmojiBoardShown) Icons.Rounded.Keyboard else Icons.Rounded.Mood,
                                 contentDescription = "Toggle emoji panel",
-                                tint = if (isEmojiBoardShown) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                tint = if (isEmojiBoardShown) MaterialTheme.colorScheme.primary else Color(0xFFCBD5E1),
                                 modifier = Modifier.size(24.dp)
                             )
                         }
@@ -965,7 +966,7 @@ fun MessageComposer(
                             if (text.isEmpty()) {
                                 Text(
                                     text = placeholder,
-                                    color = Slate500,
+                                    color = Color(0xFF94A3B8),
                                     fontSize = 13.sp,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
@@ -976,12 +977,12 @@ fun MessageComposer(
                                 onValueChange = onTextChanged,
                                 textStyle = TextStyle(
                                     fontFamily = chatText.font.family ?: LocalTextStyle.current.fontFamily,
-                                    color = if (isDark) Color.White else Slate900,
+                                    color = Color.White,
                                     fontSize = composerFontSize,
                                     lineHeight = composerFontSize * 1.3f
                                 ),
                                 visualTransformation = emojiVisualTransformation,
-                                cursorBrush = SolidColor(DayBluePrimary),
+                                cursorBrush = SolidColor(if (isDark) DarkBluePrimary else DayBluePrimary),
                                 maxLines = 5,
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -1012,7 +1013,7 @@ fun MessageComposer(
                             Icon(
                                 imageVector = Icons.Rounded.AttachFile,
                                 contentDescription = "Attach file or photo",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                tint = Color(0xFFCBD5E1),
                                 modifier = Modifier.size(22.dp)
                             )
                         }
@@ -1034,7 +1035,7 @@ fun MessageComposer(
                             Icon(
                                 imageVector = Icons.Rounded.CameraAlt,
                                 contentDescription = "Camera",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                tint = Color(0xFFCBD5E1),
                                 modifier = Modifier.size(22.dp)
                             )
                         }

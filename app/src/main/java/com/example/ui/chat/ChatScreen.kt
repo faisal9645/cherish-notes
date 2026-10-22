@@ -1383,8 +1383,8 @@ fun ChatScreen(
                         .background(
                             Brush.verticalGradient(
                                 colors = listOf(
-                                    (if (isDark) Color(0xD9050A18) else Color(0xCCF8FAFC)),
-                                    (if (isDark) Color(0x66050A18) else Color(0x66F8FAFC)),
+                                    Color(0xE6030611),
+                                    Color(0x73030611),
                                     Color.Transparent
                                 )
                             )
@@ -1778,7 +1778,7 @@ fun ChatScreen(
             val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f || com.example.ui.theme.isAppInDark()
             val isPrivate = uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE
             val barBg = if (showWallpaper) {
-                if (isDark) Color(0x99050A18) else Color(0x99FFFFFF)
+                Color(0xB8030714)
             } else if (isDark) {
                 Color.Black
             } else {
@@ -1788,12 +1788,12 @@ fun ChatScreen(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .then(if (!isPrivate && !isDark) Modifier.shadow(8.dp, RectangleShape, clip = false) else Modifier)
+                    .then(if (!isPrivate && !isDark && !showWallpaper) Modifier.shadow(8.dp, RectangleShape, clip = false) else Modifier)
                     .background(barBg)
                     // Touches on the tray stay in the tray
                     .pointerInput(Unit) {}
             ) {
-                CompositionLocalProvider(LocalContentColor provides contentColorFor(barBg)) {
+                CompositionLocalProvider(LocalContentColor provides (if (showWallpaper || isDark) Color.White else Slate900)) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
