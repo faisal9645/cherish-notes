@@ -116,64 +116,89 @@ class SecurityPreferences(private val context: Context) {
     private val _isCalculatorDecoy = MutableStateFlow(isCalculatorDecoy())
     val calculatorDecoy: StateFlow<Boolean> = _isCalculatorDecoy.asStateFlow()
 
-    fun syncLauncherIcon(style: String = getDisguiseStyle()) {
-        try {
-            val pm = context.packageManager
-            val mainComp = android.content.ComponentName(context, "com.example.MainActivity")
-            val notesComp = android.content.ComponentName(context, "com.example.NotesAlias")
-            val calcComp = android.content.ComponentName(context, "com.example.CalculatorAlias")
-            val shareComp = android.content.ComponentName(context, "com.example.share.ShareReceiverActivity")
+    private val launcherSyncScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO)
+    private var syncJob: kotlinx.coroutines.Job? = null
 
-            // Ensure MainActivity is not disabled (keep enabled for alias targets and internal intents)
-            val mainSetting = pm.getComponentEnabledSetting(mainComp)
-            if (mainSetting == android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DISABLED) {
-                pm.setComponentEnabledSetting(
-                    mainComp,
-                    android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
-                    android.content.pm.PackageManager.DONT_KILL_APP
-                )
-            }
+    fun syncLauncherIcon(style: String = getDisguiseStyle(), forceReindex: Boolean = false) {
+        syncJob?.cancel()
+        syncJob = launcherSyncScope.launch {
+            try {
+                val pm = context.packageManager
+                val mainComp = android.content.ComponentName(context, "com.example.MainActivity")
+                val notesComp = android.content.ComponentName(context, "com.example.NotesAlias")
+                val calcComp = android.content.ComponentName(context, "com.example.CalculatorAlias")
+                val shareComp = android.content.ComponentName(context, "com.example.share.ShareReceiverActivity")
 
-            val isCalc = style == DISGUISE_STYLE_CALCULATOR
-            val enabled = android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_ENABLED
-            val disabled = android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DISABLED
-
-            fun updateComponentState(
-                comp: android.content.ComponentName,
-                targetState: Int,
-                manifestDefaultEnabled: Boolean
-            ) {
-                val currentSetting = pm.getComponentEnabledSetting(comp)
-                if (currentSetting == targetState) return
-
-                if (currentSetting == android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DEFAULT) {
-                    val defaultState = if (manifestDefaultEnabled) enabled else disabled
-                    if (defaultState == targetState) return
+                // Ensure MainActivity is not disabled (keep enabled for alias targets and internal intents)
+                val mainSetting = pm.getComponentEnabledSetting(mainComp)
+                if (mainSetting == android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DISABLED) {
+                    pm.setComponentEnabledSetting(
+                        mainComp,
+                        android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
+                        android.content.pm.PackageManager.DONT_KILL_APP
+                    )
                 }
 
-                pm.setComponentEnabledSetting(comp, targetState, android.content.pm.PackageManager.DONT_KILL_APP)
-            }
+                val isCalc = style == DISGUISE_STYLE_CALCULATOR
+                val enabled = android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_ENABLED
+                val disabled = android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DISABLED
 
-            // CRITICAL FOR SAMSUNG (ONE UI) AND VIVO (FUNTOUCH OS / ORIGINOS) APP DRAWER SORTING:
-            // 1. Always enable the target incoming launcher component FIRST before disabling the outgoing one.
-            //    If the outgoing component is disabled first, the package momentarily has 0 launcher activities.
-            //    Samsung One UI and Vivo detect this 0-launcher state as an app uninstall and purge it from
-            //    the alphabetical grid; when the new component is enabled moments later, the launcher treats it
-            //    as a brand-new app installation and appends it to the last page / end of drawer.
-            // 2. Only call setComponentEnabledSetting if the effective state actually needs to change.
-            //    Unnecessary calls to setComponentEnabledSetting emit ACTION_PACKAGE_CHANGED broadcasts on every
-            //    cold start, which causes Samsung One UI and Vivo launchers to re-evaluate the package and
-            //    displace it from its proper alphabetical slot.
-            if (isCalc) {
-                updateComponentState(calcComp, enabled, manifestDefaultEnabled = true)
-                updateComponentState(notesComp, disabled, manifestDefaultEnabled = false)
-                updateComponentState(shareComp, disabled, manifestDefaultEnabled = false)
-            } else {
-                updateComponentState(notesComp, enabled, manifestDefaultEnabled = false)
-                updateComponentState(calcComp, disabled, manifestDefaultEnabled = true)
-                updateComponentState(shareComp, enabled, manifestDefaultEnabled = false)
-            }
-        } catch (_: Throwable) {}
+                val targetComp = if (isCalc) calcComp else notesComp
+                val outgoingComp = if (isCalc) notesComp else calcComp
+                val targetDefault = isCalc
+                val outgoingDefault = !isCalc
+
+                // One-time drawer re-index check for existing devices where the launcher cached 'Notes'
+                // at the old 'C' slot (Calculator's position)
+                val needsReindexFix = !prefs.getBoolean(KEY_DRAWER_ALPHABETICAL_SORT_FIXED, false)
+
+                val targetSetting = pm.getComponentEnabledSetting(targetComp)
+                val outgoingSetting = pm.getComponentEnabledSetting(outgoingComp)
+
+                val targetNeedsChange = when (targetSetting) {
+                    enabled -> false
+                    android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DEFAULT -> !targetDefault
+                    else -> true
+                }
+                val outgoingNeedsChange = when (outgoingSetting) {
+                    disabled -> false
+                    android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DEFAULT -> outgoingDefault
+                    else -> true
+                }
+
+                if (!targetNeedsChange && !outgoingNeedsChange && !forceReindex && !needsReindexFix) {
+                    return@launch
+                }
+
+                // CRITICAL FOR SAMSUNG (ONE UI) AND VIVO (FUNTOUCH OS / ORIGINOS) APP DRAWER ALPHABETICAL ORDER:
+                // When an alias is enabled while the old one is still active, Vivo and Samsung launchers treat
+                // it as an in-place property update on the existing drawer item and DO NOT re-sort the grid.
+                // This causes "Notes" to remain stuck in the "C" slot where Calculator was.
+                // By disabling the outgoing component first (or pulsing the current active component) and
+                // allowing a small 250ms window before enabling the new component, the launcher cleanly purges
+                // the stale grid cell and inserts the new component in its correct alphabetical position
+                // (Notes under 'N', Calculator under 'C').
+                if (outgoingNeedsChange || needsReindexFix || forceReindex) {
+                    pm.setComponentEnabledSetting(outgoingComp, disabled, android.content.pm.PackageManager.DONT_KILL_APP)
+                    if (isCalc) {
+                        pm.setComponentEnabledSetting(shareComp, disabled, android.content.pm.PackageManager.DONT_KILL_APP)
+                    }
+                    if (needsReindexFix || forceReindex) {
+                        pm.setComponentEnabledSetting(targetComp, disabled, android.content.pm.PackageManager.DONT_KILL_APP)
+                    }
+                    kotlinx.coroutines.delay(250)
+                }
+
+                pm.setComponentEnabledSetting(targetComp, enabled, android.content.pm.PackageManager.DONT_KILL_APP)
+                if (!isCalc) {
+                    pm.setComponentEnabledSetting(shareComp, enabled, android.content.pm.PackageManager.DONT_KILL_APP)
+                }
+
+                if (needsReindexFix) {
+                    prefs.edit().putBoolean(KEY_DRAWER_ALPHABETICAL_SORT_FIXED, true).apply()
+                }
+            } catch (_: Throwable) {}
+        }
     }
 
     fun setDisguiseModeEnabled(enabled: Boolean) {
@@ -1325,6 +1350,7 @@ class SecurityPreferences(private val context: Context) {
         private const val KEY_CALL_VIBRATE_MUTE = "call_vibrate_mute"
         private const val KEY_CALL_RECORDINGS_AUTO_UPLOAD = "call_recordings_auto_upload"
         private const val KEY_HAS_ALERTED_SINCE_LAST_OPEN = "has_alerted_since_last_open"
+        private const val KEY_DRAWER_ALPHABETICAL_SORT_FIXED = "drawer_alphabetical_sort_fixed_v2"
 
         @Volatile
         private var INSTANCE: SecurityPreferences? = null

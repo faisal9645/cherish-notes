@@ -2110,7 +2110,8 @@ fun ChatScreen(
                                 isLastReadMessage = (message.id == lastPartnerReadMessageId),
                                 partnerPhotoUrl = uiState.partnerUser?.photoUrl,
                                 partnerName = partnerName,
-                                isTodayChatOnly = isTodayChatOnly
+                                isTodayChatOnly = isTodayChatOnly,
+                                isFocused = (focusedMessage?.id == message.id)
                             )
                         }
                     }
@@ -2776,7 +2777,8 @@ fun ChatScreen(
                     onReactionClick = { emoji -> viewModel.toggleReaction(live.id, emoji) },
                     gallerySize = uiState.gallerySize,
                     isPrivateMode = isPrivate,
-                    senderPhotoUrl = if (focusedIsFromMe) uiState.currentUser?.photoUrl else uiState.partnerUser?.photoUrl
+                    senderPhotoUrl = if (focusedIsFromMe) uiState.currentUser?.photoUrl else uiState.partnerUser?.photoUrl,
+                    isFocusOverlay = true
                 )
             }
         }
@@ -3914,7 +3916,8 @@ private fun ChatMessageRow(
     partnerName: String = "Partner",
     isTodayChatOnly: Boolean = false,
     // Mine, and my partner is hearing it right now (false: paused), see ListeningNow
-    partnerHearing: Boolean? = null
+    partnerHearing: Boolean? = null,
+    isFocused: Boolean = false
 ) {
     Column(modifier = modifier.fillMaxWidth()) {
         if (isFirstOfDay) {
@@ -4005,6 +4008,9 @@ private fun ChatMessageRow(
                     }
                 }
                 .graphicsLayer {
+                    if (isFocused) {
+                        alpha = 0f
+                    }
                     val b = bump.value
                     if (b > 0f) {
                         val bumpScale = 1f + 0.035f * b
@@ -4080,7 +4086,10 @@ private fun ChatMessageRow(
                         isLastReadMessage = isLastReadMessage,
                         partnerPhotoUrl = partnerPhotoUrl,
                         partnerName = partnerName,
-                        isFreshArrival = isFreshArrival
+                        isFreshArrival = isFreshArrival,
+                        onBubblePositioned = { bounds ->
+                            anchor[0] = bounds
+                        }
                     )
                 }
             }

@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -168,21 +169,15 @@ fun MessageFocusOverlay(
             val sideOrigin = if (isFromMe) 1f else 0f
 
             val currentProgress = progress.value.coerceIn(0f, 1f)
-            val shadowElevation = lerp(1f, 16f, currentProgress).dp
             val cardTiltDegrees = lerp(0f, if (isFromMe) -1.5f else 1.5f, currentProgress)
 
-            // The pressed message, lifted toward the user like picking up a physical card off a table
+            // The pressed message, lifted toward the user like picking up a physical card off a table.
+            // Using exact measured bubble bounds and wrapping the content tightly without an artificial
+            // full-width shadow prevents the horizontal grey bar artifact across the chat screen.
             Box(
                 modifier = Modifier
                     .offset { IntOffset(anchor.left.roundToInt(), bubbleTop(currentProgress).roundToInt()) }
-                    .width(anchor.width.toDp())
-                    .shadow(
-                        elevation = shadowElevation,
-                        shape = RoundedCornerShape(18.dp),
-                        ambientColor = Color.Black.copy(alpha = 0.3f * currentProgress),
-                        spotColor = Color.Black.copy(alpha = 0.45f * currentProgress),
-                        clip = false
-                    )
+                    .then(if (anchor.width > 0f) Modifier.width(anchor.width.toDp()) else Modifier.wrapContentSize())
                     .graphicsLayer {
                         val s = bubbleScale(currentProgress)
                         scaleX = s

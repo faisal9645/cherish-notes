@@ -54,6 +54,8 @@ import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontStyle
@@ -117,7 +119,9 @@ fun MessageBubble(
     isFreshArrival: Boolean = false,
     // My voice or video note that my partner is playing right now (false: they paused it), see
     // ListeningNow; its progress comes in [audioProgress]
-    partnerHearing: Boolean? = null
+    partnerHearing: Boolean? = null,
+    isFocusOverlay: Boolean = false,
+    onBubblePositioned: ((androidx.compose.ui.geometry.Rect) -> Unit)? = null
 ) {
     // Private chat looks like the ChatGPT app: mine in a rounded blue bubble, my partner's as plain
     // text with a row of small actions under it
@@ -282,9 +286,13 @@ fun MessageBubble(
     val bigEmojis = remember(message, isPrivateMode) { if (isPrivateMode) null else message.bigEmojis() }
 
     Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 6.dp, vertical = 2.dp),
+        modifier = if (isFocusOverlay) {
+            modifier
+        } else {
+            modifier
+                .fillMaxWidth()
+                .padding(horizontal = 6.dp, vertical = 2.dp)
+        },
         contentAlignment = if (isFromMe) Alignment.CenterEnd else Alignment.CenterStart
     ) {
         // Stationary background reply indicator on the left (revealed when swiping right on ANY message)
@@ -322,6 +330,11 @@ fun MessageBubble(
             Column(
                 horizontalAlignment = if (isFromMe) Alignment.End else Alignment.Start,
                 modifier = (if (isYouTube) Modifier.fillMaxWidth() else Modifier)
+                    .then(
+                        if (onBubblePositioned != null) {
+                            Modifier.onGloballyPositioned { onBubblePositioned(it.boundsInRoot()) }
+                        } else Modifier
+                    )
                     .pointerInput(message.id, onSwipeToReply) {
                         if (onSwipeToReply != null) {
                             var accumulatedDragX = 0f
