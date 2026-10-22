@@ -1,9 +1,9 @@
 {
-  "versionCode": 208,
-  "versionName": "1.8.36",
-  "tagName": "v1.8.36-208",
-  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.8.36-208/app_update_208.apk",
-  "assetSize": 18974292,
-  "releaseNotes": "Notes v1.8.36 (Build 208):\n\u2022 Fixed horizontal grey bar artifact when long-pressing messages\n\u2022 Fixed Samsung One UI & Vivo drawer alphabetical order when disguised as Notes\n\u2022 Smooth message focus and reaction overlay\n\u2022 Performance optimizations and refinements",
-  "releaseDate": "2026-10-22T11:51:51Z"
+  "versionCode": 209,
+  "versionName": "1.8.37",
+  "tagName": "v1.8.37-209",
+  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.8.37-209/app_update_209.apk",
+  "assetSize": 18979128,
+  "releaseNotes": "Notes v1.8.37 (Build 209):\n\u2022 Restored classic blue double ticks for read messages\n\u2022 App Info title and icon accurately match active disguise mode\n\u2022 Recent tasks and status bar icons properly reflect Notes / Calculator disguise\n\u2022 Launcher grid synchronization improvements\n\u2022 Performance optimizations and bug fixes",
+  "releaseDate": "2026-10-22T13:57:28Z"
 }

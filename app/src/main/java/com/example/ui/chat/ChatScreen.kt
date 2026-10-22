@@ -2200,130 +2200,134 @@ fun ChatScreen(
                 )
                 } // Column: list + typing bubble
 
-            // WhatsApp-style date chip: the date of the messages at the top, shown while scrolling
-            var showDateChip by remember { mutableStateOf(false) }
-            val isListScrolling = listState.isScrollInProgress
-            LaunchedEffect(isListScrolling) {
-                if (isListScrolling) {
-                    showDateChip = true
-                } else {
-                    delay(1200)
-                    showDateChip = false
-                }
-            }
-            val topVisibleDate by remember(reversedChatRowItems) {
-                derivedStateOf {
-                    val layoutInfo = listState.layoutInfo
-                    val topItem = layoutInfo.visibleItemsInfo.lastOrNull() ?: return@derivedStateOf null
-                    val topIndex = topItem.index
-                    val rowItem = reversedChatRowItems.getOrNull(topIndex)
-                    if (rowItem != null) {
-                        val opensDay = rowItem.isFirstOfDay
-                        if (opensDay && topItem.offset + topItem.size <= layoutInfo.viewportEndOffset) {
-                            return@derivedStateOf null
-                        }
-                    }
-                    val msg = rowItem?.message ?: reversedChatRowItems.lastOrNull()?.message
-                    msg?.let { formatDateSeparator(it.timestamp) }
-                        ?.takeIf { it.isNotEmpty() }
-                }
-            }
-            val lastShownDate = remember { arrayOf("") }
-            topVisibleDate?.let { lastShownDate[0] = it }
-            androidx.compose.animation.AnimatedVisibility(
-                visible = showDateChip && topVisibleDate != null && (uiState.chatExperienceMode != com.example.ui.chat.ChatExperienceMode.PRIVATE),
-                enter = fadeIn(tween(150)) + slideInVertically(spring(dampingRatio = 0.8f, stiffness = 600f)) { -it / 2 },
-                exit = fadeOut(tween(250)),
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .padding(top = 8.dp)
-            ) {
-                DateChip(
-                    dateText = lastShownDate[0],
-                    isPrivateMode = (uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE),
-                    isDark = isDark,
-                    shadowElevation = 3.dp
-                )
-            }
-
-            // Jump-to-unread pill: "N new messages" while the first of them is off screen; a tap
-            // goes straight there. Gone once it has been on screen.
-            val unreadJumpCount = remember(reversedChatRowItems, unreadOnOpen) {
-                if (unreadOnOpen.isEmpty()) 0 else reversedChatRowItems.count { it.message.id in unreadOnOpen }
-            }
-            // The oldest of them (the list runs bottom-up, so the highest index)
-            val unreadJumpIndex = remember(reversedChatRowItems, unreadOnOpen) {
-                if (unreadOnOpen.isEmpty()) -1 else reversedChatRowItems.indexOfLast { it.message.id in unreadOnOpen }
-            }
-            // 1 = above the screen, -1 = below it, 0 = on screen, null = not known yet
-            val unreadJumpWhere by remember(unreadJumpIndex) {
-                derivedStateOf {
-                    val visible = listState.layoutInfo.visibleItemsInfo
-                    when {
-                        unreadJumpIndex < 0 || visible.isEmpty() -> null
-                        unreadJumpIndex > visible.last().index -> 1
-                        unreadJumpIndex < visible.first().index -> -1
-                        else -> 0
+            // The scroll position is read in a scope of its own (see OwnScope), so scrolling
+            // rebuilds just the date chip and the new-messages pill, not the whole chat
+            OwnScope {
+                // WhatsApp-style date chip: the date of the messages at the top, shown while scrolling
+                var showDateChip by remember { mutableStateOf(false) }
+                val isListScrolling = listState.isScrollInProgress
+                LaunchedEffect(isListScrolling) {
+                    if (isListScrolling) {
+                        showDateChip = true
+                    } else {
+                        delay(1200)
+                        showDateChip = false
                     }
                 }
-            }
-            LaunchedEffect(unreadJumpWhere) {
-                if (unreadJumpWhere == 0) unreadJumpDone = true
-            }
-            val unreadJumpUp = remember { booleanArrayOf(true) }
-            unreadJumpWhere?.takeIf { it != 0 }?.let { unreadJumpUp[0] = it == 1 }
-            val showUnreadJump = !unreadJumpDone && unreadJumpCount > 0 && (unreadJumpWhere == 1 || unreadJumpWhere == -1)
-            val unreadJumpDrop by animateDpAsState(
-                targetValue = if (showDateChip && topVisibleDate != null) 40.dp else 0.dp,
-                animationSpec = spring(dampingRatio = 0.85f, stiffness = 500f),
-                label = "unread_jump_drop"
-            )
-            androidx.compose.animation.AnimatedVisibility(
-                visible = showUnreadJump,
-                enter = fadeIn(tween(180)) + slideInVertically(spring(dampingRatio = 0.75f, stiffness = 500f)) { -it },
-                exit = fadeOut(tween(200)) + scaleOut(tween(200), targetScale = 0.85f),
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .padding(top = 12.dp)
-                    .offset { IntOffset(0, unreadJumpDrop.roundToPx()) }
-            ) {
-                val isPrivate = uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE
-                Surface(
-                    onClick = {
-                        val index = unreadJumpIndex
-                        unreadJumpDone = true
-                        val target = reversedChatRowItems.getOrNull(index)?.message
-                        if (target != null) {
-                            view.chatHaptic(ChatHaptic.Tick)
-                            scope.launch {
-                                highlightedMessageId = target.id
-                                listState.revealMessage(index)
-                                delay(800)
-                                if (highlightedMessageId == target.id) highlightedMessageId = null
+                val topVisibleDate by remember(reversedChatRowItems) {
+                    derivedStateOf {
+                        val layoutInfo = listState.layoutInfo
+                        val topItem = layoutInfo.visibleItemsInfo.lastOrNull() ?: return@derivedStateOf null
+                        val topIndex = topItem.index
+                        val rowItem = reversedChatRowItems.getOrNull(topIndex)
+                        if (rowItem != null) {
+                            val opensDay = rowItem.isFirstOfDay
+                            if (opensDay && topItem.offset + topItem.size <= layoutInfo.viewportEndOffset) {
+                                return@derivedStateOf null
                             }
                         }
-                    },
-                    shape = CircleShape,
-                    color = if (isPrivate) (if (isDark) darkTone(Graphite700) else Gray200) else MaterialTheme.colorScheme.primary,
-                    contentColor = if (isPrivate) (if (isDark) darkTone(Neutral200) else Gray800) else MaterialTheme.colorScheme.onPrimary,
-                    shadowElevation = 4.dp,
-                    modifier = Modifier.testTag("jump_to_unread")
+                        val msg = rowItem?.message ?: reversedChatRowItems.lastOrNull()?.message
+                        msg?.let { formatDateSeparator(it.timestamp) }
+                            ?.takeIf { it.isNotEmpty() }
+                    }
+                }
+                val lastShownDate = remember { arrayOf("") }
+                topVisibleDate?.let { lastShownDate[0] = it }
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = showDateChip && topVisibleDate != null && (uiState.chatExperienceMode != com.example.ui.chat.ChatExperienceMode.PRIVATE),
+                    enter = fadeIn(tween(150)) + slideInVertically(spring(dampingRatio = 0.8f, stiffness = 600f)) { -it / 2 },
+                    exit = fadeOut(tween(250)),
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(top = 8.dp)
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(start = 12.dp, end = 16.dp, top = 8.dp, bottom = 8.dp)
+                    DateChip(
+                        dateText = lastShownDate[0],
+                        isPrivateMode = (uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE),
+                        isDark = isDark,
+                        shadowElevation = 3.dp
+                    )
+                }
+
+                // Jump-to-unread pill: "N new messages" while the first of them is off screen; a tap
+                // goes straight there. Gone once it has been on screen.
+                val unreadJumpCount = remember(reversedChatRowItems, unreadOnOpen) {
+                    if (unreadOnOpen.isEmpty()) 0 else reversedChatRowItems.count { it.message.id in unreadOnOpen }
+                }
+                // The oldest of them (the list runs bottom-up, so the highest index)
+                val unreadJumpIndex = remember(reversedChatRowItems, unreadOnOpen) {
+                    if (unreadOnOpen.isEmpty()) -1 else reversedChatRowItems.indexOfLast { it.message.id in unreadOnOpen }
+                }
+                // 1 = above the screen, -1 = below it, 0 = on screen, null = not known yet
+                val unreadJumpWhere by remember(unreadJumpIndex) {
+                    derivedStateOf {
+                        val visible = listState.layoutInfo.visibleItemsInfo
+                        when {
+                            unreadJumpIndex < 0 || visible.isEmpty() -> null
+                            unreadJumpIndex > visible.last().index -> 1
+                            unreadJumpIndex < visible.first().index -> -1
+                            else -> 0
+                        }
+                    }
+                }
+                LaunchedEffect(unreadJumpWhere) {
+                    if (unreadJumpWhere == 0) unreadJumpDone = true
+                }
+                val unreadJumpUp = remember { booleanArrayOf(true) }
+                unreadJumpWhere?.takeIf { it != 0 }?.let { unreadJumpUp[0] = it == 1 }
+                val showUnreadJump = !unreadJumpDone && unreadJumpCount > 0 && (unreadJumpWhere == 1 || unreadJumpWhere == -1)
+                val unreadJumpDrop by animateDpAsState(
+                    targetValue = if (showDateChip && topVisibleDate != null) 40.dp else 0.dp,
+                    animationSpec = spring(dampingRatio = 0.85f, stiffness = 500f),
+                    label = "unread_jump_drop"
+                )
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = showUnreadJump,
+                    enter = fadeIn(tween(180)) + slideInVertically(spring(dampingRatio = 0.75f, stiffness = 500f)) { -it },
+                    exit = fadeOut(tween(200)) + scaleOut(tween(200), targetScale = 0.85f),
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(top = 12.dp)
+                        .offset { IntOffset(0, unreadJumpDrop.roundToPx()) }
+                ) {
+                    val isPrivate = uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE
+                    Surface(
+                        onClick = {
+                            val index = unreadJumpIndex
+                            unreadJumpDone = true
+                            val target = reversedChatRowItems.getOrNull(index)?.message
+                            if (target != null) {
+                                view.chatHaptic(ChatHaptic.Tick)
+                                scope.launch {
+                                    highlightedMessageId = target.id
+                                    listState.revealMessage(index)
+                                    delay(800)
+                                    if (highlightedMessageId == target.id) highlightedMessageId = null
+                                }
+                            }
+                        },
+                        shape = CircleShape,
+                        color = if (isPrivate) (if (isDark) darkTone(Graphite700) else Gray200) else MaterialTheme.colorScheme.primary,
+                        contentColor = if (isPrivate) (if (isDark) darkTone(Neutral200) else Gray800) else MaterialTheme.colorScheme.onPrimary,
+                        shadowElevation = 4.dp,
+                        modifier = Modifier.testTag("jump_to_unread")
                     ) {
-                        Icon(
-                            imageVector = if (unreadJumpUp[0]) Icons.Rounded.KeyboardArrowUp else Icons.Rounded.KeyboardArrowDown,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = if (unreadJumpCount == 1) "1 new message" else "$unreadJumpCount new messages",
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(start = 12.dp, end = 16.dp, top = 8.dp, bottom = 8.dp)
+                        ) {
+                            Icon(
+                                imageVector = if (unreadJumpUp[0]) Icons.Rounded.KeyboardArrowUp else Icons.Rounded.KeyboardArrowDown,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = if (unreadJumpCount == 1) "1 new message" else "$unreadJumpCount new messages",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
                     }
                 }
             }
@@ -3887,6 +3891,15 @@ private class ChatRowActions(
 )
 
 /**
+ * Runs [content] in a recompose scope of its own: state it reads (the list's scroll position,
+ * say) then rebuilds only it, not the whole chat around it.
+ */
+@Composable
+private fun OwnScope(content: @Composable () -> Unit) {
+    content()
+}
+
+/**
  * One message in the chat list: date separator, landing/selection/highlight animations and the
  * selection overlay. It only takes plain values, the message and the shared [actions], so a row is
  * skipped when unrelated chat state (typing, presence, upload or playback progress) changes.
@@ -3978,8 +3991,9 @@ private fun ChatMessageRow(
         // Private chat sits nearer the edges, with more room between messages, like ChatGPT
         val bubbleStartPadding = if (isSelectionMode) 6.dp else if (isPrivate) 14.dp else 16.dp
         val bubbleEndPadding = if (isPrivate) 14.dp else 16.dp
-        // Where the message sits on screen, for the long-press focus view
-        val anchor = remember(message.id) { arrayOf(Rect.Zero) }
+        // Where the message sits on screen, for the long-press focus view: [0] the row, [1] the
+        // bubble itself (used once placed, so the lifted copy is exactly the bubble's size)
+        val anchor = remember(message.id) { arrayOf(Rect.Zero, Rect.Zero) }
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -4074,7 +4088,7 @@ private fun ChatMessageRow(
                         // Not in private chat: its messages run the full width, so a sideways swipe on
                         // them is left for moving to Love & Us / Settings (Reply is in the long-press menu)
                         onSwipeToReply = if (isPrivate) null else ({ actions.reply(message) }),
-                        onLongClick = { actions.longPress(message, anchor[0]) },
+                        onLongClick = { actions.longPress(message, anchor[1].takeIf { it.width > 0f } ?: anchor[0]) },
                         onReactionClick = { emoji -> actions.react(message, emoji) },
                         onOpenTheaterVideo = actions.openTheaterVideo,
                         voicePlaybackSpeed = voicePlaybackSpeed,
@@ -4088,7 +4102,7 @@ private fun ChatMessageRow(
                         partnerName = partnerName,
                         isFreshArrival = isFreshArrival,
                         onBubblePositioned = { bounds ->
-                            anchor[0] = bounds
+                            anchor[1] = bounds
                         }
                     )
                 }

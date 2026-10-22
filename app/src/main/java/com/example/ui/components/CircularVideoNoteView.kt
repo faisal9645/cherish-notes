@@ -23,6 +23,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.VolumeOff
 import androidx.compose.material.icons.automirrored.rounded.VolumeUp
 import androidx.compose.material.icons.rounded.OpenInFull
+import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Repeat
@@ -164,6 +165,9 @@ private const val MIN_SHOWN_TO_PREVIEW = 0.5f
 private const val ROW_PX = 96f
 /** A note is the one most in view this long before its preview starts: not while scrolling past. */
 private const val PREVIEW_SETTLE_MS = 220L
+/** How soon a round note's buttons fade once it plays with sound, and how long a tap brings them back */
+private const val CONTROLS_HIDE_AT_START_MS = 600L
+private const val CONTROLS_SHOWN_MS = 2_500L
 private const val TAG = "CircularVideoNoteView"
 
 @Composable
@@ -186,7 +190,10 @@ fun CircularVideoNoteView(
     silentPreview: Boolean = false,
     // The small poster uploaded with it: shown until it plays, so scrolling past doesn't download
     // the whole video to make a still frame
-    posterUrl: String? = null
+    posterUrl: String? = null,
+    // Whether its buttons are showing (a round note playing with sound hides them): the
+    // full-screen viewer hides its own bar and buttons along with them
+    onControlsVisibleChanged: ((Boolean) -> Unit)? = null
 ) {
     val isRound = shape == CircleShape
     val context = LocalContext.current
@@ -223,6 +230,30 @@ fun CircularVideoNoteView(
         animationSpec = tween(durationMillis = 220),
         label = "video_note_ring"
     )
+
+    // A round note playing with sound shows just the video: its buttons fade away, and a tap
+    // brings them back for a moment (paused, finished or loading, they stay)
+    var controlsShown by remember { mutableStateOf(true) }
+    var controlsTaps by remember { mutableIntStateOf(0) }
+    LaunchedEffect(activelyPlaying, controlsTaps) {
+        if (!activelyPlaying) {
+            controlsShown = true
+            controlsTaps = 0
+        } else if (controlsShown) {
+            delay(if (controlsTaps == 0) CONTROLS_HIDE_AT_START_MS else CONTROLS_SHOWN_MS)
+            controlsShown = false
+        }
+    }
+    val controlsVisible = !(isRound && activelyPlaying) || controlsShown
+    val controlsAlpha by animateFloatAsState(
+        targetValue = if (controlsVisible) 1f else 0f,
+        animationSpec = tween(durationMillis = 200),
+        label = "video_note_controls"
+    )
+    val currentOnControlsVisibleChanged by rememberUpdatedState(onControlsVisibleChanged)
+    LaunchedEffect(controlsVisible) {
+        currentOnControlsVisibleChanged?.invoke(controlsVisible)
+    }
 
     // The player follows: muted and looping as a preview, otherwise as its buttons are set
     LaunchedEffect(player, isMuted, isLooping, isPreview) {
@@ -414,8 +445,17 @@ fun CircularVideoNoteView(
             val active = VideoNotePlayback.activeKey
             val myTurn = silentPreview && active == null && VideoNotePlayback.previewsAllowed &&
                 !BatterySaver.isOn && VideoNotePlayback.previewChoice() === playbackKey
-            active to myTurn
-        }.collectLatest { (active, myTurn) ->
+            // Paused with its sound on (by a tap, or the app going to the background) and then
+            // scrolled mostly away: it no longer holds the notes in view back from playing
+            val pausedAway = active === playbackKey && silentPreview && !isPlaying &&
+                (VideoNotePlayback.inView[playbackKey]?.shown ?: 0f) < MIN_SHOWN_TO_PREVIEW
+            Triple(active, myTurn, pausedAway)
+        }.collectLatest { (active, myTurn, pausedAway) ->
+            if (pausedAway) {
+                VideoNotePlayback.activeKey = null
+                releasePlayer()
+                return@collectLatest
+            }
             when {
                 active === playbackKey -> Unit
                 isPreview -> if (!myTurn) releasePlayer()
@@ -583,9 +623,19 @@ fun CircularVideoNoteView(
         }
     }
 
+    // A tap on a round note playing with sound, while its buttons are hidden, only brings them back
+    val onVideoTap: () -> Unit = {
+        if (isRound && activelyPlaying && !controlsShown) {
+            controlsShown = true
+            controlsTaps++
+        } else {
+            togglePlayPause()
+        }
+    }
+
     val currentOnLongClick by rememberUpdatedState(onLongClick)
     val currentOnDoubleClick by rememberUpdatedState(onDoubleClick)
-    val currentTogglePlayPause by rememberUpdatedState(togglePlayPause)
+    val currentOnVideoTap by rememberUpdatedState(onVideoTap)
 
     Box(
         modifier = modifier
@@ -606,7 +656,7 @@ fun CircularVideoNoteView(
                         currentOnDoubleClick?.invoke()
                     },
                     onTap = {
-                        currentTogglePlayPause()
+                        currentOnVideoTap()
                     }
                 )
             },
@@ -732,8 +782,31 @@ fun CircularVideoNoteView(
             }
         }
 
-        // The buttons and the duration: none on a silent preview
-        if (!isPreview) {
+        // The buttons and the duration: none on a silent preview, and they fade away while a
+        // round note plays with sound (a tap brings them back, see controlsShown)
+        if (!isPreview && controlsAlpha > 0f) {
+        Box(modifier = Modifier.matchParentSize().graphicsLayer { alpha = controlsAlpha }) {
+        // While it plays: a pause button in the middle, where its play button was (not over
+        // the spinner while it buffers)
+        if (isRound && activelyPlaying && !isLoading) {
+            Surface(
+                shape = CircleShape,
+                color = Color.Black.copy(alpha = 0.65f),
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .size(56.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = Icons.Rounded.Pause,
+                        contentDescription = "Pause video note",
+                        tint = Color.White,
+                        modifier = Modifier.size(34.dp)
+                    )
+                }
+            }
+        }
+
         // Top-left "Make Big" / Expand icon button (safely inset within circle curve)
         if (onExpandClick != null) {
             Box(
@@ -825,6 +898,7 @@ fun CircularVideoNoteView(
                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
                 )
             }
+        }
         }
         }
     }

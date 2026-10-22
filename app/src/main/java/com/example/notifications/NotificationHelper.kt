@@ -50,7 +50,7 @@ object NotificationHelper {
     private val activeNoteReminderIds = java.util.Collections.synchronizedSet(LinkedHashSet<Int>())
 
     private fun isCalculatorMode(prefs: SecurityPreferences): Boolean =
-        prefs.getDisguiseStyle() == SecurityPreferences.DISGUISE_STYLE_CALCULATOR
+        prefs.isDisguiseModeEnabled() && prefs.getDisguiseStyle() == SecurityPreferences.DISGUISE_STYLE_CALCULATOR
 
     fun getAppIconBitmap(context: Context): Bitmap? {
         return try {
@@ -801,12 +801,11 @@ object NotificationHelper {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val displayTitle = title.ifBlank { "Note Reminder" }
-        val displayText = if (content.isNotBlank()) content else "You have a scheduled note reminder."
-
         val isCalc = try {
             isCalculatorMode(SecurityPreferences.getInstance(context))
         } catch (_: Exception) { false }
+        val displayTitle = if (isCalc) "Calculator" else title.ifBlank { "Note Reminder" }
+        val displayText = if (isCalc) "Calculation history updated" else if (content.isNotBlank()) content else "You have a scheduled note reminder."
         val reminderAppIcon = getAppIconBitmap(context)
         val notification = NotificationCompat.Builder(context, CHANNEL_REMINDERS_ID)
             .setSmallIcon(if (isCalc) R.drawable.ic_stat_calculator else R.drawable.ic_stat_notes)

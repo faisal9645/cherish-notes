@@ -1516,7 +1516,7 @@ fun MessageBubble(
                                         Icon(
                                             imageVector = Icons.Rounded.DoneAll,
                                             contentDescription = "Read",
-                                            tint = Color(0xFF10B981),
+                                            tint = if (isPrivateMode && !isDark) Blue600 else Color(0xFF60A5FA),
                                             modifier = Modifier.size(13.dp)
                                         )
                                     }
@@ -1672,13 +1672,13 @@ internal class TimeChipColors(val background: Color, val content: Color, val bor
 internal fun timeChipColors(): TimeChipColors {
     val scheme = MaterialTheme.colorScheme
     return if (scheme.surface.luminance() < 0.5f) {
-        TimeChipColors(Color.Black.copy(alpha = TIME_CHIP_ALPHA), Color.White, border = null, read = Color(0xFF10B981))
+        TimeChipColors(Color.Black.copy(alpha = TIME_CHIP_ALPHA), Color.White, border = null, read = Color(0xFF60A5FA))
     } else {
         TimeChipColors(
             background = scheme.surface.copy(alpha = 0.90f),
             content = scheme.onSurface,
             border = BorderStroke(0.7.dp, scheme.outlineVariant.copy(alpha = 0.6f)),
-            read = Color(0xFF10B981)
+            read = Blue600
         )
     }
 }

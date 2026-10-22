@@ -116,7 +116,7 @@ object CallNotifications {
         timeoutMs: Long = 0L
     ): Notification {
         val prefs = SecurityPreferences.getInstance(context)
-        val isCalc = prefs.getDisguiseStyle() == SecurityPreferences.DISGUISE_STYLE_CALCULATOR
+        val isCalc = prefs.isDisguiseModeEnabled() && prefs.getDisguiseStyle() == SecurityPreferences.DISGUISE_STYLE_CALCULATOR
         return NotificationCompat.Builder(context, channelId)
             .setSmallIcon(if (isCalc) R.drawable.ic_stat_calculator else R.drawable.ic_stat_notes)
             .setColor(if (isCalc) 0xFF2E7D32.toInt() else ACCENT)
@@ -212,7 +212,7 @@ object CallNotifications {
         val notification = if (isMasked) {
             // Discreet: the disguised alert. It opens Notes; the call screen shows once Cherish is
             // unlocked, and answering from it asks to unlock the phone first
-            val isCalc = prefs.getDisguiseStyle() == SecurityPreferences.DISGUISE_STYLE_CALCULATOR
+            val isCalc = prefs.isDisguiseModeEnabled() && prefs.getDisguiseStyle() == SecurityPreferences.DISGUISE_STYLE_CALCULATOR
             val maskedTitle = prefs.getMaskedNotificationTitle()
             val maskedText = prefs.getMaskedNotificationText()
             val openNotesIntent = PendingIntent.getActivity(
@@ -259,7 +259,7 @@ object CallNotifications {
             val fullScreen = PendingIntent.getActivity(
                 context, REQUEST_FULL_SCREEN, CallActivity.incomingIntent(context, invite), immutableFlags()
             )
-            val isCalc = prefs.getDisguiseStyle() == SecurityPreferences.DISGUISE_STYLE_CALCULATOR
+            val isCalc = prefs.isDisguiseModeEnabled() && prefs.getDisguiseStyle() == SecurityPreferences.DISGUISE_STYLE_CALCULATOR
             val builder = NotificationCompat.Builder(context, channelId)
                 .setSmallIcon(if (isCalc) R.drawable.ic_stat_calculator else R.drawable.ic_stat_notes)
                 .apply {
@@ -364,7 +364,7 @@ object CallNotifications {
         val hangUp = PendingIntent.getBroadcast(context, REQUEST_HANG_UP, CallActionReceiver.hangUpIntent(context), immutableFlags())
         val show = PendingIntent.getActivity(context, REQUEST_SHOW, CallActivity.showIntent(context), immutableFlags())
         val prefs = SecurityPreferences.getInstance(context)
-        val isCalc = prefs.getDisguiseStyle() == SecurityPreferences.DISGUISE_STYLE_CALCULATOR
+        val isCalc = prefs.isDisguiseModeEnabled() && prefs.getDisguiseStyle() == SecurityPreferences.DISGUISE_STYLE_CALCULATOR
         val builder = NotificationCompat.Builder(context, CHANNEL_ONGOING)
             .setSmallIcon(if (isCalc) R.drawable.ic_stat_calculator else R.drawable.ic_stat_notes)
             .setColor(if (isCalc) 0xFF2E7D32.toInt() else ACCENT)
@@ -419,7 +419,7 @@ object CallNotifications {
             },
             immutableFlags()
         )
-        val isCalc = prefs.getDisguiseStyle() == SecurityPreferences.DISGUISE_STYLE_CALCULATOR
+        val isCalc = prefs.isDisguiseModeEnabled() && prefs.getDisguiseStyle() == SecurityPreferences.DISGUISE_STYLE_CALCULATOR
         val title = if (isMasked) prefs.getMaskedNotificationTitle() else NEUTRAL_MISSED
         val text = if (isMasked) prefs.getMaskedNotificationText() else if (showIdentity && !callerName.isNullOrBlank()) "From $callerName" else "Tap to open"
         val isRinging = prefs.isCallRingingEnabled()

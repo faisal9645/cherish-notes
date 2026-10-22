@@ -317,7 +317,7 @@ fun SharedGalleryScreen(
     }
 
     // Extract links from filtered messages
-    val extractedLinks = remember(filteredMessages, currentUserId) {
+    val allExtractedLinks = remember(filteredMessages, currentUserId) {
         val list = mutableListOf<GalleryLinkItem>()
         filteredMessages.forEach { msg ->
             if (msg.text.isNotBlank()) {
@@ -394,12 +394,16 @@ fun SharedGalleryScreen(
         list.sortedByDescending { it.timestamp }
     }
 
-    // The Media tab's filter: what kind (all, photos, videos, video notes) and who sent it (anyone, me, partner)
+    // The gallery's filters: what kind (all, photos, videos, video notes; the Media tab) and who sent
+    // it (anyone, me, partner; every tab)
     var mediaKind by rememberSaveable { mutableIntStateOf(MEDIA_ALL) }
-    var mediaFrom by rememberSaveable { mutableIntStateOf(FROM_ANYONE) }
+    var galleryFrom by rememberSaveable { mutableIntStateOf(FROM_ANYONE) }
     val partnerFirstName = remember(chatState.partnerUser?.displayName) {
         chatState.partnerUser?.displayName?.trim()?.substringBefore(' ')?.ifBlank { null } ?: "Partner"
     }
+    // A tab with nothing from the one picked in its filter
+    val nothingFromText = if (galleryFrom == FROM_ME) "Nothing from you here yet" else "Nothing from $partnerFirstName here yet"
+    val extractedLinks = remember(allExtractedLinks, galleryFrom) { allExtractedLinks.sentBy(galleryFrom) { it.isFromMe } }
     // How many of each kind there are, so kinds with none aren't offered
     val mediaKindCounts = remember(galleryMediaItems) {
         IntArray(4).also { counts ->
@@ -407,14 +411,14 @@ fun SharedGalleryScreen(
             galleryMediaItems.forEach { counts[mediaKindOf(it)]++ }
         }
     }
-    val shownMediaItems = remember(galleryMediaItems, mediaKind, mediaFrom, currentUserId) {
-        if (mediaKind == MEDIA_ALL && mediaFrom == FROM_ANYONE) {
+    val shownMediaItems = remember(galleryMediaItems, mediaKind, galleryFrom, currentUserId) {
+        if (mediaKind == MEDIA_ALL && galleryFrom == FROM_ANYONE) {
             galleryMediaItems
         } else {
             galleryMediaItems.filter { item ->
                 val fromMe = item.originalMessage.senderId == currentUserId
                 (mediaKind == MEDIA_ALL || mediaKindOf(item) == mediaKind) &&
-                    when (mediaFrom) {
+                    when (galleryFrom) {
                         FROM_ME -> fromMe
                         FROM_PARTNER -> !fromMe
                         else -> true
@@ -429,13 +433,16 @@ fun SharedGalleryScreen(
         }.sortedByDescending { it.timestamp }
     }
 
-    val voiceMessages = remember(filteredMessages) {
+    val allVoiceMessages = remember(filteredMessages) {
         filteredMessages.filter { it.getTypedType() == MessageType.AUDIO }
             .sortedByDescending { it.timestamp }
     }
+    val voiceMessages = remember(allVoiceMessages, galleryFrom, currentUserId) {
+        allVoiceMessages.sentBy(galleryFrom) { it.senderId == currentUserId }
+    }
 
     // All calls: recordings, completed, missed, declined, cancelled
-    val callHistoryItems = remember(filteredMessages) {
+    val allCallHistoryItems = remember(filteredMessages) {
         filteredMessages.filter { msg ->
             msg.getTypedType() == MessageType.CALL_RECORDING ||
             !msg.callId.isNullOrBlank() ||
@@ -446,10 +453,17 @@ fun SharedGalleryScreen(
             msg.text.contains("Missed call", ignoreCase = true)
         }.distinctBy { it.callId ?: it.id }.sortedByDescending { it.timestamp }
     }
+    // Calls I placed, or my partner did
+    val callHistoryItems = remember(allCallHistoryItems, galleryFrom, currentUserId) {
+        allCallHistoryItems.sentBy(galleryFrom) { it.senderId == currentUserId }
+    }
 
-    val starredMessages = remember(filteredMessages) {
+    val allStarredMessages = remember(filteredMessages) {
         filteredMessages.filter { it.isStarred }
             .sortedByDescending { it.timestamp }
+    }
+    val starredMessages = remember(allStarredMessages, galleryFrom, currentUserId) {
+        allStarredMessages.sentBy(galleryFrom) { it.senderId == currentUserId }
     }
 
     // Multi-select works per tab: one key per photo/video tile, otherwise one key per message
@@ -777,8 +791,8 @@ fun SharedGalleryScreen(
                                 kind = mediaKind,
                                 onKind = { mediaKind = it },
                                 kindCounts = mediaKindCounts,
-                                from = mediaFrom,
-                                onFrom = { mediaFrom = it },
+                                from = galleryFrom,
+                                onFrom = { galleryFrom = it },
                                 partnerName = partnerFirstName
                             )
                         }
@@ -787,7 +801,7 @@ fun SharedGalleryScreen(
                         val shownTab = when { shownMediaItems.isEmpty() && isGalleryLoading -> 0; shownMediaItems.isEmpty() -> 1; else -> 2 }
                         Crossfade(targetState = shownTab, animationSpec = tween(280), label = "gallery_tab", modifier = Modifier.weight(1f)) { phase ->
                         if (phase != 2) {
-                            val what = MEDIA_KIND_EMPTY_WORDS[mediaKind] + when (mediaFrom) {
+                            val what = MEDIA_KIND_EMPTY_WORDS[mediaKind] + when (galleryFrom) {
                                 FROM_ME -> " from you"
                                 FROM_PARTNER -> " from $partnerFirstName"
                                 else -> ""
@@ -840,7 +854,7 @@ fun SharedGalleryScreen(
                                 modifier = Modifier
                                     .fillMaxSize()
                                     .graphicsLayer { alpha = gridEntrance.value }
-                                    .padding(4.dp)
+                                    .padding(start = 4.dp, end = 4.dp, bottom = 4.dp)
                                     .pointerInput(Unit) {
                                         awaitEachGesture {
                                             awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
@@ -1055,13 +1069,17 @@ fun SharedGalleryScreen(
                     }
 
                     // TAB 1: Voice Notes (Playable with audio player and Show in Chat)
-                    1 -> {
+                    1 -> Column(modifier = Modifier.fillMaxSize()) {
+                        // Whose: from me or from my partner (as on the Media tab)
+                        if (allVoiceMessages.isNotEmpty()) {
+                            FromFilterRow(from = galleryFrom, onFrom = { galleryFrom = it }, partnerName = partnerFirstName)
+                        }
                         // The placeholders melt into the content instead of it popping in (each side of the
                         // crossfade keeps showing what it was)
                         val shownTab = when { voiceMessages.isEmpty() && isGalleryLoading -> 0; voiceMessages.isEmpty() -> 1; else -> 2 }
-                        Crossfade(targetState = shownTab, animationSpec = tween(280), label = "gallery_tab") { phase ->
+                        Crossfade(targetState = shownTab, animationSpec = tween(280), label = "gallery_tab", modifier = Modifier.weight(1f)) { phase ->
                         if (phase != 2) {
-                            val emptyText = if (selectedDateMillis != null) {
+                            val emptyText = if (galleryFrom != FROM_ANYONE && allVoiceMessages.isNotEmpty()) nothingFromText else if (selectedDateMillis != null) {
                                 val sdf = SimpleDateFormat("MMM d, yyyy", Locale.getDefault())
                                 "No voice notes found on ${sdf.format(Date(selectedDateMillis!!))} 📅"
                             } else {
@@ -1074,7 +1092,7 @@ fun SharedGalleryScreen(
                                 dateAt = { voiceSections.dateAt(it) },
                                 modifier = Modifier
                                     .fillMaxSize()
-                                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                                    .padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 12.dp),
                                 verticalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
                                 monthSections(voiceSections, key = { it.id }) { msg ->
@@ -1263,13 +1281,17 @@ fun SharedGalleryScreen(
                     }
 
                     // TAB 2: Links (WhatsApp Style with dates, times, and actions)
-                    2 -> {
+                    2 -> Column(modifier = Modifier.fillMaxSize()) {
+                        // Whose: from me or from my partner (as on the Media tab)
+                        if (allExtractedLinks.isNotEmpty()) {
+                            FromFilterRow(from = galleryFrom, onFrom = { galleryFrom = it }, partnerName = partnerFirstName)
+                        }
                         // The placeholders melt into the content instead of it popping in (each side of the
                         // crossfade keeps showing what it was)
                         val shownTab = when { extractedLinks.isEmpty() && isGalleryLoading -> 0; extractedLinks.isEmpty() -> 1; else -> 2 }
-                        Crossfade(targetState = shownTab, animationSpec = tween(280), label = "gallery_tab") { phase ->
+                        Crossfade(targetState = shownTab, animationSpec = tween(280), label = "gallery_tab", modifier = Modifier.weight(1f)) { phase ->
                         if (phase != 2) {
-                            val emptyText = if (selectedDateMillis != null) {
+                            val emptyText = if (galleryFrom != FROM_ANYONE && allExtractedLinks.isNotEmpty()) nothingFromText else if (selectedDateMillis != null) {
                                 val sdf = SimpleDateFormat("MMM d, yyyy", Locale.getDefault())
                                 "No links found on ${sdf.format(Date(selectedDateMillis!!))} 📅"
                             } else {
@@ -1282,7 +1304,7 @@ fun SharedGalleryScreen(
                                 dateAt = { linkSections.dateAt(it) },
                                 modifier = Modifier
                                     .fillMaxSize()
-                                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                                    .padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 12.dp),
                                 verticalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
                                 monthSections(linkSections, key = { "${it.messageId}_${it.url}" }) { item ->
@@ -1594,13 +1616,17 @@ fun SharedGalleryScreen(
                     }
 
                     // TAB 3: Starred
-                    3 -> {
+                    3 -> Column(modifier = Modifier.fillMaxSize()) {
+                        // Whose: from me or from my partner (as on the Media tab)
+                        if (allStarredMessages.isNotEmpty()) {
+                            FromFilterRow(from = galleryFrom, onFrom = { galleryFrom = it }, partnerName = partnerFirstName)
+                        }
                         // The placeholders melt into the content instead of it popping in (each side of the
                         // crossfade keeps showing what it was)
                         val shownTab = when { starredMessages.isEmpty() && isGalleryLoading -> 0; starredMessages.isEmpty() -> 1; else -> 2 }
-                        Crossfade(targetState = shownTab, animationSpec = tween(280), label = "gallery_tab") { phase ->
+                        Crossfade(targetState = shownTab, animationSpec = tween(280), label = "gallery_tab", modifier = Modifier.weight(1f)) { phase ->
                         if (phase != 2) {
-                            val emptyText = if (selectedDateMillis != null) {
+                            val emptyText = if (galleryFrom != FROM_ANYONE && allStarredMessages.isNotEmpty()) nothingFromText else if (selectedDateMillis != null) {
                                 val sdf = SimpleDateFormat("MMM d, yyyy", Locale.getDefault())
                                 "No starred items found on ${sdf.format(Date(selectedDateMillis!!))} 📅"
                             } else {
@@ -1613,7 +1639,7 @@ fun SharedGalleryScreen(
                                 dateAt = { starredSections.dateAt(it) },
                                 modifier = Modifier
                                     .fillMaxSize()
-                                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                                    .padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 12.dp),
                                 verticalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
                                 monthSections(starredSections, key = { it.id }) { msg ->
@@ -1748,13 +1774,17 @@ fun SharedGalleryScreen(
                     }
 
                     // TAB 4: Calls & Recordings
-                    4 -> {
+                    4 -> Column(modifier = Modifier.fillMaxSize()) {
+                        // Whose: from me or from my partner (as on the Media tab)
+                        if (allCallHistoryItems.isNotEmpty()) {
+                            FromFilterRow(from = galleryFrom, onFrom = { galleryFrom = it }, partnerName = partnerFirstName)
+                        }
                         // The placeholders melt into the content instead of it popping in (each side of the
                         // crossfade keeps showing what it was)
                         val shownTab = when { callHistoryItems.isEmpty() && isGalleryLoading -> 0; callHistoryItems.isEmpty() -> 1; else -> 2 }
-                        Crossfade(targetState = shownTab, animationSpec = tween(280), label = "gallery_tab") { phase ->
+                        Crossfade(targetState = shownTab, animationSpec = tween(280), label = "gallery_tab", modifier = Modifier.weight(1f)) { phase ->
                         if (phase != 2) {
-                            val emptyText = if (selectedDateMillis != null) {
+                            val emptyText = if (galleryFrom != FROM_ANYONE && allCallHistoryItems.isNotEmpty()) nothingFromText else if (selectedDateMillis != null) {
                                 val sdf = SimpleDateFormat("MMM d, yyyy", Locale.getDefault())
                                 "No calls or recordings found on ${sdf.format(Date(selectedDateMillis!!))} 📞"
                             } else {
@@ -1767,7 +1797,7 @@ fun SharedGalleryScreen(
                                 dateAt = { callSections.dateAt(it) },
                                 modifier = Modifier
                                     .fillMaxSize()
-                                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                                    .padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 12.dp),
                                 verticalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
                                 monthSections(callSections, key = { it.id }) { msg ->
@@ -2217,10 +2247,17 @@ private val MEDIA_KIND_LABELS = listOf("All", "Photos", "Videos", "Video notes")
 private val MEDIA_KIND_COUNT_WORDS = listOf("photos & videos", "photos", "videos", "video notes")
 private val MEDIA_KIND_EMPTY_WORDS = listOf("photos or videos", "photos", "videos", "video notes")
 
-/** Who sent it, for the Media tab's filter. */
+/** Who sent it, for the gallery's filter (every tab). */
 private const val FROM_ANYONE = 0
 private const val FROM_ME = 1
 private const val FROM_PARTNER = 2
+
+/** These items narrowed to who sent them, for the gallery's From me / From partner filter. */
+private fun <T> List<T>.sentBy(from: Int, isMine: (T) -> Boolean): List<T> = when (from) {
+    FROM_ME -> filter(isMine)
+    FROM_PARTNER -> filterNot(isMine)
+    else -> this
+}
 
 /** From this many columns (the smallest tiles) the Media tab shows only the photos, no buttons on them. */
 private const val COMPACT_TILE_COLUMNS = 5
@@ -2273,15 +2310,40 @@ private fun MediaFilterRow(
                 .height(20.dp)
                 .background(MaterialTheme.colorScheme.outlineVariant)
         )
-        listOf(FROM_ME to "From me", FROM_PARTNER to "From $partnerName").forEach { (value, label) ->
-            CherishFilterChip(
-                selected = from == value,
-                onClick = { onFrom(if (from == value) FROM_ANYONE else value) },
-                label = { Text(label, fontSize = 12.sp, maxLines = 1) },
-                colors = chipColors,
-                modifier = Modifier.testTag("gallery_filter_from_$value")
-            )
-        }
+        FromFilterChips(from = from, onFrom = onFrom, partnerName = partnerName)
+    }
+}
+
+/** The Voice Notes, Links, Starred and Calls tabs' filter: from me or from my partner. */
+@Composable
+private fun FromFilterRow(from: Int, onFrom: (Int) -> Unit, partnerName: String) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState())
+            .padding(horizontal = 16.dp, vertical = 4.dp)
+    ) {
+        FromFilterChips(from = from, onFrom = onFrom, partnerName = partnerName)
+    }
+}
+
+/** "From me" and "From <partner>": tapping the chosen one again shows both. */
+@Composable
+private fun FromFilterChips(from: Int, onFrom: (Int) -> Unit, partnerName: String) {
+    val chipColors = FilterChipDefaults.filterChipColors(
+        selectedContainerColor = RoseGoldPrimary.copy(alpha = 0.12f),
+        selectedLabelColor = RoseGoldPrimary
+    )
+    listOf(FROM_ME to "From me", FROM_PARTNER to "From $partnerName").forEach { (value, label) ->
+        CherishFilterChip(
+            selected = from == value,
+            onClick = { onFrom(if (from == value) FROM_ANYONE else value) },
+            label = { Text(label, fontSize = 12.sp, maxLines = 1) },
+            colors = chipColors,
+            modifier = Modifier.testTag("gallery_filter_from_$value")
+        )
     }
 }
 
@@ -2346,7 +2408,7 @@ private fun GalleryMonthHeader(month: String, count: Int) {
             .fillMaxWidth()
             // Stays readable while it rests over the photos at the top
             .background(MaterialTheme.colorScheme.background.copy(alpha = 0.94f))
-            .padding(start = 4.dp, top = 12.dp, bottom = 6.dp)
+            .padding(start = 4.dp, top = 6.dp, bottom = 4.dp)
     ) {
         Text(
             text = month,

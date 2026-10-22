@@ -189,6 +189,11 @@ fun FullScreenMediaViewer(
     DisposableEffect(Unit) {
         onDispose {
             com.example.ui.components.stopAllVideoNotes()
+            // Back on the chat, its round notes play by themselves again as they come into view
+            // (not when the viewer closed because the app went behind its disguise)
+            if (!com.example.security.SecurityPreferences.getInstance(context).isDisguiseActive()) {
+                com.example.ui.components.resumeVideoNotePreviews()
+            }
         }
     }
     var showDeleteConfirmDialog by remember { mutableStateOf(false) }
@@ -869,6 +874,9 @@ fun FullScreenMediaViewer(
                             autoPlay = isCurrentPage,
                             shape = CircleShape,
                             cropToFill = true,
+                            // While the big circle plays, the bar and buttons go with its own
+                            // buttons; a tap on it brings them all back
+                            onControlsVisibleChanged = { visible -> if (isCurrentPage) isChromeVisible = visible },
                             modifier = Modifier.fillMaxSize()
                         )
                     }

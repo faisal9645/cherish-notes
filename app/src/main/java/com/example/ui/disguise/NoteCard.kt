@@ -430,7 +430,7 @@ fun NoteCard(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(6.dp)
+                    .height(4.dp)
                     .background(themeColors.accentPrimary)
             )
 

@@ -316,11 +316,12 @@ fun NotesDisguiseScreen(
                                 .padding(horizontal = 16.dp, vertical = 8.dp)
                         ) {
                     if (uiState.isSelectionMode) {
-                        // Contextual Multi-Selection Action Bar
+                        // Contextual Multi-Selection Action Bar (as tall as the header it replaces,
+                        // so nothing below moves when a long press starts selecting)
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(vertical = 4.dp),
+                                .height(48.dp),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
@@ -371,7 +372,9 @@ fun NotesDisguiseScreen(
                     } else {
                         // Standard Header Bar
                         Row(
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(48.dp),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {

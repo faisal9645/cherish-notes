@@ -79,24 +79,20 @@
             android:windowSoftInputMode="adjustResize"
             android:theme="@style/Theme.MyApplication" />
 
-        <!-- Samsung Calculator Decoy Launcher Entry (Default on fresh install, opens immediately with no splash logo) -->
-        <activity
+        <!-- Samsung Calculator Decoy Launcher Entry (Default on fresh install) -->
+        <activity-alias
             android:name=".CalculatorAlias"
+            android:targetActivity=".MainActivity"
             android:exported="true"
-            android:hardwareAccelerated="true"
-            android:launchMode="singleTop"
             android:icon="@mipmap/ic_calculator_launcher"
             android:roundIcon="@mipmap/ic_calculator_launcher"
             android:label="@string/calculator_name"
-            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|smallestScreenSize|uiMode"
-            android:windowSoftInputMode="adjustResize"
-            android:theme="@style/Theme.MyApplication.Calculator"
             android:enabled="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-        </activity>
+        </activity-alias>
 
         <!-- Notes Launcher Alias (Disabled by default on fresh install; enabled if Notes disguise chosen) -->
         <activity-alias

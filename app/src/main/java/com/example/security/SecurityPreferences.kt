@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.withLock
 import java.security.MessageDigest
 
 class SecurityPreferences(private val context: Context) {
@@ -98,13 +99,13 @@ class SecurityPreferences(private val context: Context) {
     fun setDisguiseStyle(style: String) {
         val valid = if (style == DISGUISE_STYLE_CALCULATOR) DISGUISE_STYLE_CALCULATOR else DISGUISE_STYLE_NOTES
         if (getDisguiseStyle() == valid && _disguiseStyle.value == valid) {
-            syncLauncherIcon(valid)
+            syncLauncherIcon()
             return
         }
         prefs.edit().putString(KEY_DISGUISE_STYLE, valid).apply()
         _disguiseStyle.value = valid
         _isCalculatorDecoy.value = isCalculatorDecoy()
-        syncLauncherIcon(valid)
+        syncLauncherIcon()
     }
 
     /**
@@ -116,89 +117,127 @@ class SecurityPreferences(private val context: Context) {
     private val _isCalculatorDecoy = MutableStateFlow(isCalculatorDecoy())
     val calculatorDecoy: StateFlow<Boolean> = _isCalculatorDecoy.asStateFlow()
 
-    private val launcherSyncScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO)
-    private var syncJob: kotlinx.coroutines.Job? = null
+    private val launcherSyncScope = kotlinx.coroutines.CoroutineScope(
+        kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO
+    )
+    private val launcherSyncLock = kotlinx.coroutines.sync.Mutex()
 
-    fun syncLauncherIcon(style: String = getDisguiseStyle(), forceReindex: Boolean = false) {
-        syncJob?.cancel()
-        syncJob = launcherSyncScope.launch {
-            try {
-                val pm = context.packageManager
-                val mainComp = android.content.ComponentName(context, "com.example.MainActivity")
-                val notesComp = android.content.ComponentName(context, "com.example.NotesAlias")
-                val calcComp = android.content.ComponentName(context, "com.example.CalculatorAlias")
-                val shareComp = android.content.ComponentName(context, "com.example.share.ShareReceiverActivity")
-
-                // Ensure MainActivity is not disabled (keep enabled for alias targets and internal intents)
-                val mainSetting = pm.getComponentEnabledSetting(mainComp)
-                if (mainSetting == android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DISABLED) {
-                    pm.setComponentEnabledSetting(
-                        mainComp,
-                        android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
-                        android.content.pm.PackageManager.DONT_KILL_APP
-                    )
-                }
-
-                val isCalc = style == DISGUISE_STYLE_CALCULATOR
-                val enabled = android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_ENABLED
-                val disabled = android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DISABLED
-
-                val targetComp = if (isCalc) calcComp else notesComp
-                val outgoingComp = if (isCalc) notesComp else calcComp
-                val targetDefault = isCalc
-                val outgoingDefault = !isCalc
-
-                // One-time drawer re-index check for existing devices where the launcher cached 'Notes'
-                // at the old 'C' slot (Calculator's position)
-                val needsReindexFix = !prefs.getBoolean(KEY_DRAWER_ALPHABETICAL_SORT_FIXED, false)
-
-                val targetSetting = pm.getComponentEnabledSetting(targetComp)
-                val outgoingSetting = pm.getComponentEnabledSetting(outgoingComp)
-
-                val targetNeedsChange = when (targetSetting) {
-                    enabled -> false
-                    android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DEFAULT -> !targetDefault
-                    else -> true
-                }
-                val outgoingNeedsChange = when (outgoingSetting) {
-                    disabled -> false
-                    android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DEFAULT -> outgoingDefault
-                    else -> true
-                }
-
-                if (!targetNeedsChange && !outgoingNeedsChange && !forceReindex && !needsReindexFix) {
-                    return@launch
-                }
-
-                // CRITICAL FOR SAMSUNG (ONE UI) AND VIVO (FUNTOUCH OS / ORIGINOS) APP DRAWER ALPHABETICAL ORDER:
-                // When an alias is enabled while the old one is still active, Vivo and Samsung launchers treat
-                // it as an in-place property update on the existing drawer item and DO NOT re-sort the grid.
-                // This causes "Notes" to remain stuck in the "C" slot where Calculator was.
-                // By disabling the outgoing component first (or pulsing the current active component) and
-                // allowing a small 250ms window before enabling the new component, the launcher cleanly purges
-                // the stale grid cell and inserts the new component in its correct alphabetical position
-                // (Notes under 'N', Calculator under 'C').
-                if (outgoingNeedsChange || needsReindexFix || forceReindex) {
-                    pm.setComponentEnabledSetting(outgoingComp, disabled, android.content.pm.PackageManager.DONT_KILL_APP)
-                    if (isCalc) {
-                        pm.setComponentEnabledSetting(shareComp, disabled, android.content.pm.PackageManager.DONT_KILL_APP)
-                    }
-                    if (needsReindexFix || forceReindex) {
-                        pm.setComponentEnabledSetting(targetComp, disabled, android.content.pm.PackageManager.DONT_KILL_APP)
-                    }
-                    kotlinx.coroutines.delay(250)
-                }
-
-                pm.setComponentEnabledSetting(targetComp, enabled, android.content.pm.PackageManager.DONT_KILL_APP)
-                if (!isCalc) {
-                    pm.setComponentEnabledSetting(shareComp, enabled, android.content.pm.PackageManager.DONT_KILL_APP)
-                }
-
-                if (needsReindexFix) {
-                    prefs.edit().putBoolean(KEY_DRAWER_ALPHABETICAL_SORT_FIXED, true).apply()
-                }
-            } catch (_: Throwable) {}
+    /**
+     * Shows the one launcher icon that fits now: the Calculator, or Notes (also whenever Disguise
+     * Mode is off). Calls queue up and each works from the current settings, so a newer call never
+     * cuts an icon switch off halfway.
+     *
+     * Samsung One UI and Vivo keep a drawer item's place when an app swaps one launcher entry for
+     * another in a single change (they take it as the same app renamed): the Calculator stayed under
+     * N where Notes was, and Notes under C. Android sends component changes out together, about a
+     * second after the first one (10 s on older versions), so switching the old icon off and the new
+     * one on a moment apart still lands as one swap. So the old icon goes off on its own, and the new
+     * one comes on only after that change has gone out and the launcher has dropped the old item: the
+     * launcher then files it as a new app, under its own letter.
+     */
+    fun syncLauncherIcon() {
+        launcherSyncScope.launch {
+            launcherSyncLock.withLock { applyLauncherIcon() }
         }
+    }
+
+    private suspend fun applyLauncherIcon() {
+        try {
+            val pm = context.packageManager
+            val mainComp = android.content.ComponentName(context, "com.example.MainActivity")
+            val notesComp = android.content.ComponentName(context, "com.example.NotesAlias")
+            val calcComp = android.content.ComponentName(context, "com.example.CalculatorAlias")
+            val shareComp = android.content.ComponentName(context, "com.example.share.ShareReceiverActivity")
+
+            // Both icons open MainActivity, so it must never stay disabled
+            setComponentOn(pm, mainComp, true)
+
+            val isCalc = isCalculatorDecoy()
+            val incoming = if (isCalc) calcComp else notesComp
+            val outgoing = if (isCalc) notesComp else calcComp
+            // "Share to Notes" is offered only while the app is Notes (a calculator taking shares
+            // would stand out in every share sheet)
+            setComponentOn(pm, shareComp, !isCalc)
+
+            val incomingOn = isComponentOn(pm, incoming)
+            val outgoingOn = isComponentOn(pm, outgoing)
+            // Phones whose launcher already filed the icon under the wrong letter get it re-filed once
+            val refile = !prefs.getBoolean(KEY_DRAWER_ICON_REFILED, false)
+            if (incomingOn && !outgoingOn && !refile) return
+
+            // Every launcher entry goes off first (the right one too, when re-filing it)...
+            val goingOff = listOfNotNull(outgoing.takeIf { outgoingOn }, incoming.takeIf { incomingOn })
+            if (goingOff.isNotEmpty()) {
+                awaitPackageChangeSent {
+                    goingOff.forEach { setComponentOn(pm, it, false) }
+                }
+                // ...the launcher drops the old item...
+                kotlinx.coroutines.delay(LAUNCHER_SETTLE_MS)
+            }
+            // ...and the right icon comes in as a new app. (If the app was killed halfway, there's no
+            // icon on at all, and the next start lands here straight away.)
+            setComponentOn(pm, incoming, true)
+            prefs.edit().putBoolean(KEY_DRAWER_ICON_REFILED, true).apply()
+        } catch (_: Throwable) {}
+    }
+
+    /**
+     * Runs [change] and returns once Android has sent out the "package changed" broadcast that
+     * carries it, or after [PACKAGE_CHANGE_WAIT_MS] if it never comes.
+     */
+    private suspend fun awaitPackageChangeSent(change: () -> Unit) {
+        val sent = kotlinx.coroutines.CompletableDeferred<Unit>()
+        val receiver = object : android.content.BroadcastReceiver() {
+            override fun onReceive(c: Context, intent: android.content.Intent) {
+                sent.complete(Unit)
+            }
+        }
+        val filter = android.content.IntentFilter(android.content.Intent.ACTION_PACKAGE_CHANGED).apply {
+            addDataScheme("package")
+            addDataSchemeSpecificPart(context.packageName, android.os.PatternMatcher.PATTERN_LITERAL)
+        }
+        val listening = try {
+            androidx.core.content.ContextCompat.registerReceiver(
+                context,
+                receiver,
+                filter,
+                androidx.core.content.ContextCompat.RECEIVER_NOT_EXPORTED
+            )
+            true
+        } catch (_: Throwable) {
+            false
+        }
+        try {
+            change()
+            kotlinx.coroutines.withTimeoutOrNull(PACKAGE_CHANGE_WAIT_MS) { sent.await() }
+        } finally {
+            if (listening) {
+                try { context.unregisterReceiver(receiver) } catch (_: Throwable) {}
+            }
+        }
+    }
+
+    /** A component's real state: what it was switched to, or its manifest default if never switched */
+    @Suppress("DEPRECATION")
+    private fun isComponentOn(pm: android.content.pm.PackageManager, comp: android.content.ComponentName): Boolean =
+        when (pm.getComponentEnabledSetting(comp)) {
+            android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_ENABLED -> true
+            android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DEFAULT -> try {
+                pm.getActivityInfo(comp, android.content.pm.PackageManager.MATCH_DISABLED_COMPONENTS).enabled
+            } catch (_: Throwable) {
+                false
+            }
+            else -> false
+        }
+
+    private fun setComponentOn(pm: android.content.pm.PackageManager, comp: android.content.ComponentName, on: Boolean) {
+        if (isComponentOn(pm, comp) == on) return
+        pm.setComponentEnabledSetting(
+            comp,
+            if (on) android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_ENABLED
+            else android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
+            android.content.pm.PackageManager.DONT_KILL_APP
+        )
     }
 
     fun setDisguiseModeEnabled(enabled: Boolean) {
@@ -1350,7 +1389,13 @@ class SecurityPreferences(private val context: Context) {
         private const val KEY_CALL_VIBRATE_MUTE = "call_vibrate_mute"
         private const val KEY_CALL_RECORDINGS_AUTO_UPLOAD = "call_recordings_auto_upload"
         private const val KEY_HAS_ALERTED_SINCE_LAST_OPEN = "has_alerted_since_last_open"
-        private const val KEY_DRAWER_ALPHABETICAL_SORT_FIXED = "drawer_alphabetical_sort_fixed_v2"
+        // v3: the earlier re-file switched the icon back on too soon to take effect
+        private const val KEY_DRAWER_ICON_REFILED = "drawer_icon_refiled_v3"
+        // Android sends launcher icon changes out about a second after they're made (10 s on older
+        // versions and just after boot); this is how long to wait for that broadcast at most
+        private const val PACKAGE_CHANGE_WAIT_MS = 12_000L
+        // Then how long the launcher gets to drop the old icon before the new one comes on
+        private const val LAUNCHER_SETTLE_MS = 2_000L
 
         @Volatile
         private var INSTANCE: SecurityPreferences? = null

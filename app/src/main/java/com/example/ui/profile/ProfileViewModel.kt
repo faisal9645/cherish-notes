@@ -100,8 +100,6 @@ class ProfileViewModel(
         object Idle : ReinstallUi()
         object Preparing : ReinstallUi()
         data class Downloading(val progress: Float) : ReinstallUi()
-        /** The APK is in Downloads; waiting for the user to tap Uninstall. */
-        object ReadyToUninstall : ReinstallUi()
         data class Error(val message: String) : ReinstallUi()
     }
 
@@ -146,13 +144,14 @@ class ProfileViewModel(
                 _reinstallState.value = ReinstallUi.Error("Couldn't save the installer to Downloads.")
                 return@launch
             }
-            // Downloaded: wait for the user to tap Uninstall (they're told it's in Downloads)
-            _reinstallState.value = ReinstallUi.ReadyToUninstall
+            // Downloaded: straight on to the uninstall dialog (agreed to in "Download & Reinstall",
+            // which says the installer goes to Downloads)
+            openUninstall(context)
         }
     }
 
-    /** The user tapped Uninstall after the download: open the system uninstall dialog. */
-    fun confirmUninstall(context: android.content.Context) {
+    /** The installer is in Downloads: open the system uninstall dialog. */
+    private fun openUninstall(context: android.content.Context) {
         // Leaving for the uninstall dialog isn't the user leaving the app
         securityPreferences.ignoreNextPause = true
         securityPreferences.isExternalPickerActive = true

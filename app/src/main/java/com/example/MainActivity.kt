@@ -68,15 +68,8 @@ open class MainActivity : FragmentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         val isCalc = try {
-            val comp = intent?.component?.className ?: ""
-            if (comp.endsWith("CalculatorAlias")) {
-                true
-            } else if (comp.endsWith("NotesAlias")) {
-                false
-            } else {
-                app.securityPreferences.isDisguiseModeEnabled() &&
-                    app.securityPreferences.getDisguiseStyle() == com.example.security.SecurityPreferences.DISGUISE_STYLE_CALCULATOR
-            }
+            app.securityPreferences.isDisguiseModeEnabled() &&
+                app.securityPreferences.getDisguiseStyle() == com.example.security.SecurityPreferences.DISGUISE_STYLE_CALCULATOR
         } catch (_: Exception) { false }
         if (isCalc) {
             setTheme(R.style.Theme_MyApplication_Calculator)
@@ -245,13 +238,11 @@ open class MainActivity : FragmentActivity() {
                 intent.getBooleanExtra("open_chat", false) ||
                 intent.hasExtra("conversationId")
         val targetComponent = intent.component?.className ?: ""
-        val fromIcon = targetComponent.endsWith("CalculatorAlias") || targetComponent.endsWith("NotesAlias")
+        val fromIcon = targetComponent.endsWith("CalculatorAlias") ||
+                targetComponent.endsWith("NotesAlias") ||
+                targetComponent.endsWith("MainActivity")
         if (fromIcon) {
             if (prefs.isDisguiseModeEnabled()) {
-                prefs.setDisguiseStyle(
-                    if (targetComponent.endsWith("CalculatorAlias")) com.example.security.SecurityPreferences.DISGUISE_STYLE_CALCULATOR
-                    else com.example.security.SecurityPreferences.DISGUISE_STYLE_NOTES
-                )
                 prefs.forceDisguise()
             } else {
                 // Not the style: with Disguise Mode off the icon is Notes whatever was picked, and
@@ -579,8 +570,9 @@ open class MainActivity : FragmentActivity() {
                 else -> isSystemDark
             }
             val color = if (isDark) android.graphics.Color.BLACK else android.graphics.Color.WHITE
+            val iconRes = if (isCalc) R.drawable.ic_samsung_calculator else R.drawable.ic_notes_app
+            val bmp = android.graphics.BitmapFactory.decodeResource(resources, iconRes)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                val iconRes = if (isCalc) R.mipmap.ic_calculator_launcher else R.mipmap.ic_launcher
                 setTaskDescription(
                     android.app.ActivityManager.TaskDescription.Builder()
                         .setLabel(label)
@@ -589,8 +581,6 @@ open class MainActivity : FragmentActivity() {
                         .build()
                 )
             } else {
-                val iconRes = if (isCalc) R.drawable.ic_samsung_calculator else R.drawable.ic_notes_app
-                val bmp = android.graphics.BitmapFactory.decodeResource(resources, iconRes)
                 @Suppress("DEPRECATION")
                 setTaskDescription(android.app.ActivityManager.TaskDescription(label, bmp, color))
             }
