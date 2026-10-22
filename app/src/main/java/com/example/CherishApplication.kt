@@ -217,9 +217,6 @@ class CherishApplication : Application(), coil.ImageLoaderFactory {
             coupleFeaturesRepository
         )
 
-        // Messages saved only after the app closed last time: their push is asked for now
-        com.example.notifications.PartnerPush.resumePending(this)
-
         // Voice calls: ring while the app runs, even before (or without) a push
         try {
             com.example.call.CallManager.init(this)
@@ -235,16 +232,24 @@ class CherishApplication : Application(), coil.ImageLoaderFactory {
             Log.w("CherishApp", "CherishSyncService stop error: ${e.message}")
         }
 
-        try {
-            com.example.notifications.NoteReminderScheduler.rescheduleAllUpcomingReminders(this, notesRepository)
-        } catch (e: Throwable) {
-            Log.w("CherishApp", "NoteReminderScheduler error: ${e.message}")
-        }
-
-        try {
-            com.example.update.OtaUpdateManager.getInstance(this).cleanupDownloadedInstallers()
-        } catch (e: Throwable) {
-            Log.w("CherishApp", "OtaUpdateManager cleanup error: ${e.message}")
+        // Stagger non-critical disk & sync operations off the main thread so first frame paints instantly
+        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+            kotlinx.coroutines.delay(1_200L)
+            try {
+                com.example.notifications.PartnerPush.resumePending(this@CherishApplication)
+            } catch (e: Throwable) {
+                Log.w("CherishApp", "PartnerPush resume error: ${e.message}")
+            }
+            try {
+                com.example.notifications.NoteReminderScheduler.rescheduleAllUpcomingReminders(this@CherishApplication, notesRepository)
+            } catch (e: Throwable) {
+                Log.w("CherishApp", "NoteReminderScheduler error: ${e.message}")
+            }
+            try {
+                com.example.update.OtaUpdateManager.getInstance(this@CherishApplication).cleanupDownloadedInstallers()
+            } catch (e: Throwable) {
+                Log.w("CherishApp", "OtaUpdateManager cleanup error: ${e.message}")
+            }
         }
 
         // Background cache maintenance: clean stale temporary uploads, installers, and enforce LRU limits

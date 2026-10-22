@@ -1,9 +1,9 @@
 {
-  "versionCode": 210,
-  "versionName": "1.8.38",
-  "tagName": "v1.8.38-210",
-  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.8.38-210/app_update_210.apk",
-  "assetSize": 19034428,
-  "releaseNotes": "Notes v1.8.38 (Build 210):\n• Smoother scrolling and typing\n• Quicker start-up\n• Smaller attachments and less data use\n• Bug fixes and refinements",
-  "releaseDate": "2026-10-22T17:35:55Z"
+  "versionCode": 211,
+  "versionName": "1.8.39",
+  "tagName": "v1.8.39-211",
+  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.8.39-211/app_update_211.apk",
+  "assetSize": 19035316,
+  "releaseNotes": "Notes v1.8.39 (Build 211):\n\u2022 Scroll-freeze on video previews for locked 120 FPS\n\u2022 Draw-phase bubble press physics (zero recomposition lag)\n\u2022 Staggered background startup for instant cold launch\n\u2022 Bug fixes and battery performance refinements",
+  "releaseDate": "2026-10-22T17:45:48Z"
 }
