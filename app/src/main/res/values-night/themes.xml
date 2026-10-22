@@ -13,6 +13,6 @@
         <!-- Dark Mode & AMOLED Splash Screen. No icon background color: it would draw a circle
              behind the logo. -->
         <item name="android:windowSplashScreenBackground" tools:targetApi="s">#121212</item>
-        <item name="android:windowSplashScreenAnimatedIcon" tools:targetApi="s">@drawable/splash_icon</item>
+        <item name="android:windowSplashScreenAnimatedIcon" tools:targetApi="s">@drawable/splash_icon_neutral</item>
     </style>
 </resources>

@@ -21,6 +21,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -242,6 +243,11 @@ fun CalculatorDisguiseScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val activity = remember(context) {
+        var c: Context? = context
+        while (c is ContextWrapper) { if (c is Activity) break; c = c.baseContext }
+        c as? Activity
+    }
     val haptic = LocalHapticFeedback.current
     val coroutineScope = rememberCoroutineScope()
 
@@ -258,6 +264,10 @@ fun CalculatorDisguiseScreen(
     val history = CalculatorHistoryStore.entries
     LaunchedEffect(Unit) { CalculatorHistoryStore.load(context) }
     var showHistoryInline by remember { mutableStateOf(false) }
+    // The keypad's measured height, so the inline history takes exactly the same space and the
+    // display above never moves when you open history or the unit converter
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    var keypadHeightPx by remember { mutableIntStateOf(0) }
     var showUnitConverterScreen by remember { mutableStateOf(false) }
 
     // Secret unlock transition state
@@ -372,7 +382,8 @@ fun CalculatorDisguiseScreen(
         return false
     }
 
-    // Android back button / back gesture
+    // Android back button / back gesture: close the converter or history first; otherwise
+    // cleanly exit the calculator app, returning to launcher or previous app.
     BackHandler(enabled = true) {
         if (showUnitConverterScreen) {
             showUnitConverterScreen = false
@@ -387,9 +398,9 @@ fun CalculatorDisguiseScreen(
                 if (ctx is Activity) break
                 ctx = ctx.baseContext
             }
-            val activity = ctx as? Activity
-            activity?.moveTaskToBack(true)
-            activity?.finishAffinity() ?: activity?.finish()
+            val act = (ctx as? Activity) ?: activity
+            act?.moveTaskToBack(true)
+            act?.finishAffinity() ?: act?.finish()
         }
     }
 
@@ -415,11 +426,6 @@ fun CalculatorDisguiseScreen(
 
     // The calculator never raises the keyboard; the chat underneath still needs it to resize the
     // layout, so the soft-input mode is put back to adjustResize when the calculator leaves.
-    val activity = remember(context) {
-        var c: Context? = context
-        while (c is ContextWrapper) { if (c is Activity) break; c = c.baseContext }
-        c as? Activity
-    }
     DisposableEffect(window) {
         window?.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN)
         // A basic calculator shows upright; its five key rows don't fit a short landscape screen
@@ -923,9 +929,10 @@ fun CalculatorDisguiseScreen(
                     modifier = Modifier.padding(vertical = if (isCompactScreen) 6.dp else 10.dp)
                 )
 
-                // Scientific Keypad Panel (Animated Expansion)
+                // Scientific Keypad Panel (Animated Expansion). Stays as it is when history opens, so
+                // opening history doesn't change the height below the display (no shift).
                 AnimatedVisibility(
-                    visible = isScientificActive && !showHistoryInline,
+                    visible = isScientificActive,
                     enter = fadeIn() + expandVertically(),
                     exit = fadeOut() + shrinkVertically()
                 ) {
@@ -1049,11 +1056,14 @@ fun CalculatorDisguiseScreen(
                 if (showHistoryInline) {
                     // Inline History View (Screenshot 4)
                     // The left 3 columns are replaced by the History list and 'Clear history' pill button,
-                    // while the right column keeps the 5 operator keys (÷, ×, −, +, =)
+                    // while the right column keeps the 5 operator keys (÷, ×, −, +, =). It takes exactly
+                    // the keypad's height, so switching to it doesn't move the display.
+                    val historyHeight = if (keypadHeightPx > 0) with(density) { keypadHeightPx.toDp() }
+                        else if (isCompactScreen) 300.dp else 340.dp
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .heightIn(min = 280.dp, max = 360.dp)
+                            .height(historyHeight)
                             .padding(bottom = if (isCompactScreen) 8.dp else 16.dp),
                         horizontalArrangement = Arrangement.spacedBy(keypadSpacing)
                     ) {
@@ -1202,6 +1212,7 @@ fun CalculatorDisguiseScreen(
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .onSizeChanged { keypadHeightPx = it.height }
                             .padding(bottom = if (isCompactScreen) 8.dp else 16.dp),
                         verticalArrangement = Arrangement.spacedBy(keypadSpacing)
                     ) {
@@ -1356,6 +1367,16 @@ private fun SamsungUnitConverterScreen(
 
     var showTopDropdown by remember { mutableStateOf(false) }
     var showBottomDropdown by remember { mutableStateOf(false) }
+
+    BackHandler(enabled = true) {
+        if (showTopDropdown) {
+            showTopDropdown = false
+        } else if (showBottomDropdown) {
+            showBottomDropdown = false
+        } else {
+            onClose()
+        }
+    }
 
     fun recomputeConversion(sourceRow: Int) {
         val topSpec = unitSpecs.getOrNull(topUnitIndex) ?: return

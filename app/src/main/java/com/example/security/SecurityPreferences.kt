@@ -129,22 +129,25 @@ class SecurityPreferences(private val context: Context) {
             }
 
             val isCalc = isDisguiseModeEnabled() && style == DISGUISE_STYLE_CALCULATOR
-            val targetCalc = if (isCalc) {
-                android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_ENABLED
-            } else {
-                android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DISABLED
-            }
-            val targetNotes = if (isCalc) {
-                android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DISABLED
-            } else {
-                android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_ENABLED
+            val enabled = android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_ENABLED
+            val disabled = android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DISABLED
+
+            fun setState(comp: android.content.ComponentName, target: Int) {
+                if (pm.getComponentEnabledSetting(comp) != target) {
+                    pm.setComponentEnabledSetting(comp, target, android.content.pm.PackageManager.DONT_KILL_APP)
+                }
             }
 
-            if (pm.getComponentEnabledSetting(calcComp) != targetCalc) {
-                pm.setComponentEnabledSetting(calcComp, targetCalc, android.content.pm.PackageManager.DONT_KILL_APP)
-            }
-            if (pm.getComponentEnabledSetting(notesComp) != targetNotes) {
-                pm.setComponentEnabledSetting(notesComp, targetNotes, android.content.pm.PackageManager.DONT_KILL_APP)
+            // Turn the one going away off first, then the one coming in on, so the launcher treats
+            // the new icon as a fresh entry and files it under its own letter (Calculator under C),
+            // not in the old one's place. (OEM launchers that sort the drawer by the app's own name,
+            // "Notes", may still need their app list refreshed; that part isn't ours to control.)
+            if (isCalc) {
+                setState(notesComp, disabled)
+                setState(calcComp, enabled)
+            } else {
+                setState(calcComp, disabled)
+                setState(notesComp, enabled)
             }
             // "Share to Notes" is offered only while the app is Notes (a calculator taking shares
             // would stand out in every share sheet)
