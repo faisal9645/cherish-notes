@@ -101,7 +101,10 @@ class NotesDisguiseViewModel(
         }.let { list ->
             when (filter.sort) {
                 NotesSortOrder.RECENT -> list.sortedWith(compareByDescending<NoteEntity> { it.isPinned }.thenByDescending { it.updatedAt })
-                NotesSortOrder.ALPHABETICAL -> list.sortedWith(compareByDescending<NoteEntity> { it.isPinned }.thenBy { it.title.lowercase() })
+                NotesSortOrder.ALPHABETICAL -> list.sortedWith(
+                    compareByDescending<NoteEntity> { it.isPinned }
+                        .thenBy { (it.title.ifBlank { it.content }).trim().lowercase() }
+                )
                 NotesSortOrder.CATEGORY -> list.sortedWith(compareByDescending<NoteEntity> { it.isPinned }.thenBy { it.category })
             }
         }

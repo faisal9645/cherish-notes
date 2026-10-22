@@ -1073,7 +1073,7 @@ fun ProfileScreen(
                     ) {
                         val disguiseOptions = remember {
                             listOf(
-                                Triple(SecurityPreferences.DISGUISE_STYLE_NOTES, "ColorNote", Icons.Rounded.EditNote),
+                                Triple(SecurityPreferences.DISGUISE_STYLE_NOTES, "Notes", Icons.Rounded.EditNote),
                                 Triple(SecurityPreferences.DISGUISE_STYLE_CALCULATOR, "Calculator", Icons.Rounded.Calculate)
                             )
                         }
@@ -1099,7 +1099,7 @@ fun ProfileScreen(
                                 } else {
                                     androidx.compose.foundation.Image(
                                         painter = painterResource(id = com.example.R.drawable.ic_notes_app),
-                                        contentDescription = "ColorNote",
+                                        contentDescription = "Notes",
                                         modifier = Modifier.size(19.dp).clip(RoundedCornerShape(5.dp))
                                     )
                                 }

@@ -1,7 +1,7 @@
 <resources>
-    <string name="app_name">Calculator</string>
-    <!-- The app drawer / launcher icon's name for Notes decoy -->
-    <string name="notes_launcher_name">ColorNote</string>
+    <string name="app_name">Notes</string>
+    <!-- The app drawer / launcher icon's name for Notes decoy (sorted under N) -->
+    <string name="notes_launcher_name">Notes</string>
     <!-- The Calculator icon's name (a resource, so launchers that sort by it file it under C) -->
     <string name="calculator_name">Calculator</string>
     <string name="tagline">Simple &amp; Clean Daily Notes</string>

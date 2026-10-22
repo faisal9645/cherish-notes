@@ -311,7 +311,7 @@ fun NoteEditorScreen(
 
                         // Color chips
                         Text(
-                            text = "ColorNote Sticky Color",
+                            text = "Sticky Note Color",
                             fontSize = 11.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = editorTheme.secondaryTextColor

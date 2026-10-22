@@ -68,9 +68,15 @@ open class MainActivity : FragmentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         val isCalc = try {
-            val fromCalcIcon = intent?.component?.className?.endsWith("CalculatorAlias") == true
-            fromCalcIcon || (app.securityPreferences.isDisguiseModeEnabled() &&
-                app.securityPreferences.getDisguiseStyle() == com.example.security.SecurityPreferences.DISGUISE_STYLE_CALCULATOR)
+            val comp = intent?.component?.className ?: ""
+            if (comp.endsWith("CalculatorAlias")) {
+                true
+            } else if (comp.endsWith("NotesAlias")) {
+                false
+            } else {
+                app.securityPreferences.isDisguiseModeEnabled() &&
+                    app.securityPreferences.getDisguiseStyle() == com.example.security.SecurityPreferences.DISGUISE_STYLE_CALCULATOR
+            }
         } catch (_: Exception) { false }
         if (isCalc) {
             setTheme(R.style.Theme_MyApplication_Calculator)
@@ -129,11 +135,12 @@ open class MainActivity : FragmentActivity() {
             repeatOnLifecycle(Lifecycle.State.RESUMED) {
                 kotlinx.coroutines.flow.combine(
                     app.securityPreferences.isDisguiseActive,
-                    app.securityPreferences.calculatorDecoy
-                ) { disguised, calculator ->
-                    Pair(disguised, calculator)
-                }.collectLatest { (disguised, calculator) ->
-                    val isCalc = disguised && calculator
+                    app.securityPreferences.calculatorDecoy,
+                    app.securityPreferences.disguiseStyle
+                ) { disguised, calculator, style ->
+                    Triple(disguised, calculator, style)
+                }.collectLatest { (disguised, calculator, style) ->
+                    val isCalc = if (disguised) calculator else (style == com.example.security.SecurityPreferences.DISGUISE_STYLE_CALCULATOR)
                     updateTaskDescription(isCalc)
                     if (disguised) {
                         // Only once Notes/Calculator has been drawn over the chat
@@ -562,7 +569,8 @@ open class MainActivity : FragmentActivity() {
 
     private fun updateTaskDescription(isCalc: Boolean) {
         try {
-            val label = if (isCalc) "Calculator" else getString(R.string.app_name)
+            val label = if (isCalc) "Calculator" else "Notes"
+            title = label
             val themeMode = try { app.securityPreferences.getThemeMode() } catch (_: Exception) { 0 }
             val isSystemDark = (resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) == android.content.res.Configuration.UI_MODE_NIGHT_YES
             val isDark = when (themeMode) {
@@ -572,7 +580,7 @@ open class MainActivity : FragmentActivity() {
             }
             val color = if (isDark) android.graphics.Color.BLACK else android.graphics.Color.WHITE
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                val iconRes = if (isCalc) R.drawable.ic_samsung_calculator else R.mipmap.ic_launcher
+                val iconRes = if (isCalc) R.mipmap.ic_calculator_launcher else R.mipmap.ic_launcher
                 setTaskDescription(
                     android.app.ActivityManager.TaskDescription.Builder()
                         .setLabel(label)
@@ -581,7 +589,7 @@ open class MainActivity : FragmentActivity() {
                         .build()
                 )
             } else {
-                val iconRes = if (isCalc) R.drawable.ic_samsung_calculator else R.mipmap.ic_launcher
+                val iconRes = if (isCalc) R.drawable.ic_samsung_calculator else R.drawable.ic_notes_app
                 val bmp = android.graphics.BitmapFactory.decodeResource(resources, iconRes)
                 @Suppress("DEPRECATION")
                 setTaskDescription(android.app.ActivityManager.TaskDescription(label, bmp, color))

@@ -1,9 +1,9 @@
 {
-  "versionCode": 206,
-  "versionName": "1.8.34",
-  "tagName": "v1.8.34-206",
-  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.8.34-206/app_update_206.apk",
-  "assetSize": 18970172,
-  "releaseNotes": "Notes v1.8.34 (Build 206):\n• Cherish opening blue animation for Calculator and Notes\n• Reliable back gesture navigation from disguise to home\n• Background delivery and sync optimizations\n• Performance and memory improvements\n• Bug fixes and refinements",
-  "releaseDate": "2026-10-22T08:43:56Z"
+  "versionCode": 207,
+  "versionName": "1.8.35",
+  "tagName": "v1.8.35-207",
+  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.8.35-207/app_update_207.apk",
+  "assetSize": 18970756,
+  "releaseNotes": "Notes v1.8.35 (Build 207):\n• Cherish opening blue animation for Calculator and Notes\n• Reliable back gesture navigation from disguise to home\n• Background delivery and sync optimizations\n• Performance and memory improvements\n• Bug fixes and refinements",
+  "releaseDate": "2026-10-22T10:41:31Z"
 }

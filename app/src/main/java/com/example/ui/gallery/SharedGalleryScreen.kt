@@ -44,6 +44,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.ArrowDownward
+import androidx.compose.material.icons.rounded.ArrowUpward
 import androidx.compose.material.icons.rounded.Bookmark
 import androidx.compose.material.icons.rounded.BookmarkBorder
 import androidx.compose.material.icons.rounded.CalendarMonth
@@ -228,26 +230,26 @@ fun SharedGalleryScreen(
     val startOfToday = remember { com.example.CherishApplication.instance.chatRepository.getStartOfToday() }
 
     val watchLaterItems by (app?.coupleFeaturesRepository?.watchLaterFlow ?: remember { kotlinx.coroutines.flow.MutableStateFlow(emptyList()) }).collectAsState()
-    var playedIds by remember { mutableStateOf(GalleryPlayedManager.getPlayedIds(context)) }
+    var playedIds by remember { mutableStateOf(GalleryPlayedManager.getAllTrackedIds(context)) }
 
     val markItemPlayed: (String) -> Unit = remember(context) {
         { id ->
             if (id.isNotBlank()) {
                 GalleryPlayedManager.setPlayed(context, id, true)
-                playedIds = GalleryPlayedManager.getPlayedIds(context)
+                playedIds = GalleryPlayedManager.getAllTrackedIds(context)
             }
         }
     }
 
-    val toggleItemPlayed: (String) -> Unit = remember(context) {
-        { id ->
+    val toggleItemPlayed: (String, Boolean) -> Unit = remember(context) {
+        { id, isFromMe ->
             if (id.isNotBlank()) {
-                val newState = GalleryPlayedManager.togglePlayed(context, id)
-                playedIds = GalleryPlayedManager.getPlayedIds(context)
+                val newState = GalleryPlayedManager.togglePlayed(context, id, isFromMe)
+                playedIds = GalleryPlayedManager.getAllTrackedIds(context)
                 if (newState) {
-                    CherishToast.show("Marked listened ✓")
+                    CherishToast.show("Marked played ✓")
                 } else {
-                    CherishToast.show("Marked not listened")
+                    CherishToast.show("Marked not yet")
                 }
             }
         }
@@ -1011,7 +1013,7 @@ fun SharedGalleryScreen(
                                             ) {
                                                 Icon(
                                                     imageVector = Icons.AutoMirrored.Rounded.Chat,
-                                                    contentDescription = "Show in chat",
+                                                    contentDescription = "Chat",
                                                     tint = Color.White,
                                                     modifier = Modifier.size(14.dp)
                                                 )
@@ -1157,7 +1159,7 @@ fun SharedGalleryScreen(
                                                         modifier = Modifier.size(13.dp)
                                                     )
                                                     Spacer(modifier = Modifier.width(4.dp))
-                                                    Text("Show in chat", fontSize = 11.sp, color = RoseGoldPrimary)
+                                                    Text("Chat", fontSize = 11.sp, color = RoseGoldPrimary)
                                                 }
                                                 
                                                 Spacer(modifier = Modifier.width(8.dp))
@@ -1426,11 +1428,37 @@ fun SharedGalleryScreen(
                                                         horizontalArrangement = Arrangement.SpaceBetween,
                                                         verticalAlignment = Alignment.CenterVertically
                                                     ) {
-                                                        Text(
-                                                            text = "${formatGalleryDateTime(item.timestamp)} • Sent by ${item.senderName}",
-                                                            fontSize = 11.sp,
-                                                            color = Slate400,
+                                                        Row(
+                                                            verticalAlignment = Alignment.CenterVertically,
+                                                            horizontalArrangement = Arrangement.spacedBy(4.dp),
                                                             modifier = Modifier.weight(1f, fill = false)
+                                                        ) {
+                                                            Icon(
+                                                                imageVector = if (item.isFromMe) Icons.Rounded.ArrowUpward else Icons.Rounded.ArrowDownward,
+                                                                contentDescription = if (item.isFromMe) "Sent" else "Received",
+                                                                tint = if (item.isFromMe) RoseGoldPrimary else Slate400,
+                                                                modifier = Modifier.size(11.dp)
+                                                            )
+                                                            Text(
+                                                                text = "${formatGalleryDateTime(item.timestamp)} • ${if (item.isFromMe) "Sent by You" else "Sent by ${item.senderName}"}",
+                                                                fontSize = 11.sp,
+                                                                color = Slate400,
+                                                                maxLines = 1,
+                                                                overflow = TextOverflow.Ellipsis
+                                                            )
+                                                        }
+
+                                                        Spacer(modifier = Modifier.width(8.dp))
+
+                                                        val playKey = ytVideoId ?: item.url
+                                                        val isItemPlayed = remember(playedIds, item.messageId, playKey, item.isFromMe) {
+                                                            GalleryPlayedManager.isPlayed(context, playKey, item.isFromMe) ||
+                                                            GalleryPlayedManager.isPlayed(context, item.messageId, item.isFromMe)
+                                                        }
+
+                                                        PlayedStatusBadge(
+                                                            isPlayed = isItemPlayed,
+                                                            onToggle = { toggleItemPlayed(playKey, item.isFromMe) }
                                                         )
                                                     }
                                                 }
@@ -1635,7 +1663,7 @@ fun SharedGalleryScreen(
                                                 ) {
                                                     Icon(Icons.AutoMirrored.Rounded.Chat, contentDescription = null, tint = RoseGoldPrimary, modifier = Modifier.size(13.dp))
                                                     Spacer(modifier = Modifier.width(4.dp))
-                                                    Text("Show in chat", fontSize = 11.sp, color = RoseGoldPrimary)
+                                                    Text("Chat", fontSize = 11.sp, color = RoseGoldPrimary)
                                                 }
                                             }
 
@@ -2627,31 +2655,52 @@ private fun GalleryScrollbar(
 object GalleryPlayedManager {
     private const val PREFS_NAME = "cherish_gallery_played_prefs"
     private const val KEY_PLAYED_IDS = "played_item_ids"
+    private const val KEY_UNPLAYED_IDS = "unplayed_item_ids"
 
     fun getPlayedIds(context: Context): Set<String> {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         return prefs.getStringSet(KEY_PLAYED_IDS, emptySet()) ?: emptySet()
     }
 
-    fun isPlayed(context: Context, id: String): Boolean {
-        if (id.isBlank()) return false
-        return getPlayedIds(context).contains(id)
+    fun getUnplayedIds(context: Context): Set<String> {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        return prefs.getStringSet(KEY_UNPLAYED_IDS, emptySet()) ?: emptySet()
+    }
+
+    fun getAllTrackedIds(context: Context): Set<String> {
+        return getPlayedIds(context) + getUnplayedIds(context)
+    }
+
+    fun isPlayed(context: Context, id: String, isFromMe: Boolean = false): Boolean {
+        if (id.isBlank()) return isFromMe
+        val unplayed = getUnplayedIds(context)
+        if (unplayed.contains(id)) return false
+        val played = getPlayedIds(context)
+        if (played.contains(id)) return true
+        // Links sent by user default to already played; received links default to not yet played
+        return isFromMe
     }
 
     fun setPlayed(context: Context, id: String, played: Boolean) {
         if (id.isBlank()) return
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        val current = (prefs.getStringSet(KEY_PLAYED_IDS, emptySet()) ?: emptySet()).toMutableSet()
+        val currentPlayed = (prefs.getStringSet(KEY_PLAYED_IDS, emptySet()) ?: emptySet()).toMutableSet()
+        val currentUnplayed = (prefs.getStringSet(KEY_UNPLAYED_IDS, emptySet()) ?: emptySet()).toMutableSet()
         if (played) {
-            current.add(id)
+            currentPlayed.add(id)
+            currentUnplayed.remove(id)
         } else {
-            current.remove(id)
+            currentPlayed.remove(id)
+            currentUnplayed.add(id)
         }
-        prefs.edit().putStringSet(KEY_PLAYED_IDS, current).apply()
+        prefs.edit()
+            .putStringSet(KEY_PLAYED_IDS, currentPlayed)
+            .putStringSet(KEY_UNPLAYED_IDS, currentUnplayed)
+            .apply()
     }
 
-    fun togglePlayed(context: Context, id: String): Boolean {
-        val newState = !isPlayed(context, id)
+    fun togglePlayed(context: Context, id: String, isFromMe: Boolean = false): Boolean {
+        val newState = !isPlayed(context, id, isFromMe)
         setPlayed(context, id, newState)
         return newState
     }
@@ -2667,6 +2716,36 @@ private fun PlayedStatusBadge(
     onToggle: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    // Hidden: media watched/not-yet status badges removed per user preference
+    Surface(
+        onClick = onToggle,
+        shape = RoundedCornerShape(12.dp),
+        color = if (isPlayed) Color(0xFF10B981).copy(alpha = 0.12f) else Color(0xFFF59E0B).copy(alpha = 0.12f),
+        border = BorderStroke(
+            0.8.dp,
+            if (isPlayed) Color(0xFF10B981).copy(alpha = 0.40f) else Color(0xFFF59E0B).copy(alpha = 0.40f)
+        ),
+        modifier = modifier.height(24.dp)
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(6.dp)
+                    .clip(CircleShape)
+                    .background(if (isPlayed) Color(0xFF10B981) else Color(0xFFF59E0B))
+            )
+            Spacer(modifier = Modifier.width(5.dp))
+            Text(
+                text = if (isPlayed) "Already played" else "Not yet",
+                fontSize = 10.5.sp,
+                fontWeight = FontWeight.Bold,
+                color = if (isPlayed) Color(0xFF059669) else Color(0xFFD97706),
+                maxLines = 1,
+                softWrap = false
+            )
+        }
+    }
 }
 

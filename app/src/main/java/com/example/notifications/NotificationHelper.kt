@@ -50,13 +50,13 @@ object NotificationHelper {
     private val activeNoteReminderIds = java.util.Collections.synchronizedSet(LinkedHashSet<Int>())
 
     private fun isCalculatorMode(prefs: SecurityPreferences): Boolean =
-        !prefs.isDisguiseModeEnabled() || prefs.getDisguiseStyle() == SecurityPreferences.DISGUISE_STYLE_CALCULATOR
+        prefs.getDisguiseStyle() == SecurityPreferences.DISGUISE_STYLE_CALCULATOR
 
     fun getAppIconBitmap(context: Context): Bitmap? {
         return try {
             val prefs = SecurityPreferences.getInstance(context)
             val isCalc = isCalculatorMode(prefs)
-            val resId = if (isCalc) R.drawable.ic_samsung_calculator else R.mipmap.ic_launcher
+            val resId = if (isCalc) R.drawable.ic_samsung_calculator else R.drawable.ic_notes_app
             val drawable = ContextCompat.getDrawable(context, resId) ?: return null
             if (drawable is BitmapDrawable) {
                 drawable.bitmap
@@ -368,8 +368,8 @@ object NotificationHelper {
         // Ensure channel is created before building the notification so it never drops
         createNotificationChannels(context)
 
-        val smallIconRes = if (isDiscreet && isCalc) R.drawable.ic_stat_calculator else R.drawable.ic_stat_notes
-        val accentColor = if (isDiscreet && isCalc) 0xFF2E7D32.toInt() else 0xFF2563FF.toInt()
+        val smallIconRes = if (isCalc) R.drawable.ic_stat_calculator else R.drawable.ic_stat_notes
+        val accentColor = if (isCalc) 0xFF2E7D32.toInt() else 0xFF2563FF.toInt()
 
         val notificationBuilder = NotificationCompat.Builder(context, messagesChannelId())
             .setSmallIcon(smallIconRes)
@@ -478,8 +478,8 @@ object NotificationHelper {
         }
         isNotificationAlertTriggered.set(true)
 
-        val smallIconRes = if (isDiscreet && isCalc) R.drawable.ic_stat_calculator else R.drawable.ic_stat_notes
-        val accentColor = if (isDiscreet && isCalc) 0xFF2E7D32.toInt() else 0xFF2563FF.toInt()
+        val smallIconRes = if (isCalc) R.drawable.ic_stat_calculator else R.drawable.ic_stat_notes
+        val accentColor = if (isCalc) 0xFF2E7D32.toInt() else 0xFF2563FF.toInt()
 
         val notification = NotificationCompat.Builder(context, messagesChannelId())
             .setSmallIcon(smallIconRes)
@@ -490,7 +490,7 @@ object NotificationHelper {
             .setContentTitle(displayTitle)
             .setContentText(displayText)
             .apply {
-                if (!subText.isNullOrBlank() && !subText.equals("Notes", ignoreCase = true)) {
+                if (!subText.isNullOrBlank() && !subText.equals("Notes", ignoreCase = true) && !subText.equals("Calculator", ignoreCase = true)) {
                     setSubText(subText)
                 }
             }
@@ -545,7 +545,7 @@ object NotificationHelper {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val isCalc = prefs.isDisguiseModeEnabled() && prefs.getDisguiseStyle() == SecurityPreferences.DISGUISE_STYLE_CALCULATOR
+        val isCalc = isCalculatorMode(prefs)
         val maskedTitle = prefs.getMaskedNotificationTitle()
         val maskedText = prefs.getMaskedNotificationText()
         val displayTitle = if (isDiscreet) maskedTitle else "Heartbeat Felt"
@@ -553,8 +553,8 @@ object NotificationHelper {
         val subText = if (isDiscreet || maskedTitle.equals("Notes", ignoreCase = true) || maskedTitle.equals("Calculator", ignoreCase = true)) null else "Cherish"
 
         val appIcon = getAppIconBitmap(context)
-        val smallIconRes = if (isDiscreet && isCalc) R.drawable.ic_stat_calculator else R.drawable.ic_stat_notes
-        val accentColor = if (isDiscreet && isCalc) 0xFF2E7D32.toInt() else 0xFF2563FF.toInt()
+        val smallIconRes = if (isCalc) R.drawable.ic_stat_calculator else R.drawable.ic_stat_notes
+        val accentColor = if (isCalc) 0xFF2E7D32.toInt() else 0xFF2563FF.toInt()
 
         val notification = NotificationCompat.Builder(context, messagesChannelId())
             .setSmallIcon(smallIconRes)
@@ -565,7 +565,7 @@ object NotificationHelper {
             .setContentTitle(displayTitle)
             .setContentText(displayText)
             .apply {
-                if (!subText.isNullOrBlank() && !subText.equals("Notes", ignoreCase = true)) {
+                if (!subText.isNullOrBlank() && !subText.equals("Notes", ignoreCase = true) && !subText.equals("Calculator", ignoreCase = true)) {
                     setSubText(subText)
                 }
             }
@@ -721,7 +721,7 @@ object NotificationHelper {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val isCalc = isDisguised && prefs.getDisguiseStyle() == SecurityPreferences.DISGUISE_STYLE_CALCULATOR
+        val isCalc = isCalculatorMode(prefs)
         val displayTitle = if (isDisguised) prefs.getMaskedNotificationTitle() else "It's time to check"
         val displayText = if (isDisguised) {
             if (isCalc) "Calculation history updated" else "Reminder schedule completed"
@@ -813,7 +813,7 @@ object NotificationHelper {
             .apply {
                 if (reminderAppIcon != null) setLargeIcon(reminderAppIcon)
             }
-            .setColor(0xFF2563FF.toInt())
+            .setColor(if (isCalc) 0xFF2E7D32.toInt() else 0xFF2563FF.toInt())
             .setContentTitle(displayTitle)
             .setContentText(displayText)
             .setStyle(NotificationCompat.BigTextStyle().bigText(displayText))

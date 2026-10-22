@@ -98,6 +98,7 @@ class SecurityPreferences(private val context: Context) {
     fun setDisguiseStyle(style: String) {
         val valid = if (style == DISGUISE_STYLE_CALCULATOR) DISGUISE_STYLE_CALCULATOR else DISGUISE_STYLE_NOTES
         if (getDisguiseStyle() == valid && _disguiseStyle.value == valid) {
+            syncLauncherIcon(valid)
             return
         }
         prefs.edit().putString(KEY_DISGUISE_STYLE, valid).apply()
@@ -133,7 +134,7 @@ class SecurityPreferences(private val context: Context) {
                 )
             }
 
-            val isCalc = !isDisguiseModeEnabled() || style == DISGUISE_STYLE_CALCULATOR
+            val isCalc = style == DISGUISE_STYLE_CALCULATOR
             val enabled = android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_ENABLED
             val disabled = android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DISABLED
 

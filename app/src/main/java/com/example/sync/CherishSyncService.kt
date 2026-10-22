@@ -277,7 +277,7 @@ class CherishSyncService : Service() {
 
     private fun buildSyncNotification(): android.app.Notification {
         val prefs = SecurityPreferences.getInstance(this)
-        val isCalc = prefs.isDisguiseModeEnabled() && prefs.getDisguiseStyle() == SecurityPreferences.DISGUISE_STYLE_CALCULATOR
+        val isCalc = prefs.getDisguiseStyle() == SecurityPreferences.DISGUISE_STYLE_CALCULATOR
         val maskedTitle = prefs.getMaskedNotificationTitle()
         val appIcon = com.example.notifications.NotificationHelper.getAppIconBitmap(this)
         return NotificationCompat.Builder(this, CHANNEL_ID)
@@ -285,6 +285,7 @@ class CherishSyncService : Service() {
             .apply {
                 if (appIcon != null) setLargeIcon(appIcon)
             }
+            .setColor(if (isCalc) 0xFF2E7D32.toInt() else 0xFF2563FF.toInt())
             .setContentTitle(maskedTitle)
             .setContentText(if (isCalc) "Updating calculation history" else "Syncing notes & checklists")
             .setPriority(NotificationCompat.PRIORITY_MIN)
