@@ -4,6 +4,9 @@ import android.app.Activity
 import android.net.Uri
 import android.view.WindowManager
 import android.widget.Toast
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Dispatchers
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
@@ -209,6 +212,7 @@ fun ProfileScreen(
     val user = uiState.currentUser
     val partner = uiState.partnerUser
     val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+    val coroutineScope = rememberCoroutineScope()
     
     var isBatteryOptimizationIgnored by remember { mutableStateOf(NotificationHelper.isBatteryOptimizationIgnored(context)) }
     var isCallScreenAllowed by remember { mutableStateOf(com.example.notifications.BackgroundDelivery.isCallScreenAllowed(context)) }
@@ -313,6 +317,35 @@ fun ProfileScreen(
         if (uri != null) {
             viewModel.updateAvatar(uri) {
                 CherishToast.show("Profile photo updated ✨")
+            }
+        }
+    }
+
+    val customWallpaperPicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri: Uri? ->
+        val prefs = com.example.security.SecurityPreferences.getInstance(context)
+        prefs.isExternalPickerActive = false
+        prefs.ignoreNextPause = false
+        if (uri != null) {
+            coroutineScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                try {
+                    val inputStream = context.contentResolver.openInputStream(uri)
+                    val file = java.io.File(context.filesDir, "custom_chat_wallpaper.jpg")
+                    inputStream?.use { input ->
+                        file.outputStream().use { output ->
+                            input.copyTo(output)
+                        }
+                    }
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                        viewModel.setCustomWallpaperPath(file.absolutePath)
+                        CherishToast.show("Custom wallpaper set ✨")
+                    }
+                } catch (e: Exception) {
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                        CherishToast.show("Failed to load wallpaper")
+                    }
+                }
             }
         }
     }
@@ -2348,7 +2381,8 @@ fun ProfileScreen(
                     listOf(
                         0 to "Classic",
                         1 to "Theme 1",
-                        2 to "Theme 2"
+                        2 to "Theme 2",
+                        3 to "Custom"
                     ).forEach { (theme, label) ->
                         val isSelected = uiState.chatBgTheme == theme
                         Box(
@@ -2357,7 +2391,16 @@ fun ProfileScreen(
                                 .pressScaleTarget()
                                 .clip(RoundedCornerShape(8.dp))
                                 .background(if (isSelected) primaryAccent else Color.Transparent)
-                                .springClickable(tick = true) { viewModel.setChatBgTheme(theme) }
+                                .springClickable(tick = true) {
+                                    if (theme == 3 && uiState.customWallpaperPath == null) {
+                                        val prefs = com.example.security.SecurityPreferences.getInstance(context)
+                                        prefs.isExternalPickerActive = true
+                                        prefs.ignoreNextPause = true
+                                        customWallpaperPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                                    } else {
+                                        viewModel.setChatBgTheme(theme)
+                                    }
+                                }
                                 .padding(vertical = 8.dp),
                             contentAlignment = Alignment.Center
                         ) {
@@ -2368,6 +2411,51 @@ fun ProfileScreen(
                                 fontSize = 12.sp,
                                 textAlign = TextAlign.Center
                             )
+                        }
+                    }
+                }
+
+                if (uiState.chatBgTheme == 3 || uiState.customWallpaperPath != null) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = primaryAccent.copy(alpha = 0.12f),
+                            modifier = Modifier
+                                .weight(1f)
+                                .pressScaleTarget()
+                                .clip(RoundedCornerShape(10.dp))
+                                .springClickable(tick = true) {
+                                    val prefs = com.example.security.SecurityPreferences.getInstance(context)
+                                    prefs.isExternalPickerActive = true
+                                    prefs.ignoreNextPause = true
+                                    customWallpaperPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                                }
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 9.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.PhotoLibrary,
+                                    contentDescription = null,
+                                    tint = primaryAccent,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = if (uiState.customWallpaperPath != null) "Change Custom Wallpaper" else "Choose From Gallery",
+                                    fontSize = 12.5.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = primaryAccent
+                                )
+                            }
                         }
                     }
                 }

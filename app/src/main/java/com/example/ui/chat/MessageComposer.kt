@@ -387,21 +387,21 @@ fun MessageComposer(
     val barBg = if (isPrivateMode) {
         if (isDark) Color.Black else Color.White
     } else {
-        MaterialTheme.colorScheme.surface
+        Color.Transparent
     }
     val pillBg = if (isPrivateMode) {
         if (isAmoled) Neutral900
         else if (isDark) Neutral800
         else Neutral200
     } else {
-        if (isDark) darkSurface(NavyCard) else Color.White
+        if (isDark) Color(0xD90A1128) else Color(0xF2FFFFFF)
     }
     val pillBorder = if (isPrivateMode) {
         if (isAmoled) Neutral800
         else if (isDark) Neutral700
         else Neutral300
     } else {
-        if (isDark) darkSurface(NavyRaised, Neutral800) else Gray200
+        if (isDark) Color(0x403870FF) else Color(0x1F000000)
     }
 
     // Emojis in the message box: the size they'll be in the sent message, the same however many
@@ -594,7 +594,7 @@ fun MessageComposer(
                 .widthIn(max = 600.dp)
                 .fillMaxWidth()
                 .align(Alignment.CenterHorizontally)
-                .padding(start = 12.dp, end = 12.dp, top = if (isPrivateMode) 6.dp else 8.dp, bottom = if (isPrivateMode) 6.dp else 8.dp),
+                .padding(start = 16.dp, end = 16.dp, top = if (isPrivateMode) 6.dp else 8.dp, bottom = if (isPrivateMode) 6.dp else 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(
@@ -609,10 +609,10 @@ fun MessageComposer(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .heightIn(min = 52.dp)
-                                .clip(RoundedCornerShape(28.dp))
-                                .background(if (isDark) darkSurface(NavyCard) else Color.White)
-                                .border(BorderStroke(1.dp, pillBorder), RoundedCornerShape(28.dp))
+                                .heightIn(min = 48.dp)
+                                .clip(RoundedCornerShape(24.dp))
+                                .background(if (isDark) Color(0xD90A1128) else Color.White)
+                                .border(BorderStroke(1.dp, pillBorder), RoundedCornerShape(24.dp))
                                 .padding(horizontal = 8.dp, vertical = 6.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
@@ -933,10 +933,10 @@ fun MessageComposer(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .heightIn(min = 44.dp)
-                            .clip(RoundedCornerShape(28.dp))
+                            .heightIn(min = 48.dp)
+                            .clip(RoundedCornerShape(24.dp))
                             .background(pillBg)
-                            .border(BorderStroke(1.dp, pillBorder), RoundedCornerShape(28.dp))
+                            .border(BorderStroke(1.dp, pillBorder), RoundedCornerShape(24.dp))
                             .padding(start = 4.dp, end = 4.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {

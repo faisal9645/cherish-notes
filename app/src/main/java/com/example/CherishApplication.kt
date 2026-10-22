@@ -242,8 +242,9 @@ class CherishApplication : Application(), coil.ImageLoaderFactory {
             }
             try {
                 com.example.notifications.NoteReminderScheduler.rescheduleAllUpcomingReminders(this@CherishApplication, notesRepository)
+                com.example.notifications.GoodnightReminderScheduler.scheduleNext(this@CherishApplication)
             } catch (e: Throwable) {
-                Log.w("CherishApp", "NoteReminderScheduler error: ${e.message}")
+                Log.w("CherishApp", "ReminderScheduler error: ${e.message}")
             }
             try {
                 com.example.update.OtaUpdateManager.getInstance(this@CherishApplication).cleanupDownloadedInstallers()

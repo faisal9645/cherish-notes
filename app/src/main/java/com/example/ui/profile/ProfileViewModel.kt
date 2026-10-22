@@ -41,6 +41,7 @@ data class ProfileUiState(
     val showPreviousChats: Boolean = false,
     val themeMode: Int = 0,
     val chatBgTheme: Int = 0,
+    val customWallpaperPath: String? = null,
     // The chat's message text size (sp) and font (see ChatFont)
     val chatTextSize: Int = com.example.security.SecurityPreferences.DEFAULT_CHAT_TEXT_SIZE,
     val chatFont: Int = 0,
@@ -253,6 +254,7 @@ class ProfileViewModel(
             isCheckAfterReminderEnabled = securityPreferences.isCheckAfterReminderEnabled(),
             themeMode = securityPreferences.getThemeMode(),
             chatBgTheme = securityPreferences.getChatBgTheme(),
+            customWallpaperPath = securityPreferences.getCustomWallpaperPath(),
             chatTextSize = securityPreferences.getChatTextSize(),
             chatFont = securityPreferences.getChatFont(),
             chatExperienceMode = securityPreferences.getChatExperienceMode(),
@@ -294,6 +296,7 @@ class ProfileViewModel(
                 isCheckAfterReminderEnabled = securityPreferences.isCheckAfterReminderEnabled(),
                 themeMode = securityPreferences.getThemeMode(),
                 chatBgTheme = securityPreferences.getChatBgTheme(),
+                customWallpaperPath = securityPreferences.getCustomWallpaperPath(),
                 chatTextSize = securityPreferences.getChatTextSize(),
                 chatFont = securityPreferences.getChatFont(),
                 chatExperienceMode = securityPreferences.getChatExperienceMode(),
@@ -428,6 +431,12 @@ class ProfileViewModel(
         }
 
         viewModelScope.launch {
+            securityPreferences.customWallpaperPath.collect { path ->
+                _uiState.update { it.copy(customWallpaperPath = path) }
+            }
+        }
+
+        viewModelScope.launch {
             securityPreferences.chatTextSize.collect { size ->
                 _uiState.update { it.copy(chatTextSize = size) }
             }
@@ -524,6 +533,13 @@ class ProfileViewModel(
 
     fun setChatBgTheme(theme: Int) {
         securityPreferences.setChatBgTheme(theme)
+    }
+
+    fun setCustomWallpaperPath(path: String?) {
+        securityPreferences.setCustomWallpaperPath(path)
+        if (path != null) {
+            securityPreferences.setChatBgTheme(3)
+        }
     }
 
     fun setChatTextSize(sizeSp: Int) {

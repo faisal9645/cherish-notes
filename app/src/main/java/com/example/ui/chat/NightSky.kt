@@ -136,7 +136,8 @@ private val SunCore = Color(0xFFFFF4C9)
  */
 @Composable
 internal fun NightSky(starry: Boolean, sunrise: Boolean, onSunriseDone: () -> Unit, modifier: Modifier = Modifier) {
-    val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+    val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f || com.example.ui.theme.isAppInDark()
+    val isNight = rememberIsNight()
     val night = remember { Animatable(if (starry) 1f else 0f) }
     LaunchedEffect(starry) {
         night.animateTo(if (starry) 1f else 0f, tween(if (starry) 2_600 else 1_800, easing = FastOutSlowInEasing))
@@ -144,34 +145,44 @@ internal fun NightSky(starry: Boolean, sunrise: Boolean, onSunriseDone: () -> Un
     if (night.value > 0f) {
         val deep = if (isDark) 0.4f else 0.66f
         Box(modifier = modifier.graphicsLayer { alpha = night.value }) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(
-                        Brush.verticalGradient(
-                            0f to NightInk.copy(alpha = deep * 0.35f),
-                            0.18f to NightInk.copy(alpha = deep),
-                            0.82f to NightInk.copy(alpha = deep * 0.85f),
-                            1f to NightInk.copy(alpha = deep * 0.4f)
-                        )
-                    )
-            )
-            TwinklingStars(modifier = Modifier.fillMaxSize(), count = 70, brightness = if (isDark) 0.8f else 0.95f, periodMs = 4_200)
-            // A soft moon, high on the right
-            Box(
-                contentAlignment = Alignment.Center,
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .statusBarsPadding()
-                    .padding(top = 72.dp, end = 18.dp)
-                    .size(64.dp)
-            ) {
+            // When custom 11 PM night wallpaper is active (isNight && isDark), do not overlay the heavy dark gradient
+            if (!isNight || !isDark) {
                 Box(
                     modifier = Modifier
-                        .size(64.dp)
-                        .background(Brush.radialGradient(listOf(Color(0x40FFF1C1), Color(0x00FFF1C1))), CircleShape)
+                        .fillMaxSize()
+                        .background(
+                            Brush.verticalGradient(
+                                0f to NightInk.copy(alpha = deep * 0.35f),
+                                0.18f to NightInk.copy(alpha = deep),
+                                0.82f to NightInk.copy(alpha = deep * 0.85f),
+                                1f to NightInk.copy(alpha = deep * 0.4f)
+                            )
+                        )
                 )
-                Text(text = "🌙", fontSize = 26.sp)
+            }
+            TwinklingStars(
+                modifier = Modifier.fillMaxSize(),
+                count = if (isNight && isDark) 36 else 70,
+                brightness = if (isDark) 0.8f else 0.95f,
+                periodMs = 4_200
+            )
+            // A soft moon, high on the right (skip if photo wallpaper already contains moon)
+            if (!isNight || !isDark) {
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .statusBarsPadding()
+                        .padding(top = 72.dp, end = 18.dp)
+                        .size(64.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(64.dp)
+                            .background(Brush.radialGradient(listOf(Color(0x40FFF1C1), Color(0x00FFF1C1))), CircleShape)
+                    )
+                    Text(text = "🌙", fontSize = 26.sp)
+                }
             }
         }
     }

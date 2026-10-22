@@ -1,9 +1,9 @@
 {
-  "versionCode": 211,
-  "versionName": "1.8.39",
-  "tagName": "v1.8.39-211",
-  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.8.39-211/app_update_211.apk",
-  "assetSize": 19035316,
-  "releaseNotes": "Notes v1.8.39 (Build 211):\n\u2022 Scroll-freeze on video previews for locked 120 FPS\n\u2022 Draw-phase bubble press physics (zero recomposition lag)\n\u2022 Staggered background startup for instant cold launch\n\u2022 Bug fixes and battery performance refinements",
-  "releaseDate": "2026-10-22T17:45:48Z"
+  "versionCode": 212,
+  "versionName": "1.8.40",
+  "tagName": "v1.8.40-212",
+  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.8.40-212/app_update_212.apk",
+  "assetSize": 19064929,
+  "releaseNotes": "Notes v1.8.40 (Build 212):\n\u2022 Dark liquid glass message composer\n\u2022 Equal 48dp height for typing bar and voice chat icon\n\u2022 Full-view edge-to-edge goodnight starry background\n\u2022 Custom wallpaper support with 3D tilt-parallax\n\u2022 Added dual hearts \ud83d\udc95 in chat partner header\n\u2022 Deep midnight royal blue theme aesthetics",
+  "releaseDate": "2026-10-22T19:48:40Z"
 }

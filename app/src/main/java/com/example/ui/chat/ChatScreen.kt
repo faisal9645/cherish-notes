@@ -871,6 +871,13 @@ fun ChatScreen(
     var celebration by remember { mutableStateOf<String?>(null) }
     var showGoodnightCard by remember { mutableStateOf(false) }
     var showGoodnightStars by remember { mutableStateOf(false) }
+    var skyClock by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(60_000L)
+            skyClock = System.currentTimeMillis()
+        }
+    }
     // Our dates (shared by both phones): the earliest anniversary starts the days counter
     val ourDates by app.coupleFeaturesRepository.datesFlow.collectAsState()
     // Reminders also cover both of our birthdays (set on the Love & Us tab)
@@ -948,15 +955,20 @@ fun ChatScreen(
                     delay(300)
                 }
             }
-            if (isGoodnightDue(context) && !sentGoodnightTonight) {
-                while (showGoodnightStars) delay(250)
-                markGoodnightShown(context)
-                showGoodnightCard = true
-            }
         } finally {
             showGoodMorning = false
             celebration = null
             monthRecapInvite = null
+        }
+    }
+
+    // From 11:00 PM (until 5 AM), the goodnight card prompts once a night unless goodnight was already sent
+    LaunchedEffect(isChatInView, skyClock) {
+        if (!isChatInView) return@LaunchedEffect
+        if (isGoodnightDue(context) && !sentGoodnightTonight) {
+            while (showGoodMorning || celebration != null || showGoodnightStars) delay(250)
+            markGoodnightShown(context)
+            showGoodnightCard = true
         }
     }
 
@@ -984,13 +996,6 @@ fun ChatScreen(
 
     // Once we've both said goodnight, a starry night behind the messages until morning (on both
     // phones, from the same messages); the first message of the morning brings a small sunrise
-    var skyClock by remember { mutableLongStateOf(System.currentTimeMillis()) }
-    LaunchedEffect(Unit) {
-        while (true) {
-            delay(60_000L)
-            skyClock = System.currentTimeMillis()
-        }
-    }
     val bothSaidGoodnightTonight = remember(uiState.messages, currentUserId, skyClock) {
         bothSaidGoodnight(uiState.messages, currentUserId, skyClock)
     }
@@ -1372,6 +1377,18 @@ fun ChatScreen(
                                 )
                             )
                         )
+                } else if (showWallpaper) {
+                    Modifier
+                        .fillMaxWidth()
+                        .background(
+                            Brush.verticalGradient(
+                                colors = listOf(
+                                    (if (isDark) Color(0xD9050A18) else Color(0xCCF8FAFC)),
+                                    (if (isDark) Color(0x66050A18) else Color(0x66F8FAFC)),
+                                    Color.Transparent
+                                )
+                            )
+                        )
                 } else {
                     Modifier.fillMaxWidth()
                 }
@@ -1719,7 +1736,9 @@ fun ChatScreen(
             }
         },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = if (isDark) {
+                    containerColor = if (showWallpaper) {
+                        Color.Transparent
+                    } else if (isDark) {
                         Color.Black
                     } else if (uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE) {
                         Color.Transparent
@@ -1729,8 +1748,8 @@ fun ChatScreen(
                 ),
                 windowInsets = WindowInsets.statusBars
             )
-            // No line under the bar in private chat (ChatGPT has none)
-            if (uiState.chatExperienceMode != com.example.ui.chat.ChatExperienceMode.PRIVATE) {
+            // No line under the bar in private chat or when wallpaper is shown
+            if (uiState.chatExperienceMode != com.example.ui.chat.ChatExperienceMode.PRIVATE && !showWallpaper) {
                 HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
             }
             if (com.example.call.CallManager.hasActiveCall() && callState.phase != com.example.call.CallPhase.INCOMING_RINGING) {
@@ -1758,7 +1777,13 @@ fun ChatScreen(
         bottomBar = {
             val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f || com.example.ui.theme.isAppInDark()
             val isPrivate = uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE
-            val barBg = if (isDark) Color.Black else Color.White
+            val barBg = if (showWallpaper) {
+                if (isDark) Color(0x99050A18) else Color(0x99FFFFFF)
+            } else if (isDark) {
+                Color.Black
+            } else {
+                Color.White
+            }
             // In private mode (ChatGPT style): flat background with no harsh shadow or border
             Box(
                 modifier = Modifier
@@ -1877,10 +1902,10 @@ fun ChatScreen(
                 }
             }
     },
-        containerColor = if (isDark) {
-            Color.Black
-        } else if (showWallpaper) {
+        containerColor = if (showWallpaper) {
             Color.Transparent
+        } else if (isDark) {
+            Color.Black
         } else if (uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE) {
             Color.White
         } else MaterialTheme.colorScheme.background
@@ -4654,7 +4679,7 @@ private fun ChatPartnerHeaderContent(
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 Text(
-                    text = partnerName,
+                    text = if (partnerName.isNotBlank() && !partnerName.contains("💕")) "$partnerName 💕" else partnerName,
                     fontSize = nameFontSize,
                     lineHeight = nameLineHeight,
                     fontWeight = FontWeight.Bold,

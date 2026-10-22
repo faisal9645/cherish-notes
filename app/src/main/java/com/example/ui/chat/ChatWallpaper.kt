@@ -22,6 +22,7 @@ import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.animation.animateColor
 import androidx.compose.animation.core.Animatable
@@ -63,27 +64,109 @@ fun ChatWallpaper(
     modifier: Modifier = Modifier
 ) {
     val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f || com.example.ui.theme.isAppInDark()
+    val isNight = rememberIsNight()
 
-    when (chatBgTheme) {
-        1 -> DoodleWallpaper(isDark = isDark, modifier = modifier)
-        2 -> LoveImmersiveWallpaper(isDark = isDark, modifier = modifier)
-        else -> NormalWallpaper(isDark = isDark, modifier = modifier)
+    if (chatBgTheme == 3) {
+        // User custom wallpaper
+        CustomImageWallpaper(modifier = modifier)
+    } else if (isNight && isDark) {
+        // After 11 PM in Dark Mode: use the romantic couple moonlit beach wallpaper
+        Night11PmWallpaper(modifier = modifier)
+    } else {
+        when (chatBgTheme) {
+            1 -> DoodleWallpaper(isDark = isDark, modifier = modifier)
+            2 -> LoveImmersiveWallpaper(isDark = isDark, modifier = modifier)
+            else -> NormalWallpaper(isDark = isDark, modifier = modifier)
+        }
     }
 }
 
 /**
- * Clean minimalist wallpaper (Theme 0) - Reverted to solid default
+ * Clean minimalist wallpaper (Theme 0) - Reverted to solid default during day,
+ * switches to the romantic couple moonlit background after 11 PM in dark mode.
  */
 @Composable
 fun NormalWallpaper(
     isDark: Boolean,
     modifier: Modifier = Modifier
 ) {
+    val isNight = rememberIsNight()
+    if (isNight && isDark) {
+        Night11PmWallpaper(modifier = modifier)
+    } else {
+        Box(
+            modifier = modifier
+                .fillMaxSize()
+                .background(if (isDark) Color.Black else Color.White)
+        )
+    }
+}
+
+/**
+ * Romantic Moonlit Shore Wallpaper (Active after 11 PM in Dark Mode)
+ * Features a couple sitting by the shore under a starry night sky with crescent moon reflecting on the water.
+ * Seamless parallax tilt gives a liquid-glass 3D depth effect.
+ */
+@Composable
+fun Night11PmWallpaper(
+    modifier: Modifier = Modifier
+) {
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(if (isDark) Color.Black else Color.White)
-    )
+            .background(Color.Black)
+            .clipToBounds()
+    ) {
+        androidx.compose.foundation.Image(
+            painter = androidx.compose.ui.res.painterResource(id = com.example.R.drawable.chat_bg_night_11pm),
+            contentDescription = "11 PM Night Wallpaper",
+            contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+            modifier = Modifier
+                .fillMaxSize()
+                .tiltParallax()
+        )
+    }
+}
+
+/**
+ * User-selected custom image wallpaper with 3D tilt-parallax depth.
+ */
+@Composable
+fun CustomImageWallpaper(
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    val customPath = remember {
+        com.example.security.SecurityPreferences.getInstance(context).getCustomWallpaperPath()
+    }
+    val bitmap = remember(customPath) {
+        if (!customPath.isNullOrBlank()) {
+            val file = java.io.File(customPath)
+            if (file.exists()) {
+                android.graphics.BitmapFactory.decodeFile(file.absolutePath)?.asImageBitmap()
+            } else null
+        } else null
+    }
+
+    if (bitmap != null) {
+        Box(
+            modifier = modifier
+                .fillMaxSize()
+                .background(Color.Black)
+                .clipToBounds()
+        ) {
+            androidx.compose.foundation.Image(
+                bitmap = bitmap,
+                contentDescription = "Custom Wallpaper",
+                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .tiltParallax()
+            )
+        }
+    } else {
+        NormalWallpaper(isDark = com.example.ui.theme.isAppInDark(), modifier = modifier)
+    }
 }
 
 /**

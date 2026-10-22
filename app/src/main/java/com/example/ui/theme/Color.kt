@@ -19,11 +19,11 @@ val DayBluePrimary = Color(0xFF3048F5)
 val DayBlueSecondary = Color(0xFF258BE8)
 val DayBlueTertiary = Color(0xFF3630F2)
 
-// Dark Mode Blues (Deeper / darker rich blues for night mode)
-val DarkBluePrimary = Color(0xFF1D4ED8)
-val DarkBlueSecondary = Color(0xFF1E40AF)
-val DarkBlueTertiary = Color(0xFF172554)
-val DarkBlueBubble = Color(0xFF1D4ED8)
+// Dark Mode Blues (Deeper / richer royal midnight blues)
+val DarkBluePrimary = Color(0xFF1B44C8)
+val DarkBlueSecondary = Color(0xFF16348C)
+val DarkBlueTertiary = Color(0xFF0F1E54)
+val DarkBlueBubble = Color(0xFF1A3EB8)
 
 // Black (AMOLED) theme: graphite instead of blue for bubbles, buttons and headers, grey accents
 val BlackGradientStart = Color(0xFF3A3A3C)

@@ -227,6 +227,11 @@
             android:name=".notifications.ScheduledMessageReceiver"
             android:exported="false" />
 
+        <!-- Daily 11 PM Goodnight alarm and direct send receiver -->
+        <receiver
+            android:name=".notifications.GoodnightReminderReceiver"
+            android:exported="false" />
+
         <receiver
             android:name=".notifications.NotificationDismissedReceiver"
             android:exported="false" />

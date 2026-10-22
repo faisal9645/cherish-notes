@@ -600,11 +600,13 @@ object NotificationHelper {
             nmCompat.cancel(NOTIFICATION_ID_MESSAGE)
             nmCompat.cancel(NOTIFICATION_ID_CHECK_AFTER)
             nmCompat.cancel(NOTIFICATION_ID_HEARTBEAT)
+            nmCompat.cancel(NOTIFICATION_ID_GOODNIGHT)
             nmCompat.cancel(1003)
 
             nmSystem?.cancel(NOTIFICATION_ID_MESSAGE)
             nmSystem?.cancel(NOTIFICATION_ID_CHECK_AFTER)
             nmSystem?.cancel(NOTIFICATION_ID_HEARTBEAT)
+            nmSystem?.cancel(NOTIFICATION_ID_GOODNIGHT)
             nmSystem?.cancel(1003)
 
             synchronized(activeNoteReminderIds) {
@@ -846,6 +848,150 @@ object NotificationHelper {
             val nmSystem = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
             nmCompat.cancel(notifId)
             nmSystem?.cancel(notifId)
+        } catch (_: Exception) {}
+    }
+
+    const val NOTIFICATION_ID_GOODNIGHT = 1004
+
+    /**
+     * Confirmation notification when Goodnight is automatically or manually sent at 11:00 PM.
+     */
+    fun showGoodnightSentNotification(context: Context, partnerName: String = "Your partner") {
+        if (isAppOpenOnScreen(context)) return
+        val prefs = SecurityPreferences.getInstance(context)
+        if (!prefs.isNotificationsEnabled()) return
+
+        val isDisguised = prefs.isHideNotificationContent() || prefs.isDisguiseModeEnabled()
+        val isCalc = isCalculatorMode(prefs)
+
+        val intent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            putExtra("from_notification", true)
+            putExtra("is_discreet", isDisguised)
+        }
+
+        val pendingIntent = PendingIntent.getActivity(
+            context,
+            2027,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val displayTitle = if (isDisguised) prefs.getMaskedNotificationTitle() else "Good night \uD83C\uDF19"
+        val displayText = if (isDisguised) {
+            if (isCalc) "Night backup completed" else "Evening sync complete"
+        } else {
+            "Goodnight sent to $partnerName \u2728 Sleep well, my love"
+        }
+
+        val appIcon = getAppIconBitmap(context)
+        val smallIconRes = if (isCalc) R.drawable.ic_stat_calculator else R.drawable.ic_stat_notes
+        val accentColor = if (isCalc) 0xFF2E7D32.toInt() else 0xFF1D4ED8.toInt()
+
+        val notification = NotificationCompat.Builder(context, messagesChannelId())
+            .setSmallIcon(smallIconRes)
+            .apply { if (appIcon != null) setLargeIcon(appIcon) }
+            .setColor(accentColor)
+            .setContentTitle(displayTitle)
+            .setContentText(displayText)
+            .apply { if (!isDisguised) setSubText("Cherish") }
+            .setAutoCancel(true)
+            .setOngoing(false)
+            .setContentIntent(pendingIntent)
+            .setDeleteIntent(getDismissIntent(context))
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setCategory(NotificationCompat.CATEGORY_MESSAGE)
+            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+            .setPublicVersion(lockScreenVersion(context, messagesChannelId(), prefs))
+            .build()
+
+        try {
+            createNotificationChannels(context)
+            if (isAppOpenOnScreen(context)) return
+            val nmCompat = NotificationManagerCompat.from(context)
+            nmCompat.notify(NOTIFICATION_ID_GOODNIGHT, notification)
+        } catch (_: Exception) {}
+    }
+
+    /**
+     * Interactive prompt notification at 11:00 PM if goodnight wasn't sent yet and auto-send is off.
+     */
+    fun showGoodnightPromptNotification(context: Context, partnerName: String = "Your partner") {
+        if (isAppOpenOnScreen(context)) return
+        val prefs = SecurityPreferences.getInstance(context)
+        if (!prefs.isNotificationsEnabled()) return
+
+        val isDisguised = prefs.isHideNotificationContent() || prefs.isDisguiseModeEnabled()
+        val isCalc = isCalculatorMode(prefs)
+
+        val chatIntent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            putExtra("from_notification", true)
+            putExtra("is_discreet", isDisguised)
+        }
+
+        val pendingChatIntent = PendingIntent.getActivity(
+            context,
+            2028,
+            chatIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val directSendIntent = Intent(context, GoodnightReminderReceiver::class.java).apply {
+            action = GoodnightReminderReceiver.ACTION_SEND_GOODNIGHT_DIRECT
+        }
+        val pendingDirectSend = PendingIntent.getBroadcast(
+            context,
+            2029,
+            directSendIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val displayTitle = if (isDisguised) prefs.getMaskedNotificationTitle() else "Good night \uD83C\uDF19"
+        val displayText = if (isDisguised) {
+            if (isCalc) "Review scheduled operations" else "Evening checklist reminder"
+        } else {
+            "It's 11:00 PM — wish $partnerName sweet dreams \u2728"
+        }
+
+        val appIcon = getAppIconBitmap(context)
+        val smallIconRes = if (isCalc) R.drawable.ic_stat_calculator else R.drawable.ic_stat_notes
+        val accentColor = if (isCalc) 0xFF2E7D32.toInt() else 0xFF1D4ED8.toInt()
+
+        val builder = NotificationCompat.Builder(context, messagesChannelId())
+            .setSmallIcon(smallIconRes)
+            .apply { if (appIcon != null) setLargeIcon(appIcon) }
+            .setColor(accentColor)
+            .setContentTitle(displayTitle)
+            .setContentText(displayText)
+            .apply { if (!isDisguised) setSubText("Cherish") }
+            .setAutoCancel(true)
+            .setOngoing(false)
+            .setContentIntent(pendingChatIntent)
+            .setDeleteIntent(getDismissIntent(context))
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setCategory(NotificationCompat.CATEGORY_REMINDER)
+            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+            .setPublicVersion(lockScreenVersion(context, messagesChannelId(), prefs))
+
+        if (!isDisguised) {
+            builder.addAction(0, "Send Goodnight \uD83C\uDF19", pendingDirectSend)
+        }
+
+        try {
+            createNotificationChannels(context)
+            if (isAppOpenOnScreen(context)) return
+            val nmCompat = NotificationManagerCompat.from(context)
+            nmCompat.notify(NOTIFICATION_ID_GOODNIGHT, builder.build())
+        } catch (_: Exception) {}
+    }
+
+    fun cancelGoodnightNotification(context: Context) {
+        try {
+            val nmCompat = NotificationManagerCompat.from(context)
+            val nmSystem = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
+            nmCompat.cancel(NOTIFICATION_ID_GOODNIGHT)
+            nmSystem?.cancel(NOTIFICATION_ID_GOODNIGHT)
         } catch (_: Exception) {}
     }
 }

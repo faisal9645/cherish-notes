@@ -429,6 +429,20 @@ class SecurityPreferences(private val context: Context) {
         _chatBgTheme.value = theme
     }
 
+    private val _customWallpaperPath = MutableStateFlow(getCustomWallpaperPath())
+    val customWallpaperPath: StateFlow<String?> = _customWallpaperPath.asStateFlow()
+
+    fun getCustomWallpaperPath(): String? = prefs.getString("custom_wallpaper_path", null)
+
+    fun setCustomWallpaperPath(path: String?) {
+        if (path == null) {
+            prefs.edit().remove("custom_wallpaper_path").apply()
+        } else {
+            prefs.edit().putString("custom_wallpaper_path", path).apply()
+        }
+        _customWallpaperPath.value = path
+    }
+
     private val _chatTextSize = MutableStateFlow(getChatTextSize())
     val chatTextSize: StateFlow<Int> = _chatTextSize.asStateFlow()
 
@@ -1132,6 +1146,12 @@ class SecurityPreferences(private val context: Context) {
         prefs.edit().putBoolean(KEY_CHECK_AFTER_REMINDER, enabled).apply()
     }
 
+    fun isAutoGoodnightAt11Pm(): Boolean = prefs.getBoolean(KEY_AUTO_GOODNIGHT_11PM, true)
+
+    fun setAutoGoodnightAt11Pm(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_AUTO_GOODNIGHT_11PM, enabled).apply()
+    }
+
     // --- AUTO-LOCK & INACTIVITY TIMEOUT ---
     // 0 = Immediately, 30 = 30s, 60 = 1m, 300 = 5m, -1 = Never
     fun getAutoLockTimeoutSeconds(): Int = prefs.getInt(KEY_AUTO_LOCK_TIMEOUT_SEC, 60)
@@ -1348,6 +1368,7 @@ class SecurityPreferences(private val context: Context) {
         private const val KEY_HIGH_QUALITY_MEDIA = "high_quality_media"
         private const val KEY_DOUBLE_TAP_ZOOM = "double_tap_zoom"
         private const val KEY_CHECK_AFTER_REMINDER = "check_after_reminder_enabled"
+        private const val KEY_AUTO_GOODNIGHT_11PM = "auto_goodnight_11pm"
 
         // New Pillar 1 & 2 Keys
         private const val KEY_AUTO_LOCK_TIMEOUT_SEC = "auto_lock_timeout_sec"
