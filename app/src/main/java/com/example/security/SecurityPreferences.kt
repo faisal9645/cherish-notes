@@ -996,11 +996,11 @@ class SecurityPreferences(private val context: Context) {
     }
 
     // --- CLEAN REINSTALL (resets the usage counters Android keeps per app) ---
-    // Schedule: 0 = off, 1 = weekly, 2 = daily
-    fun getReinstallSchedule(): Int = prefs.getInt(KEY_REINSTALL_SCHEDULE, 0).coerceIn(0, 2)
+    // Schedule: 0 = off, 1 = weekly (an old stored "daily" (2) folds to weekly)
+    fun getReinstallSchedule(): Int = prefs.getInt(KEY_REINSTALL_SCHEDULE, 0).coerceIn(0, 1)
 
     fun setReinstallSchedule(mode: Int) {
-        val m = mode.coerceIn(0, 2)
+        val m = mode.coerceIn(0, 1)
         prefs.edit().putInt(KEY_REINSTALL_SCHEDULE, m).apply()
         _reinstallSchedule.value = m
     }
@@ -1025,7 +1025,7 @@ class SecurityPreferences(private val context: Context) {
         if (schedule == 0) return false
         val last = getLastReinstallAt()
         if (last <= 0L) return true
-        val interval = if (schedule == 2) 24L * 60 * 60 * 1000 else 7L * 24 * 60 * 60 * 1000
+        val interval = 7L * 24 * 60 * 60 * 1000 // weekly
         return now - last >= interval
     }
 

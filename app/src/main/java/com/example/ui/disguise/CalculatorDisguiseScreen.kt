@@ -111,6 +111,9 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.security.SecurityPreferences
+import com.example.ui.theme.DayBluePrimary
+import com.example.ui.theme.DayBlueSecondary
+import com.example.ui.theme.DayBlueTertiary
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.text.DecimalFormat
@@ -396,18 +399,7 @@ fun CalculatorDisguiseScreen(
             expression = "0"
             historyEquation = ""
             isEvaluated = false
-            var ctx: Context? = context
-            while (ctx is ContextWrapper) {
-                if (ctx is Activity) break
-                ctx = ctx.baseContext
-            }
-            val act = (ctx as? Activity) ?: activity
-            if (act != null) {
-                val moved = act.moveTaskToBack(true)
-                if (!moved) {
-                    act.finish()
-                }
-            }
+            closeDecoyToHome(context)
         }
     }
 
@@ -1363,9 +1355,9 @@ fun CalculatorDisguiseScreen(
                                 .background(
                                     Brush.linearGradient(
                                         listOf(
-                                            Color(0xFFFF5376),
-                                            Color(0xFFFF758C),
-                                            Color(0xFFFF9E7D)
+                                            DayBlueSecondary,
+                                            DayBluePrimary,
+                                            DayBlueTertiary
                                         )
                                     )
                                 ),
@@ -1395,7 +1387,7 @@ fun CalculatorDisguiseScreen(
                         ) {
                             CircularProgressIndicator(
                                 modifier = Modifier.size(16.dp),
-                                color = Color(0xFFFF5376),
+                                color = DayBluePrimary,
                                 strokeWidth = 2.2.dp
                             )
                             Text(

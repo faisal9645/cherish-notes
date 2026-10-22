@@ -310,9 +310,12 @@ fun ProfileScreen(
     // Which page of settings is open (null: the main list)
     var settingsPage by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf<SettingsPage?>(null) }
 
+    val profileApp = remember { context.applicationContext as com.example.CherishApplication }
+    val isDisguiseActive by profileApp.securityPreferences.isDisguiseActive.collectAsState()
+
     // Android back button & edge gesture: from a page, back to the main list; from the list,
     // re-disguise directly to Notes app for security
-    BackHandler {
+    BackHandler(enabled = !isDisguiseActive) {
         if (settingsPage != null) settingsPage = null else onQuickDisguise()
     }
 
@@ -699,7 +702,7 @@ fun ProfileScreen(
                             }
                         }
                     }
-                    val periodMs = if (reinstallSchedule == 2) 86_400_000L else 7L * 86_400_000L
+                    val periodMs = 7L * 86_400_000L // weekly
                     val myDone = reinstallSchedule != 0 && lastReinstallAt > 0L &&
                         System.currentTimeMillis() - lastReinstallAt < periodMs
                     val partnerDone = partnerReinstallAt > 0L &&
@@ -726,7 +729,7 @@ fun ProfileScreen(
                             .padding(4.dp),
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        listOf(0 to "Off", 1 to "Weekly", 2 to "Daily").forEach { (mode, label) ->
+                        listOf(0 to "Off", 1 to "Weekly").forEach { (mode, label) ->
                             val selected = reinstallSchedule == mode
                             Row(
                                 modifier = Modifier
@@ -767,7 +770,7 @@ fun ProfileScreen(
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
                                     text = "You: " + (if (lastReinstallAt > 0L) agoText(lastReinstallAt) else "not yet") +
-                                        (if (reinstallSchedule != 0) (if (myDone) " • done this " + (if (reinstallSchedule == 2) "day" else "week") else " • due") else ""),
+                                        (if (reinstallSchedule != 0) (if (myDone) " • done this week" else " • due") else ""),
                                     fontSize = 12.sp,
                                     color = MaterialTheme.colorScheme.onSurface
                                 )
@@ -816,6 +819,45 @@ fun ProfileScreen(
                                 Text("Downloading installer to Downloads… ${(rs.progress * 100).toInt()}%", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                         }
+                        is ProfileViewModel.ReinstallUi.ReadyToUninstall -> {
+                            Surface(
+                                shape = RoundedCornerShape(12.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 4.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(Icons.Rounded.CheckCircle, contentDescription = null, tint = Color(0xFF4CAF50), modifier = Modifier.size(18.dp))
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        "Installer saved to Downloads. Tap Uninstall, then open it from Downloads to install again.",
+                                        fontSize = 12.sp,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                }
+                            }
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 4.dp),
+                                horizontalArrangement = Arrangement.End
+                            ) {
+                                CherishButton(
+                                    onClick = { viewModel.confirmUninstall(context) },
+                                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                                    shape = RoundedCornerShape(12.dp)
+                                ) {
+                                    Icon(Icons.Rounded.Delete, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("Uninstall now", fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
                         is ProfileViewModel.ReinstallUi.Error -> {
                             Text(
                                 rs.message,
@@ -827,29 +869,31 @@ fun ProfileScreen(
                         else -> {}
                     }
 
-                    // Reinstall now
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 6.dp),
-                        horizontalArrangement = Arrangement.End
-                    ) {
-                        val busy = reinstallState is ProfileViewModel.ReinstallUi.Preparing ||
-                            reinstallState is ProfileViewModel.ReinstallUi.Downloading
-                        CherishTonalButton(
-                            onClick = { if (!busy) showReinstallConfirm = true },
-                            shape = RoundedCornerShape(12.dp),
-                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
+                    // Reinstall now (hidden once the installer is downloaded — the Uninstall button shows instead)
+                    if (reinstallState !is ProfileViewModel.ReinstallUi.ReadyToUninstall) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 6.dp),
+                            horizontalArrangement = Arrangement.End
                         ) {
-                            Icon(Icons.Rounded.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(if (busy) "Working…" else "Reinstall now", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                            val busy = reinstallState is ProfileViewModel.ReinstallUi.Preparing ||
+                                reinstallState is ProfileViewModel.ReinstallUi.Downloading
+                            CherishTonalButton(
+                                onClick = { if (!busy) showReinstallConfirm = true },
+                                shape = RoundedCornerShape(12.dp),
+                                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
+                            ) {
+                                Icon(Icons.Rounded.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(if (busy) "Working…" else "Reinstall now", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                            }
                         }
                     }
                 }
 
                 if (showReinstallConfirm) {
-                    val (coupleKey, partnerEmail) = remember { viewModel.getLoginDetails() }
+                    val reinstallLogin = remember { viewModel.getLoginDetails() }
                     CherishAlertDialog(
                         onDismissRequest = { showReinstallConfirm = false },
                         title = { Text("Reinstall now?", fontWeight = FontWeight.Bold) },
@@ -881,10 +925,13 @@ fun ProfileScreen(
                                             }
                                         }
                                         Spacer(modifier = Modifier.height(4.dp))
-                                        Text("Couple key: " + (if (isReinstallLoginRevealed) coupleKey else "••••••••"), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
-                                        if (partnerEmail.isNotBlank()) {
-                                            Text("Partner email: " + (if (isReinstallLoginRevealed) partnerEmail else "••••••••"), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        if (reinstallLogin.userName.isNotBlank()) {
+                                            Text("Your name: " + (if (isReinstallLoginRevealed) reinstallLogin.userName else "••••••••"), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface)
                                         }
+                                        if (reinstallLogin.partnerName.isNotBlank()) {
+                                            Text("Partner name: " + (if (isReinstallLoginRevealed) reinstallLogin.partnerName else "••••••••"), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface)
+                                        }
+                                        Text("Secret key: " + (if (isReinstallLoginRevealed) reinstallLogin.coupleKey else "••••••••"), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
                                         Spacer(modifier = Modifier.height(4.dp))
                                         Text("Your app-lock PIN resets on reinstall; set it again after.", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                     }

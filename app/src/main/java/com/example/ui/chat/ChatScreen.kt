@@ -1014,7 +1014,7 @@ fun ChatScreen(
     }
 
     // Android back button & gesture: handle in-app dialogs first, else return to Home tab
-    BackHandler(enabled = true) {
+    BackHandler(enabled = !isDisguiseActive) {
         if (isImeVisible) {
             keyboardController?.hide()
         } else if (isSelectionMode) {
@@ -2038,7 +2038,7 @@ fun ChatScreen(
                             }
                         } else if (showEmptyTodayHeader) {
                             item(key = "empty_today_header", contentType = "today_header") {
-                                Column(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
+                                Column(modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp)) {
                                     DateSeparatorBadge(dateText = "Today", isPrivateMode = false, isDark = isDark)
                                     if (isTodayChatOnly) {
                                         StrictlyTwoPersonBanner(isPrivateMode = false, isDark = isDark)
@@ -2163,7 +2163,7 @@ fun ChatScreen(
                 if (showEmptyTodayHeader && reversedChatRowItems.isNotEmpty()) {
                     val isPrivate = uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE
                     if (!isPrivate) {
-                        Column(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
+                        Column(modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp)) {
                             DateSeparatorBadge(dateText = "Today", isPrivateMode = isPrivate, isDark = isDark)
                             if (isTodayChatOnly) {
                                 StrictlyTwoPersonBanner(isPrivateMode = false, isDark = isDark)
@@ -4805,7 +4805,7 @@ fun DateSeparatorBadge(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 24.dp, vertical = 12.dp),
+            .padding(horizontal = 24.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Center
     ) {
@@ -4896,7 +4896,7 @@ fun StrictlyTwoPersonBanner(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 4.dp),
+            .padding(horizontal = 20.dp, vertical = 2.dp),
         contentAlignment = Alignment.Center
     ) {
         Surface(
@@ -4916,7 +4916,7 @@ fun StrictlyTwoPersonBanner(
             )
         ) {
             Row(
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+                modifier = Modifier.padding(horizontal = 14.dp, vertical = 5.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.Center
             ) {
@@ -4930,9 +4930,31 @@ fun StrictlyTwoPersonBanner(
                     },
                     modifier = Modifier.size(13.dp)
                 )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Strictly 2-Person Private Channel",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = if (isPrivateMode) {
+                        if (isDark) darkTone(Color(0xFFD1D5DB)) else Gray700
+                    } else {
+                        if (isDark) darkTone(Blue300) else Color(0xFF1E40AF)
+                    }
+                )
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(
-                    text = "Strictly 2-Person Private Channel • End-to-End Encrypted",
+                    text = "•",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = if (isPrivateMode) {
+                        if (isDark) darkTone(Color(0xFF9CA3AF)) else Gray500
+                    } else {
+                        if (isDark) darkTone(Blue300) else Color(0xFF1E40AF)
+                    }
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = "End-to-End Encrypted",
                     fontSize = 11.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = if (isPrivateMode) {
@@ -4958,7 +4980,7 @@ fun StrictlyPrivateChatBeginningBanner(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 20.dp),
+            .padding(horizontal = 20.dp, vertical = 10.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         if (isPrivateMode) {
@@ -5018,7 +5040,7 @@ fun StrictlyPrivateChatBeginningBanner(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 20.dp, vertical = 20.dp),
+                        .padding(horizontal = 20.dp, vertical = 12.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     // Overlapping connected avatars

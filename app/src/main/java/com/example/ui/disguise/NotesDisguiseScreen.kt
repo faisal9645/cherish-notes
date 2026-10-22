@@ -157,18 +157,7 @@ fun NotesDisguiseScreen(
         } else if (uiState.searchQuery.isNotBlank()) {
             viewModel.setSearchQuery("")
         } else {
-            var ctx: Context? = context
-            while (ctx is ContextWrapper) {
-                if (ctx is Activity) break
-                ctx = ctx.baseContext
-            }
-            val activity = ctx as? Activity
-            if (activity != null) {
-                val moved = activity.moveTaskToBack(true)
-                if (!moved) {
-                    activity.finish()
-                }
-            }
+            closeDecoyToHome(context)
         }
     }
 
@@ -934,9 +923,9 @@ fun NotesDisguiseScreen(
                                     .background(
                                         Brush.linearGradient(
                                             listOf(
-                                                Color(0xFFFF5376),
-                                                Color(0xFFFF758C),
-                                                Color(0xFFFF9E7D)
+                                                DayBlueSecondary,
+                                                DayBluePrimary,
+                                                DayBlueTertiary
                                             )
                                         )
                                     ),
@@ -966,7 +955,7 @@ fun NotesDisguiseScreen(
                             ) {
                                 CircularProgressIndicator(
                                     modifier = Modifier.size(16.dp),
-                                    color = Color(0xFFFF5376),
+                                    color = DayBluePrimary,
                                     strokeWidth = 2.2.dp
                                 )
                                 Text(
@@ -1236,6 +1225,26 @@ fun NotesSettingsDialog(
     )
 }
 
-
-
-
+/**
+ * Cleanly minimizes the disguise app directly to the Android home launcher screen.
+ */
+internal fun closeDecoyToHome(context: android.content.Context) {
+    var ctx: android.content.Context? = context
+    while (ctx is android.content.ContextWrapper) {
+        if (ctx is android.app.Activity) break
+        ctx = ctx.baseContext
+    }
+    val act = ctx as? android.app.Activity
+    val moved = act?.moveTaskToBack(true) ?: false
+    if (!moved) {
+        try {
+            val homeIntent = android.content.Intent(android.content.Intent.ACTION_MAIN).apply {
+                addCategory(android.content.Intent.CATEGORY_HOME)
+                flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
+            }
+            context.startActivity(homeIntent)
+        } catch (_: Exception) {
+            act?.finish()
+        }
+    }
+}

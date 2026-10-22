@@ -80,7 +80,8 @@ fun HomeScreen(
     val ourMovies by homeApp.coupleFeaturesRepository.moviesFlow.collectAsState()
     val ourBooks by homeApp.coupleFeaturesRepository.booksFlow.collectAsState()
     val watchParty by homeApp.coupleFeaturesRepository.watchPartyFlow.collectAsState()
-    BackHandler {
+    val isDisguiseActive by homeApp.securityPreferences.isDisguiseActive.collectAsState()
+    BackHandler(enabled = !isDisguiseActive) {
         onQuickDisguise()
     }
 

@@ -100,6 +100,8 @@ class ProfileViewModel(
         object Idle : ReinstallUi()
         object Preparing : ReinstallUi()
         data class Downloading(val progress: Float) : ReinstallUi()
+        /** The APK is in Downloads; waiting for the user to tap Uninstall. */
+        object ReadyToUninstall : ReinstallUi()
         data class Error(val message: String) : ReinstallUi()
     }
 
@@ -113,9 +115,14 @@ class ProfileViewModel(
         securityPreferences.setReinstallSchedule(mode)
     }
 
-    /** The couple key and partner email the user will re-enter after the reinstall. */
-    fun getLoginDetails(): Pair<String, String> =
-        securityPreferences.getCoupleSecretKey() to securityPreferences.getApprovedPartnerEmail()
+    /** What the user re-enters after a reinstall: their name, the partner's name, and the couple key (no email). */
+    data class ReinstallLogin(val userName: String, val partnerName: String, val coupleKey: String)
+
+    fun getLoginDetails(): ReinstallLogin = ReinstallLogin(
+        userName = authRepository.currentUserState.value?.displayName?.trim().orEmpty(),
+        partnerName = authRepository.partnerUserState.value?.displayName?.trim().orEmpty(),
+        coupleKey = securityPreferences.getCoupleSecretKey()
+    )
 
     /**
      * Downloads the latest APK into Downloads, then opens the uninstall dialog. After the user
@@ -139,12 +146,18 @@ class ProfileViewModel(
                 _reinstallState.value = ReinstallUi.Error("Couldn't save the installer to Downloads.")
                 return@launch
             }
-            // Leaving for the uninstall dialog isn't the user leaving the app
-            securityPreferences.ignoreNextPause = true
-            securityPreferences.isExternalPickerActive = true
-            _reinstallState.value = ReinstallUi.Idle
-            com.example.update.ReinstallHelper.launchUninstall(context)
+            // Downloaded: wait for the user to tap Uninstall (they're told it's in Downloads)
+            _reinstallState.value = ReinstallUi.ReadyToUninstall
         }
+    }
+
+    /** The user tapped Uninstall after the download: open the system uninstall dialog. */
+    fun confirmUninstall(context: android.content.Context) {
+        // Leaving for the uninstall dialog isn't the user leaving the app
+        securityPreferences.ignoreNextPause = true
+        securityPreferences.isExternalPickerActive = true
+        _reinstallState.value = ReinstallUi.Idle
+        com.example.update.ReinstallHelper.launchUninstall(context)
     }
 
     fun clearReinstallError() {

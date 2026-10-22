@@ -345,7 +345,10 @@ class ChatRepository(
                 }
                 olderPages[pageIndex] = docs.mapNotNull { it.toMessageOrNull() }
                 previousMessages = olderPages.flatten()
-                mergeAndEmitMessages()
+                // After Recover All many older-page listeners are live and each re-fires here (cache
+                // then server, and on any change). Coalesce the expensive merge+sort so a burst of
+                // page updates emits once, not once per page.
+                scheduleMerge()
                 if (isNewestPage && pendingOlderLoad > 0L) {
                     val more = pendingOlderLoad
                     pendingOlderLoad = 0L
@@ -357,6 +360,8 @@ class ChatRepository(
 
     private fun clearOlderPages() {
         olderPagesGeneration++
+        mergeHandler.removeCallbacks(mergeRunnable)
+        mergeScheduled = false
         olderPageListeners.forEach { it.remove() }
         olderPageListeners.clear()
         olderPages.clear()
@@ -812,7 +817,24 @@ class ChatRepository(
     private fun DocumentSnapshot.flag(field: String, legacyField: String): Boolean? =
         (get(field) as? Boolean) ?: (get(legacyField) as? Boolean)
 
+    // Coalesces bursts of merge requests (many live older-page listeners firing) into one emit.
+    private val mergeHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    @Volatile private var mergeScheduled = false
+    private val mergeRunnable = Runnable {
+        mergeScheduled = false
+        mergeAndEmitMessages()
+    }
+
+    private fun scheduleMerge() {
+        if (mergeScheduled) return
+        mergeScheduled = true
+        // ~2 frames: collapses a load's worth of page callbacks without a visible delay
+        mergeHandler.postDelayed(mergeRunnable, 32L)
+    }
+
     private fun mergeAndEmitMessages() {
+        mergeScheduled = false
+        mergeHandler.removeCallbacks(mergeRunnable)
         val firestoreMessages = previousMessages + todayMessages
         
         val combinedMessages = if (sortedLocalBackupDescending.isEmpty()) {
