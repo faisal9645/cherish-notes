@@ -321,7 +321,10 @@ object CallManager {
                 // Rings in its notification instead, with Answer and Decline
                 CallNotifications.showIncoming(app, invite)
             }
-        } else if (!CherishApplication.isAppInForeground && !secPrefs.getCallMaskingStyle().equals("discreet", ignoreCase = true)) {
+        } else if (!CherishApplication.isAppInForeground &&
+            !secPrefs.isDisguiseActive() &&
+            !secPrefs.getCallMaskingStyle().equals("discreet", ignoreCase = true)
+        ) {
             // Locked, asleep or idle: launch CallActivity directly over lockscreen/idle screen
             try {
                 val intent = CallActivity.incomingIntent(app, invite).apply {

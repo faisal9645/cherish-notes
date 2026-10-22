@@ -100,14 +100,40 @@ object ReinstallHelper {
 
     /** Opens the system uninstall dialog for this app. The user confirms; then the app is removed. */
     fun launchUninstall(context: Context) {
+        val packageName = context.packageName
+        val intent = Intent(Intent.ACTION_DELETE).apply {
+            data = Uri.fromParts("package", packageName, null)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+            putExtra(Intent.EXTRA_RETURN_RESULT, true)
+        }
         try {
-            val intent = Intent(Intent.ACTION_DELETE, Uri.parse("package:${context.packageName}")).apply {
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                putExtra(Intent.EXTRA_RETURN_RESULT, false)
-            }
             context.startActivity(intent)
+            return
         } catch (e: Exception) {
-            Log.e(TAG, "Couldn't open the uninstall dialog", e)
+            Log.w(TAG, "ACTION_DELETE failed, trying ACTION_UNINSTALL_PACKAGE", e)
+        }
+
+        try {
+            @Suppress("DEPRECATION")
+            val legacy = Intent(Intent.ACTION_UNINSTALL_PACKAGE).apply {
+                data = Uri.fromParts("package", packageName, null)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                putExtra(Intent.EXTRA_RETURN_RESULT, true)
+            }
+            context.startActivity(legacy)
+            return
+        } catch (e: Exception) {
+            Log.w(TAG, "ACTION_UNINSTALL_PACKAGE failed, falling back to app settings", e)
+        }
+
+        try {
+            val appDetails = Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                data = Uri.fromParts("package", packageName, null)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(appDetails)
+        } catch (e: Exception) {
+            Log.e(TAG, "Couldn't open app settings for uninstall", e)
         }
     }
 

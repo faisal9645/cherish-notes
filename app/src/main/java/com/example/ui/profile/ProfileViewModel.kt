@@ -56,7 +56,7 @@ data class ProfileUiState(
     val isCallLowDataMode: Boolean = true,
     val callDefaultAudioOutput: String = "earpiece",
     val isCallAutoRecordEnabled: Boolean = true,
-    val callMaskingStyle: String = "normal",
+    val callMaskingStyle: String = "discreet",
     val isCallVibrateConnected: Boolean = true,
     val isCallVibrateMute: Boolean = true,
     val partnerCustomTimeZone: String? = null,

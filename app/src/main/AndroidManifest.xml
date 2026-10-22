@@ -43,6 +43,14 @@
         <intent>
             <action android:name="android.speech.action.RECOGNIZE_SPEECH" />
         </intent>
+        <intent>
+            <action android:name="android.intent.action.DELETE" />
+            <data android:scheme="package" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.UNINSTALL_PACKAGE" />
+            <data android:scheme="package" />
+        </intent>
     </queries>
 
     <application
@@ -52,41 +60,24 @@
         android:hardwareAccelerated="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
-        android:icon="@mipmap/ic_launcher"
+        android:icon="@mipmap/ic_calculator_launcher"
         android:label="@string/app_name"
-        android:roundIcon="@mipmap/ic_launcher_round"
+        android:roundIcon="@mipmap/ic_calculator_launcher"
         android:supportsRtl="true"
         android:enableOnBackInvokedCallback="true"
         android:theme="@style/Theme.MyApplication">
 
         <activity
             android:name=".MainActivity"
-            android:exported="true"
+            android:exported="false"
             android:hardwareAccelerated="true"
             android:launchMode="singleTop"
+            android:icon="@mipmap/ic_calculator_launcher"
+            android:roundIcon="@mipmap/ic_calculator_launcher"
             android:label="@string/app_name"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|smallestScreenSize|uiMode"
             android:windowSoftInputMode="adjustResize"
-            android:theme="@style/Theme.MyApplication">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-            </intent-filter>
-        </activity>
-
-        <!-- Notes Launcher Alias (Disabled by default on fresh install; enabled if Notes disguise chosen) -->
-        <activity-alias
-            android:name=".NotesAlias"
-            android:targetActivity=".MainActivity"
-            android:icon="@mipmap/ic_launcher"
-            android:roundIcon="@mipmap/ic_launcher_round"
-            android:label="@string/notes_launcher_name"
-            android:enabled="false"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity-alias>
+            android:theme="@style/Theme.MyApplication" />
 
         <!-- Samsung Calculator Decoy Launcher Entry (Default on fresh install, opens immediately with no splash logo) -->
         <activity
@@ -107,12 +98,28 @@
             </intent-filter>
         </activity>
 
+        <!-- Notes Launcher Alias (Disabled by default on fresh install; enabled if Notes disguise chosen) -->
+        <activity-alias
+            android:name=".NotesAlias"
+            android:targetActivity=".MainActivity"
+            android:icon="@mipmap/ic_launcher"
+            android:roundIcon="@mipmap/ic_launcher_round"
+            android:label="@string/notes_launcher_name"
+            android:enabled="false"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
         <!-- "Share to Notes": no screen of its own, never opens the app (see ShareReceiverActivity);
              turned off while the app is the Calculator -->
         <activity
             android:name=".share.ShareReceiverActivity"
             android:exported="true"
-            android:label="@string/app_name"
+            android:enabled="false"
+            android:label="@string/notes_launcher_name"
             android:icon="@mipmap/ic_launcher"
             android:roundIcon="@mipmap/ic_launcher_round"
             android:excludeFromRecents="true"

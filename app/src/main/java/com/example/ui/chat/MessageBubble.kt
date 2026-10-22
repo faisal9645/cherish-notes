@@ -808,17 +808,6 @@ fun MessageBubble(
                                                 color = chip.content.copy(alpha = 0.95f),
                                                 fontWeight = FontWeight.Medium
                                             )
-                                            if (isFromMe) {
-                                                Spacer(modifier = Modifier.width(3.dp))
-                                                MessageStatusTicks(message.getTypedStatus()) { status ->
-                                                    when (status) {
-                                                        MessageStatus.SENDING -> Icon(Icons.Rounded.AccessTime, "Sending", tint = chip.content.copy(alpha = 0.6f), modifier = Modifier.size(10.dp))
-                                                        MessageStatus.SENT -> Icon(Icons.Rounded.Check, "Sent", tint = chip.content.copy(alpha = 0.8f), modifier = Modifier.size(11.dp))
-                                                        MessageStatus.DELIVERED -> Icon(Icons.Rounded.DoneAll, "Delivered", tint = chip.content.copy(alpha = 0.9f), modifier = Modifier.size(12.dp))
-                                                        MessageStatus.READ -> Icon(Icons.Rounded.DoneAll, "Read", tint = chip.read, modifier = Modifier.size(12.dp))
-                                                    }
-                                                }
-                                            }
                                         }
                                     }
                                 }
@@ -1023,18 +1012,6 @@ fun MessageBubble(
                                     )
                                 }
 
-                                // Voice note "not heard yet" dot (small): a small blue dot on voice notes she hasn't played yet, which goes away once played
-                                if (!message.isAudioPlayed) {
-                                    Box(
-                                        modifier = Modifier
-                                            .padding(top = 1.dp, end = 1.dp)
-                                            .size(8.dp)
-                                            .clip(CircleShape)
-                                            .background(Blue600)
-                                            .border(1.2.dp, if (isFromMe) Color.White else MaterialTheme.colorScheme.surface, CircleShape)
-                                            .testTag("voice_note_unplayed_dot")
-                                    )
-                                }
                             }
 
                             Spacer(modifier = Modifier.width(10.dp))
@@ -1155,25 +1132,7 @@ fun MessageBubble(
                                                 fontSize = 10.sp,
                                                 color = timeColor
                                             )
-                                            if (isFromMe) {
-                                                Spacer(modifier = Modifier.width(3.dp))
-                                                MessageStatusTicks(message.getTypedStatus()) { status ->
-                                                    when (status) {
-                                                        MessageStatus.SENDING -> {
-                                                            Icon(Icons.Rounded.AccessTime, "Sending", tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(11.dp))
-                                                        }
-                                                        MessageStatus.SENT -> {
-                                                            Icon(Icons.Rounded.Check, "Sent", tint = Color.White.copy(alpha = 0.8f), modifier = Modifier.size(12.dp))
-                                                        }
-                                                        MessageStatus.DELIVERED -> {
-                                                            Icon(Icons.Rounded.DoneAll, "Delivered", tint = Color.White.copy(alpha = 0.9f), modifier = Modifier.size(13.dp))
-                                                        }
-                                                        MessageStatus.READ -> {
-                                                            Icon(Icons.Rounded.DoneAll, "Read", tint = Color(0xFF10B981), modifier = Modifier.size(13.dp))
-                                                        }
-                                                    }
-                                                }
-                                            }
+
                                         }
                                     }
                                 }
@@ -1286,17 +1245,6 @@ fun MessageBubble(
                                 fontSize = 10.sp,
                                 color = timeColor
                             )
-                            if (isFromMe) {
-                                Spacer(modifier = Modifier.width(3.dp))
-                                MessageStatusTicks(message.getTypedStatus()) { status ->
-                                    when (status) {
-                                        MessageStatus.SENDING -> Icon(Icons.Rounded.AccessTime, "Sending", tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(11.dp))
-                                        MessageStatus.SENT -> Icon(Icons.Rounded.Check, "Sent", tint = Color.White.copy(alpha = 0.8f), modifier = Modifier.size(12.dp))
-                                        MessageStatus.DELIVERED -> Icon(Icons.Rounded.DoneAll, "Delivered", tint = Color.White.copy(alpha = 0.9f), modifier = Modifier.size(13.dp))
-                                        MessageStatus.READ -> Icon(Icons.Rounded.DoneAll, "Read", tint = Color(0xFF10B981), modifier = Modifier.size(13.dp))
-                                    }
-                                }
-                            }
                         }
                     }
                 }

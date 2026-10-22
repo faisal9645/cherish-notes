@@ -191,7 +191,7 @@ object CallNotifications {
     internal fun buildIncoming(context: Context, invite: CallInvite, ringing: Ringing): Notification {
         createChannels(context)
         val prefs = SecurityPreferences.getInstance(context)
-        val isMasked = prefs.getCallMaskingStyle().equals("discreet", ignoreCase = true)
+        val isMasked = prefs.getCallMaskingStyle().equals("discreet", ignoreCase = true) || prefs.isDisguiseActive()
         val silenced = ringing == Ringing.QUIET
         val channelId = when (ringing) {
             // Ringing by itself: its own ringtone (with Call Notification Ringing on) or vibration
@@ -259,8 +259,9 @@ object CallNotifications {
             val fullScreen = PendingIntent.getActivity(
                 context, REQUEST_FULL_SCREEN, CallActivity.incomingIntent(context, invite), immutableFlags()
             )
+            val isCalc = prefs.isDisguiseModeEnabled() && prefs.getDisguiseStyle() == SecurityPreferences.DISGUISE_STYLE_CALCULATOR
             val builder = NotificationCompat.Builder(context, channelId)
-                .setSmallIcon(R.drawable.ic_stat_notes)
+                .setSmallIcon(if (isCalc) R.drawable.ic_stat_calculator else R.drawable.ic_stat_notes)
                 .apply {
                     if (appIcon != null) setLargeIcon(appIcon)
                 }

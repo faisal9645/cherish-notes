@@ -940,30 +940,6 @@ fun SharedGalleryScreen(
                                         )
 
                                         if (isVideoItem) {
-                                            val isVideoPlayed = remember(playedIds, item.id, item.messageId) {
-                                                playedIds.contains(item.id) || playedIds.contains(item.messageId)
-                                            }
-                                            Surface(
-                                                onClick = { toggleItemPlayed(item.id) },
-                                                shape = RoundedCornerShape(6.dp),
-                                                color = Color.Black.copy(alpha = 0.65f),
-                                                modifier = Modifier
-                                                    .align(Alignment.TopEnd)
-                                                    .padding(4.dp)
-                                            ) {
-                                                Row(
-                                                    verticalAlignment = Alignment.CenterVertically,
-                                                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
-                                                ) {
-                                                    // Just the colour, no words: green watched, amber not yet
-                                                    Box(
-                                                        modifier = Modifier
-                                                            .size(7.dp)
-                                                            .clip(CircleShape)
-                                                            .background(if (isVideoPlayed) Color(0xFF10B981) else Color(0xFFF59E0B))
-                                                    )
-                                                }
-                                            }
 
                                             // Center Play Indicator
                                             Box(
@@ -1164,14 +1140,6 @@ fun SharedGalleryScreen(
                                                         fontSize = 11.sp,
                                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                                         maxLines = 1
-                                                    )
-                                                    Spacer(modifier = Modifier.height(4.dp))
-                                                    val isVoicePlayed = remember(playedIds, msg.id, msg.isAudioPlayed) {
-                                                        msg.isAudioPlayed || playedIds.contains(msg.id)
-                                                    }
-                                                    PlayedStatusBadge(
-                                                        isPlayed = isVoicePlayed,
-                                                        onToggle = { toggleItemPlayed(msg.id) }
                                                     )
                                                 }
 
@@ -1463,15 +1431,6 @@ fun SharedGalleryScreen(
                                                             fontSize = 11.sp,
                                                             color = Slate400,
                                                             modifier = Modifier.weight(1f, fill = false)
-                                                        )
-                                                        Spacer(modifier = Modifier.width(8.dp))
-                                                        val playKey = ytVideoId ?: item.url
-                                                        val isItemPlayed = remember(playedIds, item.messageId, playKey) {
-                                                            playedIds.contains(playKey) || playedIds.contains(item.messageId)
-                                                        }
-                                                        PlayedStatusBadge(
-                                                            isPlayed = isItemPlayed,
-                                                            onToggle = { toggleItemPlayed(playKey) }
                                                         )
                                                     }
                                                 }
@@ -2708,27 +2667,6 @@ private fun PlayedStatusBadge(
     onToggle: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    // Just the colour: green once listened, amber not yet (no words). Tap still toggles it.
-    Surface(
-        onClick = onToggle,
-        shape = CircleShape,
-        color = if (isPlayed) Color(0xFF10B981).copy(alpha = 0.14f) else Color(0xFFF59E0B).copy(alpha = 0.14f),
-        border = BorderStroke(
-            0.8.dp,
-            if (isPlayed) Color(0xFF10B981).copy(alpha = 0.40f) else Color(0xFFF59E0B).copy(alpha = 0.40f)
-        ),
-        modifier = modifier
-            .size(22.dp)
-            .semantics { contentDescription = if (isPlayed) "Listened" else "Not listened yet" }
-    ) {
-        Box(contentAlignment = Alignment.Center) {
-            Box(
-                modifier = Modifier
-                    .size(8.dp)
-                    .clip(CircleShape)
-                    .background(if (isPlayed) Color(0xFF10B981) else Color(0xFFF59E0B))
-            )
-        }
-    }
+    // Hidden: media watched/not-yet status badges removed per user preference
 }
 

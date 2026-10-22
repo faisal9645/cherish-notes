@@ -671,7 +671,6 @@ fun CalculatorDisguiseScreen(
         modifier = modifier
             .fillMaxSize()
             .background(bgMain)
-            .circleReveal(equalsCenter ?: toolbarCenter) { unlockAnimProgress.value }
     ) {
         val screenHeight = maxHeight
         val isCompactScreen = screenHeight < 720.dp

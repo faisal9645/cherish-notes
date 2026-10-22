@@ -255,9 +255,9 @@ def release_notes(version_name: str, version_code: int, custom_notes: str = None
         return f"Notes v{version_name} (Build {version_code}):\n{custom_notes}"
     return (
         f"Notes v{version_name} (Build {version_code}):\n"
-        "\u2022 Blue theme opening reveal loader for Notes & Calculator\n"
+        "\u2022 Cherish opening blue animation for Calculator and Notes\n"
         "\u2022 Reliable back gesture navigation from disguise to home\n"
-        "\u2022 Refined private channel security banner spacing\n"
+        "\u2022 Background delivery and sync optimizations\n"
         "\u2022 Performance and memory improvements\n"
         "\u2022 Bug fixes and refinements"
     )

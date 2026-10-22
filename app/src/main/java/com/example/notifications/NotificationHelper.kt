@@ -49,10 +49,13 @@ object NotificationHelper {
     private val notifiedMessageIds = java.util.Collections.synchronizedSet(LinkedHashSet<String>())
     private val activeNoteReminderIds = java.util.Collections.synchronizedSet(LinkedHashSet<Int>())
 
+    private fun isCalculatorMode(prefs: SecurityPreferences): Boolean =
+        !prefs.isDisguiseModeEnabled() || prefs.getDisguiseStyle() == SecurityPreferences.DISGUISE_STYLE_CALCULATOR
+
     fun getAppIconBitmap(context: Context): Bitmap? {
         return try {
             val prefs = SecurityPreferences.getInstance(context)
-            val isCalc = prefs.isDisguiseModeEnabled() && prefs.getDisguiseStyle() == SecurityPreferences.DISGUISE_STYLE_CALCULATOR
+            val isCalc = isCalculatorMode(prefs)
             val resId = if (isCalc) R.drawable.ic_samsung_calculator else R.mipmap.ic_launcher
             val drawable = ContextCompat.getDrawable(context, resId) ?: return null
             if (drawable is BitmapDrawable) {
@@ -147,7 +150,7 @@ object NotificationHelper {
      * notification content on the lock screen: the app's own masked words, never who or what.
      */
     private fun lockScreenVersion(context: Context, channelId: String, prefs: SecurityPreferences): android.app.Notification {
-        val isCalc = prefs.isDisguiseModeEnabled() && prefs.getDisguiseStyle() == SecurityPreferences.DISGUISE_STYLE_CALCULATOR
+        val isCalc = isCalculatorMode(prefs)
         return NotificationCompat.Builder(context, channelId)
             .setSmallIcon(if (isCalc) R.drawable.ic_stat_calculator else R.drawable.ic_stat_notes)
             .setColor(if (isCalc) 0xFF2E7D32.toInt() else 0xFF2563FF.toInt())
@@ -349,7 +352,7 @@ object NotificationHelper {
         )
 
         // When hide notification content is OFF, behave like normal chat app notifications
-        val isCalc = prefs.isDisguiseModeEnabled() && prefs.getDisguiseStyle() == SecurityPreferences.DISGUISE_STYLE_CALCULATOR
+        val isCalc = isCalculatorMode(prefs)
         val maskedTitle = prefs.getMaskedNotificationTitle()
         val maskedText = prefs.getMaskedNotificationText()
         val displayTitle = if (isDiscreet) maskedTitle else senderName.ifBlank { "Your Partner" }
@@ -455,7 +458,7 @@ object NotificationHelper {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val isCalc = prefs.isDisguiseModeEnabled() && prefs.getDisguiseStyle() == SecurityPreferences.DISGUISE_STYLE_CALCULATOR
+        val isCalc = isCalculatorMode(prefs)
         val maskedTitle = prefs.getMaskedNotificationTitle()
         val maskedText = prefs.getMaskedNotificationText()
         val displayTitle = if (isDiscreet) maskedTitle else "Thinking of you"
@@ -801,9 +804,12 @@ object NotificationHelper {
         val displayTitle = title.ifBlank { "Note Reminder" }
         val displayText = if (content.isNotBlank()) content else "You have a scheduled note reminder."
 
+        val isCalc = try {
+            isCalculatorMode(SecurityPreferences.getInstance(context))
+        } catch (_: Exception) { false }
         val reminderAppIcon = getAppIconBitmap(context)
         val notification = NotificationCompat.Builder(context, CHANNEL_REMINDERS_ID)
-            .setSmallIcon(R.drawable.ic_stat_notes)
+            .setSmallIcon(if (isCalc) R.drawable.ic_stat_calculator else R.drawable.ic_stat_notes)
             .apply {
                 if (reminderAppIcon != null) setLargeIcon(reminderAppIcon)
             }

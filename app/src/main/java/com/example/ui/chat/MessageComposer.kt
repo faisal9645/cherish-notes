@@ -30,6 +30,10 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -1417,9 +1421,49 @@ fun MessageComposer(
         // WhatsApp/Telegram-Style Tabbed Emoji Panel, in the keyboard's place (NORMAL MODE ONLY)
         if (!isPrivateMode && isEmojiBoardShown && !isRecordingVoice) {
             val boardHeightPx = if (keyboardHeightPx > 0) keyboardHeightPx else with(density) { 280.dp.roundToPx() }
+            val emojiNestedScroll = remember {
+                var accumulatedPostScrollY = 0f
+                object : NestedScrollConnection {
+                    override fun onPostScroll(
+                        consumed: Offset,
+                        available: Offset,
+                        source: NestedScrollSource
+                    ): Offset {
+                        if (available.y > 0f) {
+                            accumulatedPostScrollY += available.y
+                            if (accumulatedPostScrollY > with(density) { 24.dp.toPx() }) {
+                                closeEmojiBoard()
+                                accumulatedPostScrollY = 0f
+                                return available
+                            }
+                        } else {
+                            accumulatedPostScrollY = 0f
+                        }
+                        return Offset.Zero
+                    }
+                }
+            }
+            val swipeDownModifier = Modifier.pointerInput(Unit) {
+                var accumulatedY = 0f
+                detectVerticalDragGestures(
+                    onDragStart = { accumulatedY = 0f },
+                    onDragEnd = { accumulatedY = 0f },
+                    onDragCancel = { accumulatedY = 0f },
+                    onVerticalDrag = { _, dragAmount ->
+                        if (dragAmount > 0f) {
+                            accumulatedY += dragAmount
+                            if (accumulatedY > 20.dp.toPx()) {
+                                closeEmojiBoard()
+                                accumulatedY = 0f
+                            }
+                        }
+                    }
+                )
+            }
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .nestedScroll(emojiNestedScroll)
                     .clipToBounds()
                     .layout { measurable, constraints ->
                         val shownPx = (boardHeightPx * emojiBoardOpen.value - keyboardInsets.getBottom(this))
@@ -1436,10 +1480,27 @@ fun MessageComposer(
                     modifier = Modifier.fillMaxSize()
                 ) {
                     Column(modifier = Modifier.fillMaxSize()) {
+                        // Drag handle pill at top of emoji board
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .then(swipeDownModifier)
+                                .padding(top = 6.dp, bottom = 2.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(width = 36.dp, height = 4.dp)
+                                    .clip(CircleShape)
+                                    .background(if (isDark) Color(0xFF334155) else Color(0xFFCBD5E1))
+                            )
+                        }
+
                         // Category Tab Row (bottom-style like WhatsApp)
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
+                                .then(swipeDownModifier)
                                 .background(if (isDark) darkTone(Graphite850) else Color.White)
                                 .border(BorderStroke(0.6.dp, if (isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFE2E8F0)))
                                 .padding(horizontal = 4.dp, vertical = 2.dp),
@@ -1545,6 +1606,46 @@ private fun EmojiAttachmentPanel(
 ) {
     val panelBg = if (isDark) Neutral900 else Color.White
     val scope = rememberCoroutineScope()
+    val density = LocalDensity.current
+    val panelNestedScroll = remember {
+        var accumulatedPostScrollY = 0f
+        object : NestedScrollConnection {
+            override fun onPostScroll(
+                consumed: Offset,
+                available: Offset,
+                source: NestedScrollSource
+            ): Offset {
+                if (available.y > 0f) {
+                    accumulatedPostScrollY += available.y
+                    if (accumulatedPostScrollY > with(density) { 24.dp.toPx() }) {
+                        onClose()
+                        accumulatedPostScrollY = 0f
+                        return available
+                    }
+                } else {
+                    accumulatedPostScrollY = 0f
+                }
+                return Offset.Zero
+            }
+        }
+    }
+    val panelSwipeDownModifier = Modifier.pointerInput(Unit) {
+        var accumulatedY = 0f
+        detectVerticalDragGestures(
+            onDragStart = { accumulatedY = 0f },
+            onDragEnd = { accumulatedY = 0f },
+            onDragCancel = { accumulatedY = 0f },
+            onVerticalDrag = { _, dragAmount ->
+                if (dragAmount > 0f) {
+                    accumulatedY += dragAmount
+                    if (accumulatedY > 20.dp.toPx()) {
+                        onClose()
+                        accumulatedY = 0f
+                    }
+                }
+            }
+        )
+    }
 
     Surface(
         color = panelBg,
@@ -1554,13 +1655,31 @@ private fun EmojiAttachmentPanel(
             .fillMaxWidth()
             .height(290.dp)
             .padding(horizontal = 8.dp)
+            .nestedScroll(panelNestedScroll)
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
+            // Drag handle pill at top
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .then(panelSwipeDownModifier)
+                    .padding(top = 6.dp, bottom = 2.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(width = 36.dp, height = 4.dp)
+                        .clip(CircleShape)
+                        .background(if (isDark) Color(0xFF334155) else Color(0xFFCBD5E1))
+                )
+            }
+
             // Top Section: Quick Attachment Action Items
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                    .then(panelSwipeDownModifier)
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.SpaceAround,
                 verticalAlignment = Alignment.CenterVertically
             ) {

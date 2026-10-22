@@ -47,6 +47,25 @@ object BackgroundDelivery {
     /** Battery use is "Unrestricted": the phone delivers pushes to the closed app. */
     fun isUnrestricted(context: Context): Boolean = NotificationHelper.isBatteryOptimizationIgnored(context)
 
+    fun isSamsung(): Boolean = Build.MANUFACTURER.contains("samsung", ignoreCase = true)
+    fun isVivo(): Boolean = Build.MANUFACTURER.contains("vivo", ignoreCase = true) || Build.MANUFACTURER.contains("iqoo", ignoreCase = true)
+    fun isSamsungOrVivo(): Boolean = isSamsung() || isVivo()
+
+    private const val KEY_SAMSUNG_VIVO_PROMPT_SEEN = "samsung_vivo_prompt_seen_v2"
+
+    fun hasSeenSamsungVivoPrompt(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_SAMSUNG_VIVO_PROMPT_SEEN, false)
+
+    fun setSeenSamsungVivoPrompt(context: Context, seen: Boolean = true) {
+        prefs(context).edit().putBoolean(KEY_SAMSUNG_VIVO_PROMPT_SEEN, seen).apply()
+    }
+
+    fun shouldPromptSamsungVivo(context: Context): Boolean {
+        if (!isSamsungOrVivo()) return false
+        if (hasSeenSamsungVivoPrompt(context)) return false
+        return !isUnrestricted(context) || missingCount(context) > 0
+    }
+
     /** This phone's maker has its own Auto-start switch (worth turning on too). */
     fun hasAutoStartSetting(): Boolean = Build.MANUFACTURER.lowercase() in AUTO_START_MAKERS
 
@@ -158,6 +177,11 @@ object BackgroundDelivery {
 
     fun steps(context: Context): List<Step> {
         val maker = maker()
+        val appName = try {
+            context.applicationInfo.loadLabel(context.packageManager).toString()
+        } catch (_: Exception) {
+            "Notes"
+        }
         val steps = mutableListOf<Step>()
         steps += Step(
             "notifications", "Notifications allowed",
@@ -172,9 +196,10 @@ object BackgroundDelivery {
                 Maker.XIAOMI -> "Allow running in the background"
                 Maker.VIVO -> "Allow background power use"
                 Maker.OPPO -> "Allow background activity"
+                Maker.SAMSUNG -> "Battery: Unrestricted (Device Care)"
                 else -> "Battery: Unrestricted"
             },
-            "Without it the phone holds back pushes while Notes is closed.",
+            "Without it the phone holds back pushes while $appName is closed.",
             isOn = isUnrestricted(context),
             required = true,
             open = ::requestUnrestricted
@@ -183,14 +208,14 @@ object BackgroundDelivery {
             Maker.XIAOMI -> {
                 steps += Step(
                     "autostart", "Autostart",
-                    "Security > Permissions > Autostart: turn on Notes. Without it a swiped-away Notes can't wake for a push.",
+                    "Security > Permissions > Autostart: turn on $appName. Without it a swiped-away $appName can't wake for a push.",
                     isOn = miuiOpAllowed(context, MIUI_OP_AUTO_START),
                     required = true,
                     open = ::openAutoStart
                 )
                 steps += Step(
                     "miui_battery", "Battery saver: No restrictions",
-                    "Pick \"No restrictions\" for Notes (MIUI and HyperOS keep their own battery list).",
+                    "Pick \"No restrictions\" for $appName (MIUI and HyperOS keep their own battery list).",
                     isOn = null,
                     required = true,
                     open = ::openMakerBattery
@@ -213,29 +238,29 @@ object BackgroundDelivery {
             Maker.VIVO -> {
                 steps += Step(
                     "autostart", "Autostart",
-                    "i Manager > App manager > Autostart: turn on Notes.",
+                    "i Manager > App manager > Autostart: turn on $appName.",
                     isOn = null,
                     required = true,
-                    open = ::openAutoStart
+                    open = ::openVivoAutoStart
                 )
                 steps += Step(
                     "vivo_background", "High background power consumption",
-                    "Battery > Background power consumption management: allow Notes.",
+                    "Battery > Background power consumption management: allow $appName.",
                     isOn = null,
                     required = true,
-                    open = ::openMakerBattery
+                    open = ::openVivoBackgroundPower
                 )
             }
             Maker.SAMSUNG -> steps += Step(
                 "samsung_sleeping", "Never sleeping apps",
-                "Battery > Background usage limits: add Notes to \"Never sleeping apps\" (and take it out of Sleeping and Deep sleeping apps).",
+                "Device Care > Battery > Background usage limits: add $appName to \"Never sleeping apps\" (and take it out of Sleeping and Deep sleeping apps).",
                 isOn = null,
                 required = true,
-                open = ::openMakerBattery
+                open = ::openSamsungDeviceCare
             )
             Maker.OPPO, Maker.HUAWEI -> steps += Step(
                 "autostart", if (maker == Maker.HUAWEI) "App launch: Manage manually" else "Auto launch",
-                "Turn it on for Notes, so a closed Notes can wake for a push.",
+                "Turn it on for $appName, so a closed $appName can wake for a push.",
                 isOn = null,
                 required = true,
                 open = ::openAutoStart
@@ -245,7 +270,7 @@ object BackgroundDelivery {
         if (isBackgroundDataRestricted(context)) {
             steps += Step(
                 "background_data", "Background data",
-                "Data Saver blocks Notes in the background: allow it, so calls connect on mobile data too.",
+                "Data Saver blocks $appName in the background: allow it, so calls connect on mobile data too.",
                 isOn = false,
                 required = true,
                 open = ::openBackgroundData
@@ -283,14 +308,18 @@ object BackgroundDelivery {
     /** How many needed switches are still off. */
     fun missingCount(context: Context): Int = steps(context).count { it.required && !isDone(context, it) }
 
-    /** In Recents, keeping Notes locked stops the phone clearing it (said the way each maker does). */
-    fun lockInRecentsTip(): String = when (maker()) {
-        Maker.XIAOMI -> "Also lock Notes in Recents: open Recents, long-press Notes and tap the lock."
-        Maker.VIVO -> "Also lock Notes in Recents: open Recents and pull Notes down (or tap its lock)."
-        Maker.SAMSUNG -> "Also lock Notes in Recents: open Recents, tap the Notes icon and pick \"Keep open\"."
-        Maker.OPPO -> "Also lock Notes in Recents: open Recents, tap the ⋮ on Notes and pick \"Lock\"."
-        Maker.HUAWEI -> "Also lock Notes in Recents: open Recents and pull Notes down to lock it."
-        Maker.OTHER -> "Swiping Notes away from Recents is fine: pushes still reach it."
+    fun lockInRecentsTip(context: Context? = null): String {
+        val appName = if (context != null) {
+            try { context.applicationInfo.loadLabel(context.packageManager).toString() } catch (_: Exception) { "Notes" }
+        } else "Notes"
+        return when (maker()) {
+            Maker.XIAOMI -> "Also lock $appName in Recents: open Recents, long-press $appName and tap the lock."
+            Maker.VIVO -> "Also lock $appName in Recents: open Recents and pull $appName down (or tap its lock)."
+            Maker.SAMSUNG -> "Also lock $appName in Recents: open Recents, tap the $appName icon and pick \"Keep open\"."
+            Maker.OPPO -> "Also lock $appName in Recents: open Recents, tap the ⋮ on $appName and pick \"Lock\"."
+            Maker.HUAWEI -> "Also lock $appName in Recents: open Recents and pull $appName down to lock it."
+            Maker.OTHER -> "Swiping $appName away from Recents is fine: pushes still reach it."
+        }
     }
 
     /**
@@ -314,6 +343,75 @@ object BackgroundDelivery {
             Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, packageUri(context))
         }
         openSettingsPage(context, page)
+    }
+
+    /** Straight to Samsung One UI Device Care / Battery / Sleeping apps */
+    fun openSamsungDeviceCare(context: Context) {
+        leavingForSettings(context)
+        val screens = listOf(
+            Intent().setComponent(ComponentName("com.samsung.android.sm", "com.samsung.android.sm.battery.ui.BatteryActivity")),
+            Intent().setComponent(ComponentName("com.samsung.android.sm", "com.samsung.android.sm.ui.battery.BatteryActivity")),
+            Intent().setComponent(ComponentName("com.samsung.android.lool", "com.samsung.android.sm.battery.ui.BatteryActivity")),
+            Intent().setComponent(ComponentName("com.samsung.android.lool", "com.samsung.android.sm.ui.battery.BatteryActivity")),
+            Intent().setComponent(ComponentName("com.samsung.android.sm_cn", "com.samsung.android.sm.ui.ram.AutoRunmentActivity")),
+            Intent().setComponent(ComponentName("com.samsung.android.sm", "com.samsung.android.sm.app.dashboard.SmartManagerDashBoardActivity")),
+            Intent("com.samsung.android.sm.ACTION_BATTERY")
+        )
+        for (screen in screens) {
+            try {
+                context.startActivity(screen.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                return
+            } catch (_: Exception) {}
+        }
+        openAppDetails(context)
+    }
+
+    /** Straight to Vivo iManager / Auto-Start */
+    fun openVivoAutoStart(context: Context) {
+        leavingForSettings(context)
+        val screens = listOf(
+            Intent().setComponent(ComponentName("com.vivo.permissionmanager", "com.vivo.permissionmanager.activity.BgStartUpManagerActivity")),
+            Intent().setComponent(ComponentName("com.iqoo.secure", "com.iqoo.secure.ui.phoneoptimize.AddWhiteListActivity")),
+            Intent().setComponent(ComponentName("com.iqoo.secure", "com.iqoo.secure.ui.phoneoptimize.BgStartUpManager")),
+            Intent().setComponent(ComponentName("com.vivo.permissionmanager", "com.vivo.permissionmanager.activity.PurviewTabActivity")),
+            Intent().setComponent(ComponentName("com.iqoo.secure", "com.iqoo.secure.MainGuideActivity"))
+        )
+        for (screen in screens) {
+            try {
+                context.startActivity(screen.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                return
+            } catch (_: Exception) {}
+        }
+        openAppDetails(context)
+    }
+
+    /** Straight to Vivo High Background Power Consumption / Battery management */
+    fun openVivoBackgroundPower(context: Context) {
+        leavingForSettings(context)
+        val screens = listOf(
+            Intent().setComponent(ComponentName("com.vivo.abe", "com.vivo.applicationbehaviorengine.ui.ExcessivePowerManagerActivity")),
+            Intent().setComponent(ComponentName("com.iqoo.powersaving", "com.iqoo.powersaving.PowerSavingManagerActivity")),
+            Intent().setComponent(ComponentName("com.vivo.permissionmanager", "com.vivo.permissionmanager.activity.PurviewTabActivity"))
+        )
+        for (screen in screens) {
+            try {
+                context.startActivity(screen.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                return
+            } catch (_: Exception) {}
+        }
+        openAppDetails(context)
+    }
+
+    fun openAppDetails(context: Context) {
+        leavingForSettings(context)
+        try {
+            context.startActivity(
+                Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, packageUri(context))
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            )
+        } catch (_: Exception) {
+            onAppResumed(context)
+        }
     }
 
     /** The maker's own battery list for apps (Xiaomi, Vivo, Samsung), else the app's settings page. */

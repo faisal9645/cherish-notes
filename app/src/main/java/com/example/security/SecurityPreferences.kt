@@ -97,6 +97,9 @@ class SecurityPreferences(private val context: Context) {
 
     fun setDisguiseStyle(style: String) {
         val valid = if (style == DISGUISE_STYLE_CALCULATOR) DISGUISE_STYLE_CALCULATOR else DISGUISE_STYLE_NOTES
+        if (getDisguiseStyle() == valid && _disguiseStyle.value == valid) {
+            return
+        }
         prefs.edit().putString(KEY_DISGUISE_STYLE, valid).apply()
         _disguiseStyle.value = valid
         _isCalculatorDecoy.value = isCalculatorDecoy()
@@ -118,9 +121,11 @@ class SecurityPreferences(private val context: Context) {
             val mainComp = android.content.ComponentName(context, "com.example.MainActivity")
             val notesComp = android.content.ComponentName(context, "com.example.NotesAlias")
             val calcComp = android.content.ComponentName(context, "com.example.CalculatorAlias")
+            val shareComp = android.content.ComponentName(context, "com.example.share.ShareReceiverActivity")
 
-            // Crucial: MainActivity must ALWAYS remain enabled so activity-alias targets work
-            if (pm.getComponentEnabledSetting(mainComp) != android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_ENABLED) {
+            // Ensure MainActivity is not disabled (keep enabled for alias targets and internal intents)
+            val mainSetting = pm.getComponentEnabledSetting(mainComp)
+            if (mainSetting == android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DISABLED) {
                 pm.setComponentEnabledSetting(
                     mainComp,
                     android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
@@ -128,37 +133,44 @@ class SecurityPreferences(private val context: Context) {
                 )
             }
 
-            val isCalc = isDisguiseModeEnabled() && style == DISGUISE_STYLE_CALCULATOR
+            val isCalc = !isDisguiseModeEnabled() || style == DISGUISE_STYLE_CALCULATOR
             val enabled = android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_ENABLED
             val disabled = android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DISABLED
 
-            fun setState(comp: android.content.ComponentName, target: Int) {
-                if (pm.getComponentEnabledSetting(comp) != target) {
-                    pm.setComponentEnabledSetting(comp, target, android.content.pm.PackageManager.DONT_KILL_APP)
+            fun updateComponentState(
+                comp: android.content.ComponentName,
+                targetState: Int,
+                manifestDefaultEnabled: Boolean
+            ) {
+                val currentSetting = pm.getComponentEnabledSetting(comp)
+                if (currentSetting == targetState) return
+
+                if (currentSetting == android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DEFAULT) {
+                    val defaultState = if (manifestDefaultEnabled) enabled else disabled
+                    if (defaultState == targetState) return
                 }
+
+                pm.setComponentEnabledSetting(comp, targetState, android.content.pm.PackageManager.DONT_KILL_APP)
             }
 
-            // Turn the one going away off first, then the one coming in on, so the launcher treats
-            // the new icon as a fresh entry and files it under its own letter (Calculator under C),
-            // not in the old one's place. (OEM launchers that sort the drawer by the app's own name,
-            // "Notes", may still need their app list refreshed; that part isn't ours to control.)
+            // CRITICAL FOR SAMSUNG (ONE UI) AND VIVO (FUNTOUCH OS / ORIGINOS) APP DRAWER SORTING:
+            // 1. Always enable the target incoming launcher component FIRST before disabling the outgoing one.
+            //    If the outgoing component is disabled first, the package momentarily has 0 launcher activities.
+            //    Samsung One UI and Vivo detect this 0-launcher state as an app uninstall and purge it from
+            //    the alphabetical grid; when the new component is enabled moments later, the launcher treats it
+            //    as a brand-new app installation and appends it to the last page / end of drawer.
+            // 2. Only call setComponentEnabledSetting if the effective state actually needs to change.
+            //    Unnecessary calls to setComponentEnabledSetting emit ACTION_PACKAGE_CHANGED broadcasts on every
+            //    cold start, which causes Samsung One UI and Vivo launchers to re-evaluate the package and
+            //    displace it from its proper alphabetical slot.
             if (isCalc) {
-                setState(notesComp, disabled)
-                setState(calcComp, enabled)
+                updateComponentState(calcComp, enabled, manifestDefaultEnabled = true)
+                updateComponentState(notesComp, disabled, manifestDefaultEnabled = false)
+                updateComponentState(shareComp, disabled, manifestDefaultEnabled = false)
             } else {
-                setState(calcComp, disabled)
-                setState(notesComp, enabled)
-            }
-            // "Share to Notes" is offered only while the app is Notes (a calculator taking shares
-            // would stand out in every share sheet)
-            val shareComp = android.content.ComponentName(context, "com.example.share.ShareReceiverActivity")
-            val targetShare = if (isCalc) {
-                android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DISABLED
-            } else {
-                android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_ENABLED
-            }
-            if (pm.getComponentEnabledSetting(shareComp) != targetShare) {
-                pm.setComponentEnabledSetting(shareComp, targetShare, android.content.pm.PackageManager.DONT_KILL_APP)
+                updateComponentState(notesComp, enabled, manifestDefaultEnabled = false)
+                updateComponentState(calcComp, disabled, manifestDefaultEnabled = true)
+                updateComponentState(shareComp, enabled, manifestDefaultEnabled = false)
             }
         } catch (_: Throwable) {}
     }
@@ -172,6 +184,7 @@ class SecurityPreferences(private val context: Context) {
             _hasRevealedSecretAppInSession.value = true
         }
         _isCalculatorDecoy.value = isCalculatorDecoy()
+        _callMaskingStyle.value = getCallMaskingStyle()
         syncLauncherIcon()
     }
 
@@ -582,7 +595,11 @@ class SecurityPreferences(private val context: Context) {
     private val _callAutoRecordEnabled = MutableStateFlow(isCallAutoRecordEnabled())
     val callAutoRecordEnabledFlow: StateFlow<Boolean> = _callAutoRecordEnabled.asStateFlow()
 
-    fun getCallMaskingStyle(): String = prefs.getString(KEY_CALL_MASKING_STYLE, "normal") ?: "normal"
+    fun getCallMaskingStyle(): String {
+        val defaultStyle = if (isDisguiseModeEnabled()) "discreet" else "normal"
+        val explicit = prefs.getString(KEY_CALL_MASKING_STYLE, null)
+        return explicit ?: defaultStyle
+    }
     fun setCallMaskingStyle(style: String) {
         prefs.edit().putString(KEY_CALL_MASKING_STYLE, style).apply()
         _callMaskingStyle.value = style

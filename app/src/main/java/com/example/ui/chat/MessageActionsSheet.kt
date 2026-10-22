@@ -1,8 +1,10 @@
 package com.example.ui.chat
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -54,8 +56,18 @@ fun MessageActionsSheet(
         onDismissRequest = onDismiss,
         shape = com.example.ui.components.CherishDialogDefaults.sheetShape,
         containerColor = com.example.ui.components.CherishDialogDefaults.sheetContainerColor,
-        dragHandle = { com.example.ui.components.CherishDialogDefaults.SheetDragHandle() }
+        dragHandle = {
+            val isDark = isSystemInDarkTheme()
+            Box(
+                modifier = Modifier
+                    .padding(top = 10.dp, bottom = 4.dp)
+                    .size(width = 36.dp, height = 4.dp)
+                    .clip(CircleShape)
+                    .background(if (isDark) Color(0xFF334155) else Color(0xFFCBD5E1))
+            )
+        }
     ) {
+        val isDark = isSystemInDarkTheme()
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -79,7 +91,8 @@ fun MessageActionsSheet(
             )
             Surface(
                 shape = RoundedCornerShape(24.dp),
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
+                color = if (isDark) Color(0xFF1E2430) else Color.White,
+                border = BorderStroke(1.dp, if (isDark) Color(0xFF2E384D) else Color(0xFFE2E8F0)),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 androidx.compose.foundation.lazy.LazyRow(
@@ -115,10 +128,7 @@ fun MessageActionsSheet(
                 }
             }
 
-            HorizontalDivider(
-                modifier = Modifier.padding(vertical = 6.dp),
-                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-            )
+            Spacer(modifier = Modifier.height(6.dp))
 
             // Primary Actions Grid / List
             ListItem(

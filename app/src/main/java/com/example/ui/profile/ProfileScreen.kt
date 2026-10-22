@@ -30,8 +30,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.Logout
 import androidx.compose.material.icons.rounded.AccountCircle
+import androidx.compose.material.icons.rounded.BatteryChargingFull
 import androidx.compose.material.icons.rounded.BrightnessMedium
 import androidx.compose.material.icons.rounded.CameraAlt
+import androidx.compose.material.icons.rounded.PlayCircleOutline
+import androidx.compose.material.icons.rounded.SettingsPower
 import androidx.compose.material.icons.rounded.ChatBubble
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.ChevronRight
@@ -212,6 +215,13 @@ fun ProfileScreen(
     // The switches this phone (Xiaomi, Vivo, Samsung...) still needs on for pushes to reach a closed Notes
     var deliveryMissing by remember { mutableStateOf(com.example.notifications.BackgroundDelivery.missingCount(context)) }
     var showDeliverySetup by remember { mutableStateOf(false) }
+    var showSamsungVivoPrompt by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        if (com.example.notifications.BackgroundDelivery.shouldPromptSamsungVivo(context)) {
+            showSamsungVivoPrompt = true
+        }
+    }
 
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
@@ -2068,6 +2078,36 @@ fun ProfileScreen(
 
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), thickness = 0.6.dp)
 
+                // Samsung & Vivo OEM Background Delivery Guide
+                if (com.example.notifications.BackgroundDelivery.isSamsungOrVivo()) {
+                    val isSamsung = com.example.notifications.BackgroundDelivery.isSamsung()
+                    val title = if (isSamsung) "Samsung Device Care & Battery" else "Vivo iManager & Auto-Start"
+                    val desc = if (isSamsung) {
+                        if (isBatteryOptimizationIgnored) "Battery is Unrestricted. Ensure app is added to 'Never sleeping apps' in Device Care."
+                        else "Samsung Device Care puts closed apps to sleep. Tap to set Unrestricted Battery & Never-sleeping apps."
+                    } else {
+                        "Vivo iManager kills background apps. Enable Auto-start and allow High background power so calls ring."
+                    }
+                    ListItem(
+                        headlineContent = { Text(title, fontSize = 15.sp, fontWeight = FontWeight.SemiBold) },
+                        supportingContent = { Text(desc, fontSize = 13.sp) },
+                        leadingContent = {
+                            Icon(Icons.Rounded.BatteryChargingFull, contentDescription = null, tint = primaryAccent)
+                        },
+                        trailingContent = {
+                            CherishTonalButton(
+                                onClick = { showSamsungVivoPrompt = true },
+                                shape = RoundedCornerShape(16.dp),
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 2.dp)
+                            ) {
+                                Text("Guide", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            }
+                        },
+                        modifier = Modifier.testTag("samsung_vivo_background_delivery")
+                    )
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), thickness = 0.6.dp)
+                }
+
                 // AI Noise Suppression Mode
                 ListItem(
                     headlineContent = { Text("AI Noise Suppression", fontSize = 15.sp, fontWeight = FontWeight.SemiBold) },
@@ -3099,6 +3139,158 @@ fun ProfileScreen(
             showDeliverySetup = false
             deliveryMissing = com.example.notifications.BackgroundDelivery.missingCount(context)
         })
+    }
+
+    if (showSamsungVivoPrompt) {
+        val primaryAccent = MaterialTheme.colorScheme.primary
+        val isSamsung = com.example.notifications.BackgroundDelivery.isSamsung()
+        val appName = try {
+            context.applicationInfo.loadLabel(context.packageManager).toString()
+        } catch (_: Exception) {
+            "Calculator"
+        }
+        CherishAlertDialog(
+            onDismissRequest = {
+                showSamsungVivoPrompt = false
+                com.example.notifications.BackgroundDelivery.setSeenSamsungVivoPrompt(context, true)
+            },
+            title = {
+                Text(
+                    if (isSamsung) "Samsung Device Care Setup" else "Vivo iManager Setup",
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        if (isSamsung) {
+                            "Samsung's Device Care aggressively pauses background sync and silences incoming calls when $appName is closed.\n\nTo ensure you receive calls and messages:"
+                        } else {
+                            "Vivo's iManager / Speed Up kills background processes and blocks incoming calls when $appName is closed.\n\nTo ensure you receive calls and messages:"
+                        },
+                        fontSize = 13.sp
+                    )
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            if (isSamsung) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Icon(
+                                        if (isBatteryOptimizationIgnored) Icons.Rounded.CheckCircle else Icons.Rounded.BatteryChargingFull,
+                                        contentDescription = null,
+                                        tint = if (isBatteryOptimizationIgnored) Emerald500 else primaryAccent,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text("1. Set Battery to Unrestricted", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                                        Text("Prevents Samsung from freezing background sync", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                    CherishTonalButton(
+                                        onClick = { com.example.notifications.BackgroundDelivery.requestUnrestricted(context) },
+                                        shape = RoundedCornerShape(12.dp),
+                                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp)
+                                    ) {
+                                        Text(if (isBatteryOptimizationIgnored) "Done" else "Allow", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), thickness = 0.5.dp)
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Rounded.SettingsPower,
+                                        contentDescription = null,
+                                        tint = primaryAccent,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text("2. Add to 'Never sleeping apps'", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                                        Text("In Device Care > Battery > Background usage limits", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                    CherishTonalButton(
+                                        onClick = { com.example.notifications.BackgroundDelivery.openSamsungDeviceCare(context) },
+                                        shape = RoundedCornerShape(12.dp),
+                                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp)
+                                    ) {
+                                        Text("Open", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            } else {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Rounded.PlayCircleOutline,
+                                        contentDescription = null,
+                                        tint = primaryAccent,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text("1. Enable Auto-start in iManager", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                                        Text("App manager > Autostart: toggle $appName ON", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                    CherishTonalButton(
+                                        onClick = { com.example.notifications.BackgroundDelivery.openVivoAutoStart(context) },
+                                        shape = RoundedCornerShape(12.dp),
+                                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp)
+                                    ) {
+                                        Text("Open", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), thickness = 0.5.dp)
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Icon(
+                                        if (isBatteryOptimizationIgnored) Icons.Rounded.CheckCircle else Icons.Rounded.BatteryChargingFull,
+                                        contentDescription = null,
+                                        tint = if (isBatteryOptimizationIgnored) Emerald500 else primaryAccent,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text("2. High Background Power", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                                        Text("Battery > Background power consumption: allow $appName", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                    CherishTonalButton(
+                                        onClick = {
+                                            com.example.notifications.BackgroundDelivery.openVivoBackgroundPower(context)
+                                            com.example.notifications.BackgroundDelivery.requestUnrestricted(context)
+                                        },
+                                        shape = RoundedCornerShape(12.dp),
+                                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp)
+                                    ) {
+                                        Text("Allow", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                CherishButton(
+                    onClick = {
+                        showSamsungVivoPrompt = false
+                        com.example.notifications.BackgroundDelivery.setSeenSamsungVivoPrompt(context, true)
+                    },
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text("Got It", fontWeight = FontWeight.Bold)
+                }
+            }
+        )
     }
 
     // Edit Profile Dialog
