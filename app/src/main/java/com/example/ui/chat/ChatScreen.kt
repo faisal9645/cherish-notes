@@ -1377,7 +1377,8 @@ fun ChatScreen(
                                 )
                             )
                         )
-                } else if (showWallpaper) {
+                } else if (showWallpaper && isDark) {
+                    // Dark: the wallpaper fades in under the bar. Day keeps its plain white bar
                     Modifier
                         .fillMaxWidth()
                         .background(
@@ -1736,7 +1737,7 @@ fun ChatScreen(
             }
         },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = if (showWallpaper) {
+                    containerColor = if (showWallpaper && isDark) {
                         Color.Transparent
                     } else if (isDark) {
                         Color.Black
@@ -1748,8 +1749,8 @@ fun ChatScreen(
                 ),
                 windowInsets = WindowInsets.statusBars
             )
-            // No line under the bar in private chat or when wallpaper is shown
-            if (uiState.chatExperienceMode != com.example.ui.chat.ChatExperienceMode.PRIVATE && !showWallpaper) {
+            // No line under the bar in private chat, or over the dark wallpaper
+            if (uiState.chatExperienceMode != com.example.ui.chat.ChatExperienceMode.PRIVATE && !(showWallpaper && isDark)) {
                 HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
             }
             if (com.example.call.CallManager.hasActiveCall() && callState.phase != com.example.call.CallPhase.INCOMING_RINGING) {
@@ -1775,9 +1776,11 @@ fun ChatScreen(
             }
         },
         bottomBar = {
-            val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f || com.example.ui.theme.isAppInDark()
+            // Day or dark as the app's theme says (not the phone's), so Day stays white on a dark-mode phone
+            val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
             val isPrivate = uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE
-            val barBg = if (showWallpaper) {
+            // Dark: see-through over the wallpaper. Day: the plain white tray with its soft shadow, as before
+            val barBg = if (showWallpaper && isDark) {
                 Color.Transparent
             } else if (isDark) {
                 Color.Black
@@ -1788,12 +1791,12 @@ fun ChatScreen(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .then(if (!isPrivate && !isDark && !showWallpaper) Modifier.shadow(8.dp, RectangleShape, clip = false) else Modifier)
+                    .then(if (!isPrivate && !isDark) Modifier.shadow(8.dp, RectangleShape, clip = false) else Modifier)
                     .background(barBg)
                     // Touches on the tray stay in the tray
                     .pointerInput(Unit) {}
             ) {
-                CompositionLocalProvider(LocalContentColor provides (if (showWallpaper || isDark) Color.White else Slate900)) {
+                CompositionLocalProvider(LocalContentColor provides (if (isDark) Color.White else contentColorFor(barBg))) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -4886,9 +4889,9 @@ private fun PartnerTypingBubble(
                 showOnlineBadge = false
             )
             Spacer(modifier = Modifier.width(6.dp))
-            // The same liquid glass as my partner's bubbles
+            // The same solid colour and fine edge as my partner's bubbles
             val typingShape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomEnd = 16.dp, bottomStart = 4.dp)
-            val glass = rememberBubbleGlass(isFromMe = false, isDark = isDark)
+            val fill = rememberBubbleFill(isFromMe = false, isDark = isDark)
             Surface(
                 shape = typingShape,
                 color = Color.Transparent,
@@ -4896,9 +4899,8 @@ private fun PartnerTypingBubble(
             ) {
                 Box(
                     modifier = Modifier
-                        .background(glass.tint, typingShape)
-                        .background(glass.sheen, typingShape)
-                        .border(BorderStroke(0.8.dp, glass.rim), typingShape)
+                        .background(fill.brush, typingShape)
+                        .then(fill.edge?.let { Modifier.border(BorderStroke(0.5.dp, it), typingShape) } ?: Modifier)
                         .padding(horizontal = 16.dp, vertical = 12.dp),
                     contentAlignment = Alignment.Center
                 ) {
@@ -5475,7 +5477,7 @@ private fun ChatBottomComposerBar(
             placeholder = when {
                 uiState.isStealthCurtainActive -> "Add a note..."
                 uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE -> "Reply to ChatGPT"
-                else -> "Message ${partnerName.replace("💕", "").replace("❤️", "").trim()}..."
+                else -> "Message ${partnerName.replace("💕", "").replace("❤️", "").trim()}... ❤️"
             },
             isPrivateMode = (uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE),
             onInputFocused = onInputFocused,

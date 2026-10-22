@@ -89,6 +89,25 @@ fun appVerticalGradient(): Brush {
     )
 }
 
+/**
+ * The Notes app's original blue gradient, the same in day and dark (graphite in the Black theme),
+ * as the Notes screen paints it. The chat's bubbles and buttons use it.
+ */
+fun notesGradient(black: Boolean, vertical: Boolean = false): Brush {
+    val stops = arrayOf(
+        0.0f to (if (black) BlackGradientStart else DayBlueSecondary),
+        0.55f to (if (black) BlackGradientMid else DayBluePrimary),
+        1.0f to (if (black) BlackGradientEnd else DayBlueTertiary)
+    )
+    return if (vertical) Brush.verticalGradient(*stops) else Brush.horizontalGradient(*stops)
+}
+
+@Composable
+fun notesHorizontalGradient(): Brush = notesGradient(LocalAmoledBlack.current)
+
+@Composable
+fun notesVerticalGradient(): Brush = notesGradient(LocalAmoledBlack.current, vertical = true)
+
 @Composable
 fun Modifier.appGradientShadow(shape: Shape = RoundedCornerShape(16.dp)): Modifier {
     val shadowColor = if (LocalAmoledBlack.current) Color(0x35000000) else if (isAppInDark()) Color(0x351D4ED8) else Color(0x353048F5)

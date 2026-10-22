@@ -93,57 +93,22 @@ private fun formatMessageTime(rawTimestamp: Long): String {
 // An album's own text ("Sent 3 photos"), compiled once rather than in every bubble
 private val SentPhotosCaption = Regex("""Sent \d+ photos?""")
 
-/** How a bubble's liquid glass is painted: see [rememberBubbleGlass]. */
-internal class BubbleGlass(val tint: Brush, val sheen: Brush, val rim: Brush)
+/** How a bubble is painted: see [rememberBubbleFill]. */
+internal class BubbleFill(val brush: Brush, val edge: Color?)
 
 /**
- * Liquid glass for the chat's bubbles, in their own colours (mine the app's blue, my partner's
- * the same mist or navy as before): the colour lets a little through, so the wallpaper softly
- * shows; a sheen of light lies across the top; a bright rim fades down the edge and catches
- * again at the bottom. Plain fills and one border, nothing blurred live, so it costs nothing
- * while the chat scrolls.
+ * The chat's bubbles in plain, solid colours (no glass): mine in the Notes app's original blue
+ * gradient, the same in day and dark (see [notesGradient]); my partner's solid mist or night with
+ * a fine edge.
  */
 @Composable
-internal fun rememberBubbleGlass(isFromMe: Boolean, isDark: Boolean): BubbleGlass {
-    val start = AppGradientStart
-    val mid = AppGradientMid
-    val end = AppGradientEnd
+internal fun rememberBubbleFill(isFromMe: Boolean, isDark: Boolean): BubbleFill {
+    val black = com.example.ui.theme.LocalAmoledBlack.current
     val received = if (isDark) darkSurface(NavyCard) else MistBlue
     val receivedEdge = if (isDark) darkSurface(NavyRaised, Neutral800) else Gray200
-    return remember(isFromMe, isDark, start, mid, end, received, receivedEdge) {
-        val white = Color.White
-        if (isFromMe) {
-            val a = if (isDark) 0.94f else 0.92f
-            BubbleGlass(
-                tint = Brush.horizontalGradient(
-                    0f to start.copy(alpha = a),
-                    0.55f to mid.copy(alpha = a),
-                    1f to end.copy(alpha = a)
-                ),
-                sheen = Brush.verticalGradient(
-                    0f to white.copy(alpha = if (isDark) 0.12f else 0.18f),
-                    0.5f to Color.Transparent
-                ),
-                rim = Brush.verticalGradient(
-                    0f to white.copy(alpha = if (isDark) 0.32f else 0.5f),
-                    0.55f to white.copy(alpha = 0.06f),
-                    1f to white.copy(alpha = if (isDark) 0.12f else 0.2f)
-                )
-            )
-        } else {
-            BubbleGlass(
-                tint = SolidColor(if (isDark) Color(0xF5080B14) else received.copy(alpha = 0.85f)),
-                sheen = Brush.verticalGradient(
-                    0f to (if (isDark) Color(0x183870FF) else white.copy(alpha = 0.6f)),
-                    0.5f to Color.Transparent
-                ),
-                rim = Brush.verticalGradient(
-                    0f to (if (isDark) Color(0x353870FF) else white),
-                    0.5f to (if (isDark) Color(0x14204080) else receivedEdge.copy(alpha = 0.6f)),
-                    1f to (if (isDark) Color(0x25121622) else receivedEdge)
-                )
-            )
-        }
+    return remember(isFromMe, black, received, receivedEdge) {
+        if (isFromMe) BubbleFill(notesGradient(black), edge = null)
+        else BubbleFill(SolidColor(received), receivedEdge)
     }
 }
 
@@ -201,7 +166,7 @@ fun MessageBubble(
     val isAmoledBlack = com.example.ui.theme.LocalAmoledBlack.current
     // The text size and font chosen in Settings
     val chatText = LocalChatTextStyle.current
-    val glass = rememberBubbleGlass(isFromMe, isDark)
+    val fill = rememberBubbleFill(isFromMe, isDark)
 
     val bubbleBg = if (isPrivateMode) {
         if (isFromMe) {
@@ -736,16 +701,14 @@ fun MessageBubble(
                                 )
                             } else if (isPhotoOnly) Modifier
                             else if (isPrivateMode) Modifier
-                            // Liquid glass: a bright rim that fades down the bubble's edge
-                            else Modifier.border(BorderStroke(0.8.dp, glass.rim), cardShape)
+                            // My partner's bubble has a fine edge; mine is just the blue
+                            else fill.edge?.let { Modifier.border(BorderStroke(0.5.dp, it), cardShape) } ?: Modifier
                         )
                         .background(
                             if (isPhotoOnly) androidx.compose.ui.graphics.SolidColor(Color.Transparent)
                             else if (isPrivateMode) androidx.compose.ui.graphics.SolidColor(bubbleBg)
-                            else glass.tint
+                            else fill.brush
                         )
-                        // ...and a sheen of light across its top
-                        .then(if (isPhotoOnly || isPrivateMode) Modifier else Modifier.background(glass.sheen))
                         .pointerInput(message.id) {
                             detectTapGestures(
                                 onTap = {
@@ -1035,7 +998,7 @@ fun MessageBubble(
                         } else if (isFromMe) {
                             null
                         } else {
-                            appVerticalGradient()
+                            notesVerticalGradient()
                         }
 
                         Row(

@@ -63,7 +63,8 @@ fun ChatWallpaper(
     chatBgTheme: Int,
     modifier: Modifier = Modifier
 ) {
-    val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f || com.example.ui.theme.isAppInDark()
+    // Day or dark as the app's theme says (not the phone's): Day never gets the night wallpaper
+    val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
     val isNight = rememberIsNight()
 
     if (chatBgTheme == 3) {
@@ -165,7 +166,7 @@ fun CustomImageWallpaper(
             )
         }
     } else {
-        NormalWallpaper(isDark = com.example.ui.theme.isAppInDark(), modifier = modifier)
+        NormalWallpaper(isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f, modifier = modifier)
     }
 }
 
@@ -262,12 +263,15 @@ fun DoodleWallpaper(
 }
 
 /**
- * Shifts the wallpaper a few dp against the phone's tilt for a sense of depth. Tilt is measured
- * against a slowly drifting baseline, so whatever angle the phone is held at counts as centre.
- * Off when system animations are turned off.
+ * Moves the wallpaper as the phone turns, like a scene behind the glass. The gyroscope's turn is
+ * added up and slowly let go of (over about a second and a half), so whatever angle the phone is
+ * held at becomes centre again; a phone without a gyroscope uses gravity against a resting angle
+ * that catches up the same way. Both are timed by the sensor's clock, not counted per reading, so
+ * a phone that reports 200 times a second moves as much as one that reports 15. Only while the
+ * chat is on screen. One layer moving, nothing recomposes.
  */
 @Composable
-private fun Modifier.tiltParallax(maxShift: Dp = 10.dp): Modifier {
+private fun Modifier.tiltParallax(maxShift: Dp = 18.dp): Modifier {
     val context = LocalContext.current
     val maxShiftPx = with(LocalDensity.current) { maxShift.toPx() }
     val shift = remember { Animatable(Offset.Zero, Offset.VectorConverter) }
@@ -279,32 +283,54 @@ private fun Modifier.tiltParallax(maxShift: Dp = 10.dp): Modifier {
 
     LaunchedEffect(maxShiftPx, isOnScreen) {
         if (!isOnScreen) return@LaunchedEffect
-        if (context.areAnimationsDisabled()) return@LaunchedEffect
         val sensorManager = context.getSystemService(SensorManager::class.java) ?: return@LaunchedEffect
-        val sensor = sensorManager.getDefaultSensor(Sensor.TYPE_GRAVITY)
+        val sensor = sensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE)
+            ?: sensorManager.getDefaultSensor(Sensor.TYPE_GRAVITY)
             ?: sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
             ?: return@LaunchedEffect
+        val isGyro = sensor.type == Sensor.TYPE_GYROSCOPE
         val targets = Channel<Offset>(Channel.CONFLATED)
+        // Gyroscope: the turn so far (radians), easing back to nothing
+        var turnX = 0f
+        var turnY = 0f
+        // Gravity: the resting angle the phone is held at
         var baseX = Float.NaN
         var baseY = Float.NaN
+        var lastNanos = 0L
         var lastTarget = Offset.Zero
         val listener = object : SensorEventListener {
             override fun onSensorChanged(event: SensorEvent) {
-                val x = event.values[0]
-                val y = event.values[1]
-                if (baseX.isNaN()) {
-                    baseX = x
-                    baseY = y
+                val dt = if (lastNanos == 0L) 0f else ((event.timestamp - lastNanos) / 1e9f).coerceIn(0f, 0.1f)
+                lastNanos = event.timestamp
+                // How far the wallpaper goes each way, -1 to 1
+                val dx: Float
+                val dy: Float
+                if (isGyro) {
+                    val keep = kotlin.math.exp(-dt / 1.5f)
+                    turnX = turnX * keep + event.values[0] * dt
+                    turnY = turnY * keep + event.values[1] * dt
+                    // About 15° of turn gives the full shift; the far scene slides the way the
+                    // near edge turns away
+                    dx = (turnY / 0.26f).coerceIn(-1f, 1f)
+                    dy = (turnX / 0.26f).coerceIn(-1f, 1f)
+                } else {
+                    val x = event.values[0]
+                    val y = event.values[1]
+                    if (baseX.isNaN()) {
+                        baseX = x
+                        baseY = y
+                    }
+                    val catchUp = 1f - kotlin.math.exp(-dt / 1.5f)
+                    baseX += (x - baseX) * catchUp
+                    baseY += (y - baseY) * catchUp
+                    // About 2.5 m/s² (some 15°) away from the resting angle gives the full shift
+                    dx = ((x - baseX) / 2.5f).coerceIn(-1f, 1f)
+                    dy = (-(y - baseY) / 2.5f).coerceIn(-1f, 1f)
                 }
-                baseX += (x - baseX) * 0.02f
-                baseY += (y - baseY) * 0.02f
-                // About 3 m/s² of change away from the baseline gives the full shift
-                val dx = ((x - baseX) / 3f).coerceIn(-1f, 1f)
-                val dy = ((y - baseY) / 3f).coerceIn(-1f, 1f)
-                val newTarget = Offset(dx * maxShiftPx, -dy * maxShiftPx)
-                // Ignore micro-fluctuations smaller than 0.5px so the animation settles when still
-                if (kotlin.math.abs(newTarget.x - lastTarget.x) >= 0.5f ||
-                    kotlin.math.abs(newTarget.y - lastTarget.y) >= 0.5f
+                val newTarget = Offset(dx * maxShiftPx, dy * maxShiftPx)
+                // Hand tremor under a pixel is ignored, so the wallpaper rests when the phone does
+                if (kotlin.math.abs(newTarget.x - lastTarget.x) >= 1f ||
+                    kotlin.math.abs(newTarget.y - lastTarget.y) >= 1f
                 ) {
                     lastTarget = newTarget
                     targets.trySend(newTarget)
@@ -313,11 +339,11 @@ private fun Modifier.tiltParallax(maxShift: Dp = 10.dp): Modifier {
 
             override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
         }
-        sensorManager.registerListener(listener, sensor, SensorManager.SENSOR_DELAY_UI)
+        sensorManager.registerListener(listener, sensor, SensorManager.SENSOR_DELAY_GAME)
         try {
             targets.consumeAsFlow().collectLatest { target ->
                 if ((target - shift.value).getDistance() >= 0.5f) {
-                    shift.animateTo(target, spring(dampingRatio = 0.9f, stiffness = Spring.StiffnessVeryLow))
+                    shift.animateTo(target, spring(dampingRatio = 0.85f, stiffness = Spring.StiffnessLow))
                 }
             }
         } finally {

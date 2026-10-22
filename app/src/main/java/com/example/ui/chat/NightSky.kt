@@ -136,7 +136,8 @@ private val SunCore = Color(0xFFFFF4C9)
  */
 @Composable
 internal fun NightSky(starry: Boolean, sunrise: Boolean, onSunriseDone: () -> Unit, modifier: Modifier = Modifier) {
-    val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f || com.example.ui.theme.isAppInDark()
+    // The same day/dark as the wallpaper (the app's theme), so the night photo and this agree
+    val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
     val isNight = rememberIsNight()
     val night = remember { Animatable(if (starry) 1f else 0f) }
     LaunchedEffect(starry) {

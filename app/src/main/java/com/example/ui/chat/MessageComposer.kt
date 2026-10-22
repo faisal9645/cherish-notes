@@ -97,11 +97,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.Message
 import com.example.ui.components.WaveformView
-import com.example.ui.theme.DarkBluePrimary
 import com.example.ui.theme.DayBluePrimary
 import com.example.ui.theme.HeartRed
 import com.example.ui.theme.appGradientShadow
-import com.example.ui.theme.appHorizontalGradient
+import com.example.ui.theme.notesHorizontalGradient
 import com.example.ui.theme.darkSurface
 import kotlin.math.roundToInt
 import kotlin.math.sin
@@ -114,7 +113,6 @@ import kotlinx.coroutines.withTimeoutOrNull
 import com.example.ui.theme.Blue500
 import com.example.ui.theme.Emerald500
 import com.example.ui.theme.Graphite700
-import com.example.ui.theme.Graphite850
 import com.example.ui.theme.Gray200
 import com.example.ui.theme.Gray700
 import com.example.ui.theme.Gray800
@@ -382,28 +380,33 @@ fun MessageComposer(
         shimmerOffset = 0f
     }
 
-    val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f || com.example.ui.theme.isAppInDark()
+    // Day or dark as the app's theme says (not the phone's), so Day stays white on a dark-mode phone
+    val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
     val isAmoled = com.example.ui.theme.LocalAmoledBlack.current
     val barBg = if (isPrivateMode) {
         if (isDark) Color.Black else Color.White
     } else {
-        Color.Transparent
+        if (isDark) Color.Transparent else MaterialTheme.colorScheme.surface
     }
     val pillBg = if (isPrivateMode) {
         if (isAmoled) Neutral900
         else if (isDark) Neutral800
         else Neutral200
     } else {
-        // Transparent type center bar - allows wallpaper to shine directly through
-        Color.Transparent
+        // Dark: see-through, so the wallpaper shines through; Day: plain white as before
+        if (isDark) Color.Transparent else Color.White
     }
     val pillBorder = if (isPrivateMode) {
         if (isAmoled) Neutral800
         else if (isDark) Neutral700
         else Neutral300
     } else {
-        Color(0x403870FF)
+        if (isDark) Color(0x403870FF) else Gray200
     }
+    // The message box's shape: Day keeps its original rounder, slimmer pill
+    val pillShape = RoundedCornerShape(if (isDark) 24.dp else 28.dp)
+    val composerSidePadding = if (isDark) 16.dp else 12.dp
+    val composerIconTint = if (isDark) Color(0xFFCBD5E1) else MaterialTheme.colorScheme.onSurfaceVariant
 
     // Emojis in the message box: the size they'll be in the sent message, the same however many
     // there are (picked or typed), so nothing jumps while typing
@@ -595,7 +598,7 @@ fun MessageComposer(
                 .widthIn(max = 600.dp)
                 .fillMaxWidth()
                 .align(Alignment.CenterHorizontally)
-                .padding(start = 16.dp, end = 16.dp, top = if (isPrivateMode) 6.dp else 8.dp, bottom = if (isPrivateMode) 6.dp else 8.dp),
+                .padding(start = composerSidePadding, end = composerSidePadding, top = if (isPrivateMode) 6.dp else 8.dp, bottom = if (isPrivateMode) 6.dp else 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(
@@ -610,10 +613,10 @@ fun MessageComposer(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .heightIn(min = 48.dp)
-                                .clip(RoundedCornerShape(24.dp))
-                                .background(pillBg)
-                                .border(BorderStroke(1.dp, pillBorder), RoundedCornerShape(24.dp))
+                                .heightIn(min = if (isDark) 48.dp else 52.dp)
+                                .clip(pillShape)
+                                .background(if (isDark) pillBg else Color.White)
+                                .border(BorderStroke(1.dp, pillBorder), pillShape)
                                 .padding(horizontal = 8.dp, vertical = 6.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
@@ -934,10 +937,10 @@ fun MessageComposer(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .heightIn(min = 48.dp)
-                            .clip(RoundedCornerShape(24.dp))
+                            .heightIn(min = if (isDark) 48.dp else 44.dp)
+                            .clip(pillShape)
                             .background(pillBg)
-                            .border(BorderStroke(1.dp, pillBorder), RoundedCornerShape(24.dp))
+                            .border(BorderStroke(1.dp, pillBorder), pillShape)
                             .padding(start = 4.dp, end = 4.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -951,7 +954,7 @@ fun MessageComposer(
                             Icon(
                                 imageVector = if (isEmojiBoardShown) Icons.Rounded.Keyboard else Icons.Rounded.Mood,
                                 contentDescription = "Toggle emoji panel",
-                                tint = if (isEmojiBoardShown) MaterialTheme.colorScheme.primary else Color(0xFFCBD5E1),
+                                tint = if (isEmojiBoardShown) MaterialTheme.colorScheme.primary else composerIconTint,
                                 modifier = Modifier.size(24.dp)
                             )
                         }
@@ -966,7 +969,7 @@ fun MessageComposer(
                             if (text.isEmpty()) {
                                 Text(
                                     text = placeholder,
-                                    color = Color(0xFF94A3B8),
+                                    color = if (isDark) Color(0xFF94A3B8) else Slate500,
                                     fontSize = 13.sp,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
@@ -977,12 +980,12 @@ fun MessageComposer(
                                 onValueChange = onTextChanged,
                                 textStyle = TextStyle(
                                     fontFamily = chatText.font.family ?: LocalTextStyle.current.fontFamily,
-                                    color = Color.White,
+                                    color = if (isDark) Color.White else Slate900,
                                     fontSize = composerFontSize,
                                     lineHeight = composerFontSize * 1.3f
                                 ),
                                 visualTransformation = emojiVisualTransformation,
-                                cursorBrush = SolidColor(if (isDark) DarkBluePrimary else DayBluePrimary),
+                                cursorBrush = SolidColor(DayBluePrimary),
                                 maxLines = 5,
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -1013,7 +1016,7 @@ fun MessageComposer(
                             Icon(
                                 imageVector = Icons.Rounded.AttachFile,
                                 contentDescription = "Attach file or photo",
-                                tint = Color(0xFFCBD5E1),
+                                tint = composerIconTint,
                                 modifier = Modifier.size(22.dp)
                             )
                         }
@@ -1035,7 +1038,7 @@ fun MessageComposer(
                             Icon(
                                 imageVector = Icons.Rounded.CameraAlt,
                                 contentDescription = "Camera",
-                                tint = Color(0xFFCBD5E1),
+                                tint = composerIconTint,
                                 modifier = Modifier.size(22.dp)
                             )
                         }
@@ -1144,7 +1147,7 @@ fun MessageComposer(
                                         else Modifier
                                             .appGradientShadow(CircleShape)
                                             .clip(CircleShape)
-                                            .background(appHorizontalGradient())
+                                            .background(notesHorizontalGradient())
                                     )
                                     .bounceClick(
                                         onLongClick = onScheduleText?.let { schedule ->
@@ -1213,7 +1216,7 @@ fun MessageComposer(
                                         else Modifier
                                             .appGradientShadow(CircleShape)
                                             .clip(CircleShape)
-                                            .background(appHorizontalGradient())
+                                            .background(notesHorizontalGradient())
                                     )
                                     .bounceClick {
                                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -1278,14 +1281,14 @@ fun MessageComposer(
                                                     }
                                                     .appGradientShadow(CircleShape)
                                                     .clip(CircleShape)
-                                                    .background(appHorizontalGradient())
+                                                    .background(notesHorizontalGradient())
                                             } else if (isPrivateMode) {
                                                 Modifier.clip(CircleShape).background(recordBg ?: Color.Gray)
                                             } else {
                                                 Modifier
                                                     .appGradientShadow(CircleShape)
                                                     .clip(CircleShape)
-                                                    .background(appHorizontalGradient())
+                                                    .background(notesHorizontalGradient())
                                             }
                                         )
                                         .pointerInput(isVideoMode) {
@@ -1515,8 +1518,9 @@ fun MessageComposer(
                         layout(board.width, shownPx) { board.place(0, 0) }
                     }
             ) {
+                // Dark: see-through like the message box, the wallpaper behind the emojis; Day: white
                 Surface(
-                    color = if (isDark) MaterialTheme.colorScheme.surfaceVariant else Color.White,
+                    color = if (isDark) Color.Transparent else Color.White,
                     border = BorderStroke(1.dp, pillBorder),
                     shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
                     modifier = Modifier.fillMaxSize()
@@ -1543,7 +1547,7 @@ fun MessageComposer(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .then(swipeDownModifier)
-                                .background(if (isDark) darkTone(Graphite850) else Color.White)
+                                .background(if (isDark) Color.Transparent else Color.White)
                                 .border(BorderStroke(0.6.dp, if (isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFE2E8F0)))
                                 .padding(horizontal = 4.dp, vertical = 2.dp),
                             horizontalArrangement = Arrangement.SpaceEvenly,
