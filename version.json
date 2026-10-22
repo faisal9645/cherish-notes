@@ -1,9 +1,9 @@
 {
-  "versionCode": 209,
-  "versionName": "1.8.37",
-  "tagName": "v1.8.37-209",
-  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.8.37-209/app_update_209.apk",
-  "assetSize": 18979128,
-  "releaseNotes": "Notes v1.8.37 (Build 209):\n\u2022 Restored classic blue double ticks for read messages\n\u2022 App Info title and icon accurately match active disguise mode\n\u2022 Recent tasks and status bar icons properly reflect Notes / Calculator disguise\n\u2022 Launcher grid synchronization improvements\n\u2022 Performance optimizations and bug fixes",
-  "releaseDate": "2026-10-22T13:57:28Z"
+  "versionCode": 210,
+  "versionName": "1.8.38",
+  "tagName": "v1.8.38-210",
+  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.8.38-210/app_update_210.apk",
+  "assetSize": 19034428,
+  "releaseNotes": "Notes v1.8.38 (Build 210):\n• Smoother scrolling and typing\n• Quicker start-up\n• Smaller attachments and less data use\n• Bug fixes and refinements",
+  "releaseDate": "2026-10-22T17:35:55Z"
 }

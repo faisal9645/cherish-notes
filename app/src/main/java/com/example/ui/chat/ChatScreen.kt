@@ -2358,6 +2358,7 @@ fun ChatScreen(
                 var showDateChip by remember { mutableStateOf(false) }
                 val isListScrolling = listState.isScrollInProgress
                 LaunchedEffect(isListScrolling) {
+                    com.example.ui.components.setVideoNotesScrollState(isListScrolling)
                     if (isListScrolling) {
                         showDateChip = true
                     } else {

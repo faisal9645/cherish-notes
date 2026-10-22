@@ -89,6 +89,7 @@ import kotlin.math.roundToInt
 private object VideoNotePlayback {
     var activeKey by mutableStateOf<Any?>(null)
     var previewsAllowed by mutableStateOf(true)
+    var isListScrolling by mutableStateOf(false)
     // How much of each round note in the chat is on screen
     val inView = mutableStateMapOf<Any, InView>()
 
@@ -150,6 +151,13 @@ fun stopAllVideoNotes() {
 /** Lets the chat's round notes play their silent previews again (the app is back from Notes). */
 fun resumeVideoNotePreviews() {
     VideoNotePlayback.previewsAllowed = true
+}
+
+/** Tells video notes whether the chat list is currently scrolling so decoding pauses during fast flings. */
+fun setVideoNotesScrollState(isScrolling: Boolean) {
+    if (VideoNotePlayback.isListScrolling != isScrolling) {
+        VideoNotePlayback.isListScrolling = isScrolling
+    }
 }
 
 private val BlueCircularBorder = Blue500
@@ -444,6 +452,7 @@ fun CircularVideoNoteView(
         snapshotFlow {
             val active = VideoNotePlayback.activeKey
             val myTurn = silentPreview && active == null && VideoNotePlayback.previewsAllowed &&
+                !VideoNotePlayback.isListScrolling &&
                 !BatterySaver.isOn && VideoNotePlayback.previewChoice() === playbackKey
             // Paused with its sound on (by a tap, or the app going to the background) and then
             // scrolled mostly away: it no longer holds the notes in view back from playing

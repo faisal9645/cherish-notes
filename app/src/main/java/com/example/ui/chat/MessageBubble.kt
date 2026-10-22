@@ -251,7 +251,7 @@ fun MessageBubble(
     // The press shows after a short delay so a scroll starting on a bubble doesn't flicker it.
     var isPressed by remember { mutableStateOf(false) }
     var isLongPressed by remember { mutableStateOf(false) }
-    val pressScale by animateFloatAsState(
+    val pressScale = animateFloatAsState(
         targetValue = when {
             isLongPressed -> 0.94f
             isPressed -> 0.96f
@@ -494,9 +494,6 @@ fun MessageBubble(
                         }
                     }
                 }
-                val videoHighlightScale = if (highlightPulse.value > 0f) {
-                    1f + 0.04f * kotlin.math.sin(highlightPulse.value * Math.PI.toFloat())
-                } else 1f
 
                 var isPlayingVideoNote by remember { mutableStateOf(false) }
                 val screenWidth = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp.dp
@@ -527,8 +524,11 @@ fun MessageBubble(
                             .requiredSize(animatedCircleSize)
                             .bringIntoViewRequester(bringPlayingNoteIntoView)
                             .graphicsLayer {
-                                scaleX = pressScale * videoHighlightScale
-                                scaleY = pressScale * videoHighlightScale
+                                val hp = highlightPulse.value
+                                val vhs = if (hp > 0f) 1f + 0.04f * kotlin.math.sin(hp * Math.PI.toFloat()) else 1f
+                                val ps = pressScale.value
+                                scaleX = ps * vhs
+                                scaleY = ps * vhs
                             }
                             .heartBurst(heartBurst)
                             .then(
@@ -613,8 +613,9 @@ fun MessageBubble(
                         .graphicsLayer {
                             val pulse = highlightPulse.value
                             val highlight = if (pulse > 0f) 1f + 0.06f * kotlin.math.sin(pulse * Math.PI.toFloat()) else 1f
-                            scaleX = pressScale * highlight
-                            scaleY = pressScale * highlight
+                            val ps = pressScale.value
+                            scaleX = ps * highlight
+                            scaleY = ps * highlight
                         }
                         .heartBurst(heartBurst)
                         .pointerInput(message.id) {
@@ -703,15 +704,14 @@ fun MessageBubble(
                     else -> if (isPrivateMode && !isFromMe) 340.dp else 295.dp
                 }
 
-                val bubbleHighlightScale = if (highlightPulse.value > 0f) {
-                    1f + 0.045f * kotlin.math.sin(highlightPulse.value * Math.PI.toFloat())
-                } else 1f
-
                 Box(
                     modifier = (if (isYouTube) Modifier.fillMaxWidth() else Modifier.widthIn(min = bubbleMinWidth, max = bubbleMaxWidth))
                         .graphicsLayer {
-                            scaleX = pressScale * bubbleHighlightScale
-                            scaleY = pressScale * bubbleHighlightScale
+                            val hp = highlightPulse.value
+                            val bhs = if (hp > 0f) 1f + 0.045f * kotlin.math.sin(hp * Math.PI.toFloat()) else 1f
+                            val ps = pressScale.value
+                            scaleX = ps * bhs
+                            scaleY = ps * bhs
                         }
                         .heartBurst(heartBurst)
                         .then(
