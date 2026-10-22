@@ -115,7 +115,7 @@ fun Color.withoutBlue(): Color {
 
 /** A dark-mode surface: [navy] in the Dark theme, [black] in the Black theme. */
 @Composable
-fun darkSurface(navy: Color, black: Color = Color(0xFF141414)): Color =
+fun darkSurface(navy: Color, black: Color = Color(0xFF0A0A0A)): Color =
     if (LocalAmoledBlack.current) black else navy
 
 @Composable

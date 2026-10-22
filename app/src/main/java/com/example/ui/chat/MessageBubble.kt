@@ -113,7 +113,7 @@ internal fun rememberBubbleGlass(isFromMe: Boolean, isDark: Boolean): BubbleGlas
     return remember(isFromMe, isDark, start, mid, end, received, receivedEdge) {
         val white = Color.White
         if (isFromMe) {
-            val a = if (isDark) 0.86f else 0.9f
+            val a = if (isDark) 0.94f else 0.92f
             BubbleGlass(
                 tint = Brush.horizontalGradient(
                     0f to start.copy(alpha = a),
@@ -132,15 +132,15 @@ internal fun rememberBubbleGlass(isFromMe: Boolean, isDark: Boolean): BubbleGlas
             )
         } else {
             BubbleGlass(
-                tint = SolidColor(received.copy(alpha = if (isDark) 0.82f else 0.8f)),
+                tint = SolidColor(if (isDark) Color(0xF5080B14) else received.copy(alpha = 0.85f)),
                 sheen = Brush.verticalGradient(
-                    0f to white.copy(alpha = if (isDark) 0.07f else 0.6f),
+                    0f to (if (isDark) Color(0x183870FF) else white.copy(alpha = 0.6f)),
                     0.5f to Color.Transparent
                 ),
                 rim = Brush.verticalGradient(
-                    0f to white.copy(alpha = if (isDark) 0.16f else 1f),
-                    0.5f to (if (isDark) white.copy(alpha = 0.04f) else receivedEdge.copy(alpha = 0.6f)),
-                    1f to receivedEdge
+                    0f to (if (isDark) Color(0x353870FF) else white),
+                    0.5f to (if (isDark) Color(0x14204080) else receivedEdge.copy(alpha = 0.6f)),
+                    1f to (if (isDark) Color(0x25121622) else receivedEdge)
                 )
             )
         }
@@ -215,7 +215,7 @@ fun MessageBubble(
         if (isFromMe) {
             darkTone(DayBluePrimary)
         } else {
-            if (isDark) darkSurface(NavyCard) else MistBlue
+            if (isDark) Color(0xFF080B14) else MistBlue
         }
     }
 
@@ -1882,7 +1882,7 @@ private fun ReplyIndicator(
     val backgroundColor = when {
         isReached -> if (isPrivateMode) Gray600 else RoseGoldPrimary
         isPrivateMode -> if (isDark) darkTone(Gray800) else Neutral200
-        isDark -> darkTone(Color(0xFF2C2227))
+        isDark -> Color(0xFF0E121E)
         else -> Color(0xFFFFF1F4)
     }
 

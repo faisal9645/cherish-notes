@@ -19,11 +19,11 @@ val DayBluePrimary = Color(0xFF3048F5)
 val DayBlueSecondary = Color(0xFF258BE8)
 val DayBlueTertiary = Color(0xFF3630F2)
 
-// Dark Mode Blues (Deeper / richer royal midnight blues)
-val DarkBluePrimary = Color(0xFF1B44C8)
-val DarkBlueSecondary = Color(0xFF16348C)
-val DarkBlueTertiary = Color(0xFF0F1E54)
-val DarkBlueBubble = Color(0xFF1A3EB8)
+// Dark Mode Blues (Deeper / richer royal midnight blues preserving the original gradient spectrum)
+val DarkBluePrimary = Color(0xFF1D3FD6)
+val DarkBlueSecondary = Color(0xFF1868D8)
+val DarkBlueTertiary = Color(0xFF1C18C0)
+val DarkBlueBubble = Color(0xFF1D3FD6)
 
 // Black (AMOLED) theme: graphite instead of blue for bubbles, buttons and headers, grey accents
 val BlackGradientStart = Color(0xFF3A3A3C)
@@ -59,7 +59,7 @@ val AppGradientEnd: Color
 val AppGradientShadow: Color
     @Composable
     @ReadOnlyComposable
-    get() = if (LocalAmoledBlack.current) Color(0x35000000) else if (isAppInDark()) Color(0x351D4ED8) else Color(0x353048F5)
+    get() = if (LocalAmoledBlack.current) Color(0x35000000) else if (isAppInDark()) Color(0x351868D8) else Color(0x353048F5)
 
 @Composable
 fun appHorizontalGradient(): Brush {
@@ -197,7 +197,7 @@ val BubbleSent: Color
 val BubbleReceived: Color
     @Composable
     @ReadOnlyComposable
-    get() = if (LocalAmoledBlack.current) Color(0xFF141414) else if (isAppInDark()) Color(0xFF131A2A) else MistBlue
+    get() = if (LocalAmoledBlack.current) Color(0xFF0A0A0A) else if (isAppInDark()) Color(0xFF080B14) else MistBlue
 
 // The secret app's shared palette. Screens use these names instead of their own hex codes, so the
 // same grey, green or pink is the same everywhere (colours that only looked alike were merged).
@@ -226,13 +226,13 @@ val Slate400 = Color(0xFF94A3B8)
 val Slate500 = Color(0xFF64748B)
 val Slate900 = Color(0xFF0F172A)
 
-// Night surfaces: navy for the Dark theme, graphite for overlays
-val NavyDeep = Color(0xFF0B1233)
-val NavyCard = Color(0xFF1E2638)
-val NavyRaised = Color(0xFF263049)
-val Graphite850 = Color(0xFF1E2024)
-val Graphite800 = Color(0xFF222228)
-val Graphite700 = Color(0xFF2E2F33)
+// Night surfaces: dark obsidian blackish surfaces for the Dark theme, graphite for overlays
+val NavyDeep = Color(0xFF04060C)
+val NavyCard = Color(0xFF0A0D16)
+val NavyRaised = Color(0xFF121622)
+val Graphite850 = Color(0xFF0E1015)
+val Graphite800 = Color(0xFF14161C)
+val Graphite700 = Color(0xFF1C1E26)
 
 // Blues and indigo
 val MistBlue = Color(0xFFF1F5FB)

@@ -1778,7 +1778,7 @@ fun ChatScreen(
             val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f || com.example.ui.theme.isAppInDark()
             val isPrivate = uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE
             val barBg = if (showWallpaper) {
-                Color(0xB8030714)
+                Color.Transparent
             } else if (isDark) {
                 Color.Black
             } else {
@@ -2303,10 +2303,10 @@ fun ChatScreen(
                             ) {
                                 Surface(
                                     shape = RoundedCornerShape(20.dp),
-                                    color = if (isDark) darkTone(Gray800).copy(alpha = 0.95f) else Color.White.copy(alpha = 0.95f),
+                                    color = if (isDark) Color(0xF5080B14) else Color.White.copy(alpha = 0.95f),
                                     border = BorderStroke(
                                         1.dp,
-                                        if (isDark) Color.White.copy(alpha = 0.12f) else Color.Black.copy(alpha = 0.08f)
+                                        if (isDark) Color(0x353870FF) else Color.Black.copy(alpha = 0.08f)
                                     ),
                                     shadowElevation = 2.dp
                                 ) {
@@ -4678,14 +4678,21 @@ private fun ChatPartnerHeaderContent(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
+                val cleanPartnerName = partnerName.replace("💕", "").replace("❤️", "").trim()
                 Text(
-                    text = if (partnerName.isNotBlank() && !partnerName.contains("💕")) "$partnerName 💕" else partnerName,
+                    text = cleanPartnerName,
                     fontSize = nameFontSize,
                     lineHeight = nameLineHeight,
                     fontWeight = FontWeight.Bold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    color = if (isDark) Color.White else Slate900
+                    color = if (isDark) Color.White else Slate900,
+                    modifier = Modifier.weight(1f, fill = false)
+                )
+                Text(
+                    text = "💕",
+                    fontSize = (nameFontSize.value * 0.92f).sp,
+                    lineHeight = nameLineHeight
                 )
 
                 val partnerMood = presence.mood?.takeIf {
@@ -5075,14 +5082,14 @@ fun DateChip(
         color = if (isPrivateMode) {
             if (isDark) darkTone(Graphite850).copy(alpha = 0.95f) else Neutral200
         } else {
-            if (isDark) darkSurface(NavyCard).copy(alpha = 0.92f) else MistBlue.copy(alpha = 0.95f)
+            if (isDark) Color(0xF5080B14) else MistBlue.copy(alpha = 0.95f)
         },
         border = BorderStroke(
             0.8.dp,
             if (isPrivateMode) {
                 if (isDark) darkTone(Gray700).copy(alpha = 0.6f) else Gray200
             } else {
-                if (isDark) darkTone(Color(0xFF475569)).copy(alpha = 0.4f) else Gray200
+                if (isDark) Color(0x303870FF) else Gray200
             }
         ),
         shadowElevation = shadowElevation,
@@ -5095,7 +5102,7 @@ fun DateChip(
             color = if (isPrivateMode) {
                 if (isDark) darkTone(Gray400) else Gray600
             } else {
-                if (isDark) darkTone(Slate400) else Color(0xFF475569)
+                if (isDark) Color(0xFFCBD5E1) else Color(0xFF475569)
             },
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
         )
@@ -5468,7 +5475,7 @@ private fun ChatBottomComposerBar(
             placeholder = when {
                 uiState.isStealthCurtainActive -> "Add a note..."
                 uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE -> "Reply to ChatGPT"
-                else -> "Message $partnerName... ❤️"
+                else -> "Message ${partnerName.replace("💕", "").replace("❤️", "").trim()}..."
             },
             isPrivateMode = (uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE),
             onInputFocused = onInputFocused,

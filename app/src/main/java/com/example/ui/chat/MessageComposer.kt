@@ -394,15 +394,15 @@ fun MessageComposer(
         else if (isDark) Neutral800
         else Neutral200
     } else {
-        // Deep obsidian dark liquid glass - rich dark tone, zero whitish haze
-        Color(0xF2050814)
+        // Transparent type center bar - allows wallpaper to shine directly through
+        Color.Transparent
     }
     val pillBorder = if (isPrivateMode) {
         if (isAmoled) Neutral800
         else if (isDark) Neutral700
         else Neutral300
     } else {
-        Color(0x383870FF)
+        Color(0x403870FF)
     }
 
     // Emojis in the message box: the size they'll be in the sent message, the same however many
