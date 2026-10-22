@@ -90,7 +90,9 @@ data class User(
     val appVersionCode: Int? = null,
     val appVersionName: String? = null,
     val isDisguiseEnabled: Boolean = true,
-    val disguiseStyle: String = "notes"
+    val disguiseStyle: String = "notes",
+    /** When this phone last did a clean reinstall (server time, ms), so the partner can see it's kept up. */
+    val lastReinstallAt: Long? = null
 ) {
     /**
      * When this phone received this user's latest live presence update, on this phone's own clock

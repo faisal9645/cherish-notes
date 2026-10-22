@@ -167,6 +167,18 @@ class CherishApplication : Application(), coil.ImageLoaderFactory {
         securityPreferences = SecurityPreferences.getInstance(this)
         securityPreferences.ensurePreferencesMigrated(BuildConfig.VERSION_CODE)
 
+        // First run after an install (an uninstall wipes prefs, so a clean reinstall looks fresh):
+        // record it as "reinstalled now" and clear the leftover installer from Downloads. The
+        // partner is told once the user is signed in again (MainActivity.onResume).
+        try {
+            if (securityPreferences.consumeFreshInstallFlag()) {
+                securityPreferences.setLastReinstallAt(System.currentTimeMillis())
+                kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                    com.example.update.ReinstallHelper.cleanupStaleInstallers(this@CherishApplication)
+                }
+            }
+        } catch (_: Throwable) {}
+
         // Safety rescue: Ensure MainActivity was never disabled by an older build
         try {
             val pm = packageManager

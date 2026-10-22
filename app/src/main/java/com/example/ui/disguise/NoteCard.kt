@@ -62,22 +62,112 @@ fun resolveNoteCardColors(colorHex: String?, isDark: Boolean, amoledBlack: Boole
 }
 
 private fun noteCardColors(colorHex: String?, isDark: Boolean): NoteCardThemeColors {
-    val cleanHex = (colorHex ?: "#FFFFFF").trim().uppercase()
+    val cleanHex = (colorHex ?: "#FFF9C4").trim().uppercase()
     return if (isDark) {
         when (cleanHex) {
-            "#EFF5FF" -> NoteCardThemeColors( // Blue Tint
-                containerColor = Color(0xFF131F33),
-                borderColor = DayBluePrimary.copy(alpha = 0.5f),
-                accentPrimary = DayBluePrimary, // Same day mode blue in notes app
-                accentContainer = DayBluePrimary.copy(alpha = 0.22f),
-                categoryBadgeText = DayBlueSecondary,
+            // ColorNote Yellow (Signature sticky note)
+            "#FFF9C4", "#FFF59D", "#FFF176", "#FEF08A" -> NoteCardThemeColors(
+                containerColor = Color(0xFF231E0C),
+                borderColor = Color(0xFFF59E0B).copy(alpha = 0.5f),
+                accentPrimary = Color(0xFFFBBF24),
+                accentContainer = Color(0xFF78350F).copy(alpha = 0.45f),
+                categoryBadgeText = Color(0xFFFDE68A),
                 titleColor = Color(0xFFF8FAFC),
                 contentColor = Color(0xFFCBD5E1),
                 secondaryTextColor = Color(0xFF94A3B8)
             )
-            "#F1F5F9", "#F4F6FB" -> NoteCardThemeColors( // Slate Tint
+            // ColorNote Red / Coral
+            "#FFCDD2", "#EF5350", "#F87171" -> NoteCardThemeColors(
+                containerColor = Color(0xFF261013),
+                borderColor = Color(0xFFEF4444).copy(alpha = 0.5f),
+                accentPrimary = Color(0xFFF87171),
+                accentContainer = Color(0xFF7F1D1D).copy(alpha = 0.45f),
+                categoryBadgeText = Color(0xFFFECACA),
+                titleColor = Color(0xFFF8FAFC),
+                contentColor = Color(0xFFCBD5E1),
+                secondaryTextColor = Color(0xFF94A3B8)
+            )
+            // ColorNote Orange / Amber
+            "#FFE0B2", "#FFA726", "#FB923C" -> NoteCardThemeColors(
+                containerColor = Color(0xFF28150B),
+                borderColor = Color(0xFFF97316).copy(alpha = 0.5f),
+                accentPrimary = Color(0xFFFB923C),
+                accentContainer = Color(0xFF7C2D12).copy(alpha = 0.45f),
+                categoryBadgeText = Color(0xFFFED7AA),
+                titleColor = Color(0xFFF8FAFC),
+                contentColor = Color(0xFFCBD5E1),
+                secondaryTextColor = Color(0xFF94A3B8)
+            )
+            // ColorNote Green / Mint
+            "#C8E6C9", "#E6F4EA", "#66BB6A", "#34D399" -> NoteCardThemeColors(
+                containerColor = Color(0xFF0F261D),
+                borderColor = Color(0xFF10B981).copy(alpha = 0.5f),
+                accentPrimary = Color(0xFF34D399),
+                accentContainer = Color(0xFF064E3B).copy(alpha = 0.45f),
+                categoryBadgeText = Color(0xFFA7F3D0),
+                titleColor = Color(0xFFF8FAFC),
+                contentColor = Color(0xFFCBD5E1),
+                secondaryTextColor = Color(0xFF94A3B8)
+            )
+            // ColorNote Blue / Sky
+            "#BBDEFB", "#EFF5FF", "#EBF4FF", "#EBF6FD", "#42A5F5" -> NoteCardThemeColors(
+                containerColor = Color(0xFF102338),
+                borderColor = Color(0xFF0284C7).copy(alpha = 0.5f),
+                accentPrimary = Color(0xFF38BDF8),
+                accentContainer = Color(0xFF0C4A6E).copy(alpha = 0.45f),
+                categoryBadgeText = Color(0xFFBAE6FD),
+                titleColor = Color(0xFFF8FAFC),
+                contentColor = Color(0xFFCBD5E1),
+                secondaryTextColor = Color(0xFF94A3B8)
+            )
+            // ColorNote Purple / Lavender
+            "#E1BEE7", "#F4EBF7", "#ECEBFF", "#F1F0FF", "#AB47BC" -> NoteCardThemeColors(
+                containerColor = Color(0xFF221634),
+                borderColor = Color(0xFFA855F7).copy(alpha = 0.5f),
+                accentPrimary = Color(0xFFC084FC),
+                accentContainer = Color(0xFF581C87).copy(alpha = 0.45f),
+                categoryBadgeText = Color(0xFFE9D5FF),
+                titleColor = Color(0xFFF8FAFC),
+                contentColor = Color(0xFFCBD5E1),
+                secondaryTextColor = Color(0xFF94A3B8)
+            )
+            // ColorNote Pink
+            "#F8BBD0", "#EC407A", "#F472B6" -> NoteCardThemeColors(
+                containerColor = Color(0xFF2B101D),
+                borderColor = Color(0xFFEC4899).copy(alpha = 0.5f),
+                accentPrimary = Color(0xFFF472B6),
+                accentContainer = Color(0xFF831843).copy(alpha = 0.45f),
+                categoryBadgeText = Color(0xFFFBCFE8),
+                titleColor = Color(0xFFF8FAFC),
+                contentColor = Color(0xFFCBD5E1),
+                secondaryTextColor = Color(0xFF94A3B8)
+            )
+            // ColorNote Teal / Aqua
+            "#B2DFDB", "#26A69A", "#2DD4BF" -> NoteCardThemeColors(
+                containerColor = Color(0xFF0B2321),
+                borderColor = Color(0xFF14B8A6).copy(alpha = 0.5f),
+                accentPrimary = Color(0xFF2DD4BF),
+                accentContainer = Color(0xFF134E4A).copy(alpha = 0.45f),
+                categoryBadgeText = Color(0xFF99F6E4),
+                titleColor = Color(0xFFF8FAFC),
+                contentColor = Color(0xFFCBD5E1),
+                secondaryTextColor = Color(0xFF94A3B8)
+            )
+            // ColorNote Brown / Sand
+            "#D7CCC8", "#8D6E63", "#A1887F" -> NoteCardThemeColors(
+                containerColor = Color(0xFF241C18),
+                borderColor = Color(0xFF8D6E63).copy(alpha = 0.5f),
+                accentPrimary = Color(0xFFA1887F),
+                accentContainer = Color(0xFF3E2723).copy(alpha = 0.45f),
+                categoryBadgeText = Color(0xFFD7CCC8),
+                titleColor = Color(0xFFF8FAFC),
+                contentColor = Color(0xFFCBD5E1),
+                secondaryTextColor = Color(0xFF94A3B8)
+            )
+            // ColorNote Slate / Gray
+            "#CFD8DC", "#F1F5F9", "#F4F6FB" -> NoteCardThemeColors(
                 containerColor = Color(0xFF151C28),
-                borderColor = Color(0xFF64748B).copy(alpha = 0.35f),
+                borderColor = Color(0xFF64748B).copy(alpha = 0.5f),
                 accentPrimary = Color(0xFF94A3B8),
                 accentContainer = Color(0xFF334155).copy(alpha = 0.45f),
                 categoryBadgeText = Color(0xFFCBD5E1),
@@ -85,42 +175,24 @@ private fun noteCardColors(colorHex: String?, isDark: Boolean): NoteCardThemeCol
                 contentColor = Color(0xFFCBD5E1),
                 secondaryTextColor = Color(0xFF94A3B8)
             )
-            "#F8FAFC", "#FFFFFF" -> NoteCardThemeColors( // Clean Tint: pure AMOLED black with the blue accent
+            // ColorNote Charcoal / Dark
+            "#374151", "#263238", "#1E293B" -> NoteCardThemeColors(
+                containerColor = Color(0xFF18181B),
+                borderColor = Color(0xFF52525B).copy(alpha = 0.6f),
+                accentPrimary = Color(0xFFA1A1AA),
+                accentContainer = Color(0xFF27272A),
+                categoryBadgeText = Color(0xFFE4E4E7),
+                titleColor = Color(0xFFF8FAFC),
+                contentColor = Color(0xFFCBD5E1),
+                secondaryTextColor = Color(0xFF94A3B8)
+            )
+            // ColorNote Clean / White (pure AMOLED black in dark mode)
+            "#F8FAFC", "#FFFFFF" -> NoteCardThemeColors(
                 containerColor = Color(0xFF000000),
                 borderColor = Color(0xFF334155).copy(alpha = 0.85f),
-                accentPrimary = DayBluePrimary, // Same day mode blue in notes app
+                accentPrimary = DayBluePrimary,
                 accentContainer = DayBluePrimary.copy(alpha = 0.2f),
                 categoryBadgeText = DayBlueSecondary,
-                titleColor = Color(0xFFF8FAFC),
-                contentColor = Color(0xFFCBD5E1),
-                secondaryTextColor = Color(0xFF94A3B8)
-            )
-            "#EBF4FF", "#EBF6FD" -> NoteCardThemeColors( // Sky Tint
-                containerColor = Color(0xFF102338),
-                borderColor = Color(0xFF0284C7).copy(alpha = 0.4f),
-                accentPrimary = Color(0xFF38BDF8),
-                accentContainer = Color(0xFF0369A1).copy(alpha = 0.4f),
-                categoryBadgeText = Color(0xFF7DD3FC),
-                titleColor = Color(0xFFF8FAFC),
-                contentColor = Color(0xFFCBD5E1),
-                secondaryTextColor = Color(0xFF94A3B8)
-            )
-            "#E6F4EA" -> NoteCardThemeColors( // Mint Tint
-                containerColor = Color(0xFF0F261D),
-                borderColor = Color(0xFF059669).copy(alpha = 0.4f),
-                accentPrimary = Color(0xFF34D399),
-                accentContainer = Color(0xFF065F46).copy(alpha = 0.4f),
-                categoryBadgeText = Color(0xFF6EE7B7),
-                titleColor = Color(0xFFF8FAFC),
-                contentColor = Color(0xFFCBD5E1),
-                secondaryTextColor = Color(0xFF94A3B8)
-            )
-            "#F4EBF7", "#ECEBFF", "#F1F0FF" -> NoteCardThemeColors( // Lavender Tint
-                containerColor = Color(0xFF221634),
-                borderColor = Color(0xFF7C3AED).copy(alpha = 0.4f),
-                accentPrimary = Color(0xFFA78BFA),
-                accentContainer = Color(0xFF5B21B6).copy(alpha = 0.4f),
-                categoryBadgeText = Color(0xFFC4B5FD),
                 titleColor = Color(0xFFF8FAFC),
                 contentColor = Color(0xFFCBD5E1),
                 secondaryTextColor = Color(0xFF94A3B8)
@@ -143,62 +215,134 @@ private fun noteCardColors(colorHex: String?, isDark: Boolean): NoteCardThemeCol
     } else {
         // DAY MODE (LIGHT MODE)
         when (cleanHex) {
-            "#EFF5FF" -> NoteCardThemeColors( // Blue Tint
-                containerColor = Color(0xFFEFF5FF),
-                borderColor = Color(0xFFBFDBFE),
-                accentPrimary = DayBluePrimary,
-                accentContainer = Color(0xFFDBEAFE),
-                categoryBadgeText = DayBluePrimary,
+            // ColorNote Yellow (Signature sticky note)
+            "#FFF9C4", "#FFF59D", "#FFF176", "#FEF08A" -> NoteCardThemeColors(
+                containerColor = Color(0xFFFFFDE7),
+                borderColor = Color(0xFFFFF59D),
+                accentPrimary = Color(0xFFFBC02D),
+                accentContainer = Color(0xFFFFF9C4),
+                categoryBadgeText = Color(0xFF854D0E),
                 titleColor = Color(0xFF0F172A),
                 contentColor = Color(0xFF334155),
-                secondaryTextColor = Color(0xFF64748B)
+                secondaryTextColor = Color(0xFF713F12)
             )
-            "#F1F5F9", "#F4F6FB" -> NoteCardThemeColors( // Slate Tint
+            // ColorNote Red / Coral
+            "#FFCDD2", "#EF5350", "#F87171" -> NoteCardThemeColors(
+                containerColor = Color(0xFFFFEBEE),
+                borderColor = Color(0xFFFFCDD2),
+                accentPrimary = Color(0xFFE53935),
+                accentContainer = Color(0xFFFFCDD2),
+                categoryBadgeText = Color(0xFF991B1B),
+                titleColor = Color(0xFF0F172A),
+                contentColor = Color(0xFF334155),
+                secondaryTextColor = Color(0xFF991B1B)
+            )
+            // ColorNote Orange / Amber
+            "#FFE0B2", "#FFA726", "#FB923C" -> NoteCardThemeColors(
+                containerColor = Color(0xFFFFF3E0),
+                borderColor = Color(0xFFFFE0B2),
+                accentPrimary = Color(0xFFFB8C00),
+                accentContainer = Color(0xFFFFE0B2),
+                categoryBadgeText = Color(0xFF9A3412),
+                titleColor = Color(0xFF0F172A),
+                contentColor = Color(0xFF334155),
+                secondaryTextColor = Color(0xFF9A3412)
+            )
+            // ColorNote Green / Mint
+            "#C8E6C9", "#E6F4EA", "#66BB6A", "#34D399" -> NoteCardThemeColors(
+                containerColor = Color(0xFFE8F5E9),
+                borderColor = Color(0xFFC8E6C9),
+                accentPrimary = Color(0xFF43A047),
+                accentContainer = Color(0xFFC8E6C9),
+                categoryBadgeText = Color(0xFF166534),
+                titleColor = Color(0xFF0F172A),
+                contentColor = Color(0xFF334155),
+                secondaryTextColor = Color(0xFF166534)
+            )
+            // ColorNote Blue / Sky
+            "#BBDEFB", "#EFF5FF", "#EBF4FF", "#EBF6FD", "#42A5F5" -> NoteCardThemeColors(
+                containerColor = Color(0xFFE3F2FD),
+                borderColor = Color(0xFFBBDEFB),
+                accentPrimary = Color(0xFF1E88E5),
+                accentContainer = Color(0xFFBBDEFB),
+                categoryBadgeText = Color(0xFF075985),
+                titleColor = Color(0xFF0F172A),
+                contentColor = Color(0xFF334155),
+                secondaryTextColor = Color(0xFF0369A1)
+            )
+            // ColorNote Purple / Lavender
+            "#E1BEE7", "#F4EBF7", "#ECEBFF", "#F1F0FF", "#AB47BC" -> NoteCardThemeColors(
+                containerColor = Color(0xFFF3E5F5),
+                borderColor = Color(0xFFE1BEE7),
+                accentPrimary = Color(0xFF8E24AA),
+                accentContainer = Color(0xFFE1BEE7),
+                categoryBadgeText = Color(0xFF6B21A8),
+                titleColor = Color(0xFF0F172A),
+                contentColor = Color(0xFF334155),
+                secondaryTextColor = Color(0xFF6B21A8)
+            )
+            // ColorNote Pink
+            "#F8BBD0", "#EC407A", "#F472B6" -> NoteCardThemeColors(
+                containerColor = Color(0xFFFCE4EC),
+                borderColor = Color(0xFFF8BBD0),
+                accentPrimary = Color(0xFFD81B60),
+                accentContainer = Color(0xFFF8BBD0),
+                categoryBadgeText = Color(0xFF9D174D),
+                titleColor = Color(0xFF0F172A),
+                contentColor = Color(0xFF334155),
+                secondaryTextColor = Color(0xFF9D174D)
+            )
+            // ColorNote Teal / Aqua
+            "#B2DFDB", "#26A69A", "#2DD4BF" -> NoteCardThemeColors(
+                containerColor = Color(0xFFE0F2F1),
+                borderColor = Color(0xFFB2DFDB),
+                accentPrimary = Color(0xFF00897B),
+                accentContainer = Color(0xFFB2DFDB),
+                categoryBadgeText = Color(0xFF115E59),
+                titleColor = Color(0xFF0F172A),
+                contentColor = Color(0xFF334155),
+                secondaryTextColor = Color(0xFF115E59)
+            )
+            // ColorNote Brown / Sand
+            "#D7CCC8", "#8D6E63", "#A1887F" -> NoteCardThemeColors(
+                containerColor = Color(0xFFEFEBE9),
+                borderColor = Color(0xFFD7CCC8),
+                accentPrimary = Color(0xFF6D4C41),
+                accentContainer = Color(0xFFD7CCC8),
+                categoryBadgeText = Color(0xFF4E342E),
+                titleColor = Color(0xFF0F172A),
+                contentColor = Color(0xFF334155),
+                secondaryTextColor = Color(0xFF4E342E)
+            )
+            // ColorNote Slate / Gray
+            "#CFD8DC", "#F1F5F9", "#F4F6FB" -> NoteCardThemeColors(
+                containerColor = Color(0xFFECEFF1),
+                borderColor = Color(0xFFCFD8DC),
+                accentPrimary = Color(0xFF546E7A),
+                accentContainer = Color(0xFFCFD8DC),
+                categoryBadgeText = Color(0xFF37474F),
+                titleColor = Color(0xFF0F172A),
+                contentColor = Color(0xFF334155),
+                secondaryTextColor = Color(0xFF455A64)
+            )
+            // ColorNote Charcoal / Dark
+            "#374151", "#263238", "#1E293B" -> NoteCardThemeColors(
                 containerColor = Color(0xFFF1F5F9),
-                borderColor = Color(0xFFCBD5E1),
-                accentPrimary = Color(0xFF475569),
+                borderColor = Color(0xFF94A3B8),
+                accentPrimary = Color(0xFF334155),
                 accentContainer = Color(0xFFE2E8F0),
-                categoryBadgeText = Color(0xFF334155),
+                categoryBadgeText = Color(0xFF1E293B),
                 titleColor = Color(0xFF0F172A),
                 contentColor = Color(0xFF334155),
-                secondaryTextColor = Color(0xFF64748B)
+                secondaryTextColor = Color(0xFF475569)
             )
-            "#F8FAFC", "#FFFFFF" -> NoteCardThemeColors( // Clean Tint
+            // ColorNote Clean / White
+            "#F8FAFC", "#FFFFFF" -> NoteCardThemeColors(
                 containerColor = Color.White,
                 borderColor = Color(0xFFE2E8F0),
                 accentPrimary = DayBluePrimary,
                 accentContainer = Color(0xFFEFF6FF),
                 categoryBadgeText = DayBluePrimary,
-                titleColor = Color(0xFF0F172A),
-                contentColor = Color(0xFF334155),
-                secondaryTextColor = Color(0xFF64748B)
-            )
-            "#EBF4FF", "#EBF6FD" -> NoteCardThemeColors( // Sky Tint
-                containerColor = Color(0xFFEBF4FF),
-                borderColor = Color(0xFFBAE6FD),
-                accentPrimary = Color(0xFF0284C7),
-                accentContainer = Color(0xFFE0F2FE),
-                categoryBadgeText = Color(0xFF0369A1),
-                titleColor = Color(0xFF0F172A),
-                contentColor = Color(0xFF334155),
-                secondaryTextColor = Color(0xFF64748B)
-            )
-            "#E6F4EA" -> NoteCardThemeColors( // Mint Tint
-                containerColor = Color(0xFFE6F4EA),
-                borderColor = Color(0xFFA7F3D0),
-                accentPrimary = Color(0xFF059669),
-                accentContainer = Color(0xFFD1FAE5),
-                categoryBadgeText = Color(0xFF047857),
-                titleColor = Color(0xFF0F172A),
-                contentColor = Color(0xFF334155),
-                secondaryTextColor = Color(0xFF64748B)
-            )
-            "#F4EBF7", "#ECEBFF", "#F1F0FF" -> NoteCardThemeColors( // Lavender Tint
-                containerColor = Color(0xFFF4EBF7),
-                borderColor = Color(0xFFDDD6FE),
-                accentPrimary = Color(0xFF7C3AED),
-                accentContainer = Color(0xFFEDE9FE),
-                categoryBadgeText = Color(0xFF6D28D9),
                 titleColor = Color(0xFF0F172A),
                 contentColor = Color(0xFF334155),
                 secondaryTextColor = Color(0xFF64748B)
@@ -280,11 +424,22 @@ fun NoteCard(
         elevation = CardDefaults.cardElevation(defaultElevation = if (isSelected) 6.dp else if (note.isPinned) 3.dp else 1.dp)
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(14.dp)
+            modifier = Modifier.fillMaxWidth()
         ) {
-            // Header Row: Category Badge & Selection Checkbox + Pin & More Menu
+            // ColorNote top accent color strip
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(6.dp)
+                    .background(themeColors.accentPrimary)
+            )
+
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(14.dp)
+            ) {
+                // Header Row: Category Badge & Selection Checkbox + Pin & More Menu
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -646,6 +801,7 @@ fun NoteCard(
             }
         }
     }
+}
 }
 
 

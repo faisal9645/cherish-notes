@@ -93,7 +93,7 @@ class SecurityPreferences(private val context: Context) {
     private val _disguiseStyle = MutableStateFlow(getDisguiseStyle())
     val disguiseStyle: StateFlow<String> = _disguiseStyle.asStateFlow()
 
-    fun getDisguiseStyle(): String = prefs.getString(KEY_DISGUISE_STYLE, DISGUISE_STYLE_NOTES) ?: DISGUISE_STYLE_NOTES
+    fun getDisguiseStyle(): String = prefs.getString(KEY_DISGUISE_STYLE, DISGUISE_STYLE_CALCULATOR) ?: DISGUISE_STYLE_CALCULATOR
 
     fun setDisguiseStyle(style: String) {
         val valid = if (style == DISGUISE_STYLE_CALCULATOR) DISGUISE_STYLE_CALCULATOR else DISGUISE_STYLE_NOTES
@@ -606,6 +606,29 @@ class SecurityPreferences(private val context: Context) {
     private val _callVibrateMute = MutableStateFlow(isCallVibrateMute())
     val callVibrateMuteFlow: StateFlow<Boolean> = _callVibrateMute.asStateFlow()
 
+    fun getUserGender(): String = prefs.getString(KEY_USER_GENDER, GENDER_MALE) ?: GENDER_MALE
+    fun setUserGender(gender: String) {
+        val clean = gender.lowercase().trim()
+        prefs.edit().putString(KEY_USER_GENDER, clean).apply()
+        _userGender.value = clean
+        if (!prefs.contains(KEY_PARTNER_GENDER)) {
+            val opposite = if (clean == GENDER_MALE) GENDER_FEMALE else GENDER_MALE
+            prefs.edit().putString(KEY_PARTNER_GENDER, opposite).apply()
+            _partnerGender.value = opposite
+        }
+    }
+    private val _userGender = MutableStateFlow(getUserGender())
+    val userGenderFlow: StateFlow<String> = _userGender.asStateFlow()
+
+    fun getPartnerGender(): String = prefs.getString(KEY_PARTNER_GENDER, if (getUserGender() == GENDER_MALE) GENDER_FEMALE else GENDER_MALE) ?: GENDER_FEMALE
+    fun setPartnerGender(gender: String) {
+        val clean = gender.lowercase().trim()
+        prefs.edit().putString(KEY_PARTNER_GENDER, clean).apply()
+        _partnerGender.value = clean
+    }
+    private val _partnerGender = MutableStateFlow(getPartnerGender())
+    val partnerGenderFlow: StateFlow<String> = _partnerGender.asStateFlow()
+
     fun setPin(pin: String) {
         val hash = hashPin(pin)
         prefs.edit().putString(KEY_PIN_HASH, hash).apply()
@@ -698,6 +721,16 @@ class SecurityPreferences(private val context: Context) {
     fun setEqualsHoldDuration(seconds: Int) {
         prefs.edit().putInt(KEY_EQUALS_HOLD_DURATION, seconds.coerceIn(1, 10)).apply()
     }
+
+    fun isEqualsHoldUnlockEnabled(): Boolean = prefs.getBoolean(KEY_EQUALS_HOLD_UNLOCK_ENABLED, true)
+
+    fun setEqualsHoldUnlockEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_EQUALS_HOLD_UNLOCK_ENABLED, enabled).apply()
+        _isEqualsHoldUnlockEnabled.value = enabled
+    }
+
+    private val _isEqualsHoldUnlockEnabled = MutableStateFlow(isEqualsHoldUnlockEnabled())
+    val isEqualsHoldUnlockEnabledFlow: StateFlow<Boolean> = _isEqualsHoldUnlockEnabled.asStateFlow()
 
     // Require phone screen lock (PIN, Password, Pattern) or fingerprint before revealing secret chat
     fun isRequirePhoneLockAfterHold(): Boolean = prefs.getBoolean(KEY_REQUIRE_PHONE_LOCK_AFTER_HOLD, false)
@@ -884,6 +917,10 @@ class SecurityPreferences(private val context: Context) {
             // New version APK update: ensure previous settings are preserved safely
             prefs.edit().putInt(KEY_LAST_SEEN_APP_VERSION, currentVersionCode).apply()
         }
+        if (!prefs.contains(KEY_DISGUISE_STYLE)) {
+            // Fresh install defaults to Calculator
+            prefs.edit().putString(KEY_DISGUISE_STYLE, DISGUISE_STYLE_CALCULATOR).apply()
+        }
     }
 
     fun isHapticFeedbackEnabled(): Boolean = prefs.getBoolean(KEY_HAPTIC_FEEDBACK_ENABLED, true)
@@ -956,6 +993,51 @@ class SecurityPreferences(private val context: Context) {
 
     fun setDoubleTapZoomEnabled(enabled: Boolean) {
         prefs.edit().putBoolean(KEY_DOUBLE_TAP_ZOOM, enabled).apply()
+    }
+
+    // --- CLEAN REINSTALL (resets the usage counters Android keeps per app) ---
+    // Schedule: 0 = off, 1 = weekly, 2 = daily
+    fun getReinstallSchedule(): Int = prefs.getInt(KEY_REINSTALL_SCHEDULE, 0).coerceIn(0, 2)
+
+    fun setReinstallSchedule(mode: Int) {
+        val m = mode.coerceIn(0, 2)
+        prefs.edit().putInt(KEY_REINSTALL_SCHEDULE, m).apply()
+        _reinstallSchedule.value = m
+    }
+
+    private val _reinstallSchedule = MutableStateFlow(getReinstallSchedule())
+    val reinstallScheduleFlow: StateFlow<Int> = _reinstallSchedule.asStateFlow()
+
+    /** When this phone last did a clean reinstall (local clock, ms); 0 if never. */
+    fun getLastReinstallAt(): Long = prefs.getLong(KEY_LAST_REINSTALL_AT, 0L)
+
+    fun setLastReinstallAt(timestamp: Long) {
+        prefs.edit().putLong(KEY_LAST_REINSTALL_AT, timestamp).apply()
+        _lastReinstallAt.value = timestamp
+    }
+
+    private val _lastReinstallAt = MutableStateFlow(getLastReinstallAt())
+    val lastReinstallAtFlow: StateFlow<Long> = _lastReinstallAt.asStateFlow()
+
+    /** Whether a reinstall is due now, by the chosen schedule. */
+    fun isReinstallDue(now: Long = System.currentTimeMillis()): Boolean {
+        val schedule = getReinstallSchedule()
+        if (schedule == 0) return false
+        val last = getLastReinstallAt()
+        if (last <= 0L) return true
+        val interval = if (schedule == 2) 24L * 60 * 60 * 1000 else 7L * 24 * 60 * 60 * 1000
+        return now - last >= interval
+    }
+
+    /**
+     * True exactly once per install: the first run after a fresh install (an uninstall wipes all
+     * prefs, so this key is absent again). Used to clean up the leftover installer and mark the
+     * reinstall as done.
+     */
+    fun consumeFreshInstallFlag(): Boolean {
+        if (prefs.contains(KEY_INSTALL_MARKED)) return false
+        prefs.edit().putBoolean(KEY_INSTALL_MARKED, true).apply()
+        return true
     }
 
     fun isCheckAfterReminderEnabled(): Boolean = prefs.getBoolean(KEY_CHECK_AFTER_REMINDER, true)
@@ -1153,11 +1235,16 @@ class SecurityPreferences(private val context: Context) {
         private const val KEY_PIN_HASH = "pin_hash"
         private const val KEY_COUPLE_KEY = "couple_key"
         private const val KEY_PARTNER_EMAIL = "partner_email"
+        private const val KEY_USER_GENDER = "user_gender"
+        private const val KEY_PARTNER_GENDER = "partner_gender"
+        const val GENDER_MALE = "male"
+        const val GENDER_FEMALE = "female"
 
         // Trigger & gallery keys
         private const val KEY_KEYWORD_TRIGGER_ENABLED = "keyword_trigger_enabled"
         private const val KEY_PLUS_HOLD_DURATION = "plus_hold_duration_sec"
         private const val KEY_EQUALS_HOLD_DURATION = "equals_hold_duration_sec"
+        private const val KEY_EQUALS_HOLD_UNLOCK_ENABLED = "equals_hold_unlock_enabled"
         private const val KEY_IMAGE_GALLERY_SIZE = "image_gallery_size"
         private const val KEY_HAPTIC_FEEDBACK_ENABLED = "haptic_feedback_enabled"
         private const val KEY_HAPTIC_SEND = "haptic_on_send"
@@ -1206,6 +1293,9 @@ class SecurityPreferences(private val context: Context) {
         private const val KEY_PARTNER_CUSTOM_TIMEZONE = "partner_custom_timezone"
         private const val KEY_SEEN_CALL_RECORDING_NOTICE = "seen_call_recording_notice"
         private const val KEY_LAST_SEEN_APP_VERSION = "last_seen_app_version_code"
+        private const val KEY_REINSTALL_SCHEDULE = "reinstall_schedule"
+        private const val KEY_LAST_REINSTALL_AT = "last_reinstall_at"
+        private const val KEY_INSTALL_MARKED = "install_marked"
         private const val KEY_DAILY_FREE_CALL_MINUTES = "daily_free_call_minutes"
         const val DAILY_VOICE_CHANGER_QUOTA_SECONDS = 300 // 5 minutes free daily voice effects
         private const val KEY_CALL_AI_NOISE_MODE = "call_ai_noise_mode"

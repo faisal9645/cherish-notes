@@ -240,6 +240,8 @@ fun ProfileScreen(
     var isPasscodeRevealed by remember { mutableStateOf(false) }
     var isDialogPasscodeRevealed by remember { mutableStateOf(false) }
     var showCheckAfterSheet by remember { mutableStateOf(false) }
+    var showReinstallConfirm by remember { mutableStateOf(false) }
+    var isReinstallLoginRevealed by remember { mutableStateOf(false) }
 
     var tempCameraUri by remember { mutableStateOf<Uri?>(null) }
 
@@ -591,6 +593,60 @@ fun ProfileScreen(
                         Icon(Icons.Rounded.Key, contentDescription = null, tint = primaryAccent)
                     }
                 )
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), thickness = 0.6.dp)
+                ListItem(
+                    headlineContent = { Text("Your Gender", fontSize = 15.sp, fontWeight = FontWeight.SemiBold) },
+                    supportingContent = { Text("Choose Male or Female lips for kiss send & kiss screen", fontSize = 13.sp) },
+                    leadingContent = {
+                        Icon(Icons.Rounded.Person, contentDescription = null, tint = primaryAccent)
+                    },
+                    trailingContent = {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            CherishFilterChip(
+                                selected = uiState.userGender == com.example.security.SecurityPreferences.GENDER_MALE,
+                                onClick = { viewModel.setUserGender(com.example.security.SecurityPreferences.GENDER_MALE) },
+                                label = { Text("Male ♂", fontSize = 12.sp) },
+                                shape = RoundedCornerShape(20.dp)
+                            )
+                            CherishFilterChip(
+                                selected = uiState.userGender == com.example.security.SecurityPreferences.GENDER_FEMALE,
+                                onClick = { viewModel.setUserGender(com.example.security.SecurityPreferences.GENDER_FEMALE) },
+                                label = { Text("Female ♀", fontSize = 12.sp) },
+                                shape = RoundedCornerShape(20.dp)
+                            )
+                        }
+                    }
+                )
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), thickness = 0.6.dp)
+                ListItem(
+                    headlineContent = { Text("Partner's Gender", fontSize = 15.sp, fontWeight = FontWeight.SemiBold) },
+                    supportingContent = { Text("Choose Male or Female lips for partner's kiss send & kiss screen", fontSize = 13.sp) },
+                    leadingContent = {
+                        Icon(Icons.Rounded.Favorite, contentDescription = null, tint = HeartRed)
+                    },
+                    trailingContent = {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            CherishFilterChip(
+                                selected = uiState.partnerGender == com.example.security.SecurityPreferences.GENDER_MALE,
+                                onClick = { viewModel.setPartnerGender(com.example.security.SecurityPreferences.GENDER_MALE) },
+                                label = { Text("Male ♂", fontSize = 12.sp) },
+                                shape = RoundedCornerShape(20.dp)
+                            )
+                            CherishFilterChip(
+                                selected = uiState.partnerGender == com.example.security.SecurityPreferences.GENDER_FEMALE,
+                                onClick = { viewModel.setPartnerGender(com.example.security.SecurityPreferences.GENDER_FEMALE) },
+                                label = { Text("Female ♀", fontSize = 12.sp) },
+                                shape = RoundedCornerShape(20.dp)
+                            )
+                        }
+                    }
+                )
             }
 
 
@@ -623,6 +679,233 @@ fun ProfileScreen(
                         }
                     }
                 )
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), thickness = 0.6.dp)
+
+                // --- Clean reinstall (resets the usage counters Android keeps per app) ---
+                run {
+                    val reinstallSchedule by viewModel.reinstallSchedule.collectAsState()
+                    val lastReinstallAt by viewModel.lastReinstallAt.collectAsState()
+                    val reinstallState by viewModel.reinstallState.collectAsState()
+                    val partnerReinstallAt = uiState.partnerUser?.lastReinstallAt ?: 0L
+                    val partnerName = uiState.partnerUser?.displayName?.ifBlank { "Partner" } ?: "Partner"
+                    val agoText: (Long) -> String = { ts ->
+                        if (ts <= 0L) "never" else {
+                            val d = System.currentTimeMillis() - ts
+                            when {
+                                d < 60_000L -> "just now"
+                                d < 3_600_000L -> "${d / 60_000L}m ago"
+                                d < 86_400_000L -> "${d / 3_600_000L}h ago"
+                                else -> "${d / 86_400_000L}d ago"
+                            }
+                        }
+                    }
+                    val periodMs = if (reinstallSchedule == 2) 86_400_000L else 7L * 86_400_000L
+                    val myDone = reinstallSchedule != 0 && lastReinstallAt > 0L &&
+                        System.currentTimeMillis() - lastReinstallAt < periodMs
+                    val partnerDone = partnerReinstallAt > 0L &&
+                        System.currentTimeMillis() - partnerReinstallAt < periodMs
+
+                    ListItem(
+                        headlineContent = { Text("Clean Reinstall", fontSize = 15.sp, fontWeight = FontWeight.SemiBold) },
+                        supportingContent = {
+                            Text(
+                                "Reinstall to reset the app's data, battery and screen-time counters in Settings. Removes the app; you reinstall from Downloads and sign in again.",
+                                fontSize = 13.sp
+                            )
+                        },
+                        leadingContent = { Icon(Icons.Rounded.Refresh, contentDescription = null, tint = primaryAccent) }
+                    )
+
+                    // Schedule: Off / Weekly / Daily
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 4.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                            .padding(4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        listOf(0 to "Off", 1 to "Weekly", 2 to "Daily").forEach { (mode, label) ->
+                            val selected = reinstallSchedule == mode
+                            Row(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .pressScaleTarget()
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(if (selected) primaryAccent else Color.Transparent)
+                                    .springClickable(tick = true) { viewModel.setReinstallSchedule(mode) }
+                                    .padding(vertical = 10.dp),
+                                horizontalArrangement = Arrangement.Center
+                            ) {
+                                Text(
+                                    text = label,
+                                    color = if (selected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                                    fontSize = 13.sp
+                                )
+                            }
+                        }
+                    }
+
+                    // This phone + partner status
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 4.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = if (reinstallSchedule == 0 || myDone) Icons.Rounded.CheckCircle else Icons.Rounded.Schedule,
+                                    contentDescription = null,
+                                    tint = if (reinstallSchedule != 0 && !myDone) Color(0xFFFFA000) else Color(0xFF4CAF50),
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "You: " + (if (lastReinstallAt > 0L) agoText(lastReinstallAt) else "not yet") +
+                                        (if (reinstallSchedule != 0) (if (myDone) " • done this " + (if (reinstallSchedule == 2) "day" else "week") else " • due") else ""),
+                                    fontSize = 12.sp,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                            if (uiState.partnerUser != null) {
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = if (partnerDone) Icons.Rounded.CheckCircle else Icons.Rounded.Schedule,
+                                        contentDescription = null,
+                                        tint = if (partnerDone) Color(0xFF4CAF50) else Color(0xFFFFA000),
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = "$partnerName: " + (if (partnerReinstallAt > 0L) agoText(partnerReinstallAt) else "not yet"),
+                                        fontSize = 12.sp,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // Progress / error
+                    when (val rs = reinstallState) {
+                        is ProfileViewModel.ReinstallUi.Preparing -> {
+                            Text(
+                                "Preparing…",
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                            )
+                        }
+                        is ProfileViewModel.ReinstallUi.Downloading -> {
+                            Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+                                LinearProgressIndicator(
+                                    progress = { rs.progress },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(6.dp)
+                                        .clip(RoundedCornerShape(3.dp)),
+                                    color = primaryAccent
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text("Downloading installer to Downloads… ${(rs.progress * 100).toInt()}%", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                        is ProfileViewModel.ReinstallUi.Error -> {
+                            Text(
+                                rs.message,
+                                fontSize = 12.sp,
+                                color = Color(0xFFE53935),
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                            )
+                        }
+                        else -> {}
+                    }
+
+                    // Reinstall now
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 6.dp),
+                        horizontalArrangement = Arrangement.End
+                    ) {
+                        val busy = reinstallState is ProfileViewModel.ReinstallUi.Preparing ||
+                            reinstallState is ProfileViewModel.ReinstallUi.Downloading
+                        CherishTonalButton(
+                            onClick = { if (!busy) showReinstallConfirm = true },
+                            shape = RoundedCornerShape(12.dp),
+                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
+                        ) {
+                            Icon(Icons.Rounded.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(if (busy) "Working…" else "Reinstall now", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+
+                if (showReinstallConfirm) {
+                    val (coupleKey, partnerEmail) = remember { viewModel.getLoginDetails() }
+                    CherishAlertDialog(
+                        onDismissRequest = { showReinstallConfirm = false },
+                        title = { Text("Reinstall now?", fontWeight = FontWeight.Bold) },
+                        text = {
+                            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                Text(
+                                    "The installer will be saved to your Downloads, then the app is removed. Open it from Downloads to install again and sign in with the details below.",
+                                    fontSize = 13.sp
+                                )
+                                Surface(
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = MaterialTheme.colorScheme.surfaceVariant,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Column(modifier = Modifier.padding(12.dp)) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text("Your sign-in details", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                            IconButton(onClick = { isReinstallLoginRevealed = !isReinstallLoginRevealed }, modifier = Modifier.size(28.dp)) {
+                                                Icon(
+                                                    imageVector = if (isReinstallLoginRevealed) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility,
+                                                    contentDescription = if (isReinstallLoginRevealed) "Hide" else "Reveal",
+                                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    modifier = Modifier.size(18.dp)
+                                                )
+                                            }
+                                        }
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Text("Couple key: " + (if (isReinstallLoginRevealed) coupleKey else "••••••••"), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
+                                        if (partnerEmail.isNotBlank()) {
+                                            Text("Partner email: " + (if (isReinstallLoginRevealed) partnerEmail else "••••••••"), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        }
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Text("Your app-lock PIN resets on reinstall; set it again after.", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                }
+                            }
+                        },
+                        confirmButton = {
+                            CherishButton(
+                                onClick = {
+                                    showReinstallConfirm = false
+                                    viewModel.startReinstall(context)
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                                shape = RoundedCornerShape(12.dp)
+                            ) { Text("Download & Reinstall", fontWeight = FontWeight.Bold) }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { showReinstallConfirm = false }) { Text("Cancel") }
+                        }
+                    )
+                }
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), thickness = 0.6.dp)
 
                 // Disguise Decoy App Toggle
@@ -733,7 +1016,7 @@ fun ProfileScreen(
                     ) {
                         val disguiseOptions = remember {
                             listOf(
-                                Triple(SecurityPreferences.DISGUISE_STYLE_NOTES, "Notes App", Icons.Rounded.EditNote),
+                                Triple(SecurityPreferences.DISGUISE_STYLE_NOTES, "ColorNote", Icons.Rounded.EditNote),
                                 Triple(SecurityPreferences.DISGUISE_STYLE_CALCULATOR, "Calculator", Icons.Rounded.Calculate)
                             )
                         }
@@ -759,7 +1042,7 @@ fun ProfileScreen(
                                 } else {
                                     androidx.compose.foundation.Image(
                                         painter = painterResource(id = com.example.R.drawable.ic_notes_app),
-                                        contentDescription = "Notes App",
+                                        contentDescription = "ColorNote",
                                         modifier = Modifier.size(19.dp).clip(RoundedCornerShape(5.dp))
                                     )
                                 }
@@ -814,46 +1097,57 @@ fun ProfileScreen(
                             headlineContent = { Text("Hold '=' Button to Unlock", fontSize = 15.sp, fontWeight = FontWeight.SemiBold) },
                             supportingContent = {
                                 Text(
-                                    "Hold '=' for ${uiState.equalsHoldDurationSec}s in Calculator to reveal chat",
+                                    if (uiState.isEqualsHoldUnlockEnabled)
+                                        "Hold '=' for ${uiState.equalsHoldDurationSec}s in Calculator to reveal chat"
+                                    else
+                                        "Disabled (enter passcode and press '=' to unlock)",
                                     fontSize = 13.sp
                                 )
                             },
-                            leadingContent = { Icon(Icons.Rounded.TouchApp, contentDescription = null, tint = primaryAccent) }
+                            leadingContent = { Icon(Icons.Rounded.TouchApp, contentDescription = null, tint = primaryAccent) },
+                            trailingContent = {
+                                CherishSwitch(
+                                    checked = uiState.isEqualsHoldUnlockEnabled,
+                                    onCheckedChange = { viewModel.setEqualsHoldUnlockEnabled(it) }
+                                )
+                            }
                         )
 
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 4.dp)
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(MaterialTheme.colorScheme.surfaceVariant)
-                                .padding(4.dp),
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            listOf(
-                                1 to "1s",
-                                2 to "2s",
-                                3 to "3s",
-                                4 to "4s",
-                                5 to "5s"
-                            ).forEach { (duration, label) ->
-                                val isSelected = uiState.equalsHoldDurationSec == duration
-                                Box(
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .pressScaleTarget()
-                                        .clip(RoundedCornerShape(8.dp))
-                                        .background(if (isSelected) primaryAccent else Color.Transparent)
-                                        .springClickable(tick = true) { viewModel.setEqualsHoldDuration(duration) }
-                                        .padding(vertical = 8.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(
-                                        text = label,
-                                        color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
-                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                        fontSize = 12.sp
-                                    )
+                        AnimatedVisibility(visible = uiState.isEqualsHoldUnlockEnabled) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 4.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                                    .padding(4.dp),
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                listOf(
+                                    1 to "1s",
+                                    2 to "2s",
+                                    3 to "3s",
+                                    4 to "4s",
+                                    5 to "5s"
+                                ).forEach { (duration, label) ->
+                                    val isSelected = uiState.equalsHoldDurationSec == duration
+                                    Box(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .pressScaleTarget()
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(if (isSelected) primaryAccent else Color.Transparent)
+                                            .springClickable(tick = true) { viewModel.setEqualsHoldDuration(duration) }
+                                            .padding(vertical = 8.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = label,
+                                            color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
+                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                            fontSize = 12.sp
+                                        )
+                                    }
                                 }
                             }
                         }

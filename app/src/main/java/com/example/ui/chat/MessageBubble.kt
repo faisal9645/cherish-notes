@@ -1169,7 +1169,7 @@ fun MessageBubble(
                                                             Icon(Icons.Rounded.DoneAll, "Delivered", tint = Color.White.copy(alpha = 0.9f), modifier = Modifier.size(13.dp))
                                                         }
                                                         MessageStatus.READ -> {
-                                                            Icon(Icons.Rounded.DoneAll, "Read", tint = Color.White, modifier = Modifier.size(13.dp))
+                                                            Icon(Icons.Rounded.DoneAll, "Read", tint = Color(0xFF10B981), modifier = Modifier.size(13.dp))
                                                         }
                                                     }
                                                 }
@@ -1293,7 +1293,7 @@ fun MessageBubble(
                                         MessageStatus.SENDING -> Icon(Icons.Rounded.AccessTime, "Sending", tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(11.dp))
                                         MessageStatus.SENT -> Icon(Icons.Rounded.Check, "Sent", tint = Color.White.copy(alpha = 0.8f), modifier = Modifier.size(12.dp))
                                         MessageStatus.DELIVERED -> Icon(Icons.Rounded.DoneAll, "Delivered", tint = Color.White.copy(alpha = 0.9f), modifier = Modifier.size(13.dp))
-                                        MessageStatus.READ -> Icon(Icons.Rounded.DoneAll, "Read", tint = Color.White, modifier = Modifier.size(13.dp))
+                                        MessageStatus.READ -> Icon(Icons.Rounded.DoneAll, "Read", tint = Color(0xFF10B981), modifier = Modifier.size(13.dp))
                                     }
                                 }
                             }
@@ -1555,7 +1555,7 @@ fun MessageBubble(
                                         Icon(
                                             imageVector = Icons.Rounded.DoneAll,
                                             contentDescription = "Read",
-                                            tint = tickTint,
+                                            tint = Color(0xFF10B981),
                                             modifier = Modifier.size(13.dp)
                                         )
                                     }
@@ -1711,13 +1711,13 @@ internal class TimeChipColors(val background: Color, val content: Color, val bor
 internal fun timeChipColors(): TimeChipColors {
     val scheme = MaterialTheme.colorScheme
     return if (scheme.surface.luminance() < 0.5f) {
-        TimeChipColors(Color.Black.copy(alpha = TIME_CHIP_ALPHA), Color.White, border = null, read = Color(0xFF60A5FA))
+        TimeChipColors(Color.Black.copy(alpha = TIME_CHIP_ALPHA), Color.White, border = null, read = Color(0xFF10B981))
     } else {
         TimeChipColors(
             background = scheme.surface.copy(alpha = 0.90f),
             content = scheme.onSurface,
             border = BorderStroke(0.7.dp, scheme.outlineVariant.copy(alpha = 0.6f)),
-            read = Blue600
+            read = Color(0xFF10B981)
         )
     }
 }
@@ -1765,7 +1765,7 @@ private fun FloatingTimeChip(message: Message, isFromMe: Boolean, modifier: Modi
                         MessageStatus.SENDING -> Icon(Icons.Rounded.AccessTime, "Sending", tint = chip.content.copy(alpha = 0.6f), modifier = Modifier.size(10.dp))
                         MessageStatus.SENT -> Icon(Icons.Rounded.Check, "Sent", tint = chip.content.copy(alpha = 0.8f), modifier = Modifier.size(10.dp))
                         MessageStatus.DELIVERED -> Icon(Icons.Rounded.DoneAll, "Delivered", tint = chip.content.copy(alpha = 0.9f), modifier = Modifier.size(11.dp))
-                        MessageStatus.READ -> Icon(Icons.Rounded.DoneAll, "Read", tint = chip.content, modifier = Modifier.size(11.dp))
+                        MessageStatus.READ -> Icon(Icons.Rounded.DoneAll, "Read", tint = chip.read, modifier = Modifier.size(11.dp))
                     }
                 }
             }

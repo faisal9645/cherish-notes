@@ -85,7 +85,7 @@ fun NoteEditorScreen(
     var title by remember { mutableStateOf(initialNote?.title ?: "") }
     var content by remember { mutableStateOf(initialNote?.content ?: "") }
     var category by remember { mutableStateOf(initialNote?.category ?: "Personal") }
-    var colorHex by remember { mutableStateOf(initialNote?.colorHex ?: "#FFFFFF") }
+    var colorHex by remember { mutableStateOf(initialNote?.colorHex ?: "#FFF9C4") }
     var isPinned by remember { mutableStateOf(initialNote?.isPinned ?: false) }
     var reminderTime by remember { mutableStateOf(initialNote?.reminderTime) }
     var showReminderDialog by remember { mutableStateOf(false) }
@@ -120,12 +120,18 @@ fun NoteEditorScreen(
     val categories = remember { listOf("Personal", "Work", "Lists", "Ideas", "Journal", "Urgent") }
     val colorPalettes = remember {
         listOf(
-            "#FFFFFF" to "White",
-            "#EFF5FF" to "Blue Tint",
-            "#F1F5F9" to "Slate Tint",
-            "#EBF4FF" to "Sky Tint",
-            "#E6F4EA" to "Mint Tint",
-            "#F4EBF7" to "Lavender Tint"
+            "#FFF9C4" to "Yellow",
+            "#FFCDD2" to "Red",
+            "#FFE0B2" to "Orange",
+            "#C8E6C9" to "Green",
+            "#BBDEFB" to "Blue",
+            "#E1BEE7" to "Purple",
+            "#F8BBD0" to "Pink",
+            "#B2DFDB" to "Teal",
+            "#D7CCC8" to "Brown",
+            "#CFD8DC" to "Slate",
+            "#374151" to "Charcoal",
+            "#FFFFFF" to "White"
         )
     }
 
@@ -165,6 +171,14 @@ fun NoteEditorScreen(
                     .background(editorTheme.containerColor)
                     .statusBarsPadding()
             ) {
+                // ColorNote top accent color strip
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(4.dp)
+                        .background(editorTheme.accentPrimary)
+                )
+
                 // Top App Bar / Actions
                 Row(
                     modifier = Modifier
@@ -297,26 +311,27 @@ fun NoteEditorScreen(
 
                         // Color chips
                         Text(
-                            text = "Card Accent Tint",
+                            text = "ColorNote Sticky Color",
                             fontSize = 11.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = editorTheme.secondaryTextColor
                         )
                         Spacer(modifier = Modifier.height(4.dp))
-                        Row(
+                        LazyRow(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth()
                         ) {
-                            colorPalettes.forEach { (hex, label) ->
+                            items(colorPalettes, key = { it.first }) { (hex, label) ->
                                 val isSelected = colorHex.equals(hex, ignoreCase = true)
                                 val chipTheme = resolveNoteCardColors(hex, isDark, amoledBlack)
                                 Box(
                                     modifier = Modifier
-                                        .size(28.dp)
+                                        .size(30.dp)
                                         .clip(CircleShape)
                                         .background(chipTheme.containerColor)
                                         .border(
-                                            width = if (isSelected) 2.dp else 1.dp,
+                                            width = if (isSelected) 2.5.dp else 1.dp,
                                             color = if (isSelected) chipTheme.accentPrimary else chipTheme.borderColor,
                                             shape = CircleShape
                                         )
@@ -325,7 +340,7 @@ fun NoteEditorScreen(
                                 ) {
                                     Box(
                                         modifier = Modifier
-                                            .size(10.dp)
+                                            .size(12.dp)
                                             .background(chipTheme.accentPrimary, CircleShape)
                                     )
                                     if (isSelected) {
@@ -333,7 +348,7 @@ fun NoteEditorScreen(
                                             imageVector = Icons.Default.Check,
                                             contentDescription = label,
                                             tint = if (chipTheme.containerColor.luminance() > 0.5f) chipTheme.accentPrimary else Color.White,
-                                            modifier = Modifier.size(14.dp)
+                                            modifier = Modifier.size(15.dp)
                                         )
                                     }
                                 }

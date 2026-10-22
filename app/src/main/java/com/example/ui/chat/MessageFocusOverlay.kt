@@ -198,7 +198,8 @@ fun MessageFocusOverlay(
             // Quick reactions above it, popping in one after another
             Surface(
                 shape = RoundedCornerShape(28.dp),
-                color = MaterialTheme.colorScheme.surface,
+                color = Color.White,
+                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE2E8F0)),
                 shadowElevation = 10.dp,
                 modifier = Modifier
                     .offset { IntOffset(barX.roundToInt(), (bubbleTop(progress.value) - gap - barH).roundToInt()) }
@@ -252,7 +253,7 @@ fun MessageFocusOverlay(
                             .size(34.dp)
                             .pressScaleTarget()
                             .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                            .background(Color(0xFFF1F5F9))
                             .springClickable {
                                 onMoreReactions()
                                 close()

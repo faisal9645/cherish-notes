@@ -132,13 +132,15 @@ fun FullScreenMediaViewer(
     var showKissPadInViewer by remember { mutableStateOf(false) }
     var profileKisses by remember { mutableStateOf<List<KissBloom>>(emptyList()) }
     var kissFeedbackText by remember { mutableStateOf<String?>(null) }
+    val isUserMale = remember { com.example.security.SecurityPreferences.getInstance(context).getUserGender() == com.example.security.SecurityPreferences.GENDER_MALE }
+    val isPartnerMale = remember { com.example.security.SecurityPreferences.getInstance(context).getPartnerGender() == com.example.security.SecurityPreferences.GENDER_MALE }
 
     fun kissProfile(atFraction: Offset = Offset(0.5f, 0.45f)) {
-        val bloom = KissBloom(java.util.UUID.randomUUID().toString(), atFraction.x, atFraction.y, fromMe = true)
+        val bloom = KissBloom(java.util.UUID.randomUUID().toString(), atFraction.x, atFraction.y, fromMe = true, isMale = isUserMale)
         profileKisses = profileKisses + bloom
         context.vibrateKiss()
         val name = partnerName?.trim()?.substringBefore(' ') ?: "Partner"
-        kissFeedbackText = "Kissed $name 💋"
+        kissFeedbackText = "Kissed $name ${if (isUserMale) "👄" else "💋"}"
         scope.launch {
             try {
                 (context.applicationContext as? CherishApplication)?.authRepository?.sendKiss(atFraction.x, atFraction.y)
@@ -1102,7 +1104,7 @@ fun FullScreenMediaViewer(
                                 ) {
                                     Icon(
                                         imageVector = Icons.AutoMirrored.Rounded.Chat,
-                                        contentDescription = "Show in chat",
+                                        contentDescription = "Chat",
                                         tint = Color.White,
                                         modifier = Modifier.size(18.dp)
                                     )
@@ -1302,7 +1304,7 @@ fun FullScreenMediaViewer(
                             // Romantic Kiss Profile button
                             Surface(
                                 shape = RoundedCornerShape(24.dp),
-                                color = Color(0xFFE0475F).copy(alpha = 0.88f),
+                                color = if (isUserMale) Color(0xFFC76270).copy(alpha = 0.88f) else Color(0xFFE0475F).copy(alpha = 0.88f),
                                 border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.45f)),
                                 modifier = Modifier
                                     .pressScaleTarget()
@@ -1313,7 +1315,7 @@ fun FullScreenMediaViewer(
                                     verticalAlignment = Alignment.CenterVertically,
                                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 9.dp)
                                 ) {
-                                    Text("💋", fontSize = 17.sp)
+                                    Text(if (isUserMale) "👄" else "💋", fontSize = 17.sp)
                                     Spacer(Modifier.width(6.dp))
                                     Text(
                                         text = "Kiss ${partnerName?.trim()?.substringBefore(' ') ?: "Profile"}",
@@ -1345,10 +1347,10 @@ fun FullScreenMediaViewer(
                                     verticalAlignment = Alignment.CenterVertically,
                                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 9.dp)
                                 ) {
-                                    Text("👄", fontSize = 17.sp)
+                                    Text(if (isPartnerMale) "👄" else "💋", fontSize = 17.sp)
                                     Spacer(Modifier.width(6.dp))
                                     Text(
-                                        text = "Kiss Screen 💋",
+                                        text = "Kiss Screen ${if (isPartnerMale) "👄" else "💋"}",
                                         color = Color.White,
                                         fontSize = 13.5.sp,
                                         fontWeight = FontWeight.Bold
@@ -1438,7 +1440,9 @@ fun FullScreenMediaViewer(
                     partnerName = partnerName ?: "Partner",
                     partnerTouch = pTouch,
                     onTouch = { x, y -> appAuth?.setKissTouch(x, y) },
-                    onDismiss = { showKissPadInViewer = false }
+                    onDismiss = { showKissPadInViewer = false },
+                    userIsMale = isUserMale,
+                    partnerIsMale = isPartnerMale
                 )
             }
         }

@@ -10,8 +10,16 @@
         <item name="android:navigationBarColor">#FFFFFF</item>
         <item name="android:windowLightStatusBar">true</item>
         <item name="android:windowLightNavigationBar">true</item>
-        <!-- Android 12+ Splash Screen with centered high quality sharp note app logo -->
+        <!-- Android 12+ Splash Screen with centered high quality sharp note app logo (Notes only) -->
         <item name="android:windowSplashScreenBackground">#FFFFFF</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_icon</item>
+    </style>
+
+    <!-- Calculator Disguise: opens immediately without splash screen like original Samsung Calculator -->
+    <style name="Theme.MyApplication.Calculator" parent="Theme.MyApplication">
+        <item name="android:windowDisablePreview">true</item>
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
         <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_icon_neutral</item>
     </style>
 </resources>

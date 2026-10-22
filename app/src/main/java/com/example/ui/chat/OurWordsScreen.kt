@@ -201,7 +201,7 @@ fun OurWordsScreen(
                             ) {
                                 Icon(Icons.Rounded.ChatBubbleOutline, contentDescription = null, modifier = Modifier.size(18.dp))
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text("Show in chat")
+                                Text("Chat")
                             }
                             TextButton(
                                 onClick = {

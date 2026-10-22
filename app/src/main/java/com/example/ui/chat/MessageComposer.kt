@@ -1440,7 +1440,8 @@ fun MessageComposer(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .background(if (isDark) darkTone(Graphite850) else Neutral200)
+                                .background(if (isDark) darkTone(Graphite850) else Color.White)
+                                .border(BorderStroke(0.6.dp, if (isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFE2E8F0)))
                                 .padding(horizontal = 4.dp, vertical = 2.dp),
                             horizontalArrangement = Arrangement.SpaceEvenly,
                             verticalAlignment = Alignment.CenterVertically
@@ -1602,7 +1603,8 @@ private fun EmojiAttachmentPanel(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(if (isDark) Neutral900 else Neutral200)
+                    .background(if (isDark) Neutral900 else Color.White)
+                    .border(BorderStroke(0.6.dp, if (isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFE2E8F0)))
                     .padding(horizontal = 4.dp, vertical = 2.dp),
                 horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically

@@ -163,8 +163,12 @@ fun NotesDisguiseScreen(
                 ctx = ctx.baseContext
             }
             val activity = ctx as? Activity
-            activity?.moveTaskToBack(true)
-            activity?.finishAffinity() ?: activity?.finish()
+            if (activity != null) {
+                val moved = activity.moveTaskToBack(true)
+                if (!moved) {
+                    activity.finish()
+                }
+            }
         }
     }
 
@@ -691,13 +695,23 @@ fun NotesDisguiseScreen(
                                 },
                             contentAlignment = Alignment.Center
                         ) {
-                            // Always the + of a notes app (never a lock), also while it opens
-                            Icon(
-                                imageVector = Icons.Default.Add,
-                                contentDescription = "Add Note",
-                                tint = Color.White,
-                                modifier = Modifier.size(28.dp)
-                            )
+                            if (isUnlockingAnimationPlaying) {
+                                Icon(
+                                    imageVector = Icons.Default.LockOpen,
+                                    contentDescription = "Secret Unlocked",
+                                    tint = Color.White,
+                                    modifier = Modifier
+                                        .size(28.dp)
+                                        .scale(0.85f + (unlockAnimProgress.value * 0.25f))
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Default.Add,
+                                    contentDescription = "Add Note",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(28.dp)
+                                )
+                            }
                         }
                     }
                 }
@@ -893,6 +907,79 @@ fun NotesDisguiseScreen(
 
 }
 }
+
+            // Satisfying secret opening transition overlay once hold completes
+            if (isUnlockingAnimationPlaying) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = unlockAnimProgress.value * 0.35f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Surface(
+                            shape = CircleShape,
+                            color = Color.White,
+                            shadowElevation = 14.dp,
+                            modifier = Modifier
+                                .size(72.dp)
+                                .scale(0.82f + (unlockAnimProgress.value * 0.28f))
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(
+                                        Brush.linearGradient(
+                                            listOf(
+                                                Color(0xFFFF5376),
+                                                Color(0xFFFF758C),
+                                                Color(0xFFFF9E7D)
+                                            )
+                                        )
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.LockOpen,
+                                    contentDescription = "Secret Unlocked",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(34.dp)
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Surface(
+                            shape = RoundedCornerShape(20.dp),
+                            color = if (isDark) Color(0xFF1E1E22).copy(alpha = 0.95f) else Color.White.copy(alpha = 0.95f),
+                            shadowElevation = 6.dp,
+                            modifier = Modifier.graphicsLayer {
+                                alpha = unlockAnimProgress.value
+                            }
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 20.dp, vertical = 9.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(16.dp),
+                                    color = Color(0xFFFF5376),
+                                    strokeWidth = 2.2.dp
+                                )
+                                Text(
+                                    text = "Opening Cherish...",
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = if (isDark) Color.White else Color(0xFF1E293B)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
 }
 
         if (showNotesSettingsDialog) {

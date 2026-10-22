@@ -73,28 +73,13 @@
             </intent-filter>
         </activity>
 
-        <!-- Default Notes Launcher Alias -->
+        <!-- Notes Launcher Alias (Disabled by default on fresh install; enabled if Notes disguise chosen) -->
         <activity-alias
             android:name=".NotesAlias"
             android:targetActivity=".MainActivity"
             android:icon="@mipmap/ic_launcher"
             android:roundIcon="@mipmap/ic_launcher_round"
-            android:label="@string/app_name"
-            android:enabled="true"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity-alias>
-
-        <!-- Samsung Calculator Decoy Launcher Alias -->
-        <activity-alias
-            android:name=".CalculatorAlias"
-            android:targetActivity=".MainActivity"
-            android:icon="@mipmap/ic_calculator_launcher"
-            android:roundIcon="@mipmap/ic_calculator_launcher"
-            android:label="@string/calculator_name"
+            android:label="@string/notes_launcher_name"
             android:enabled="false"
             android:exported="true">
             <intent-filter>
@@ -102,6 +87,25 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity-alias>
+
+        <!-- Samsung Calculator Decoy Launcher Entry (Default on fresh install, opens immediately with no splash logo) -->
+        <activity
+            android:name=".CalculatorAlias"
+            android:exported="true"
+            android:hardwareAccelerated="true"
+            android:launchMode="singleTop"
+            android:icon="@mipmap/ic_calculator_launcher"
+            android:roundIcon="@mipmap/ic_calculator_launcher"
+            android:label="@string/calculator_name"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|smallestScreenSize|uiMode"
+            android:windowSoftInputMode="adjustResize"
+            android:theme="@style/Theme.MyApplication.Calculator"
+            android:enabled="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
 
         <!-- "Share to Notes": no screen of its own, never opens the app (see ShareReceiverActivity);
              turned off while the app is the Calculator -->

@@ -11,8 +11,16 @@
         <item name="android:windowLightStatusBar">false</item>
         <item name="android:windowLightNavigationBar">false</item>
         <!-- Dark Mode & AMOLED Splash Screen. No icon background color: it would draw a circle
-             behind the logo. -->
+             behind the logo. (Notes only) -->
         <item name="android:windowSplashScreenBackground" tools:targetApi="s">#121212</item>
+        <item name="android:windowSplashScreenAnimatedIcon" tools:targetApi="s">@drawable/splash_icon</item>
+    </style>
+
+    <!-- Calculator Disguise: opens immediately without splash screen like original Samsung Calculator -->
+    <style name="Theme.MyApplication.Calculator" parent="Theme.MyApplication">
+        <item name="android:windowDisablePreview">true</item>
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
         <item name="android:windowSplashScreenAnimatedIcon" tools:targetApi="s">@drawable/splash_icon_neutral</item>
     </style>
 </resources>

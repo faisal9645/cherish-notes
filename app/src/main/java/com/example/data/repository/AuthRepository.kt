@@ -1267,6 +1267,23 @@ class AuthRepository(private val context: Context) {
         }
     }
 
+    /** Records that this phone just did a clean reinstall, so the partner's app shows it's kept up. */
+    suspend fun updateReinstallStatus(timestampMillis: Long = System.currentTimeMillis()): Result<Unit> {
+        val uid = getCurrentUserId()
+        if (uid.isBlank()) return Result.success(Unit)
+        _currentUserState.value = _currentUserState.value?.copy(lastReinstallAt = timestampMillis)
+        return try {
+            userDocument(uid)?.set(
+                mapOf("lastReinstallAt" to timestampMillis),
+                com.google.firebase.firestore.SetOptions.merge()
+            )?.await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Log.w("AuthRepository", "Failed to update reinstall status", e)
+            Result.success(Unit)
+        }
+    }
+
     /**
      * Computes the current phone's alert status:
      * - "CLOSED" if notifications are turned off in-app or blocked in Android system settings
@@ -1879,6 +1896,7 @@ class AuthRepository(private val context: Context) {
             val appVersionName = snapshot.getString("appVersionName")
             val isDisguiseEnabled = (snapshot.get("isDisguiseEnabled") as? Boolean) ?: true
             val disguiseStyle = snapshot.getString("disguiseStyle") ?: "notes"
+            val lastReinstallAt = (snapshot.get("lastReinstallAt") as? Number)?.toLong()
             val notifPerm = (snapshot.get("notificationPermission") as? Boolean)
                 ?: try { snapshot.getBoolean("notificationPermission") } catch (_: Exception) { null }
                 ?: true
@@ -1918,7 +1936,8 @@ class AuthRepository(private val context: Context) {
                 appVersionCode = appVersionCode,
                 appVersionName = appVersionName,
                 isDisguiseEnabled = isDisguiseEnabled,
-                disguiseStyle = disguiseStyle
+                disguiseStyle = disguiseStyle,
+                lastReinstallAt = lastReinstallAt
             ).apply {
                 notificationPermission = notifPerm
             }
@@ -2086,6 +2105,10 @@ class AuthRepository(private val context: Context) {
                 val docVerName = doc.getString("appVersionName")
                 if (docVerCode != null && partner.appVersionCode != docVerCode) {
                     partner = partner.copy(appVersionCode = docVerCode, appVersionName = docVerName ?: partner.appVersionName)
+                }
+                val docReinstallAt = (doc.get("lastReinstallAt") as? Number)?.toLong()
+                if (docReinstallAt != null && partner.lastReinstallAt != docReinstallAt) {
+                    partner = partner.copy(lastReinstallAt = docReinstallAt)
                 }
                 val now = System.currentTimeMillis()
                 if (!doc.metadata.isFromCache) {

@@ -1104,9 +1104,8 @@ class ChatViewModel(
         isSendingGoodMorning = true
         viewModelScope.launch {
             try {
-                val nameSuffix = if (partnerName.isNotBlank() && partnerName != "Partner" && partnerName != "love") " $partnerName" else ", my love"
                 chatRepository.sendMessage(
-                    text = "Good morning$nameSuffix \u2600\uFE0F\uD83D\uDC9B Wishing you a beautiful day!",
+                    text = "Good morning! \uD83C\uDF04\u2600\uFE0F\uD83D\uDC9B",
                     effect = EFFECT_GOODMORNING
                 )
             } finally {

@@ -21,6 +21,8 @@ data class ProfileUiState(
     val isScreenshotProtectionEnabled: Boolean = false,
     val isHideNotificationContent: Boolean = true,
     val coupleKey: String = "",
+    val userGender: String = com.example.security.SecurityPreferences.GENDER_MALE,
+    val partnerGender: String = com.example.security.SecurityPreferences.GENDER_FEMALE,
     val isDisguiseModeEnabled: Boolean = true,
     val disguiseStyle: String = com.example.security.SecurityPreferences.DISGUISE_STYLE_NOTES,
     val disguisePasscode: String = "love",
@@ -28,6 +30,7 @@ data class ProfileUiState(
     val isKeywordTriggerEnabled: Boolean = true,
     val plusHoldDurationSec: Int = 5,
     val equalsHoldDurationSec: Int = 2,
+    val isEqualsHoldUnlockEnabled: Boolean = true,
     val isRequirePhoneLockAfterHold: Boolean = false,
     val gallerySize: String = "small",
     val isHapticEnabled: Boolean = true,
@@ -91,6 +94,62 @@ class ProfileViewModel(
 ) : ViewModel() {
 
     val backupState: StateFlow<com.example.backup.BackupState> = googleDriveBackupManager.backupState
+
+    // --- Clean reinstall (resets the per-app usage counters Android keeps) ---
+    sealed class ReinstallUi {
+        object Idle : ReinstallUi()
+        object Preparing : ReinstallUi()
+        data class Downloading(val progress: Float) : ReinstallUi()
+        data class Error(val message: String) : ReinstallUi()
+    }
+
+    private val _reinstallState = kotlinx.coroutines.flow.MutableStateFlow<ReinstallUi>(ReinstallUi.Idle)
+    val reinstallState: StateFlow<ReinstallUi> = _reinstallState
+
+    val reinstallSchedule: StateFlow<Int> = securityPreferences.reinstallScheduleFlow
+    val lastReinstallAt: StateFlow<Long> = securityPreferences.lastReinstallAtFlow
+
+    fun setReinstallSchedule(mode: Int) {
+        securityPreferences.setReinstallSchedule(mode)
+    }
+
+    /** The couple key and partner email the user will re-enter after the reinstall. */
+    fun getLoginDetails(): Pair<String, String> =
+        securityPreferences.getCoupleSecretKey() to securityPreferences.getApprovedPartnerEmail()
+
+    /**
+     * Downloads the latest APK into Downloads, then opens the uninstall dialog. After the user
+     * reinstalls from Downloads and signs in, the app records it and clears the leftover installer.
+     */
+    fun startReinstall(context: android.content.Context) {
+        val state = _reinstallState.value
+        if (state is ReinstallUi.Preparing || state is ReinstallUi.Downloading) return
+        _reinstallState.value = ReinstallUi.Preparing
+        viewModelScope.launch {
+            val info = com.example.update.ReinstallHelper.fetchLatestApk()
+            if (info == null) {
+                _reinstallState.value = ReinstallUi.Error("Couldn't reach the update server. Check your connection.")
+                return@launch
+            }
+            _reinstallState.value = ReinstallUi.Downloading(0f)
+            val ok = com.example.update.ReinstallHelper.downloadToDownloads(context, info) { p ->
+                _reinstallState.value = ReinstallUi.Downloading(p)
+            }
+            if (!ok) {
+                _reinstallState.value = ReinstallUi.Error("Couldn't save the installer to Downloads.")
+                return@launch
+            }
+            // Leaving for the uninstall dialog isn't the user leaving the app
+            securityPreferences.ignoreNextPause = true
+            securityPreferences.isExternalPickerActive = true
+            _reinstallState.value = ReinstallUi.Idle
+            com.example.update.ReinstallHelper.launchUninstall(context)
+        }
+    }
+
+    fun clearReinstallError() {
+        if (_reinstallState.value is ReinstallUi.Error) _reinstallState.value = ReinstallUi.Idle
+    }
 
     fun backupNow(onResult: (Boolean, String) -> Unit = { _, _ -> }) {
         viewModelScope.launch {
@@ -158,6 +217,8 @@ class ProfileViewModel(
             isScreenshotProtectionEnabled = securityPreferences.isScreenshotProtectionEnabled(),
             isHideNotificationContent = securityPreferences.isHideNotificationContent(),
             coupleKey = securityPreferences.getCoupleSecretKey(),
+            userGender = securityPreferences.getUserGender(),
+            partnerGender = securityPreferences.getPartnerGender(),
             isDisguiseModeEnabled = securityPreferences.isDisguiseModeEnabled(),
             disguiseStyle = securityPreferences.getDisguiseStyle(),
             disguisePasscode = securityPreferences.getDisguisePasscode(),
@@ -165,6 +226,7 @@ class ProfileViewModel(
             isKeywordTriggerEnabled = securityPreferences.isKeywordTriggerEnabled(),
             plusHoldDurationSec = securityPreferences.getPlusIconHoldDuration(),
             equalsHoldDurationSec = securityPreferences.getEqualsHoldDuration(),
+            isEqualsHoldUnlockEnabled = securityPreferences.isEqualsHoldUnlockEnabled(),
             isRequirePhoneLockAfterHold = securityPreferences.isRequirePhoneLockAfterHold(),
             gallerySize = securityPreferences.getImageGallerySize(),
             isHapticEnabled = securityPreferences.isHapticFeedbackEnabled(),
@@ -205,6 +267,7 @@ class ProfileViewModel(
                 isKeywordTriggerEnabled = securityPreferences.isKeywordTriggerEnabled(),
                 plusHoldDurationSec = securityPreferences.getPlusIconHoldDuration(),
                 equalsHoldDurationSec = securityPreferences.getEqualsHoldDuration(),
+                isEqualsHoldUnlockEnabled = securityPreferences.isEqualsHoldUnlockEnabled(),
                 isRequirePhoneLockAfterHold = securityPreferences.isRequirePhoneLockAfterHold(),
                 gallerySize = securityPreferences.getImageGallerySize(),
                 isHapticEnabled = securityPreferences.isHapticFeedbackEnabled(),
@@ -586,6 +649,11 @@ class ProfileViewModel(
         _uiState.update { it.copy(equalsHoldDurationSec = seconds) }
     }
 
+    fun setEqualsHoldUnlockEnabled(enabled: Boolean) {
+        securityPreferences.setEqualsHoldUnlockEnabled(enabled)
+        _uiState.update { it.copy(isEqualsHoldUnlockEnabled = enabled) }
+    }
+
     fun setRequirePhoneLockAfterHold(enabled: Boolean) {
         securityPreferences.setRequirePhoneLockAfterHold(enabled)
         _uiState.update { it.copy(isRequirePhoneLockAfterHold = enabled) }
@@ -668,6 +736,16 @@ class ProfileViewModel(
             securityPreferences.setCoupleSecretKey(cleanCode)
             _uiState.update { it.copy(coupleKey = cleanCode) }
         }
+    }
+
+    fun setUserGender(gender: String) {
+        securityPreferences.setUserGender(gender)
+        _uiState.update { it.copy(userGender = gender, partnerGender = securityPreferences.getPartnerGender()) }
+    }
+
+    fun setPartnerGender(gender: String) {
+        securityPreferences.setPartnerGender(gender)
+        _uiState.update { it.copy(partnerGender = gender) }
     }
 
     fun logout() {

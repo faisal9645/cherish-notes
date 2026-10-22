@@ -41,7 +41,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
-class MainActivity : FragmentActivity() {
+open class MainActivity : FragmentActivity() {
 
     private val app: CherishApplication
         get() = application as CherishApplication
@@ -67,6 +67,14 @@ class MainActivity : FragmentActivity() {
     private var privacyCoverColor = android.graphics.Color.WHITE
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        val isCalc = try {
+            val fromCalcIcon = intent?.component?.className?.endsWith("CalculatorAlias") == true
+            fromCalcIcon || (app.securityPreferences.isDisguiseModeEnabled() &&
+                app.securityPreferences.getDisguiseStyle() == com.example.security.SecurityPreferences.DISGUISE_STYLE_CALCULATOR)
+        } catch (_: Exception) { false }
+        if (isCalc) {
+            setTheme(R.style.Theme_MyApplication_Calculator)
+        }
         super.onCreate(savedInstanceState)
         try {
             ContextCompat.registerReceiver(
@@ -372,6 +380,13 @@ class MainActivity : FragmentActivity() {
             lifecycleScope.launch {
                 app.authRepository.updateBatteryStatus(info.level, info.isCharging)
                 app.authRepository.updateNotificationStatus()
+                // Tell the partner about a clean reinstall once we're signed in again (prefs recorded
+                // it on the fresh start; the profile may not have it yet)
+                val localReinstall = app.securityPreferences.getLastReinstallAt()
+                val synced = app.authRepository.currentUserState.value?.lastReinstallAt ?: 0L
+                if (localReinstall > 0L && localReinstall > synced) {
+                    app.authRepository.updateReinstallStatus(localReinstall)
+                }
             }
             // Morning unlock: resets "Asleep 🌙" status to active when partner or user opens phone in morning
             val currentStatus = app.authRepository.currentUserState.value?.statusMessage

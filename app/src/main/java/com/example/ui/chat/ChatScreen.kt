@@ -860,13 +860,15 @@ fun ChatScreen(
     val partnerKissStamp by viewModel.partnerKiss.collectAsState()
     val kissesAllowed = uiState.chatExperienceMode != com.example.ui.chat.ChatExperienceMode.PRIVATE &&
         !uiState.isStealthCurtainActive
+    val isMyMale = remember(uiState) { com.example.security.SecurityPreferences.getInstance(context).getUserGender() == com.example.security.SecurityPreferences.GENDER_MALE }
+    val isPartnerMale = remember(uiState) { com.example.security.SecurityPreferences.getInstance(context).getPartnerGender() == com.example.security.SecurityPreferences.GENDER_MALE }
     LaunchedEffect(partnerKissStamp?.id, isChatInView, kissesAllowed) {
         val kiss = partnerKissStamp ?: return@LaunchedEffect
         if (!isChatInView || !kissesAllowed || isKissSeen(context, kiss.id)) return@LaunchedEffect
         if (System.currentTimeMillis() - kiss.atMs > KISS_WAITS_MS) return@LaunchedEffect
         markKissSeen(context, kiss.id)
         delay(250)
-        kissBlooms += KissBloom(kiss.id, kiss.x, kiss.y, fromMe = false)
+        kissBlooms += KissBloom(kiss.id, kiss.x, kiss.y, fromMe = false, isMale = isPartnerMale)
         context.vibrateKiss()
     }
     // Partner's live kiss (lips held on the chat or on their kiss pad)
@@ -890,7 +892,7 @@ fun ChatScreen(
                 val at = root.localPositionOf(list, local)
                 val x = (at.x / root.size.width).coerceIn(0f, 1f)
                 val y = (at.y / root.size.height).coerceIn(0f, 1f)
-                kissBlooms += KissBloom(java.util.UUID.randomUUID().toString(), x, y, fromMe = true)
+                kissBlooms += KissBloom(java.util.UUID.randomUUID().toString(), x, y, fromMe = true, isMale = isMyMale)
                 context.vibrateKiss()
                 viewModel.sendKiss(x, y)
             }
@@ -1954,14 +1956,29 @@ fun ChatScreen(
 
                 // The typing bubble sits under the list, so as it grows the newest messages move up
                 Column(modifier = Modifier.fillMaxSize()) {
-                // Swiping down on the chat list while keyboard is open dismisses the keyboard cleanly
+                // Swiping down on chat list closes keyboard cleanly; swiping up opens keyboard
                 val dismissKeyboardOnSwipeConnection = remember(isImeVisible) {
                     object : NestedScrollConnection {
                         override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
-                            if (source == NestedScrollSource.Drag && isImeVisible) {
-                                if (available.y > 18f && listState.firstVisibleItemIndex <= 1) {
+                            if (source == NestedScrollSource.Drag) {
+                                if (isImeVisible && available.y > 12f) {
                                     keyboardController?.hide()
+                                } else if (!isImeVisible && available.y < -15f && listState.firstVisibleItemIndex <= 1) {
+                                    try {
+                                        composerFocusRequester.requestFocus()
+                                        keyboardController?.show()
+                                    } catch (_: Exception) {}
                                 }
+                            }
+                            return Offset.Zero
+                        }
+
+                        override fun onPostScroll(consumed: Offset, unconsumed: Offset, source: NestedScrollSource): Offset {
+                            if (source == NestedScrollSource.Drag && !isImeVisible && unconsumed.y < -8f) {
+                                try {
+                                    composerFocusRequester.requestFocus()
+                                    keyboardController?.show()
+                                } catch (_: Exception) {}
                             }
                             return Offset.Zero
                         }
@@ -2845,7 +2862,9 @@ fun ChatScreen(
             partnerName = partnerName,
             partnerTouch = partnerKissTouch,
             onTouch = { x, y -> viewModel.setKissTouch(x, y) },
-            onDismiss = { showKissPad = false }
+            onDismiss = { showKissPad = false },
+            userIsMale = isMyMale,
+            partnerIsMale = isPartnerMale
         )
     }
 
@@ -3291,7 +3310,7 @@ fun ChatScreen(
                         // Romantic Kiss action inside profile view
                         Surface(
                             shape = RoundedCornerShape(20.dp),
-                            color = Color(0xFFE0475F).copy(alpha = 0.88f),
+                            color = if (isMyMale) Color(0xFFC76270).copy(alpha = 0.88f) else Color(0xFFE0475F).copy(alpha = 0.88f),
                             border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.45f)),
                             modifier = Modifier
                                 .padding(top = 14.dp)
@@ -3299,14 +3318,14 @@ fun ChatScreen(
                                 .springClickable {
                                     context.vibrateKiss()
                                     viewModel.sendKiss(0.5f, 0.5f)
-                                    kissBlooms += KissBloom(java.util.UUID.randomUUID().toString(), 0.5f, 0.5f, fromMe = true)
+                                    kissBlooms += KissBloom(java.util.UUID.randomUUID().toString(), 0.5f, 0.5f, fromMe = true, isMale = isMyMale)
                                 }
                         ) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
                                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
                             ) {
-                                Text("💋", fontSize = 16.sp)
+                                Text(if (isMyMale) "👄" else "💋", fontSize = 16.sp)
                                 Spacer(Modifier.width(8.dp))
                                 Text(
                                     text = "Kiss ${partnerName.trim().substringBefore(' ')}",
@@ -3336,10 +3355,10 @@ fun ChatScreen(
                                 verticalAlignment = Alignment.CenterVertically,
                                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
                             ) {
-                                Text("👄", fontSize = 16.sp)
+                                Text(if (isPartnerMale) "👄" else "💋", fontSize = 16.sp)
                                 Spacer(Modifier.width(8.dp))
                                 Text(
-                                    text = "Kiss Screen 💋",
+                                    text = "Kiss Screen ${if (isPartnerMale) "👄" else "💋"}",
                                     color = Color.White,
                                     fontSize = 13.5.sp,
                                     fontWeight = FontWeight.Bold

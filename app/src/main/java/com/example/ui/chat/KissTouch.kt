@@ -154,60 +154,130 @@ internal const val KISS_WAITS_MS = 30 * 60 * 1000L
 
 // ---- Drawn ----------------------------------------------------------------------------------
 
-private val LipRose = Color(0xFFE0475F)
-private val LipBlush = Color(0xFFF27A8F)
-private val LipLine = Color(0xFFB8304A)
+private val LipFemaleRose = Color(0xFFE0475F)
+private val LipFemaleBlush = Color(0xFFF27A8F)
+private val LipFemaleLine = Color(0xFFB8304A)
 
-/** A lip print [width] wide at [center], with a soft blush around it. */
-private fun DrawScope.drawLips(path: Path, center: Offset, width: Float, alpha: Float) {
+private val LipMaleBase = Color(0xFFC76270)
+private val LipMaleBlush = Color(0xFFDA7C8A)
+private val LipMaleLine = Color(0xFF8F3946)
+
+/**
+ * A lip print [width] wide at [center].
+ * Differentiates male vs female lips:
+ * - Female: fuller curves, defined Cupid's bow, glossy lipstick shine, rich crimson/ruby tones.
+ * - Male: broader natural masculine profile, relaxed subtle bow, earthy warm terracotta/rose tones, soft matte finish.
+ */
+private fun DrawScope.drawLips(path: Path, center: Offset, width: Float, alpha: Float, isMale: Boolean = false) {
     if (alpha <= 0f || width <= 0f) return
-    val a = width / 2f
-    val h = width * 0.6f
     val cx = center.x
     val cy = center.y
-    drawCircle(
-        Brush.radialGradient(listOf(LipBlush.copy(alpha = 0.32f * alpha), LipBlush.copy(alpha = 0f)), center = center, radius = width * 0.9f),
-        radius = width * 0.9f,
-        center = center
-    )
-    val brush = Brush.verticalGradient(listOf(LipRose, LipBlush), startY = cy - h * 0.5f, endY = cy + h * 0.56f)
-    // Upper lip, with its bow
-    path.reset()
-    path.moveTo(cx - a, cy)
-    path.cubicTo(cx - a * 0.75f, cy - h * 0.18f, cx - a * 0.5f, cy - h * 0.52f, cx - a * 0.22f, cy - h * 0.46f)
-    path.cubicTo(cx - a * 0.1f, cy - h * 0.43f, cx - a * 0.04f, cy - h * 0.34f, cx, cy - h * 0.33f)
-    path.cubicTo(cx + a * 0.04f, cy - h * 0.34f, cx + a * 0.1f, cy - h * 0.43f, cx + a * 0.22f, cy - h * 0.46f)
-    path.cubicTo(cx + a * 0.5f, cy - h * 0.52f, cx + a * 0.75f, cy - h * 0.18f, cx + a, cy)
-    path.cubicTo(cx + a * 0.55f, cy + h * 0.06f, cx + a * 0.2f, cy - h * 0.02f, cx, cy + h * 0.02f)
-    path.cubicTo(cx - a * 0.2f, cy - h * 0.02f, cx - a * 0.55f, cy + h * 0.06f, cx - a, cy)
-    path.close()
-    drawPath(path, brush, alpha = 0.62f * alpha)
-    // Lower lip, fuller
-    path.reset()
-    path.moveTo(cx - a, cy)
-    path.cubicTo(cx - a * 0.55f, cy + h * 0.1f, cx - a * 0.2f, cy + h * 0.06f, cx, cy + h * 0.08f)
-    path.cubicTo(cx + a * 0.2f, cy + h * 0.06f, cx + a * 0.55f, cy + h * 0.1f, cx + a, cy)
-    path.cubicTo(cx + a * 0.7f, cy + h * 0.42f, cx + a * 0.35f, cy + h * 0.56f, cx, cy + h * 0.56f)
-    path.cubicTo(cx - a * 0.35f, cy + h * 0.56f, cx - a * 0.7f, cy + h * 0.42f, cx - a, cy)
-    path.close()
-    drawPath(path, brush, alpha = 0.58f * alpha)
-    // Where they part, and a soft shine on the lower lip
-    path.reset()
-    path.moveTo(cx - a * 0.92f, cy + h * 0.01f)
-    path.cubicTo(cx - a * 0.5f, cy + h * 0.08f, cx - a * 0.2f, cy + h * 0.03f, cx, cy + h * 0.05f)
-    path.cubicTo(cx + a * 0.2f, cy + h * 0.03f, cx + a * 0.5f, cy + h * 0.08f, cx + a * 0.92f, cy + h * 0.01f)
-    drawPath(path, LipLine, alpha = 0.45f * alpha, style = Stroke(width = width * 0.025f))
-    drawOval(
-        Color.White.copy(alpha = 0.22f * alpha),
-        topLeft = Offset(cx - a * 0.28f, cy + h * 0.2f),
-        size = androidx.compose.ui.geometry.Size(a * 0.56f, h * 0.12f)
-    )
+
+    if (isMale) {
+        val a = width * 0.54f
+        val h = width * 0.50f
+        drawCircle(
+            Brush.radialGradient(
+                listOf(LipMaleBlush.copy(alpha = 0.22f * alpha), LipMaleBlush.copy(alpha = 0f)),
+                center = center,
+                radius = width * 0.85f
+            ),
+            radius = width * 0.85f,
+            center = center
+        )
+        val brush = Brush.verticalGradient(
+            listOf(LipMaleBase, LipMaleBlush),
+            startY = cy - h * 0.45f,
+            endY = cy + h * 0.52f
+        )
+        // Upper lip: flatter, broader, relaxed Cupid's bow
+        path.reset()
+        path.moveTo(cx - a, cy)
+        path.cubicTo(cx - a * 0.75f, cy - h * 0.12f, cx - a * 0.5f, cy - h * 0.35f, cx - a * 0.22f, cy - h * 0.28f)
+        path.cubicTo(cx - a * 0.1f, cy - h * 0.25f, cx - a * 0.04f, cy - h * 0.18f, cx, cy - h * 0.17f)
+        path.cubicTo(cx + a * 0.04f, cy - h * 0.18f, cx + a * 0.1f, cy - h * 0.25f, cx + a * 0.22f, cy - h * 0.28f)
+        path.cubicTo(cx + a * 0.5f, cy - h * 0.35f, cx + a * 0.75f, cy - h * 0.12f, cx + a, cy)
+        path.cubicTo(cx + a * 0.55f, cy + h * 0.04f, cx + a * 0.2f, cy - h * 0.01f, cx, cy + h * 0.01f)
+        path.cubicTo(cx - a * 0.2f, cy - h * 0.01f, cx - a * 0.55f, cy + h * 0.04f, cx - a, cy)
+        path.close()
+        drawPath(path, brush, alpha = 0.65f * alpha)
+
+        // Lower lip: firmer, broader natural masculine span
+        path.reset()
+        path.moveTo(cx - a, cy)
+        path.cubicTo(cx - a * 0.55f, cy + h * 0.06f, cx - a * 0.2f, cy + h * 0.04f, cx, cy + h * 0.05f)
+        path.cubicTo(cx + a * 0.2f, cy + h * 0.04f, cx + a * 0.55f, cy + h * 0.06f, cx + a, cy)
+        path.cubicTo(cx + a * 0.72f, cy + h * 0.36f, cx + a * 0.38f, cy + h * 0.48f, cx, cy + h * 0.48f)
+        path.cubicTo(cx - a * 0.38f, cy + h * 0.48f, cx - a * 0.72f, cy + h * 0.36f, cx - a, cy)
+        path.close()
+        drawPath(path, brush, alpha = 0.60f * alpha)
+
+        // Parting line: defined natural seam
+        path.reset()
+        path.moveTo(cx - a * 0.94f, cy + h * 0.01f)
+        path.cubicTo(cx - a * 0.5f, cy + h * 0.05f, cx - a * 0.2f, cy + h * 0.02f, cx, cy + h * 0.03f)
+        path.cubicTo(cx + a * 0.2f, cy + h * 0.02f, cx + a * 0.5f, cy + h * 0.05f, cx + a * 0.94f, cy + h * 0.01f)
+        drawPath(path, LipMaleLine, alpha = 0.52f * alpha, style = Stroke(width = width * 0.028f))
+
+        // Natural matte texture (subtle soft glow instead of glossy lipstick shine)
+        drawOval(
+            LipMaleBlush.copy(alpha = 0.18f * alpha),
+            topLeft = Offset(cx - a * 0.22f, cy + h * 0.16f),
+            size = androidx.compose.ui.geometry.Size(a * 0.44f, h * 0.10f)
+        )
+    } else {
+        val a = width / 2f
+        val h = width * 0.6f
+        drawCircle(
+            Brush.radialGradient(listOf(LipFemaleBlush.copy(alpha = 0.32f * alpha), LipFemaleBlush.copy(alpha = 0f)), center = center, radius = width * 0.9f),
+            radius = width * 0.9f,
+            center = center
+        )
+        val brush = Brush.verticalGradient(listOf(LipFemaleRose, LipFemaleBlush), startY = cy - h * 0.5f, endY = cy + h * 0.56f)
+        // Upper lip, with its pronounced bow
+        path.reset()
+        path.moveTo(cx - a, cy)
+        path.cubicTo(cx - a * 0.75f, cy - h * 0.18f, cx - a * 0.5f, cy - h * 0.52f, cx - a * 0.22f, cy - h * 0.46f)
+        path.cubicTo(cx - a * 0.1f, cy - h * 0.43f, cx - a * 0.04f, cy - h * 0.34f, cx, cy - h * 0.33f)
+        path.cubicTo(cx + a * 0.04f, cy - h * 0.34f, cx + a * 0.1f, cy - h * 0.43f, cx + a * 0.22f, cy - h * 0.46f)
+        path.cubicTo(cx + a * 0.5f, cy - h * 0.52f, cx + a * 0.75f, cy - h * 0.18f, cx + a, cy)
+        path.cubicTo(cx + a * 0.55f, cy + h * 0.06f, cx + a * 0.2f, cy - h * 0.02f, cx, cy + h * 0.02f)
+        path.cubicTo(cx - a * 0.2f, cy - h * 0.02f, cx - a * 0.55f, cy + h * 0.06f, cx - a, cy)
+        path.close()
+        drawPath(path, brush, alpha = 0.62f * alpha)
+        // Lower lip, voluptuous & fuller
+        path.reset()
+        path.moveTo(cx - a, cy)
+        path.cubicTo(cx - a * 0.55f, cy + h * 0.1f, cx - a * 0.2f, cy + h * 0.06f, cx, cy + h * 0.08f)
+        path.cubicTo(cx + a * 0.2f, cy + h * 0.06f, cx + a * 0.55f, cy + h * 0.1f, cx + a, cy)
+        path.cubicTo(cx + a * 0.7f, cy + h * 0.42f, cx + a * 0.35f, cy + h * 0.56f, cx, cy + h * 0.56f)
+        path.cubicTo(cx - a * 0.35f, cy + h * 0.56f, cx - a * 0.7f, cy + h * 0.42f, cx - a, cy)
+        path.close()
+        drawPath(path, brush, alpha = 0.58f * alpha)
+        // Where they part, and a glossy shine on the lower lip
+        path.reset()
+        path.moveTo(cx - a * 0.92f, cy + h * 0.01f)
+        path.cubicTo(cx - a * 0.5f, cy + h * 0.08f, cx - a * 0.2f, cy + h * 0.03f, cx, cy + h * 0.05f)
+        path.cubicTo(cx + a * 0.2f, cy + h * 0.03f, cx + a * 0.5f, cy + h * 0.08f, cx + a * 0.92f, cy + h * 0.01f)
+        drawPath(path, LipFemaleLine, alpha = 0.45f * alpha, style = Stroke(width = width * 0.025f))
+        drawOval(
+            Color.White.copy(alpha = 0.24f * alpha),
+            topLeft = Offset(cx - a * 0.28f, cy + h * 0.2f),
+            size = androidx.compose.ui.geometry.Size(a * 0.56f, h * 0.12f)
+        )
+    }
 }
 
 // ---- Stamped on the chat --------------------------------------------------------------------
 
-/** A kiss blooming on the chat: where (parts of the screen), and whose. */
-internal class KissBloom(val id: String, val x: Float, val y: Float, val fromMe: Boolean) {
+/** A kiss blooming on the chat: where (parts of the screen), whose, and gender style. */
+internal class KissBloom(
+    val id: String,
+    val x: Float,
+    val y: Float,
+    val fromMe: Boolean,
+    val isMale: Boolean = false
+) {
     // Each print sits at its own slight angle
     val tilt = Random.nextFloat() * 24f - 12f
 }
@@ -241,13 +311,13 @@ internal fun KissStampLayer(blooms: List<KissBloom>, partnerName: String, onDone
                         val grow = if (t < 0.18f) 0.55f + 0.55f * FastOutSlowInEasing.transform(t / 0.18f) else 1.1f - 0.1f * ((t - 0.18f) / 0.82f).coerceAtMost(1f)
                         val alpha = if (t < 0.6f) (t / 0.08f).coerceAtMost(1f) else 1f - (t - 0.6f) / 0.4f
                         rotate(bloom.tilt, pivot = center) {
-                            drawLips(path, center, this.size.width * 0.62f * grow, alpha.coerceIn(0f, 1f))
+                            drawLips(path, center, this.size.width * 0.62f * grow, alpha.coerceIn(0f, 1f), isMale = bloom.isMale)
                         }
                     }
                     if (!bloom.fromMe) {
                         Text(
                             text = "a kiss from ${partnerName.substringBefore(' ')}",
-                            color = LipRose,
+                            color = if (bloom.isMale) LipMaleBase else LipFemaleRose,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.SemiBold,
                             textAlign = TextAlign.Center,
@@ -589,7 +659,9 @@ internal fun KissPadDialog(
     partnerName: String,
     partnerTouch: KissTouch?,
     onTouch: (x: Float?, y: Float?) -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    userIsMale: Boolean = false,
+    partnerIsMale: Boolean = true
 ) {
     val context = LocalContext.current
     val name = partnerName.substringBefore(' ').ifBlank { "Your love" }
@@ -674,17 +746,17 @@ internal fun KissPadDialog(
                     // A glow round the two kisses
                     val between = (mine + theirs) / 2f
                     drawCircle(
-                        Brush.radialGradient(listOf(LipBlush.copy(alpha = 0.45f * glow), Color.Transparent), center = between, radius = size.width * 0.75f),
+                        Brush.radialGradient(listOf(LipFemaleBlush.copy(alpha = 0.45f * glow), Color.Transparent), center = between, radius = size.width * 0.75f),
                         radius = size.width * 0.75f,
                         center = between
                     )
                 }
                 val lips = size.width * 0.42f
-                if (theirs != null) drawLips(path, theirs, lips * (0.9f + 0.1f * glow), 0.85f)
-                if (mine != null) drawLips(path, mine, lips * (0.9f + 0.1f * glow), 1f)
+                if (theirs != null) drawLips(path, theirs, lips * (0.9f + 0.1f * glow), 0.85f, isMale = partnerIsMale)
+                if (mine != null) drawLips(path, mine, lips * (0.9f + 0.1f * glow), 1f, isMale = userIsMale)
                 if (mine == null && theirs == null) {
-                    // Where to press: a faint print
-                    drawLips(path, middle, lips, 0.22f + 0.1f * glow)
+                    // Where to press: a faint print of partner's lips
+                    drawLips(path, middle, lips, 0.22f + 0.1f * glow, isMale = partnerIsMale)
                 }
             }
             IconButton(
@@ -709,13 +781,15 @@ internal fun KissPadDialog(
                     .navigationBarsPadding()
                     .padding(horizontal = 28.dp, vertical = 28.dp)
             ) {
+                val partnerEmoji = if (partnerIsMale) "👄" else "💋"
+                val userEmoji = if (userIsMale) "👄" else "💋"
                 Text(text = "Kiss", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
                 Text(
                     text = when {
-                        connected -> "You're kissing $name 💋"
-                        partnerLive -> "$name is kissing you… kiss back"
-                        myTouch != null -> "Kissing $name… waiting for a kiss back"
-                        else -> "Press your lips to the screen"
+                        connected -> "You're kissing $name $partnerEmoji$userEmoji"
+                        partnerLive -> "$name is kissing you… kiss back $partnerEmoji"
+                        myTouch != null -> "Kissing $name… waiting for a kiss back $userEmoji"
+                        else -> "Press your lips to the screen $userEmoji"
                     },
                     color = Color(0xFFF5C6CF),
                     fontSize = 15.sp,

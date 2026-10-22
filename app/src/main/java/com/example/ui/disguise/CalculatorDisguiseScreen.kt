@@ -58,10 +58,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.Backspace
+import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.rounded.ArrowDownward
 import androidx.compose.material.icons.rounded.ArrowDropDown
 import androidx.compose.material.icons.rounded.ArrowUpward
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -89,6 +91,7 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -399,8 +402,12 @@ fun CalculatorDisguiseScreen(
                 ctx = ctx.baseContext
             }
             val act = (ctx as? Activity) ?: activity
-            act?.moveTaskToBack(true)
-            act?.finishAffinity() ?: act?.finish()
+            if (act != null) {
+                val moved = act.moveTaskToBack(true)
+                if (!moved) {
+                    act.finish()
+                }
+            }
         }
     }
 
@@ -1193,6 +1200,7 @@ fun CalculatorDisguiseScreen(
                                 textColor = operatorTextColor,
                                 onClick = { onOperator("+") }
                             )
+                            val isEqualsHoldUnlockEnabled = securityPreferences.isEqualsHoldUnlockEnabled()
                             val equalsHoldSec = securityPreferences.getEqualsHoldDuration()
                             SamsungRoundKey(
                                 text = "=",
@@ -1201,9 +1209,11 @@ fun CalculatorDisguiseScreen(
                                 modifier = Modifier.onGloballyPositioned { coordinates ->
                                     equalsCenter = coordinates.boundsInRoot().center
                                 },
-                                customHoldDurationMs = equalsHoldSec * 1000L,
+                                customHoldDurationMs = if (isEqualsHoldUnlockEnabled) equalsHoldSec * 1000L else null,
                                 onClick = { onEquals() },
-                                onLongClick = { triggerSecretUnlock(equalsCenter) }
+                                onLongClick = if (isEqualsHoldUnlockEnabled) {
+                                    { triggerSecretUnlock(equalsCenter) }
+                                } else null
                             )
                         }
                     }
@@ -1304,6 +1314,7 @@ fun CalculatorDisguiseScreen(
                                 modifier = Modifier.weight(1f),
                                 onClick = { onDecimal() }
                             )
+                            val isEqualsHoldUnlockEnabled = securityPreferences.isEqualsHoldUnlockEnabled()
                             val equalsHoldSec = securityPreferences.getEqualsHoldDuration()
                             SamsungRoundKey(
                                 text = "=",
@@ -1314,11 +1325,84 @@ fun CalculatorDisguiseScreen(
                                     .onGloballyPositioned { coordinates ->
                                         equalsCenter = coordinates.boundsInRoot().center
                                     },
-                                customHoldDurationMs = equalsHoldSec * 1000L,
+                                customHoldDurationMs = if (isEqualsHoldUnlockEnabled) equalsHoldSec * 1000L else null,
                                 onClick = { onEquals() },
-                                onLongClick = {
-                                    triggerSecretUnlock(equalsCenter)
-                                }
+                                onLongClick = if (isEqualsHoldUnlockEnabled) {
+                                    { triggerSecretUnlock(equalsCenter) }
+                                } else null
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // Satisfying secret opening transition overlay (matches Notes app unlock loader)
+        if (isUnlockingSecret) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = unlockAnimProgress.value * 0.35f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Surface(
+                        shape = CircleShape,
+                        color = Color.White,
+                        shadowElevation = 14.dp,
+                        modifier = Modifier
+                            .size(72.dp)
+                            .scale(0.82f + (unlockAnimProgress.value * 0.28f))
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(
+                                    Brush.linearGradient(
+                                        listOf(
+                                            Color(0xFFFF5376),
+                                            Color(0xFFFF758C),
+                                            Color(0xFFFF9E7D)
+                                        )
+                                    )
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.LockOpen,
+                                contentDescription = "Cherish Unlocked",
+                                tint = Color.White,
+                                modifier = Modifier.size(34.dp)
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Surface(
+                        shape = RoundedCornerShape(20.dp),
+                        color = if (isDark) Color(0xFF1E1E22).copy(alpha = 0.95f) else Color.White.copy(alpha = 0.95f),
+                        shadowElevation = 6.dp,
+                        modifier = Modifier.graphicsLayer {
+                            alpha = unlockAnimProgress.value
+                        }
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 20.dp, vertical = 9.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(16.dp),
+                                color = Color(0xFFFF5376),
+                                strokeWidth = 2.2.dp
+                            )
+                            Text(
+                                text = "Opening Cherish...",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = if (isDark) Color.White else Color(0xFF1E293B)
                             )
                         }
                     }
@@ -1871,15 +1955,17 @@ private fun SamsungRoundKey(
             icon()
         } else if (text != null) {
             val fontSize = when {
-                text.length > 2 -> (btnW.value * 0.32f).coerceIn(13f, 20f).sp
-                text == "=" || text == "C" || text == "%" -> (btnW.value * 0.44f).coerceIn(19f, 28f).sp
-                else -> (btnW.value * 0.46f).coerceIn(21f, 29f).sp
+                text.length > 2 -> (btnW.value * 0.30f).coerceIn(13f, 18f).sp // for "+/-"
+                text == "( )" -> (btnW.value * 0.32f).coerceIn(16f, 22f).sp // for "( )"
+                text == "=" || text == "C" || text == "%" -> (btnW.value * 0.42f).coerceIn(20f, 28f).sp
+                text in listOf("+", "−", "×", "÷") -> (btnW.value * 0.44f).coerceIn(24f, 32f).sp
+                else -> (btnW.value * 0.42f).coerceIn(23f, 30f).sp
             }
 
             Text(
                 text = text,
                 fontSize = fontSize,
-                fontWeight = FontWeight.Normal,
+                fontWeight = if (text in listOf("=", "+", "−", "×", "÷")) FontWeight.Medium else FontWeight.Normal,
                 color = textColor,
                 fontFamily = FontFamily.SansSerif,
                 maxLines = 1,
