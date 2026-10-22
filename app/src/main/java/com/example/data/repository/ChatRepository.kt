@@ -24,6 +24,7 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
 import java.util.UUID
@@ -74,6 +75,15 @@ class ChatRepository(
     private var previousMessages: List<Message> = emptyList()
     private var localBackupMessages: List<Message> = emptyList()
     private var sortedLocalBackupDescending: List<Message> = emptyList()
+
+    // Older chat shown from the phone's own archive (see ChatArchive), newest first, instead of
+    // reading it from Firestore again. Exhausted: all of the archive's complete stretch is shown,
+    // so anything older comes from Firestore pages
+    private val archive by lazy { com.example.data.local.ChatArchive.get(context) }
+    private var archivedMessages: List<Message> = emptyList()
+    private var archiveExhausted = false
+    private var archiveTodayJob: Job? = null
+    private val archiveRangeLock = kotlinx.coroutines.sync.Mutex()
 
     private val _isQueryExhaustedFlow = MutableStateFlow(false)
     val isQueryExhaustedFlow: StateFlow<Boolean> = _isQueryExhaustedFlow.asStateFlow()
@@ -239,6 +249,8 @@ class ChatRepository(
     }
 
     fun loadMoreMessages() {
+        // Older chat this phone already has comes straight from its archive, with no download
+        if (loadMoreFromArchive()) return
         val hasMoreBackup = sortedLocalBackupDescending.isNotEmpty() && previousMessageLimit < sortedLocalBackupDescending.size
         if (_isQueryExhaustedFlow.value && hasMoreBackup) {
             previousMessageLimit += OLDER_PAGE_SIZE
@@ -250,13 +262,19 @@ class ChatRepository(
     }
 
     /**
-     * Every message sent from [from] (inclusive) until [until] (exclusive), oldest first, read in
-     * pages straight from Firestore (for the monthly recap). Null when it couldn't be read.
+     * Every message sent from [from] (inclusive) until [until] (exclusive), oldest first (for the
+     * monthly recap): from the phone's archive when it holds all of that stretch, else read in pages
+     * from Firestore (and then kept in the archive). Null when it couldn't be read.
      */
     suspend fun loadMessagesBetween(from: Long, until: Long): List<Message>? {
+        val conversationId = currentActiveConversationId ?: getConversationId()
+        val range = withContext(Dispatchers.IO) { archive.completeRange(conversationId) }
+        if (range != null && from >= range.from && until <= range.until) {
+            return withContext(Dispatchers.IO) { archive.between(conversationId, from, until).asReversed() }
+        }
         val fs = firestore ?: return null
         val messagesRef = fs.collection("conversations")
-            .document(currentActiveConversationId ?: getConversationId())
+            .document(conversationId)
             .collection("messages")
         return try {
             val all = mutableListOf<Message>()
@@ -274,6 +292,8 @@ class ChatRepository(
                 if (docs.size < RANGE_PAGE_SIZE) break
                 lastDoc = docs.last()
             }
+            withContext(Dispatchers.IO) { archive.save(conversationId, all) }
+            addCompleteStretch(conversationId, com.example.data.local.ChatArchive.Range(from, until))
             all
         } catch (e: CancellationException) {
             throw e
@@ -306,32 +326,36 @@ class ChatRepository(
             return
         }
         val conversationId = currentActiveConversationId ?: getConversationId()
-        val upperBound = olderPageOldestTimestamps.lastOrNull() ?: getStartOfToday()
+        // Below the older pages already loaded, else below what the archive showed, else today
+        val upperBound = olderPageOldestTimestamps.lastOrNull()
+            ?: archivedMessages.lastOrNull()?.timestamp
+            ?: getStartOfToday()
         val pageIndex = olderPages.size
         val generation = olderPagesGeneration
         olderPages.add(emptyList())
         previousMessageLimit += pageSize
         _isLoadingMoreFlow.value = true
 
-        val registration = fs.collection("conversations")
+        // Read once, not listened to: an older page hardly changes, and a live listener read it all
+        // from the server again every time the chat reconnected (it's kept in the archive instead)
+        fs.collection("conversations")
             .document(conversationId)
             .collection("messages")
             .whereLessThan("timestamp", upperBound)
             .orderBy("timestamp", Query.Direction.DESCENDING)
             .limit(pageSize)
-            .addSnapshotListener { snapshot, error ->
-                if (generation != olderPagesGeneration) return@addSnapshotListener
+            .get()
+            .addOnFailureListener { error ->
+                if (generation != olderPagesGeneration) return@addOnFailureListener
+                Log.w("ChatRepository", "Couldn't read older messages", error)
+                if (pageIndex == olderPages.lastIndex) _isLoadingMoreFlow.value = false
+            }
+            .addOnSuccessListener { snapshot ->
+                if (generation != olderPagesGeneration) return@addOnSuccessListener
                 val isNewestPage = pageIndex == olderPages.lastIndex
-                if (error != null) {
-                    Log.w("ChatRepository", "Listen older messages failed", error)
-                    if (isNewestPage) _isLoadingMoreFlow.value = false
-                    return@addSnapshotListener
-                }
-                if (snapshot == null) return@addSnapshotListener
                 val docs = snapshot.documents
                 if (isNewestPage) {
-                    // Until the next page is requested, the newest page decides where it will start
-                    // and whether history has ended (a first, cache-only answer may still grow)
+                    // The newest page decides where the next one starts and whether history has ended
                     val oldest = docs.lastOrNull()?.getLong("timestamp") ?: upperBound
                     if (olderPageOldestTimestamps.size > pageIndex) {
                         olderPageOldestTimestamps[pageIndex] = oldest
@@ -340,14 +364,22 @@ class ChatRepository(
                     }
                     val moreBackup = sortedLocalBackupDescending.isNotEmpty() && previousMessageLimit < sortedLocalBackupDescending.size
                     _isQueryExhaustedFlow.value = (docs.size < pageSize) && !moreBackup
-                    if (pageIndex == 0) _hasPreviousChatsAvailableFlow.value = docs.isNotEmpty() || sortedLocalBackupDescending.isNotEmpty()
+                    if (pageIndex == 0) {
+                        _hasPreviousChatsAvailableFlow.value = docs.isNotEmpty() ||
+                            sortedLocalBackupDescending.isNotEmpty() || archivedMessages.isNotEmpty()
+                    }
                     _isLoadingMoreFlow.value = false
+                    // From the server: the archive now holds every message down to this page's oldest
+                    if (!snapshot.metadata.isFromCache) {
+                        growArchiveRange(conversationId, upperBound, docs.lastOrNull()?.getLong("timestamp"), reachedStart = docs.size < pageSize)
+                    }
                 }
-                olderPages[pageIndex] = docs.mapNotNull { it.toMessageOrNull() }
+                val pageMessages = docs.mapNotNull { it.toMessageOrNull() }
+                olderPages[pageIndex] = pageMessages
+                // Kept on the phone, so next time this stretch shows without a download
+                if (pageMessages.isNotEmpty()) repoScope.launch { archive.save(conversationId, pageMessages) }
                 previousMessages = olderPages.flatten()
-                // After Recover All many older-page listeners are live and each re-fires here (cache
-                // then server, and on any change). Coalesce the expensive merge+sort so a burst of
-                // page updates emits once, not once per page.
+                // Coalesce the merge+sort, so pages arriving close together emit once
                 scheduleMerge()
                 if (isNewestPage && pendingOlderLoad > 0L) {
                     val more = pendingOlderLoad
@@ -355,7 +387,181 @@ class ChatRepository(
                     loadOlderPage(more)
                 }
             }
-        olderPageListeners.add(registration)
+    }
+
+    /**
+     * The next page of older chat from the phone's archive (from its complete stretch, see
+     * ChatArchive). The first one catches the archive up with the days it hasn't got (only those
+     * are downloaded). False when the archive has nothing more to show: Firestore pages from there.
+     */
+    private fun loadMoreFromArchive(): Boolean {
+        if (archiveExhausted || olderPages.isNotEmpty()) return false
+        if (_isLoadingMoreFlow.value) return true
+        val conversationId = currentActiveConversationId ?: getConversationId()
+        if (conversationId.isBlank()) return false
+        val generation = olderPagesGeneration
+        val startOfToday = getStartOfToday()
+        val top = archivedMessages.lastOrNull()?.timestamp ?: startOfToday
+        val isFirstPage = archivedMessages.isEmpty()
+        _isLoadingMoreFlow.value = true
+        repoScope.launch {
+            if (isFirstPage) catchUpArchive(conversationId, startOfToday)
+            val range = archive.completeRange(conversationId)
+            val usable = range != null && range.until >= startOfToday && top > range.from
+            val page = if (range != null && usable) {
+                archive.before(conversationId, top, ARCHIVE_PAGE_SIZE).filter { it.timestamp >= range.from }
+            } else emptyList()
+            withContext(Dispatchers.Main) {
+                _isLoadingMoreFlow.value = false
+                // Reset meanwhile (a new day, another chat): this page belongs to the old one
+                if (generation != olderPagesGeneration) return@withContext
+                val shown = page.filter { it.id !in deletedMessageIds }
+                if (shown.isNotEmpty()) {
+                    archivedMessages = archivedMessages + shown
+                    _hasPreviousChatsAvailableFlow.value = true
+                    _isQueryExhaustedFlow.value = false
+                    mergeAndEmitMessages()
+                }
+                if (page.size < ARCHIVE_PAGE_SIZE) {
+                    archiveExhausted = true
+                    if (range != null && usable && range.from <= 0L) {
+                        // The archive reaches the chat's very first message: nothing older anywhere
+                        _isQueryExhaustedFlow.value = previousMessageLimit >= sortedLocalBackupDescending.size
+                    } else if (shown.isEmpty()) {
+                        // Nothing from the archive this time: on with Firestore pages straight away
+                        loadMoreMessages()
+                    }
+                }
+            }
+        }
+        return true
+    }
+
+    /**
+     * Brings the archive's complete stretch up to today: only what was sent since it was last
+     * complete is downloaded (a few days' messages, usually). Nothing while it has no stretch yet.
+     */
+    private suspend fun catchUpArchive(conversationId: String, startOfToday: Long) {
+        val range = archive.completeRange(conversationId) ?: return
+        if (range.until >= startOfToday) return
+        val fs = firestore ?: return
+        val messagesRef = fs.collection("conversations").document(conversationId).collection("messages")
+        try {
+            var lastDoc: DocumentSnapshot? = null
+            while (true) {
+                var page = messagesRef
+                    .whereGreaterThanOrEqualTo("timestamp", range.until - ARCHIVE_SYNC_OVERLAP_MS)
+                    .whereLessThan("timestamp", startOfToday)
+                    .orderBy("timestamp", Query.Direction.ASCENDING)
+                    .limit(RANGE_PAGE_SIZE)
+                lastDoc?.let { page = page.startAfter(it) }
+                // From the server: a cache-only answer could be missing messages
+                val docs = page.get(Source.SERVER).await().documents
+                archive.save(conversationId, docs.mapNotNull { it.toMessageOrNull() })
+                if (docs.size < RANGE_PAGE_SIZE) break
+                lastDoc = docs.last()
+            }
+            archiveRangeLock.withLock {
+                // Re-read: an older page may have stretched it further back meanwhile
+                val now = archive.completeRange(conversationId) ?: range
+                archive.setCompleteRange(
+                    conversationId,
+                    com.example.data.local.ChatArchive.Range(minOf(now.from, range.from), startOfToday)
+                )
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w("ChatRepository", "Couldn't catch the chat archive up", e)
+        }
+    }
+
+    /**
+     * An older page came from the server: every message from its oldest one up to [pageTop] is in
+     * the archive now, so its complete stretch reaches back that far (where the two meet).
+     */
+    private fun growArchiveRange(conversationId: String, pageTop: Long, pageBottom: Long?, reachedStart: Boolean) {
+        val from = when {
+            reachedStart -> 0L
+            // Other messages sent at the very same time as the oldest may not have fit in the page
+            pageBottom != null -> pageBottom + 1
+            else -> return
+        }
+        addCompleteStretch(conversationId, com.example.data.local.ChatArchive.Range(from, pageTop))
+    }
+
+    /**
+     * Every message in [stretch] is in the archive now (read whole from the server): joined to its
+     * complete stretch where the two meet; a newer one that doesn't meet it takes its place.
+     */
+    private fun addCompleteStretch(conversationId: String, stretch: com.example.data.local.ChatArchive.Range) {
+        if (conversationId.isBlank() || stretch.until <= stretch.from) return
+        repoScope.launch {
+            archiveRangeLock.withLock {
+                val range = archive.completeRange(conversationId)
+                val joined = when {
+                    range == null -> stretch
+                    stretch.from <= range.until && stretch.until >= range.from ->
+                        com.example.data.local.ChatArchive.Range(minOf(range.from, stretch.from), maxOf(range.until, stretch.until))
+                    stretch.until > range.until -> stretch
+                    else -> range
+                }
+                if (joined != range) archive.setCompleteRange(conversationId, joined)
+            }
+        }
+    }
+
+    /** Today's messages go into the archive too: a moment after they last changed, not on every tick. */
+    private fun archiveTodaySoon(conversationId: String, messages: List<Message>) {
+        if (messages.isEmpty()) return
+        archiveTodayJob?.cancel()
+        archiveTodayJob = repoScope.launch {
+            kotlinx.coroutines.delay(ARCHIVE_TODAY_DELAY_MS)
+            archive.save(conversationId, messages.filter { it.status != MessageStatus.SENDING.name })
+        }
+    }
+
+    /**
+     * "Show in chat" for an older message sent at [sentAt]: all the chat down to it from the archive
+     * in one go, with no download. [onDone] gets false when the archive doesn't reach that far, or
+     * Firestore pages are already showing; then pages load the usual way.
+     */
+    fun showArchivedDownTo(sentAt: Long, onDone: (Boolean) -> Unit) {
+        val conversationId = currentActiveConversationId ?: getConversationId()
+        val startOfToday = getStartOfToday()
+        val top = archivedMessages.lastOrNull()?.timestamp ?: startOfToday
+        if (sentAt >= top) {
+            onDone(true)
+            return
+        }
+        if (conversationId.isBlank() || olderPages.isNotEmpty() || _isLoadingMoreFlow.value) {
+            onDone(false)
+            return
+        }
+        val generation = olderPagesGeneration
+        val isFirstPage = archivedMessages.isEmpty()
+        _isLoadingMoreFlow.value = true
+        repoScope.launch {
+            if (isFirstPage) catchUpArchive(conversationId, startOfToday)
+            val range = archive.completeRange(conversationId)
+            val reaches = range != null && range.until >= startOfToday && sentAt >= range.from
+            val stretch = if (reaches) archive.between(conversationId, sentAt, top) else emptyList()
+            withContext(Dispatchers.Main) {
+                _isLoadingMoreFlow.value = false
+                if (generation != olderPagesGeneration || !reaches) {
+                    onDone(false)
+                    return@withContext
+                }
+                val shown = stretch.filter { it.id !in deletedMessageIds }
+                if (shown.isNotEmpty()) {
+                    archivedMessages = archivedMessages + shown
+                    _hasPreviousChatsAvailableFlow.value = true
+                    _isQueryExhaustedFlow.value = false
+                    mergeAndEmitMessages()
+                }
+                onDone(true)
+            }
+        }
     }
 
     private fun clearOlderPages() {
@@ -369,6 +575,8 @@ class ChatRepository(
         pendingOlderLoad = 0L
         previousMessageLimit = 0L
         previousMessages = emptyList()
+        archivedMessages = emptyList()
+        archiveExhausted = false
     }
 
     /**
@@ -389,8 +597,8 @@ class ChatRepository(
         val messagesRef = fs.collection("conversations").document(convId).collection("messages")
         val job = repoScope.launch {
             // Everything already on the phone shows at once from its cache. From the server only
-            // what's new since the last check is fetched; the whole gallery once a week, to pick up
-            // changes to older items.
+            // what's new since the last check is fetched (the whole gallery only the first time on
+            // this install: re-reading it every week cost thousands of reads)
             try {
                 loadGalleryFrom(messagesRef, Source.CACHE, convId)
             } catch (e: CancellationException) {
@@ -400,17 +608,19 @@ class ChatRepository(
             }
             try {
                 val lastSync = galleryPrefs.getLong("gallery_synced_$convId", 0L)
-                val lastFullSync = galleryPrefs.getLong("gallery_full_synced_$convId", 0L)
                 val syncStartedAt = System.currentTimeMillis()
-                if (lastSync > 0L && syncStartedAt - lastFullSync < GALLERY_FULL_SYNC_INTERVAL_MS) {
+                if (lastSync > 0L) {
+                    val since = lastSync - GALLERY_SYNC_OVERLAP_MS
                     val newer = messagesRef
-                        .whereGreaterThan("timestamp", lastSync - GALLERY_SYNC_OVERLAP_MS)
+                        .whereGreaterThan("timestamp", since)
                         .get(Source.SERVER).await()
                         .documents.mapNotNull { it.toMessageOrNull() }
                     publishGalleryItems(newer)
+                    // Every message since then: into the archive, whose complete stretch reaches that far now
+                    archive.save(convId, newer)
+                    addCompleteStretch(convId, com.example.data.local.ChatArchive.Range(since + 1, syncStartedAt))
                 } else {
                     loadGalleryFrom(messagesRef, Source.SERVER, convId)
-                    galleryPrefs.edit().putLong("gallery_full_synced_$convId", syncStartedAt).apply()
                 }
                 galleryPrefs.edit().putLong("gallery_synced_$convId", syncStartedAt).apply()
             } catch (e: CancellationException) {
@@ -446,10 +656,16 @@ class ChatRepository(
             .flatten()
         publishGalleryItems(targeted)
 
-        // Messages from before the hasLink flag existed: page through the history once per phone
-        // (newest first, publishing as pages arrive) and tag the link messages, so from then on the
-        // query above finds them without a scan
+        // Messages from before the hasLink flag existed: page through the history once (newest first,
+        // publishing as pages arrive) and tag the link messages, so from then on the query above finds
+        // them without a scan. Once one phone has done it, the chat's own document says so, and no
+        // phone reads the whole history for it again (not after a reinstall either)
         if (isLinkBackfillDone(conversationId)) return@coroutineScope
+        if (source == Source.SERVER && linksTaggedForChat(messagesRef)) {
+            markLinkBackfillDone(conversationId)
+            return@coroutineScope
+        }
+        val scanStartedAt = System.currentTimeMillis()
         val untaggedLinkIds = mutableListOf<String>()
         var lastDoc: DocumentSnapshot? = null
         val pending = mutableListOf<Message>()
@@ -467,6 +683,8 @@ class ChatRepository(
             val now = System.currentTimeMillis()
             if (isLastPage || now - lastPublishAt >= GALLERY_PUBLISH_INTERVAL_MS) {
                 publishGalleryItems(pending.toList())
+                // Read from the server anyway: kept in the archive, so Recover All needn't read it again
+                if (source == Source.SERVER) archive.save(conversationId, pending.toList())
                 pending.clear()
                 lastPublishAt = now
             }
@@ -476,7 +694,23 @@ class ChatRepository(
         if (source == Source.SERVER) {
             tagLinkMessages(messagesRef, untaggedLinkIds)
             markLinkBackfillDone(conversationId)
+            // The whole history came by: the archive holds every message up to when this started
+            addCompleteStretch(conversationId, com.example.data.local.ChatArchive.Range(0L, scanStartedAt))
+            try {
+                messagesRef.parent?.set(mapOf("linksTagged" to true), SetOptions.merge())
+            } catch (e: Exception) {
+                Log.w("ChatRepository", "Couldn't note the link tagging on the chat", e)
+            }
         }
+    }
+
+    /** The chat's own document says its link messages were tagged already (one read, not the whole history). */
+    private suspend fun linksTaggedForChat(messagesRef: CollectionReference): Boolean = try {
+        messagesRef.parent?.get(Source.SERVER)?.await()?.getBoolean("linksTagged") == true
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        false
     }
 
     private val galleryPrefs by lazy {
@@ -565,11 +799,13 @@ class ChatRepository(
         // (from what's already on the phone; it's only fetched when it isn't)
         loadAllGalleryMedia()
 
-        // Chat: older history comes back page by page as the user scrolls up
+        // Chat: older history comes back as the user scrolls up: from the phone's archive at once
+        // where it has it (after downloading only the days it's missing), else from Firestore
         _hasPreviousChatsAvailableFlow.value = true
-        if (olderPages.isEmpty()) {
+        if (olderPages.isEmpty() && archivedMessages.isEmpty()) {
             _isQueryExhaustedFlow.value = false
-            loadOlderPage(OLDER_PAGE_SIZE)
+            archiveExhausted = false
+            loadMoreMessages()
         }
         mergeAndEmitMessages()
 
@@ -669,10 +905,21 @@ class ChatRepository(
             if (snapshot != null) {
                 val currentUserId = authRepository.getCurrentUserId()
 
+                // Only the documents that changed are read again (a send, a tick, a reaction): the
+                // rest keep the Message they had, so their rows aren't rebuilt and this stays quick
+                // on the main thread however long today's chat is
+                if (isInitialTodaySnapshot) todayMapped.clear()
+                for (change in snapshot.documentChanges) {
+                    val doc = change.document
+                    val mapped = if (change.type == com.google.firebase.firestore.DocumentChange.Type.REMOVED) null
+                        else doc.toMessageOrNull()
+                    if (mapped == null) todayMapped.remove(doc.id) else todayMapped[doc.id] = mapped
+                }
+
                 if (!isInitialTodaySnapshot) {
                     for (change in snapshot.documentChanges) {
                         if (change.type == com.google.firebase.firestore.DocumentChange.Type.ADDED) {
-                            val msg = change.document.toMessageOrNull() ?: continue
+                            val msg = todayMapped[change.document.id] ?: continue
                             // A call recording isn't a message from the partner: no notification for it
                             if (msg.getTypedType() == MessageType.CALL_RECORDING) continue
                             if (msg.senderId != currentUserId && msg.status != MessageStatus.READ.name) {
@@ -700,7 +947,8 @@ class ChatRepository(
                 isInitialTodaySnapshot = false
 
                 todayMessages = snapshot.documents.mapNotNull { doc ->
-                    val msg = doc.toMessageOrNull() ?: return@mapNotNull null
+                    val msg = todayMapped[doc.id] ?: doc.toMessageOrNull()?.also { todayMapped[doc.id] = it }
+                        ?: return@mapNotNull null
                     if (doc.metadata.hasPendingWrites() && msg.senderId == currentUserId &&
                         msg.status == MessageStatus.SENT.name &&
                         !acknowledgedSentIds.contains(msg.id)
@@ -713,6 +961,7 @@ class ChatRepository(
                 if (!snapshot.metadata.isFromCache) {
                     markArrivedAsDelivered(convRef, todayMessages, currentUserId)
                 }
+                archiveTodaySoon(conversationId, todayMessages)
                 mergeAndEmitMessages()
             }
         }
@@ -730,6 +979,9 @@ class ChatRepository(
                 }
             }
     }
+
+    // Today's messages as last read, by document id (see the today listener)
+    private val todayMapped = HashMap<String, Message>()
 
     // Partner messages this phone already marked delivered, so each one costs a single write
     private val deliveredMarkedIds: MutableSet<String> = ConcurrentHashMap.newKeySet()
@@ -790,13 +1042,15 @@ class ChatRepository(
             null
         } ?: return null
         if (message.id.isBlank()) message.id = id
-        if (message.durationSeconds <= 0) {
+        val kind = message.getTypedType()
+        // Only voice, video and call messages have a length to find
+        if (message.durationSeconds <= 0 && kind != MessageType.TEXT && kind != MessageType.IMAGE) {
             val num = (get("durationSeconds") as? Number)?.toInt()
                 ?: (get("duration") as? Number)?.toInt()
             if (num != null && num > 0) {
                 message.durationSeconds = num
             } else {
-                val parsed = Regex("""\((\d+)\s*s\)""").find(message.text)?.groupValues?.get(1)?.toIntOrNull()
+                val parsed = DURATION_IN_TEXT.find(message.text)?.groupValues?.get(1)?.toIntOrNull()
                 if (parsed != null && parsed > 0) {
                     message.durationSeconds = parsed
                 } else if (message.waveform.isNotEmpty()) {
@@ -835,7 +1089,8 @@ class ChatRepository(
     private fun mergeAndEmitMessages() {
         mergeScheduled = false
         mergeHandler.removeCallbacks(mergeRunnable)
-        val firestoreMessages = previousMessages + todayMessages
+        // Firestore's copies come last, so they win over the archive's
+        val firestoreMessages = archivedMessages + previousMessages + todayMessages
         
         val combinedMessages = if (sortedLocalBackupDescending.isEmpty()) {
             firestoreMessages
@@ -1175,6 +1430,21 @@ class ChatRepository(
         for (id in ids) {
             com.example.util.StorageOptimizer.deleteMessageMediaCache(context, id)
         }
+        // Their kept videos too (kept under their link, see KeptMedia)
+        val deletedMedia = (_messagesFlow.value + archivedMessages + _galleryMediaMessages.value)
+            .filter { it.id in ids }
+            .flatMap { listOfNotNull(it.mediaUrl) + it.mediaUrls }
+            .filter { it.isNotBlank() }
+            .distinct()
+        if (deletedMedia.isNotEmpty()) {
+            repoScope.launch {
+                deletedMedia.forEach { url ->
+                    try {
+                        com.example.util.VideoThumbnailHelper.getVideoCacheFile(context, url).delete()
+                    } catch (_: Exception) {}
+                }
+            }
+        }
 
         // Remove from every in-memory source at once, so the messages leave chat and gallery immediately
         // and can't be merged back from a stale list before Firestore confirms
@@ -1184,6 +1454,8 @@ class ChatRepository(
         previousMessages = previousMessages.filterNot { it.id in ids }
         localBackupMessages = localBackupMessages.filterNot { it.id in ids }
         sortedLocalBackupDescending = sortedLocalBackupDescending.filterNot { it.id in ids }
+        archivedMessages = archivedMessages.filterNot { it.id in ids }
+        repoScope.launch { archive.remove(ids) }
 
         val fs = firestore
         if (fs != null) {
@@ -1450,16 +1722,22 @@ class ChatRepository(
 
     private companion object {
         const val OLDER_PAGE_SIZE = 60L
+        /** Older chat shown from the phone's archive at a time (nothing downloads, so a big page) */
+        const val ARCHIVE_PAGE_SIZE = 300
+        /** Catching the archive up starts a little before where it was complete, for clock or write delays */
+        const val ARCHIVE_SYNC_OVERLAP_MS = 60L * 60 * 1000
+        /** Today's messages are archived this long after they last changed */
+        const val ARCHIVE_TODAY_DELAY_MS = 3_000L
         const val SEARCH_OLDER_TARGET = 500L
         const val GALLERY_SCAN_PAGE_SIZE = 500L
         const val RANGE_PAGE_SIZE = 500L
-        /** The gallery is fully re-read from the server this often; otherwise only new items. */
-        const val GALLERY_FULL_SYNC_INTERVAL_MS = 7L * 24 * 60 * 60 * 1000
         /** New-items check reaches a little before the last one, for clock or write delays. */
         const val GALLERY_SYNC_OVERLAP_MS = 60L * 60 * 1000
         const val GALLERY_PUBLISH_INTERVAL_MS = 300L
         const val FIRESTORE_BATCH_LIMIT = 450
         val LINK_REGEX = Regex("""(https?://\S+)|(www\.\S+)""", RegexOption.IGNORE_CASE)
+        // "Voice message (12s)": a length written into an old message's text
+        private val DURATION_IN_TEXT = Regex("""\((\d+)\s*s\)""")
         val GENERIC_PHOTO_CAPTION = Regex("""Sent (a photo|\d+ photos?)""", RegexOption.IGNORE_CASE)
     }
 }

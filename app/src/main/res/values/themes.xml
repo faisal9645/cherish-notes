@@ -10,7 +10,14 @@
         <item name="android:navigationBarColor">#FFFFFF</item>
         <item name="android:windowLightStatusBar">true</item>
         <item name="android:windowLightNavigationBar">true</item>
-        <!-- Splash Screen with centered high quality sharp note app logo (Notes only) -->
+        <!-- Launch screen of the Calculator (the app's own look): just its background, no logo, so
+             it opens straight into the calculator like Samsung's (Notes: NotesSplash, below) -->
+        <item name="android:windowSplashScreenBackground" tools:targetApi="s">#FFFFFF</item>
+        <item name="android:windowSplashScreenAnimatedIcon" tools:targetApi="s">@drawable/splash_icon_neutral</item>
+    </style>
+
+    <!-- Launch screen while Notes is the decoy: the Notes logo (MainActivity sets it on Android 13+) -->
+    <style name="Theme.MyApplication.NotesSplash" parent="Theme.MyApplication">
         <item name="android:windowSplashScreenBackground" tools:targetApi="s">#FFFFFF</item>
         <item name="android:windowSplashScreenAnimatedIcon" tools:targetApi="s">@drawable/splash_icon</item>
     </style>

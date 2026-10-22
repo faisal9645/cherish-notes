@@ -147,7 +147,11 @@ data class GalleryMediaItem(
     val originalMessage: Message,
     // Small preview for the grid; the viewer opens mediaUrl
     val previewUrl: String = mediaUrl
-)
+) {
+    /** An animated GIF: it keeps its .gif name when it's sent (see MediaRepository.compressAndPrepareImage) */
+    val isGif: Boolean
+        get() = !isVideo && mediaUrl.substringBefore('?').endsWith(".gif", ignoreCase = true)
+}
 
 data class GalleryLinkItem(
     val messageId: String,
@@ -406,7 +410,7 @@ fun SharedGalleryScreen(
     val extractedLinks = remember(allExtractedLinks, galleryFrom) { allExtractedLinks.sentBy(galleryFrom) { it.isFromMe } }
     // How many of each kind there are, so kinds with none aren't offered
     val mediaKindCounts = remember(galleryMediaItems) {
-        IntArray(4).also { counts ->
+        IntArray(MEDIA_KIND_LABELS.size).also { counts ->
             counts[MEDIA_ALL] = galleryMediaItems.size
             galleryMediaItems.forEach { counts[mediaKindOf(it)]++ }
         }
@@ -947,13 +951,31 @@ fun SharedGalleryScreen(
                                         // are a long-press or the photo's viewer away), and a small play mark on videos
                                         val isCompactTile = gridColumnCount >= COMPACT_TILE_COLUMNS
 
-                                        // Small tiles show the ~10 KB thumbnail; two big columns, the full photo
+                                        // Small tiles show the ~10 KB thumbnail; two big columns, the full photo.
+                                        // In the GIFs filter, each GIF plays (like Telegram's GIFs tab)
                                         GalleryTileImage(
                                             item = item,
-                                            full = gridColumnCount <= 2,
+                                            full = gridColumnCount <= 2 || (item.isGif && mediaKind == MEDIA_GIFS),
                                             posterFor = { chatViewModel.videoPoster(it.originalMessage, it.mediaUrl) },
                                             modifier = Modifier.fillMaxSize()
                                         )
+                                        if (item.isGif && !isCompactTile) {
+                                            Surface(
+                                                shape = RoundedCornerShape(6.dp),
+                                                color = Color.Black.copy(alpha = 0.6f),
+                                                modifier = Modifier
+                                                    .align(Alignment.BottomStart)
+                                                    .padding(4.dp)
+                                            ) {
+                                                Text(
+                                                    text = "GIF",
+                                                    color = Color.White,
+                                                    fontSize = 9.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
+                                                )
+                                            }
+                                        }
 
                                         if (isVideoItem) {
 
@@ -1092,7 +1114,7 @@ fun SharedGalleryScreen(
                                 dateAt = { voiceSections.dateAt(it) },
                                 modifier = Modifier
                                     .fillMaxSize()
-                                    .padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 12.dp),
+                                    .padding(start = 16.dp, end = 16.dp, bottom = 12.dp),
                                 verticalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
                                 monthSections(voiceSections, key = { it.id }) { msg ->
@@ -1304,7 +1326,7 @@ fun SharedGalleryScreen(
                                 dateAt = { linkSections.dateAt(it) },
                                 modifier = Modifier
                                     .fillMaxSize()
-                                    .padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 12.dp),
+                                    .padding(start = 16.dp, end = 16.dp, bottom = 12.dp),
                                 verticalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
                                 monthSections(linkSections, key = { "${it.messageId}_${it.url}" }) { item ->
@@ -1639,7 +1661,7 @@ fun SharedGalleryScreen(
                                 dateAt = { starredSections.dateAt(it) },
                                 modifier = Modifier
                                     .fillMaxSize()
-                                    .padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 12.dp),
+                                    .padding(start = 16.dp, end = 16.dp, bottom = 12.dp),
                                 verticalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
                                 monthSections(starredSections, key = { it.id }) { msg ->
@@ -1738,7 +1760,7 @@ fun SharedGalleryScreen(
                                                 }
                                                 val clean = msg.text.trim()
                                                 val isSuppressed = clean.lowercase().let { it.contains("today") && (it.contains("start") || it.contains("satrt") || it.contains("6 am") || it.contains("6am") || it.contains("6:00")) }
-                                                if (clean.isNotBlank() && clean != "Sent a photo" && !isSuppressed) {
+                                                if (clean.isNotBlank() && clean != "Sent a photo" && clean != com.example.ui.chat.GIF_CAPTION && !isSuppressed) {
                                                     Spacer(modifier = Modifier.height(6.dp))
                                                     Text(clean, fontSize = 13.sp)
                                                 }
@@ -1797,7 +1819,7 @@ fun SharedGalleryScreen(
                                 dateAt = { callSections.dateAt(it) },
                                 modifier = Modifier
                                     .fillMaxSize()
-                                    .padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 12.dp),
+                                    .padding(start = 16.dp, end = 16.dp, bottom = 12.dp),
                                 verticalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
                                 monthSections(callSections, key = { it.id }) { msg ->
@@ -1914,19 +1936,6 @@ fun SharedGalleryScreen(
                                                     ),
                                                     modifier = Modifier.fillMaxWidth()
                                                 )
-                                            } else {
-                                                Spacer(modifier = Modifier.height(8.dp))
-                                                CherishTonalButton(
-                                                    onClick = { com.example.call.CallActivity.startOutgoing(context) },
-                                                    shape = RoundedCornerShape(12.dp),
-                                                    colors = ButtonDefaults.filledTonalButtonColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
-                                                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
-                                                    modifier = Modifier.fillMaxWidth().height(36.dp)
-                                                ) {
-                                                    Icon(Icons.Rounded.Phone, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(15.dp))
-                                                    Spacer(modifier = Modifier.width(6.dp))
-                                                    Text("Call Back", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onPrimaryContainer)
-                                                }
                                             }
                                         }
                                     }
@@ -2243,9 +2252,10 @@ private const val MEDIA_ALL = 0
 private const val MEDIA_PHOTOS = 1
 private const val MEDIA_VIDEOS = 2
 private const val MEDIA_VIDEO_NOTES = 3
-private val MEDIA_KIND_LABELS = listOf("All", "Photos", "Videos", "Video notes")
-private val MEDIA_KIND_COUNT_WORDS = listOf("photos & videos", "photos", "videos", "video notes")
-private val MEDIA_KIND_EMPTY_WORDS = listOf("photos or videos", "photos", "videos", "video notes")
+private const val MEDIA_GIFS = 4
+private val MEDIA_KIND_LABELS = listOf("All", "Photos", "Videos", "Video notes", "GIFs")
+private val MEDIA_KIND_COUNT_WORDS = listOf("photos & videos", "photos", "videos", "video notes", "GIFs")
+private val MEDIA_KIND_EMPTY_WORDS = listOf("photos or videos", "photos", "videos", "video notes", "GIFs")
 
 /** Who sent it, for the gallery's filter (every tab). */
 private const val FROM_ANYONE = 0
@@ -2263,6 +2273,7 @@ private fun <T> List<T>.sentBy(from: Int, isMine: (T) -> Boolean): List<T> = whe
 private const val COMPACT_TILE_COLUMNS = 5
 
 private fun mediaKindOf(item: GalleryMediaItem): Int = when {
+    !item.isVideo && item.isGif -> MEDIA_GIFS
     !item.isVideo -> MEDIA_PHOTOS
     item.originalMessage.isCircularVideoNote() -> MEDIA_VIDEO_NOTES
     else -> MEDIA_VIDEOS
@@ -2408,7 +2419,7 @@ private fun GalleryMonthHeader(month: String, count: Int) {
             .fillMaxWidth()
             // Stays readable while it rests over the photos at the top
             .background(MaterialTheme.colorScheme.background.copy(alpha = 0.94f))
-            .padding(start = 4.dp, top = 6.dp, bottom = 4.dp)
+            .padding(start = 4.dp, top = 2.dp, bottom = 4.dp)
     ) {
         Text(
             text = month,

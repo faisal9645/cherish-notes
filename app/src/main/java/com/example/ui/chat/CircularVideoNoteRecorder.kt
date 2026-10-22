@@ -26,6 +26,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Send
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.FlashOff
+import androidx.compose.material.icons.rounded.FlashOn
 import androidx.compose.material.icons.rounded.FlipCameraAndroid
 import androidx.compose.material.icons.rounded.Videocam
 import androidx.compose.material3.*
@@ -45,6 +47,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -52,6 +55,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.window.DialogWindowProvider
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -106,6 +110,12 @@ fun CircularVideoNoteRecorderDialog(
     var recordingSession by remember { mutableIntStateOf(0) }
     // Normal (non-mirrored) view was default, user requested mirror mode initially. User can toggle mirror if desired.
     var isMirrorMode by remember { mutableStateOf(true) }
+    // Front flash: the screen turns white at full brightness and lights the face (front camera)
+    var isFrontFlashOn by remember { mutableStateOf(false) }
+    val flashLit = isFrontFlashOn && cameraFacing == Camera.CameraInfo.CAMERA_FACING_FRONT
+    // Words and buttons stay readable on the lit (white) screen
+    val chromeText = if (flashLit) Color.Black else Color.White
+    val chromeButtonBg = if (flashLit) Color.Black.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.15f)
 
     /** Centre-crops the camera picture into the square viewfinder, with normal/mirror orientation control. */
     fun adjustTextureTransform(tv: TextureView, viewW: Int, viewH: Int) {
@@ -355,10 +365,23 @@ fun CircularVideoNoteRecorderDialog(
             decorFitsSystemWindows = false
         )
     ) {
+        // Lit: this window at full brightness (the phone's own brightness is back once it's off)
+        val dialogWindow = (LocalView.current.parent as? DialogWindowProvider)?.window
+        DisposableEffect(dialogWindow, flashLit) {
+            val window = dialogWindow
+            window?.attributes = window?.attributes?.apply {
+                screenBrightness = if (flashLit) 1f else android.view.WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
+            }
+            onDispose {
+                window?.attributes = window?.attributes?.apply {
+                    screenBrightness = android.view.WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
+                }
+            }
+        }
         BoxWithConstraints(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.88f))
+                .background(if (flashLit) Color.White else Color.Black.copy(alpha = 0.88f))
                 .statusBarsPadding()
                 .navigationBarsPadding(),
             contentAlignment = Alignment.Center
@@ -390,7 +413,7 @@ fun CircularVideoNoteRecorderDialog(
                     }
                     Text(
                         text = if (isRecording) "Recording Video Note..." else "Circular Video Note",
-                        color = Color.White,
+                        color = chromeText,
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold
                     )
@@ -398,7 +421,7 @@ fun CircularVideoNoteRecorderDialog(
 
                 Text(
                     text = if (isRecording) "Tap check to send • Tap trash to discard" else "Tap record button to begin",
-                    color = Color.White.copy(alpha = 0.75f),
+                    color = chromeText.copy(alpha = 0.75f),
                     fontSize = 13.sp
                 )
 
@@ -557,12 +580,12 @@ fun CircularVideoNoteRecorderDialog(
                             },
                             modifier = Modifier
                                 .size(56.dp)
-                                .background(Color.White.copy(alpha = 0.15f), CircleShape)
+                                .background(chromeButtonBg, CircleShape)
                         ) {
                             Icon(
                                 imageVector = Icons.Rounded.FlipCameraAndroid,
                                 contentDescription = "Switch Camera",
-                                tint = Color.White,
+                                tint = chromeText,
                                 modifier = Modifier.size(26.dp)
                             )
                         }
@@ -612,7 +635,7 @@ fun CircularVideoNoteRecorderDialog(
                             modifier = Modifier
                                 .size(56.dp)
                                 .background(
-                                    if (isMirrorMode) RoseGoldPrimary.copy(alpha = 0.35f) else Color.White.copy(alpha = 0.15f),
+                                    if (isMirrorMode) RoseGoldPrimary.copy(alpha = 0.35f) else chromeButtonBg,
                                     CircleShape
                                 )
                         ) {
@@ -633,7 +656,7 @@ fun CircularVideoNoteRecorderDialog(
                             onClick = { cancelAndDiscard() },
                             modifier = Modifier
                                 .size(56.dp)
-                                .background(Color.White.copy(alpha = 0.15f), CircleShape)
+                                .background(chromeButtonBg, CircleShape)
                         ) {
                             Icon(
                                 imageVector = Icons.Rounded.Delete,
@@ -651,12 +674,12 @@ fun CircularVideoNoteRecorderDialog(
                             },
                             modifier = Modifier
                                 .size(56.dp)
-                                .background(Color.White.copy(alpha = 0.15f), CircleShape)
+                                .background(chromeButtonBg, CircleShape)
                         ) {
                             Icon(
                                 imageVector = Icons.Rounded.FlipCameraAndroid,
                                 contentDescription = "Switch Camera",
-                                tint = Color.White,
+                                tint = chromeText,
                                 modifier = Modifier.size(26.dp)
                             )
                         }
@@ -673,7 +696,7 @@ fun CircularVideoNoteRecorderDialog(
                                 modifier = Modifier
                                     .size(56.dp)
                                     .background(
-                                        if (isMirrorMode) RoseGoldPrimary.copy(alpha = 0.35f) else Color.White.copy(alpha = 0.15f),
+                                        if (isMirrorMode) RoseGoldPrimary.copy(alpha = 0.35f) else chromeButtonBg,
                                         CircleShape
                                     )
                             ) {
@@ -702,6 +725,27 @@ fun CircularVideoNoteRecorderDialog(
                             }
                         }
                     }
+                }
+            }
+
+            // Front flash switch, top left (front camera only)
+            if (cameraFacing == Camera.CameraInfo.CAMERA_FACING_FRONT) {
+                IconButton(
+                    onClick = {
+                        isFrontFlashOn = !isFrontFlashOn
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    },
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(16.dp)
+                        .size(40.dp)
+                        .background(if (isFrontFlashOn) RoseGoldPrimary else Color.Black.copy(alpha = 0.5f), CircleShape)
+                ) {
+                    Icon(
+                        imageVector = if (isFrontFlashOn) Icons.Rounded.FlashOn else Icons.Rounded.FlashOff,
+                        contentDescription = if (isFrontFlashOn) "Turn front flash off" else "Turn front flash on",
+                        tint = Color.White
+                    )
                 }
             }
 
@@ -775,11 +819,12 @@ private fun choosePreviewSize(sizes: List<Camera.Size>, videoW: Int, videoH: Int
 }
 
 /**
- * A round video note is shown small, so it's recorded light: about 5 MB a minute (it was about
- * 8 MB with the camera's own sound settings), which uploads quickly on mobile data.
+ * A round video note is recorded light: a face at 480p needs little, and its voice is mono speech.
+ * About 3.6 MB a minute (5 MB before, 8 MB with the camera's own settings), so it uploads and
+ * downloads quickly on mobile data.
  */
-private const val VIDEO_NOTE_BIT_RATE = 650_000
-private const val VIDEO_NOTE_AUDIO_BIT_RATE = 64_000
+private const val VIDEO_NOTE_BIT_RATE = 450_000
+private const val VIDEO_NOTE_AUDIO_BIT_RATE = 32_000
 
 private fun startVideoRecording(
     context: Context,
@@ -799,6 +844,8 @@ private fun startVideoRecording(
             recorder.setProfile(profile)
             recorder.setVideoEncodingBitRate(minOf(profile.videoBitRate, VIDEO_NOTE_BIT_RATE))
             recorder.setAudioEncodingBitRate(minOf(profile.audioBitRate, VIDEO_NOTE_AUDIO_BIT_RATE))
+            // One voice: mono halves the sound's size at the same clarity
+            recorder.setAudioChannels(1)
         } else {
             recorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
             recorder.setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
@@ -807,6 +854,7 @@ private fun startVideoRecording(
             recorder.setVideoFrameRate(30)
             recorder.setVideoEncodingBitRate(VIDEO_NOTE_BIT_RATE)
             recorder.setAudioEncodingBitRate(VIDEO_NOTE_AUDIO_BIT_RATE)
+            recorder.setAudioChannels(1)
         }
         recorder.setOutputFile(outputFile.absolutePath)
         recorder.setOrientationHint(orientationHint)

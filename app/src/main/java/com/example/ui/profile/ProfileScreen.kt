@@ -1510,42 +1510,14 @@ fun ProfileScreen(
                         text = {
                             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                                 Text(
-                                    "The installer will be saved to your Downloads, then the app is removed. Open it from Downloads to install again and sign in with the details below.",
+                                    "The installer is saved to your Downloads first. Then you uninstall the app, install it again from Downloads and sign in with the details below.",
                                     fontSize = 13.sp
                                 )
-                                Surface(
-                                    shape = RoundedCornerShape(12.dp),
-                                    color = MaterialTheme.colorScheme.surfaceVariant,
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Column(modifier = Modifier.padding(12.dp)) {
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.SpaceBetween,
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Text("Your sign-in details", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                            IconButton(onClick = { isReinstallLoginRevealed = !isReinstallLoginRevealed }, modifier = Modifier.size(28.dp)) {
-                                                Icon(
-                                                    imageVector = if (isReinstallLoginRevealed) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility,
-                                                    contentDescription = if (isReinstallLoginRevealed) "Hide" else "Reveal",
-                                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                    modifier = Modifier.size(18.dp)
-                                                )
-                                            }
-                                        }
-                                        Spacer(modifier = Modifier.height(4.dp))
-                                        if (reinstallLogin.userName.isNotBlank()) {
-                                            Text("Your name: " + (if (isReinstallLoginRevealed) reinstallLogin.userName else "••••••••"), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface)
-                                        }
-                                        if (reinstallLogin.partnerName.isNotBlank()) {
-                                            Text("Partner name: " + (if (isReinstallLoginRevealed) reinstallLogin.partnerName else "••••••••"), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface)
-                                        }
-                                        Text("Secret key: " + (if (isReinstallLoginRevealed) reinstallLogin.coupleKey else "••••••••"), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
-                                        Spacer(modifier = Modifier.height(4.dp))
-                                        Text("Your app-lock PIN resets on reinstall; set it again after.", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    }
-                                }
+                                ReinstallLoginCard(
+                                    login = reinstallLogin,
+                                    revealed = isReinstallLoginRevealed,
+                                    onToggleReveal = { isReinstallLoginRevealed = !isReinstallLoginRevealed }
+                                )
                             }
                         },
                         confirmButton = {
@@ -1564,8 +1536,54 @@ fun ProfileScreen(
                     )
                 }
 
+                // Downloaded: what to do now, step by step, starting with the uninstall
+                val reinstallStep by viewModel.reinstallState.collectAsState()
+                (reinstallStep as? ProfileViewModel.ReinstallUi.Downloaded)?.let { done ->
+                    val reinstallLogin = remember { viewModel.getLoginDetails() }
+                    CherishAlertDialog(
+                        onDismissRequest = { viewModel.dismissReinstallSteps() },
+                        title = { Text("Download complete", fontWeight = FontWeight.Bold) },
+                        text = {
+                            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                Text("The new installer is in your Downloads: ${done.fileName}", fontSize = 13.sp)
+                                listOf(
+                                    "Tap Uninstall now and confirm. The app is removed.",
+                                    "Open Files (My Files on Samsung), go to Downloads and tap ${done.fileName} to install it.",
+                                    "Open the app and sign in with the details below.",
+                                    "Delete ${done.fileName} from Downloads."
+                                ).forEachIndexed { index, step ->
+                                    Row(verticalAlignment = Alignment.Top) {
+                                        Text(
+                                            "${index + 1}.",
+                                            fontSize = 13.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            modifier = Modifier.width(20.dp)
+                                        )
+                                        Text(step, fontSize = 13.sp)
+                                    }
+                                }
+                                ReinstallLoginCard(
+                                    login = reinstallLogin,
+                                    revealed = isReinstallLoginRevealed,
+                                    onToggleReveal = { isReinstallLoginRevealed = !isReinstallLoginRevealed }
+                                )
+                            }
+                        },
+                        confirmButton = {
+                            CherishButton(
+                                onClick = { viewModel.openUninstall(context) },
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                                shape = RoundedCornerShape(12.dp)
+                            ) { Text("Uninstall now", fontWeight = FontWeight.Bold) }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { viewModel.dismissReinstallSteps() }) { Text("Later") }
+                        }
+                    )
+                }
+
             }
- 
+
             } // Privacy
 
             // 4. Notification Settings Section (Separated Notification Bar & App Badge)
@@ -3642,6 +3660,48 @@ fun ProfileScreen(
             CherishToast.show(if (asked) "Asked your partner. It starts when they accept." else "Couldn't send the request. Try again.", long = true)
         }
     )
+}
+
+/** The sign-in details to type in again after a Clean Reinstall (hidden until revealed). */
+@Composable
+private fun ReinstallLoginCard(
+    login: ProfileViewModel.ReinstallLogin,
+    revealed: Boolean,
+    onToggleReveal: () -> Unit
+) {
+    Surface(
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("Your sign-in details", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                IconButton(onClick = onToggleReveal, modifier = Modifier.size(28.dp)) {
+                    Icon(
+                        imageVector = if (revealed) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility,
+                        contentDescription = if (revealed) "Hide" else "Reveal",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(4.dp))
+            if (login.userName.isNotBlank()) {
+                Text("Your name: " + (if (revealed) login.userName else "••••••••"), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface)
+            }
+            if (login.partnerName.isNotBlank()) {
+                Text("Partner name: " + (if (revealed) login.partnerName else "••••••••"), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface)
+            }
+            Text("Secret key: " + (if (revealed) login.coupleKey else "••••••••"), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
+            Spacer(modifier = Modifier.height(4.dp))
+            Text("Your app-lock PIN resets on reinstall; set it again after.", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
 }
 
 

@@ -32,14 +32,14 @@ object ChatTimeFormatter {
         return timestamp - DAY_ROLLOVER_OFFSET_MS
     }
 
+    // Same local date, compared as days since 1970 in the phone's time zone: the chat checks this
+    // for every message each time the list changes, and two Calendars a check added up
     private fun isSameCalendarDay(t1: Long, t2: Long): Boolean {
-        val cal1 = Calendar.getInstance(TimeZone.getDefault(), Locale.getDefault()).apply { timeInMillis = t1 }
-        val cal2 = Calendar.getInstance(TimeZone.getDefault(), Locale.getDefault()).apply { timeInMillis = t2 }
-
-        return cal1.get(Calendar.ERA) == cal2.get(Calendar.ERA) &&
-                cal1.get(Calendar.YEAR) == cal2.get(Calendar.YEAR) &&
-                cal1.get(Calendar.DAY_OF_YEAR) == cal2.get(Calendar.DAY_OF_YEAR)
+        val zone = TimeZone.getDefault()
+        return Math.floorDiv(t1 + zone.getOffset(t1), DAY_MS) == Math.floorDiv(t2 + zone.getOffset(t2), DAY_MS)
     }
+
+    private const val DAY_MS = 86_400_000L
 
     // Caches to eliminate repetitive Calendar & SimpleDateFormat object allocations during LazyColumn scrolling
     private val timeFormatCache = android.util.LruCache<Long, String>(256)

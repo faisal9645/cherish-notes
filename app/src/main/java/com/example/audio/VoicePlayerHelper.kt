@@ -178,8 +178,31 @@ class VoicePlayerHelper(private val context: Context) {
 
         try {
             val source = resolveSource(messageId, audioUriOrUrl)
-            currentSource = source
-            startPlayer(messageId, source, startAtMs = 0)
+            val isRemote = source.startsWith("http://") || source.startsWith("https://")
+            val kept = if (isRemote) com.example.util.KeptMedia.keptVoice(context, messageId, source) else null
+            if (isRemote && kept == null) {
+                // First play: downloaded once into the app's hidden storage, and from then on always
+                // played from there (streaming it downloaded it again on every play)
+                scope.launch {
+                    val file = kotlinx.coroutines.withContext(Dispatchers.IO) {
+                        com.example.util.KeptMedia.downloadVoice(context, messageId, source)
+                    }
+                    // Paused, stopped or another note started meanwhile
+                    if (_currentTrackId.value != messageId || !_isPlaying.value || mediaPlayer != null) return@launch
+                    val playFrom = file?.absolutePath ?: source
+                    currentSource = playFrom
+                    try {
+                        startPlayer(messageId, playFrom, startAtMs = 0)
+                    } catch (e: Exception) {
+                        Log.e("VoicePlayerHelper", "Failed to play audio", e)
+                        stop()
+                    }
+                }
+                return
+            }
+            val playFrom = kept?.absolutePath ?: source
+            currentSource = playFrom
+            startPlayer(messageId, playFrom, startAtMs = 0)
         } catch (e: Exception) {
             Log.e("VoicePlayerHelper", "Failed to play audio", e)
             stop()
@@ -505,7 +528,13 @@ class VoicePlayerHelper(private val context: Context) {
             if (cached != null && cached > 0) return cached
             return try {
                 val retriever = android.media.MediaMetadataRetriever()
-                if (source.startsWith("http://") || source.startsWith("https://")) {
+                // Its kept copy, when it has been played: no download just to read its length
+                val kept = if (source.startsWith("http://") || source.startsWith("https://")) {
+                    com.example.util.KeptMedia.keptVoice(context, trackId, source)
+                } else null
+                if (kept != null) {
+                    retriever.setDataSource(kept.absolutePath)
+                } else if (source.startsWith("http://") || source.startsWith("https://")) {
                     retriever.setDataSource(source, HashMap())
                 } else if (source.startsWith("file://")) {
                     val path = Uri.parse(source).path

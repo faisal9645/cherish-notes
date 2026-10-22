@@ -45,6 +45,7 @@ import androidx.compose.ui.graphics.vector.VectorPainter
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.pow
@@ -211,7 +212,10 @@ internal class BurstHeart(
     val sizeDp: Float,
     val spin: Float,
     val delay: Float,
-    val color: Color
+    val color: Color,
+    // How far its path bows to one side (a part of its distance; below 0 the other way), so the
+    // hearts fly out on arcs, not straight lines
+    val curve: Float = 0f
 )
 
 /** Hearts that burst out of a message on double-tap. */
@@ -221,16 +225,18 @@ class HeartBurstState {
     internal var hearts by mutableStateOf(emptyList<BurstHeart>())
         private set
 
-    suspend fun burst() {
-        hearts = List(9) {
+    /** [scale] sizes it for its element: 1 for a message, smaller for, say, a reactions pill. */
+    suspend fun burst(scale: Float = 1f, count: Int = 9) {
+        hearts = List(count) {
             BurstHeart(
                 // Mostly upwards (screen y grows downwards), fanned out to the sides
                 angle = (-PI / 2 + (Random.nextFloat() - 0.5f) * 2.4f).toFloat(),
-                distanceDp = 48f + Random.nextFloat() * 64f,
-                sizeDp = 11f + Random.nextFloat() * 11f,
+                distanceDp = (48f + Random.nextFloat() * 64f) * scale,
+                sizeDp = (11f + Random.nextFloat() * 11f) * scale,
                 spin = (Random.nextFloat() - 0.5f) * 70f,
                 delay = Random.nextFloat() * 0.18f,
-                color = HeartColors.random()
+                color = HeartColors.random(),
+                curve = (Random.nextFloat() - 0.5f) * 0.9f
             )
         }
         progress.snapTo(0f)
@@ -240,6 +246,58 @@ class HeartBurstState {
 
 @Composable
 fun rememberHeartBurstState(): HeartBurstState = remember { HeartBurstState() }
+
+/**
+ * Pulled on past the newest message, in px (shared by the chat's rows, read only while drawing):
+ * the rows bunch up toward the bottom like an accordion, the newest the most, and spring back open
+ * with a bounce when let go, in place of the system's stretch.
+ */
+@Stable
+class AccordionPull(private val list: androidx.compose.foundation.lazy.LazyListState) {
+    var value by androidx.compose.runtime.mutableFloatStateOf(0f)
+        private set
+    private var settleJob: kotlinx.coroutines.Job? = null
+
+    /** The finger went [px] further past the newest message: taken in ever stiffer, up to [maxPx]. */
+    fun dragBy(px: Float, maxPx: Float) {
+        settleJob?.cancel()
+        val give = (1f - value / maxPx).coerceIn(0.05f, 1f)
+        value = (value + px * 0.5f * give).coerceIn(0f, maxPx)
+    }
+
+    /** Pulled back by [px]: the accordion opens first. Returns how much of it that took. */
+    fun releaseBy(px: Float): Float {
+        settleJob?.cancel()
+        val taken = minOf(px, value.coerceAtLeast(0f))
+        value -= taken
+        return taken
+    }
+
+    /** Let go (or a fling ran into the end at [velocityPxPerSec]): back open on a bouncy spring. */
+    fun settle(scope: kotlinx.coroutines.CoroutineScope, velocityPxPerSec: Float = 0f) {
+        if (value == 0f && velocityPxPerSec == 0f) return
+        settleJob?.cancel()
+        settleJob = scope.launch {
+            androidx.compose.animation.core.animate(
+                initialValue = value,
+                targetValue = 0f,
+                initialVelocity = velocityPxPerSec,
+                animationSpec = androidx.compose.animation.core.spring(dampingRatio = 0.42f, stiffness = 380f)
+            ) { pulled, _ -> value = pulled }
+        }
+    }
+
+    /** How far up the screen the row [key] moves now: the newest the most, each one above it less. */
+    fun shiftFor(key: Any): Float {
+        val pulled = value
+        if (pulled == 0f) return 0f
+        val index = list.layoutInfo.visibleItemsInfo.firstOrNull { it.key == key }?.index ?: return 0f
+        return pulled * kotlin.math.exp(-index / 4.5f)
+    }
+}
+
+/** The chat list's [AccordionPull], for its rows (none outside the chat). */
+internal val LocalAccordionPull = androidx.compose.runtime.staticCompositionLocalOf<AccordionPull?> { null }
 
 /**
  * Draws [state]'s heart burst around this element. Put it before any clip in the modifier chain so
@@ -257,9 +315,11 @@ fun Modifier.heartBurst(state: HeartBurstState): Modifier {
             if (local <= 0f) return@forEach
             val travel = 1f - (1f - local).pow(3)
             val distance = h.distanceDp.dp.toPx() * travel
+            // Bowed out to one side mid-flight (a bezier-like arc), back on its line at the end
+            val bow = h.curve * h.distanceDp.dp.toPx() * sin(travel * PI.toFloat())
             val position = Offset(
-                center.x + cos(h.angle) * distance,
-                center.y + sin(h.angle) * distance - local * local * 24.dp.toPx()
+                center.x + cos(h.angle) * distance - sin(h.angle) * bow,
+                center.y + sin(h.angle) * distance + cos(h.angle) * bow - local * local * 24.dp.toPx()
             )
             val grow = if (local < 0.2f) local / 0.2f else 1f
             val alpha = if (local > 0.55f) 1f - (local - 0.55f) / 0.45f else 1f

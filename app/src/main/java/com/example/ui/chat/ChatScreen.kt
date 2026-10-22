@@ -174,8 +174,12 @@ fun ChatScreen(
     val haptic = LocalHapticFeedback.current
     val scope = rememberCoroutineScope()
     val uiState by viewModel.uiState.collectAsState()
-    val partnerPresence by viewModel.partnerPresence.collectAsState()
-    val isPartnerTouching = partnerPresence.isHeartTouching || uiState.isPartnerHeartTouching
+    // Presence changes often (its beat, typing pace); this screen only shows two things from it, so
+    // only those recompose it
+    val partnerPresenceState = viewModel.partnerPresence.collectAsState()
+    val isPartnerHeartTouchingNow by remember { derivedStateOf { partnerPresenceState.value.isHeartTouching } }
+    val isPartnerOnlineNow by remember { derivedStateOf { partnerPresenceState.value.isOnline } }
+    val isPartnerTouching = isPartnerHeartTouchingNow || uiState.isPartnerHeartTouching
     // My partner playing one of my voice notes (or a video note) right now: shown on it, its
     // waveform moving as they hear it (timed by listeningClock, which only that message reads), and
     // in the header. Not once it should have ended, nor while they're out of Cherish
@@ -191,7 +195,7 @@ fun ChatScreen(
         listeningOver = heard
     }
     val partnerListening = partnerListeningNow?.takeIf {
-        it != listeningOver && partnerPresence.isOnline &&
+        it != listeningOver && isPartnerOnlineNow &&
             uiState.chatExperienceMode != com.example.ui.chat.ChatExperienceMode.PRIVATE
     }
     val hearingStatus = partnerListening?.let { listeningStatus(it.isVideo, it.playing) }
@@ -199,6 +203,79 @@ fun ChatScreen(
         initialFirstVisibleItemIndex = viewModel.savedScrollIndex,
         initialFirstVisibleItemScrollOffset = viewModel.savedScrollOffset
     )
+    // How scrolling feels: the bubbles move exactly with the finger (no lean or spring while it
+    // scrolls, which cost frames; see 1817b6f); a fling ticks lightly in the hand as messages race
+    // past; pulled on past the newest message, the bubbles bunch up like an accordion and spring
+    // back open on release (see AccordionPull)
+    val accordion = remember(listState) { AccordionPull(listState) }
+    val accordionMaxPx = with(androidx.compose.ui.platform.LocalDensity.current) { 96.dp.toPx() }
+    val flingTickPx = with(androidx.compose.ui.platform.LocalDensity.current) { 72.dp.toPx() }
+    val scrollView = androidx.compose.ui.platform.LocalView.current
+    val chatScrollConnection = remember(accordion, accordionMaxPx, flingTickPx, scrollView) {
+        object : NestedScrollConnection {
+            private var flingTravel = 0f
+            private var lastTickAt = 0L
+            private var pullSign = 0f
+
+            /** The list can't go on that way because it's at the newest message. */
+            private fun isPastNewest(deltaY: Float): Boolean =
+                !listState.canScrollBackward && (listState.canScrollForward || deltaY < 0f)
+
+            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                // Pulling back while bunched up: the accordion opens first
+                if (source == NestedScrollSource.UserInput && accordion.value > 0f && pullSign != 0f &&
+                    kotlin.math.sign(available.y) == -pullSign
+                ) {
+                    val taken = accordion.releaseBy(kotlin.math.abs(available.y))
+                    return Offset(0f, taken * -pullSign)
+                }
+                return Offset.Zero
+            }
+
+            override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
+                // A fling: a tiny tick every few messages' worth, never faster than about 30 a second
+                if (source == NestedScrollSource.SideEffect && consumed.y != 0f) {
+                    flingTravel += kotlin.math.abs(consumed.y)
+                    if (flingTravel >= flingTickPx) {
+                        flingTravel = 0f
+                        val now = android.os.SystemClock.uptimeMillis()
+                        if (now - lastTickAt >= 32L &&
+                            com.example.security.SecurityPreferences.getInstance(scrollView.context).isHapticFeedbackEnabled()
+                        ) {
+                            lastTickAt = now
+                            scrollView.performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK)
+                        }
+                    }
+                }
+                // Past the newest message: the bubbles bunch up instead of the list stretching
+                if (source == NestedScrollSource.UserInput && available.y != 0f && isPastNewest(available.y)) {
+                    pullSign = kotlin.math.sign(available.y)
+                    accordion.dragBy(kotlin.math.abs(available.y), accordionMaxPx)
+                    return Offset(0f, available.y)
+                }
+                return Offset.Zero
+            }
+
+            override suspend fun onPreFling(available: androidx.compose.ui.unit.Velocity): androidx.compose.ui.unit.Velocity {
+                // Let go: it springs back open with a bounce
+                flingTravel = 0f
+                if (accordion.value > 0f) accordion.settle(scope)
+                return androidx.compose.ui.unit.Velocity.Zero
+            }
+
+            override suspend fun onPostFling(
+                consumed: androidx.compose.ui.unit.Velocity,
+                available: androidx.compose.ui.unit.Velocity
+            ): androidx.compose.ui.unit.Velocity {
+                // A fling that runs into the newest message: a quick bunch-up and rebound with what's left of it
+                if (available.y != 0f && isPastNewest(available.y)) {
+                    accordion.settle(scope, velocityPxPerSec = kotlin.math.abs(available.y) * 0.12f)
+                    return available
+                }
+                return androidx.compose.ui.unit.Velocity.Zero
+            }
+        }
+    }
 
     val composerState = remember { ComposerState(viewModel.draftMessageText) }
 
@@ -321,8 +398,8 @@ fun ChatScreen(
     // Read only inside the playing bubble, so playback progress doesn't recompose the whole screen
     val audioProgressState = viewModel.voicePlayerHelper.playbackProgress.collectAsState()
     val isRecordingVoice by viewModel.voiceRecorderHelper.isRecording.collectAsState()
-    val recordingDurationSec by viewModel.voiceRecorderHelper.recordingDurationSec.collectAsState()
-    val recordingAmplitudes by viewModel.voiceRecorderHelper.amplitudes.collectAsState()
+    // (The recording's seconds and levels are read by the message box alone, see ChatBottomComposerBar:
+    // they change many times a second)
 
     // Activity result launchers for media selection (supports multiple photo selection)
     var isHandlingMedia by remember { mutableStateOf(false) }
@@ -466,6 +543,75 @@ fun ChatScreen(
         }
     }
 
+    // Holding the camera button records a video with the phone's own camera, sent full size but
+    // compressed (720p, like a picked video, see sendMediaFile)
+    var tempCameraVideoUri by remember { mutableStateOf<Uri?>(null) }
+    var tempCameraVideoFile by remember { mutableStateOf<File?>(null) }
+    val cameraVideoLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CaptureVideo()
+    ) { success: Boolean ->
+        val prefs = com.example.security.SecurityPreferences.getInstance(context)
+        prefs.isExternalPickerActive = false
+        prefs.ignoreNextPause = false
+        val uri = tempCameraVideoUri
+        val clip = tempCameraVideoFile
+        when {
+            !success || uri == null -> clip?.delete()
+            // A camera app that kept the video somewhere else leaves this file empty
+            clip != null && clip.length() == 0L -> {
+                clip.delete()
+                CherishToast.show("The camera didn't hand the video back. Try sending it from the gallery")
+            }
+            else -> viewModel.sendMediaFile(
+                uri, MessageType.VIDEO,
+                mediaName = "video_${System.currentTimeMillis()}.mp4",
+                compactVideo = true
+            )
+        }
+    }
+
+    fun launchCameraVideo() {
+        val prefs = com.example.security.SecurityPreferences.getInstance(context)
+        try {
+            val clipsDir = File(context.cacheDir, "camera_snaps").apply { mkdirs() }
+            val clipFile = File(clipsDir, "clip_${System.currentTimeMillis()}.mp4").apply { createNewFile() }
+            val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", clipFile)
+            tempCameraVideoUri = uri
+            tempCameraVideoFile = clipFile
+            prefs.isExternalPickerActive = true
+            prefs.ignoreNextPause = true
+            cameraVideoLauncher.launch(uri)
+        } catch (e: Exception) {
+            prefs.isExternalPickerActive = false
+            prefs.ignoreNextPause = false
+            CherishToast.show("Could not open camera: ${e.message}")
+        }
+    }
+
+    val cameraVideoPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        val prefs = com.example.security.SecurityPreferences.getInstance(context)
+        prefs.isExternalPickerActive = false
+        prefs.ignoreNextPause = false
+        if (isGranted) {
+            launchCameraVideo()
+        } else {
+            CherishToast.show("Camera permission needed to record videos")
+        }
+    }
+
+    val triggerCameraVideo: () -> Unit = {
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
+            launchCameraVideo()
+        } else {
+            val prefs = com.example.security.SecurityPreferences.getInstance(context)
+            prefs.isExternalPickerActive = true
+            prefs.ignoreNextPause = true
+            cameraVideoPermissionLauncher.launch(Manifest.permission.CAMERA)
+        }
+    }
+
     // Filter messages for search query and starred filter - all messages preserved and displayed based on pagination scroll.
     val displayedMessages by viewModel.displayedMessages.collectAsState()
     val reversedChatRowItems by viewModel.reversedChatRowItems.collectAsState()
@@ -527,9 +673,11 @@ fun ChatScreen(
             }
     }
 
-    // Save draft text without interrupting scrolling or snapping scroll position on every character
-    LaunchedEffect(composerState.text) {
-        viewModel.draftMessageText = composerState.text
+    // Save draft text without interrupting scrolling or snapping scroll position on every character.
+    // Read in a snapshotFlow, not as the effect's key: a key read here recomposed this whole screen
+    // (and every visible row's call) on each key typed
+    LaunchedEffect(composerState) {
+        snapshotFlow { composerState.text }.collect { viewModel.draftMessageText = it }
     }
 
     // When bottom overlays appear (upload status, reply preview), keep the newest message clear of them
@@ -1078,9 +1226,9 @@ fun ChatScreen(
             }
         }
     }
-    // Never found (say, older than the chat shows): given up after a while, so the chat follows new
-    // messages again
-    LaunchedEffect(uiState.targetScrollMessageId) {
+    // Never found (say, older than the chat shows): given up once older chat has stopped coming in
+    // for a while, so the chat follows new messages again
+    LaunchedEffect(uiState.targetScrollMessageId, reversedChatRowItems.size) {
         val targetId = uiState.targetScrollMessageId ?: return@LaunchedEffect
         delay(12_000)
         if (viewModel.uiState.value.targetScrollMessageId == targetId) viewModel.clearTargetScrollMessageId()
@@ -1120,7 +1268,7 @@ fun ChatScreen(
     }
     // From 11 PM: the same colours, but slower, softer motion and quieter sounds (see NightCalm)
     val isNight = rememberIsNight()
-    CompositionLocalProvider(LocalChatTextStyle provides chatTextStyle, LocalHugCouple provides hugCouple, LocalChatNight provides isNight) {
+    CompositionLocalProvider(LocalChatTextStyle provides chatTextStyle, LocalHugCouple provides hugCouple, LocalChatNight provides isNight, LocalAccordionPull provides accordion) {
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -1647,8 +1795,6 @@ fun ChatScreen(
                     viewModel = viewModel,
                     uiState = uiState,
                     isRecordingVoice = isRecordingVoice,
-                    recordingDurationSec = recordingDurationSec,
-                    recordingAmplitudes = recordingAmplitudes,
                     partnerName = partnerName,
                     myUser = myUser,
                     onScheduleText = {
@@ -1658,6 +1804,8 @@ fun ChatScreen(
                         }
                     },
                     triggerCameraSnap = triggerCameraSnap,
+                    // Not in private chat, which only sends photos
+                    triggerCameraVideo = if (isPrivate) null else triggerCameraVideo,
                     onPickAttachment = {
                         if (isPrivate) {
                             val prefs = com.example.security.SecurityPreferences.getInstance(context)
@@ -1990,6 +2138,9 @@ fun ChatScreen(
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxWidth()
+                        // The scroll feel outside the keyboard's: the keyboard's pull-up still sees
+                        // what the list left over before the accordion takes it
+                        .nestedScroll(chatScrollConnection)
                         .nestedScroll(dismissKeyboardOnSwipeConnection)
                         // Lips (or a thumb) held on the background: a kiss there (see KissTouch)
                         .glassTouchOnHold(
@@ -2879,7 +3030,7 @@ fun ChatScreen(
         HeartbeatTouchDialog(
             partnerName = partnerName,
             isPartnerTouching = isPartnerTouching,
-            isPartnerOnline = partnerPresence.isOnline || uiState.isPartnerOnline,
+            isPartnerOnline = isPartnerOnlineNow || uiState.isPartnerOnline,
             onTouchChanged = { viewModel.setHeartbeatTouch(it) },
             onSyncHeartbeatStreak = { viewModel.syncHeartbeatStreak() },
             onDismiss = {
@@ -3932,6 +4083,7 @@ private fun ChatMessageRow(
     partnerHearing: Boolean? = null,
     isFocused: Boolean = false
 ) {
+    val accordion = LocalAccordionPull.current
     Column(modifier = modifier.fillMaxWidth()) {
         if (isFirstOfDay) {
             val dateSep = if (dateSeparatorText.isNotEmpty()) dateSeparatorText else formatDateSeparator(message.timestamp)
@@ -4026,11 +4178,12 @@ private fun ChatMessageRow(
                         alpha = 0f
                     }
                     val b = bump.value
-                    if (b > 0f) {
-                        val bumpScale = 1f + 0.035f * b
-                        scaleX = bumpScale
-                        scaleY = bumpScale
-                    }
+                    val bumpScale = if (b > 0f) 1f + 0.035f * b else 1f
+                    // Pulled on past the newest message, it bunches up toward the bottom (see AccordionPull)
+                    val bunch = accordion?.shiftFor(message.id) ?: 0f
+                    if (bunch != 0f) translationY = -bunch
+                    scaleX = bumpScale
+                    scaleY = bumpScale
                 }
                 .then(
                     if (landsWithSpring) {
@@ -4700,14 +4853,20 @@ private fun PartnerTypingBubble(
                 showOnlineBadge = false
             )
             Spacer(modifier = Modifier.width(6.dp))
+            // The same liquid glass as my partner's bubbles
+            val typingShape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomEnd = 16.dp, bottomStart = 4.dp)
+            val glass = rememberBubbleGlass(isFromMe = false, isDark = isDark)
             Surface(
-                shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomEnd = 16.dp, bottomStart = 4.dp),
-                color = if (isDark) darkSurface(NavyCard) else MistBlue,
-                border = BorderStroke(0.5.dp, if (isDark) darkSurface(NavyRaised, Neutral800) else Gray200),
+                shape = typingShape,
+                color = Color.Transparent,
                 shadowElevation = 0.8.dp
             ) {
                 Box(
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                    modifier = Modifier
+                        .background(glass.tint, typingShape)
+                        .background(glass.sheen, typingShape)
+                        .border(BorderStroke(0.8.dp, glass.rim), typingShape)
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     if (isRecording) {
@@ -4799,6 +4958,13 @@ fun BouncingDots(color: Color = RoseGoldPrimary, pace: Int = 1) {
                     .graphicsLayer {
                         val wave = kotlin.math.sin(phase.floatValue * 2f * Math.PI.toFloat() - dot * 0.9f)
                         translationY = if (wave > 0f) -wave * height.dp.toPx() else 0f
+                        // Like a little rubber ball: it squashes as it lands and stretches as it leaves
+                        // the ground (scaled from its base, so it stays on the line)
+                        val squash = if (wave < 0f) -wave * 0.24f else 0f
+                        val stretch = if (wave > 0f) wave * (1f - wave) * 0.45f else 0f
+                        transformOrigin = TransformOrigin(0.5f, 1f)
+                        scaleY = 1f - squash + stretch
+                        scaleX = 1f + squash * 0.8f - stretch * 0.5f
                     }
                     .size(6.dp)
                     .background(color, CircleShape)
@@ -4919,7 +5085,8 @@ fun StrictlyTwoPersonBanner(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 2.dp),
+            // A little room under it, so the first message doesn't sit right against it
+            .padding(start = 20.dp, end = 20.dp, top = 2.dp, bottom = 12.dp),
         contentAlignment = Alignment.Center
     ) {
         Surface(
@@ -5200,12 +5367,11 @@ private fun ChatBottomComposerBar(
     viewModel: ChatViewModel,
     uiState: ChatUiState,
     isRecordingVoice: Boolean,
-    recordingDurationSec: Int,
-    recordingAmplitudes: List<Float>,
     partnerName: String,
     myUser: com.example.data.model.User?,
     onScheduleText: () -> Unit,
     triggerCameraSnap: () -> Unit,
+    triggerCameraVideo: (() -> Unit)? = null,
     onPickAttachment: () -> Unit,
     onPickVideo: () -> Unit = {},
     onPickDocument: () -> Unit = {},
@@ -5217,54 +5383,73 @@ private fun ChatBottomComposerBar(
     focusRequester: FocusRequester = remember { FocusRequester() },
     modifier: Modifier = Modifier
 ) {
-    MessageComposer(
-        text = composerState.text,
-        onTextChanged = {
-            composerState.text = it
-            viewModel.onTypingChanged(it.isNotBlank())
-        },
-        onSendText = {
-            val textToSend = composerState.text
-            if (textToSend.isNotBlank()) {
+    val recordingDurationSec by viewModel.voiceRecorderHelper.recordingDurationSec.collectAsState()
+    val recordingAmplitudes by viewModel.voiceRecorderHelper.amplitudes.collectAsState()
+    // A GIF from the keyboard's own GIF search (Gboard, Samsung Keyboard) goes straight into
+    // the chat, as a GIF; not in private chat, which is text only
+    AcceptKeyboardMedia(
+        enabled = uiState.chatExperienceMode != com.example.ui.chat.ChatExperienceMode.PRIVATE,
+        onMedia = { uri -> viewModel.sendMediaFile(uri, MessageType.IMAGE) }
+    ) {
+        MessageComposer(
+            text = composerState.text,
+            onTextChanged = {
+                composerState.text = it
+                viewModel.onTypingChanged(it.isNotBlank())
+            },
+            onSendText = {
+                val textToSend = composerState.text
+                if (textToSend.isNotBlank()) {
+                    onSendHaptic()
+                    onUnreadJumpDone()
+                    onInputFocused()
+                    viewModel.sendTextMessage(textToSend)
+                    composerState.text = ""
+                    viewModel.onTypingChanged(false)
+                }
+            },
+            replyingTo = uiState.replyingToMessage,
+            isRecordingVoice = isRecordingVoice,
+            recordingDurationSec = recordingDurationSec,
+            recordingAmplitudes = recordingAmplitudes,
+            onStartVoiceRecord = onMicPermissionRequired,
+            onStopAndSendVoiceRecord = { viewModel.stopAndSendVoiceRecording() },
+            onCancelVoiceRecord = { viewModel.cancelVoiceRecording() },
+            onTakePhoto = triggerCameraSnap,
+            onRecordVideo = triggerCameraVideo,
+            onPickAttachment = onPickAttachment,
+            onPickVideo = onPickVideo,
+            onPickDocument = onPickDocument,
+            onScheduleText = onScheduleText,
+            // Not behind the stealth curtain (it looks like notes there)
+            onSendHug = if (uiState.isStealthCurtainActive) null else { level ->
                 onSendHaptic()
                 onUnreadJumpDone()
-                onInputFocused()
-                viewModel.sendTextMessage(textToSend)
-                composerState.text = ""
-                viewModel.onTypingChanged(false)
-            }
-        },
-        replyingTo = uiState.replyingToMessage,
-        isRecordingVoice = isRecordingVoice,
-        recordingDurationSec = recordingDurationSec,
-        recordingAmplitudes = recordingAmplitudes,
-        onStartVoiceRecord = onMicPermissionRequired,
-        onStopAndSendVoiceRecord = { viewModel.stopAndSendVoiceRecording() },
-        onCancelVoiceRecord = { viewModel.cancelVoiceRecording() },
-        onTakePhoto = triggerCameraSnap,
-        onPickAttachment = onPickAttachment,
-        onPickVideo = onPickVideo,
-        onPickDocument = onPickDocument,
-        onScheduleText = onScheduleText,
-        // Not behind the stealth curtain (it looks like notes there)
-        onSendHug = if (uiState.isStealthCurtainActive) null else { level ->
-            onSendHaptic()
-            onUnreadJumpDone()
-            viewModel.sendHugSqueeze(level)
-        },
-        onRecordVideoNote = onRecordVideoNote,
-        myPhotoUrl = myUser?.photoUrl,
-        myName = myUser?.displayName ?: "Me",
-        placeholder = when {
-            uiState.isStealthCurtainActive -> "Add a note..."
-            uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE -> "Reply to ChatGPT"
-            else -> "Message $partnerName... ❤️"
-        },
-        isPrivateMode = (uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE),
-        onInputFocused = onInputFocused,
-        focusRequester = focusRequester,
-        modifier = modifier
-    )
+                viewModel.sendHugSqueeze(level)
+            },
+            onRecordVideoNote = onRecordVideoNote,
+            // GIPHY's GIFs: not in private chat (text only) or behind the stealth curtain
+            onSendGif = if (
+                uiState.isStealthCurtainActive ||
+                uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE
+            ) null else { gif ->
+                onSendHaptic()
+                onUnreadJumpDone()
+                viewModel.sendGif(gif)
+            },
+            myPhotoUrl = myUser?.photoUrl,
+            myName = myUser?.displayName ?: "Me",
+            placeholder = when {
+                uiState.isStealthCurtainActive -> "Add a note..."
+                uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE -> "Reply to ChatGPT"
+                else -> "Message $partnerName... ❤️"
+            },
+            isPrivateMode = (uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE),
+            onInputFocused = onInputFocused,
+            focusRequester = focusRequester,
+            modifier = modifier
+        )
+    }
 }
 
 

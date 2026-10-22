@@ -23,6 +23,12 @@ class CherishApplication : Application(), coil.ImageLoaderFactory {
         return coil.ImageLoader.Builder(this)
             .components {
                 add(coil.decode.VideoFrameDecoder.Factory())
+                // Animated GIFs move (the phone's own animated-image decoder from Android 9)
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+                    add(coil.decode.ImageDecoderDecoder.Factory())
+                } else {
+                    add(coil.decode.GifDecoder.Factory())
+                }
             }
             .crossfade(true)
             // Recent photos stay in memory; the disk keeps the rest. Room for a lot of them, so a

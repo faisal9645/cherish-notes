@@ -26,6 +26,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -136,7 +137,7 @@ import com.example.ui.components.springClickable
 import androidx.compose.material.icons.automirrored.rounded.InsertDriveFile
 import com.example.ui.theme.steadyDigits
 
-@OptIn(ExperimentalLayoutApi::class)
+@OptIn(ExperimentalLayoutApi::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun MessageComposer(
     text: String,
@@ -164,6 +165,10 @@ fun MessageComposer(
     onInputFocused: () -> Unit = {},
     onPickDocument: (() -> Unit)? = null,
     onPickVideo: (() -> Unit)? = null,
+    // A GIF picked from GIPHY's search (the emoji board's GIF tab); null hides the tab
+    onSendGif: ((GiphyGif) -> Unit)? = null,
+    // Holding the camera button: record a video with the phone's camera (a tap takes a photo)
+    onRecordVideo: (() -> Unit)? = null,
     focusRequester: FocusRequester = remember { FocusRequester() },
     modifier: Modifier = Modifier
 ) {
@@ -180,6 +185,7 @@ fun MessageComposer(
     var dragOffsetX by remember { mutableFloatStateOf(0f) }
     var dragOffsetY by remember { mutableFloatStateOf(0f) }
     var isVideoMode by remember { mutableStateOf(false) }
+    var showGifPicker by remember { mutableStateOf(false) }
 
     val density = LocalDensity.current
     val keyboardInsets = WindowInsets.ime.exclude(WindowInsets.navigationBars)
@@ -1011,11 +1017,18 @@ fun MessageComposer(
                             )
                         }
 
-                        // Right inside pill: 📷 Real-time Camera button
-                        IconButton(
-                            onClick = onTakePhoto,
+                        // Right inside pill: 📷 Real-time Camera button (tap: a photo; hold: a video)
+                        Box(
+                            contentAlignment = Alignment.Center,
                             modifier = Modifier
                                 .size(36.dp)
+                                .clip(CircleShape)
+                                .combinedClickable(
+                                    onClick = onTakePhoto,
+                                    // (combinedClickable buzzes on the long press itself)
+                                    onLongClick = onRecordVideo,
+                                    onLongClickLabel = if (onRecordVideo != null) "Record a video" else null
+                                )
                                 .testTag("composer_camera_button")
                         ) {
                             Icon(
@@ -1039,27 +1052,43 @@ fun MessageComposer(
                 modifier = Modifier.width(if (isPrivateMode) 44.dp else 48.dp),
                 contentAlignment = Alignment.BottomCenter
             ) {
-                // Lock indicator shown while holding Mic
-                if (isRecordingVoice && !isLockedRecording) {
+                // Lock indicator shown while holding Mic: magnetic, it's drawn to the thumb faster the
+                // closer the thumb comes, growing a little; at the lock it snaps shut (the closed lock
+                // pops and fades with the haptic)
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = isRecordingVoice && !isLockedRecording,
+                    enter = fadeIn(tween(120)) + scaleIn(spring(dampingRatio = 0.55f, stiffness = 600f), initialScale = 0.6f),
+                    exit = scaleOut(tween(200), targetScale = 1.3f) + fadeOut(tween(200))
+                ) {
+                    val nearLock = dragOffsetY < -45f && !isLockedRecording
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         modifier = Modifier
-                            .offset { IntOffset(0, -64.dp.roundToPx() + (dragOffsetY * 0.3f).roundToInt()) }
+                            .offset {
+                                val pull = (-dragOffsetY / 55f).coerceIn(0f, 1f)
+                                IntOffset(0, -64.dp.roundToPx() + (dragOffsetY * (0.3f + 0.5f * pull * pull)).roundToInt())
+                            }
+                            .graphicsLayer {
+                                val pull = (-dragOffsetY / 55f).coerceIn(0f, 1f)
+                                val grow = 1f + 0.14f * pull * pull
+                                scaleX = grow
+                                scaleY = grow
+                            }
                             .clip(RoundedCornerShape(16.dp))
                             .background(MaterialTheme.colorScheme.surface)
-                            .border(1.dp, if (dragOffsetY < -45f) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(16.dp))
+                            .border(1.dp, if (nearLock || isLockedRecording) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(16.dp))
                             .padding(horizontal = 8.dp, vertical = 6.dp)
                     ) {
                         Icon(
-                            imageVector = if (dragOffsetY < -45f) Icons.Rounded.LockOpen else Icons.Rounded.Lock,
+                            imageVector = if (nearLock) Icons.Rounded.LockOpen else Icons.Rounded.Lock,
                             contentDescription = "Lock",
-                            tint = if (dragOffsetY < -45f) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            tint = if (nearLock || isLockedRecording) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(16.dp)
                         )
                         Icon(
                             imageVector = Icons.Rounded.KeyboardArrowUp,
                             contentDescription = null,
-                            tint = if (dragOffsetY < -45f) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            tint = if (nearLock || isLockedRecording) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(14.dp)
                         )
                     }
@@ -1418,6 +1447,18 @@ fun MessageComposer(
             }
         }
 
+        // GIPHY's GIFs, opened from the emoji board's GIF tab; a tap sends one
+        if (showGifPicker && onSendGif != null) {
+            GifPickerSheet(
+                onPick = { gif ->
+                    showGifPicker = false
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    onSendGif(gif)
+                },
+                onDismiss = { showGifPicker = false }
+            )
+        }
+
         // WhatsApp/Telegram-Style Tabbed Emoji Panel, in the keyboard's place (NORMAL MODE ONLY)
         if (!isPrivateMode && isEmojiBoardShown && !isRecordingVoice) {
             val boardHeightPx = if (keyboardHeightPx > 0) keyboardHeightPx else with(density) { 280.dp.roundToPx() }
@@ -1528,6 +1569,31 @@ fun MessageComposer(
                                     Text(
                                         text = tabEmoji,
                                         fontSize = if (isSelected) 18.sp else 15.sp
+                                    )
+                                }
+                            }
+
+                            // GIFs: searching needs the keyboard, so they open in their own sheet
+                            if (onSendGif != null && Giphy.isAvailable) {
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .clickable {
+                                            closeEmojiBoard()
+                                            showGifPicker = true
+                                        }
+                                        .padding(vertical = 6.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = "GIF",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier
+                                            .border(1.2.dp, MaterialTheme.colorScheme.onSurfaceVariant, RoundedCornerShape(4.dp))
+                                            .padding(horizontal = 4.dp)
                                     )
                                 }
                             }

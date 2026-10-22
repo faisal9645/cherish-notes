@@ -66,6 +66,9 @@ object StorageOptimizer {
                 enforceLruLimit(File(cacheDir, "outgoing_media"), TARGET_CACHE_BYTES / 5)
                 enforceLruLimit(File(cacheDir, "voice_cache"), TARGET_CACHE_BYTES / 5)
             }
+
+            // 5. Played voice notes and videos are kept (see KeptMedia), within their own limits
+            KeptMedia.trim(context)
         } catch (e: Exception) {
             Log.w(TAG, "pruneStaleCaches failed gracefully: ${e.message}")
         }
@@ -94,6 +97,9 @@ object StorageOptimizer {
                     file.delete()
                 }
             }
+
+            // Its kept voice note (see KeptMedia)
+            KeptMedia.forgetVoice(context, messageId)
         } catch (_: Exception) {}
     }
 

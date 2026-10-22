@@ -100,6 +100,8 @@ class ProfileViewModel(
         object Idle : ReinstallUi()
         object Preparing : ReinstallUi()
         data class Downloading(val progress: Float) : ReinstallUi()
+        /** The installer [fileName] is in Downloads: the steps from here are shown, then Uninstall. */
+        data class Downloaded(val fileName: String) : ReinstallUi()
         data class Error(val message: String) : ReinstallUi()
     }
 
@@ -123,8 +125,9 @@ class ProfileViewModel(
     )
 
     /**
-     * Downloads the latest APK into Downloads, then opens the uninstall dialog. After the user
-     * reinstalls from Downloads and signs in, the app records it and clears the leftover installer.
+     * Downloads the latest APK into Downloads, then shows what to do next (uninstall, install it
+     * from Downloads, delete it). After the user reinstalls and signs in, the app records it and
+     * clears the leftover installer where Android lets it.
      */
     fun startReinstall(context: android.content.Context) {
         val state = _reinstallState.value
@@ -144,14 +147,13 @@ class ProfileViewModel(
                 _reinstallState.value = ReinstallUi.Error("Couldn't save the installer to Downloads.")
                 return@launch
             }
-            // Downloaded: straight on to the uninstall dialog (agreed to in "Download & Reinstall",
-            // which says the installer goes to Downloads)
-            openUninstall(context)
+            // Downloaded: the steps from here, with an Uninstall button to start them
+            _reinstallState.value = ReinstallUi.Downloaded(info.fileName)
         }
     }
 
-    /** The installer is in Downloads: open the system uninstall dialog. */
-    private fun openUninstall(context: android.content.Context) {
+    /** "Uninstall now" in the download-complete steps: open the system uninstall dialog. */
+    fun openUninstall(context: android.content.Context) {
         // Leaving for the uninstall dialog isn't the user leaving the app
         securityPreferences.ignoreNextPause = true
         securityPreferences.isExternalPickerActive = true
@@ -161,6 +163,11 @@ class ProfileViewModel(
 
     fun clearReinstallError() {
         if (_reinstallState.value is ReinstallUi.Error) _reinstallState.value = ReinstallUi.Idle
+    }
+
+    /** "Later" in the download-complete steps: the installer stays in Downloads for now. */
+    fun dismissReinstallSteps() {
+        if (_reinstallState.value is ReinstallUi.Downloaded) _reinstallState.value = ReinstallUi.Idle
     }
 
     fun backupNow(onResult: (Boolean, String) -> Unit = { _, _ -> }) {

@@ -318,7 +318,7 @@ internal enum class EmojiMotion(val durationMs: Int) {
     Heartbeat(1500), KissBlow(1400), Love(1300), Hug(1600), Blush(1500), Joy(1200), Laugh(1300), Nervous(1300),
     Silly(1300), Wink(1100), Smirk(1400), Relieved(1600), Yum(1300), Neutral(1600), Confused(1500),
     Unamused(1500), Wow(1000), Scream(1300), Sob(1500), Sad(1600), Angry(1000), Fire(1400),
-    Party(1300), Wave(1500), Cheer(1100), Sparkle(1400), Jelly(1100)
+    Party(1300), Wave(1500), Cheer(1100), Sparkle(1400), Jelly(1100), Bloom(1800)
 }
 
 /**
@@ -544,6 +544,16 @@ internal fun GraphicsLayerScope.emojiMotion(motion: EmojiMotion, t: Float, unit:
             scaleY = 1f - 0.16f * wobble
             rotationZ = 6f * sin(t * 3f * PI_F) * fade
         }
+        EmojiMotion.Bloom -> {
+            // Opens up a little, then sways from its stem in a breeze, settling as it lets petals go
+            transformOrigin = TransformOrigin(0.5f, 0.92f)
+            val open = 0.15f * pulse(t, 0.13f, 0.07f)
+            val sway = sin(t * 2.5f * PI_F) * fade * ease
+            rotationZ = 13f * sway
+            translationX = 3f * unit * sway
+            scaleX = 1f + open
+            scaleY = 1f + open
+        }
     }
 }
 
@@ -592,6 +602,7 @@ internal fun motionOf(base: String): EmojiMotion = when {
     base in PARTY -> EmojiMotion.Party
     base in WAVE -> EmojiMotion.Wave
     base in CHEER -> EmojiMotion.Cheer
+    base in FLOWERS -> EmojiMotion.Bloom
     base in SPARKLE -> EmojiMotion.Sparkle
     else -> EmojiMotion.Jelly
 }
@@ -660,9 +671,11 @@ private val CHEER = setOf(
     "👍", "👏", "🙌", "💪", "✌", "👌", "🤞", "🤟", "🤘", "👊", "✊", "🤙", "🫡", "💯", "✅", "🙏", "🤝", "😎"
 )
 private val SPARKLE = setOf(
-    "✨", "⭐", "🌟", "💫", "🌙", "🌈", "☀", "🌸", "🌹", "💐", "🌺", "🌷", "🌻", "🤩", "😇", "🦋",
+    "✨", "⭐", "🌟", "💫", "🌙", "🌈", "☀", "🤩", "😇", "🦋",
     "🌞", "🌛", "🌝", "💎", "👑"
 )
+/** Flowers: they bloom, sway and let petals go, in their own colours (see petalColorsOf). */
+private val FLOWERS = setOf("🌹", "🌸", "🌷", "🌺", "🌻", "🌼", "💐", "🏵", "💮", "🪷", "🪻", "🥀")
 /** Laughing till they cry. */
 private val LAUGH_TEARS = setOf("😂", "🤣", "😹")
 /** Sad faces with a tear to shed. */
@@ -672,13 +685,13 @@ private val FLUSHED = setOf("😳")
 // ---- The burst around them --------------------------------------------------------------------
 
 private enum class BurstStyle(val count: Int, val tapCount: Int) {
-    Hearts(9, 14), HeartBeats(12, 20), KissHearts(6, 10), Hug(6, 8), Blush(5, 8), Flushed(2, 2), Confetti(22, 34),
+    Hearts(9, 14), HeartBeats(14, 22), KissHearts(6, 10), Hug(6, 8), Blush(5, 8), Flushed(2, 2), Confetti(22, 34),
     Sparkles(9, 14), Twinkle(2, 4), LaughTears(6, 10), SobTears(16, 24), CryTears(3, 5), Sweat(2, 3),
-    Sigh(3, 5), Dots(3, 3), Question(1, 3), Ripples(3, 4), Embers(12, 18), Rage(9, 13)
+    Sigh(3, 5), Dots(3, 3), Question(1, 3), Ripples(3, 4), Embers(12, 18), Rage(9, 13), Petals(11, 18)
 }
 
 private enum class ParticleShape {
-    Heart, Confetti, Sparkle, Drop, Ember, Puff, Glyph,
+    Heart, Confetti, Sparkle, Drop, Ember, Puff, Glyph, Petal,
     // These stay where they start: a ring spreading out, a dot, a glow on the face, an aura behind it
     Ring, Dot, Glow, Aura
 }
@@ -756,6 +769,7 @@ private fun burstStyleOf(base: String, motion: EmojiMotion): BurstStyle? = when 
     EmojiMotion.Angry -> BurstStyle.Rage
     EmojiMotion.Fire -> BurstStyle.Embers
     EmojiMotion.Party -> BurstStyle.Confetti
+    EmojiMotion.Bloom -> BurstStyle.Petals
     EmojiMotion.Joy, EmojiMotion.Silly, EmojiMotion.Wave, EmojiMotion.Jelly -> null
 }
 
@@ -807,11 +821,24 @@ private fun particlesFor(
                 ParticleShape.Heart, angle = UP + rnd(-1.3f, 1.3f), distance = rnd(56f, 120f), size = rnd(12f, 22f),
                 spin = rnd(-50f, 50f), start = rnd(0f, 0.12f), life = rnd(0.6f, 0.8f), gravity = -24f
             )
-            // In time with the two beats
-            BurstStyle.HeartBeats -> particle(
-                ParticleShape.Heart, angle = UP + rnd(-1.4f, 1.4f), distance = rnd(48f, 110f), size = rnd(11f, 20f),
-                spin = rnd(-40f, 40f), start = (if (i % 2 == 0) 0.1f else 0.54f) + rnd(0f, 0.05f),
-                life = rnd(0.38f, 0.44f), gravity = -20f
+            // In time with the two beats: a soft glow behind it and a ring going out with each beat,
+            // and hearts thrown up
+            BurstStyle.HeartBeats -> when (i) {
+                0, 1 -> particle(ParticleShape.Aura, size = 44f, start = if (i == 0) 0.08f else 0.52f, life = 0.3f)
+                2, 3 -> particle(
+                    ParticleShape.Ring, distance = rnd(58f, 66f), size = 2.2f, start = if (i == 2) 0.1f else 0.54f, life = 0.36f
+                )
+                else -> particle(
+                    ParticleShape.Heart, angle = UP + rnd(-1.4f, 1.4f), distance = rnd(48f, 110f), size = rnd(11f, 20f),
+                    spin = rnd(-40f, 40f), start = (if (i % 2 == 0) 0.1f else 0.54f) + rnd(0f, 0.05f),
+                    life = rnd(0.38f, 0.44f), gravity = -20f
+                )
+            }
+            // Petals let go of the flower: thrown up and out a little, then drifting down, turning over
+            BurstStyle.Petals -> particle(
+                ParticleShape.Petal, angle = UP + rnd(-1.5f, 1.5f), distance = rnd(24f, 66f), size = rnd(8f, 13f),
+                spin = rnd(-240f, 240f), start = rnd(0f, 0.32f), life = rnd(0.55f, 0.66f), gravity = rnd(60f, 96f),
+                dy = -0.2f
             )
             // Blown from the lips with the kiss, off to the side and up, the first one big
             BurstStyle.KissHearts -> particle(
@@ -933,6 +960,7 @@ private fun colorsOf(style: BurstStyle, base: String): List<Color> = when (style
     BurstStyle.Ripples -> RippleColors
     BurstStyle.Embers -> FireColors
     BurstStyle.Rage -> SteamColors
+    BurstStyle.Petals -> petalColorsOf(base)
 }
 
 /** A coloured heart throws hearts of its own colour. */
@@ -949,6 +977,20 @@ private fun heartColorsOf(base: String): List<Color> = when (if (base.isEmpty())
     0x1FA75 -> listOf(Color(0xFF81D4FA), Color(0xFF4FC3F7), Color(0xFFB3E5FC)) // 🩵
     0x1FA76 -> listOf(Color(0xFF9E9E9E), Color(0xFFBDBDBD), Color(0xFF757575)) // 🩶
     else -> HeartColors
+}
+
+/** A flower's petals, in its own colours. */
+private fun petalColorsOf(base: String): List<Color> = when (base) {
+    "🌹" -> listOf(Color(0xFFE53935), Color(0xFFC62828), Color(0xFFEF5350), Color(0xFFD32F2F))
+    "🥀" -> listOf(Color(0xFF8E2430), Color(0xFFA63A45), Color(0xFF6D1B24))
+    "🌸", "💮" -> listOf(Color(0xFFF8BBD0), Color(0xFFF48FB1), Color(0xFFFCE4EC), Color(0xFFF7A8C4))
+    "🌷" -> listOf(Color(0xFFEC407A), Color(0xFFF06292), Color(0xFFF48FB1))
+    "🌺", "🏵" -> listOf(Color(0xFFE91E63), Color(0xFFFF4081), Color(0xFFFF80AB), Color(0xFFFF6E40))
+    "🌻", "🌼" -> listOf(Color(0xFFFFC107), Color(0xFFFFD54F), Color(0xFFFFB300), Color(0xFFFFE082))
+    "🪷" -> listOf(Color(0xFFF8BBD0), Color(0xFFF48FB1), Color(0xFFFFFFFF))
+    "🪻" -> listOf(Color(0xFF9575CD), Color(0xFFB39DDB), Color(0xFF7E57C2))
+    // A bouquet: a bit of each
+    else -> listOf(Color(0xFFF48FB1), Color(0xFFE53935), Color(0xFFFFD54F), Color(0xFFFCE4EC), Color(0xFFBA68C8))
 }
 
 private val ConfettiColors = listOf(
@@ -1036,6 +1078,19 @@ private fun DrawScope.drawParticle(p: Particle, t: Float, heart: VectorPainter, 
             }
         }
         ParticleShape.Sparkle -> drawSparkle(state.path, position, px, rotation, p.color, alpha)
+        ParticleShape.Petal -> {
+            val sway = sin(local * 3f * PI_F) * px * 0.9f
+            val at = Offset(position.x + sway, position.y)
+            val width = px * (0.3f + 0.4f * abs(cos(rotation * PI_F / 180f)))
+            rotate(rotation, pivot = at) {
+                drawOval(
+                    color = p.color,
+                    topLeft = Offset(at.x - width / 2f, at.y - px / 2f),
+                    size = Size(width, px),
+                    alpha = alpha
+                )
+            }
+        }
         ParticleShape.Drop -> drawDrop(state.path, position, px, p.color, alpha)
         ParticleShape.Ember -> {
             drawCircle(p.color, radius = px, center = position, alpha = alpha * 0.3f)

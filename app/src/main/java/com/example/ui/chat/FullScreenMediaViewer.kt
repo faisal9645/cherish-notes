@@ -175,17 +175,6 @@ fun FullScreenMediaViewer(
         entrance.animateTo(1f, spring(dampingRatio = 0.9f, stiffness = 340f))
     }
     var isClosing by remember { mutableStateOf(false) }
-    val closeAnimated: () -> Unit = {
-        if (!isClosing) {
-            isClosing = true
-            com.example.ui.components.stopAllVideoNotes()
-            scope.launch {
-                entrance.animateTo(0f, tween(200, easing = FastOutSlowInEasing))
-                onDismiss()
-            }
-        }
-    }
-    BackHandler(onBack = closeAnimated)
     DisposableEffect(Unit) {
         onDispose {
             com.example.ui.components.stopAllVideoNotes()
@@ -251,6 +240,31 @@ fun FullScreenMediaViewer(
     val offsetYAnim = remember(currentIndex) { Animatable(0f) }
     var swipeOffsetY by remember(currentIndex) { mutableFloatStateOf(0f) }
     var isChromeVisible by remember { mutableStateOf(true) }
+
+    // Closing (back, the X, a pull down, a pinch in): still on the photo it opened from, it shrinks
+    // back into that exact bubble or tile, a pull or pinch easing out on the way so it lands square
+    // in it; otherwise it zooms away
+    val closeAnimated: () -> Unit = {
+        if (!isClosing) {
+            isClosing = true
+            com.example.ui.components.stopAllVideoNotes()
+            val intoTile = pagerState.currentPage == initialIdx && tileRectInViewer() != null
+            scope.launch {
+                if (intoTile) {
+                    val home = tween<Float>(260, easing = FastOutSlowInEasing)
+                    launch {
+                        androidx.compose.animation.core.animate(swipeOffsetY, 0f, animationSpec = home) { value, _ -> swipeOffsetY = value }
+                    }
+                    launch { scaleAnim.animateTo(1f, home) }
+                    launch { offsetXAnim.animateTo(0f, home) }
+                    launch { offsetYAnim.animateTo(0f, home) }
+                }
+                entrance.animateTo(0f, tween(if (intoTile) 260 else 200, easing = FastOutSlowInEasing))
+                onDismiss()
+            }
+        }
+    }
+    BackHandler(onBack = closeAnimated)
 
     var containerSize by remember { mutableStateOf(IntSize.Zero) }
     var currentImageSize by remember(currentIndex) { mutableStateOf(Size.Zero) }
@@ -465,6 +479,35 @@ fun FullScreenMediaViewer(
                 window.setDimAmount(0f)
             }
         }
+        // The chat behind softens into a blur as the photo lifts out of it, and comes back into
+        // focus as the photo is pulled or pinched home (Android 12+, when the phone allows window
+        // blur; Battery Saver turns it off). The system blurs what's behind the window (as in
+        // CherishAlertDialog): only its radius changes, in a few steps, as each change updates
+        // the window
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val blurMaxPx = with(androidx.compose.ui.platform.LocalDensity.current) { 28.dp.toPx() }
+            val blurStepPx = with(androidx.compose.ui.platform.LocalDensity.current) { 3.dp.toPx() }
+            LaunchedEffect(view, currentIndex) {
+                val window = (view.parent as? androidx.compose.ui.window.DialogWindowProvider)?.window ?: return@LaunchedEffect
+                if (!window.windowManager.isCrossWindowBlurEnabled) return@LaunchedEffect
+                window.addFlags(android.view.WindowManager.LayoutParams.FLAG_BLUR_BEHIND)
+                var applied = -1
+                snapshotFlow {
+                    val pulled = (swipeOffsetY.coerceAtLeast(0f) / 480f).coerceIn(0f, 1f)
+                    val pinchedIn = ((1f - scaleAnim.value) / (1f - PINCH_CLOSE_SCALE)).coerceIn(0f, 1f)
+                    val open = entrance.value.coerceIn(0f, 1f) * (1f - pulled * pulled) * (1f - 0.5f * pinchedIn)
+                    (blurMaxPx * open).roundToInt()
+                }.collect { radius ->
+                    val settled = radius == 0 || radius >= blurMaxPx.roundToInt()
+                    if (applied < 0 || settled || kotlin.math.abs(radius - applied) >= blurStepPx) {
+                        if (radius != applied) {
+                            applied = radius
+                            window.attributes = window.attributes.apply { blurBehindRadius = radius }
+                        }
+                    }
+                }
+            }
+        }
 
         Box(
             modifier = Modifier
@@ -476,7 +519,9 @@ fun FullScreenMediaViewer(
                 }
                 .drawBehind {
                     val fade = if (openedTile != null) entrance.value.coerceIn(0f, 1f) else 1f
-                    drawRect(Color.Black.copy(alpha = backgroundAlpha * fade))
+                    // Pinched in under its size, the black thins and the (blurred) chat shows through
+                    val pinchedIn = ((1f - scaleAnim.value) / (1f - PINCH_CLOSE_SCALE)).coerceIn(0f, 1f)
+                    drawRect(Color.Black.copy(alpha = backgroundAlpha * fade * (1f - 0.5f * pinchedIn)))
                 }
                 .testTag("full_screen_media_dialog")
         ) {
@@ -682,7 +727,10 @@ fun FullScreenMediaViewer(
                                         val elapsed = System.currentTimeMillis() - startTime
                                         val dist = hypot(totalX, totalY)
 
-                                        if (isMultiTouch) {
+                                        if (isMultiTouch && scaleAnim.value < PINCH_CLOSE_SCALE) {
+                                            // Pinched in well under its size: back into its bubble
+                                            closeAnimated()
+                                        } else if (isMultiTouch) {
                                             // End of pinch gesture: spring back smoothly if scale < 1.0x or > 5.0x, or offset out of bounds
                                             val curScale = scaleAnim.value
                                             val targetScale = curScale.coerceIn(1.0f, 5.0f)
@@ -804,7 +852,10 @@ fun FullScreenMediaViewer(
                                                 val velocityY = velocityTracker.calculateVelocity().y
                                                 val flicked = velocityY >= 1100.dp.toPx() && swipeOffsetY > 24.dp.toPx()
                                                 val from = swipeOffsetY
-                                                if (from > 160f || flicked) {
+                                                val backIntoTile = pagerState.currentPage == initialIdx && tileRectInViewer() != null
+                                                if ((from > 160f || flicked) && backIntoTile) {
+                                                    closeAnimated()
+                                                } else if (from > 160f || flicked) {
                                                     val flyTo = size.height.toFloat() + from
                                                     scope.launch {
                                                         androidx.compose.animation.core.animate(
@@ -1456,6 +1507,9 @@ fun FullScreenMediaViewer(
         }
     }
 }
+
+/** Pinched in under this scale and let go, the viewer closes back into the photo it came from. */
+private const val PINCH_CLOSE_SCALE = 0.9f
 
 /**
  * The photo (a chat bubble or a gallery tile) that was just tapped to open, so the viewer can grow

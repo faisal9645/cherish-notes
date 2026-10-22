@@ -47,10 +47,22 @@ object VideoThumbnailHelper {
         memoryCache.evictAll()
     }
 
+    /**
+     * A video's kept copy: in the app's private storage (see KeptMedia), not the cache that Android
+     * or the cache clean-up empties, so a played video is never downloaded twice. One left in the
+     * old cache folder moves over.
+     */
     fun getVideoCacheFile(context: Context, url: String): File {
         val safeKey = abs(url.hashCode()).toString(16)
-        val dir = File(context.cacheDir, "video_notes").apply { if (!exists()) mkdirs() }
-        return File(dir, "vn_$safeKey.mp4")
+        val file = File(KeptMedia.videoDir(context), "vn_$safeKey.mp4")
+        if (!file.exists()) {
+            val old = File(File(context.cacheDir, "video_notes"), "vn_$safeKey.mp4")
+            if (old.exists() && old.length() > 1024) old.renameTo(file)
+        } else {
+            // Just used: the size limit makes room from the ones played longest ago
+            file.setLastModified(System.currentTimeMillis())
+        }
+        return file
     }
 
     fun cacheLocalVideo(context: Context, sourceFile: File, url: String) {

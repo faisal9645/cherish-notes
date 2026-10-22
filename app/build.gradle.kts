@@ -130,6 +130,8 @@ dependencies {
   implementation(libs.androidx.room.runtime)
   implementation(libs.coil.compose)
   implementation(libs.coil.video)
+  // Animated GIFs (keyboard GIFs and picked ones) move in the chat and the gallery
+  implementation(libs.coil.gif)
   implementation(libs.firebase.firestore)
   implementation(libs.firebase.auth)
   implementation(libs.firebase.storage)

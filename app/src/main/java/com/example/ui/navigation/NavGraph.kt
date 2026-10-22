@@ -269,6 +269,17 @@ fun CherishNavGraph(
 
     val updateState by profileViewModel.updateState.collectAsState()
 
+    // Opened behind the disguise (the Calculator or Notes): the first frames are just the decoy, so
+    // it's there the moment the app opens; the secret app behind it is built right after, unseen
+    var composeSecretApp by remember { mutableStateOf(!app.securityPreferences.isDisguiseActive()) }
+    LaunchedEffect(Unit) {
+        if (!composeSecretApp) {
+            withFrameNanos { }
+            withFrameNanos { }
+            composeSecretApp = true
+        }
+    }
+
     LaunchedEffect(isDisguiseActive) {
         if (!isDisguiseActive) {
             // A few seconds in, so the chat opens and loads first
@@ -293,6 +304,7 @@ fun CherishNavGraph(
             typography = secretTypography
         ) {
         // Shared elements (a Love & Us tile growing into its screen) are drawn above every screen here
+        if (composeSecretApp || !isDisguiseActive) {
         SharedTransitionLayout(
             modifier = Modifier
                 .fillMaxSize()
@@ -670,6 +682,7 @@ fun CherishNavGraph(
             )
         }
     }
+        }
         }
         }
 

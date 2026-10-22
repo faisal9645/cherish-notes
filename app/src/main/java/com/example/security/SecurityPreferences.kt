@@ -109,10 +109,14 @@ class SecurityPreferences(private val context: Context) {
     }
 
     /**
-     * The app is the Calculator right now: its icon, and what hides Cherish. With Disguise Mode off
-     * the icon is Notes whatever style was picked, so the decoy is Notes too.
+     * The app is the Calculator right now: its icon, its name in notifications and recent apps, and
+     * what hides Cherish. The Calculator is the app's own identity (its name and icon in Settings),
+     * so it's Notes only while Disguise Mode is on with Notes picked.
      */
-    fun isCalculatorDecoy(): Boolean = isDisguiseModeEnabled() && getDisguiseStyle() == DISGUISE_STYLE_CALCULATOR
+    fun isCalculatorDecoy(): Boolean = !isDisguiseModeEnabled() || getDisguiseStyle() == DISGUISE_STYLE_CALCULATOR
+
+    /** The style the app wears right now (see [isCalculatorDecoy]). */
+    fun currentDecoyStyle(): String = if (isCalculatorDecoy()) DISGUISE_STYLE_CALCULATOR else DISGUISE_STYLE_NOTES
 
     private val _isCalculatorDecoy = MutableStateFlow(isCalculatorDecoy())
     val calculatorDecoy: StateFlow<Boolean> = _isCalculatorDecoy.asStateFlow()
@@ -1027,7 +1031,7 @@ class SecurityPreferences(private val context: Context) {
     fun setAppSoundVolume(volume: Int) = prefs.edit().putInt(KEY_APP_SOUND_VOLUME, volume.coerceIn(0, 100)).apply()
 
     /** What a masked (hidden-content / disguised) notification says. */
-    fun getMaskedNotificationTitle(style: String = getDisguiseStyle()): String {
+    fun getMaskedNotificationTitle(style: String = currentDecoyStyle()): String {
         return if (style == DISGUISE_STYLE_CALCULATOR) {
             val custom = prefs.getString(KEY_MASKED_TITLE_CALCULATOR, null)?.ifBlank { null }
             custom ?: "Calculator"
@@ -1037,7 +1041,7 @@ class SecurityPreferences(private val context: Context) {
         }
     }
 
-    fun getMaskedNotificationText(style: String = getDisguiseStyle()): String {
+    fun getMaskedNotificationText(style: String = currentDecoyStyle()): String {
         return if (style == DISGUISE_STYLE_CALCULATOR) {
             val custom = prefs.getString(KEY_MASKED_TEXT_CALCULATOR, null)?.ifBlank { null }
             custom ?: "Calculation history updated"

@@ -49,8 +49,7 @@ object NotificationHelper {
     private val notifiedMessageIds = java.util.Collections.synchronizedSet(LinkedHashSet<String>())
     private val activeNoteReminderIds = java.util.Collections.synchronizedSet(LinkedHashSet<Int>())
 
-    private fun isCalculatorMode(prefs: SecurityPreferences): Boolean =
-        prefs.isDisguiseModeEnabled() && prefs.getDisguiseStyle() == SecurityPreferences.DISGUISE_STYLE_CALCULATOR
+    private fun isCalculatorMode(prefs: SecurityPreferences): Boolean = prefs.isCalculatorDecoy()
 
     fun getAppIconBitmap(context: Context): Bitmap? {
         return try {
@@ -331,8 +330,9 @@ object NotificationHelper {
             return
         }
 
+        // Disguised (or content hidden): never the chat's sender or words, like missed calls
         val isHideContent = prefs.isHideNotificationContent()
-        val isDiscreet = isHideContent && prefs.isDisguiseModeEnabled()
+        val isDiscreet = isHideContent || prefs.isDisguiseModeEnabled()
 
         val intent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
@@ -397,7 +397,8 @@ object NotificationHelper {
             .setContentIntent(pendingIntent)
             .setDeleteIntent(getDismissIntent(context))
             .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setCategory(NotificationCompat.CATEGORY_MESSAGE)
+            // Disguised, it isn't filed with chats ("Conversations" on One UI and stock Android)
+            .setCategory(if (isDiscreet) NotificationCompat.CATEGORY_REMINDER else NotificationCompat.CATEGORY_MESSAGE)
             .setDefaults(NotificationCompat.DEFAULT_LIGHTS)
             // Default system notification sound
             .setSound(systemNotificationSoundUri())
@@ -706,7 +707,7 @@ object NotificationHelper {
         if (!prefs.isNotificationsEnabled()) return
         if (!prefs.isCheckAfterReminderEnabled()) return
 
-        val isDisguised = prefs.isHideNotificationContent() && prefs.isDisguiseModeEnabled()
+        val isDisguised = prefs.isHideNotificationContent() || prefs.isDisguiseModeEnabled()
 
         val intent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP

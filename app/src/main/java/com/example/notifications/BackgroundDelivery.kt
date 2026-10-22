@@ -180,7 +180,7 @@ object BackgroundDelivery {
         val appName = try {
             context.applicationInfo.loadLabel(context.packageManager).toString()
         } catch (_: Exception) {
-            "Notes"
+            "Calculator"
         }
         val steps = mutableListOf<Step>()
         steps += Step(
@@ -267,6 +267,16 @@ object BackgroundDelivery {
             )
             Maker.OTHER -> Unit
         }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            steps += Step(
+                "unused_pause",
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) "Pause app activity if unused: Off" else "Remove permissions if unused: Off",
+                "App info > turn off \"Pause app activity if unused\". Otherwise, after a while without opening $appName, Android stops its pushes and takes its permissions, so messages and calls stop coming.",
+                isOn = isExemptFromUnusedPause(context),
+                required = true,
+                open = ::openUnusedPauseSettings
+            )
+        }
         if (isBackgroundDataRestricted(context)) {
             steps += Step(
                 "background_data", "Background data",
@@ -310,8 +320,8 @@ object BackgroundDelivery {
 
     fun lockInRecentsTip(context: Context? = null): String {
         val appName = if (context != null) {
-            try { context.applicationInfo.loadLabel(context.packageManager).toString() } catch (_: Exception) { "Notes" }
-        } else "Notes"
+            try { context.applicationInfo.loadLabel(context.packageManager).toString() } catch (_: Exception) { "Calculator" }
+        } else "Calculator"
         return when (maker()) {
             Maker.XIAOMI -> "Also lock $appName in Recents: open Recents, long-press $appName and tap the lock."
             Maker.VIVO -> "Also lock $appName in Recents: open Recents and pull $appName down (or tap its lock)."
@@ -416,11 +426,9 @@ object BackgroundDelivery {
 
     /** The maker's own battery list for apps (Xiaomi, Vivo, Samsung), else the app's settings page. */
     private fun openMakerBattery(context: Context) {
-        val label = try {
-            context.applicationInfo.loadLabel(context.packageManager).toString()
-        } catch (_: Exception) {
-            "Notes"
-        }
+        // Named as the app looks right now (its own name is always "Calculator"), so the Notes
+        // decoy isn't shown as a Calculator there
+        val label = if (SecurityPreferences.getInstance(context).isCalculatorDecoy()) "Calculator" else "Notes"
         val screens = when (maker()) {
             Maker.XIAOMI -> listOf(
                 Intent().setComponent(ComponentName("com.miui.powerkeeper", "com.miui.powerkeeper.ui.HiddenAppsConfigActivity"))
@@ -477,6 +485,26 @@ object BackgroundDelivery {
             Intent(Settings.ACTION_IGNORE_BACKGROUND_DATA_RESTRICTIONS_SETTINGS, packageUri(context))
         } else {
             Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, packageUri(context))
+        }
+        openSettingsPage(context, page)
+    }
+
+    /**
+     * "Pause app activity if unused" (Android 12+; "Remove permissions if unused" on 11) is off for
+     * the app: a long spell without opening it doesn't stop its pushes or take its permissions.
+     */
+    private fun isExemptFromUnusedPause(context: Context): Boolean? = try {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) context.packageManager.isAutoRevokeWhitelisted else true
+    } catch (_: Throwable) {
+        null
+    }
+
+    /** Where that switch is: the app's own info page on Android 12+, its permissions page on 11. */
+    private fun openUnusedPauseSettings(context: Context) {
+        val page = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, packageUri(context))
+        } else {
+            Intent(Intent.ACTION_AUTO_REVOKE_PERMISSIONS, packageUri(context))
         }
         openSettingsPage(context, page)
     }

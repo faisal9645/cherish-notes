@@ -277,7 +277,7 @@ class CherishSyncService : Service() {
 
     private fun buildSyncNotification(): android.app.Notification {
         val prefs = SecurityPreferences.getInstance(this)
-        val isCalc = prefs.isDisguiseModeEnabled() && prefs.getDisguiseStyle() == SecurityPreferences.DISGUISE_STYLE_CALCULATOR
+        val isCalc = prefs.isCalculatorDecoy()
         val maskedTitle = prefs.getMaskedNotificationTitle()
         val appIcon = com.example.notifications.NotificationHelper.getAppIconBitmap(this)
         return NotificationCompat.Builder(this, CHANNEL_ID)

@@ -49,6 +49,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -87,6 +88,63 @@ import androidx.compose.material.icons.automirrored.rounded.PhoneMissed
 
 private fun formatMessageTime(rawTimestamp: Long): String {
     return ChatTimeFormatter.formatMessageTime(rawTimestamp)
+}
+
+// An album's own text ("Sent 3 photos"), compiled once rather than in every bubble
+private val SentPhotosCaption = Regex("""Sent \d+ photos?""")
+
+/** How a bubble's liquid glass is painted: see [rememberBubbleGlass]. */
+internal class BubbleGlass(val tint: Brush, val sheen: Brush, val rim: Brush)
+
+/**
+ * Liquid glass for the chat's bubbles, in their own colours (mine the app's blue, my partner's
+ * the same mist or navy as before): the colour lets a little through, so the wallpaper softly
+ * shows; a sheen of light lies across the top; a bright rim fades down the edge and catches
+ * again at the bottom. Plain fills and one border, nothing blurred live, so it costs nothing
+ * while the chat scrolls.
+ */
+@Composable
+internal fun rememberBubbleGlass(isFromMe: Boolean, isDark: Boolean): BubbleGlass {
+    val start = AppGradientStart
+    val mid = AppGradientMid
+    val end = AppGradientEnd
+    val received = if (isDark) darkSurface(NavyCard) else MistBlue
+    val receivedEdge = if (isDark) darkSurface(NavyRaised, Neutral800) else Gray200
+    return remember(isFromMe, isDark, start, mid, end, received, receivedEdge) {
+        val white = Color.White
+        if (isFromMe) {
+            val a = if (isDark) 0.86f else 0.9f
+            BubbleGlass(
+                tint = Brush.horizontalGradient(
+                    0f to start.copy(alpha = a),
+                    0.55f to mid.copy(alpha = a),
+                    1f to end.copy(alpha = a)
+                ),
+                sheen = Brush.verticalGradient(
+                    0f to white.copy(alpha = if (isDark) 0.12f else 0.18f),
+                    0.5f to Color.Transparent
+                ),
+                rim = Brush.verticalGradient(
+                    0f to white.copy(alpha = if (isDark) 0.32f else 0.5f),
+                    0.55f to white.copy(alpha = 0.06f),
+                    1f to white.copy(alpha = if (isDark) 0.12f else 0.2f)
+                )
+            )
+        } else {
+            BubbleGlass(
+                tint = SolidColor(received.copy(alpha = if (isDark) 0.82f else 0.8f)),
+                sheen = Brush.verticalGradient(
+                    0f to white.copy(alpha = if (isDark) 0.07f else 0.6f),
+                    0.5f to Color.Transparent
+                ),
+                rim = Brush.verticalGradient(
+                    0f to white.copy(alpha = if (isDark) 0.16f else 1f),
+                    0.5f to (if (isDark) white.copy(alpha = 0.04f) else receivedEdge.copy(alpha = 0.6f)),
+                    1f to receivedEdge
+                )
+            )
+        }
+    }
 }
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -143,6 +201,7 @@ fun MessageBubble(
     val isAmoledBlack = com.example.ui.theme.LocalAmoledBlack.current
     // The text size and font chosen in Settings
     val chatText = LocalChatTextStyle.current
+    val glass = rememberBubbleGlass(isFromMe, isDark)
 
     val bubbleBg = if (isPrivateMode) {
         if (isFromMe) {
@@ -195,7 +254,7 @@ fun MessageBubble(
     val pressScale by animateFloatAsState(
         targetValue = when {
             isLongPressed -> 0.94f
-            isPressed -> 0.97f
+            isPressed -> 0.96f
             else -> 1f
         },
         animationSpec = spring(dampingRatio = 0.5f, stiffness = 700f),
@@ -326,6 +385,14 @@ fun MessageBubble(
             horizontalArrangement = if (isFromMe) Arrangement.End else Arrangement.Start,
             modifier = (if (isYouTube) Modifier.fillMaxWidth() else Modifier)
                 .offset { androidx.compose.ui.unit.IntOffset(swipeOffset.value.roundToInt(), 0) }
+                // Swiping to reply, it leans a little (up to 2.5°) the way the finger pulls it
+                .graphicsLayer {
+                    val pull = (swipeOffset.value / maxDragPx).coerceIn(-1f, 1f)
+                    if (pull != 0f) {
+                        transformOrigin = androidx.compose.ui.graphics.TransformOrigin(if (isFromMe) 1f else 0f, 0.5f)
+                        rotationZ = 2.5f * pull
+                    }
+                }
         ) {
             Column(
                 horizontalAlignment = if (isFromMe) Alignment.End else Alignment.Start,
@@ -518,12 +585,19 @@ fun MessageBubble(
                             .zIndex(1f)
                             .padding(horizontal = 6.dp)
                     ) {
+                        // Its reactions on the circle's edge too, beside the time (not down below it)
+                        if (isFromMe) {
+                            ReactionsPill(message, isPrivateMode, onReactionClick, Modifier.padding(end = 4.dp))
+                        }
                         // My partner watching it right now
                         if (partnerHearing != null && isFromMe) {
                             PartnerHearingChip(playing = partnerHearing)
                             Spacer(modifier = Modifier.width(4.dp))
                         }
                         FloatingTimeChip(message = message, isFromMe = isFromMe)
+                        if (!isFromMe) {
+                            ReactionsPill(message, isPrivateMode, onReactionClick, Modifier.padding(start = 4.dp))
+                        }
                     }
                 }
                 DisposableEffect(message.id) {
@@ -592,9 +666,10 @@ fun MessageBubble(
                 }
             } else {
                 val isGenericPhotoText = message.getTypedType() == MessageType.IMAGE && (
-                    message.text.isBlank() || 
-                    message.text.equals("Sent a photo", ignoreCase = true) || 
-                    message.text.matches(Regex("""Sent \d+ photos?"""))
+                    message.text.isBlank() ||
+                    message.text.equals("Sent a photo", ignoreCase = true) ||
+                    message.text.equals(GIF_CAPTION, ignoreCase = true) ||
+                    message.text.matches(SentPhotosCaption)
                 )
 
                 // A photo with nothing else in the bubble fills it edge to edge: no bubble colour
@@ -650,6 +725,8 @@ fun MessageBubble(
                             }
                         )
                         .clip(cardShape)
+                        // A photo catches a soft sheen as the phone tilts (see tiltSheen)
+                        .then(if (isPhotoOnly && !isPrivateMode) Modifier.tiltSheen() else Modifier)
                         .then(
                             if (highlightPulse.value > 0.04f) {
                                 val strokeColor = if (isPrivateMode) Gray400 else RoseGoldPrimary
@@ -659,18 +736,16 @@ fun MessageBubble(
                                 )
                             } else if (isPhotoOnly) Modifier
                             else if (isPrivateMode) Modifier
-                            else if (!isFromMe) Modifier.border(
-                                BorderStroke(0.5.dp, if (isDark) darkSurface(NavyRaised, Neutral800) else Gray200),
-                                cardShape
-                            )
-                            else Modifier
+                            // Liquid glass: a bright rim that fades down the bubble's edge
+                            else Modifier.border(BorderStroke(0.8.dp, glass.rim), cardShape)
                         )
                         .background(
                             if (isPhotoOnly) androidx.compose.ui.graphics.SolidColor(Color.Transparent)
                             else if (isPrivateMode) androidx.compose.ui.graphics.SolidColor(bubbleBg)
-                            else if (isFromMe) appHorizontalGradient()
-                            else androidx.compose.ui.graphics.SolidColor(if (isDark) darkSurface(NavyCard) else MistBlue)
+                            else glass.tint
                         )
+                        // ...and a sheen of light across its top
+                        .then(if (isPhotoOnly || isPrivateMode) Modifier else Modifier.background(glass.sheen))
                         .pointerInput(message.id) {
                             detectTapGestures(
                                 onTap = {
@@ -830,7 +905,10 @@ fun MessageBubble(
                     MessageType.VIDEO -> {
                         val videoUrl = message.mediaUrl ?: message.mediaUrls.firstOrNull()
                         if (!videoUrl.isNullOrBlank()) {
+                            // Full screen grows out of this card (and shrinks back into it), like a photo
+                            val videoAnchor = remember { MediaTileAnchor() }
                             val openBigVideo = {
+                                videoAnchor.open()
                                 if (onImageClickWithList != null) {
                                     onImageClickWithList(videoUrl, listOf(videoUrl))
                                 } else {
@@ -848,6 +926,7 @@ fun MessageBubble(
                                     .padding(vertical = 2.dp)
                                     .fillMaxWidth()
                                     .aspectRatio(4f / 3f)
+                                    .mediaTileAnchor(videoAnchor)
                             )
                         }
                     }
@@ -1047,7 +1126,8 @@ fun MessageBubble(
                                                     else if (isFromMe) Color.White.copy(alpha = 0.38f) 
                                                     else MaterialTheme.colorScheme.primary.copy(alpha = 0.35f),
                                     onSeek = onSeekAudio,
-                                    height = 36.dp
+                                    height = 36.dp,
+                                    durationSeconds = message.durationSeconds
                                 )
                                 Spacer(modifier = Modifier.height(6.dp))
                                 CompositionLocalProvider(
@@ -1559,78 +1639,15 @@ fun MessageBubble(
             }
         }
 
-        // Emoji reactions pill below bubble: pops in with the first reaction, bumps when reactions
-        // change and counts roll to their new value. The last non-empty set is kept so the pill
-        // still has content while it shrinks away.
-        val lastReactions = remember { arrayOf(message.reactions) }
-        if (message.reactions.isNotEmpty()) lastReactions[0] = message.reactions
-        val pillBump = remember { Animatable(1f) }
-        val isFirstReactionsRun = remember { booleanArrayOf(true) }
-        val reactionsSignature = message.reactions.entries.sortedBy { it.key }.joinToString { "${it.key}:${it.value}" }
-        LaunchedEffect(reactionsSignature) {
-            if (isFirstReactionsRun[0]) {
-                isFirstReactionsRun[0] = false
-            } else if (message.reactions.isNotEmpty()) {
-                pillBump.snapTo(1.22f)
-                pillBump.animateTo(1f, spring(dampingRatio = 0.4f, stiffness = 600f))
-            }
+        // Emoji reactions pill below the bubble (a round video note has it beside its time instead)
+        if (!isVideoNote) {
+            ReactionsPill(
+                message = message,
+                isPrivateMode = isPrivateMode,
+                onReactionClick = onReactionClick,
+                modifier = Modifier.offset(y = (-6).dp)
+            )
         }
-        AnimatedVisibility(
-            visible = !isPrivateMode && message.reactions.isNotEmpty(),
-            enter = scaleIn(spring(dampingRatio = 0.45f, stiffness = 500f), initialScale = 0.3f) + fadeIn(tween(120)),
-            exit = scaleOut(tween(150), targetScale = 0.5f) + fadeOut(tween(150))
-        ) {
-            Surface(
-                modifier = Modifier
-                    .offset(y = (-6).dp)
-                    .graphicsLayer {
-                        scaleX = pillBump.value
-                        scaleY = pillBump.value
-                    }
-                    .testTag("reactions_pill_${message.id}"),
-                shape = CircleShape,
-                color = MaterialTheme.colorScheme.surface,
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
-                shadowElevation = 2.dp
-            ) {
-                Row(
-                    modifier = Modifier
-                        .padding(horizontal = 8.dp, vertical = 2.dp)
-                        .animateContentSize(spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessMediumLow)),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    val emojiCounts = lastReactions[0].values.groupingBy { it }.eachCount()
-                    for ((emoji, count) in emojiCounts) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier
-                                .clickable {
-                                    view.chatHaptic(ChatHaptic.Tick)
-                                    onReactionClick(emoji)
-                                }
-                                .padding(horizontal = 2.dp)
-                                .testTag("reaction_badge_${message.id}_$emoji")
-                        ) {
-                            ChatEmoji(emoji = emoji, fontSize = 15.sp)
-                            if (count > 1) {
-                                AnimatedContent(
-                                    targetState = count,
-                                    transitionSpec = {
-                                        val up = targetState > initialState
-                                        (slideInVertically { if (up) it else -it } + fadeIn())
-                                            .togetherWith(slideOutVertically { if (up) -it else it } + fadeOut())
-                                            .using(SizeTransform(clip = false))
-                                    },
-                                    label = "reaction_count"
-                                ) { shownCount ->
-                                    Text(text = " $shownCount", fontSize = 12.sp)
-                                }
-                            }
-                        }
-                    }
-                }
-            }
             // Seen photo (small): a tiny round photo of your partner sits under the last message they've read and glides down as they read more, like Messenger
             // It leaves the message she'd read before and slides down into place under this one
             androidx.compose.animation.AnimatedVisibility(
@@ -1655,9 +1672,100 @@ fun MessageBubble(
                 }
             }
         }
-        }
     }
 }
+}
+
+/**
+ * A message's emoji reactions in a pill: pops in with the first reaction, bumps when they change,
+ * and counts roll to their new value. The last non-empty set is kept, so the pill still has its
+ * emojis while it shrinks away.
+ */
+@Composable
+private fun ReactionsPill(
+    message: Message,
+    isPrivateMode: Boolean,
+    onReactionClick: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val view = androidx.compose.ui.platform.LocalView.current
+    val lastReactions = remember { arrayOf(message.reactions) }
+    if (message.reactions.isNotEmpty()) lastReactions[0] = message.reactions
+    val pillBump = remember { Animatable(1f) }
+    // A reaction just added throws a few tiny hearts off the pill
+    val pillHearts = rememberHeartBurstState()
+    val lastReactionCount = remember { intArrayOf(message.reactions.size) }
+    val isFirstReactionsRun = remember { booleanArrayOf(true) }
+    val reactionsSignature = message.reactions.entries.sortedBy { it.key }.joinToString { "${it.key}:${it.value}" }
+    LaunchedEffect(reactionsSignature) {
+        val added = message.reactions.size > lastReactionCount[0]
+        lastReactionCount[0] = message.reactions.size
+        if (isFirstReactionsRun[0]) {
+            isFirstReactionsRun[0] = false
+        } else if (message.reactions.isNotEmpty()) {
+            if (added) launch { pillHearts.burst(scale = 0.45f, count = 6) }
+            pillBump.snapTo(1.22f)
+            pillBump.animateTo(1f, spring(dampingRatio = 0.4f, stiffness = 600f))
+        }
+    }
+    androidx.compose.animation.AnimatedVisibility(
+        visible = !isPrivateMode && message.reactions.isNotEmpty(),
+        enter = scaleIn(spring(dampingRatio = 0.45f, stiffness = 500f), initialScale = 0.3f) + fadeIn(tween(120)),
+        exit = scaleOut(tween(150), targetScale = 0.5f) + fadeOut(tween(150))
+    ) {
+        Surface(
+            modifier = modifier
+                // Before the pill's own clip, so its hearts fly past its edge
+                .heartBurst(pillHearts)
+                .graphicsLayer {
+                    scaleX = pillBump.value
+                    scaleY = pillBump.value
+                }
+                .testTag("reactions_pill_${message.id}"),
+            shape = CircleShape,
+            color = MaterialTheme.colorScheme.surface,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
+            shadowElevation = 2.dp
+        ) {
+            Row(
+                modifier = Modifier
+                    .padding(horizontal = 8.dp, vertical = 2.dp)
+                    .animateContentSize(spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessMediumLow)),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                val emojiCounts = lastReactions[0].values.groupingBy { it }.eachCount()
+                for ((emoji, count) in emojiCounts) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .clickable {
+                                view.chatHaptic(ChatHaptic.Tick)
+                                onReactionClick(emoji)
+                            }
+                            .padding(horizontal = 2.dp)
+                            .testTag("reaction_badge_${message.id}_$emoji")
+                    ) {
+                        ChatEmoji(emoji = emoji, fontSize = 15.sp)
+                        if (count > 1) {
+                            AnimatedContent(
+                                targetState = count,
+                                transitionSpec = {
+                                    val up = targetState > initialState
+                                    (slideInVertically { if (up) it else -it } + fadeIn())
+                                        .togetherWith(slideOutVertically { if (up) -it else it } + fadeOut())
+                                        .using(SizeTransform(clip = false))
+                                },
+                                label = "reaction_count"
+                            ) { shownCount ->
+                                Text(text = " $shownCount", fontSize = 12.sp)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
 /** How dark the time's pill is at night: a soft grey. */
@@ -1807,6 +1915,8 @@ private fun ReplyIndicator(
                 val scale = ((0.55f + (p * 0.45f)).coerceIn(0.55f, 1.0f)) * snapScale
                 scaleX = scale
                 scaleY = scale
+                // The arrow turns into place as the swipe fills, on an elastic curve
+                rotationZ = -50f * (1f - p) * (1f - p)
                 this.alpha = p.coerceIn(0.2f, 1f)
             }
             .shadow(

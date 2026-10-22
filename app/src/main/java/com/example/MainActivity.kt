@@ -68,13 +68,19 @@ open class MainActivity : FragmentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         val isCalc = try {
-            app.securityPreferences.isDisguiseModeEnabled() &&
-                app.securityPreferences.getDisguiseStyle() == com.example.security.SecurityPreferences.DISGUISE_STYLE_CALCULATOR
-        } catch (_: Exception) { false }
+            app.securityPreferences.isCalculatorDecoy()
+        } catch (_: Exception) { true }
         if (isCalc) {
             setTheme(R.style.Theme_MyApplication_Calculator)
         }
         super.onCreate(savedInstanceState)
+        // The Calculator opens straight into its keys, like Samsung's: its plain launch screen (just
+        // the calculator's background) goes the moment the first frame is drawn, with no fade
+        if (isCalc && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            try {
+                splashScreen.setOnExitAnimationListener { it.remove() }
+            } catch (_: Throwable) {}
+        }
         try {
             ContextCompat.registerReceiver(
                 this,
@@ -128,13 +134,13 @@ open class MainActivity : FragmentActivity() {
             repeatOnLifecycle(Lifecycle.State.RESUMED) {
                 kotlinx.coroutines.flow.combine(
                     app.securityPreferences.isDisguiseActive,
-                    app.securityPreferences.calculatorDecoy,
-                    app.securityPreferences.disguiseStyle
-                ) { disguised, calculator, style ->
-                    Triple(disguised, calculator, style)
-                }.collectLatest { (disguised, calculator, style) ->
-                    val isCalc = if (disguised) calculator else (style == com.example.security.SecurityPreferences.DISGUISE_STYLE_CALCULATOR)
-                    updateTaskDescription(isCalc)
+                    app.securityPreferences.calculatorDecoy
+                ) { disguised, calculator ->
+                    disguised to calculator
+                }.collectLatest { (disguised, calculator) ->
+                    // Named and drawn as the app is right now: the Calculator, unless Notes is the decoy
+                    updateTaskDescription(calculator)
+                    updateSplashTheme(calculator)
                     if (disguised) {
                         // Only once Notes/Calculator has been drawn over the chat
                         delay(300)
@@ -558,6 +564,21 @@ open class MainActivity : FragmentActivity() {
     }
 
 
+    /**
+     * The launch screen for the next starts, which Android 13+ keeps for the app: the Notes logo
+     * while Notes is the decoy, else the Calculator's plain one from the manifest. (Older Android
+     * always shows the plain one.)
+     */
+    private fun updateSplashTheme(isCalc: Boolean) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU || appliedSplashIsCalc == isCalc) return
+        try {
+            splashScreen.setSplashScreenTheme(
+                if (isCalc) android.content.res.Resources.ID_NULL else R.style.Theme_MyApplication_NotesSplash
+            )
+            appliedSplashIsCalc = isCalc
+        } catch (_: Throwable) {}
+    }
+
     private fun updateTaskDescription(isCalc: Boolean) {
         try {
             val label = if (isCalc) "Calculator" else "Notes"
@@ -587,3 +608,6 @@ open class MainActivity : FragmentActivity() {
         } catch (_: Throwable) {}
     }
 }
+
+/** The launch screen last set (see MainActivity.updateSplashTheme): it's set again only when it changes */
+private var appliedSplashIsCalc: Boolean? = null

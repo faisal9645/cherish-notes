@@ -89,6 +89,10 @@ class MediaRepository(private val context: Context) {
      */
     suspend fun compressAndPrepareImage(uri: Uri): File = withContext(Dispatchers.IO) {
         val cacheDir = File(context.cacheDir, "compressed_media").apply { mkdirs() }
+        // A GIF stays a GIF: made into WebP it would be a still picture
+        val isGif = runCatching { context.contentResolver.getType(uri) }.getOrNull().equals("image/gif", ignoreCase = true) ||
+            uri.toString().substringBefore('?').endsWith(".gif", ignoreCase = true)
+        if (isGif) return@withContext copyAsIs(uri, cacheDir)
         try {
             val originalSize = runCatching {
                 context.contentResolver.openFileDescriptor(uri, "r")?.use { it.statSize } ?: 0L

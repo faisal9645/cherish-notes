@@ -36,7 +36,7 @@ import kotlin.coroutines.resume
 
 /**
  * Makes media smaller before it uploads, with the phone's own encoders (Media3 Transformer):
- * gallery videos to 720p H.264, call recordings from the call engine's raw WAV to AAC. When it
+ * shared videos to 540p H.264, call recordings from the call engine's raw WAV to AAC. When it
  * can't (an unusual format, an encoder that refuses) or it wouldn't help, the caller sends the
  * original: nothing is ever held back because it couldn't be made smaller.
  */
@@ -44,13 +44,26 @@ import kotlin.coroutines.resume
 object MediaCompressor {
     private const val TAG = "MediaCompressor"
 
-    /** Videos go out with their short side at most this many pixels (720p, like messaging apps). */
-    private const val VIDEO_SHORT_SIDE = 720
-    private const val VIDEO_BIT_RATE = 2_000_000
-    private const val VIDEO_AUDIO_BIT_RATE = 96_000
+    /**
+     * Videos (picked, or recorded by holding the camera button) go out with their short side at
+     * most this many pixels, at about 8 MB a minute: half of what 720p at 2 Mbps took (the user
+     * asked for smaller camera videos, 2026-10-22).
+     */
+    private const val VIDEO_SHORT_SIDE = 540
+    private const val VIDEO_BIT_RATE = 1_000_000
+    private const val VIDEO_AUDIO_BIT_RATE = 64_000
     /** A video already this small, or this light (bits a second), is sent as it is. */
-    private const val SMALL_VIDEO_BYTES = 6L * 1024 * 1024
-    private const val LIGHT_VIDEO_BIT_RATE = 2_600_000
+    private const val SMALL_VIDEO_BYTES = 2L * 1024 * 1024
+    private const val LIGHT_VIDEO_BIT_RATE = 1_300_000
+    /**
+     * A clip recorded by holding the camera button goes smaller still: 480p, about 5 MB a minute
+     * (the user asked twice for camera videos to be more compressed, 2026-10-22).
+     */
+    private const val COMPACT_SHORT_SIDE = 480
+    private const val COMPACT_BIT_RATE = 650_000
+    private const val COMPACT_AUDIO_BIT_RATE = 48_000
+    private const val COMPACT_SMALL_BYTES = 1L * 1024 * 1024
+    private const val COMPACT_LIGHT_BIT_RATE = 800_000
     /** A call recording is speech: AAC at this rate is clear, about 0.35 MB a minute. */
     private const val RECORDING_BIT_RATE = 48_000
     private const val VIDEO_TIMEOUT_MS = 10L * 60 * 1000
@@ -61,19 +74,22 @@ object MediaCompressor {
 
     /**
      * A smaller copy of the video at [source] (a content or file link), or null to send the
-     * original. [onProgress] goes from 0 to 1.
+     * original. [onProgress] goes from 0 to 1. [compact]: a camera clip, made smaller still.
      */
-    suspend fun compressVideo(context: Context, source: Uri, onProgress: (Float) -> Unit = {}): File? {
+    suspend fun compressVideo(context: Context, source: Uri, compact: Boolean = false, onProgress: (Float) -> Unit = {}): File? {
         val app = context.applicationContext
         val info = withContext(Dispatchers.IO) { probeVideo(app, source) } ?: return null
         val shortSide = minOf(info.width, info.height)
+        val maxShortSide = if (compact) COMPACT_SHORT_SIDE else VIDEO_SHORT_SIDE
+        val videoBitRate = if (compact) COMPACT_BIT_RATE else VIDEO_BIT_RATE
+        val audioBitRate = if (compact) COMPACT_AUDIO_BIT_RATE else VIDEO_AUDIO_BIT_RATE
         val bytes = withContext(Dispatchers.IO) { sizeOf(app, source) }.takeIf { it > 0 } ?: info.estimatedBytes
-        val small = bytes in 1..SMALL_VIDEO_BYTES
-        val light = shortSide <= VIDEO_SHORT_SIDE && info.bitRate in 1..LIGHT_VIDEO_BIT_RATE
+        val small = bytes in 1..(if (compact) COMPACT_SMALL_BYTES else SMALL_VIDEO_BYTES)
+        val light = shortSide <= maxShortSide && info.bitRate in 1..(if (compact) COMPACT_LIGHT_BIT_RATE else LIGHT_VIDEO_BIT_RATE)
         if (small || light) return null
 
         val output = File(File(app.cacheDir, "compressed_media").apply { mkdirs() }, "vid_${UUID.randomUUID()}.mp4")
-        val effects = if (shortSide > VIDEO_SHORT_SIDE) listOf(Presentation.createForShortSide(VIDEO_SHORT_SIDE)) else emptyList()
+        val effects = if (shortSide > maxShortSide) listOf(Presentation.createForShortSide(maxShortSide)) else emptyList()
         val item = EditedMediaItem.Builder(MediaItem.fromUri(source))
             .setEffects(Effects(emptyList(), effects))
             .build()
@@ -82,8 +98,8 @@ object MediaCompressor {
             .setHdrMode(Composition.HDR_MODE_TONE_MAP_HDR_TO_SDR_USING_OPEN_GL)
             .build()
         val encoders = DefaultEncoderFactory.Builder(app)
-            .setRequestedVideoEncoderSettings(VideoEncoderSettings.Builder().setBitrate(VIDEO_BIT_RATE).build())
-            .setRequestedAudioEncoderSettings(AudioEncoderSettings.Builder().setBitrate(VIDEO_AUDIO_BIT_RATE).build())
+            .setRequestedVideoEncoderSettings(VideoEncoderSettings.Builder().setBitrate(videoBitRate).build())
+            .setRequestedAudioEncoderSettings(AudioEncoderSettings.Builder().setBitrate(audioBitRate).build())
             .setEnableFallback(true)
             .build()
         val ok = export(app, composition, output, encoders, MimeTypes.VIDEO_H264, VIDEO_TIMEOUT_MS, onProgress)

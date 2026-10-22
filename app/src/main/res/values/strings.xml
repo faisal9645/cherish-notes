@@ -1,5 +1,8 @@
 <resources>
-    <string name="app_name">Notes</string>
+    <!-- The app's own name, which Android shows in Settings (App info, battery, data usage), on
+         notifications, permission prompts and the uninstall dialog: the Calculator is the app's
+         identity, Notes only its other look -->
+    <string name="app_name">Calculator</string>
     <!-- The app drawer / launcher icon's name for Notes decoy (sorted under N) -->
     <string name="notes_launcher_name">Notes</string>
     <!-- The Calculator icon's name (a resource, so launchers that sort by it file it under C) -->

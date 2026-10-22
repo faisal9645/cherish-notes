@@ -225,14 +225,13 @@ class ChatViewModel(
                 val isFirstOfDay = prevMsg == null || !com.example.util.ChatTimeFormatter.isSameDay(prevMsg.timestamp, msg.timestamp)
                 val isOldestShown = (i == 0)
                 val dateSep = if (isFirstOfDay) com.example.util.ChatTimeFormatter.formatDateSeparator(msg.timestamp) else ""
-                val formattedTime = com.example.util.ChatTimeFormatter.formatMessageTime(msg.timestamp)
+                // (The row formats its own time: nothing reads one made here)
                 items.add(
                     ChatUiRowItem(
                         message = msg,
                         isFirstOfDay = isFirstOfDay,
                         isOldestShown = isOldestShown,
-                        dateSeparatorText = dateSep,
-                        formattedTime = formattedTime
+                        dateSeparatorText = dateSep
                     )
                 )
             }
@@ -652,6 +651,24 @@ class ChatViewModel(
         }
     }
 
+    /** A GIF from GIPHY's picker goes out as GIPHY's own link: nothing to upload. */
+    fun sendGif(gif: GiphyGif) {
+        val replyTo = _uiState.value.replyingToMessage
+        soundEffectsPlayer.playSound(ChatSoundEffectsPlayer.SoundType.SENT)
+        viewModelScope.launch {
+            _uiState.update { it.copy(replyingToMessage = null) }
+            chatRepository.sendMessage(
+                text = GIF_CAPTION,
+                type = MessageType.IMAGE,
+                mediaUrl = gif.sendUrl,
+                mediaName = "giphy.gif",
+                replyTo = replyTo,
+                // Its first frame, for the gallery's small tiles
+                thumbnailUrls = listOfNotNull(gif.stillUrl)
+            )
+        }
+    }
+
     private var uploadJob: Job? = null
 
     /**
@@ -703,22 +720,27 @@ class ChatViewModel(
         url != null && (url.startsWith("https://") || url.startsWith("http://") || url.startsWith("data:") || url.startsWith("file://") || url.startsWith("content://"))
 
     private fun reportUploadProgress(progress: Float) {
+        // Every change of the chat's state rebuilds the chat screen: the bar moves in 2% steps,
+        // not on each of the upload's many callbacks
+        val shown = _uiState.value.uploadProgress
+        if (progress < 1f && kotlin.math.abs(progress - shown) < 0.02f) return
         _uiState.update { it.copy(uploadProgress = progress) }
     }
 
-    fun sendMediaFile(uri: Uri, type: MessageType, mediaName: String? = null) {
+    /** [compactVideo]: a clip from holding the camera button, made smaller still (480p). */
+    fun sendMediaFile(uri: Uri, type: MessageType, mediaName: String? = null, compactVideo: Boolean = false) {
         val label = when (type) {
             MessageType.IMAGE -> "photo"
             MessageType.VIDEO -> "video"
             else -> "file"
         }
-        val retry = { sendMediaFile(uri, type, mediaName) }
+        val retry = { sendMediaFile(uri, type, mediaName, compactVideo) }
         runUpload(label, retry) {
             val coupleId = chatRepository.getConversationId()
             // A video goes out smaller (720p) when that helps: the first part of the bar while
             // that's done, the rest while it uploads
             val compressedVideo = if (type == MessageType.VIDEO) {
-                com.example.util.MediaCompressor.compressVideo(CherishApplication.instance, uri) { p ->
+                com.example.util.MediaCompressor.compressVideo(CherishApplication.instance, uri, compact = compactVideo) { p ->
                     reportUploadProgress(p * VIDEO_COMPRESS_SHARE)
                 }
             } else null
@@ -775,6 +797,11 @@ class ChatViewModel(
                 }
                 if (uri.path?.contains("camera_snaps") == true) {
                     File(uri.path!!).takeIf { it.exists() }?.delete()
+                    // A camera photo or clip comes as this app's own content link: its file is in
+                    // the cache's camera_snaps (a recorded clip can be hundreds of MB)
+                    uri.lastPathSegment?.let { name ->
+                        File(File(CherishApplication.instance.cacheDir, "camera_snaps"), name).takeIf { it.exists() }?.delete()
+                    }
                 }
             }
             null
@@ -1309,7 +1336,13 @@ class ChatViewModel(
             if (!recovered) return false
             securityPreferences.revealSecretHistory()
             securityPreferences.setShowPreviousChatsEnabled(true)
-            loadHistoryUntil(messageId)
+            val sentAt = target?.timestamp
+            if (sentAt != null) {
+                // All of the chat down to it from the phone's archive in one go, else page by page
+                chatRepository.showArchivedDownTo(sentAt) { shown -> if (!shown) loadHistoryUntil(messageId) }
+            } else {
+                loadHistoryUntil(messageId)
+            }
         }
         _uiState.update { it.copy(targetScrollMessageId = messageId) }
         return true
