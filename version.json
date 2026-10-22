@@ -1,9 +1,9 @@
 {
-  "versionCode": 215,
-  "versionName": "1.8.43",
-  "tagName": "v1.8.43-215",
-  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.8.43-215/app_update_215.apk",
-  "assetSize": 19551796,
-  "releaseNotes": "Notes v1.8.43 (Build 215):\n\u2022 Original notes blue gradient for bubbles and buttons\n\u2022 Clean solid dark cards without glass sheen\n\u2022 100% full original HD uncompressed wallpaper\n\u2022 Transparent emoji board and composer styling\n\u2022 Performance optimizations and UI refinement",
-  "releaseDate": "2026-10-22T21:25:44Z"
+  "versionCode": 216,
+  "versionName": "1.8.44",
+  "tagName": "v1.8.44-216",
+  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.8.44-216/app_update_216.apk",
+  "assetSize": 19553044,
+  "releaseNotes": "Notes v1.8.44 (Build 216):\n• Fixes the app closing on open after the last update\n• Day mode is clean and white again\n• Classic blue look restored\n• Bug fixes and refinements",
+  "releaseDate": "2026-10-22T21:48:39Z"
 }
