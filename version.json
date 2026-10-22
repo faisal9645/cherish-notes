@@ -1,9 +1,9 @@
 {
-  "versionCode": 203,
-  "versionName": "1.8.31",
-  "tagName": "v1.8.31-203",
-  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.8.31-203/app_update_203.apk",
-  "assetSize": 18937000,
-  "releaseNotes": "Notes v1.8.31 (Build 203):\n• Notes save automatically when you go back\n• Reminders open the right note\n• Sharing to Notes saves a note\n• Attachments grouped by month\n• Smoother audio playback and lighter memory use\n• Bug fixes and improvements",
-  "releaseDate": "2026-10-22T01:24:22Z"
+  "versionCode": 204,
+  "versionName": "1.8.32",
+  "tagName": "v1.8.32-204",
+  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.8.32-204/app_update_204.apk",
+  "assetSize": 18966680,
+  "releaseNotes": "Notes v1.8.32 (Build 204):\n• Smoother navigation and back gestures\n• Cleaner layout when switching views\n• New option to refresh the app from Settings\n• Performance and memory improvements\n• Bug fixes and refinements",
+  "releaseDate": "2026-10-22T06:11:49Z"
 }
