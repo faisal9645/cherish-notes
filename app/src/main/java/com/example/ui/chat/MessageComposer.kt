@@ -605,8 +605,8 @@ fun MessageComposer(
                 modifier = Modifier.weight(1f),
                 horizontalAlignment = Alignment.Start
             ) {
-                // Main Input Pill / Active Recording Bar
-                if (isRecordingVoice) {
+                // Main Input Pill / Active Recording Bar (each its own compiled part, see ComposerPart)
+                if (isRecordingVoice) ComposerPart {
                     // ---- WhatsApp-Style Recording Bar ----
                     if (isLockedRecording) {
                         // LOCKED hands-free mode: [ Avatar | 🔴 timer | waveform | 🔒 ] [ 🗑 ]
@@ -824,7 +824,7 @@ fun MessageComposer(
                         }
                     }
                 }
-            } else {
+            } else ComposerPart {
                 if (isPrivateMode) {
                     // ChatGPT Text Input Pill (Private mode):
                     Row(
@@ -1464,7 +1464,7 @@ fun MessageComposer(
         }
 
         // WhatsApp/Telegram-Style Tabbed Emoji Panel, in the keyboard's place (NORMAL MODE ONLY)
-        if (!isPrivateMode && isEmojiBoardShown && !isRecordingVoice) {
+        if (!isPrivateMode && isEmojiBoardShown && !isRecordingVoice) ComposerPart {
             val boardHeightPx = if (keyboardHeightPx > 0) keyboardHeightPx else with(density) { 280.dp.roundToPx() }
             val emojiNestedScroll = remember {
                 var accumulatedPostScrollY = 0f
@@ -1656,6 +1656,17 @@ fun MessageComposer(
         }
 
     }
+}
+
+/**
+ * Composes [content] as a function of its own. MessageComposer is one very large function (Row,
+ * Column and Box put their content inline into it), and past 256 registers R8 wrote code for it
+ * that Android refused to load: 1.8.43 closed as soon as the chat opened (VerifyError). Its
+ * biggest parts go through here, which keeps every function well under that.
+ */
+@Composable
+private fun ComposerPart(content: @Composable () -> Unit) {
+    content()
 }
 
 @Composable

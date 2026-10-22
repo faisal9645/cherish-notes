@@ -255,9 +255,9 @@ def release_notes(version_name: str, version_code: int, custom_notes: str = None
         return f"Notes v{version_name} (Build {version_code}):\n{custom_notes}"
     return (
         f"Notes v{version_name} (Build {version_code}):\n"
-        "\u2022 Smoother scrolling and typing\n"
-        "\u2022 Quicker start-up\n"
-        "\u2022 Smaller attachments and less data use\n"
+        "\u2022 Fixes the app closing on open after the last update\n"
+        "\u2022 Day mode is clean and white again\n"
+        "\u2022 Classic blue look restored\n"
         "\u2022 Bug fixes and refinements"
     )
 
@@ -298,6 +298,56 @@ def update_firestore(project_root: str, version_code: int, version_name: str, do
         "releaseNotes": f"v{version_name} \u2014 Live couple avatars, Double-tap heartbursts, and Watch Party sync notifications",
     }, merge=True)
     print("Firestore app_config/version updated successfully!")
+
+
+def check_dex_registers(project_root: str, apk_path: str, limit: int = 256):
+    """Refuses to publish an APK with a method needing more than 256 registers.
+
+    Past that, R8 wrote code Android refused to load: in 1.8.43 MessageComposer needed 290, and
+    the app closed as soon as the chat opened (VerifyError, app_config/last_crash). Split such a
+    function (see ComposerPart in MessageComposer.kt) instead of publishing it."""
+    import glob
+    import subprocess
+    import tempfile
+    import zipfile
+    sdk = os.environ.get("ANDROID_HOME") or os.environ.get("ANDROID_SDK_ROOT")
+    local_props = os.path.join(project_root, "local.properties")
+    if not sdk and os.path.exists(local_props):
+        with open(local_props, encoding="utf-8") as f:
+            for line in f:
+                if line.startswith("sdk.dir="):
+                    sdk = line.split("=", 1)[1].strip().replace("\\:", ":").replace("\\\\", "\\")
+    exe = "dexdump.exe" if os.name == "nt" else "dexdump"
+    tools = sorted(glob.glob(os.path.join(sdk or "", "build-tools", "*", exe)))
+    if not tools:
+        print("WARNING: dexdump not found (Android SDK build-tools), skipping the register check", flush=True)
+        return
+    print("Checking every method's register count (R8 VerifyError guard)...", flush=True)
+    too_big = []
+    with tempfile.TemporaryDirectory() as tmp, zipfile.ZipFile(apk_path) as apk:
+        for name in apk.namelist():
+            if not re.fullmatch(r"classes\d*\.dex", name):
+                continue
+            dex = apk.extract(name, tmp)
+            out = subprocess.run([tools[-1], dex], capture_output=True, text=True, errors="replace").stdout
+            cls = method = "?"
+            for line in out.splitlines():
+                s = line.strip()
+                if s.startswith("Class descriptor"):
+                    cls = s.split(":", 1)[1].strip()
+                elif s.startswith("name") and ":" in s:
+                    method = s.split(":", 1)[1].strip()
+                elif s.startswith("registers") and ":" in s:
+                    count = int(s.split(":", 1)[1].strip())
+                    if count > limit:
+                        too_big.append(f"{name} {cls} {method}: {count} registers")
+    if too_big:
+        print("ERROR: these methods need more than 256 registers; R8 can write code Android won't load:")
+        for entry in too_big:
+            print("  " + entry)
+        print("Map the names with app/build/outputs/mapping/release/mapping.txt and split them. Not publishing.")
+        sys.exit(1)
+    print("Register check passed: every method is within 256 registers", flush=True)
 
 
 def build_apk(project_root: str):
@@ -368,6 +418,7 @@ def main():
 
     print(f"Version  : {version_name} (code {version_code})")
     print(f"APK      : {apk_path}")
+    check_dex_registers(project_root, apk_path)
 
     for repo in args.also:
         print(f"\nAlso publishing to {repo}...")
