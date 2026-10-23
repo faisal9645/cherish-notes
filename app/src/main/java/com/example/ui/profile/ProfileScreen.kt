@@ -165,7 +165,7 @@ private fun SettingsSection(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(20.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+            border = BorderStroke(1.dp, com.example.ui.theme.legacyPanelBorderColor()),
             elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
         ) {
             Column(
@@ -469,7 +469,7 @@ fun ProfileScreen(
                     .testTag("profile_header_card"),
                 shape = RoundedCornerShape(20.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
+                border = BorderStroke(1.dp, com.example.ui.theme.legacyPanelBorderColor().copy(alpha = 0.6f)),
                 elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
             ) {
                 Row(
@@ -575,7 +575,7 @@ fun ProfileScreen(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(20.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                border = BorderStroke(1.dp, com.example.ui.theme.legacyPanelBorderColor()),
                 elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
             ) {
                 Column(modifier = Modifier.padding(vertical = 4.dp)) {
@@ -1860,7 +1860,7 @@ fun ProfileScreen(
                     Surface(
                         shape = RoundedCornerShape(16.dp),
                         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
+                        border = BorderStroke(1.dp, com.example.ui.theme.legacyPanelBorderColor().copy(alpha = 0.6f)),
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(horizontal = 16.dp, vertical = 8.dp)
@@ -2584,7 +2584,7 @@ fun ProfileScreen(
                         else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
                         border = if (currentMode == com.example.ui.chat.ChatExperienceMode.NORMAL)
                             BorderStroke(1.5.dp, RoseGoldPrimary)
-                        else BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
+                        else BorderStroke(1.dp, com.example.ui.theme.legacyPanelBorderColor().copy(alpha = 0.6f)),
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable { 
@@ -2622,7 +2622,7 @@ fun ProfileScreen(
                         else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
                         border = if (currentMode == com.example.ui.chat.ChatExperienceMode.PRIVATE)
                             BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary)
-                        else BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
+                        else BorderStroke(1.dp, com.example.ui.theme.legacyPanelBorderColor().copy(alpha = 0.6f)),
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable { 
@@ -2658,7 +2658,7 @@ fun ProfileScreen(
                     Surface(
                         shape = RoundedCornerShape(16.dp),
                         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
+                        border = BorderStroke(1.dp, com.example.ui.theme.legacyPanelBorderColor().copy(alpha = 0.6f)),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Row(

@@ -288,3 +288,9 @@ val Rose600 = Color(0xFFE11D48)
 val Lavender50 = Color(0xFFF1EEF8)
 val Lavender200 = Color(0xFFCFC6E6)
 val Violet600 = Color(0xFF8E2DE2)
+/** Original subtle card border for Love & Us and Settings, independent of action accents. */
+@Composable
+@ReadOnlyComposable
+fun legacyPanelBorderColor(): Color =
+    if (MaterialTheme.colorScheme.surface.luminance() < 0.5f) Color(0xFF171717)
+    else MaterialTheme.colorScheme.outlineVariant

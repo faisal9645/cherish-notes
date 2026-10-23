@@ -1,9 +1,9 @@
 {
-  "versionCode": 230,
-  "versionName": "1.8.58",
-  "tagName": "v1.8.58-230",
-  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.8.58-230/app_update_230.apk",
-  "assetSize": 19525564,
-  "releaseNotes": "Notes v1.8.58 (Build 230):\n\u2022 Refined dynamic light and dark theme styling in Heartbeat touch dialog\n\u2022 Smooth, coherent ink and accent colors across vibration controls\n\u2022 Performance optimizations and bug fixes",
-  "releaseDate": "2026-10-23T17:49:53Z"
+  "versionCode": 231,
+  "versionName": "1.8.59",
+  "tagName": "v1.8.59-231",
+  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.8.59-231/app_update_231.apk",
+  "assetSize": 19974964,
+  "releaseNotes": "Notes v1.8.59 (Build 231):\n\u2022 High-resolution night wallpaper and starry sky updates\n\u2022 Refined chat bubbles, composer bar, and UI styling\n\u2022 Performance optimizations and bug fixes",
+  "releaseDate": "2026-10-23T23:38:20Z"
 }

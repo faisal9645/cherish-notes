@@ -54,6 +54,9 @@ import kotlin.math.sin
 /** The chat's calm night (11 PM to 6 AM): its animations slower and softer, see NightCalm. */
 internal val LocalChatNight = staticCompositionLocalOf { false }
 
+/** Opaque chat surfaces while the good-night background is active. */
+internal val LocalGoodnightSurfaces = staticCompositionLocalOf { false }
+
 /** Whether it's the calm night now; it turns by itself at 11 PM and 6 AM. */
 @Composable
 internal fun rememberIsNight(): Boolean {
@@ -161,14 +164,6 @@ internal fun NightSky(starry: Boolean, sunrise: Boolean, onSunriseDone: () -> Un
                         )
                 )
             }
-            TwinklingStars(
-                modifier = Modifier.fillMaxSize(),
-                count = if (isNight && isDark) 65 else 125,
-                brightness = if (isDark) 0.90f else 0.98f,
-                periodMs = 3_200,
-                maxYFraction = if (isNight && isDark) 0.62f else 1f,
-                blueGlow = true
-            )
             // A soft moon, high on the right (skip if photo wallpaper already contains moon)
             if (!isNight || !isDark) {
                 Box(

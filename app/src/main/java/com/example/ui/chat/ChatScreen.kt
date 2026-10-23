@@ -1316,7 +1316,10 @@ fun ChatScreen(
     }
     // From 11 PM: the same colours, but slower, softer motion and quieter sounds (see NightCalm)
     val isNight = rememberIsNight()
+    val goodnightSurfaces = showWallpaper && isDark &&
+        (isNight || (bothSaidGoodnightTonight && !showSunrise))
     CompositionLocalProvider(LocalChatTextStyle provides chatTextStyle, LocalHugCouple provides hugCouple, LocalChatNight provides isNight, LocalAccordionPull provides accordion,
+        LocalGoodnightSurfaces provides goodnightSurfaces,
         com.example.ui.components.LocalVisualWorkAllowed provides chatVisualsActive) {
     Box(
         modifier = Modifier
@@ -1342,6 +1345,18 @@ fun ChatScreen(
             onSunriseDone = { showSunrise = false },
             modifier = Modifier.fillMaxSize()
         )
+        // One dot layer for dark chat, independent of the clock and good-night messages.
+        // Draw after NightSky so its dimming overlay cannot hide the dots.
+        if (isDark) {
+            TwinklingStars(
+                modifier = Modifier.fillMaxSize(),
+                count = 60,
+                brightness = 1f,
+                periodMs = 3_400,
+                maxYFraction = if (isNight) 0.62f else 1f,
+                blueGlow = true
+            )
+        }
     }
     Scaffold(
         modifier = Modifier
@@ -3014,7 +3029,7 @@ fun ChatScreen(
             onMoreReactions = { viewModel.setSelectedMessageForActions(live) },
             onDismissed = { focusedMessage = null }
         ) {
-            CompositionLocalProvider(LocalChatTextStyle provides chatTextStyle, LocalHugCouple provides hugCouple, LocalChatNight provides isNight) {
+            CompositionLocalProvider(LocalChatTextStyle provides chatTextStyle, LocalHugCouple provides hugCouple, LocalChatNight provides isNight, LocalGoodnightSurfaces provides goodnightSurfaces) {
                 MessageBubble(
                     message = live,
                     isFromMe = focusedIsFromMe,

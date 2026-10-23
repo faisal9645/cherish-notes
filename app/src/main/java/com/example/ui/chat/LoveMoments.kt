@@ -259,7 +259,7 @@ internal fun TwinklingStars(
             Star(
                 x = 0.02f + random.nextFloat() * 0.96f,
                 y = 0.02f + random.nextFloat() * (maxYFraction - 0.04f).coerceAtLeast(0.1f),
-                radius = 0.5f + random.nextFloat() * 1.1f,
+                radius = 0.75f + random.nextFloat() * 1.15f,
                 phase = random.nextFloat(),
                 speed = 0.5f + random.nextFloat() * 0.65f
             )
@@ -286,15 +286,16 @@ internal fun TwinklingStars(
     }
     Canvas(modifier = modifier) {
         val time = cycles.value
-        val dotColor = Color(0xFFA9C5ED)
+        // Cool silver-blue light echoes the moon and sea in the night wallpaper.
+        val dotColor = if (blueGlow) Color(0xFFD5E2FF) else Color(0xFFA9C5ED)
         stars.forEach { star ->
             val wave = (0.5 + 0.5 * kotlin.math.sin(2.0 * PI * (time * star.speed + star.phase))).toFloat()
-            val alpha = (0.16f + 0.64f * wave * wave) * brightness.coerceIn(0f, 1f)
+            val alpha = (0.18f + 0.76f * wave * wave) * brightness.coerceIn(0f, 1f)
             val center = Offset(star.x * size.width, star.y * size.height)
             val radius = star.radius.dp.toPx()
             if (blueGlow) {
                 // A small circular halo fades continuously with its dot; no threshold pop or rays.
-                drawCircle(Color(0xFF60A5FA).copy(alpha = alpha * 0.10f), radius * 1.8f, center)
+                drawCircle(Color(0xFF7E9DE0).copy(alpha = alpha * 0.10f), radius * 1.8f, center)
             }
             drawCircle(dotColor.copy(alpha = alpha), radius, center)
         }

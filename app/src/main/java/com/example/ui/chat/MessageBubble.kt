@@ -103,22 +103,23 @@ internal class BubbleFill(val brush: Brush, val edge: Color?)
 @Composable
 internal fun rememberBubbleFill(isFromMe: Boolean, isDark: Boolean): BubbleFill {
     val black = com.example.ui.theme.LocalAmoledBlack.current
+    val opaque = LocalGoodnightSurfaces.current
     val received = if (isDark) Color(0xFF263653) else MistBlue
     val receivedEdge = if (isDark) Color(0xFF647DA8).copy(alpha = 0.30f) else Gray200
-    return remember(isFromMe, black, isDark, received, receivedEdge) {
+    return remember(isFromMe, black, isDark, received, receivedEdge, opaque) {
         if (isFromMe) BubbleFill(
             if (isDark) Brush.horizontalGradient(
-                0f to DarkBlueSecondary.copy(alpha = 0.82f),
-                0.55f to DarkBluePrimary.copy(alpha = 0.72f),
-                1f to DarkBlueTertiary.copy(alpha = 0.80f)
+                0f to DarkBlueSecondary.copy(alpha = if (opaque) 1f else 0.82f),
+                0.55f to DarkBluePrimary.copy(alpha = if (opaque) 1f else 0.72f),
+                1f to DarkBlueTertiary.copy(alpha = if (opaque) 1f else 0.80f)
             ) else notesGradient(black = black, isDark = false),
             edge = if (isDark) Color(0xFF7197FF).copy(alpha = 0.25f) else null
         )
         else BubbleFill(
             if (isDark) Brush.verticalGradient(
-                0f to Color(0xFF344765).copy(alpha = 0.78f),
-                0.45f to received.copy(alpha = 0.68f),
-                1f to Color(0xFF1C2942).copy(alpha = 0.74f)
+                0f to Color(0xFF344765).copy(alpha = if (opaque) 1f else 0.78f),
+                0.45f to received.copy(alpha = if (opaque) 1f else 0.68f),
+                1f to Color(0xFF1C2942).copy(alpha = if (opaque) 1f else 0.74f)
             ) else SolidColor(received),
             receivedEdge
         )

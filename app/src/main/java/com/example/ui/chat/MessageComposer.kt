@@ -435,11 +435,12 @@ fun MessageComposer(
     } else {
         if (isDark) Color(0xFF526B96).copy(alpha = 0.30f) else Gray200
     }
-    val typingFill = remember(isDark, pillBg) {
+    val opaque = LocalGoodnightSurfaces.current
+    val typingFill = remember(isDark, pillBg, opaque) {
         if (isDark) Brush.verticalGradient(
-            0f to Color(0xFF263653).copy(alpha = 0.78f),
-            0.45f to Color(0xFF17243B).copy(alpha = 0.64f),
-            1f to Color(0xFF111B2E).copy(alpha = 0.72f)
+            0f to Color(0xFF263653).copy(alpha = if (opaque) 1f else 0.78f),
+            0.45f to Color(0xFF17243B).copy(alpha = if (opaque) 1f else 0.64f),
+            1f to Color(0xFF111B2E).copy(alpha = if (opaque) 1f else 0.72f)
         ) else SolidColor(pillBg)
     }
     // The message box's shape: Day keeps its original rounder, slimmer pill

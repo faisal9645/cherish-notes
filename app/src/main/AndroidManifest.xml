@@ -55,9 +55,9 @@
 
     <application
         android:name=".NotesApplication"
-        android:label="@string/calculator_name"
-        android:icon="@mipmap/ic_calculator_launcher"
-        android:roundIcon="@mipmap/ic_calculator_launcher"
+        android:label="@string/notes_launcher_name"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
         android:allowBackup="false"
         android:hasFragileUserData="false"
         android:hardwareAccelerated="true"
@@ -131,37 +131,37 @@
             android:label="@string/notes_launcher_name"
             android:icon="@mipmap/ic_launcher"
             android:roundIcon="@mipmap/ic_launcher_round">
-            <intent-filter>
+            <intent-filter android:label="@string/notes_launcher_name" android:icon="@mipmap/ic_launcher">
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="text/*" />
             </intent-filter>
-            <intent-filter>
+            <intent-filter android:label="@string/notes_launcher_name" android:icon="@mipmap/ic_launcher">
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="image/*" />
             </intent-filter>
-            <intent-filter>
+            <intent-filter android:label="@string/notes_launcher_name" android:icon="@mipmap/ic_launcher">
                 <action android:name="android.intent.action.SEND_MULTIPLE" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="image/*" />
             </intent-filter>
-            <intent-filter>
+            <intent-filter android:label="@string/notes_launcher_name" android:icon="@mipmap/ic_launcher">
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="video/*" />
             </intent-filter>
-            <intent-filter>
+            <intent-filter android:label="@string/notes_launcher_name" android:icon="@mipmap/ic_launcher">
                 <action android:name="android.intent.action.SEND_MULTIPLE" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="video/*" />
             </intent-filter>
-            <intent-filter>
+            <intent-filter android:label="@string/notes_launcher_name" android:icon="@mipmap/ic_launcher">
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="*/*" />
             </intent-filter>
-            <intent-filter>
+            <intent-filter android:label="@string/notes_launcher_name" android:icon="@mipmap/ic_launcher">
                 <action android:name="android.intent.action.SEND_MULTIPLE" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="*/*" />
@@ -176,37 +176,37 @@
             android:label="@string/notes_launcher_name"
             android:icon="@mipmap/ic_launcher"
             android:roundIcon="@mipmap/ic_launcher_round">
-            <intent-filter>
+            <intent-filter android:label="@string/notes_launcher_name" android:icon="@mipmap/ic_launcher">
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="text/*" />
             </intent-filter>
-            <intent-filter>
+            <intent-filter android:label="@string/notes_launcher_name" android:icon="@mipmap/ic_launcher">
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="image/*" />
             </intent-filter>
-            <intent-filter>
+            <intent-filter android:label="@string/notes_launcher_name" android:icon="@mipmap/ic_launcher">
                 <action android:name="android.intent.action.SEND_MULTIPLE" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="image/*" />
             </intent-filter>
-            <intent-filter>
+            <intent-filter android:label="@string/notes_launcher_name" android:icon="@mipmap/ic_launcher">
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="video/*" />
             </intent-filter>
-            <intent-filter>
+            <intent-filter android:label="@string/notes_launcher_name" android:icon="@mipmap/ic_launcher">
                 <action android:name="android.intent.action.SEND_MULTIPLE" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="video/*" />
             </intent-filter>
-            <intent-filter>
+            <intent-filter android:label="@string/notes_launcher_name" android:icon="@mipmap/ic_launcher">
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="*/*" />
             </intent-filter>
-            <intent-filter>
+            <intent-filter android:label="@string/notes_launcher_name" android:icon="@mipmap/ic_launcher">
                 <action android:name="android.intent.action.SEND_MULTIPLE" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="*/*" />
@@ -221,37 +221,37 @@
             android:label="@string/notes_launcher_name"
             android:icon="@mipmap/ic_launcher"
             android:roundIcon="@mipmap/ic_launcher_round">
-            <intent-filter>
+            <intent-filter android:label="@string/notes_launcher_name" android:icon="@mipmap/ic_launcher">
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="text/*" />
             </intent-filter>
-            <intent-filter>
+            <intent-filter android:label="@string/notes_launcher_name" android:icon="@mipmap/ic_launcher">
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="image/*" />
             </intent-filter>
-            <intent-filter>
+            <intent-filter android:label="@string/notes_launcher_name" android:icon="@mipmap/ic_launcher">
                 <action android:name="android.intent.action.SEND_MULTIPLE" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="image/*" />
             </intent-filter>
-            <intent-filter>
+            <intent-filter android:label="@string/notes_launcher_name" android:icon="@mipmap/ic_launcher">
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="video/*" />
             </intent-filter>
-            <intent-filter>
+            <intent-filter android:label="@string/notes_launcher_name" android:icon="@mipmap/ic_launcher">
                 <action android:name="android.intent.action.SEND_MULTIPLE" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="video/*" />
             </intent-filter>
-            <intent-filter>
+            <intent-filter android:label="@string/notes_launcher_name" android:icon="@mipmap/ic_launcher">
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="*/*" />
             </intent-filter>
-            <intent-filter>
+            <intent-filter android:label="@string/notes_launcher_name" android:icon="@mipmap/ic_launcher">
                 <action android:name="android.intent.action.SEND_MULTIPLE" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="*/*" />
@@ -266,37 +266,37 @@
             android:label="@string/notes_launcher_name"
             android:icon="@mipmap/ic_launcher"
             android:roundIcon="@mipmap/ic_launcher_round">
-            <intent-filter>
+            <intent-filter android:label="@string/notes_launcher_name" android:icon="@mipmap/ic_launcher">
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="text/*" />
             </intent-filter>
-            <intent-filter>
+            <intent-filter android:label="@string/notes_launcher_name" android:icon="@mipmap/ic_launcher">
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="image/*" />
             </intent-filter>
-            <intent-filter>
+            <intent-filter android:label="@string/notes_launcher_name" android:icon="@mipmap/ic_launcher">
                 <action android:name="android.intent.action.SEND_MULTIPLE" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="image/*" />
             </intent-filter>
-            <intent-filter>
+            <intent-filter android:label="@string/notes_launcher_name" android:icon="@mipmap/ic_launcher">
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="video/*" />
             </intent-filter>
-            <intent-filter>
+            <intent-filter android:label="@string/notes_launcher_name" android:icon="@mipmap/ic_launcher">
                 <action android:name="android.intent.action.SEND_MULTIPLE" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="video/*" />
             </intent-filter>
-            <intent-filter>
+            <intent-filter android:label="@string/notes_launcher_name" android:icon="@mipmap/ic_launcher">
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="*/*" />
             </intent-filter>
-            <intent-filter>
+            <intent-filter android:label="@string/notes_launcher_name" android:icon="@mipmap/ic_launcher">
                 <action android:name="android.intent.action.SEND_MULTIPLE" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="*/*" />
@@ -311,37 +311,37 @@
             android:label="@string/notes_launcher_name"
             android:icon="@mipmap/ic_launcher"
             android:roundIcon="@mipmap/ic_launcher_round">
-            <intent-filter>
+            <intent-filter android:label="@string/notes_launcher_name" android:icon="@mipmap/ic_launcher">
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="text/*" />
             </intent-filter>
-            <intent-filter>
+            <intent-filter android:label="@string/notes_launcher_name" android:icon="@mipmap/ic_launcher">
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="image/*" />
             </intent-filter>
-            <intent-filter>
+            <intent-filter android:label="@string/notes_launcher_name" android:icon="@mipmap/ic_launcher">
                 <action android:name="android.intent.action.SEND_MULTIPLE" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="image/*" />
             </intent-filter>
-            <intent-filter>
+            <intent-filter android:label="@string/notes_launcher_name" android:icon="@mipmap/ic_launcher">
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="video/*" />
             </intent-filter>
-            <intent-filter>
+            <intent-filter android:label="@string/notes_launcher_name" android:icon="@mipmap/ic_launcher">
                 <action android:name="android.intent.action.SEND_MULTIPLE" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="video/*" />
             </intent-filter>
-            <intent-filter>
+            <intent-filter android:label="@string/notes_launcher_name" android:icon="@mipmap/ic_launcher">
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="*/*" />
             </intent-filter>
-            <intent-filter>
+            <intent-filter android:label="@string/notes_launcher_name" android:icon="@mipmap/ic_launcher">
                 <action android:name="android.intent.action.SEND_MULTIPLE" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="*/*" />

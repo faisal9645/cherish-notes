@@ -124,6 +124,7 @@ fun Night11PmWallpaper(
             .clipToBounds()
     ) {
         androidx.compose.foundation.Image(
+            // drawable-nodpi preserves the supplied image's full native resolution.
             painter = androidx.compose.ui.res.painterResource(id = com.example.R.drawable.chat_bg_night_11pm),
             contentDescription = "11 PM Night Wallpaper",
             contentScale = androidx.compose.ui.layout.ContentScale.Crop,
@@ -131,15 +132,7 @@ fun Night11PmWallpaper(
                 .fillMaxSize()
                 .tiltParallax()
         )
-        // Soft circular blue dots match the night photograph; no animated star-shaped flares.
-        TwinklingStars(
-            modifier = Modifier.fillMaxSize(),
-            count = 60,
-            brightness = 0.95f,
-            periodMs = 3_400,
-            maxYFraction = 0.62f,
-            blueGlow = true
-        )
+        // ChatScreen owns the single animated dot layer above all wallpaper overlays.
     }
 }
 

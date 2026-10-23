@@ -22,12 +22,15 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -176,6 +179,8 @@ fun HeartbeatTouchDialog(
     )
 
     val density = androidx.compose.ui.platform.LocalDensity.current
+    var touchAreaOrigin by remember { mutableStateOf(Offset.Zero) }
+    var closeButtonBounds by remember { mutableStateOf<Rect?>(null) }
     var isVisible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         isVisible = true
@@ -207,12 +212,12 @@ fun HeartbeatTouchDialog(
                             )
                         )
                     )
+                    .onGloballyPositioned { touchAreaOrigin = it.positionInRoot() }
                     .pointerInput(Unit) {
                         awaitEachGesture {
                             val down = awaitFirstDown(requireUnconsumed = false)
-                            // Exclude touches in top-right corner to prevent close button tap from triggering touch pulse
-                            val closeAreaPx = with(density) { 96.dp.toPx() }
-                            if (down.position.y < closeAreaPx && down.position.x > size.width - closeAreaPx) {
+                            // Follow the inset-adjusted close target instead of a fixed screen corner.
+                            if (closeButtonBounds?.contains(down.position + touchAreaOrigin) == true) {
                                 return@awaitEachGesture
                             }
                             isMeTouching = true
@@ -262,8 +267,13 @@ fun HeartbeatTouchDialog(
                     onClick = dismissDialog,
                     modifier = Modifier
                         .align(Alignment.TopEnd)
+                        .zIndex(1f)
+                        .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))
                         .padding(24.dp)
                         .size(44.dp)
+                        .onGloballyPositioned {
+                            closeButtonBounds = it.boundsInRoot().inflate(with(density) { 4.dp.toPx() })
+                        }
                         .background(touchInk.copy(alpha = 0.15f), CircleShape)
                 ) {
                     Icon(Icons.Rounded.Close, contentDescription = "Close", tint = touchInk)
