@@ -415,10 +415,12 @@ fun MessageComposer(
     // Day or dark as the app's theme says (not the phone's), so Day stays white on a dark-mode phone
     val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
     val isAmoled = com.example.ui.theme.LocalAmoledBlack.current
-    val barBg = if (isPrivateMode) {
-        if (isDark) Color.Black else Color.White
+    val barBg = if (isDark) {
+        Color.Black
+    } else if (isPrivateMode) {
+        Color.White
     } else {
-        if (isDark) Color(0x66030714) else MaterialTheme.colorScheme.surface.copy(alpha = 0.85f)
+        MaterialTheme.colorScheme.surface.copy(alpha = 0.85f)
     }
     val pillBg = if (isPrivateMode) {
         if (isAmoled) Neutral900
@@ -1534,9 +1536,9 @@ fun MessageComposer(
                         layout(board.width, shownPx) { board.place(0, 0) }
                     }
             ) {
-                // Dark: subtle translucent glass over the wallpaper; Day: white with gentle transparency
+                // Dark: AMOLED black; Day: white with gentle transparency
                 Surface(
-                    color = if (isDark) Color(0xB8080B14) else Color.White.copy(alpha = 0.90f),
+                    color = if (isDark) Color.Black else Color.White.copy(alpha = 0.90f),
                     border = BorderStroke(1.dp, pillBorder),
                     shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
                     modifier = Modifier.fillMaxSize()
@@ -1613,7 +1615,7 @@ private fun EmojiAttachmentPanel(
     onPickVideo: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val panelBg = if (isDark) Neutral900 else Color.White
+    val panelBg = if (isDark) Color.Black else Color.White
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
     val panelNestedScroll = remember {
@@ -1731,7 +1733,7 @@ private fun EmojiAttachmentPanel(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(if (isDark) Neutral900 else Color.White)
+                    .background(if (isDark) Color.Black else Color.White)
                     .border(BorderStroke(0.6.dp, if (isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFE2E8F0)))
                     .padding(horizontal = 4.dp, vertical = 2.dp),
                 horizontalArrangement = Arrangement.SpaceEvenly,

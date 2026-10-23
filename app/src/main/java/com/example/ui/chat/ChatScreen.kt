@@ -1807,13 +1807,11 @@ fun ChatScreen(
             // Day or dark as the app's theme says (not the phone's), so Day stays white on a dark-mode phone
             val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
             val isPrivate = uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE
-            // Dark: subtle translucent blur over wallpaper. Day: white tray with gentle transparency
-            val barBg = if (showWallpaper && isDark) {
-                Color(0x66030714)
+            // Dark mode: AMOLED black bottom tray. Day: white tray with gentle transparency
+            val barBg = if (isDark) {
+                Color.Black
             } else if (showWallpaper && !isDark) {
                 Color.White.copy(alpha = 0.85f)
-            } else if (isDark) {
-                Color.Black
             } else {
                 Color.White
             }

@@ -174,7 +174,7 @@ private fun EmojiBoardContent(
             modifier = Modifier
                 .fillMaxWidth()
                 .then(swipeDownModifier)
-                .background(if (isDark) Color(0x66080B14) else Color.White.copy(alpha = 0.90f))
+                .background(if (isDark) Color.Black else Color.White.copy(alpha = 0.90f))
                 .border(BorderStroke(0.6.dp, if (isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFE2E8F0)))
                 .padding(horizontal = 4.dp, vertical = 2.dp),
             horizontalArrangement = Arrangement.SpaceEvenly,
@@ -640,7 +640,7 @@ private fun MediaBoardBottomBar(
     ) {
         Surface(
             shape = CircleShape,
-            color = if (isDark) Color(0xF00F172A) else Color(0xF5FFFFFF),
+            color = if (isDark) Color.Black else Color(0xF5FFFFFF),
             border = BorderStroke(1.dp, if (isDark) Color(0x33FFFFFF) else Color(0x22000000)),
             shadowElevation = 8.dp,
             modifier = Modifier.height(46.dp)

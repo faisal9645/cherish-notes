@@ -25,6 +25,7 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -836,12 +837,12 @@ fun CalculatorDisguiseScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         // History icon (toggles portrait inline history view)
-                        IconButton(
+                        CalculatorCircleButton(
                             onClick = {
                                 showHistoryInline = !showHistoryInline
                                 haptic.performHapticFeedback(HapticFeedbackType.KeyboardTap)
                             },
-                            modifier = Modifier.size(38.dp)
+                            isDark = isDark
                         ) {
                             Icon(
                                 imageVector = if (showHistoryInline) Icons.Rounded.Dialpad else Icons.Outlined.History,
@@ -852,25 +853,24 @@ fun CalculatorDisguiseScreen(
                         }
 
                         // Unit Converter icon (opens Screenshot 1 converter)
-                        IconButton(
+                        CalculatorCircleButton(
                             onClick = {
                                 showUnitConverterScreen = true
                                 haptic.performHapticFeedback(HapticFeedbackType.KeyboardTap)
                             },
-                            modifier = Modifier.size(38.dp)
+                            isDark = isDark
                         ) {
                             RulerIcon(color = iconMuted)
                         }
 
                         // Scientific calculator toggle with rotation animation
-                        IconButton(
+                        CalculatorCircleButton(
                             onClick = {
                                 isScientificActive = !isScientificActive
                                 haptic.performHapticFeedback(HapticFeedbackType.KeyboardTap)
                             },
-                            modifier = Modifier
-                                .size(38.dp)
-                                .rotate(sciIconRotation)
+                            modifier = Modifier.rotate(sciIconRotation),
+                            isDark = isDark
                         ) {
                             ScientificSquareIcon(
                                 color = if (isScientificActive) operatorTextColor else iconMuted
@@ -1341,12 +1341,13 @@ fun CalculatorDisguiseScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Box {
-                                IconButton(
+                                CalculatorCircleButton(
                                     onClick = {
                                         showOptionsMenu = true
                                         haptic.performHapticFeedback(HapticFeedbackType.KeyboardTap)
                                     },
-                                    modifier = Modifier.size(36.dp)
+                                    size = 36.dp,
+                                    isDark = isDark
                                 ) {
                                     Icon(
                                         imageVector = Icons.Rounded.MoreVert,
@@ -1417,12 +1418,12 @@ fun CalculatorDisguiseScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Box {
-                            IconButton(
+                            CalculatorCircleButton(
                                 onClick = {
                                     showOptionsMenu = true
                                     haptic.performHapticFeedback(HapticFeedbackType.KeyboardTap)
                                 },
-                                modifier = Modifier.size(38.dp)
+                                isDark = isDark
                             ) {
                                 Icon(
                                     imageVector = Icons.Rounded.MoreVert,
@@ -1788,9 +1789,9 @@ private fun SamsungUnitConverterScreen(
                     .padding(vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                IconButton(
+                CalculatorCircleButton(
                     onClick = onClose,
-                    modifier = Modifier.size(38.dp)
+                    isDark = isDark
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
@@ -1823,7 +1824,7 @@ private fun SamsungUnitConverterScreen(
                     Surface(
                         shape = RoundedCornerShape(18.dp),
                         color = if (isSelected) chipActiveBg else Color.Transparent,
-                        modifier = Modifier.clickable {
+                        onClick = {
                             selectedCategoryIndex = idx
                             topUnitIndex = 0
                             bottomUnitIndex = 1
@@ -1850,7 +1851,10 @@ private fun SamsungUnitConverterScreen(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable { activeRow = 0 }
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null
+                    ) { activeRow = 0 }
                     .padding(vertical = 8.dp)
             ) {
                 Row(
@@ -1862,8 +1866,9 @@ private fun SamsungUnitConverterScreen(
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
                                 .clickable { showTopDropdown = true }
-                                .padding(vertical = 4.dp)
+                                .padding(horizontal = 4.dp, vertical = 4.dp)
                         ) {
                             Text(
                                 text = topSpec.name,
@@ -1927,7 +1932,10 @@ private fun SamsungUnitConverterScreen(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable { activeRow = 1 }
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null
+                    ) { activeRow = 1 }
                     .padding(vertical = 8.dp)
             ) {
                 Row(
@@ -1939,8 +1947,9 @@ private fun SamsungUnitConverterScreen(
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
                                 .clickable { showBottomDropdown = true }
-                                .padding(vertical = 4.dp)
+                                .padding(horizontal = 4.dp, vertical = 4.dp)
                         ) {
                             Text(
                                 text = bottomSpec.name,
@@ -2205,6 +2214,48 @@ private fun SamsungRoundKey(
                 softWrap = false
             )
         }
+    }
+}
+
+/**
+ * Circular toolbar button with smooth touch feedback and strict circular clipping,
+ * avoiding any rectangular focus/border artifacts on click.
+ */
+@Composable
+private fun CalculatorCircleButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    size: androidx.compose.ui.unit.Dp = 38.dp,
+    isDark: Boolean = true,
+    content: @Composable () -> Unit
+) {
+    var isPressed by remember { mutableStateOf(false) }
+    val pressFactor by animateFloatAsState(
+        targetValue = if (isPressed) 1f else 0f,
+        animationSpec = tween(durationMillis = if (isPressed) 40 else 180, easing = FastOutSlowInEasing),
+        label = "circle_btn_press"
+    )
+    val currentOnClick by androidx.compose.runtime.rememberUpdatedState(onClick)
+    val pressColor = if (isDark) Color.White.copy(alpha = 0.14f * pressFactor) else Color.Black.copy(alpha = 0.08f * pressFactor)
+
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = modifier
+            .size(size)
+            .clip(CircleShape)
+            .background(pressColor)
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onPress = {
+                        isPressed = true
+                        tryAwaitRelease()
+                        isPressed = false
+                    },
+                    onTap = { currentOnClick() }
+                )
+            }
+    ) {
+        content()
     }
 }
 
