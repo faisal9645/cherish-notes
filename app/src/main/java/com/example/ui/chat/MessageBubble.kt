@@ -97,17 +97,23 @@ private val SentPhotosCaption = Regex("""Sent \d+ photos?""")
 internal class BubbleFill(val brush: Brush, val edge: Color?)
 
 /**
- * The chat's bubbles in plain, solid colours (no glass): mine in the Notes app's original blue
- * gradient, the same in day and dark (see [notesGradient]); my partner's solid mist or night with
- * a fine edge.
+ * Opaque midnight-blue fills in dark mode; the original Notes palette in light mode.
+ * Shapes and sizing are supplied by the existing message card.
  */
 @Composable
 internal fun rememberBubbleFill(isFromMe: Boolean, isDark: Boolean): BubbleFill {
     val black = com.example.ui.theme.LocalAmoledBlack.current
-    val received = if (isDark) darkSurface(NavyCard) else MistBlue
-    val receivedEdge = if (isDark) darkSurface(NavyRaised, Neutral800) else Gray200
+    val received = if (isDark) Color(0xFF263653) else MistBlue
+    val receivedEdge = if (isDark) Color(0xFF526B96).copy(alpha = 0.45f) else Gray200
     return remember(isFromMe, black, isDark, received, receivedEdge) {
-        if (isFromMe) BubbleFill(notesGradient(black = black, isDark = isDark), edge = null)
+        if (isFromMe) BubbleFill(
+            if (isDark) Brush.horizontalGradient(
+                0f to Color(0xFF2858D6),
+                0.55f to Color(0xFF2448B8),
+                1f to Color(0xFF183C9D)
+            ) else notesGradient(black = black, isDark = false),
+            edge = null
+        )
         else BubbleFill(SolidColor(received), receivedEdge)
     }
 }
@@ -232,12 +238,14 @@ fun MessageBubble(
         if (isFromMe) {
             Color.White
         } else {
-            if (isDark) darkTone(Color.White) else Slate900
+            if (isDark) Color.White else Slate900
         }
     }
 
     val timeColor = if (isPrivateMode) {
         textColor.copy(alpha = 0.5f)
+    } else if (isDark) {
+        if (isFromMe) Color(0xFFD1E3FF) else Color(0xFFA9C5ED)
     } else {
         if (isFromMe) Color.White.copy(alpha = 0.85f)
         else darkTone(DayBlueSecondary)
@@ -749,7 +757,7 @@ fun MessageBubble(
                             } else if (isPhotoOnly) Modifier
                             else if (isPrivateMode) Modifier
                             // My partner's bubble has a fine edge; mine is just the blue
-                            else fill.edge?.let { Modifier.border(BorderStroke(0.5.dp, it), cardShape) } ?: Modifier
+                            else fill.edge?.let { Modifier.border(BorderStroke(if (isDark) 0.7.dp else 0.5.dp, it), cardShape) } ?: Modifier
                         )
                         .background(
                             if (isPhotoOnly) androidx.compose.ui.graphics.SolidColor(Color.Transparent)

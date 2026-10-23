@@ -1773,7 +1773,11 @@ fun ChatScreen(
             )
             // Keep the header boundary visible on black surfaces, including dark wallpapers.
             if (isDark || uiState.chatExperienceMode != com.example.ui.chat.ChatExperienceMode.PRIVATE) {
-                HorizontalDivider(thickness = 1.dp, color = MaterialTheme.colorScheme.outlineVariant)
+                HorizontalDivider(
+                    thickness = if (isDark) 0.5.dp else 1.dp,
+                    color = if (isDark) Color(0xFF252A35).copy(alpha = 0.45f)
+                    else MaterialTheme.colorScheme.outlineVariant
+                )
             }
             if (com.example.call.CallManager.hasActiveCall() && callState.phase != com.example.call.CallPhase.INCOMING_RINGING) {
                 Surface(
