@@ -173,7 +173,42 @@ fun Context.vibrateWave(timings: LongArray, amplitudes: IntArray, inHand: Boolea
 fun Context.areAnimationsDisabled(): Boolean =
     Settings.Global.getFloat(contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f
 
-/** A soft light sweep, used as a loading placeholder. */
+/** A soft light sweep composable, used as a high-performance loading placeholder without composed modifier overhead. */
+@Composable
+fun ShimmerPlaceholder(
+    modifier: Modifier = Modifier,
+    baseColor: Color,
+    highlightColor: Color
+) {
+    val isForeground = com.example.ui.components.rememberAppIsResumed()
+    val transition = rememberInfiniteTransition(label = "shimmer")
+    val progress: Float = if (isForeground) {
+        val p by transition.animateFloat(
+            initialValue = 0f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(tween(1100, easing = LinearEasing)),
+            label = "shimmer_progress"
+        )
+        p
+    } else 0f
+
+    androidx.compose.foundation.layout.Spacer(
+        modifier = modifier.drawBehind {
+            drawRect(baseColor)
+            val band = size.width * 0.6f
+            val x = -band + (size.width + 2 * band) * progress
+            drawRect(
+                Brush.linearGradient(
+                    colors = listOf(Color.Transparent, highlightColor, Color.Transparent),
+                    start = Offset(x - band / 2, 0f),
+                    end = Offset(x + band / 2, size.height / 3)
+                )
+            )
+        }
+    )
+}
+
+/** Legacy Modifier.shimmer wrapper. Prefer [ShimmerPlaceholder] to avoid composed allocation churn. */
 fun Modifier.shimmer(baseColor: Color, highlightColor: Color): Modifier = composed {
     val isForeground = com.example.ui.components.rememberAppIsResumed()
     val progress: Float = if (isForeground) {

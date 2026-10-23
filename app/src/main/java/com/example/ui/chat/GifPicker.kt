@@ -315,16 +315,7 @@ fun GifPickerSheet(
                     )
                 }
             }
-            // GIPHY asks for this wherever its GIFs are shown
-            Text(
-                text = "Powered by GIPHY",
-                fontSize = 10.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier
-                    .align(Alignment.CenterHorizontally)
-                    .padding(vertical = 6.dp)
-            )
+
         }
     }
 }

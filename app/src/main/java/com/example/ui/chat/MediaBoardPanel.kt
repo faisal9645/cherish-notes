@@ -425,14 +425,7 @@ private fun GifBoardContent(
             }
         }
 
-        // Attribution
-        Text(
-            text = "Powered by GIPHY",
-            fontSize = 9.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = if (isDark) Color(0xFF64748B) else Color(0xFF94A3B8),
-            modifier = Modifier.align(Alignment.CenterHorizontally).padding(vertical = 2.dp)
-        )
+
     }
 }
 

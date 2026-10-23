@@ -112,6 +112,48 @@ internal fun rememberBubbleFill(isFromMe: Boolean, isDark: Boolean): BubbleFill 
     }
 }
 
+/** Double-tap heart burst effect: created and active ONLY when the user double-taps. */
+@Composable
+private fun androidx.compose.foundation.layout.BoxScope.HeartBurstPop(
+    fontSize: androidx.compose.ui.unit.TextUnit = 36.sp,
+    onFinished: () -> Unit
+) {
+    val heartScale = remember { Animatable(0.2f) }
+    val heartAlpha = remember { Animatable(1f) }
+    val burstState = rememberHeartBurstState()
+    LaunchedEffect(Unit) {
+        launch { burstState.burst() }
+        launch {
+            heartScale.animateTo(
+                targetValue = 1.6f,
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                    stiffness = Spring.StiffnessLow
+                )
+            )
+        }
+        delay(380)
+        heartAlpha.animateTo(0f, animationSpec = tween(250))
+        onFinished()
+    }
+    Box(
+        modifier = Modifier
+            .matchParentSize()
+            .heartBurst(burstState),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = "💖",
+            fontSize = fontSize,
+            modifier = Modifier.graphicsLayer {
+                scaleX = heartScale.value
+                scaleY = heartScale.value
+                alpha = heartAlpha.value
+            }
+        )
+    }
+}
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun MessageBubble(
@@ -208,9 +250,6 @@ fun MessageBubble(
     var showBurstHeart by remember { mutableStateOf(false) }
     // A tap on a text message plays its emojis again
     var emojiReplay by remember { mutableIntStateOf(0) }
-    val heartScale = remember { Animatable(0f) }
-    val heartAlpha = remember { Animatable(0f) }
-    val heartBurst = rememberHeartBurstState()
 
     // Bubble cushion tip: tips a degree or two toward your finger like pressing one side of a cushion,
     // then springs flat with one small wobble.
@@ -304,24 +343,7 @@ fun MessageBubble(
         scope.launch {
             context.vibrateHeartbeat()
             onReactionClick("❤️")
-            launch { heartBurst.burst() }
             showBurstHeart = true
-            heartScale.snapTo(0.2f)
-            heartAlpha.snapTo(1f)
-            launch {
-                heartScale.animateTo(
-                    targetValue = 1.6f,
-                    animationSpec = spring(
-                        dampingRatio = Spring.DampingRatioMediumBouncy,
-                        stiffness = Spring.StiffnessLow
-                    )
-                )
-            }
-            launch {
-                delay(380)
-                heartAlpha.animateTo(0f, animationSpec = tween(250))
-                showBurstHeart = false
-            }
         }
     }
 
@@ -541,7 +563,6 @@ fun MessageBubble(
                                 rotationX = cushionTiltX.value
                                 rotationY = cushionTiltY.value
                             }
-                            .heartBurst(heartBurst)
                             .then(
                                 if (highlightPulse.value > 0.04f) {
                                     Modifier.border(BorderStroke(3.dp, RoseGoldPrimary.copy(alpha = highlightPulse.value)), CircleShape)
@@ -571,20 +592,7 @@ fun MessageBubble(
 
                         // Bursting Heart Dopamine Pop Animation on Double-Tap
                         if (showBurstHeart) {
-                            Box(
-                                modifier = Modifier.matchParentSize(),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = "💖",
-                                    fontSize = 36.sp,
-                                    modifier = Modifier.graphicsLayer {
-                                        scaleX = heartScale.value
-                                        scaleY = heartScale.value
-                                        alpha = heartAlpha.value
-                                    }
-                                )
-                            }
+                            HeartBurstPop(fontSize = 36.sp, onFinished = { showBurstHeart = false })
                         }
                     }
 
@@ -632,7 +640,6 @@ fun MessageBubble(
                             rotationX = cushionTiltX.value
                             rotationY = cushionTiltY.value
                         }
-                        .heartBurst(heartBurst)
                         .pointerInput(message.id) {
                             detectTapGestures(
                                 onTap = { bigEmojiReplay++ },
@@ -664,20 +671,7 @@ fun MessageBubble(
 
                     // Bursting Heart Dopamine Pop Animation on Double-Tap
                     if (showBurstHeart) {
-                        Box(
-                            modifier = Modifier.matchParentSize(),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = "💖",
-                                fontSize = 36.sp,
-                                modifier = Modifier.graphicsLayer {
-                                    scaleX = heartScale.value
-                                    scaleY = heartScale.value
-                                    alpha = heartAlpha.value
-                                }
-                            )
-                        }
+                        HeartBurstPop(fontSize = 36.sp, onFinished = { showBurstHeart = false })
                     }
                 }
             } else {
@@ -732,7 +726,6 @@ fun MessageBubble(
                             rotationX = cushionTiltX.value
                             rotationY = cushionTiltY.value
                         }
-                        .heartBurst(heartBurst)
                         .then(
                             if (isPhotoOnly) {
                                 Modifier.shadow(1.dp, cardShape)
@@ -1642,20 +1635,7 @@ fun MessageBubble(
 
             // Bursting Heart Dopamine Pop Animation on Double-Tap
             if (showBurstHeart) {
-                Box(
-                    modifier = Modifier.matchParentSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "💖",
-                        fontSize = 44.sp,
-                        modifier = Modifier.graphicsLayer {
-                            scaleX = heartScale.value
-                            scaleY = heartScale.value
-                            alpha = heartAlpha.value
-                        }
-                    )
-                }
+                HeartBurstPop(fontSize = 44.sp, onFinished = { showBurstHeart = false })
             }
             }
         }

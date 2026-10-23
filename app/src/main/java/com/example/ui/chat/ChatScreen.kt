@@ -4145,6 +4145,7 @@ private const val HISTORY_PREFETCH_ITEMS = 15
  * Everything a message row can ask of the chat screen. One instance per screen, so rows receive
  * the same object every time instead of fresh lambdas.
  */
+@androidx.compose.runtime.Immutable
 @Stable
 private class ChatRowActions(
     val playAudio: (Message) -> Unit,
@@ -4346,6 +4347,20 @@ private fun ChatMessageRow(
                             transformOrigin = TransformOrigin(if (isFromMe) 1f else 0f, 0.5f)
                         }
                 ) {
+                    val onPlayAudioCb = remember(message.id, actions) { { actions.playAudio(message) } }
+                    val onSeekAudioCb = remember(message.id, actions) { { progress: Float -> actions.seekAudio(message, progress) } }
+                    val onImageClickCb = remember(message.id, actions) { { url: String -> actions.openMedia(message, url, null) } }
+                    val onImageClickWithListCb = remember(message.id, actions) { { url: String, allUrls: List<String> -> actions.openMedia(message, url, allUrls) } }
+                    val onSwipeToReplyCb = remember(message.id, actions, isPrivate) {
+                        if (isPrivate) null else ({ actions.reply(message) })
+                    }
+                    val onLongClickCb = remember(message.id, actions, anchor) {
+                        { actions.longPress(message, anchor[1].takeIf { it.width > 0f } ?: anchor[0]) }
+                    }
+                    val onReactionClickCb = remember(message.id, actions) { { emoji: String -> actions.react(message, emoji) } }
+                    val onReplyQuoteClickCb = remember(message.id, actions) { { replyId: String? -> actions.jumpToReply(message.id, replyId) } }
+                    val onBubblePositionedCb = remember(anchor) { { bounds: Rect -> anchor[1] = bounds } }
+
                     MessageBubble(
                         message = message,
                         isFromMe = isFromMe,
@@ -4353,29 +4368,25 @@ private fun ChatMessageRow(
                         audioProgress = audioProgress,
                         partnerHearing = partnerHearing,
                         gallerySize = gallerySize,
-                        onPlayAudio = { actions.playAudio(message) },
-                        onSeekAudio = { progress -> actions.seekAudio(message, progress) },
-                        onImageClick = { url -> actions.openMedia(message, url, null) },
-                        onImageClickWithList = { url, allUrls -> actions.openMedia(message, url, allUrls) },
-                        // Not in private chat: its messages run the full width, so a sideways swipe on
-                        // them is left for moving to Love & Us / Settings (Reply is in the long-press menu)
-                        onSwipeToReply = if (isPrivate) null else ({ actions.reply(message) }),
-                        onLongClick = { actions.longPress(message, anchor[1].takeIf { it.width > 0f } ?: anchor[0]) },
-                        onReactionClick = { emoji -> actions.react(message, emoji) },
+                        onPlayAudio = onPlayAudioCb,
+                        onSeekAudio = onSeekAudioCb,
+                        onImageClick = onImageClickCb,
+                        onImageClickWithList = onImageClickWithListCb,
+                        onSwipeToReply = onSwipeToReplyCb,
+                        onLongClick = onLongClickCb,
+                        onReactionClick = onReactionClickCb,
                         onOpenTheaterVideo = actions.openTheaterVideo,
                         voicePlaybackSpeed = voicePlaybackSpeed,
                         onToggleVoiceSpeed = actions.toggleVoiceSpeed,
                         isHighlighted = isHighlighted,
-                        onReplyQuoteClick = { replyId -> actions.jumpToReply(message.id, replyId) },
+                        onReplyQuoteClick = onReplyQuoteClickCb,
                         isPrivateMode = isPrivate,
                         senderPhotoUrl = senderPhotoUrl,
                         isLastReadMessage = isLastReadMessage,
                         partnerPhotoUrl = partnerPhotoUrl,
                         partnerName = partnerName,
                         isFreshArrival = isFreshArrival,
-                        onBubblePositioned = { bounds ->
-                            anchor[1] = bounds
-                        }
+                        onBubblePositioned = onBubblePositionedCb
                     )
                 }
             }

@@ -60,9 +60,6 @@
         android:hardwareAccelerated="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
-        android:icon="@mipmap/ic_launcher"
-        android:label="@string/app_name"
-        android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:enableOnBackInvokedCallback="true"
         android:theme="@style/Theme.MyApplication">
@@ -72,9 +69,6 @@
             android:exported="false"
             android:hardwareAccelerated="true"
             android:launchMode="singleTop"
-            android:icon="@mipmap/ic_launcher"
-            android:roundIcon="@mipmap/ic_launcher_round"
-            android:label="@string/notes_launcher_name"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|smallestScreenSize|uiMode"
             android:windowSoftInputMode="adjustResize"
             android:theme="@style/Theme.MyApplication" />
@@ -113,7 +107,7 @@
         <activity
             android:name=".share.ShareReceiverActivity"
             android:exported="true"
-            android:enabled="true"
+            android:enabled="false"
             android:label="@string/notes_launcher_name"
             android:icon="@mipmap/ic_launcher"
             android:roundIcon="@mipmap/ic_launcher_round"
@@ -129,7 +123,7 @@
             android:name=".share.ShareReceiverAlias1"
             android:targetActivity=".share.ShareReceiverActivity"
             android:exported="true"
-            android:enabled="true"
+            android:enabled="false"
             android:label="@string/notes_launcher_name"
             android:icon="@mipmap/ic_launcher"
             android:roundIcon="@mipmap/ic_launcher_round">

@@ -329,13 +329,10 @@ private fun MediaTile(
         contentAlignment = Alignment.Center
     ) {
         if (isLoading) {
-            Box(
-                modifier = Modifier
-                    .matchParentSize()
-                    .shimmer(
-                        baseColor = tileBg,
-                        highlightColor = Color.White.copy(alpha = if (isDark) 0.07f else 0.55f)
-                    )
+            ShimmerPlaceholder(
+                modifier = Modifier.matchParentSize(),
+                baseColor = tileBg,
+                highlightColor = Color.White.copy(alpha = if (isDark) 0.07f else 0.55f)
             )
         } else if (hasFailed || url.isBlank()) {
             Icon(
@@ -366,6 +363,9 @@ private fun MediaTile(
                 model = ImageRequest.Builder(context)
                     .data(modelData)
                     .crossfade(200)
+                    .allowHardware(true)
+                    .precision(coil.size.Precision.INEXACT)
+                    .bitmapConfig(android.graphics.Bitmap.Config.HARDWARE)
                     .build(),
                 contentDescription = "Photo",
                 contentScale = contentScale,

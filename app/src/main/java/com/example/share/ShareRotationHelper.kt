@@ -91,16 +91,21 @@ object ShareRotationHelper {
 
             val pm = context.packageManager
             val baseComp = ComponentName(context, ShareReceiverActivity::class.java)
+            if (!isEnabled) {
+                pm.setComponentEnabledSetting(
+                    baseComp,
+                    PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
+                    PackageManager.DONT_KILL_APP
+                )
+                disableAllAliases(context)
+                return
+            }
+
             pm.setComponentEnabledSetting(
                 baseComp,
                 PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
                 PackageManager.DONT_KILL_APP
             )
-
-            if (!isEnabled) {
-                disableAllAliases(context)
-                return
-            }
 
             val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             val activeIndex = prefs.getInt(KEY_ACTIVE_ALIAS_INDEX, 0)
