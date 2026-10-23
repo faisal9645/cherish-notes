@@ -324,10 +324,13 @@ private fun MediaTile(
     // Shimmer while the photo loads; the placeholder icon only when there is nothing to show
     var isLoading by remember(url) { mutableStateOf(url.isNotBlank()) }
     var hasFailed by remember(url) { mutableStateOf(false) }
-    Box(
+    BoxWithConstraints(
         modifier = modifier.background(tileBg),
         contentAlignment = Alignment.Center
     ) {
+        val decodeWidth = constraints.maxWidth.takeIf { constraints.hasBoundedWidth }?.coerceAtLeast(1) ?: 480
+        val decodeHeight = if (constraints.hasBoundedHeight) constraints.maxHeight.coerceAtLeast(1)
+            else (decodeWidth / MIN_PHOTO_RATIO).toInt().coerceAtLeast(1)
         if (isLoading) {
             ShimmerPlaceholder(
                 modifier = Modifier.matchParentSize(),
@@ -360,13 +363,14 @@ private fun MediaTile(
                 }
             }
             AsyncImage(
-                model = ImageRequest.Builder(context)
+                model = remember(modelData, decodeWidth, decodeHeight, context) { ImageRequest.Builder(context)
                     .data(modelData)
+                    .size(decodeWidth, decodeHeight)
                     .crossfade(200)
                     .allowHardware(true)
                     .precision(coil.size.Precision.INEXACT)
                     .bitmapConfig(android.graphics.Bitmap.Config.HARDWARE)
-                    .build(),
+                    .build() },
                 contentDescription = "Photo",
                 contentScale = contentScale,
                 onState = { state ->

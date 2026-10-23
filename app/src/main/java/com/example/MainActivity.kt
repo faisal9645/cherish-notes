@@ -72,13 +72,29 @@ open class MainActivity : FragmentActivity() {
         } catch (_: Exception) { true }
         if (isCalc) {
             setTheme(R.style.Theme_MyApplication_Calculator)
+        } else {
+            setTheme(R.style.Theme_MyApplication_NotesSplash)
         }
         super.onCreate(savedInstanceState)
-        // The Calculator opens straight into its keys, like Samsung's: its plain launch screen (just
-        // the calculator's background) goes the moment the first frame is drawn, with no fade
-        if (isCalc && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             try {
-                splashScreen.setOnExitAnimationListener { it.remove() }
+                if (isCalc) {
+                    // The Calculator opens straight into its keys like original: plain launch screen goes immediately
+                    splashScreen.setOnExitAnimationListener { it.remove() }
+                } else {
+                    // Notes decoy: display the Notes logo splash screen and smoothly fade it out
+                    splashScreen.setOnExitAnimationListener { splashScreenView ->
+                        val fadeOut = android.animation.ObjectAnimator.ofFloat(splashScreenView, View.ALPHA, 1f, 0f)
+                        fadeOut.duration = 250L
+                        fadeOut.startDelay = 350L
+                        fadeOut.addListener(object : android.animation.AnimatorListenerAdapter() {
+                            override fun onAnimationEnd(animation: android.animation.Animator) {
+                                splashScreenView.remove()
+                            }
+                        })
+                        fadeOut.start()
+                    }
+                }
             } catch (_: Throwable) {}
         }
         try {
@@ -573,7 +589,7 @@ open class MainActivity : FragmentActivity() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU || appliedSplashIsCalc == isCalc) return
         try {
             splashScreen.setSplashScreenTheme(
-                if (isCalc) android.content.res.Resources.ID_NULL else R.style.Theme_MyApplication_NotesSplash
+                if (isCalc) R.style.Theme_MyApplication_Calculator else R.style.Theme_MyApplication_NotesSplash
             )
             appliedSplashIsCalc = isCalc
         } catch (_: Throwable) {}

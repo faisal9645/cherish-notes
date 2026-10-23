@@ -490,7 +490,7 @@ private fun StickersBoardContent(
     val moodPhrases = remember {
         listOf(
             "Flirty mood 🔥", "Dinner date tonight? 🍽️", "Call me when free 📞",
-            "Thinking bad thoughts 😏", "Yours only 🔐", "All mine 💖"
+            "Need a call 📞", "Thinking bad thoughts 😏", "Yours only 🔐", "All mine 💖"
         )
     }
 

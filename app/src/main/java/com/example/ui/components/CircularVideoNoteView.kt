@@ -207,6 +207,8 @@ fun CircularVideoNoteView(
 ) {
     val isRound = shape == CircleShape
     val context = LocalContext.current
+    val visualWorkAllowed = rememberAppIsResumed()
+    val latestVisualWorkAllowed by rememberUpdatedState(visualWorkAllowed)
     // Playing its silent preview (muted, looping, no ring or buttons)
     var isPreview by remember { mutableStateOf(false) }
     // The player exists only while this note plays (with sound or as a preview)
@@ -454,17 +456,16 @@ fun CircularVideoNoteView(
         if (autoPlay) VideoNotePlayback.activeKey = playbackKey
         snapshotFlow {
             val active = VideoNotePlayback.activeKey
-            val myTurn = silentPreview && active == null && VideoNotePlayback.previewsAllowed &&
+            val myTurn = latestVisualWorkAllowed && silentPreview && active == null && VideoNotePlayback.previewsAllowed &&
                 !VideoNotePlayback.isListScrolling &&
                 !BatterySaver.isOn && VideoNotePlayback.previewChoice() === playbackKey
-            // Paused with its sound on (by a tap, or the app going to the background) and then
-            // scrolled mostly away: it no longer holds the notes in view back from playing
-            val pausedAway = active === playbackKey && silentPreview && !isPlaying &&
-                (VideoNotePlayback.inView[playbackKey]?.shown ?: 0f) < MIN_SHOWN_TO_PREVIEW
+            // Release even a playing decoder when its row leaves view or the UI is hidden.
+            val pausedAway = !latestVisualWorkAllowed || (active === playbackKey && silentPreview &&
+                (VideoNotePlayback.inView[playbackKey]?.shown ?: 0f) <= 0f)
             Triple(active, myTurn, pausedAway)
         }.collectLatest { (active, myTurn, pausedAway) ->
             if (pausedAway) {
-                VideoNotePlayback.activeKey = null
+                if (VideoNotePlayback.activeKey === playbackKey) VideoNotePlayback.activeKey = null
                 releasePlayer()
                 return@collectLatest
             }
@@ -492,7 +493,7 @@ fun CircularVideoNoteView(
                         isPlaying = false
                     }
                 }
-                Lifecycle.Event.ON_RESUME -> if (isPreview) {
+                Lifecycle.Event.ON_RESUME -> if (isPreview && latestVisualWorkAllowed) {
                     isPlaying = true
                     player?.play()
                 }
@@ -515,8 +516,9 @@ fun CircularVideoNoteView(
         }
     }
 
-    // Extract thumbnail, metadata, and ensure local caching for smooth instant playback
-    LaunchedEffect(videoUrl) {
+    // Prepare only visible posters. Download the full video only when playback requests it.
+    LaunchedEffect(videoUrl, visualWorkAllowed) {
+        if (!visualWorkAllowed) return@LaunchedEffect
         if (videoUrl.isNotBlank()) {
             val cachedInfo = VideoThumbnailHelper.getVideoInfo(videoUrl)
             if (cachedInfo != null) {
@@ -557,12 +559,7 @@ fun CircularVideoNoteView(
                 }
             }
 
-            val file = withContext(Dispatchers.IO) {
-                VideoThumbnailHelper.getCachedFile(context, videoUrl)
-            }
-            if (file != null && file.exists()) {
-                localVideoFile = file
-            }
+            // Full video downloads belong to playback, never thumbnail preparation.
         }
     }
 

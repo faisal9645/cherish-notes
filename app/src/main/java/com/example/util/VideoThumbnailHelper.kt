@@ -8,6 +8,8 @@ import android.util.Log
 import android.util.LruCache
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.io.File
 import java.io.FileOutputStream
 import java.net.HttpURLConnection
@@ -22,6 +24,8 @@ data class VideoInfo(
 )
 
 object VideoThumbnailHelper {
+    // Serialize frame extraction: fast scrolling must not start multiple native decoders.
+    private val thumbnailMutex = Mutex()
     private val maxCacheBytes = ((Runtime.getRuntime().maxMemory() / 16)
         .coerceIn(4 * 1024 * 1024L, 24 * 1024 * 1024L)).toInt()
 
@@ -186,9 +190,22 @@ object VideoThumbnailHelper {
         memoryCache.get(videoPathOrUrl)?.let { return it }
 
         return withContext(Dispatchers.IO) {
+            thumbnailMutex.withLock {
+            memoryCache.get(videoPathOrUrl)?.let { return@withLock it }
+            val key = java.security.MessageDigest.getInstance("SHA-256")
+                .digest(videoPathOrUrl.toByteArray()).joinToString("") { "%02x".format(it) }
+            val posterDir = File(context.cacheDir, "video_posters").apply { mkdirs() }
+            val poster = File(posterDir, "$key.jpg")
+            android.graphics.BitmapFactory.decodeFile(poster.absolutePath)?.let {
+                poster.setLastModified(System.currentTimeMillis())
+                memoryCache.put(videoPathOrUrl, it)
+                return@withLock it
+            }
             var retriever: MediaMetadataRetriever? = null
             try {
-                val localFile = getCachedFile(context, videoPathOrUrl)
+                // Use an existing download, but never fetch an entire video just for its poster.
+                val localFile = getVideoCacheFile(context, videoPathOrUrl).takeIf { it.exists() && it.length() > 1024 }
+                    ?: if (videoPathOrUrl.startsWith("data:video")) getCachedFile(context, videoPathOrUrl) else null
 
                 retriever = MediaMetadataRetriever()
                 if (localFile != null && localFile.exists()) {
@@ -203,7 +220,13 @@ object VideoThumbnailHelper {
 
                 // Camera startup frame (at time 0) is pitch black.
                 // Seek to 500ms (500_000 us) to get the properly exposed face / scene.
-                val rawBitmap = retriever.getFrameAtTime(500_000L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+                val rawWidth = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)?.toIntOrNull() ?: 480
+                val rawHeight = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)?.toIntOrNull() ?: 480
+                val scale = minOf(1f, 480f / maxOf(rawWidth, rawHeight).coerceAtLeast(1))
+                val rawBitmap = if (android.os.Build.VERSION.SDK_INT >= 27) {
+                    retriever.getScaledFrameAtTime(500_000L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC,
+                        (rawWidth * scale).toInt().coerceAtLeast(1), (rawHeight * scale).toInt().coerceAtLeast(1))
+                } else retriever.getFrameAtTime(500_000L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
                     ?: retriever.getFrameAtTime(300_000L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
                     ?: retriever.frameAtTime
                     ?: retriever.getFrameAtTime(0L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
@@ -233,6 +256,14 @@ object VideoThumbnailHelper {
 
                 if (bitmap != null) {
                     memoryCache.put(videoPathOrUrl, bitmap)
+                    // Disposable bounded disk cache survives scrolling, memory trims and restarts.
+                    runCatching {
+                        val temp = File(posterDir, "$key.tmp")
+                        FileOutputStream(temp).use { bitmap.compress(Bitmap.CompressFormat.JPEG, 82, it) }
+                        if (!temp.renameTo(poster)) temp.delete()
+                        posterDir.listFiles()?.filter { it.extension == "jpg" }
+                            ?.sortedByDescending { it.lastModified() }?.drop(128)?.forEach { it.delete() }
+                    }
                 }
 
                 try {
@@ -260,6 +291,7 @@ object VideoThumbnailHelper {
                 try {
                     retriever?.release()
                 } catch (_: Exception) {}
+            }
             }
         }
     }

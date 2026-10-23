@@ -29,6 +29,7 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
@@ -50,16 +51,27 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.Image
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.Backspace
 import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.outlined.History
+import androidx.compose.material.icons.rounded.Dialpad
+import androidx.compose.material.icons.rounded.MoreVert
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.window.Dialog
+import com.example.R
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.material.icons.rounded.ArrowDownward
 import androidx.compose.material.icons.rounded.ArrowDropDown
 import androidx.compose.material.icons.rounded.ArrowUpward
@@ -130,8 +142,8 @@ import kotlin.math.sqrt
 import kotlin.math.tan
 
 /**
- * Authentic Samsung One UI Calculator Disguise Screen.
- * Exact replication of official Samsung Galaxy Calculator app:
+ * Samsung-style calculator. Visual parity with the requested 12.6.00.35 reference
+ * still requires device screenshots; the layout below is not a verified pixel match.
  * - Accurate Day & Night palettes: circular light grey (#F2F3F5) / dark (#212123) buttons,
  *   green operators (#278829 / #2BB532), coral C (#FF6565), solid green = button (#35A324 / #2BB532).
  * - Exact expression styling: operators colored Samsung green, numbers black/white.
@@ -173,14 +185,11 @@ private object CalculatorHistoryStore {
     }
 }
 
-/** The display line, with the "=" count it belongs to (a new count animates in as a result). */
-private data class CalcLine(val text: androidx.compose.ui.text.AnnotatedString, val generation: Int)
-
 /**
  * The sum as shown: each number's whole part in groups of three ("12345.678" -> "12,345.678"),
  * as Samsung's calculator does while typing. Only for showing; the sum itself has no separators.
  */
-private fun groupDigitsForDisplay(expression: String): String {
+internal fun groupDigitsForDisplay(expression: String): String {
     val source = expression.replace(",", "")
     val out = StringBuilder(source.length + 8)
     var i = 0
@@ -212,35 +221,6 @@ private fun groupDigitsForDisplay(expression: String): String {
     return out.toString()
 }
 
-/** A thin cursor after the last digit, blinking about twice a second like a text field's. */
-@Composable
-private fun BlinkingCursor(color: Color, height: androidx.compose.ui.unit.Dp) {
-    val transition = androidx.compose.animation.core.rememberInfiniteTransition(label = "calc_cursor")
-    val alpha by transition.animateFloat(
-        initialValue = 1f,
-        targetValue = 0f,
-        animationSpec = androidx.compose.animation.core.infiniteRepeatable(
-            animation = androidx.compose.animation.core.keyframes {
-                durationMillis = 1000
-                1f at 0
-                1f at 499
-                0f at 500
-                0f at 999
-            },
-            repeatMode = androidx.compose.animation.core.RepeatMode.Restart
-        ),
-        label = "calc_cursor_alpha"
-    )
-    Box(
-        modifier = Modifier
-            .padding(start = 2.dp)
-            .width(2.dp)
-            .height(height)
-            .graphicsLayer { this.alpha = alpha }
-            .background(color)
-    )
-}
-
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 fun CalculatorDisguiseScreen(
@@ -258,11 +238,10 @@ fun CalculatorDisguiseScreen(
     val coroutineScope = rememberCoroutineScope()
 
     // Calculator states
-    var expression by remember { mutableStateOf("0") }
+    val expressionEditor = remember { CalculatorEditor() }
+    var expression by expressionEditor
     var historyEquation by remember { mutableStateOf("") }
     var isEvaluated by remember { mutableStateOf(false) }
-    // Goes up with each "=": the result slides up into place, the sum moves out above it
-    var evalCount by remember { mutableIntStateOf(0) }
     var isDegMode by remember { mutableStateOf(true) }
     var isScientificActive by remember { mutableStateOf(false) }
 
@@ -275,6 +254,8 @@ fun CalculatorDisguiseScreen(
     val density = androidx.compose.ui.platform.LocalDensity.current
     var keypadHeightPx by remember { mutableIntStateOf(0) }
     var showUnitConverterScreen by remember { mutableStateOf(false) }
+    var showOptionsMenu by remember { mutableStateOf(false) }
+    var showAboutDialog by remember { mutableStateOf(false) }
 
     // Secret unlock transition state
     var isUnlockingSecret by remember { mutableStateOf(false) }
@@ -388,10 +369,14 @@ fun CalculatorDisguiseScreen(
         return false
     }
 
-    // Android back button / back gesture: close the converter or history first; otherwise
+    // Android back button / back gesture: close the converter, dialog, menu, or history first; otherwise
     // cleanly exit the calculator app, returning to launcher or previous app.
     BackHandler(enabled = true) {
-        if (showUnitConverterScreen) {
+        if (showAboutDialog) {
+            showAboutDialog = false
+        } else if (showOptionsMenu) {
+            showOptionsMenu = false
+        } else if (showUnitConverterScreen) {
             showUnitConverterScreen = false
         } else if (showHistoryInline) {
             showHistoryInline = false
@@ -427,9 +412,9 @@ fun CalculatorDisguiseScreen(
     // layout, so the soft-input mode is put back to adjustResize when the calculator leaves.
     DisposableEffect(window) {
         window?.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN)
-        // A basic calculator shows upright; its five key rows don't fit a short landscape screen
+        // Respect the user's rotation setting; landscape uses a separate fitted keypad layout.
         val previousOrientation = activity?.requestedOrientation
-        activity?.requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+        activity?.requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_USER
         onDispose {
             window?.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
             previousOrientation?.let { activity?.requestedOrientation = it }
@@ -453,7 +438,7 @@ fun CalculatorDisguiseScreen(
     val chipActiveBg = if (isDark) Color(0xFF212123) else Color(0xFFF0F1F3)
 
     // Live preview evaluation (e.g. "1260")
-    val liveResult = remember(expression, isDegMode) {
+    val liveResult = remember(expression, isDegMode, isEvaluated) {
         if (!isEvaluated && expression.any { it in "+−×÷^%!√" || it.isLetter() }) {
             evaluateSamsungExpression(expression, isDegMode).getOrNull()
         } else null
@@ -461,6 +446,12 @@ fun CalculatorDisguiseScreen(
 
     fun onDigit(digit: String) {
         haptic.performHapticFeedback(HapticFeedbackType.KeyboardTap)
+        if (expressionEditor.editingInside) {
+            expressionEditor.replaceSelection(digit)
+            isEvaluated = false
+            historyEquation = ""
+            return
+        }
         if (isEvaluated) {
             expression = digit
             historyEquation = ""
@@ -488,6 +479,11 @@ fun CalculatorDisguiseScreen(
 
     fun onDecimal() {
         haptic.performHapticFeedback(HapticFeedbackType.KeyboardTap)
+        if (expressionEditor.editingInside) {
+            expressionEditor.replaceSelection(".")
+            isEvaluated = false
+            return
+        }
         if (isEvaluated) {
             expression = "0."
             historyEquation = ""
@@ -506,6 +502,11 @@ fun CalculatorDisguiseScreen(
 
     fun onOperator(op: String) {
         haptic.performHapticFeedback(HapticFeedbackType.KeyboardTap)
+        if (expressionEditor.editingInside) {
+            expressionEditor.replaceSelection(" $op ")
+            isEvaluated = false
+            return
+        }
         if (isEvaluated) {
             isEvaluated = false
             historyEquation = ""
@@ -523,6 +524,14 @@ fun CalculatorDisguiseScreen(
 
     fun onParenthesis() {
         haptic.performHapticFeedback(HapticFeedbackType.KeyboardTap)
+        if (expressionEditor.editingInside) {
+            val prefix = expression.take(expressionEditor.value.selection.min)
+            val close = prefix.count { it == '(' } > prefix.count { it == ')' } &&
+                prefix.lastOrNull()?.let { it.isDigit() || it == ')' } == true
+            expressionEditor.replaceSelection(if (close) ")" else "(")
+            isEvaluated = false
+            return
+        }
         if (isEvaluated) {
             expression = "("
             historyEquation = ""
@@ -547,6 +556,11 @@ fun CalculatorDisguiseScreen(
 
     fun onPercentage() {
         haptic.performHapticFeedback(HapticFeedbackType.KeyboardTap)
+        if (expressionEditor.editingInside) {
+            expressionEditor.replaceSelection("%")
+            isEvaluated = false
+            return
+        }
         if (isEvaluated) {
             expression = "$expression%"
             isEvaluated = false
@@ -560,6 +574,13 @@ fun CalculatorDisguiseScreen(
 
     fun onPlusMinus() {
         haptic.performHapticFeedback(HapticFeedbackType.KeyboardTap)
+        if (expressionEditor.editingInside) {
+            val selection = expressionEditor.value.selection
+            val selected = expression.substring(selection.min, selection.max)
+            expressionEditor.replaceSelection(if (selected.isEmpty()) "−" else "−($selected)")
+            isEvaluated = false
+            return
+        }
         if (isEvaluated) {
             expression = if (expression.startsWith("−")) expression.removePrefix("−") else "−$expression"
             return
@@ -589,6 +610,12 @@ fun CalculatorDisguiseScreen(
 
     fun onBackspace() {
         haptic.performHapticFeedback(HapticFeedbackType.KeyboardTap)
+        if (expressionEditor.editingInside) {
+            expressionEditor.backspace()
+            isEvaluated = false
+            historyEquation = ""
+            return
+        }
         if (isEvaluated) {
             expression = "0"
             historyEquation = ""
@@ -607,6 +634,11 @@ fun CalculatorDisguiseScreen(
 
     fun onScientificFn(fn: String) {
         haptic.performHapticFeedback(HapticFeedbackType.KeyboardTap)
+        if (expressionEditor.editingInside) {
+            expressionEditor.replaceSelection(if (fn in listOf("π", "e")) fn else "$fn(")
+            isEvaluated = false
+            return
+        }
         if (isEvaluated) {
             expression = if (fn in listOf("π", "e")) fn else "$fn("
             historyEquation = ""
@@ -624,6 +656,13 @@ fun CalculatorDisguiseScreen(
                 expression = "$trimmed $fn("
             }
         }
+    }
+
+    fun onPostfix(token: String) {
+        haptic.performHapticFeedback(HapticFeedbackType.KeyboardTap)
+        expressionEditor.replaceSelection(token)
+        isEvaluated = false
+        historyEquation = ""
     }
 
     fun onEquals() {
@@ -653,12 +692,6 @@ fun CalculatorDisguiseScreen(
         // Kept without separators (they're added when shown), so it carries on cleanly
         expression = res.replace(",", "")
         isEvaluated = true
-        evalCount++
-    }
-
-    val displayScrollState = rememberScrollState()
-    LaunchedEffect(expression) {
-        displayScrollState.animateScrollTo(displayScrollState.maxValue)
     }
 
     val sciIconRotation by animateFloatAsState(
@@ -672,6 +705,8 @@ fun CalculatorDisguiseScreen(
             .fillMaxSize()
             .background(bgMain)
     ) {
+        val isLandscape = maxWidth > maxHeight
+        LaunchedEffect(isLandscape) { keypadHeightPx = 0 }
         val screenHeight = maxHeight
         val isCompactScreen = screenHeight < 720.dp
         val isVerySmallScreen = screenHeight < 600.dp
@@ -692,22 +727,11 @@ fun CalculatorDisguiseScreen(
                 secondaryText = secondaryText,
                 dividerColor = dividerColor,
                 chipActiveBg = chipActiveBg,
+                landscape = isLandscape,
                 onClose = { showUnitConverterScreen = false }
             )
         } else {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .statusBarsPadding()
-                    .navigationBarsPadding()
-                    .padding(horizontal = horizontalPad)
-                    .padding(bottom = if (isCompactScreen) 4.dp else 8.dp),
-                verticalArrangement = Arrangement.Bottom
-            ) {
-                // Expanding top space: absorbs all upper space, pinning calculator display & keypad
-                // directly to the bottom like the official Samsung Galaxy Calculator
-                Spacer(modifier = Modifier.weight(1f))
-
+            val display: @Composable () -> Unit = {
                 // Display Section (Samsung One UI layout) with horizontal scroll
                 Column(
                     modifier = Modifier
@@ -750,65 +774,30 @@ fun CalculatorDisguiseScreen(
                         }
                     }
 
-                    // Numbers show with thousands separators as they're typed ("1,234"), like Samsung
-                    val shownExpression = remember(expression) { groupDigitsForDisplay(expression) }
-                    val annotatedExpression = remember(shownExpression, primaryText, operatorTextColor) {
-                        buildAnnotatedString {
-                            for (ch in shownExpression) {
-                                if (ch in "+−×÷%()^√") {
-                                    withStyle(SpanStyle(color = operatorTextColor, fontWeight = FontWeight.Normal)) {
-                                        append(ch)
-                                    }
-                                } else {
-                                    withStyle(SpanStyle(color = primaryText, fontWeight = FontWeight.Normal)) {
-                                        append(ch)
-                                    }
-                                }
+                    BasicTextField(
+                        value = expressionEditor.value,
+                        onValueChange = { next ->
+                            val previous = expression
+                            expressionEditor.update(next)
+                            if (expression != previous) {
+                                isEvaluated = false
+                                historyEquation = ""
                             }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        textStyle = TextStyle(
+                            color = primaryText,
+                            fontSize = primaryFontSize,
+                            fontFamily = FontFamily.SansSerif,
+                            textAlign = TextAlign.End
+                        ),
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(showKeyboardOnFocus = false),
+                        cursorBrush = SolidColor(operatorTextColor),
+                        visualTransformation = remember(operatorTextColor) {
+                            CalculatorNumberTransformation(operatorColor = operatorTextColor)
                         }
-                    }
-                    // The digits shrink smoothly as the sum grows, instead of jumping a size
-                    val animatedFontSize by animateFloatAsState(
-                        targetValue = primaryFontSize.value,
-                        animationSpec = tween(180, easing = FastOutSlowInEasing),
-                        label = "calc_font_size"
                     )
-
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(displayScrollState),
-                        horizontalArrangement = Arrangement.End,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        // On "=" the result rises into place and the sum moves up out of the way; typing
-                        // within one sum just updates it (the key only changes with each "=")
-                        androidx.compose.animation.AnimatedContent(
-                            targetState = CalcLine(annotatedExpression, evalCount),
-                            contentKey = { it.generation },
-                            transitionSpec = {
-                                (androidx.compose.animation.slideInVertically(tween(260, easing = FastOutSlowInEasing)) { it / 2 } +
-                                    fadeIn(tween(220))) togetherWith
-                                    (androidx.compose.animation.slideOutVertically(tween(220, easing = FastOutSlowInEasing)) { -it / 2 } +
-                                        fadeOut(tween(160)))
-                            },
-                            label = "calc_result"
-                        ) { line ->
-                            Text(
-                                text = line.text,
-                                fontSize = animatedFontSize.sp,
-                                fontWeight = FontWeight.Normal,
-                                maxLines = 1,
-                                textAlign = TextAlign.End,
-                                fontFamily = FontFamily.SansSerif
-                            )
-                        }
-                        // Samsung's green cursor, blinking while a sum is being typed
-                        if (!isEvaluated) {
-                            BlinkingCursor(color = operatorTextColor, height = (animatedFontSize * 1.05f).dp)
-                        }
-                    }
-
                     // Live result preview (clean number without '= ', e.g. "1260" - Screenshot 3)
                     AnimatedVisibility(
                         visible = liveResult != null && !isEvaluated,
@@ -817,7 +806,9 @@ fun CalculatorDisguiseScreen(
                     ) {
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
-                            text = liveResult.orEmpty(),
+                            text = CalculatorNumberTransformation().filter(
+                                androidx.compose.ui.text.AnnotatedString(liveResult.orEmpty())
+                            ).text,
                             fontSize = if (isCompactScreen) 20.sp else 24.sp,
                             fontWeight = FontWeight.Normal,
                             color = secondaryText,
@@ -827,6 +818,8 @@ fun CalculatorDisguiseScreen(
                     }
                 }
 
+            }
+            val toolbar: @Composable () -> Unit = {
                 // Samsung One UI Toolbar (Screenshot 3 & 4)
                 Row(
                     modifier = Modifier
@@ -851,8 +844,8 @@ fun CalculatorDisguiseScreen(
                             modifier = Modifier.size(38.dp)
                         ) {
                             Icon(
-                                imageVector = Icons.Outlined.History,
-                                contentDescription = "History",
+                                imageVector = if (showHistoryInline) Icons.Rounded.Dialpad else Icons.Outlined.History,
+                                contentDescription = if (showHistoryInline) "Keypad" else "History",
                                 tint = if (showHistoryInline) operatorTextColor else iconMuted,
                                 modifier = Modifier.size(22.dp)
                             )
@@ -885,39 +878,43 @@ fun CalculatorDisguiseScreen(
                         }
                     }
 
-                    // Green backspace button on right
+                    // Green backspace button on right (only visible when digits/content are typed, matching Samsung One UI)
                     val hasContent = expression != "0" || historyEquation.isNotEmpty()
                     // A tap deletes one; held, it keeps deleting, faster the longer it's held (as
                     // Samsung's does; "C" is what clears everything)
                     val backspaceAction by androidx.compose.runtime.rememberUpdatedState({ onBackspace() })
-                    Box(
-                        contentAlignment = Alignment.Center,
-                        modifier = Modifier
-                            .size(38.dp)
-                            .clip(CircleShape)
-                            .pointerInput(Unit) {
-                                awaitEachGesture {
-                                    awaitFirstDown()
-                                    backspaceAction()
-                                    var gap = 380L
-                                    while (true) {
-                                        val ended = withTimeoutOrNull(gap) {
-                                            waitForUpOrCancellation()
-                                            true
-                                        } ?: false
-                                        if (ended) break
+                    if (hasContent) {
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier
+                                .size(38.dp)
+                                .clip(CircleShape)
+                                .pointerInput(Unit) {
+                                    awaitEachGesture {
+                                        awaitFirstDown()
                                         backspaceAction()
-                                        gap = (gap * 0.75).toLong().coerceAtLeast(45L)
+                                        var gap = 380L
+                                        while (true) {
+                                            val ended = withTimeoutOrNull(gap) {
+                                                waitForUpOrCancellation()
+                                                true
+                                            } ?: false
+                                            if (ended) break
+                                            backspaceAction()
+                                            gap = (gap * 0.75).toLong().coerceAtLeast(45L)
+                                        }
                                     }
                                 }
-                            }
-                    ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Rounded.Backspace,
-                            contentDescription = "Backspace",
-                            tint = if (hasContent) operatorTextColor else iconMuted.copy(alpha = 0.35f),
-                            modifier = Modifier.size(24.dp)
-                        )
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Rounded.Backspace,
+                                contentDescription = "Backspace",
+                                tint = operatorTextColor,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+                    } else {
+                        Spacer(modifier = Modifier.size(38.dp))
                     }
                 }
 
@@ -927,10 +924,12 @@ fun CalculatorDisguiseScreen(
                     modifier = Modifier.padding(vertical = if (isCompactScreen) 6.dp else 10.dp)
                 )
 
+            }
+            val science: @Composable () -> Unit = {
                 // Scientific Keypad Panel (Animated Expansion). Stays as it is when history opens, so
                 // opening history doesn't change the height below the display (no shift).
                 AnimatedVisibility(
-                    visible = isScientificActive,
+                    visible = isScientificActive || isLandscape,
                     enter = fadeIn() + expandVertically(),
                     exit = fadeOut() + shrinkVertically()
                 ) {
@@ -987,7 +986,7 @@ fun CalculatorDisguiseScreen(
                                 modifier = Modifier.weight(1f),
                                 onClick = {
                                     haptic.performHapticFeedback(HapticFeedbackType.KeyboardTap)
-                                    expression += "^2"
+                                    onPostfix("^2")
                                 }
                             )
                             ScientificKey(
@@ -1007,10 +1006,9 @@ fun CalculatorDisguiseScreen(
                                 modifier = Modifier.weight(1f),
                                 onClick = {
                                     haptic.performHapticFeedback(HapticFeedbackType.KeyboardTap)
-                                    if (expression == "0" || isEvaluated) {
-                                        expression = "π"
-                                        isEvaluated = false
-                                    } else expression += "π"
+                                    if (expression == "0" || isEvaluated) expression = "π"
+                                    else expressionEditor.replaceSelection("π")
+                                    isEvaluated = false
                                 }
                             )
                         }
@@ -1029,10 +1027,9 @@ fun CalculatorDisguiseScreen(
                                 modifier = Modifier.weight(1f),
                                 onClick = {
                                     haptic.performHapticFeedback(HapticFeedbackType.KeyboardTap)
-                                    if (expression == "0" || isEvaluated) {
-                                        expression = "e"
-                                        isEvaluated = false
-                                    } else expression += "e"
+                                    if (expression == "0" || isEvaluated) expression = "e"
+                                    else expressionEditor.replaceSelection("e")
+                                    isEvaluated = false
                                 }
                             )
                             ScientificKey(
@@ -1043,7 +1040,7 @@ fun CalculatorDisguiseScreen(
                                 modifier = Modifier.weight(1f),
                                 onClick = {
                                     haptic.performHapticFeedback(HapticFeedbackType.KeyboardTap)
-                                    expression += "!"
+                                    onPostfix("!")
                                 }
                             )
                             ScientificKey(text = "( )", bgColor = scientificKeyBg, textColor = scientificKeyText, keyHeight = scientificKeyHeight, modifier = Modifier.weight(1f), onClick = { onParenthesis() })
@@ -1051,12 +1048,15 @@ fun CalculatorDisguiseScreen(
                     }
                 }
 
+            }
+            val keypad: @Composable () -> Unit = {
                 if (showHistoryInline) {
                     // Inline History View (Screenshot 4)
                     // The left 3 columns are replaced by the History list and 'Clear history' pill button,
                     // while the right column keeps the 5 operator keys (÷, ×, −, +, =). It takes exactly
                     // the keypad's height, so switching to it doesn't move the display.
-                    val historyHeight = if (keypadHeightPx > 0) with(density) { keypadHeightPx.toDp() }
+                    val historyHeight = if (isLandscape) (screenHeight - 64.dp).coerceAtLeast(120.dp)
+                        else if (keypadHeightPx > 0) with(density) { keypadHeightPx.toDp() }
                         else if (isCompactScreen) 300.dp else 340.dp
                     Row(
                         modifier = Modifier
@@ -1100,9 +1100,9 @@ fun CalculatorDisguiseScreen(
                                             modifier = Modifier
                                                 .fillMaxWidth()
                                                 .clickable {
-                                                    expression = res.replace(",", "")
-                                                    historyEquation = eq
-                                                    isEvaluated = true
+                                                    expression = eq
+                                                    historyEquation = ""
+                                                    isEvaluated = false
                                                     showHistoryInline = false
                                                 }
                                                 .padding(vertical = 4.dp),
@@ -1326,8 +1326,150 @@ fun CalculatorDisguiseScreen(
                     }
                 }
             }
+            if (isLandscape) {
+                Row(
+                    modifier = Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()
+                        .padding(horizontal = horizontalPad, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(20.dp)
+                ) {
+                    Column(modifier = Modifier.weight(1f).fillMaxHeight()) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 2.dp),
+                            horizontalArrangement = Arrangement.End,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box {
+                                IconButton(
+                                    onClick = {
+                                        showOptionsMenu = true
+                                        haptic.performHapticFeedback(HapticFeedbackType.KeyboardTap)
+                                    },
+                                    modifier = Modifier.size(36.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.MoreVert,
+                                        contentDescription = "More options",
+                                        tint = iconMuted,
+                                        modifier = Modifier.size(22.dp)
+                                    )
+                                }
+                                DropdownMenu(
+                                    expanded = showOptionsMenu,
+                                    onDismissRequest = { showOptionsMenu = false },
+                                    modifier = Modifier.background(if (isDark) Color(0xFF252527) else Color(0xFFFFFFFF))
+                                ) {
+                                    DropdownMenuItem(
+                                        text = { Text("History", color = primaryText, fontSize = 15.sp, fontFamily = FontFamily.SansSerif) },
+                                        onClick = {
+                                            showOptionsMenu = false
+                                            showUnitConverterScreen = false
+                                            showHistoryInline = true
+                                        }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("Unit converter", color = primaryText, fontSize = 15.sp, fontFamily = FontFamily.SansSerif) },
+                                        onClick = {
+                                            showOptionsMenu = false
+                                            showHistoryInline = false
+                                            showUnitConverterScreen = true
+                                        }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("About Calculator", color = primaryText, fontSize = 15.sp, fontFamily = FontFamily.SansSerif) },
+                                        onClick = {
+                                            showOptionsMenu = false
+                                            showAboutDialog = true
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                        display()
+                        toolbar()
+                        Column(modifier = Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+                            science()
+                        }
+                    }
+                    BoxWithConstraints(
+                        modifier = Modifier.weight(1f).fillMaxHeight(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        // Five rows of round keys fit the actual space left by the system bars.
+                        val keyDiameter = ((maxHeight - keypadSpacing * 4 - 8.dp) / 5).coerceAtLeast(1.dp)
+                        val fittedWidth = minOf(maxWidth, keyDiameter * 4 + keypadSpacing * 3)
+                        Box(modifier = Modifier.width(fittedWidth)) { keypad() }
+                    }
+                }
+            } else {
+                Column(
+                    modifier = Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()
+                        .padding(horizontal = horizontalPad)
+                        .padding(bottom = if (isCompactScreen) 4.dp else 8.dp),
+                    verticalArrangement = Arrangement.Bottom
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 2.dp),
+                        horizontalArrangement = Arrangement.End,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box {
+                            IconButton(
+                                onClick = {
+                                    showOptionsMenu = true
+                                    haptic.performHapticFeedback(HapticFeedbackType.KeyboardTap)
+                                },
+                                modifier = Modifier.size(38.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.MoreVert,
+                                    contentDescription = "More options",
+                                    tint = iconMuted,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            }
+                            DropdownMenu(
+                                expanded = showOptionsMenu,
+                                onDismissRequest = { showOptionsMenu = false },
+                                modifier = Modifier.background(if (isDark) Color(0xFF252527) else Color(0xFFFFFFFF))
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text("History", color = primaryText, fontSize = 15.sp, fontFamily = FontFamily.SansSerif) },
+                                    onClick = {
+                                        showOptionsMenu = false
+                                        showUnitConverterScreen = false
+                                        showHistoryInline = true
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Unit converter", color = primaryText, fontSize = 15.sp, fontFamily = FontFamily.SansSerif) },
+                                    onClick = {
+                                        showOptionsMenu = false
+                                        showHistoryInline = false
+                                        showUnitConverterScreen = true
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("About Calculator", color = primaryText, fontSize = 15.sp, fontFamily = FontFamily.SansSerif) },
+                                    onClick = {
+                                        showOptionsMenu = false
+                                        showAboutDialog = true
+                                    }
+                                )
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.weight(1f))
+                    display()
+                    toolbar()
+                    science()
+                    keypad()
+                }
+            }
         }
-
         // Satisfying secret opening transition overlay (matches Notes app unlock loader)
         if (isUnlockingSecret) {
             Box(
@@ -1400,6 +1542,100 @@ fun CalculatorDisguiseScreen(
                 }
             }
         }
+
+        // Authentic Samsung One UI "About Calculator" popup dialog
+        if (showAboutDialog) {
+            Dialog(
+                onDismissRequest = { showAboutDialog = false }
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(26.dp),
+                    color = if (isDark) Color(0xFF212124) else Color(0xFFFFFFFF),
+                    shadowElevation = 10.dp,
+                    modifier = Modifier.widthIn(min = 280.dp, max = 340.dp)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 24.dp, vertical = 24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Image(
+                            painter = painterResource(id = R.drawable.ic_samsung_calculator),
+                            contentDescription = "Calculator",
+                            modifier = Modifier
+                                .size(76.dp)
+                                .clip(RoundedCornerShape(20.dp))
+                        )
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        Text(
+                            text = "Calculator",
+                            fontSize = 22.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = primaryText,
+                            fontFamily = FontFamily.SansSerif
+                        )
+
+                        Spacer(modifier = Modifier.height(4.dp))
+
+                        Text(
+                            text = "Version 12.3.05.8",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Normal,
+                            color = secondaryText,
+                            fontFamily = FontFamily.SansSerif
+                        )
+
+                        Spacer(modifier = Modifier.height(6.dp))
+
+                        Text(
+                            text = "The latest version is installed.",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Normal,
+                            color = secondaryText,
+                            fontFamily = FontFamily.SansSerif
+                        )
+
+                        Spacer(modifier = Modifier.height(18.dp))
+
+                        Text(
+                            text = "© 2026 Samsung Electronics Co., Ltd.\nAll rights reserved.",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Normal,
+                            color = secondaryText.copy(alpha = 0.7f),
+                            textAlign = TextAlign.Center,
+                            lineHeight = 15.sp,
+                            fontFamily = FontFamily.SansSerif
+                        )
+
+                        Spacer(modifier = Modifier.height(20.dp))
+
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(22.dp))
+                                .background(if (isDark) Color(0xFF2E2E32) else Color(0xFFF2F3F5))
+                                .clickable {
+                                    haptic.performHapticFeedback(HapticFeedbackType.KeyboardTap)
+                                    showAboutDialog = false
+                                }
+                                .padding(vertical = 12.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "OK",
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = operatorTextColor,
+                                fontFamily = FontFamily.SansSerif
+                            )
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -1423,6 +1659,7 @@ private fun SamsungUnitConverterScreen(
     secondaryText: Color,
     dividerColor: Color,
     chipActiveBg: Color,
+    landscape: Boolean = false,
     onClose: () -> Unit
 ) {
     val haptic = LocalHapticFeedback.current
@@ -1531,12 +1768,15 @@ private fun SamsungUnitConverterScreen(
         }
     }
 
+    Box(modifier = Modifier.fillMaxSize().background(bgMain), contentAlignment = Alignment.TopCenter) {
     Column(
         modifier = Modifier
+            .then(if (landscape) Modifier.widthIn(max = 420.dp) else Modifier)
             .fillMaxSize()
             .background(bgMain)
             .statusBarsPadding()
             .navigationBarsPadding()
+            .then(if (landscape) Modifier.verticalScroll(rememberScrollState()) else Modifier)
             .padding(horizontal = 20.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.SpaceBetween
     ) {
@@ -1861,8 +2101,10 @@ private fun SamsungUnitConverterScreen(
     }
 }
 
+}
+
 /**
- * Authentic circular key for Samsung One UI Calculator with spring press physics and responsive font scaling.
+ * Circular calculator key with responsive font scaling.
  */
 @Composable
 private fun SamsungRoundKey(
@@ -2224,7 +2466,9 @@ fun evaluateSamsungExpression(rawExpr: String, isDeg: Boolean): Result<String> {
         // Expand scientific notation from an earlier result ("1.5e12", "2e-3") to plain digits, so
         // its 'e' is never mistaken for Euler's number
         clean = Regex("""(\d+(?:\.\d+)?)[eE]([+-]?\d+)""").replace(clean) { match ->
-            java.math.BigDecimal(match.groupValues[1]).scaleByPowerOfTen(match.groupValues[2].toInt()).toPlainString()
+            val exponent = match.groupValues[2].toInt()
+            require(exponent in -324..308) { "Exponent out of range" }
+            java.math.BigDecimal(match.groupValues[1]).scaleByPowerOfTen(exponent).toPlainString()
         }
 
         var trimmed = clean
@@ -2255,18 +2499,17 @@ private fun formatSamsungResult(value: Double): String {
     if (value.isNaN()) return "Invalid input"
     if (value.isInfinite()) return if (value > 0) "Infinity" else "-Infinity"
 
-    // Clear floating-point dust: sin(180°) reads 0 (not 1.2e-16), 0.1 + 0.2 reads 0.3
-    var v = value
-    v = if (abs(v) < 1e-13) 0.0 else java.math.BigDecimal(v).round(java.math.MathContext(12)).toDouble()
+    // Round binary floating-point noise without erasing valid small values.
+    val v = java.math.BigDecimal.valueOf(value).round(java.math.MathContext(15)).toDouble()
     if (v == 0.0) return "0"
 
     val absVal = abs(v)
     if (absVal >= 1e12 || absVal < 1e-9) {
-        val df = DecimalFormat("0.######E0", DecimalFormatSymbols(Locale.US))
+        val df = DecimalFormat("0.##############E0", DecimalFormatSymbols(Locale.US))
         return df.format(v).replace("E", "e")
     }
 
-    val df = DecimalFormat("#,##0.##########", DecimalFormatSymbols(Locale.US))
+    val df = DecimalFormat("0.###############", DecimalFormatSymbols(Locale.US))
     var res = df.format(v)
     if (res == "-0" || res == "-0.0") res = "0"
     return res
@@ -2334,7 +2577,8 @@ private class SamsungExpressionParser(private val expr: String, private val isDe
             eat(')'.code)
         } else if ((ch in '0'.code..'9'.code) || ch == '.'.code) {
             while ((ch in '0'.code..'9'.code) || ch == '.'.code) nextChar()
-            x = expr.substring(startPos, this.pos).toDoubleOrNull() ?: 0.0
+            x = expr.substring(startPos, this.pos).toDoubleOrNull()
+                ?: throw IllegalArgumentException("Invalid number")
         } else if (ch == 'π'.code) {
             nextChar()
             x = Math.PI
@@ -2370,7 +2614,7 @@ private class SamsungExpressionParser(private val expr: String, private val isDe
 
         if (eat('^'.code)) x = x.pow(parseFactor())
         if (eat('!'.code)) {
-            if (x < 0 || x > 170) throw IllegalArgumentException("Invalid input")
+            if (x < 0 || x > 170 || x != kotlin.math.floor(x)) throw IllegalArgumentException("Invalid input")
             var fact = 1.0
             val n = x.toInt()
             for (i in 2..n) fact *= i

@@ -44,17 +44,17 @@ private val PureWhiteColorScheme = lightColorScheme(
 
 // Dark Mode (AMOLED-Style with Blue Theme): Strict #000000 pure black background & surface, deep blue accents, crisp white text
 private val DarkColorScheme = darkColorScheme(
-    primary = DarkBluePrimary, // Deep Dark Blue (0xFF1D4ED8)
+    primary = DarkBluePrimary, // Deep Dark Blue
     onPrimary = Color.White,
-    primaryContainer = Color(0xFF172554), // Deep blue container
+    primaryContainer = Color(0xFF0F1B3E), // Deep dark blue container
     onPrimaryContainer = Color(0xFFBFDBFE), // Soft light blue text
     secondary = DarkBlueSecondary,
     onSecondary = Color.White,
-    secondaryContainer = Color(0xFF1E3A8A), // Rich blue container
+    secondaryContainer = Color(0xFF132356), // Rich dark blue container
     onSecondaryContainer = Color(0xFFDBEAFE),
     tertiary = DarkBlueTertiary,
     onTertiary = Color.White,
-    tertiaryContainer = Color(0xFF0F172A),
+    tertiaryContainer = Color(0xFF0A1024),
     onTertiaryContainer = Color(0xFFDBEAFE),
     background = Color(0xFF000000), // Strict AMOLED pure black #000000
     onBackground = Color(0xFFFFFFFF),

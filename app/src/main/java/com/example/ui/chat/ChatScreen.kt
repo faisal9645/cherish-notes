@@ -81,6 +81,7 @@ import androidx.compose.material.icons.rounded.Videocam
 import androidx.compose.material.icons.rounded.WarningAmber
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -173,12 +174,16 @@ fun ChatScreen(
     val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
     val scope = rememberCoroutineScope()
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val chatVisualsActive = com.example.ui.components.rememberAppIsResumed() &&
+        !uiState.isStealthCurtainActive && uiState.fullScreenMediaUrl == null && uiState.theaterVideoId == null
     // Presence changes often (its beat, typing pace); this screen only shows two things from it, so
     // only those recompose it
-    val partnerPresenceState = viewModel.partnerPresence.collectAsState()
-    val isPartnerHeartTouchingNow by remember { derivedStateOf { partnerPresenceState.value.isHeartTouching } }
-    val isPartnerOnlineNow by remember { derivedStateOf { partnerPresenceState.value.isOnline } }
+    val screenPresence by remember(viewModel) {
+        viewModel.partnerPresence.map { it.isHeartTouching to it.isOnline }.distinctUntilChanged()
+    }.collectAsStateWithLifecycle(initialValue = false to false)
+    val isPartnerHeartTouchingNow = screenPresence.first
+    val isPartnerOnlineNow = screenPresence.second
     val isPartnerTouching = isPartnerHeartTouchingNow || uiState.isPartnerHeartTouching
     // My partner playing one of my voice notes (or a video note) right now: shown on it, its
     // waveform moving as they hear it (timed by listeningClock, which only that message reads), and
@@ -186,7 +191,8 @@ fun ChatScreen(
     val partnerListeningNow by viewModel.partnerListening.collectAsState()
     val listeningClock = remember { mutableLongStateOf(0L) }
     var listeningOver by remember { mutableStateOf<com.example.data.model.PartnerListening?>(null) }
-    LaunchedEffect(partnerListeningNow) {
+    LaunchedEffect(partnerListeningNow, chatVisualsActive) {
+        if (!chatVisualsActive) return@LaunchedEffect
         val heard = partnerListeningNow ?: return@LaunchedEffect
         while (heard.isCurrent()) {
             listeningClock.longValue = android.os.SystemClock.elapsedRealtime()
@@ -890,7 +896,8 @@ fun ChatScreen(
     var showGoodnightCard by remember { mutableStateOf(false) }
     var showGoodnightStars by remember { mutableStateOf(false) }
     var skyClock by remember { mutableLongStateOf(System.currentTimeMillis()) }
-    LaunchedEffect(Unit) {
+    LaunchedEffect(chatVisualsActive) {
+        if (!chatVisualsActive) return@LaunchedEffect
         while (true) {
             delay(60_000L)
             skyClock = System.currentTimeMillis()
@@ -933,7 +940,9 @@ fun ChatScreen(
     LaunchedEffect(isChatInView) {
         if (!isChatInView) return@LaunchedEffect
         try {
-            delay(450)
+            // Let the first chat frames, cached media and keyboard settle before decoration.
+            withFrameNanos { }
+            delay(1_200)
             val alreadySentGm = sentGoodMorningToday
             if (isGoodMorningDue(context) && !alreadySentGm) {
                 markGoodMorningShown(context)
@@ -1291,7 +1300,8 @@ fun ChatScreen(
     }
     // From 11 PM: the same colours, but slower, softer motion and quieter sounds (see NightCalm)
     val isNight = rememberIsNight()
-    CompositionLocalProvider(LocalChatTextStyle provides chatTextStyle, LocalHugCouple provides hugCouple, LocalChatNight provides isNight, LocalAccordionPull provides accordion) {
+    CompositionLocalProvider(LocalChatTextStyle provides chatTextStyle, LocalHugCouple provides hugCouple, LocalChatNight provides isNight, LocalAccordionPull provides accordion,
+        com.example.ui.components.LocalVisualWorkAllowed provides chatVisualsActive) {
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -2262,6 +2272,11 @@ fun ChatScreen(
                         }
                     ) { item ->
                         val message = item.message
+                        val rowVisible by remember(listState, message.id) {
+                            derivedStateOf {
+                                listState.layoutInfo.visibleItemsInfo.any { it.key == message.id }
+                            }
+                        }
                         val isFromMe = message.senderId == currentUserId
                         // A message that arrives while the chat is open lands with a spring
                         val isFreshArrival = remember(message.id) {
@@ -2286,6 +2301,9 @@ fun ChatScreen(
                                 )
                                 .fillMaxWidth()
                         ) {
+                            CompositionLocalProvider(
+                                com.example.ui.components.LocalVisualWorkAllowed provides (chatVisualsActive && rowVisible)
+                            ) {
                             ChatMessageRow(
                                 message = message,
                                 isFromMe = isFromMe,
@@ -2317,6 +2335,7 @@ fun ChatScreen(
                                 isTodayChatOnly = isTodayChatOnly,
                                 isFocused = (focusedMessage?.id == message.id)
                             )
+                            }
                         }
                     }
 
@@ -4695,14 +4714,15 @@ private fun ChatPartnerHeaderContent(
     // A long press on their photo: the kiss pad (see KissTouch)
     onAvatarLongPress: () -> Unit = {}
 ) {
-    val presence by presenceFlow.collectAsState()
+    val presence by presenceFlow.collectAsStateWithLifecycle()
+    val headerActive = com.example.ui.components.rememberAppIsResumed()
     val isPartnerOnline = presence.isOnline
     val partnerHasCheckAfter = presence.checkAfterActive
     val partnerCheckAfterTarget = presence.checkAfterTimeMillis ?: 0L
 
     var headerTicker by remember { mutableLongStateOf(System.currentTimeMillis()) }
-    LaunchedEffect(partnerCheckAfterTarget, partnerHasCheckAfter) {
-        if (partnerHasCheckAfter) {
+    LaunchedEffect(partnerCheckAfterTarget, partnerHasCheckAfter, headerActive) {
+        if (partnerHasCheckAfter && headerActive) {
             while (true) {
                 headerTicker = System.currentTimeMillis()
                 kotlinx.coroutines.delay(10_000L)
@@ -4871,8 +4891,8 @@ private fun ChatPartnerHeaderContent(
             }
             val effPartnerTz = presence.timeZone?.takeIf { it.isNotBlank() }
             var chatTimeTicker by remember { mutableLongStateOf(System.currentTimeMillis()) }
-            LaunchedEffect(effPartnerTz) {
-                while (effPartnerTz != null) {
+            LaunchedEffect(effPartnerTz, headerActive) {
+                while (effPartnerTz != null && headerActive) {
                     chatTimeTicker = System.currentTimeMillis()
                     kotlinx.coroutines.delay(60_000L - chatTimeTicker % 60_000L)
                 }
@@ -4915,7 +4935,8 @@ private fun ChatPartnerTypingBubbleWrapper(
     fallbackPartnerName: String,
     isDark: Boolean
 ) {
-    val presence by presenceFlow.collectAsState()
+    val presence by presenceFlow.collectAsStateWithLifecycle()
+    if (!com.example.ui.components.rememberAppIsResumed()) return
     if (chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE) {
         val showTyping = (presence.isTyping || presence.isRecordingAudio) && !isSearching && isAtBottom
         AnimatedVisibility(
@@ -4945,7 +4966,7 @@ private fun ChatPartnerTypingBubbleWrapper(
                 }
                 Spacer(modifier = Modifier.width(10.dp))
                 val infiniteTransition = rememberInfiniteTransition(label = "pulse_chatgpt")
-                val dotAlpha by infiniteTransition.animateFloat(
+                val dotAlpha = infiniteTransition.animateFloat(
                     initialValue = 0.25f,
                     targetValue = 1f,
                     animationSpec = infiniteRepeatable(tween(550), RepeatMode.Reverse),
@@ -4955,7 +4976,8 @@ private fun ChatPartnerTypingBubbleWrapper(
                     modifier = Modifier
                         .size(10.dp)
                         .clip(CircleShape)
-                        .background(if (isDark) Neutral200.copy(alpha = dotAlpha) else InkBlack.copy(alpha = dotAlpha))
+                        .graphicsLayer { alpha = dotAlpha.value }
+                        .background(if (isDark) Neutral200 else InkBlack)
                 )
             }
         }
@@ -5537,8 +5559,8 @@ private fun ChatBottomComposerBar(
     focusRequester: FocusRequester = remember { FocusRequester() },
     modifier: Modifier = Modifier
 ) {
-    val recordingDurationSec by viewModel.voiceRecorderHelper.recordingDurationSec.collectAsState()
-    val recordingAmplitudes by viewModel.voiceRecorderHelper.amplitudes.collectAsState()
+    val recordingDurationSec = viewModel.voiceRecorderHelper.recordingDurationSec.collectAsStateWithLifecycle()
+    val recordingAmplitudes = viewModel.voiceRecorderHelper.amplitudes.collectAsStateWithLifecycle()
     // A GIF from the keyboard's own GIF search (Gboard, Samsung Keyboard) goes straight into
     // the chat, as a GIF; not in private chat, which is text only
     AcceptKeyboardMedia(

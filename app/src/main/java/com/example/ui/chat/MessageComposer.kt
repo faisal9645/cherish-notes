@@ -135,6 +135,35 @@ import com.example.ui.components.springClickable
 import androidx.compose.material.icons.automirrored.rounded.InsertDriveFile
 import com.example.ui.theme.steadyDigits
 
+@Composable
+private fun RecordingTimer(seconds: State<Int>, fontSize: androidx.compose.ui.unit.TextUnit) {
+    val value = seconds.value
+    Text(
+        text = "%d:%02d".format(value / 60, value % 60),
+        fontWeight = FontWeight.Bold,
+        color = MaterialTheme.colorScheme.onSurface,
+        fontSize = fontSize,
+        style = LocalTextStyle.current.steadyDigits
+    )
+}
+
+@Composable
+private fun RecordingWaveform(
+    amplitudes: State<List<Float>>,
+    activeColor: Color,
+    height: androidx.compose.ui.unit.Dp,
+    modifier: Modifier = Modifier
+) {
+    WaveformView(
+        amplitudes = amplitudes.value.takeLast(45),
+        progress = 1f,
+        isRecording = true,
+        activeColor = activeColor,
+        height = height,
+        modifier = modifier
+    )
+}
+
 @OptIn(ExperimentalLayoutApi::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun MessageComposer(
@@ -143,8 +172,8 @@ fun MessageComposer(
     onSendText: () -> Unit,
     replyingTo: Message?,
     isRecordingVoice: Boolean,
-    recordingDurationSec: Int,
-    recordingAmplitudes: List<Float>,
+    recordingDurationSec: State<Int>,
+    recordingAmplitudes: State<List<Float>>,
     onStartVoiceRecord: () -> Unit,
     onStopAndSendVoiceRecord: () -> Unit,
     onCancelVoiceRecord: () -> Unit,
@@ -360,17 +389,17 @@ fun MessageComposer(
 
     // Pulsing animations, only while a voice note is being recorded (running all the time, they'd
     // rebuild the whole message box every frame for as long as the chat is open)
-    val pulseAlpha: Float
-    val shimmerOffset: Float
-    if (isRecordingVoice) {
+    val pulseAlpha: State<Float>
+    val shimmerOffset: State<Float>
+    if (isRecordingVoice && com.example.ui.components.rememberAppIsResumed()) {
         val infiniteTransition = rememberInfiniteTransition(label = "recording_fx")
-        val pulse by infiniteTransition.animateFloat(
+        val pulse = infiniteTransition.animateFloat(
             initialValue = 0.3f,
             targetValue = 1f,
             animationSpec = infiniteRepeatable(tween(550, easing = FastOutSlowInEasing), RepeatMode.Reverse),
             label = "pulse_alpha"
         )
-        val shimmer by infiniteTransition.animateFloat(
+        val shimmer = infiniteTransition.animateFloat(
             initialValue = 0f,
             targetValue = -14f,
             animationSpec = infiniteRepeatable(tween(750, easing = LinearEasing), RepeatMode.Restart),
@@ -379,8 +408,8 @@ fun MessageComposer(
         pulseAlpha = pulse
         shimmerOffset = shimmer
     } else {
-        pulseAlpha = 0f
-        shimmerOffset = 0f
+        pulseAlpha = remember { mutableFloatStateOf(0f) }
+        shimmerOffset = remember { mutableFloatStateOf(0f) }
     }
 
     // Day or dark as the app's theme says (not the phone's), so Day stays white on a dark-mode phone
@@ -657,28 +686,20 @@ fun MessageComposer(
                         Box(
                             modifier = Modifier
                                 .size(9.dp)
-                                .graphicsLayer { scaleX = 1f + pulseAlpha * 0.3f; scaleY = 1f + pulseAlpha * 0.3f }
+                                .graphicsLayer { scaleX = 1f + pulseAlpha.value * 0.3f; scaleY = 1f + pulseAlpha.value * 0.3f }
                                 .background(Rose600, CircleShape)
                         )
 
                         Spacer(modifier = Modifier.width(6.dp))
 
                         // Timer
-                        Text(
-                            text = "%d:%02d".format(recordingDurationSec / 60, recordingDurationSec % 60),
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            fontSize = 14.sp,
-                            style = LocalTextStyle.current.steadyDigits
-                        )
+                        RecordingTimer(recordingDurationSec, 14.sp)
 
                         Spacer(modifier = Modifier.width(8.dp))
 
                         // Live waveform
-                        WaveformView(
-                            amplitudes = recordingAmplitudes.takeLast(45),
-                            progress = 1f,
-                            isRecording = true,
+                        RecordingWaveform(
+                            amplitudes = recordingAmplitudes,
                             activeColor = MaterialTheme.colorScheme.primary,
                             height = 28.dp,
                             modifier = Modifier.weight(1f)
@@ -723,28 +744,20 @@ fun MessageComposer(
                         Box(
                             modifier = Modifier
                                 .size(9.dp)
-                                .graphicsLayer { scaleX = 1f + pulseAlpha * 0.3f; scaleY = 1f + pulseAlpha * 0.3f }
-                                .background(Rose600.copy(alpha = 0.9f + pulseAlpha * 0.1f), CircleShape)
+                                .graphicsLayer { scaleX = 1f + pulseAlpha.value * 0.3f; scaleY = 1f + pulseAlpha.value * 0.3f }
+                                .background(Rose600, CircleShape)
                         )
 
                         Spacer(modifier = Modifier.width(5.dp))
 
                         // Timer
-                        Text(
-                            text = "%d:%02d".format(recordingDurationSec / 60, recordingDurationSec % 60),
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            fontSize = 13.sp,
-                            style = LocalTextStyle.current.steadyDigits
-                        )
+                        RecordingTimer(recordingDurationSec, 13.sp)
 
                         Spacer(modifier = Modifier.width(6.dp))
 
                         // Growing waveform with Implosion Spring on Cancel
-                        WaveformView(
-                            amplitudes = recordingAmplitudes.takeLast(45),
-                            progress = 1f,
-                            isRecording = true,
+                        RecordingWaveform(
+                            amplitudes = recordingAmplitudes,
                             activeColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.85f),
                             height = 26.dp,
                             modifier = Modifier
@@ -781,7 +794,7 @@ fun MessageComposer(
                                     .padding(end = 4.dp)
                                     .graphicsLayer {
                                         if (isAtTrash) {
-                                            rotationZ = sin(pulseAlpha * PI.toFloat() * 2f) * 6f
+                                            rotationZ = sin(pulseAlpha.value * PI.toFloat() * 2f) * 6f
                                         }
                                     },
                                 contentAlignment = Alignment.Center
@@ -805,8 +818,8 @@ fun MessageComposer(
                                     fontSize = 13.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = if (isNearTrash) MaterialTheme.colorScheme.error.copy(alpha = 0.85f)
-                                    else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f + pulseAlpha * 0.3f),
-                                    modifier = Modifier.offset { IntOffset(shimmerOffset.roundToInt(), 0) }
+                                    else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                    modifier = Modifier.offset { IntOffset(shimmerOffset.value.roundToInt(), 0) }
                                 )
                                 Spacer(modifier = Modifier.width(3.dp))
                                 Text(
@@ -1269,9 +1282,9 @@ fun MessageComposer(
                                         .size(48.dp)
                                         .drawBehind {
                                             if (showRings) {
-                                                val liveAmp = (recordingAmplitudes.lastOrNull() ?: 0.15f).coerceIn(0.1f, 1f)
-                                                drawCircle(ringOuter, radius = (24f + liveAmp * 21f + pulseAlpha * 7f).dp.toPx())
-                                                drawCircle(ringInner, radius = (24f + liveAmp * 11f + pulseAlpha * 4f).dp.toPx())
+                                                val liveAmp = (recordingAmplitudes.value.lastOrNull() ?: 0.15f).coerceIn(0.1f, 1f)
+                                                drawCircle(ringOuter, radius = (24f + liveAmp * 21f + pulseAlpha.value * 7f).dp.toPx())
+                                                drawCircle(ringInner, radius = (24f + liveAmp * 11f + pulseAlpha.value * 4f).dp.toPx())
                                             }
                                         }
                                         .then(
@@ -1279,8 +1292,8 @@ fun MessageComposer(
                                                 // Pulses but keeps the original pink gradient
                                                 Modifier
                                                     .graphicsLayer {
-                                                        scaleX = 1f + pulseAlpha * 0.1f
-                                                        scaleY = 1f + pulseAlpha * 0.1f
+                                                        scaleX = 1f + pulseAlpha.value * 0.1f
+                                                        scaleY = 1f + pulseAlpha.value * 0.1f
                                                     }
                                                     .appGradientShadow(CircleShape)
                                                     .clip(CircleShape)

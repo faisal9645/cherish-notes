@@ -106,8 +106,8 @@ internal fun rememberBubbleFill(isFromMe: Boolean, isDark: Boolean): BubbleFill 
     val black = com.example.ui.theme.LocalAmoledBlack.current
     val received = if (isDark) darkSurface(NavyCard) else MistBlue
     val receivedEdge = if (isDark) darkSurface(NavyRaised, Neutral800) else Gray200
-    return remember(isFromMe, black, received, receivedEdge) {
-        if (isFromMe) BubbleFill(notesGradient(black), edge = null)
+    return remember(isFromMe, black, isDark, received, receivedEdge) {
+        if (isFromMe) BubbleFill(notesGradient(black = black, isDark = isDark), edge = null)
         else BubbleFill(SolidColor(received), receivedEdge)
     }
 }
@@ -220,7 +220,7 @@ fun MessageBubble(
         }
     } else {
         if (isFromMe) {
-            darkTone(DayBluePrimary)
+            if (isDark) DarkBlueBubble else DayBluePrimary
         } else {
             if (isDark) Color(0xFF080B14) else MistBlue
         }
@@ -952,11 +952,11 @@ fun MessageBubble(
 
                         val docIconBg = when (ext) {
                             "PDF" -> Red500
-                            "DOC", "DOCX" -> Blue600
+                            "DOC", "DOCX" -> if (isDark) DarkBluePrimary else Blue600
                             "XLS", "XLSX" -> Emerald500
                             "PPT", "PPTX" -> Color(0xFFF97316)
                             "ZIP", "RAR", "7Z" -> Color(0xFF8B5CF6)
-                            else -> if (isPrivateMode) Gray500 else RoseGoldPrimary
+                            else -> if (isPrivateMode) Gray500 else if (isDark) DarkBluePrimary else RoseGoldPrimary
                         }
 
                         Surface(
@@ -964,7 +964,7 @@ fun MessageBubble(
                             color = if (isPrivateMode) {
                                 if (isDark) Neutral800 else Gray200
                             } else {
-                                if (isFromMe) Color.White.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+                                if (isFromMe) Color.White.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = if (isDark) 0.35f else 0.6f)
                             },
                             modifier = Modifier
                                 .fillMaxWidth()

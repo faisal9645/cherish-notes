@@ -182,7 +182,18 @@ internal fun BigEmoji(
         }
     }
 
-    LaunchedEffect(Unit) {
+    val visualWorkAllowed = com.example.ui.components.rememberAppIsResumed()
+    var entranceStarted by remember { mutableStateOf(false) }
+    LaunchedEffect(visualWorkAllowed) {
+        if (!visualWorkAllowed) return@LaunchedEffect
+        if (entranceStarted) {
+            flight.snapTo(1f)
+            pop.snapTo(1f)
+            life.snapTo(lifeMs)
+            hasLanded = true
+            return@LaunchedEffect
+        }
+        entranceStarted = true
         when (entrance) {
             BigEmojiEntrance.FlyFromComposer -> {
                 snapshotFlow { slotCenter }.first { it.isSpecified }
@@ -212,8 +223,10 @@ internal fun BigEmoji(
             }
         }
     }
-    LaunchedEffect(replay) {
-        if (replay == 0) return@LaunchedEffect
+    var handledReplay by remember { mutableStateOf(0) }
+    LaunchedEffect(replay, visualWorkAllowed) {
+        if (!visualWorkAllowed || replay <= handledReplay) return@LaunchedEffect
+        handledReplay = replay
         // A heart beats in the hand too, and a hug squeezes (as tight as it was sent)
         if (hugScene) {
             feelHug(from = replayFrom)

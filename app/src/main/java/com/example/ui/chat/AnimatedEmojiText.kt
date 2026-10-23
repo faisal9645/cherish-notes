@@ -72,15 +72,26 @@ internal fun AnimatedEmojiText(
         life.snapTo(0f)
         life.animateTo(lifeMs, tween((lifeMs * slow).roundToInt(), easing = LinearEasing))
     }
-    LaunchedEffect(Unit) {
-        if (playOnArrival) {
+    val visualWorkAllowed = com.example.ui.components.rememberAppIsResumed()
+    var arrivalPlayed by remember { mutableStateOf(false) }
+    LaunchedEffect(visualWorkAllowed) {
+        if (!visualWorkAllowed) {
+            life.snapTo(LIFE_DONE)
+            return@LaunchedEffect
+        }
+        if (playOnArrival && !arrivalPlayed) {
+            arrivalPlayed = true
             // Once the message has landed
             delay(380)
             play()
         }
     }
-    LaunchedEffect(replay) {
-        if (replay > 0) play()
+    var handledReplay by remember { mutableStateOf(0) }
+    LaunchedEffect(replay, visualWorkAllowed) {
+        if (visualWorkAllowed && replay > handledReplay) {
+            handledReplay = replay
+            play()
+        }
     }
 
     val inlineContent = remember(content, style, emojiSize) {

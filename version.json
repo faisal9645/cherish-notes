@@ -1,9 +1,9 @@
 {
-  "versionCode": 220,
-  "versionName": "1.8.48",
-  "tagName": "v1.8.48-220",
-  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.8.48-220/app_update_220.apk",
-  "assetSize": 19573560,
-  "releaseNotes": "Notes v1.8.48 (Build 220):\n• Fixes the app closing on open after the last update\n• Day mode is clean and white again\n• Classic blue look restored\n• Bug fixes and refinements",
-  "releaseDate": "2026-10-23T11:30:43Z"
+  "versionCode": 221,
+  "versionName": "1.8.49",
+  "tagName": "v1.8.49-221",
+  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.8.49-221/app_update_221.apk",
+  "assetSize": 19588080,
+  "releaseNotes": "Notes v1.8.49 (Build 221):\n\u2022 Authentic Samsung Calculator disguise with One UI 3-dots menu & About Calculator\n\u2022 Auto-hiding backspace key when 0\n\u2022 Refined dark mode chat card gradient\n\u2022 Performance optimizations and bug fixes",
+  "releaseDate": "2026-10-23T12:47:13Z"
 }

@@ -19,11 +19,11 @@ val DayBluePrimary = Color(0xFF3048F5)
 val DayBlueSecondary = Color(0xFF258BE8)
 val DayBlueTertiary = Color(0xFF3630F2)
 
-// Dark Mode Blues (Deeper / richer royal midnight blues like previous)
-val DarkBluePrimary = Color(0xFF1B44C8)
-val DarkBlueSecondary = Color(0xFF16348C)
-val DarkBlueTertiary = Color(0xFF0F1E54)
-val DarkBlueBubble = Color(0xFF1A3EB8)
+// Dark Mode Blues (Deep, rich dark midnight blues - sleek, calm, and not bright)
+val DarkBluePrimary = Color(0xFF133285)
+val DarkBlueSecondary = Color(0xFF0F2668)
+val DarkBlueTertiary = Color(0xFF081232)
+val DarkBlueBubble = Color(0xFF112970)
 
 // Black (AMOLED) theme: graphite instead of blue for bubbles, buttons and headers, grey accents
 val BlackGradientStart = Color(0xFF3A3A3C)
@@ -59,7 +59,7 @@ val AppGradientEnd: Color
 val AppGradientShadow: Color
     @Composable
     @ReadOnlyComposable
-    get() = if (LocalAmoledBlack.current) Color(0x35000000) else if (isAppInDark()) Color(0x351D4ED8) else Color(0x353048F5)
+    get() = if (LocalAmoledBlack.current) Color(0x35000000) else if (isAppInDark()) Color(0x350A1A4A) else Color(0x353048F5)
 
 @Composable
 fun appHorizontalGradient(): Brush {
@@ -90,27 +90,40 @@ fun appVerticalGradient(): Brush {
 }
 
 /**
- * The Notes app's original blue gradient, the same in day and dark (graphite in the Black theme),
- * as the Notes screen paints it. The chat's bubbles and buttons use it.
+ * The blue gradient for cards, bubbles, and buttons.
+ * In day mode: electric royal blue.
+ * In dark mode: deep, dark midnight blue (not bright).
+ * In black AMOLED mode: sleek graphite.
  */
-fun notesGradient(black: Boolean, vertical: Boolean = false): Brush {
+fun notesGradient(black: Boolean, isDark: Boolean = false, vertical: Boolean = false): Brush {
+    val start = if (black) BlackGradientStart else if (isDark) DarkBlueSecondary else DayBlueSecondary
+    val mid = if (black) BlackGradientMid else if (isDark) DarkBluePrimary else DayBluePrimary
+    val end = if (black) BlackGradientEnd else if (isDark) DarkBlueTertiary else DayBlueTertiary
     val stops = arrayOf(
-        0.0f to (if (black) BlackGradientStart else DayBlueSecondary),
-        0.55f to (if (black) BlackGradientMid else DayBluePrimary),
-        1.0f to (if (black) BlackGradientEnd else DayBlueTertiary)
+        0.0f to start,
+        0.55f to mid,
+        1.0f to end
     )
     return if (vertical) Brush.verticalGradient(*stops) else Brush.horizontalGradient(*stops)
 }
 
 @Composable
-fun notesHorizontalGradient(): Brush = notesGradient(LocalAmoledBlack.current)
+fun notesHorizontalGradient(): Brush = notesGradient(
+    black = LocalAmoledBlack.current,
+    isDark = isAppInDark(),
+    vertical = false
+)
 
 @Composable
-fun notesVerticalGradient(): Brush = notesGradient(LocalAmoledBlack.current, vertical = true)
+fun notesVerticalGradient(): Brush = notesGradient(
+    black = LocalAmoledBlack.current,
+    isDark = isAppInDark(),
+    vertical = true
+)
 
 @Composable
 fun Modifier.appGradientShadow(shape: Shape = RoundedCornerShape(16.dp)): Modifier {
-    val shadowColor = if (LocalAmoledBlack.current) Color(0x35000000) else if (isAppInDark()) Color(0x351D4ED8) else Color(0x353048F5)
+    val shadowColor = if (LocalAmoledBlack.current) Color(0x35000000) else if (isAppInDark()) Color(0x350A1A4A) else Color(0x353048F5)
     return this.softShadow(
         elevation = 8.dp,
         shape = shape,

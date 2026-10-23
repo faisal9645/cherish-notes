@@ -13,6 +13,9 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.example.security.SecurityPreferences
 
+/** A retained/precomposed chat row must not animate or decode video offscreen. */
+val LocalVisualWorkAllowed = androidx.compose.runtime.compositionLocalOf { true }
+
 /**
  * Returns true only when the current lifecycle is at least RESUMED (i.e. visible and interactive)
  * AND the app is not hidden behind the Notes disguise screen.
@@ -40,5 +43,5 @@ fun rememberAppIsResumed(): Boolean {
             lifecycleOwner.lifecycle.removeObserver(observer)
         }
     }
-    return isResumed && !isDisguised
+    return isResumed && !isDisguised && LocalVisualWorkAllowed.current
 }

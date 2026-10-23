@@ -39,7 +39,8 @@ data class ChatUiRowItem(
     val isFirstOfDay: Boolean,
     val isOldestShown: Boolean,
     val dateSeparatorText: String,
-    val formattedTime: String = ""
+    val formattedTime: String = "",
+    val previousTimestamp: Long? = null
 )
 
 @androidx.compose.runtime.Immutable
@@ -174,26 +175,20 @@ class ChatViewModel(
         showPreviousChats = showPreviousChats,
         starredOnly = filterStarredOnly,
         clearedBefore = temporaryClearTimestamp,
-        query = searchQuery,
+        query = settledSearchQuery.value,
         logicalDay = logicalDay
     )
 
     private fun filterMessages(filter: MessageFilter): List<Message> {
-        var list = filter.messages.filter { !it.isDeleted }
-        if (!filter.showPreviousChats) {
-            list = list.filter { com.example.util.ChatTimeFormatter.isToday(it.timestamp) }
+        val query = filter.query.trim()
+        // One pass and one result allocation, rather than one list per active filter.
+        return filter.messages.filter { message ->
+            !message.isDeleted &&
+                (filter.showPreviousChats || com.example.util.ChatTimeFormatter.isToday(message.timestamp)) &&
+                (!filter.starredOnly || message.isStarred) &&
+                (filter.clearedBefore <= 0L || message.timestamp > filter.clearedBefore) &&
+                (query.isEmpty() || message.text.contains(query, ignoreCase = true))
         }
-        if (filter.starredOnly) {
-            list = list.filter { it.isStarred }
-        }
-        if (filter.clearedBefore > 0L) {
-            list = list.filter { it.timestamp > filter.clearedBefore }
-        }
-        if (filter.query.isNotBlank()) {
-            val q = filter.query.trim()
-            list = list.filter { it.text.contains(q, ignoreCase = true) }
-        }
-        return list
     }
 
     /**
@@ -201,9 +196,13 @@ class ChatViewModel(
      * arriving, filtering on the main thread made scrolling stutter. Only recomputed when the
      * messages or a filter change (not for typing or presence updates).
      */
+    private val settledSearchQuery = MutableStateFlow("")
+    private var searchJob: Job? = null
+
     @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
     val displayedMessages: StateFlow<List<Message>> = _uiState
         .map { it.messageFilter() }
+        .combine(settledSearchQuery) { filter, query -> filter.copy(query = query) }
         .distinctUntilChanged()
         .mapLatest { filterMessages(it) }
         .flowOn(kotlinx.coroutines.Dispatchers.Default)
@@ -216,22 +215,30 @@ class ChatViewModel(
      */
     @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
     val reversedChatRowItems: StateFlow<List<ChatUiRowItem>> = displayedMessages
-        .mapLatest { list ->
+        .runningFold(emptyList<ChatUiRowItem>()) { previous, list ->
+            val previousById = previous.associateBy { it.message.id }
             val size = list.size
             val items = ArrayList<ChatUiRowItem>(size)
             for (i in list.indices) {
                 val msg = list[i]
                 val prevMsg = if (i > 0) list[i - 1] else null
-                val isFirstOfDay = prevMsg == null || !com.example.util.ChatTimeFormatter.isSameDay(prevMsg.timestamp, msg.timestamp)
+                val old = previousById[msg.id]
+                val sameNeighbours = old != null && old.message.timestamp == msg.timestamp &&
+                    old.previousTimestamp == prevMsg?.timestamp
+                val isFirstOfDay = if (sameNeighbours) old!!.isFirstOfDay
+                    else prevMsg == null || !com.example.util.ChatTimeFormatter.isSameDay(prevMsg.timestamp, msg.timestamp)
                 val isOldestShown = (i == 0)
+                val sameDayPosition = sameNeighbours && old != null &&
+                    old.isFirstOfDay == isFirstOfDay && old.isOldestShown == isOldestShown
                 val dateSep = if (isFirstOfDay) com.example.util.ChatTimeFormatter.formatDateSeparator(msg.timestamp) else ""
                 // (The row formats its own time: nothing reads one made here)
                 items.add(
-                    ChatUiRowItem(
+                    if (old != null && sameDayPosition && old.message == msg && old.dateSeparatorText == dateSep) old else ChatUiRowItem(
                         message = msg,
                         isFirstOfDay = isFirstOfDay,
                         isOldestShown = isOldestShown,
-                        dateSeparatorText = dateSep
+                        dateSeparatorText = dateSep,
+                        previousTimestamp = prevMsg?.timestamp
                     )
                 )
             }
@@ -569,19 +576,26 @@ class ChatViewModel(
     private var isCurrentlyTyping = false
     private var lastPaceUpdateRealtime = 0L
     private var lastWrittenPace = 0
+    private var lastKeystrokeRealtime = 0L
 
     /** Called on keystrokes; throttled so typing does not flood Firestore or re-trigger listeners. */
     fun onTypingChanged(isTyping: Boolean) {
-        typingIdleJob?.cancel()
+        if (isTyping) lastKeystrokeRealtime = android.os.SystemClock.elapsedRealtime()
+        else typingIdleJob?.cancel()
         if (isTyping != isCurrentlyTyping) {
             isCurrentlyTyping = isTyping
             authRepository.setTyping(isTyping)
         }
         updateTypingPace(isTyping)
-        if (isTyping) {
+        if (isTyping && typingIdleJob?.isActive != true) {
             // Stop showing "typing…" to the partner once the keyboard has been idle a while
             typingIdleJob = viewModelScope.launch {
-                kotlinx.coroutines.delay(TYPING_IDLE_TIMEOUT_MS)
+                do {
+                    val remaining = TYPING_IDLE_TIMEOUT_MS -
+                        (android.os.SystemClock.elapsedRealtime() - lastKeystrokeRealtime)
+                    if (remaining <= 0L) break
+                    kotlinx.coroutines.delay(remaining)
+                } while (true)
                 isCurrentlyTyping = false
                 authRepository.setTyping(false)
                 authRepository.setTypingPace(0)
@@ -600,8 +614,8 @@ class ChatViewModel(
      * that, paused (0) after 2.5 s without a key. Throttled to at most once per 3.5s to keep Firestore writes light.
      */
     private fun updateTypingPace(isTyping: Boolean) {
-        typingPauseJob?.cancel()
         if (!isTyping) {
+            typingPauseJob?.cancel()
             keystrokeTimes.clear()
             typingPace = 0
             if (lastWrittenPace != 0) {
@@ -624,8 +638,12 @@ class ChatViewModel(
             lastWrittenPace = calculatedPace
             authRepository.setTypingPace(calculatedPace)
         }
-        typingPauseJob = viewModelScope.launch {
-            kotlinx.coroutines.delay(2_500L)
+        if (typingPauseJob?.isActive != true) typingPauseJob = viewModelScope.launch {
+            do {
+                val remaining = 2_500L - (android.os.SystemClock.elapsedRealtime() - lastKeystrokeRealtime)
+                if (remaining <= 0L) break
+                kotlinx.coroutines.delay(remaining)
+            } while (true)
             typingPace = 0
             keystrokeTimes.clear()
             if (lastWrittenPace != 0) {
@@ -1250,9 +1268,18 @@ class ChatViewModel(
 
     fun setSearchQuery(query: String) {
         _uiState.update { it.copy(searchQuery = query) }
+        searchJob?.cancel()
+        searchJob = viewModelScope.launch {
+            if (query.isNotBlank()) kotlinx.coroutines.delay(250L)
+            settledSearchQuery.value = query
+        }
     }
 
     fun setSearching(searching: Boolean) {
+        if (!searching) {
+            searchJob?.cancel()
+            settledSearchQuery.value = ""
+        }
         _uiState.update {
             it.copy(
                 isSearching = searching,
