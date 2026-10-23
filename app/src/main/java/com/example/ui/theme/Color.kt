@@ -20,16 +20,16 @@ val DayBlueSecondary = Color(0xFF258BE8)
 val DayBlueTertiary = Color(0xFF3630F2)
 
 // Dark Mode Blues (Deep, rich dark midnight blues - sleek, calm, and not bright)
-val DarkBluePrimary = Color(0xFF133285)
-val DarkBlueSecondary = Color(0xFF0F2668)
-val DarkBlueTertiary = Color(0xFF081232)
-val DarkBlueBubble = Color(0xFF112970)
+val DarkBluePrimary = Color(0xFF2448B8)
+val DarkBlueSecondary = Color(0xFF2858D6)
+val DarkBlueTertiary = Color(0xFF183C9D)
+val DarkBlueBubble = DarkBluePrimary
 
-// Black (AMOLED) theme: graphite instead of blue for bubbles, buttons and headers, grey accents
-val BlackGradientStart = Color(0xFF3A3A3C)
-val BlackGradientMid = Color(0xFF2C2C2E)
-val BlackGradientEnd = Color(0xFF1C1C1E)
-val BlackAccent = Color(0xFF8E8E93)
+// Shared sapphire accents for dark and AMOLED controls; backgrounds stay black.
+val BlackGradientStart = DarkBlueSecondary
+val BlackGradientMid = DarkBluePrimary
+val BlackGradientEnd = DarkBlueTertiary
+val BlackAccent = DarkBluePrimary
 
 @Composable
 @ReadOnlyComposable
@@ -93,7 +93,7 @@ fun appVerticalGradient(): Brush {
  * The blue gradient for cards, bubbles, and buttons.
  * In day mode: electric royal blue.
  * In dark mode: deep, dark midnight blue (not bright).
- * In black AMOLED mode: sleek graphite.
+ * In black AMOLED mode: the same sapphire blue as the sent chat bubbles.
  */
 fun notesGradient(black: Boolean, isDark: Boolean = false, vertical: Boolean = false): Brush {
     val start = if (black) BlackGradientStart else if (isDark) DarkBlueSecondary else DayBlueSecondary

@@ -424,7 +424,8 @@ private fun CardHeaderButton(
 fun InlineYouTubeCard(
     videoId: String,
     onOpenTheater: (String) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onPlay: () -> Unit = {}
 ) {
     val context = LocalContext.current
     var isPlayingInline by remember { mutableStateOf(false) }
@@ -519,6 +520,7 @@ fun InlineYouTubeCard(
                             modifier = Modifier.testTag("youtube_expand_fullscreen"),
                             onClick = {
                                 isPlayingInline = false
+                                onPlay()
                                 onOpenTheater(videoId)
                             }
                         )
@@ -531,6 +533,7 @@ fun InlineYouTubeCard(
                             modifier = Modifier.testTag("youtube_open_in_app"),
                             onClick = {
                                 isPlayingInline = false
+                                onPlay()
                                 YouTubeHelper.openInYouTube(context, videoId)
                             }
                         )
@@ -593,7 +596,7 @@ fun InlineYouTubeCard(
                     modifier = Modifier
                         .fillMaxWidth()
                         .aspectRatio(16f / 9f)
-                        .clickable { isPlayingInline = true },
+                        .clickable { onPlay(); isPlayingInline = true },
                     contentAlignment = Alignment.Center
                 ) {
                     AsyncImage(
@@ -682,7 +685,7 @@ fun InlineYouTubeCard(
                             }
                             Spacer(modifier = Modifier.width(6.dp))
                             CherishTonalButton(
-                                onClick = { onOpenTheater(videoId) },
+                                onClick = { onPlay(); onOpenTheater(videoId) },
                                 contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
                                 modifier = Modifier
                                     .height(28.dp)

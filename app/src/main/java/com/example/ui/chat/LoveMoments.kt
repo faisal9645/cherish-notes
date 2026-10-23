@@ -240,13 +240,10 @@ private class Star(
     val y: Float,
     val radius: Float,
     val phase: Float,
-    val speed: Float,
-    val isGlitter: Boolean,
-    val isBlueStar: Boolean = false,
-    val flareScale: Float = 1f
+    val speed: Float
 )
 
-/** Softly twinkling stars over the area with varied blinking rates, subtle sparkles, and celestial blue starbursts. */
+/** Circular moon-blue dots only, with continuous, independently phased brightness. */
 @Composable
 internal fun TwinklingStars(
     modifier: Modifier = Modifier,
@@ -256,119 +253,53 @@ internal fun TwinklingStars(
     maxYFraction: Float = 1f,
     blueGlow: Boolean = false
 ) {
-    val stars = remember(count, maxYFraction, blueGlow) {
+    val stars = remember(count, maxYFraction) {
         val random = Random(42)
-        List(count) { i ->
-            val r = 0.5f + random.nextFloat() * 1.9f
-            val isBlue = blueGlow && (r > 1.35f || (i % 4 == 0))
-            val isGlit = r > 1.4f && random.nextFloat() < (if (blueGlow) 0.65f else 0.35f)
-            val flare = if (blueGlow && r > 1.6f) 1.2f + random.nextFloat() * 0.8f else 1f
+        List(count.coerceAtLeast(0)) {
             Star(
                 x = 0.02f + random.nextFloat() * 0.96f,
                 y = 0.02f + random.nextFloat() * (maxYFraction - 0.04f).coerceAtLeast(0.1f),
-                radius = r,
+                radius = 0.5f + random.nextFloat() * 1.1f,
                 phase = random.nextFloat(),
-                speed = 0.5f + random.nextFloat() * 1.6f,
-                isGlitter = isGlit,
-                isBlueStar = isBlue,
-                flareScale = flare
+                speed = 0.5f + random.nextFloat() * 0.65f
             )
         }
     }
     val isAppForeground = com.example.ui.components.rememberAppIsResumed()
-    val time: Float = if (isAppForeground) {
-        val transition = rememberInfiniteTransition(label = "twinkle")
-        val t by transition.animateFloat(
-            initialValue = 0f,
-            targetValue = 1f,
-            animationSpec = infiniteRepeatable(tween(periodMs, easing = LinearEasing), RepeatMode.Restart),
-            label = "twinkle_time"
-        )
-        t
-    } else {
-        0f
-    }
-    Canvas(modifier = modifier) {
-        stars.forEach { star ->
-            // Dynamic blinking: deep valleys (stars dim/turn off) and crisp shining peaks
-            val rawWave = 0.5f + 0.5f * sin(2f * PI.toFloat() * (time * star.speed + star.phase))
-            val blink = (rawWave * rawWave).coerceIn(0.04f, 1f)
-            val alpha = blink * brightness
-            val center = Offset(star.x * size.width, star.y * size.height)
-            val r = star.radius.dp.toPx()
-
-            if (star.isBlueStar && alpha > 0.25f) {
-                // Wide sapphire aura halo (matching the bright blue stars in the photo)
-                drawCircle(
-                    color = Color(0xFF38BDF8).copy(alpha = 0.22f * alpha),
-                    radius = r * 4.2f,
-                    center = center
-                )
-                // Mid cyan-blue luminous glow
-                drawCircle(
-                    color = Color(0xFF60A5FA).copy(alpha = 0.38f * alpha),
-                    radius = r * 2.2f,
-                    center = center
-                )
-            } else if (star.radius > 1.5f && alpha > 0.3f) {
-                // Soft white glow for larger neutral stars when bright
-                drawCircle(
-                    color = Color.White.copy(alpha = 0.16f * alpha),
-                    radius = r * 3.2f,
-                    center = center
-                )
-            }
-
-            // Core star dot (pure brilliant white for maximum contrast)
-            drawCircle(
-                color = if (star.isBlueStar) Color(0xFFF0F9FF).copy(alpha = alpha) else Color.White.copy(alpha = alpha),
-                radius = r,
-                center = center
-            )
-
-            // Sparkle 4-point cross starburst flare on prominent blinking stars at peak
-            if (star.isGlitter && alpha > 0.55f) {
-                val glintLength = r * 2.8f * star.flareScale * (alpha - 0.45f) * 2f
-                val strokeW = (if (star.isBlueStar) 1.2.dp else 1.dp).toPx()
-                val outerRayColor = if (star.isBlueStar) Color(0xFF38BDF8).copy(alpha = 0.45f * alpha) else Color.White.copy(alpha = 0.4f * alpha)
-                val coreRayColor = if (star.isBlueStar) Color(0xFFE0F2FE).copy(alpha = 0.85f * alpha) else Color.White.copy(alpha = 0.75f * alpha)
-
-                // Soft outer cross ray
-                drawLine(
-                    color = outerRayColor,
-                    start = Offset(center.x - glintLength * 1.3f, center.y),
-                    end = Offset(center.x + glintLength * 1.3f, center.y),
-                    strokeWidth = strokeW * 0.85f,
-                    cap = StrokeCap.Round
-                )
-                drawLine(
-                    color = outerRayColor,
-                    start = Offset(center.x, center.y - glintLength * 1.3f),
-                    end = Offset(center.x, center.y + glintLength * 1.3f),
-                    strokeWidth = strokeW * 0.85f,
-                    cap = StrokeCap.Round
-                )
-
-                // Bright inner diamond flare
-                drawLine(
-                    color = coreRayColor,
-                    start = Offset(center.x - glintLength, center.y),
-                    end = Offset(center.x + glintLength, center.y),
-                    strokeWidth = strokeW,
-                    cap = StrokeCap.Round
-                )
-                drawLine(
-                    color = coreRayColor,
-                    start = Offset(center.x, center.y - glintLength),
-                    end = Offset(center.x, center.y + glintLength),
-                    strokeWidth = strokeW,
-                    cap = StrokeCap.Round
-                )
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val reducedMotion = context.areAnimationsDisabled()
+    // Keep accumulated phase across pauses. Read it only inside Canvas, not in composition.
+    val cycles = remember { mutableStateOf(0.0) }
+    LaunchedEffect(isAppForeground, reducedMotion, periodMs) {
+        if (!isAppForeground || reducedMotion) return@LaunchedEffect
+        var previousFrame: Long? = null
+        while (true) {
+            androidx.compose.runtime.withFrameNanos { frame ->
+                previousFrame?.let { previous ->
+                    // A delayed frame advances gently rather than flashing to a distant phase.
+                    val deltaMs = ((frame - previous) / 1_000_000.0).coerceIn(0.0, 64.0)
+                    cycles.value += deltaMs / periodMs.coerceAtLeast(1)
+                }
+                previousFrame = frame
             }
         }
     }
+    Canvas(modifier = modifier) {
+        val time = cycles.value
+        val dotColor = Color(0xFFA9C5ED)
+        stars.forEach { star ->
+            val wave = (0.5 + 0.5 * kotlin.math.sin(2.0 * PI * (time * star.speed + star.phase))).toFloat()
+            val alpha = (0.16f + 0.64f * wave * wave) * brightness.coerceIn(0f, 1f)
+            val center = Offset(star.x * size.width, star.y * size.height)
+            val radius = star.radius.dp.toPx()
+            if (blueGlow) {
+                // A small circular halo fades continuously with its dot; no threshold pop or rays.
+                drawCircle(Color(0xFF60A5FA).copy(alpha = alpha * 0.10f), radius * 1.8f, center)
+            }
+            drawCircle(dotColor.copy(alpha = alpha), radius, center)
+        }
+    }
 }
-
 /**
  * From 10 PM, the first open of the night: a moon-and-stars card. One tap sends the partner a
  * goodnight (which dims their screen with stars when they see it).

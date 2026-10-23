@@ -1537,6 +1537,37 @@ class MediaTileAnchor {
 
 fun Modifier.mediaTileAnchor(anchor: MediaTileAnchor): Modifier = onPlaced { anchor.coordinates = it }
 
+/** Open on the first tap without waiting for a possible double tap.
+ * A second tap can still react if the same media surface remains mounted.
+ */
+internal suspend fun androidx.compose.ui.input.pointer.PointerInputScope.detectImmediateMediaTaps(
+    onPress: suspend androidx.compose.foundation.gestures.PressGestureScope.(Offset) -> Unit = {},
+    onLongPress: ((Offset) -> Unit)? = null,
+    onDoubleTap: ((Offset) -> Unit)? = null,
+    onTap: (Offset) -> Unit
+) {
+    var lastTapAt = 0L
+    var lastTapPosition: Offset? = null
+    detectTapGestures(
+        onPress = onPress,
+        onLongPress = onLongPress,
+        onTap = { position ->
+            val now = android.os.SystemClock.uptimeMillis()
+            val previous = lastTapPosition
+            val isSecondTap = onDoubleTap != null && previous != null &&
+                now - lastTapAt in viewConfiguration.doubleTapMinTimeMillis..viewConfiguration.doubleTapTimeoutMillis &&
+                (position - previous).getDistance() <= viewConfiguration.touchSlop * 2f
+            if (isSecondTap) {
+                lastTapPosition = null
+                onDoubleTap?.invoke(position)
+            } else {
+                lastTapAt = now
+                lastTapPosition = position
+                onTap(position)
+            }
+        }
+    )
+}
 /** A tappable photo that the viewer grows out of when it opens. */
 fun Modifier.openableMedia(
     onLongClick: (() -> Unit)? = null,
@@ -1550,7 +1581,7 @@ fun Modifier.openableMedia(
     val currentOnDoubleClick by rememberUpdatedState(onDoubleClick)
     val currentOnPress by rememberUpdatedState(onPress)
     mediaTileAnchor(anchor).pointerInput(Unit) {
-        detectTapGestures(
+        detectImmediateMediaTaps(
             onPress = { offset ->
                 val press = currentOnPress
                 if (press != null) {

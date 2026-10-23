@@ -800,6 +800,17 @@ fun ChatScreen(
     // What a message row can ask of the screen. Created once, reading the latest state when
     // called, so rows get the same instance every time and can be skipped on recomposition.
     val latestDisplayedMessages = rememberUpdatedState(displayedMessages)
+    // Prepare the gallery away from the tap handler, so opening media never scans the chat.
+    val chatPhotoUrls by produceState<List<String>>(emptyList(), displayedMessages) {
+        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+            displayedMessages.asSequence()
+                .filter { it.getTypedType() == MessageType.IMAGE }
+                .flatMap { it.getAllMediaUrls().asSequence() }
+                .distinct()
+                .toList()
+        }
+    }
+    val latestChatPhotoUrls = rememberUpdatedState(chatPhotoUrls)
     val latestKeyboardController = rememberUpdatedState(keyboardController)
     val rowActions = remember(viewModel) {
         ChatRowActions(
@@ -822,13 +833,13 @@ fun ChatScreen(
                 (context.applicationContext as? com.example.CherishApplication)?.securityPreferences?.isMediaViewerActive = true
                 val isVideoNote = message.isCircularVideoNote() || message.isVideoNote
                 val isVideo = message.getTypedType() == MessageType.VIDEO || isVideoNote
+                if (isVideo) {
+                    com.example.ui.gallery.GalleryPlayedManager.setPlayed(context, message.id, true)
+                }
                 val ownPhotos = siblings ?: message.getAllMediaUrls()
                 // A photo opens among all the chat's photos (an album's in their order), so the
                 // viewer counts them all ("88 of 100") and swipes on through them
-                val chatPhotos = if (isVideo) emptyList() else latestDisplayedMessages.value
-                    .filter { it.getTypedType() == MessageType.IMAGE }
-                    .flatMap { it.getAllMediaUrls() }
-                    .distinct()
+                val chatPhotos = if (isVideo) emptyList() else latestChatPhotoUrls.value
                 val mediaList = when {
                     isVideo -> listOf(url)
                     url in chatPhotos -> chatPhotos

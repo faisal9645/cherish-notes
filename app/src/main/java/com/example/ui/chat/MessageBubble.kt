@@ -108,17 +108,17 @@ internal fun rememberBubbleFill(isFromMe: Boolean, isDark: Boolean): BubbleFill 
     return remember(isFromMe, black, isDark, received, receivedEdge) {
         if (isFromMe) BubbleFill(
             if (isDark) Brush.horizontalGradient(
-                0f to Color(0xFF2858D6),
-                0.55f to Color(0xFF2448B8),
-                1f to Color(0xFF183C9D)
+                0f to DarkBlueSecondary.copy(alpha = 0.82f),
+                0.55f to DarkBluePrimary.copy(alpha = 0.72f),
+                1f to DarkBlueTertiary.copy(alpha = 0.80f)
             ) else notesGradient(black = black, isDark = false),
             edge = if (isDark) Color(0xFF7197FF).copy(alpha = 0.25f) else null
         )
         else BubbleFill(
             if (isDark) Brush.verticalGradient(
-                0f to Color(0xFF344765).copy(alpha = 0.96f),
-                0.45f to received.copy(alpha = 0.96f),
-                1f to Color(0xFF1C2942).copy(alpha = 0.96f)
+                0f to Color(0xFF344765).copy(alpha = 0.78f),
+                0.45f to received.copy(alpha = 0.68f),
+                1f to Color(0xFF1C2942).copy(alpha = 0.74f)
             ) else SolidColor(received),
             receivedEdge
         )
@@ -1513,6 +1513,10 @@ fun MessageBubble(
                             InlineYouTubeCard(
                                 videoId = youtubeVideoId,
                                 onOpenTheater = { vid -> onOpenTheaterVideo?.invoke(vid) },
+                                onPlay = {
+                                    com.example.ui.gallery.GalleryPlayedManager.setPlayed(context, youtubeVideoId, true)
+                                    com.example.ui.gallery.GalleryPlayedManager.setPlayed(context, message.id, true)
+                                },
                                 modifier = Modifier.fillMaxWidth()
                             )
                         } else if (genericUrl != null) {

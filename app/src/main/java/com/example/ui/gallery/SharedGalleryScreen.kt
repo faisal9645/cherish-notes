@@ -234,13 +234,23 @@ fun SharedGalleryScreen(
     val startOfToday = remember { com.example.CherishApplication.instance.chatRepository.getStartOfToday() }
 
     val watchLaterItems by (app?.coupleFeaturesRepository?.watchLaterFlow ?: remember { kotlinx.coroutines.flow.MutableStateFlow(emptyList()) }).collectAsState()
-    var playedIds by remember { mutableStateOf(GalleryPlayedManager.getAllTrackedIds(context)) }
+    var playedIds by remember { mutableStateOf(GalleryPlayedManager.getPlaybackState(context)) }
+
+    DisposableEffect(context) {
+        val prefs = context.getSharedPreferences("cherish_gallery_played_prefs", Context.MODE_PRIVATE)
+        val listener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, _ ->
+            playedIds = GalleryPlayedManager.getPlaybackState(context)
+        }
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        playedIds = GalleryPlayedManager.getPlaybackState(context)
+        onDispose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+    }
 
     val markItemPlayed: (String) -> Unit = remember(context) {
         { id ->
             if (id.isNotBlank()) {
                 GalleryPlayedManager.setPlayed(context, id, true)
-                playedIds = GalleryPlayedManager.getAllTrackedIds(context)
+                playedIds = GalleryPlayedManager.getPlaybackState(context)
             }
         }
     }
@@ -249,7 +259,7 @@ fun SharedGalleryScreen(
         { id, isFromMe ->
             if (id.isNotBlank()) {
                 val newState = GalleryPlayedManager.togglePlayed(context, id, isFromMe)
-                playedIds = GalleryPlayedManager.getAllTrackedIds(context)
+                playedIds = GalleryPlayedManager.getPlaybackState(context)
                 if (newState) {
                     CherishToast.show("Marked played ✓")
                 } else {
@@ -1503,7 +1513,11 @@ fun SharedGalleryScreen(
 
                                                         PlayedStatusBadge(
                                                             isPlayed = isItemPlayed,
-                                                            onToggle = { toggleItemPlayed(playKey, item.isFromMe) }
+                                                            onToggle = {
+                                                                toggleItemPlayed(playKey, item.isFromMe)
+                                                                GalleryPlayedManager.setPlayed(context, item.messageId,
+                                                                    GalleryPlayedManager.isPlayed(context, playKey, item.isFromMe))
+                                                            }
                                                         )
                                                     }
                                                 }
@@ -2741,6 +2755,10 @@ object GalleryPlayedManager {
         return prefs.getStringSet(KEY_UNPLAYED_IDS, emptySet()) ?: emptySet()
     }
 
+    // Keep played and unplayed distinct: their union does not change when a badge is toggled.
+    fun getPlaybackState(context: Context): Pair<Set<String>, Set<String>> =
+        getPlayedIds(context).toSet() to getUnplayedIds(context).toSet()
+
     fun getAllTrackedIds(context: Context): Set<String> {
         return getPlayedIds(context) + getUnplayedIds(context)
     }
@@ -2755,6 +2773,7 @@ object GalleryPlayedManager {
         return isFromMe
     }
 
+    @Synchronized
     fun setPlayed(context: Context, id: String, played: Boolean) {
         if (id.isBlank()) return
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)

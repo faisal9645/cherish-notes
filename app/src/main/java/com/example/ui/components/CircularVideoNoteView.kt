@@ -16,7 +16,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectTapGestures
+import com.example.ui.chat.detectImmediateMediaTaps
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
@@ -670,7 +670,7 @@ fun CircularVideoNoteView(
             .clip(shape)
             .background(Slate900)
             .pointerInput(Unit) {
-                detectTapGestures(
+                detectImmediateMediaTaps(
                     onLongPress = {
                         currentOnLongClick?.invoke()
                     },

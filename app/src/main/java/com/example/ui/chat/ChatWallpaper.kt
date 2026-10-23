@@ -131,7 +131,7 @@ fun Night11PmWallpaper(
                 .fillMaxSize()
                 .tiltParallax()
         )
-        // Twinkling celestial sapphire & diamond stars in the sky matching the photograph
+        // Soft circular blue dots match the night photograph; no animated star-shaped flares.
         TwinklingStars(
             modifier = Modifier.fillMaxSize(),
             count = 60,

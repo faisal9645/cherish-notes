@@ -195,7 +195,7 @@ fun HeartbeatButton(
                 .softShadow(10.dp, CircleShape)
                 .clip(CircleShape)
                 // Pink to the app's blue, in every theme
-                .background(Brush.linearGradient(listOf(HeartbeatPink, HeartbeatBlue)))
+                .background(if (com.example.ui.theme.isAppInDark()) com.example.ui.theme.notesGradient(black = false, isDark = true) else Brush.linearGradient(listOf(HeartbeatPink, HeartbeatBlue)))
                 .border(2.dp, Color.White.copy(alpha = 0.7f), CircleShape)
                 .combinedClickable(
                     onClickLabel = "Heartbeat Touch",

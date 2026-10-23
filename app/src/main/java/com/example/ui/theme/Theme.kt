@@ -72,17 +72,17 @@ private val DarkColorScheme = darkColorScheme(
     outlineVariant = Color(0xFF383838)
 )
 
-// Black (AMOLED): black surfaces, neutral greys and white, no blue anywhere
+// Black (AMOLED): black surfaces with the same sapphire action colours as chat.
 private val AmoledBlackColorScheme = DarkColorScheme.copy(
-    primary = Color(0xFF767676),
+    primary = DarkBluePrimary,
     onPrimary = Color.White,
     primaryContainer = Color(0xFF141414),
     onPrimaryContainer = Color(0xFFE5E5E5),
-    secondary = Color(0xFF767676),
+    secondary = DarkBlueSecondary,
     onSecondary = Color.White,
     secondaryContainer = Color(0xFF141414),
     onSecondaryContainer = Color(0xFFE5E5E5),
-    tertiary = Color(0xFF767676),
+    tertiary = DarkBlueTertiary,
     onTertiary = Color.White,
     tertiaryContainer = Color(0xFF141414),
     onTertiaryContainer = Color(0xFFE5E5E5),

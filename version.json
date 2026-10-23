@@ -1,9 +1,9 @@
 {
-  "versionCode": 228,
-  "versionName": "1.8.56",
-  "tagName": "v1.8.56-228",
-  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.8.56-228/app_update_228.apk",
-  "assetSize": 19519728,
-  "releaseNotes": "Notes v1.8.56 (Build 228):\n\u2022 Reverted Love Us tab and Settings tab dark mode background colors to original sleek dark/AMOLED surfaces\n\u2022 Retained premium sapphire glass effects exclusively in the Chat tab\n\u2022 Good night wallpaper activates from 10:00 PM\n\u2022 Performance optimizations and stability improvements",
-  "releaseDate": "2026-10-23T17:11:18Z"
+  "versionCode": 229,
+  "versionName": "1.8.57",
+  "tagName": "v1.8.57-229",
+  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.8.57-229/app_update_229.apk",
+  "assetSize": 19521220,
+  "releaseNotes": "Notes v1.8.57 (Build 229):\n\u2022 Smooth moon-blue circular stars with gentle frame-paced twinkling\n\u2022 Sapphire action accents on AMOLED black surfaces\n\u2022 Enhanced gallery and inline video interactions\n\u2022 Performance optimizations and bug fixes",
+  "releaseDate": "2026-10-23T17:31:15Z"
 }
