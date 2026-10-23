@@ -143,7 +143,7 @@ internal fun NightSky(starry: Boolean, sunrise: Boolean, onSunriseDone: () -> Un
     LaunchedEffect(starry) {
         night.animateTo(if (starry) 1f else 0f, tween(if (starry) 2_600 else 1_800, easing = FastOutSlowInEasing))
     }
-    if (night.value > 0f) {
+    if (isDark && night.value > 0f) {
         val deep = if (isDark) 0.4f else 0.66f
         Box(modifier = modifier.graphicsLayer { alpha = night.value }) {
             // When custom 11 PM night wallpaper is active (isNight && isDark), do not overlay the heavy dark gradient

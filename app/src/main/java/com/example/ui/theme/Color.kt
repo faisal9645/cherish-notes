@@ -1,6 +1,5 @@
 package com.example.ui.theme
 
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -34,10 +33,7 @@ val BlackAccent = DarkBluePrimary
 @Composable
 @ReadOnlyComposable
 fun isAppInDark(): Boolean {
-    return isSystemInDarkTheme() ||
-            MaterialTheme.colorScheme.background == Color.Black ||
-            MaterialTheme.colorScheme.background == Color(0xFF0B0F19) ||
-            MaterialTheme.colorScheme.surface.luminance() < 0.5f
+    return MaterialTheme.colorScheme.surface.luminance() < 0.5f
 }
 
 // Electric Royal Blue Gradient matching screenshots (dynamic based on theme):

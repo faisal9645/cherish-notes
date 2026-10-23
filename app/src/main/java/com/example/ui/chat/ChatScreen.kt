@@ -1001,8 +1001,13 @@ fun ChatScreen(
     }
 
     // From 11:00 PM (until 5 AM), the goodnight card prompts once a night unless goodnight was already sent
-    LaunchedEffect(isChatInView, skyClock) {
+    LaunchedEffect(isChatInView, skyClock, isDark) {
         if (!isChatInView) return@LaunchedEffect
+        if (!isDark) {
+            showGoodnightCard = false
+            showGoodnightStars = false
+            return@LaunchedEffect
+        }
         if (isGoodnightDue(context) && !sentGoodnightTonight) {
             while (showGoodMorning || celebration != null || showGoodnightStars) delay(250)
             markGoodnightShown(context)
@@ -1017,9 +1022,9 @@ fun ChatScreen(
             .filter { it.effect == EFFECT_GOODNIGHT && it.senderId != currentUserId && !it.isDeleted }
             .maxByOrNull { it.timestamp }
     }
-    LaunchedEffect(latestGoodnight?.id, isChatInView) {
+    LaunchedEffect(latestGoodnight?.id, isChatInView, isDark) {
         val goodnight = latestGoodnight ?: return@LaunchedEffect
-        if (!isChatInView || isGoodnightStarsSeen(context, goodnight.id)) return@LaunchedEffect
+        if (!isDark || !isChatInView || isGoodnightStarsSeen(context, goodnight.id)) return@LaunchedEffect
         if (System.currentTimeMillis() - goodnight.timestamp > 10L * 60 * 60 * 1000) return@LaunchedEffect
         delay(600)
         while (showGoodMorning || celebration != null || showGoodnightCard) delay(250)
@@ -1332,7 +1337,7 @@ fun ChatScreen(
             modifier = Modifier.fillMaxSize()
         )
         NightSky(
-            starry = bothSaidGoodnightTonight && !showSunrise,
+            starry = isDark && bothSaidGoodnightTonight && !showSunrise,
             sunrise = showSunrise,
             onSunriseDone = { showSunrise = false },
             modifier = Modifier.fillMaxSize()
@@ -2865,7 +2870,7 @@ fun ChatScreen(
     }
 
     androidx.compose.animation.AnimatedVisibility(
-        visible = showGoodnightCard,
+        visible = isDark && showGoodnightCard,
         enter = fadeIn(tween(400)),
         exit = fadeOut(tween(500))
     ) {
@@ -2877,7 +2882,7 @@ fun ChatScreen(
     }
 
     androidx.compose.animation.AnimatedVisibility(
-        visible = showGoodnightStars,
+        visible = isDark && showGoodnightStars,
         enter = fadeIn(tween(900)),
         exit = fadeOut(tween(1_200))
     ) {

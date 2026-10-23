@@ -24,6 +24,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
@@ -51,6 +52,11 @@ fun HeartbeatTouchDialog(
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
+    val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+    val touchStart = if (isDark) com.example.ui.theme.DarkBlueSecondary else com.example.ui.theme.DayBlueSecondary
+    val touchEnd = if (isDark) com.example.ui.theme.DarkBlueTertiary else com.example.ui.theme.DayBlueTertiary
+    val touchAccent = if (isDark) Color(0xFFA9C5ED) else com.example.ui.theme.DayBlueTertiary
+    val touchInk = if (isDark) Color.White else Color(0xFF17243B)
     val hapticHelper = remember { HeartbeatHapticHelper(context) }
     var isMeTouching by remember { mutableStateOf(false) }
 
@@ -195,9 +201,9 @@ fun HeartbeatTouchDialog(
                     .background(
                         Brush.verticalGradient(
                             colors = listOf(
-                                Color(0xFF0F0814),
-                                Color(0xFF1E0E1B),
-                                Color(0xFF0D040A)
+                                if (isDark) Color(0xFF111B2E) else Color(0xFFEFF4FF),
+                                if (isDark) Color(0xFF17243B) else Color(0xFFE0E7FF),
+                                if (isDark) Color.Black else Color.White
                             )
                         )
                     )
@@ -226,7 +232,7 @@ fun HeartbeatTouchDialog(
                 contentAlignment = Alignment.Center
             ) {
                 // Background Ambient Glow
-                val glowColor = (if (isConnected) HeartbeatBlue else HeartbeatPink).copy(alpha = glowAlpha * 0.45f)
+                val glowColor = (if (isConnected) touchEnd else touchStart).copy(alpha = glowAlpha * 0.45f)
                 Canvas(modifier = Modifier.fillMaxSize()) {
                     val center = Offset(size.width / 2f, size.height / 2f)
                     val radius = size.width * (if (isConnected) 0.70f else 0.4f)
@@ -258,9 +264,9 @@ fun HeartbeatTouchDialog(
                         .align(Alignment.TopEnd)
                         .padding(24.dp)
                         .size(44.dp)
-                        .background(Color.White.copy(alpha = 0.15f), CircleShape)
+                        .background(touchInk.copy(alpha = 0.15f), CircleShape)
                 ) {
-                    Icon(Icons.Rounded.Close, contentDescription = "Close", tint = Color.White)
+                    Icon(Icons.Rounded.Close, contentDescription = "Close", tint = touchInk)
                 }
 
             Column(
@@ -270,7 +276,7 @@ fun HeartbeatTouchDialog(
             ) {
                 Text(
                     text = "Heartbeat Touch",
-                    color = Color.White,
+                    color = touchInk,
                     fontSize = 22.sp,
                     fontWeight = FontWeight.Bold
                 )
@@ -280,10 +286,10 @@ fun HeartbeatTouchDialog(
                 // Live status banner
                 Surface(
                     shape = RoundedCornerShape(16.dp),
-                    color = if (isConnected) HeartbeatBlue.copy(alpha = 0.28f) else Color.White.copy(alpha = 0.08f),
+                    color = if (isConnected) touchAccent.copy(alpha = 0.28f) else touchInk.copy(alpha = 0.08f),
                     border = androidx.compose.foundation.BorderStroke(
                         1.dp,
-                        if (isConnected) HeartbeatBlue.copy(alpha = 0.7f) else Color.White.copy(alpha = 0.15f)
+                        if (isConnected) touchAccent.copy(alpha = 0.7f) else touchInk.copy(alpha = 0.15f)
                     )
                 ) {
                     Text(
@@ -294,7 +300,7 @@ fun HeartbeatTouchDialog(
                             isMeTouching && !isPartnerTouching -> "❤️ Touching your heart... Waiting for $partnerName"
                             else -> "Touch & hold your finger on the heart together"
                         },
-                        color = if (isConnected) Color.White else Color.White.copy(alpha = 0.9f),
+                        color = touchInk.copy(alpha = if (isConnected) 1f else 0.9f),
                         fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold,
                         textAlign = TextAlign.Center,
@@ -314,8 +320,8 @@ fun HeartbeatTouchDialog(
                     ) {
                         Surface(
                             shape = RoundedCornerShape(16.dp),
-                            color = Color(0xFF3B1028).copy(alpha = 0.75f),
-                            border = androidx.compose.foundation.BorderStroke(1.dp, HeartbeatBlue.copy(alpha = 0.5f))
+                            color = (if (isDark) Color(0xFF263653) else Color(0xFFDBEAFE)).copy(alpha = 0.75f),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, touchAccent.copy(alpha = 0.5f))
                         ) {
                             Crossfade(
                                 targetState = currentLoveMessage,
@@ -324,7 +330,7 @@ fun HeartbeatTouchDialog(
                             ) { message ->
                                 Text(
                                     text = message,
-                                    color = Color(0xFFFFD1DC),
+                                    color = if (isDark) Color(0xFFD1E3FF) else Color(0xFF183C9D),
                                     fontSize = 13.sp,
                                     fontWeight = FontWeight.Medium,
                                     textAlign = TextAlign.Center,
@@ -367,8 +373,8 @@ fun HeartbeatTouchDialog(
                                 drawCircle(
                                     brush = Brush.radialGradient(
                                         colors = listOf(
-                                            Color(0xFFFF529A).copy(alpha = 0.55f * neckAlpha),
-                                            HeartbeatBlue.copy(alpha = 0.4f * neckAlpha),
+                                            (if (isDark) com.example.ui.theme.DarkBluePrimary else com.example.ui.theme.DayBluePrimary).copy(alpha = 0.55f * neckAlpha),
+                                            touchEnd.copy(alpha = 0.4f * neckAlpha),
                                             Color.Transparent
                                         ),
                                         center = center,
@@ -383,8 +389,8 @@ fun HeartbeatTouchDialog(
                             drawCircle(
                                 brush = Brush.radialGradient(
                                     colors = listOf(
-                                        HeartbeatPink.copy(alpha = 0.75f),
-                                        HeartbeatPink.copy(alpha = 0.25f),
+                                        touchStart.copy(alpha = 0.75f),
+                                        touchStart.copy(alpha = 0.25f),
                                         Color.Transparent
                                     ),
                                     center = droplet1Center,
@@ -398,8 +404,8 @@ fun HeartbeatTouchDialog(
                             drawCircle(
                                 brush = Brush.radialGradient(
                                     colors = listOf(
-                                        HeartbeatBlue.copy(alpha = 0.75f),
-                                        HeartbeatBlue.copy(alpha = 0.25f),
+                                        touchEnd.copy(alpha = 0.75f),
+                                        touchEnd.copy(alpha = 0.25f),
                                         Color.Transparent
                                     ),
                                     center = droplet2Center,
@@ -411,7 +417,7 @@ fun HeartbeatTouchDialog(
                         } else {
                             // Single ambient idle ripple
                             drawCircle(
-                                color = (if (isConnected) HeartbeatBlue else HeartbeatPink).copy(alpha = glowAlpha * 0.30f),
+                                color = (if (isConnected) touchEnd else touchStart).copy(alpha = glowAlpha * 0.30f),
                                 radius = size.width * 0.44f,
                                 center = center
                             )
@@ -425,7 +431,7 @@ fun HeartbeatTouchDialog(
                             .clip(CircleShape)
                             .border(
                                 width = if (hasEngagedMagneticLock) 3.5.dp else 2.5.dp,
-                                color = (if (isConnected) HeartbeatBlue else HeartbeatPink).copy(alpha = glowAlpha),
+                                color = (if (isConnected) touchEnd else touchStart).copy(alpha = glowAlpha),
                                 shape = CircleShape
                             )
                     )
@@ -439,9 +445,14 @@ fun HeartbeatTouchDialog(
                             .clip(CircleShape)
                             .background(
                                 Brush.linearGradient(
-                                    listOf(
-                                        HeartbeatPink.copy(alpha = 0.7f + 0.3f * coalescence),
-                                        HeartbeatBlue.copy(alpha = 0.7f + 0.3f * coalescence)
+                                    if (isDark) listOf(
+                                        touchStart.copy(alpha = 0.7f + 0.3f * coalescence),
+                                        com.example.ui.theme.DarkBluePrimary.copy(alpha = 0.7f + 0.3f * coalescence),
+                                        touchEnd.copy(alpha = 0.7f + 0.3f * coalescence)
+                                    ) else listOf(
+                                        touchStart.copy(alpha = 0.7f + 0.3f * coalescence),
+                                        com.example.ui.theme.DayBluePrimary.copy(alpha = 0.7f + 0.3f * coalescence),
+                                        touchEnd.copy(alpha = 0.7f + 0.3f * coalescence)
                                     )
                                 )
                             )
@@ -472,7 +483,7 @@ fun HeartbeatTouchDialog(
                         whoStoppedMessage != null -> "Touch and hold again to reconnect"
                         else -> "Touch & Hold Heart"
                     },
-                    color = Color.White.copy(alpha = 0.95f),
+                    color = touchInk.copy(alpha = 0.95f),
                     fontSize = 15.sp,
                     fontWeight = FontWeight.SemiBold
                 )
@@ -485,7 +496,7 @@ fun HeartbeatTouchDialog(
                     } else {
                         "Both partners must hold the heart simultaneously for heartbeat vibrations to sync in real-time."
                     },
-                    color = Color.White.copy(alpha = 0.65f),
+                    color = touchInk.copy(alpha = 0.65f),
                     fontSize = 12.sp,
                     textAlign = TextAlign.Center,
                     lineHeight = 17.sp
