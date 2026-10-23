@@ -20,16 +20,16 @@ val DayBlueSecondary = Color(0xFF258BE8)
 val DayBlueTertiary = Color(0xFF3630F2)
 
 // Dark Mode Blues (Deep, rich dark midnight blues - sleek, calm, and not bright)
-val DarkBluePrimary = Color(0xFF2448B8)
-val DarkBlueSecondary = Color(0xFF2858D6)
-val DarkBlueTertiary = Color(0xFF183C9D)
-val DarkBlueBubble = Color(0xFF2448B8)
+val DarkBluePrimary = Color(0xFF133285)
+val DarkBlueSecondary = Color(0xFF0F2668)
+val DarkBlueTertiary = Color(0xFF081232)
+val DarkBlueBubble = Color(0xFF112970)
 
-// AMOLED shares the chat midnight-blue accents while keeping black backgrounds.
-val BlackGradientStart = DarkBlueSecondary
-val BlackGradientMid = DarkBluePrimary
-val BlackGradientEnd = DarkBlueTertiary
-val BlackAccent = DarkBluePrimary
+// Black (AMOLED) theme: graphite instead of blue for bubbles, buttons and headers, grey accents
+val BlackGradientStart = Color(0xFF3A3A3C)
+val BlackGradientMid = Color(0xFF2C2C2E)
+val BlackGradientEnd = Color(0xFF1C1C1E)
+val BlackAccent = Color(0xFF8E8E93)
 
 @Composable
 @ReadOnlyComposable
@@ -93,7 +93,7 @@ fun appVerticalGradient(): Brush {
  * The blue gradient for cards, bubbles, and buttons.
  * In day mode: electric royal blue.
  * In dark mode: deep, dark midnight blue (not bright).
- * In black AMOLED mode: the same midnight-blue palette.
+ * In black AMOLED mode: sleek graphite.
  */
 fun notesGradient(black: Boolean, isDark: Boolean = false, vertical: Boolean = false): Brush {
     val start = if (black) BlackGradientStart else if (isDark) DarkBlueSecondary else DayBlueSecondary
@@ -143,7 +143,7 @@ val RoseGoldOnPrimary = Color(0xFFFFFFFF)
 val RoseGoldContainer: Color
     @Composable
     @ReadOnlyComposable
-    get() = if (isAppInDark()) Color(0xFF263653) else Color(0xFFEFF4FF)
+    get() = if (LocalAmoledBlack.current) Color(0xFF1A1A1A) else if (isAppInDark()) Color(0xFF0F172A) else Color(0xFFEFF4FF)
 
 val OnRoseGoldContainer = Color(0xFF1E293B)
 
@@ -157,7 +157,7 @@ val ChampagneOnSecondary = Color(0xFFFFFFFF)
 val ChampagneContainer: Color
     @Composable
     @ReadOnlyComposable
-    get() = if (isAppInDark()) Color(0xFF263653) else Color(0xFFE0E7FF)
+    get() = if (LocalAmoledBlack.current) Color(0xFF1A1A1A) else if (isAppInDark()) Color(0xFF172554) else Color(0xFFE0E7FF)
 
 val OnChampagneContainer = Color(0xFF0A1033)
 
@@ -171,7 +171,7 @@ val AmethystOnTertiary = Color(0xFFFFFFFF)
 val AmethystContainer: Color
     @Composable
     @ReadOnlyComposable
-    get() = if (isAppInDark()) Color(0xFF263653) else Color(0xFFDBEAFE)
+    get() = if (LocalAmoledBlack.current) Color(0xFF141414) else if (isAppInDark()) Color(0xFF0F172A) else Color(0xFFDBEAFE)
 
 val OnAmethystContainer = Color(0xFF0F172A)
 
@@ -260,8 +260,8 @@ val Slate900 = Color(0xFF0F172A)
 
 // Night surfaces: dark obsidian blackish surfaces for the Dark theme, graphite for overlays
 val NavyDeep = Color(0xFF04060C)
-val NavyCard = Color(0xFF263653)
-val NavyRaised = Color(0xFF30415F)
+val NavyCard = Color(0xFF0A0D16)
+val NavyRaised = Color(0xFF121622)
 val Graphite850 = Color(0xFF0E1015)
 val Graphite800 = Color(0xFF14161C)
 val Graphite700 = Color(0xFF1C1E26)

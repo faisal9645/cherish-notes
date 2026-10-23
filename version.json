@@ -1,9 +1,9 @@
 {
-  "versionCode": 227,
-  "versionName": "1.8.55",
-  "tagName": "v1.8.55-227",
-  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.8.55-227/app_update_227.apk",
-  "assetSize": 19517652,
-  "releaseNotes": "Notes v1.8.55 (Build 227):\n\u2022 Good night wallpaper and glowing starry sky now activates from 10:00 PM (instead of 11:00 PM)\n\u2022 Night calm mode and goodnight reminders active from 10:00 PM\n\u2022 Unified midnight-blue themes across dark and AMOLED modes\n\u2022 Performance optimizations and bug fixes",
-  "releaseDate": "2026-10-23T16:52:40Z"
+  "versionCode": 228,
+  "versionName": "1.8.56",
+  "tagName": "v1.8.56-228",
+  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.8.56-228/app_update_228.apk",
+  "assetSize": 19519728,
+  "releaseNotes": "Notes v1.8.56 (Build 228):\n\u2022 Reverted Love Us tab and Settings tab dark mode background colors to original sleek dark/AMOLED surfaces\n\u2022 Retained premium sapphire glass effects exclusively in the Chat tab\n\u2022 Good night wallpaper activates from 10:00 PM\n\u2022 Performance optimizations and stability improvements",
+  "releaseDate": "2026-10-23T17:11:18Z"
 }

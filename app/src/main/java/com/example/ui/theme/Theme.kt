@@ -46,15 +46,15 @@ private val PureWhiteColorScheme = lightColorScheme(
 private val DarkColorScheme = darkColorScheme(
     primary = DarkBluePrimary, // Deep Dark Blue
     onPrimary = Color.White,
-    primaryContainer = Color(0xFF263653), // Deep dark blue container
+    primaryContainer = Color(0xFF0F1B3E), // Deep dark blue container
     onPrimaryContainer = Color(0xFFBFDBFE), // Soft light blue text
     secondary = DarkBlueSecondary,
     onSecondary = Color.White,
-    secondaryContainer = Color(0xFF263653), // Rich dark blue container
+    secondaryContainer = Color(0xFF132356), // Rich dark blue container
     onSecondaryContainer = Color(0xFFDBEAFE),
     tertiary = DarkBlueTertiary,
     onTertiary = Color.White,
-    tertiaryContainer = Color(0xFF263653),
+    tertiaryContainer = Color(0xFF0A1024),
     onTertiaryContainer = Color(0xFFDBEAFE),
     background = Color(0xFF000000), // Strict AMOLED pure black #000000
     onBackground = Color(0xFFFFFFFF),
@@ -66,21 +66,43 @@ private val DarkColorScheme = darkColorScheme(
     surfaceContainer = Color(0xFF000000),
     surfaceContainerLow = Color(0xFF000000),
     surfaceContainerLowest = Color(0xFF000000),
-    surfaceContainerHigh = Color(0xFF263653),
-    surfaceContainerHighest = Color(0xFF30415F),
-    outline = Color(0xFF526B96),
-    outlineVariant = Color(0xFF526B96).copy(alpha = 0.45f)
+    surfaceContainerHigh = Color(0xFF080808),
+    surfaceContainerHighest = Color(0xFF101010),
+    outline = Color(0xFF646464),
+    outlineVariant = Color(0xFF383838)
 )
 
-// AMOLED keeps the same midnight-blue controls and pure black background.
-private val AmoledBlackColorScheme = DarkColorScheme.copy()
+// Black (AMOLED): black surfaces, neutral greys and white, no blue anywhere
+private val AmoledBlackColorScheme = DarkColorScheme.copy(
+    primary = Color(0xFF767676),
+    onPrimary = Color.White,
+    primaryContainer = Color(0xFF141414),
+    onPrimaryContainer = Color(0xFFE5E5E5),
+    secondary = Color(0xFF767676),
+    onSecondary = Color.White,
+    secondaryContainer = Color(0xFF141414),
+    onSecondaryContainer = Color(0xFFE5E5E5),
+    tertiary = Color(0xFF767676),
+    onTertiary = Color.White,
+    tertiaryContainer = Color(0xFF141414),
+    onTertiaryContainer = Color(0xFFE5E5E5),
+    onSurfaceVariant = Color(0xFFD4D4D4),
+    surfaceVariant = Color(0xFF000000),
+    surfaceContainerHigh = Color(0xFF080808),
+    surfaceContainerHighest = Color(0xFF101010),
+    outline = Color(0xFF646464),
+    outlineVariant = Color(0xFF383838)
+)
 
-/** True when the explicit AMOLED theme is selected. */
+/** True in the Black (AMOLED) theme, where dark surfaces are near-black greys instead of navy. */
 val LocalAmoledBlack = staticCompositionLocalOf { false }
 
-/** Dark and AMOLED share blue accents; semantic colours stay unchanged. */
+/**
+ * A dark-mode colour written for the (blue-tinted) Dark theme: in the Black theme a blue-tinted
+ * colour becomes the neutral grey of the same lightness. Reds, greens etc. keep their colour.
+ */
 @Composable
-fun darkTone(color: Color): Color = color
+fun darkTone(color: Color): Color = if (LocalAmoledBlack.current) color.withoutBlue() else color
 
 /** The neutral grey as light as this colour, when it's a blue/navy tone; other colours unchanged. */
 fun Color.withoutBlue(): Color {
@@ -91,10 +113,10 @@ fun Color.withoutBlue(): Color {
     return Color(grey, grey, grey, alpha)
 }
 
-/** Both dark themes use the same navy card palette; black screen backgrounds are separate. */
+/** A dark-mode surface: [navy] in the Dark theme, [black] in the Black theme. */
 @Composable
 fun darkSurface(navy: Color, black: Color = Color(0xFF0A0A0A)): Color =
-    navy
+    if (LocalAmoledBlack.current) black else navy
 
 @Composable
 fun CherishTheme(

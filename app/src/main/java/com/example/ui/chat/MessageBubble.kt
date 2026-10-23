@@ -108,9 +108,9 @@ internal fun rememberBubbleFill(isFromMe: Boolean, isDark: Boolean): BubbleFill 
     return remember(isFromMe, black, isDark, received, receivedEdge) {
         if (isFromMe) BubbleFill(
             if (isDark) Brush.horizontalGradient(
-                0f to DarkBlueSecondary,
-                0.55f to DarkBluePrimary,
-                1f to DarkBlueTertiary
+                0f to Color(0xFF2858D6),
+                0.55f to Color(0xFF2448B8),
+                1f to Color(0xFF183C9D)
             ) else notesGradient(black = black, isDark = false),
             edge = if (isDark) Color(0xFF7197FF).copy(alpha = 0.25f) else null
         )
