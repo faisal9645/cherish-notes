@@ -2,7 +2,7 @@
   "versionCode": 232,
   "versionName": "1.8.60",
   "tagName": "v1.8.60-232",
-  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/untagged-fe9b7e25adc5bf78b157/app_update_232.apk",
+  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.8.60-232/app_update_232.apk",
   "assetSize": 19985344,
   "releaseNotes": "Notes v1.8.60 (Build 232):\n- Updated moonlit seaside wallpaper with fewer matching blinking dots.\n- Receive saved morning and night greeting animations when returning to chat.\n- Solid blue chat bubbles and typing center without glass effects.\n- Restored subtle dark and AMOLED screen borders.",
   "releaseDate": "2026-10-23T23.53.47Z"
