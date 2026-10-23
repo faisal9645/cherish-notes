@@ -939,9 +939,7 @@ fun FullScreenMediaViewer(
                         autoPlay = isCurrentPage,
                         shape = androidx.compose.ui.graphics.RectangleShape,
                         cropToFill = false,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .fillMaxHeight(0.8f)
+                        modifier = Modifier.fillMaxSize()
                     )
                     } else {
                         val modelData = remember(pageUrl) {

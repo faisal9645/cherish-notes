@@ -411,17 +411,18 @@ fun SharedGalleryScreen(
     // How many of each kind there are, so kinds with none aren't offered
     val mediaKindCounts = remember(galleryMediaItems) {
         IntArray(MEDIA_KIND_LABELS.size).also { counts ->
-            counts[MEDIA_ALL] = galleryMediaItems.size
+            counts[MEDIA_ALL] = galleryMediaItems.count { !it.isGif }
             galleryMediaItems.forEach { counts[mediaKindOf(it)]++ }
         }
     }
     val shownMediaItems = remember(galleryMediaItems, mediaKind, galleryFrom, currentUserId) {
         if (mediaKind == MEDIA_ALL && galleryFrom == FROM_ANYONE) {
-            galleryMediaItems
+            galleryMediaItems.filter { !it.isGif }
         } else {
             galleryMediaItems.filter { item ->
                 val fromMe = item.originalMessage.senderId == currentUserId
-                (mediaKind == MEDIA_ALL || mediaKindOf(item) == mediaKind) &&
+                val matchesKind = if (mediaKind == MEDIA_ALL) !item.isGif else mediaKindOf(item) == mediaKind
+                matchesKind &&
                     when (galleryFrom) {
                         FROM_ME -> fromMe
                         FROM_PARTNER -> !fromMe

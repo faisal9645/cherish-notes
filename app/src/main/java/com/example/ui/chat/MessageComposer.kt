@@ -386,7 +386,7 @@ fun MessageComposer(
     val barBg = if (isPrivateMode) {
         if (isDark) Color.Black else Color.White
     } else {
-        if (isDark) Color.Transparent else MaterialTheme.colorScheme.surface
+        if (isDark) Color(0x66030714) else MaterialTheme.colorScheme.surface.copy(alpha = 0.85f)
     }
     val pillBg = if (isPrivateMode) {
         if (isAmoled) Neutral900
@@ -1518,9 +1518,9 @@ fun MessageComposer(
                         layout(board.width, shownPx) { board.place(0, 0) }
                     }
             ) {
-                // Dark: see-through like the message box, the wallpaper behind the emojis; Day: white
+                // Dark: subtle translucent glass over the wallpaper; Day: white with gentle transparency
                 Surface(
-                    color = if (isDark) Color.Transparent else Color.White,
+                    color = if (isDark) Color(0xB8080B14) else Color.White.copy(alpha = 0.90f),
                     border = BorderStroke(1.dp, pillBorder),
                     shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
                     modifier = Modifier.fillMaxSize()
@@ -1547,7 +1547,7 @@ fun MessageComposer(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .then(swipeDownModifier)
-                                .background(if (isDark) Color.Transparent else Color.White)
+                                .background(if (isDark) Color(0x66080B14) else Color.White.copy(alpha = 0.90f))
                                 .border(BorderStroke(0.6.dp, if (isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFE2E8F0)))
                                 .padding(horizontal = 4.dp, vertical = 2.dp),
                             horizontalArrangement = Arrangement.SpaceEvenly,

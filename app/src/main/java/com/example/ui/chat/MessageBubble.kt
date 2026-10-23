@@ -878,6 +878,10 @@ fun MessageBubble(
                                     onImageClick(videoUrl)
                                 }
                             }
+                            val videoAspect = remember(videoUrl) {
+                                val info = com.example.util.VideoThumbnailHelper.getVideoInfo(videoUrl)
+                                info?.aspect?.coerceIn(0.72f, 1.9f) ?: (4f / 3f)
+                            }
                             // A shared video: a rounded card with its first frame, plays here or full screen
                             com.example.ui.components.CircularVideoNoteView(
                                 videoUrl = videoUrl,
@@ -888,7 +892,7 @@ fun MessageBubble(
                                 modifier = Modifier
                                     .padding(vertical = 2.dp)
                                     .fillMaxWidth()
-                                    .aspectRatio(4f / 3f)
+                                    .aspectRatio(videoAspect)
                                     .mediaTileAnchor(videoAnchor)
                             )
                         }

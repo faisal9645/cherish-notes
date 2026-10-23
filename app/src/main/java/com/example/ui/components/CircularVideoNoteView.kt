@@ -52,9 +52,11 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
@@ -360,8 +362,9 @@ fun CircularVideoNoteView(
             }
 
             override fun onVideoSizeChanged(videoSize: VideoSize) {
-                if (thumbnailBitmap == null && videoSize.width > 0 && videoSize.height > 0) {
-                    videoAspect = videoSize.width * videoSize.pixelWidthHeightRatio / videoSize.height
+                if (videoSize.width > 0 && videoSize.height > 0) {
+                    val pixelRatio = if (videoSize.pixelWidthHeightRatio > 0f) videoSize.pixelWidthHeightRatio else 1f
+                    videoAspect = (videoSize.width.toFloat() * pixelRatio) / videoSize.height.toFloat()
                 }
             }
 
@@ -612,23 +615,35 @@ fun CircularVideoNoteView(
         }
     }
 
-    // Precise center-crop aspect ratio scaling:
-    // TextureView fills the container (mapping pixels to width & height).
-    // For a circular/square presentation, applying scaleX / scaleY according to videoAspect
-    // perfectly un-squishes the video to its natural aspect ratio, matching ContentScale.Crop on the thumbnail.
-    // This eliminates the previous double-scaling that caused extreme face zoom.
-    val scaleX = remember(videoAspect, cropToFill) {
-        if (!cropToFill) {
-            if (videoAspect > 1f) 1f else videoAspect.coerceAtLeast(0.01f)
+    var containerSize by remember { mutableStateOf(IntSize.Zero) }
+    val containerAspect = remember(containerSize) {
+        if (containerSize.width > 0 && containerSize.height > 0) {
+            containerSize.width.toFloat() / containerSize.height.toFloat()
+        } else 1f
+    }
+
+    // Precise aspect ratio scaling matching ContentScale.Crop / ContentScale.Fit:
+    // TextureView fills the container (mapping pixels to container width & height).
+    // Comparing videoAspect to containerAspect guarantees that neither crop nor fit
+    // ever stretches or squishes the video, regardless of whether the container is square or rectangular.
+    val scaleX = remember(videoAspect, containerAspect, cropToFill) {
+        val va = videoAspect.coerceAtLeast(0.01f)
+        val ca = containerAspect.coerceAtLeast(0.01f)
+        val r = va / ca
+        if (cropToFill) {
+            if (r > 1f) r else 1f
         } else {
-            if (videoAspect > 1f) videoAspect else 1f
+            if (r > 1f) 1f else r
         }
     }
-    val scaleY = remember(videoAspect, cropToFill) {
-        if (!cropToFill) {
-            if (videoAspect < 1f) 1f else 1f / videoAspect.coerceAtLeast(0.01f)
+    val scaleY = remember(videoAspect, containerAspect, cropToFill) {
+        val va = videoAspect.coerceAtLeast(0.01f)
+        val ca = containerAspect.coerceAtLeast(0.01f)
+        val r = va / ca
+        if (cropToFill) {
+            if (r < 1f) 1f / r else 1f
         } else {
-            if (videoAspect < 1f) 1f / videoAspect.coerceAtLeast(0.01f) else 1f
+            if (r < 1f) 1f else 1f / r
         }
     }
 
@@ -649,6 +664,7 @@ fun CircularVideoNoteView(
     Box(
         modifier = modifier
             .then(if (isRound) Modifier.defaultMinSize(minWidth = 220.dp, minHeight = 220.dp) else Modifier)
+            .onSizeChanged { containerSize = it }
             // How much of it is on screen, for the chat's one silent preview
             .then(
                 if (silentPreview) Modifier.onGloballyPositioned { VideoNotePlayback.report(playbackKey, it) }

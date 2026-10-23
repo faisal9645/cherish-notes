@@ -271,7 +271,7 @@ fun DoodleWallpaper(
  * chat is on screen. One layer moving, nothing recomposes.
  */
 @Composable
-private fun Modifier.tiltParallax(maxShift: Dp = 18.dp): Modifier {
+private fun Modifier.tiltParallax(maxShift: Dp = 7.dp): Modifier {
     val context = LocalContext.current
     val maxShiftPx = with(LocalDensity.current) { maxShift.toPx() }
     val shift = remember { Animatable(Offset.Zero, Offset.VectorConverter) }
@@ -302,17 +302,16 @@ private fun Modifier.tiltParallax(maxShift: Dp = 18.dp): Modifier {
             override fun onSensorChanged(event: SensorEvent) {
                 val dt = if (lastNanos == 0L) 0f else ((event.timestamp - lastNanos) / 1e9f).coerceIn(0f, 0.1f)
                 lastNanos = event.timestamp
-                // How far the wallpaper goes each way, -1 to 1
+                // How far the wallpaper goes each way, -1 to 1 (gentle, progressive response)
                 val dx: Float
                 val dy: Float
                 if (isGyro) {
-                    val keep = kotlin.math.exp(-dt / 1.5f)
+                    val keep = kotlin.math.exp(-dt / 2.0f)
                     turnX = turnX * keep + event.values[0] * dt
                     turnY = turnY * keep + event.values[1] * dt
-                    // About 15° of turn gives the full shift; the far scene slides the way the
-                    // near edge turns away
-                    dx = (turnY / 0.26f).coerceIn(-1f, 1f)
-                    dy = (turnX / 0.26f).coerceIn(-1f, 1f)
+                    // Softer turn sensitivity: graceful, gentle parallax response
+                    dx = (turnY / 0.45f).coerceIn(-1f, 1f)
+                    dy = (turnX / 0.45f).coerceIn(-1f, 1f)
                 } else {
                     val x = event.values[0]
                     val y = event.values[1]
@@ -320,17 +319,17 @@ private fun Modifier.tiltParallax(maxShift: Dp = 18.dp): Modifier {
                         baseX = x
                         baseY = y
                     }
-                    val catchUp = 1f - kotlin.math.exp(-dt / 1.5f)
+                    val catchUp = 1f - kotlin.math.exp(-dt / 2.0f)
                     baseX += (x - baseX) * catchUp
                     baseY += (y - baseY) * catchUp
-                    // About 2.5 m/s² (some 15°) away from the resting angle gives the full shift
-                    dx = ((x - baseX) / 2.5f).coerceIn(-1f, 1f)
-                    dy = (-(y - baseY) / 2.5f).coerceIn(-1f, 1f)
+                    // Softer gravity response for calm and gentle floating effect
+                    dx = ((x - baseX) / 4.2f).coerceIn(-1f, 1f)
+                    dy = (-(y - baseY) / 4.2f).coerceIn(-1f, 1f)
                 }
                 val newTarget = Offset(dx * maxShiftPx, dy * maxShiftPx)
                 // Hand tremor under a pixel is ignored, so the wallpaper rests when the phone does
-                if (kotlin.math.abs(newTarget.x - lastTarget.x) >= 1f ||
-                    kotlin.math.abs(newTarget.y - lastTarget.y) >= 1f
+                if (kotlin.math.abs(newTarget.x - lastTarget.x) >= 0.8f ||
+                    kotlin.math.abs(newTarget.y - lastTarget.y) >= 0.8f
                 ) {
                     lastTarget = newTarget
                     targets.trySend(newTarget)
@@ -342,8 +341,8 @@ private fun Modifier.tiltParallax(maxShift: Dp = 18.dp): Modifier {
         sensorManager.registerListener(listener, sensor, SensorManager.SENSOR_DELAY_GAME)
         try {
             targets.consumeAsFlow().collectLatest { target ->
-                if ((target - shift.value).getDistance() >= 0.5f) {
-                    shift.animateTo(target, spring(dampingRatio = 0.85f, stiffness = Spring.StiffnessLow))
+                if ((target - shift.value).getDistance() >= 0.4f) {
+                    shift.animateTo(target, spring(dampingRatio = 0.92f, stiffness = Spring.StiffnessLow))
                 }
             }
         } finally {
@@ -353,7 +352,7 @@ private fun Modifier.tiltParallax(maxShift: Dp = 18.dp): Modifier {
 
     return graphicsLayer {
         // Slightly enlarged so the shifted edges never show
-        val zoom = 1f + 2.2f * maxShiftPx / size.minDimension.coerceAtLeast(1f)
+        val zoom = 1f + 2.0f * maxShiftPx / size.minDimension.coerceAtLeast(1f)
         scaleX = zoom
         scaleY = zoom
         translationX = shift.value.x
