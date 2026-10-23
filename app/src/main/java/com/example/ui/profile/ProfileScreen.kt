@@ -330,15 +330,22 @@ fun ProfileScreen(
         if (uri != null) {
             coroutineScope.launch(kotlinx.coroutines.Dispatchers.IO) {
                 try {
+                    val timestamp = System.currentTimeMillis()
+                    val file = java.io.File(context.filesDir, "custom_chat_wallpaper_${timestamp}.jpg")
                     val inputStream = context.contentResolver.openInputStream(uri)
-                    val file = java.io.File(context.filesDir, "custom_chat_wallpaper.jpg")
                     inputStream?.use { input ->
                         file.outputStream().use { output ->
                             input.copyTo(output)
                         }
                     }
+                    // Clean up older wallpaper files
+                    context.filesDir.listFiles { f ->
+                        f.name.startsWith("custom_chat_wallpaper") && f.name != file.name
+                    }?.forEach { it.delete() }
+
                     kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
                         viewModel.setCustomWallpaperPath(file.absolutePath)
+                        viewModel.setChatBgTheme(3)
                         CherishToast.show("Custom wallpaper set ✨")
                     }
                 } catch (e: Exception) {

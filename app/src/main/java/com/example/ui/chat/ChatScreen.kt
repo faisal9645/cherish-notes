@@ -1807,11 +1807,13 @@ fun ChatScreen(
             // Day or dark as the app's theme says (not the phone's), so Day stays white on a dark-mode phone
             val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
             val isPrivate = uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE
-            // Dark mode: AMOLED black bottom tray. Day: white tray with gentle transparency
-            val barBg = if (isDark) {
-                Color.Black
-            } else if (showWallpaper && !isDark) {
-                Color.White.copy(alpha = 0.85f)
+            // Dark mode with wallpaper: transparent bottom tray so custom wallpaper flows fluidly edge-to-edge
+            val barBg = if (isPrivate) {
+                if (isDark) Color.Black else Color.White
+            } else if (showWallpaper) {
+                if (isDark) Color.Transparent else Color.White.copy(alpha = 0.85f)
+            } else if (isDark) {
+                Color.Transparent
             } else {
                 Color.White
             }
@@ -1819,7 +1821,7 @@ fun ChatScreen(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .then(if (!isPrivate && !isDark) Modifier.shadow(8.dp, RectangleShape, clip = false) else Modifier)
+                    .then(if (!isPrivate && !isDark && !showWallpaper) Modifier.shadow(8.dp, RectangleShape, clip = false) else Modifier)
                     .background(barBg)
                     // Touches on the tray stay in the tray
                     .pointerInput(Unit) {}

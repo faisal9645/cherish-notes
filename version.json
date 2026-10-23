@@ -1,9 +1,9 @@
 {
-  "versionCode": 222,
-  "versionName": "1.8.50",
-  "tagName": "v1.8.50-222",
-  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.8.50-222/app_update_222.apk",
-  "assetSize": 19589028,
-  "releaseNotes": "Notes v1.8.50 (Build 222):\n\u2022 Fixed unit converter and menu circular buttons (removed rectangular click border)\n\u2022 Pure AMOLED black bottom composer and media board in dark mode\n\u2022 Authentic Samsung Calculator disguise refinements\n\u2022 Performance optimizations and bug fixes",
-  "releaseDate": "2026-10-23T13:28:56Z"
+  "versionCode": 223,
+  "versionName": "1.8.51",
+  "tagName": "v1.8.51-223",
+  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.8.51-223/app_update_223.apk",
+  "assetSize": 19590756,
+  "releaseNotes": "Notes v1.8.51 (Build 223):\n\u2022 Transparent bottom typing bar in dark mode for fluid edge-to-edge wallpaper flow\n\u2022 Reactive and fluid custom wallpaper updates with background decoding and crossfade\n\u2022 Clean memory-efficient downsampled custom image rendering\n\u2022 Performance optimizations and stability improvements",
+  "releaseDate": "2026-10-23T13:51:59Z"
 }

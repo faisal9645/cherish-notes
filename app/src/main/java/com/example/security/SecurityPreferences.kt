@@ -388,6 +388,9 @@ class SecurityPreferences(private val context: Context) {
     private val _customWallpaperPath = MutableStateFlow(getCustomWallpaperPath())
     val customWallpaperPath: StateFlow<String?> = _customWallpaperPath.asStateFlow()
 
+    private val _customWallpaperVersion = MutableStateFlow(System.currentTimeMillis())
+    val customWallpaperVersion: StateFlow<Long> = _customWallpaperVersion.asStateFlow()
+
     fun getCustomWallpaperPath(): String? = prefs.getString("custom_wallpaper_path", null)
 
     fun setCustomWallpaperPath(path: String?) {
@@ -397,6 +400,7 @@ class SecurityPreferences(private val context: Context) {
             prefs.edit().putString("custom_wallpaper_path", path).apply()
         }
         _customWallpaperPath.value = path
+        _customWallpaperVersion.value = System.currentTimeMillis()
     }
 
     private val _chatTextSize = MutableStateFlow(getChatTextSize())

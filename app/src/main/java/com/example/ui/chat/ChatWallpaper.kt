@@ -29,11 +29,16 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.VectorConverter
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawBehind
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -137,36 +142,84 @@ fun CustomImageWallpaper(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    val customPath = remember {
-        com.example.security.SecurityPreferences.getInstance(context).getCustomWallpaperPath()
-    }
-    val bitmap = remember(customPath) {
-        if (!customPath.isNullOrBlank()) {
-            val file = java.io.File(customPath)
+    val prefs = remember { com.example.security.SecurityPreferences.getInstance(context) }
+    val customPath by prefs.customWallpaperPath.collectAsState()
+    val wallpaperVersion by prefs.customWallpaperVersion.collectAsState()
+    val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+
+    var bitmapState by remember { mutableStateOf<androidx.compose.ui.graphics.ImageBitmap?>(null) }
+    val alphaAnim = remember { Animatable(0f) }
+
+    LaunchedEffect(customPath, wallpaperVersion) {
+        val path = customPath
+        if (!path.isNullOrBlank()) {
+            val file = java.io.File(path)
             if (file.exists()) {
-                android.graphics.BitmapFactory.decodeFile(file.absolutePath)?.asImageBitmap()
-            } else null
-        } else null
+                val loadedBitmap = withContext(Dispatchers.IO) {
+                    try {
+                        val displayMetrics = context.resources.displayMetrics
+                        val reqW = displayMetrics.widthPixels.coerceAtLeast(1080)
+                        val reqH = displayMetrics.heightPixels.coerceAtLeast(1920)
+
+                        val boundsOpts = android.graphics.BitmapFactory.Options().apply {
+                            inJustDecodeBounds = true
+                        }
+                        android.graphics.BitmapFactory.decodeFile(file.absolutePath, boundsOpts)
+
+                        var inSampleSize = 1
+                        if (boundsOpts.outHeight > reqH || boundsOpts.outWidth > reqW) {
+                            val halfHeight = boundsOpts.outHeight / 2
+                            val halfWidth = boundsOpts.outWidth / 2
+                            while ((halfHeight / inSampleSize) >= reqH && (halfWidth / inSampleSize) >= reqW) {
+                                inSampleSize *= 2
+                            }
+                        }
+
+                        val decodeOptions = android.graphics.BitmapFactory.Options().apply {
+                            this.inSampleSize = inSampleSize
+                            inPreferredConfig = android.graphics.Bitmap.Config.ARGB_8888
+                        }
+                        val decoded = android.graphics.BitmapFactory.decodeFile(file.absolutePath, decodeOptions)
+                        decoded?.asImageBitmap()
+                    } catch (e: Exception) {
+                        null
+                    }
+                }
+                if (loadedBitmap != null) {
+                    bitmapState = loadedBitmap
+                    alphaAnim.snapTo(0.45f)
+                    alphaAnim.animateTo(1f, animationSpec = tween(280))
+                } else {
+                    bitmapState = null
+                }
+            } else {
+                bitmapState = null
+            }
+        } else {
+            bitmapState = null
+        }
     }
 
-    if (bitmap != null) {
+    val currentBitmap = bitmapState
+    if (currentBitmap != null) {
         Box(
             modifier = modifier
                 .fillMaxSize()
-                .background(Color.Black)
+                .background(if (isDark) Color.Black else Color(0xFFF1F5F9))
                 .clipToBounds()
         ) {
             androidx.compose.foundation.Image(
-                bitmap = bitmap,
+                bitmap = currentBitmap,
                 contentDescription = "Custom Wallpaper",
                 contentScale = androidx.compose.ui.layout.ContentScale.Crop,
                 modifier = Modifier
                     .fillMaxSize()
+                    .graphicsLayer { alpha = alphaAnim.value }
                     .tiltParallax()
             )
         }
     } else {
-        NormalWallpaper(isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f, modifier = modifier)
+        NormalWallpaper(isDark = isDark, modifier = modifier)
     }
 }
 

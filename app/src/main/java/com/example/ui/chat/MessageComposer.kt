@@ -415,12 +415,10 @@ fun MessageComposer(
     // Day or dark as the app's theme says (not the phone's), so Day stays white on a dark-mode phone
     val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
     val isAmoled = com.example.ui.theme.LocalAmoledBlack.current
-    val barBg = if (isDark) {
-        Color.Black
-    } else if (isPrivateMode) {
-        Color.White
+    val barBg = if (isPrivateMode) {
+        if (isDark) Color.Black else Color.White
     } else {
-        MaterialTheme.colorScheme.surface.copy(alpha = 0.85f)
+        if (isDark) Color.Transparent else MaterialTheme.colorScheme.surface.copy(alpha = 0.85f)
     }
     val pillBg = if (isPrivateMode) {
         if (isAmoled) Neutral900
