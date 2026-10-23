@@ -18,16 +18,16 @@ object GoodnightReminderScheduler {
     fun scheduleNext(context: Context) {
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager ?: return
 
-        // Target next 11:00 PM (23:00:00)
+        // Target next 10:00 PM (22:00:00)
         val now = System.currentTimeMillis()
         val cal = Calendar.getInstance().apply {
             timeInMillis = now
-            set(Calendar.HOUR_OF_DAY, 23)
+            set(Calendar.HOUR_OF_DAY, 22)
             set(Calendar.MINUTE, 0)
             set(Calendar.SECOND, 0)
             set(Calendar.MILLISECOND, 0)
             if (timeInMillis <= now) {
-                // If it's already past 11:00 PM today, target 11:00 PM tomorrow
+                // If it's already past 10:00 PM today, target 10:00 PM tomorrow
                 add(Calendar.DAY_OF_YEAR, 1)
             }
         }

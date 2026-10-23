@@ -7,7 +7,7 @@ import java.util.Calendar
  * and its sounds quieter, so a late chat feels like a whisper.
  */
 object NightCalm {
-    private const val START_HOUR = 23
+    private const val START_HOUR = 22
     private const val END_HOUR = 6
 
     /** Animations take this much longer at night. */

@@ -76,7 +76,7 @@ fun ChatWallpaper(
         // User custom wallpaper
         CustomImageWallpaper(modifier = modifier)
     } else if (isNight && isDark) {
-        // After 11 PM in Dark Mode: use the romantic couple moonlit beach wallpaper
+        // After 10 PM in Dark Mode: use the romantic couple moonlit beach wallpaper
         Night11PmWallpaper(modifier = modifier)
     } else {
         when (chatBgTheme) {
@@ -89,7 +89,7 @@ fun ChatWallpaper(
 
 /**
  * Clean minimalist wallpaper (Theme 0) - Reverted to solid default during day,
- * switches to the romantic couple moonlit background after 11 PM in dark mode.
+ * switches to the romantic couple moonlit background after 10 PM in dark mode.
  */
 @Composable
 fun NormalWallpaper(
@@ -109,7 +109,7 @@ fun NormalWallpaper(
 }
 
 /**
- * Romantic Moonlit Shore Wallpaper (Active after 11 PM in Dark Mode)
+ * Romantic Moonlit Shore Wallpaper (Active after 10 PM in Dark Mode)
  * Features a couple sitting by the shore under a starry night sky with crescent moon reflecting on the water.
  * Seamless parallax tilt gives a liquid-glass 3D depth effect.
  */

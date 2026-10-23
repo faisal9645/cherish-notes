@@ -175,11 +175,11 @@ fun todayStartMillis(now: Long = System.currentTimeMillis()): Long {
     return cal.timeInMillis
 }
 
-/** When tonight started (11:00 PM), for "did I already say goodnight tonight". */
+/** When tonight started (10:00 PM), for "did I already say goodnight tonight". */
 fun tonightStartMillis(now: Long = System.currentTimeMillis()): Long {
     val cal = Calendar.getInstance().apply {
         timeInMillis = now - 6 * HOUR_MS
-        set(Calendar.HOUR_OF_DAY, 23)
+        set(Calendar.HOUR_OF_DAY, 22)
         set(Calendar.MINUTE, 0)
         set(Calendar.SECOND, 0)
         set(Calendar.MILLISECOND, 0)
@@ -187,13 +187,13 @@ fun tonightStartMillis(now: Long = System.currentTimeMillis()): Long {
     return cal.timeInMillis
 }
 
-/** Night (11:00 PM to 5 AM) and tonight's goodnight card hasn't been shown yet. */
+/** Night (10:00 PM to 5 AM) and tonight's goodnight card hasn't been shown yet. */
 fun isGoodnightDue(context: Context): Boolean {
     val cal = Calendar.getInstance()
     val hour = cal.get(Calendar.HOUR_OF_DAY)
-    // Only from 11:00 PM (23:00) until 5:00 AM
-    val isAfter11Pm = hour == 23 || (hour in 0 until 5)
-    if (!isAfter11Pm) return false
+    // Only from 10:00 PM (22:00) until 5:00 AM
+    val isAfter10Pm = hour >= 22 || (hour in 0 until 5)
+    if (!isAfter10Pm) return false
     return lovePrefs(context).getString("goodnight_card_shown", null) != nightKey()
 }
 

@@ -1,9 +1,9 @@
 {
-  "versionCode": 226,
-  "versionName": "1.8.54",
-  "tagName": "v1.8.54-226",
-  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.8.54-226/app_update_226.apk",
+  "versionCode": 227,
+  "versionName": "1.8.55",
+  "tagName": "v1.8.55-227",
+  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.8.55-227/app_update_227.apk",
   "assetSize": 19517652,
-  "releaseNotes": "Notes v1.8.54 (Build 226):\n\u2022 Unified midnight-blue themes across dark and AMOLED modes\n\u2022 Refined card surfaces, composer styling, and message bubbles\n\u2022 Enhanced contrast and border outlines across screens\n\u2022 Performance optimizations and stability improvements",
-  "releaseDate": "2026-10-23T16:40:54Z"
+  "releaseNotes": "Notes v1.8.55 (Build 227):\n\u2022 Good night wallpaper and glowing starry sky now activates from 10:00 PM (instead of 11:00 PM)\n\u2022 Night calm mode and goodnight reminders active from 10:00 PM\n\u2022 Unified midnight-blue themes across dark and AMOLED modes\n\u2022 Performance optimizations and bug fixes",
+  "releaseDate": "2026-10-23T16:52:40Z"
 }
