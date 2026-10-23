@@ -50,6 +50,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.input.pointer.pointerInput
@@ -240,23 +241,37 @@ private class Star(
     val radius: Float,
     val phase: Float,
     val speed: Float,
-    val isGlitter: Boolean
+    val isGlitter: Boolean,
+    val isBlueStar: Boolean = false,
+    val flareScale: Float = 1f
 )
 
-/** Softly twinkling stars over the whole area with varied blinking rates and subtle sparkles. */
+/** Softly twinkling stars over the area with varied blinking rates, subtle sparkles, and celestial blue starbursts. */
 @Composable
-internal fun TwinklingStars(modifier: Modifier = Modifier, count: Int = 100, brightness: Float = 1f, periodMs: Int = 2600) {
-    val stars = remember(count) {
+internal fun TwinklingStars(
+    modifier: Modifier = Modifier,
+    count: Int = 100,
+    brightness: Float = 1f,
+    periodMs: Int = 2600,
+    maxYFraction: Float = 1f,
+    blueGlow: Boolean = false
+) {
+    val stars = remember(count, maxYFraction, blueGlow) {
         val random = Random(42)
-        List(count) {
+        List(count) { i ->
             val r = 0.5f + random.nextFloat() * 1.9f
+            val isBlue = blueGlow && (r > 1.35f || (i % 4 == 0))
+            val isGlit = r > 1.4f && random.nextFloat() < (if (blueGlow) 0.65f else 0.35f)
+            val flare = if (blueGlow && r > 1.6f) 1.2f + random.nextFloat() * 0.8f else 1f
             Star(
-                x = random.nextFloat(),
-                y = random.nextFloat(),
+                x = 0.02f + random.nextFloat() * 0.96f,
+                y = 0.02f + random.nextFloat() * (maxYFraction - 0.04f).coerceAtLeast(0.1f),
                 radius = r,
                 phase = random.nextFloat(),
-                speed = 0.6f + random.nextFloat() * 1.8f,
-                isGlitter = r > 1.6f && random.nextFloat() < 0.35f
+                speed = 0.5f + random.nextFloat() * 1.6f,
+                isGlitter = isGlit,
+                isBlueStar = isBlue,
+                flareScale = flare
             )
         }
     }
@@ -282,8 +297,21 @@ internal fun TwinklingStars(modifier: Modifier = Modifier, count: Int = 100, bri
             val center = Offset(star.x * size.width, star.y * size.height)
             val r = star.radius.dp.toPx()
 
-            // Soft glow for larger stars when bright
-            if (star.radius > 1.5f && alpha > 0.3f) {
+            if (star.isBlueStar && alpha > 0.25f) {
+                // Wide sapphire aura halo (matching the bright blue stars in the photo)
+                drawCircle(
+                    color = Color(0xFF38BDF8).copy(alpha = 0.22f * alpha),
+                    radius = r * 4.2f,
+                    center = center
+                )
+                // Mid cyan-blue luminous glow
+                drawCircle(
+                    color = Color(0xFF60A5FA).copy(alpha = 0.38f * alpha),
+                    radius = r * 2.2f,
+                    center = center
+                )
+            } else if (star.radius > 1.5f && alpha > 0.3f) {
+                // Soft white glow for larger neutral stars when bright
                 drawCircle(
                     color = Color.White.copy(alpha = 0.16f * alpha),
                     radius = r * 3.2f,
@@ -291,29 +319,50 @@ internal fun TwinklingStars(modifier: Modifier = Modifier, count: Int = 100, bri
                 )
             }
 
-            // Core star dot
+            // Core star dot (pure brilliant white for maximum contrast)
             drawCircle(
-                color = Color.White.copy(alpha = alpha),
+                color = if (star.isBlueStar) Color(0xFFF0F9FF).copy(alpha = alpha) else Color.White.copy(alpha = alpha),
                 radius = r,
                 center = center
             )
 
-            // Sparkle cross flare glint on prominent blinking stars at peak
-            if (star.isGlitter && alpha > 0.65f) {
-                val glintLength = r * 2.5f * (alpha - 0.5f) * 2f
-                val glintColor = Color.White.copy(alpha = 0.75f * alpha)
-                val strokeW = 1.dp.toPx()
+            // Sparkle 4-point cross starburst flare on prominent blinking stars at peak
+            if (star.isGlitter && alpha > 0.55f) {
+                val glintLength = r * 2.8f * star.flareScale * (alpha - 0.45f) * 2f
+                val strokeW = (if (star.isBlueStar) 1.2.dp else 1.dp).toPx()
+                val outerRayColor = if (star.isBlueStar) Color(0xFF38BDF8).copy(alpha = 0.45f * alpha) else Color.White.copy(alpha = 0.4f * alpha)
+                val coreRayColor = if (star.isBlueStar) Color(0xFFE0F2FE).copy(alpha = 0.85f * alpha) else Color.White.copy(alpha = 0.75f * alpha)
+
+                // Soft outer cross ray
                 drawLine(
-                    color = glintColor,
-                    start = Offset(center.x - glintLength, center.y),
-                    end = Offset(center.x + glintLength, center.y),
-                    strokeWidth = strokeW
+                    color = outerRayColor,
+                    start = Offset(center.x - glintLength * 1.3f, center.y),
+                    end = Offset(center.x + glintLength * 1.3f, center.y),
+                    strokeWidth = strokeW * 0.85f,
+                    cap = StrokeCap.Round
                 )
                 drawLine(
-                    color = glintColor,
+                    color = outerRayColor,
+                    start = Offset(center.x, center.y - glintLength * 1.3f),
+                    end = Offset(center.x, center.y + glintLength * 1.3f),
+                    strokeWidth = strokeW * 0.85f,
+                    cap = StrokeCap.Round
+                )
+
+                // Bright inner diamond flare
+                drawLine(
+                    color = coreRayColor,
+                    start = Offset(center.x - glintLength, center.y),
+                    end = Offset(center.x + glintLength, center.y),
+                    strokeWidth = strokeW,
+                    cap = StrokeCap.Round
+                )
+                drawLine(
+                    color = coreRayColor,
                     start = Offset(center.x, center.y - glintLength),
                     end = Offset(center.x, center.y + glintLength),
-                    strokeWidth = strokeW
+                    strokeWidth = strokeW,
+                    cap = StrokeCap.Round
                 )
             }
         }
@@ -479,7 +528,7 @@ fun GoodnightStarsOverlay(partnerName: String, onDismiss: () -> Unit) {
             .testTag("goodnight_stars"),
         contentAlignment = Alignment.Center
     ) {
-        TwinklingStars(modifier = Modifier.fillMaxSize(), count = 140)
+        TwinklingStars(modifier = Modifier.fillMaxSize(), count = 110)
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Box(contentAlignment = Alignment.Center) {
                 Box(

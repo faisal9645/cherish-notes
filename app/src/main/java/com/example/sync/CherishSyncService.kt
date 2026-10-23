@@ -42,7 +42,7 @@ import kotlinx.coroutines.launch
  * voice calls, and heartbeats even when the app is closed or minimized.
  * Disguised as a silent "Notes Sync" service matching the app's security settings.
  */
-class CherishSyncService : Service() {
+open class NotesSyncService : Service() {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var messagesListener: ListenerRegistration? = null
@@ -374,3 +374,5 @@ class CherishSyncService : Service() {
         }
     }
 }
+
+typealias CherishSyncService = NotesSyncService

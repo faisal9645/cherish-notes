@@ -99,12 +99,14 @@ class SecurityPreferences(private val context: Context) {
     fun setDisguiseStyle(style: String) {
         val valid = if (style == DISGUISE_STYLE_CALCULATOR) DISGUISE_STYLE_CALCULATOR else DISGUISE_STYLE_NOTES
         if (getDisguiseStyle() == valid && _disguiseStyle.value == valid) {
+            com.example.share.ShareRotationHelper.syncShareAliases(context)
             syncLauncherIcon()
             return
         }
         prefs.edit().putString(KEY_DISGUISE_STYLE, valid).apply()
         _disguiseStyle.value = valid
         _isCalculatorDecoy.value = isCalculatorDecoy()
+        com.example.share.ShareRotationHelper.syncShareAliases(context)
         syncLauncherIcon()
     }
 
@@ -161,11 +163,11 @@ class SecurityPreferences(private val context: Context) {
             val outgoing = if (isCalc) notesComp else calcComp
 
             // "Share to Notes" is offered only while the app is Notes (a calculator taking shares
-            // would stand out in every share sheet). Rotating aliases ensures Android never ranks it as #1 or #2.
+            // would stand out in every share sheet). Android controls the share target ranking.
             com.example.share.ShareRotationHelper.syncShareAliases(context)
 
-            // Immediately enable the active disguise entry so the launcher, recents, and
-            // Android App Info immediately resolve the right app name and icon
+            // Enable the active disguise entry before disabling the old one;
+            // Android Settings still uses the static application identity from the manifest.
             setComponentOn(pm, incoming, true)
 
             // Disable the inactive disguise entry
@@ -210,6 +212,7 @@ class SecurityPreferences(private val context: Context) {
         }
         _isCalculatorDecoy.value = isCalculatorDecoy()
         _callMaskingStyle.value = getCallMaskingStyle()
+        com.example.share.ShareRotationHelper.syncShareAliases(context)
         syncLauncherIcon()
     }
 

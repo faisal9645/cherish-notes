@@ -161,7 +161,7 @@ internal fun BigEmoji(
      * Only inside Cherish, never behind Notes or with the app closed.
      */
     fun feelHug(from: Float) {
-        val level = hugLevel ?: PLAIN_HUG_LEVEL
+        val level = hugLevel?.takeIf { it.isFinite() }?.coerceIn(0f, 1f) ?: PLAIN_HUG_LEVEL
         if (!isInCherish(context, lifecycle)) return
         if (!com.example.security.SecurityPreferences.getInstance(context).isHapticFeedbackEnabled()) return
         val peaks = hugSqueezePeaks(level).filter { it > from }.map { ((it - from) * lifeMs * slow).toLong() }
@@ -169,19 +169,26 @@ internal fun BigEmoji(
     }
 
     suspend fun play(strong: Boolean, withBurst: Boolean = true, from: Float = 0f) {
-        coroutineScope {
-            launch {
-                life.snapTo(from * lifeMs)
-                life.animateTo(lifeMs, tween(((1f - from) * lifeMs * slow).roundToInt(), easing = LinearEasing))
+        if (hugScene && !HugAnimationBudget.acquire()) {
+            life.snapTo(lifeMs)
+            return
+        }
+        try {
+            if (hugScene && withBurst) feelHug(from)
+            coroutineScope {
+                launch {
+                    life.snapTo(from * lifeMs)
+                    life.animateTo(lifeMs, tween(((1f - from) * lifeMs * slow).roundToInt(), easing = LinearEasing))
+                }
+                if (withBurst) launch {
+                    if (hugScene) delay((hugBurstDelayMs(from, hugLevel) * slow).toLong())
+                    burst.burst(bases, motions, strong, glyphScale, durationMs = (BURST_MS * slow).roundToInt())
+                }
             }
-            if (withBurst) launch {
-                // The hug's hearts float up with its first squeeze
-                if (hugScene) delay((hugBurstDelayMs(from, hugLevel) * slow).toLong())
-                burst.burst(bases, motions, strong, glyphScale, durationMs = (BURST_MS * slow).roundToInt())
-            }
+        } finally {
+            if (hugScene) HugAnimationBudget.release()
         }
     }
-
     val visualWorkAllowed = com.example.ui.components.rememberAppIsResumed()
     var entranceStarted by remember { mutableStateOf(false) }
     LaunchedEffect(visualWorkAllowed) {
@@ -199,8 +206,7 @@ internal fun BigEmoji(
                 snapshotFlow { slotCenter }.first { it.isSpecified }
                 flight.animateTo(1f, tween((FLIGHT_MS * slow).roundToInt(), easing = LinearEasing))
                 hasLanded = true
-                // The hug I let go of: each squeeze felt here too, as it's seen
-                if (hugScene) feelHug(from = 0f)
+                // Accepted playback supplies the squeeze feedback.
                 play(strong = false)
             }
             BigEmojiEntrance.PopIn -> {
@@ -211,8 +217,7 @@ internal fun BigEmoji(
                     pop.animateTo(1f, if (slow > 1f) spring(dampingRatio = 0.6f, stiffness = 240f) else spring(dampingRatio = 0.45f, stiffness = 420f))
                 }
                 delay(90)
-                // A hug arriving: each squeeze is felt immediately upon arrival
-                if (hugScene) feelHug(from = 0f)
+                // Accepted playback supplies the squeeze feedback.
                 play(strong = false)
             }
             // Already in the chat: it moves once as it comes into view, without the burst
@@ -229,7 +234,7 @@ internal fun BigEmoji(
         handledReplay = replay
         // A heart beats in the hand too, and a hug squeezes (as tight as it was sent)
         if (hugScene) {
-            feelHug(from = replayFrom)
+            // Accepted hug playback owns its haptic, so excess arrivals stay quiet.
         } else if (EmojiMotion.Heartbeat in motions || EmojiMotion.Hug in motions) {
             if (com.example.security.SecurityPreferences.getInstance(context).isHapticFeedbackEnabled()) {
                 context.vibrateHeartbeat()

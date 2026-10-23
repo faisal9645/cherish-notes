@@ -1,9 +1,9 @@
 {
-  "versionCode": 223,
-  "versionName": "1.8.51",
-  "tagName": "v1.8.51-223",
-  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.8.51-223/app_update_223.apk",
-  "assetSize": 19590756,
-  "releaseNotes": "Notes v1.8.51 (Build 223):\n\u2022 Transparent bottom typing bar in dark mode for fluid edge-to-edge wallpaper flow\n\u2022 Reactive and fluid custom wallpaper updates with background decoding and crossfade\n\u2022 Clean memory-efficient downsampled custom image rendering\n\u2022 Performance optimizations and stability improvements",
-  "releaseDate": "2026-10-23T13:51:59Z"
+  "versionCode": 224,
+  "versionName": "1.8.52",
+  "tagName": "v1.8.52-224",
+  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.8.52-224/app_update_224.apk",
+  "assetSize": 19518952,
+  "releaseNotes": "Notes v1.8.52 (Build 224):\n\u2022 Celestial starry night goodnight wallpaper with glowing sapphire halos and diamond starbursts\n\u2022 Clean Notes branding across Android Settings, system app info, and background services\n\u2022 Rounded grey ChatGPT-style header buttons in Private Mode\n\u2022 Smooth transparent bottom composer in dark mode for fluid wallpaper flow\n\u2022 Performance optimizations and bug fixes",
+  "releaseDate": "2026-10-23T15:57:32Z"
 }

@@ -586,7 +586,7 @@ private fun KeepInSync(party: WatchPartySession, player: WatchPartyPlayer, repo:
                 if (player.state == YtState.PLAYING && p.bufferingBy == myId) {
                     repo.markWatchPartyWaiting(isBuffering = false, isAd = false)
                 }
-            } else if (!p.isPlaying && player.state != YtState.AD && (player.state == YtState.PLAYING || player.state == YtState.BUFFERING)) {
+            } else if (!shouldPlay && player.state != YtState.AD && (player.state == YtState.PLAYING || player.state == YtState.BUFFERING)) {
                 player.pause()
             }
             pass++

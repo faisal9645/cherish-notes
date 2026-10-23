@@ -1511,14 +1511,15 @@ fun ChatScreen(
                 navigationIcon = {
                     if (uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE && !uiState.isSearching) {
                         // ChatGPT's clean menu button: opens Settings, as sliding right does
-                        IconButton(
+                        PrivateRoundButton(
+                            isDark = isDark,
                             onClick = onNavigateToProfile,
                             modifier = Modifier
-                                .padding(start = 6.dp)
-                                .size(42.dp)
+                                .padding(start = 12.dp)
+                                .size(38.dp)
                                 .testTag("chat_back_button")
                         ) {
-                            TwoLineMenuIcon(tint = if (isDark) Gray400 else Color(0xFF71717A))
+                            TwoLineMenuIcon(tint = if (isDark) Color(0xFFECECEC) else Color(0xFF1F2937))
                         }
                     } else {
                         CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides androidx.compose.ui.unit.Dp.Unspecified) {
@@ -1564,27 +1565,36 @@ fun ChatScreen(
                         }
                     } else {
                         val isPrivateChat = uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE
-                        val iconTint = if (isPrivateChat) (if (isDark) Gray400 else Color(0xFF71717A)) else MaterialTheme.colorScheme.onSurface
+                        val iconTint = if (isPrivateChat) (if (isDark) Color(0xFFECECEC) else Color(0xFF1F2937)) else MaterialTheme.colorScheme.onSurface
                         if (isPrivateChat) {
-                            // ChatGPT style: clean new chat and overflow icons without distracting heavy borders
-                            Box(modifier = Modifier.padding(end = 6.dp)) {
+                            // ChatGPT style: round grey icon buttons for new chat and overflow menu
+                            Box(modifier = Modifier.padding(end = 12.dp)) {
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
-                                    IconButton(
+                                    PrivateRoundButton(
+                                        isDark = isDark,
                                         onClick = { showClearChatDialog = true },
                                         modifier = Modifier
-                                            .size(42.dp)
+                                            .size(38.dp)
                                             .testTag("chat_new_chat_button")
                                     ) {
                                         NewChatIcon(tint = iconTint)
                                     }
-                                    IconButton(
+                                    PrivateRoundButton(
+                                        isDark = isDark,
                                         onClick = { showChatMenu = true },
-                                        modifier = Modifier.size(44.dp)
+                                        modifier = Modifier
+                                            .size(38.dp)
+                                            .testTag("chat_more_button")
                                     ) {
-                                        Icon(Icons.Rounded.MoreVert, contentDescription = "More options", tint = iconTint, modifier = Modifier.size(26.dp))
+                                        Icon(
+                                            Icons.Rounded.MoreVert,
+                                            contentDescription = "More options",
+                                            tint = iconTint,
+                                            modifier = Modifier.size(20.dp)
+                                        )
                                     }
                                 }
                                 DropdownMenu(
@@ -1607,14 +1617,6 @@ fun ChatScreen(
                                             viewModel.setSearching(true)
                                         },
                                         leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface) }
-                                    )
-                                    DropdownMenuItem(
-                                        text = { Text("Search by Date") },
-                                        onClick = {
-                                            showChatMenu = false
-                                            showJumpToDate = true
-                                        },
-                                        leadingIcon = { Icon(Icons.Rounded.CalendarMonth, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface) }
                                     )
                                     DropdownMenuItem(
                                         text = { Text("Starred messages") },
@@ -1716,14 +1718,6 @@ fun ChatScreen(
                                         leadingIcon = { Icon(Icons.Rounded.Mood, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface) }
                                     )
                                     DropdownMenuItem(
-                                        text = { Text("Search by Date") },
-                                        onClick = {
-                                            showChatMenu = false
-                                            showJumpToDate = true
-                                        },
-                                        leadingIcon = { Icon(Icons.Rounded.CalendarMonth, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface) }
-                                    )
-                                    DropdownMenuItem(
                                         text = { Text("Starred Messages") },
                                         onClick = {
                                             showChatMenu = false
@@ -1777,9 +1771,9 @@ fun ChatScreen(
                 ),
                 windowInsets = WindowInsets.statusBars
             )
-            // No line under the bar in private chat, or over the dark wallpaper
-            if (uiState.chatExperienceMode != com.example.ui.chat.ChatExperienceMode.PRIVATE && !(showWallpaper && isDark)) {
-                HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+            // Keep the header boundary visible on black surfaces, including dark wallpapers.
+            if (isDark || uiState.chatExperienceMode != com.example.ui.chat.ChatExperienceMode.PRIVATE) {
+                HorizontalDivider(thickness = 1.dp, color = MaterialTheme.colorScheme.outlineVariant)
             }
             if (com.example.call.CallManager.hasActiveCall() && callState.phase != com.example.call.CallPhase.INCOMING_RINGING) {
                 Surface(
@@ -5645,10 +5639,10 @@ private fun ChatBottomComposerBar(
 
 
 /** The round buttons and pill at the top of private chat (ChatGPT's dark grey, with a fine edge). */
-private val PrivateChromeDark = Neutral800
-private val PrivateChromeLight = Neutral200
-private val PrivateChromeEdgeDark = Neutral700
-private val PrivateChromeEdgeLight = Neutral300
+private val PrivateChromeDark = Color(0xFF262626)
+private val PrivateChromeLight = Color(0xFFF0F0F0)
+private val PrivateChromeEdgeDark = Color(0xFF383838)
+private val PrivateChromeEdgeLight = Color(0xFFE0E0E0)
 
 @Composable
 private fun PrivateRoundButton(
@@ -5657,9 +5651,8 @@ private fun PrivateRoundButton(
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit
 ) {
-    val isAmoled = com.example.ui.theme.LocalAmoledBlack.current
-    val bg = if (isDark) (if (isAmoled) Neutral900 else PrivateChromeDark) else PrivateChromeLight
-    val edge = if (isDark) (if (isAmoled) Neutral800 else PrivateChromeEdgeDark) else PrivateChromeEdgeLight
+    val bg = if (isDark) PrivateChromeDark else PrivateChromeLight
+    val edge = if (isDark) PrivateChromeEdgeDark else PrivateChromeEdgeLight
     Box(
         contentAlignment = Alignment.Center,
         modifier = modifier

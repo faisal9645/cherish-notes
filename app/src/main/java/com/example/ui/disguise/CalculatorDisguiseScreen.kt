@@ -124,9 +124,9 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.security.SecurityPreferences
-import com.example.ui.theme.DayBluePrimary
-import com.example.ui.theme.DayBlueSecondary
-import com.example.ui.theme.DayBlueTertiary
+
+
+
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.text.DecimalFormat
@@ -1497,9 +1497,9 @@ fun CalculatorDisguiseScreen(
                                 .background(
                                     Brush.linearGradient(
                                         listOf(
-                                            DayBlueSecondary,
-                                            DayBluePrimary,
-                                            DayBlueTertiary
+                                            equalsCircleBg,
+                                            operatorTextColor,
+                                            equalsCircleBg
                                         )
                                     )
                                 ),
@@ -1529,7 +1529,7 @@ fun CalculatorDisguiseScreen(
                         ) {
                             CircularProgressIndicator(
                                 modifier = Modifier.size(16.dp),
-                                color = DayBluePrimary,
+                                color = operatorTextColor,
                                 strokeWidth = 2.2.dp
                             )
                             Text(

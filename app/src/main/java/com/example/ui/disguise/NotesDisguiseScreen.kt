@@ -633,7 +633,7 @@ fun NotesDisguiseScreen(
                                     .border(
                                         width = 3.dp,
                                         brush = androidx.compose.ui.graphics.Brush.sweepGradient(
-                                            listOf(DayBlueSecondary, darkTone(DayBluePrimary), darkTone(DayBlueTertiary), darkTone(DayBlueSecondary))
+                                            listOf(DayBlueSecondary, DayBluePrimary, DayBlueTertiary, DayBlueSecondary)
                                         ),
                                         shape = CircleShape
                                     )
@@ -650,7 +650,7 @@ fun NotesDisguiseScreen(
                                 .scale(fabScale)
                                 .shadow(6.dp, CircleShape, ambientColor = Color(0x353048F5), spotColor = Color(0x353048F5))
                                 .clip(CircleShape)
-                                .background(notesHorizontalGradient)
+                                .background(if (isUnlockingAnimationPlaying) Brush.horizontalGradient(listOf(DayBlueSecondary, DayBluePrimary, DayBlueTertiary)) else notesHorizontalGradient)
                                 .pointerInput(Unit) {
                                     awaitEachGesture {
                                         val down = awaitFirstDown(requireUnconsumed = false)

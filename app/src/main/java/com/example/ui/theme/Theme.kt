@@ -68,21 +68,21 @@ private val DarkColorScheme = darkColorScheme(
     surfaceContainerLowest = Color(0xFF000000),
     surfaceContainerHigh = Color(0xFF080808),
     surfaceContainerHighest = Color(0xFF101010),
-    outline = Color(0xFF262626),
-    outlineVariant = Color(0xFF171717)
+    outline = Color(0xFF646464),
+    outlineVariant = Color(0xFF383838)
 )
 
 // Black (AMOLED): black surfaces, neutral greys and white, no blue anywhere
 private val AmoledBlackColorScheme = DarkColorScheme.copy(
-    primary = Color(0xFF737373),
+    primary = Color(0xFF767676),
     onPrimary = Color.White,
     primaryContainer = Color(0xFF141414),
     onPrimaryContainer = Color(0xFFE5E5E5),
-    secondary = Color(0xFF8A8A8A),
+    secondary = Color(0xFF767676),
     onSecondary = Color.White,
     secondaryContainer = Color(0xFF141414),
     onSecondaryContainer = Color(0xFFE5E5E5),
-    tertiary = Color(0xFF8A8A8A),
+    tertiary = Color(0xFF767676),
     onTertiary = Color.White,
     tertiaryContainer = Color(0xFF141414),
     onTertiaryContainer = Color(0xFFE5E5E5),
@@ -90,8 +90,8 @@ private val AmoledBlackColorScheme = DarkColorScheme.copy(
     surfaceVariant = Color(0xFF000000),
     surfaceContainerHigh = Color(0xFF080808),
     surfaceContainerHighest = Color(0xFF101010),
-    outline = Color(0xFF262626),
-    outlineVariant = Color(0xFF171717)
+    outline = Color(0xFF646464),
+    outlineVariant = Color(0xFF383838)
 )
 
 /** True in the Black (AMOLED) theme, where dark surfaces are near-black greys instead of navy. */

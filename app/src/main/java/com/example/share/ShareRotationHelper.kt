@@ -5,14 +5,7 @@ import android.content.Context
 import android.content.pm.PackageManager
 import com.example.security.SecurityPreferences
 
-/**
- * Manages rotating activity-aliases for receiving shares from external apps (Gallery, YouTube, Chrome, etc.).
- *
- * Android OS (ChooserActivity / UsageStatsManager) logs and ranks sharing frequency per exact
- * ComponentName. By rotating between multiple aliases after each share, no single component
- * ever accumulates enough usage history to be ranked as the #1 or #2 "Frequent" app in
- * the system share sheet, while keeping sharing completely functional.
- */
+/** Maintains one Notes share target. Android owns ranking; aliases cannot guarantee last place. */
 object ShareRotationHelper {
     const val ALIAS_COUNT = 5
     private const val PREFS_NAME = "share_rotation_prefs"
@@ -43,46 +36,20 @@ object ShareRotationHelper {
         syncShareAliases(context)
     }
 
-    /**
-     * Rotates to the next alias after a share is handled.
-     * This resets Android's per-component frequency ranking so the app does not
-     * dominate the top spots in the system share sheet.
-     */
+    /** Rotate only while Notes sharing is enabled; never revive a Calculator share target. */
+    @Synchronized
     fun rotateToNextAlias(context: Context) {
-        try {
-            if (!isShareSheetEnabled(context)) {
-                disableAllAliases(context)
-                return
-            }
+        if (isShareSheetEnabled(context) && !SecurityPreferences.getInstance(context).isCalculatorDecoy()) {
             val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            val currentIndex = prefs.getInt(KEY_ACTIVE_ALIAS_INDEX, 0)
-            val nextIndex = (currentIndex + 1) % ALIAS_COUNT
-
-            val pm = context.packageManager
-            val currentComp = ComponentName(context, getAliasName(currentIndex))
-            val nextComp = ComponentName(context, getAliasName(nextIndex))
-
-            // Enable next alias first so there is always a valid share target available
-            pm.setComponentEnabledSetting(
-                nextComp,
-                PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
-                PackageManager.DONT_KILL_APP
-            )
-
-            // Disable the alias that was just used
-            pm.setComponentEnabledSetting(
-                currentComp,
-                PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
-                PackageManager.DONT_KILL_APP
-            )
-
-            prefs.edit().putInt(KEY_ACTIVE_ALIAS_INDEX, nextIndex).apply()
-        } catch (e: Throwable) {}
+            val next = (prefs.getInt(KEY_ACTIVE_ALIAS_INDEX, 0).coerceIn(0, ALIAS_COUNT - 1) + 1) % ALIAS_COUNT
+            prefs.edit().putInt(KEY_ACTIVE_ALIAS_INDEX, next).apply()
+        }
+        syncShareAliases(context)
     }
-
     /**
      * Synchronizes the active alias with the current disguise style and user settings.
      */
+    @Synchronized
     fun syncShareAliases(context: Context) {
         try {
             val secPrefs = SecurityPreferences.getInstance(context)
@@ -108,7 +75,7 @@ object ShareRotationHelper {
             )
 
             val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            val activeIndex = prefs.getInt(KEY_ACTIVE_ALIAS_INDEX, 0)
+            val activeIndex = prefs.getInt(KEY_ACTIVE_ALIAS_INDEX, 0).coerceIn(0, ALIAS_COUNT - 1)
 
             for (i in 0 until ALIAS_COUNT) {
                 val comp = ComponentName(context, getAliasName(i))
@@ -123,17 +90,19 @@ object ShareRotationHelper {
         } catch (e: Throwable) {}
     }
 
+    @Synchronized
     fun disableAllAliases(context: Context) {
-        try {
-            val pm = context.packageManager
-            for (i in 0 until ALIAS_COUNT) {
-                val comp = ComponentName(context, getAliasName(i))
+        val pm = context.packageManager
+        for (i in 0 until ALIAS_COUNT) {
+            try {
                 pm.setComponentEnabledSetting(
-                    comp,
+                    ComponentName(context, getAliasName(i)),
                     PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
                     PackageManager.DONT_KILL_APP
                 )
+            } catch (_: Exception) {
+                // A stale/missing component must not prevent disabling the remaining aliases.
             }
-        } catch (e: Throwable) {}
+        }
     }
 }

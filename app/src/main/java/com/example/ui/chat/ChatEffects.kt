@@ -132,7 +132,31 @@ fun Context.vibrateHeartbeat() {
  * follows the phone's touch-vibration setting on Android 13+); otherwise something felt, like a
  * hug or a kiss arriving.
  */
+// One bounded waveform at a time. Do not retry a failing OEM vibrator service in a burst.
+private object ChatVibrationGate {
+    private var busyUntil = 0L
+    private var touchUntil = 0L
+    private var failedUntil = 0L
+    @Synchronized fun acquire(duration: Long, inHand: Boolean): Boolean {
+        val now = android.os.SystemClock.elapsedRealtime()
+        if (now < failedUntil || now < touchUntil) return false
+        if (!inHand && now < busyUntil) return false
+        if (inHand) touchUntil = now + duration.coerceAtMost(120L)
+        busyUntil = now + duration + 80L
+        return true
+    }
+    @Synchronized fun backOff() {
+        failedUntil = android.os.SystemClock.elapsedRealtime() + 30_000L
+    }
+}
+
 fun Context.vibrateWave(timings: LongArray, amplitudes: IntArray, inHand: Boolean = true) {
+    if (timings.isEmpty() || timings.size != amplitudes.size || timings.size > 16) return
+    if (timings.any { it < 0L || it > 5_000L }) return
+    val duration = timings.sum()
+    if (duration !in 1L..6_000L || amplitudes.none { it > 0 }) return
+    if (!com.example.security.SecurityPreferences.getInstance(this).isHapticFeedbackEnabled()) return
+    if (!ChatVibrationGate.acquire(duration, inHand)) return
     try {
         val vibrator = if (Build.VERSION.SDK_INT >= 31) {
             getSystemService(VibratorManager::class.java)?.defaultVibrator
@@ -140,35 +164,30 @@ fun Context.vibrateWave(timings: LongArray, amplitudes: IntArray, inHand: Boolea
             @Suppress("DEPRECATION")
             getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
         } ?: return
-        if (!vibrator.hasVibrator() || timings.isEmpty()) return
+        if (!vibrator.hasVibrator()) return
         if (Build.VERSION.SDK_INT >= 26) {
-            val effect = if (vibrator.hasAmplitudeControl()) {
+            // Use timing-only feedback on Vivo/iQOO to avoid dependence on custom amplitude support.
+            val manufacturer = Build.MANUFACTURER.lowercase(java.util.Locale.ROOT)
+            val defaultAmplitude = manufacturer.contains("vivo") || manufacturer.contains("iqoo")
+            val effect = if (!defaultAmplitude && vibrator.hasAmplitudeControl()) {
                 VibrationEffect.createWaveform(timings, amplitudes.map { it.coerceIn(0, 255) }.toIntArray(), -1)
             } else {
                 VibrationEffect.createWaveform(timings, -1)
             }
-            try {
-                if (Build.VERSION.SDK_INT >= 33) {
-                    val usage = if (inHand) VibrationAttributes.USAGE_TOUCH else VibrationAttributes.USAGE_COMMUNICATION_REQUEST
-                    vibrator.vibrate(effect, VibrationAttributes.createForUsage(usage))
-                } else {
-                    vibrator.vibrate(effect)
-                }
-            } catch (_: Exception) {
-                try {
-                    vibrator.vibrate(effect)
-                } catch (_: Exception) {
-                    @Suppress("DEPRECATION")
-                    vibrator.vibrate(timings, -1)
-                }
+            // Decorative chat feedback follows the device's touch-feedback policy.
+            if (Build.VERSION.SDK_INT >= 33) {
+                vibrator.vibrate(effect, VibrationAttributes.createForUsage(VibrationAttributes.USAGE_TOUCH))
+            } else {
+                vibrator.vibrate(effect)
             }
         } else {
             @Suppress("DEPRECATION")
             vibrator.vibrate(timings, -1)
         }
-    } catch (_: Exception) {}
+    } catch (_: Exception) {
+        ChatVibrationGate.backOff()
+    }
 }
-
 /** True when animations are switched off (accessibility "Remove animations" / developer options). */
 fun Context.areAnimationsDisabled(): Boolean =
     Settings.Global.getFloat(contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f

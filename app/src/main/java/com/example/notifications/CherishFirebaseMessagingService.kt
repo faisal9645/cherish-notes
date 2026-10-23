@@ -4,7 +4,7 @@ import android.util.Log
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
 
-class CherishFirebaseMessagingService : FirebaseMessagingService() {
+open class NotesFirebaseMessagingService : FirebaseMessagingService() {
 
     override fun onNewToken(token: String) {
         super.onNewToken(token)
@@ -149,3 +149,5 @@ class CherishFirebaseMessagingService : FirebaseMessagingService() {
         )
     }
 }
+
+typealias CherishFirebaseMessagingService = NotesFirebaseMessagingService

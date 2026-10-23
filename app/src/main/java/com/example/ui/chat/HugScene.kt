@@ -37,7 +37,6 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import java.util.Collections
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.exp
@@ -60,8 +59,23 @@ internal val LocalHugCouple = staticCompositionLocalOf { HugCouple(iAmHim = true
 
 /** Tracks which incoming hugs have already played their entrance so new ones play on receipt automatically. */
 internal object HugPlayedTracker {
-    private val played = Collections.synchronizedSet(HashSet<String>())
-    fun shouldPlay(id: String): Boolean = played.add(id)
+    private val played = LinkedHashSet<String>()
+    @Synchronized fun shouldPlay(id: String): Boolean {
+        val added = played.add(id)
+        if (played.size > 2048) played.iterator().run { next(); remove() }
+        return added
+    }
+}
+
+/** Excess incoming hugs settle immediately instead of queuing animation and particle jobs. */
+internal object HugAnimationBudget {
+    private var active = 0
+    @Synchronized fun acquire(): Boolean {
+        if (active >= 2) return false
+        active++
+        return true
+    }
+    @Synchronized fun release() { active = (active - 1).coerceAtLeast(0) }
 }
 
 /** A message of nothing but 🫂 is shown as the hug. */
@@ -109,7 +123,7 @@ internal fun HugScene(
             .size(HUG_SCENE_WIDTH, HUG_SCENE_HEIGHT)
             .semantics { contentDescription = PEOPLE_HUGGING }
             .drawBehind {
-                drawHug(progress().coerceIn(0f, 1f), left = partner, right = me, rightHugs = isFromMe, heart, path, level ?: PLAIN_HUG_LEVEL)
+                drawHug(progress().coerceIn(0f, 1f), left = partner, right = me, rightHugs = isFromMe, heart, path, level?.takeIf { it.isFinite() }?.coerceIn(0f, 1f) ?: PLAIN_HUG_LEVEL)
             }
     )
 }
@@ -203,8 +217,8 @@ private fun DrawScope.drawHug(
     val huggerX = 60f - huggerFacing * (14f - snug - 1.5f * squeeze + 24f * (1f - walk))
     val huggedX = 60f - huggedFacing * (14f - snug - 1.5f * squeeze + 5f * (1f - meet))
     // A bounce in each step, leaning into the walk
-    val huggerLift = 3f * abs(sin(walk * 3f * HugPi))
-    val huggerLean = huggerFacing * (7f * sin(walk * HugPi) + 2f * nestle)
+    val huggerLift = 1.4f * abs(sin(walk * 3f * HugPi))
+    val huggerLean = huggerFacing * (4f * sin(walk * HugPi) + 2f * nestle)
     val huggedLean = huggedFacing * 2f * nestle
     // On each one's back, where the other's hands go
     val huggedBack = huggedX - huggedFacing * hugged.shoulders * 0.8f
@@ -269,11 +283,11 @@ private fun DrawScope.drawFigure(
     val drop = 2f + 6f * figure.softness
     val reach = 0.75f - 0.3f * figure.softness
     path.reset()
-    path.moveTo((x - half) * u, 100f * u)
-    path.lineTo((x - half) * u, (top + 18f) * u)
+    path.moveTo((x - half * 0.72f) * u, 100f * u)
+    path.cubicTo((x - half * 0.62f) * u, 86f * u, (x - half) * u, (top + 28f) * u, (x - half) * u, (top + 18f) * u)
     path.cubicTo((x - half) * u, (top + drop) * u, (x - half * reach) * u, top * u, x * u, top * u)
     path.cubicTo((x + half * reach) * u, top * u, (x + half) * u, (top + drop) * u, (x + half) * u, (top + 18f) * u)
-    path.lineTo((x + half) * u, 100f * u)
+    path.cubicTo((x + half) * u, (top + 28f) * u, (x + half * 0.62f) * u, 86f * u, (x + half * 0.72f) * u, 100f * u)
     path.close()
     drawPath(
         path,
@@ -299,7 +313,15 @@ private fun DrawScope.drawFigure(
             size = Size(r * u, r * 1.35f * u)
         )
     }
-    drawCircle(figure.color, radius = r * u, center = head)
+    // Neck joins the head to the shoulders, with a shaded collar instead of a floating circle.
+    drawLine(figure.shade, Offset(headX * u, (headY + r * 0.65f) * u),
+        Offset(x * u, (top + 5f) * u), strokeWidth = r * 0.8f * u, cap = StrokeCap.Round)
+    drawOval(figure.color, topLeft = Offset((headX - r * 0.86f) * u, (headY - r) * u),
+        size = Size(r * 1.72f * u, r * 2.08f * u))
+    // A small profile and ear keep the faces turned into the embrace.
+    drawCircle(figure.color, r * 0.2f * u, Offset((headX + facing * r * 0.85f) * u, (headY + r * 0.15f) * u))
+    drawCircle(figure.shade.copy(alpha = 0.45f), r * 0.18f * u,
+        Offset((headX - facing * r * 0.55f) * u, (headY + r * 0.2f) * u))
     // The hair over the top and back of the head: short for him, fuller for her
     path.reset()
     path.addOval(Rect(head, r * u))
@@ -328,7 +350,15 @@ private fun DrawScope.drawHand(at: Offset, figure: HugFigure, scale: Float, u: F
     if (scale <= 0f) return
     val center = Offset(at.x * u, at.y * u)
     drawCircle(figure.shade, radius = 4.8f * scale * u, center = center)
-    drawCircle(figure.color, radius = 3.6f * scale * u, center = center)
+    drawOval(figure.color, topLeft = center - Offset(3.2f, 4.2f) * (scale * u),
+        size = Size(6.4f * scale * u, 8.4f * scale * u))
+    // Subtle fingers resting on the back, using the existing blue palette.
+    for (finger in -1..1) {
+        val y = center.y + finger * 1.5f * scale * u
+        drawLine(figure.shade.copy(alpha = 0.45f), Offset(center.x, y),
+            Offset(center.x + 2f * scale * u, y), strokeWidth = 0.45f * scale * u,
+            cap = StrokeCap.Round)
+    }
 }
 
 /** Grows from 0 to a little past 1 and settles back. */

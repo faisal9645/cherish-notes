@@ -96,6 +96,7 @@ private const val HUG_TAP_LEVEL = 0.15f
 internal fun HugHoldButton(onSend: (level: Float) -> Unit, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val lifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle
     val pressure = remember { Animatable(0f) }
     var holding by remember { mutableStateOf(false) }
     Box(
@@ -123,13 +124,20 @@ internal fun HugHoldButton(onSend: (level: Float) -> Unit, modifier: Modifier = 
                     // Felt in the hand: pulses coming faster and harder as it tightens
                     val feel = scope.launch {
                         if (!SecurityPreferences.getInstance(context).isHapticFeedbackEnabled()) return@launch
-                        while (isActive) {
+                        while (isActive && lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)) {
                             val p = pressure.value
                             context.vibrateSqueezePulse(p)
                             delay((280 - 190 * p).toLong())
                         }
                     }
-                    val up = waitForUpOrCancellation()
+                    val up = try {
+                        waitForUpOrCancellation()
+                    } finally {
+                        // Pointer cancellation/disposal must not leave a pulse loop running.
+                        build.cancel()
+                        feel.cancel()
+                        holding = false
+                    }
                     build.cancel()
                     feel.cancel()
                     holding = false
@@ -201,7 +209,7 @@ private fun HugPressureMeter(pressure: () -> Float) {
 
 /** One pulse while holding the hug: stronger and longer as it tightens. */
 internal fun android.content.Context.vibrateSqueezePulse(pressure: Float) {
-    val p = pressure.coerceIn(0f, 1f)
+    val p = pressure.takeIf { it.isFinite() }?.coerceIn(0f, 1f) ?: 0f
     vibrateWave(longArrayOf(0, (24 + 46 * p).toLong()), intArrayOf(0, (50 + 205 * p).toInt()))
 }
 
@@ -210,12 +218,13 @@ internal fun android.content.Context.vibrateSqueezePulse(pressure: Float) {
  * sent. [peaksMs]: when each squeeze is tightest, from now.
  */
 internal fun android.content.Context.vibrateHugSqueezes(level: Float, peaksMs: List<Long>) {
-    val pulse = (110 + 230 * level).toLong()
-    val strength = (70 + 185 * level).toInt()
+    val safeLevel = level.takeIf { it.isFinite() }?.coerceIn(0f, 1f) ?: PLAIN_HUG_LEVEL
+    val pulse = (90 + 130 * safeLevel).toLong()
+    val strength = (70 + 140 * safeLevel).toInt()
     val timings = ArrayList<Long>()
     val amplitudes = ArrayList<Int>()
     var at = 0L
-    for (peak in peaksMs) {
+    for (peak in peaksMs.filter { it in 0L..5_000L }.distinct().sorted().take(3)) {
         val start = (peak - pulse / 2).coerceAtLeast(at)
         timings += start - at
         amplitudes += 0
@@ -226,58 +235,10 @@ internal fun android.content.Context.vibrateHugSqueezes(level: Float, peaksMs: L
     vibrateWave(timings.toLongArray(), amplitudes.toIntArray(), inHand = false)
 }
 
-/**
- * Tactile release haptic when letting go of the hug button.
- * Specifically tuned for Vivo and all Android devices with multi-layer fallback.
- */
+/** Release uses the same bounded vibrator path as incoming hugs. */
 internal fun android.content.Context.vibrateHugRelease(level: Float) {
-    if (!com.example.security.SecurityPreferences.getInstance(this).isHapticFeedbackEnabled()) return
-    val lvl = level.coerceIn(0f, 1f)
-    val ms = (35 + 55 * lvl).toLong()
-    val strength = (130 + 125 * lvl).toInt().coerceIn(1, 255)
-    try {
-        val vibrator = if (android.os.Build.VERSION.SDK_INT >= 31) {
-            getSystemService(android.os.VibratorManager::class.java)?.defaultVibrator
-        } else {
-            @Suppress("DEPRECATION")
-            getSystemService(android.content.Context.VIBRATOR_SERVICE) as? android.os.Vibrator
-        } ?: return
-        if (!vibrator.hasVibrator()) return
-
-        if (android.os.Build.VERSION.SDK_INT >= 26) {
-            val timings = longArrayOf(0, ms / 2, 15, ms)
-            val amplitudes = intArrayOf(0, (strength * 0.6f).toInt().coerceIn(1, 255), 0, strength)
-            val effect = if (vibrator.hasAmplitudeControl()) {
-                android.os.VibrationEffect.createWaveform(timings, amplitudes, -1)
-            } else {
-                android.os.VibrationEffect.createWaveform(timings, -1)
-            }
-            try {
-                if (android.os.Build.VERSION.SDK_INT >= 33) {
-                    val attrs = android.os.VibrationAttributes.Builder()
-                        .setUsage(android.os.VibrationAttributes.USAGE_TOUCH)
-                        .build()
-                    vibrator.vibrate(effect, attrs)
-                } else {
-                    vibrator.vibrate(effect)
-                }
-            } catch (_: Exception) {
-                try {
-                    vibrator.vibrate(effect)
-                } catch (_: Exception) {
-                    @Suppress("DEPRECATION")
-                    vibrator.vibrate(timings, -1)
-                }
-            }
-        } else {
-            @Suppress("DEPRECATION")
-            vibrator.vibrate(longArrayOf(0, ms / 2, 15, ms), -1)
-        }
-    } catch (_: Exception) {
-        try {
-            @Suppress("DEPRECATION")
-            (getSystemService(android.content.Context.VIBRATOR_SERVICE) as? android.os.Vibrator)?.vibrate(50)
-        } catch (_: Exception) {}
-    }
+    val safeLevel = level.takeIf { it.isFinite() }?.coerceIn(0f, 1f) ?: PLAIN_HUG_LEVEL
+    val ms = (35 + 55 * safeLevel).toLong()
+    val strength = (100 + 110 * safeLevel).toInt()
+    vibrateWave(longArrayOf(0, ms / 2, 15, ms), intArrayOf(0, strength / 2, 0, strength))
 }
-

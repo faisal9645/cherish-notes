@@ -82,6 +82,8 @@ internal class WatchPartyPlayer {
     /** Until when state changes are our own commands coming back, not a tap on the video. */
     private var commandsUntil = 0L
 
+    internal var bridge: PlayerBridge? = null
+
     var currentQuality by mutableStateOf("auto")
     var availableQualities by mutableStateOf<List<String>>(
         listOf("auto", "hd1080", "hd720", "large", "medium", "small", "tiny")
@@ -118,6 +120,7 @@ internal class WatchPartyPlayer {
 
     /** A seek can buffer for a while, and starts a video that hasn't played yet. */
     fun seekTo(seconds: Float) {
+        if (!seconds.isFinite() || seconds < 0f) return
         currentTime = seconds
         command("__party.seek(" + String.format(Locale.US, "%.2f", seconds) + ")", SEEK_ECHO_MS)
     }
@@ -154,7 +157,7 @@ internal class WatchPartyPlayer {
     fun onState(newState: Int, time: Float) {
         val previous = state
         state = newState
-        if (time > 0f) currentTime = time
+        if (time.isFinite() && time >= 0f) currentTime = time
         if (newState != previous && newState in TAP_STATES && SystemClock.uptimeMillis() > commandsUntil) {
             lastVideoAction = VideoAction(newState, currentTime, SystemClock.uptimeMillis())
         }
@@ -168,13 +171,21 @@ internal class WatchPartyPlayer {
 }
 
 /** The page's calls back into the app; they come on a background thread. */
-private class PlayerBridge(private val player: WatchPartyPlayer) {
+internal class PlayerBridge(private val player: WatchPartyPlayer) {
     private val main = Handler(Looper.getMainLooper())
+    @Volatile private var active = true
+    fun close() {
+        active = false
+        main.removeCallbacksAndMessages(null)
+    }
+    private fun dispatch(block: () -> Unit) {
+        if (active) main.post { if (active) block() }
+    }
 
     @JavascriptInterface
     fun onReady(duration: Double) {
-        main.post {
-            if (duration > 0) player.duration = duration.toFloat()
+        dispatch {
+            if (duration.isFinite() && duration > 0) player.duration = duration.toFloat()
             player.isReady = true
             // Playing after all (say, once signed in on YouTube's page): no error left showing
             player.errorCode = 0
@@ -183,8 +194,8 @@ private class PlayerBridge(private val player: WatchPartyPlayer) {
 
     @JavascriptInterface
     fun onState(state: Int, time: Double, duration: Double) {
-        main.post {
-            if (duration > 0) player.duration = duration.toFloat()
+        dispatch {
+            if (duration.isFinite() && duration > 0) player.duration = duration.toFloat()
             player.isReady = true
             player.errorCode = 0
             player.onState(state, time.toFloat())
@@ -193,21 +204,21 @@ private class PlayerBridge(private val player: WatchPartyPlayer) {
 
     @JavascriptInterface
     fun onTime(time: Double, state: Int) {
-        main.post {
+        dispatch {
             player.isReady = true
-            player.currentTime = time.toFloat()
+            if (time.isFinite() && time >= 0) player.currentTime = time.toFloat()
             if (state != player.state) player.onState(state, time.toFloat())
         }
     }
 
     @JavascriptInterface
     fun onError(code: Int) {
-        main.post { player.onError(code) }
+        dispatch { player.onError(code) }
     }
 
     @JavascriptInterface
     fun onQuality(quality: String, listJson: String) {
-        main.post {
+        dispatch {
             val levels = try {
                 if (listJson.startsWith("[")) {
                     val array = org.json.JSONArray(listJson)
@@ -238,6 +249,14 @@ internal fun WatchPartyVideo(
     val page = remember(videoId) {
         videoId.takeIf { VideoIdPattern.matches(it) }
             ?.let { playerPage(it, startAt.toInt().coerceAtLeast(0), autoplay) }
+    }
+    // A blocked API request may never report an error. Avoid an endless loading screen.
+    LaunchedEffect(player, videoId, player.isReady, player.onWatchPage) {
+        if (page == null || player.isReady) return@LaunchedEffect
+        delay(25_000)
+        if (!player.isReady) {
+            if (player.onWatchPage) player.errorCode = -1 else player.switchToWatchPage()
+        }
     }
     // The embed was refused: YouTube's own page, from about where the party is
     LaunchedEffect(player.onWatchPage) {
@@ -273,7 +292,10 @@ internal fun WatchPartyVideo(
                 val cookieManager = CookieManager.getInstance()
                 cookieManager.setAcceptCookie(true)
                 cookieManager.setAcceptThirdPartyCookies(this, true)
-                addJavascriptInterface(PlayerBridge(player), "Party")
+                player.bridge?.close()
+                val bridge = PlayerBridge(player)
+                player.bridge = bridge
+                addJavascriptInterface(bridge, "Party")
                 webChromeClient = object : WebChromeClient() {
                     override fun onPermissionRequest(request: android.webkit.PermissionRequest?) {
                         try {
@@ -336,7 +358,14 @@ internal fun WatchPartyVideo(
             }
         },
         onRelease = { webView ->
-            if (player.webView === webView) player.webView = null
+            if (player.webView === webView) {
+                player.bridge?.close()
+                player.bridge = null
+                player.webView = null
+            }
+            webView.removeJavascriptInterface("Party")
+            webView.keepScreenOn = false
+            webView.onPause()
             player.isReady = false
             webView.stopLoading()
             webView.loadUrl("about:blank")
@@ -376,6 +405,7 @@ window.__party = {
       try { iframe.contentWindow.postMessage('{"event":"command","func":"playVideo","args":""}', '*'); } catch (e) {}
     }
     setTimeout(function() {
+      if (pendingCommand !== 'play') return;
       if (player && typeof player.getPlayerState === 'function') {
         var s = player.getPlayerState();
         if (s !== 1 && s !== 3) {
@@ -453,6 +483,7 @@ window.addEventListener('message', function (e) {
 });
 
 function onYouTubeIframeAPIReady() {
+  if (player) return;
   player = new YT.Player('player', {
     width: '100%', height: '100%', videoId: '$videoId',
     host: 'https://www.youtube.com',
@@ -572,23 +603,10 @@ private fun watchPageScript(videoId: String, autoplay: Boolean): String = """
         var p = el.play();
         if (p && p.catch) {
           p.catch(function(e) {
-            try { el.muted = true; el.play(); } catch(err) {}
+            // Leave audio enabled; a user play gesture can retry blocked autoplay.
           });
         }
       } catch(e) {}
-    }
-    var selectors = [
-      '.ytp-large-play-button',
-      '.player-control-play-pause-icon',
-      'button[aria-label*="Play"]',
-      '.ytp-play-button',
-      '#player-control-overlay'
-    ];
-    for (var i = 0; i < selectors.length; i++) {
-      var btn = document.querySelector(selectors[i]);
-      if (btn) {
-        try { btn.click(); } catch(e) {}
-      }
     }
     var player = document.getElementById('movie_player');
     if (player && typeof player.playVideo === 'function') {

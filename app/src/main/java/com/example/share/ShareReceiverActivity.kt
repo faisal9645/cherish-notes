@@ -30,6 +30,13 @@ class ShareReceiverActivity : ComponentActivity() {
             finish()
             return
         }
+        // A chooser may still hold a stale alias after the disguise changes.
+        if (!ShareRotationHelper.isShareSheetEnabled(this) ||
+            com.example.security.SecurityPreferences.getInstance(this).isCalculatorDecoy()) {
+            ShareRotationHelper.syncShareAliases(this)
+            finish()
+            return
+        }
         val app = application as CherishApplication
         val share = intent
         lifecycleScope.launch {

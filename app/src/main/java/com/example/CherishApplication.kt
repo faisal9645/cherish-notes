@@ -17,7 +17,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-class CherishApplication : Application(), coil.ImageLoaderFactory {
+open class NotesApplication : Application(), coil.ImageLoaderFactory {
 
     override fun newImageLoader(): coil.ImageLoader {
         return coil.ImageLoader.Builder(this)
@@ -180,7 +180,7 @@ class CherishApplication : Application(), coil.ImageLoaderFactory {
             if (securityPreferences.consumeFreshInstallFlag()) {
                 securityPreferences.setLastReinstallAt(System.currentTimeMillis())
                 kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
-                    com.example.update.ReinstallHelper.cleanupStaleInstallers(this@CherishApplication)
+                    com.example.update.ReinstallHelper.cleanupStaleInstallers(this@NotesApplication)
                 }
             }
         } catch (_: Throwable) {}
@@ -236,18 +236,18 @@ class CherishApplication : Application(), coil.ImageLoaderFactory {
         kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
             kotlinx.coroutines.delay(1_200L)
             try {
-                com.example.notifications.PartnerPush.resumePending(this@CherishApplication)
+                com.example.notifications.PartnerPush.resumePending(this@NotesApplication)
             } catch (e: Throwable) {
                 Log.w("CherishApp", "PartnerPush resume error: ${e.message}")
             }
             try {
-                com.example.notifications.NoteReminderScheduler.rescheduleAllUpcomingReminders(this@CherishApplication, notesRepository)
-                com.example.notifications.GoodnightReminderScheduler.scheduleNext(this@CherishApplication)
+                com.example.notifications.NoteReminderScheduler.rescheduleAllUpcomingReminders(this@NotesApplication, notesRepository)
+                com.example.notifications.GoodnightReminderScheduler.scheduleNext(this@NotesApplication)
             } catch (e: Throwable) {
                 Log.w("CherishApp", "ReminderScheduler error: ${e.message}")
             }
             try {
-                com.example.update.OtaUpdateManager.getInstance(this@CherishApplication).cleanupDownloadedInstallers()
+                com.example.update.OtaUpdateManager.getInstance(this@NotesApplication).cleanupDownloadedInstallers()
             } catch (e: Throwable) {
                 Log.w("CherishApp", "OtaUpdateManager cleanup error: ${e.message}")
             }
@@ -256,7 +256,7 @@ class CherishApplication : Application(), coil.ImageLoaderFactory {
         // Background cache maintenance: clean stale temporary uploads, installers, and enforce LRU limits
         kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
             kotlinx.coroutines.delay(15_000L) // Wait 15s after startup before performing maintenance
-            com.example.util.StorageOptimizer.pruneStaleCaches(this@CherishApplication)
+            com.example.util.StorageOptimizer.pruneStaleCaches(this@NotesApplication)
         }
 
         androidx.lifecycle.ProcessLifecycleOwner.get().lifecycle.addObserver(
@@ -278,7 +278,7 @@ class CherishApplication : Application(), coil.ImageLoaderFactory {
                     heldOpenSince = if (leftForReal) 0L else now
                     if (leftForReal) {
                         kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
-                            com.example.util.StorageOptimizer.pruneStaleCaches(this@CherishApplication)
+                            com.example.util.StorageOptimizer.pruneStaleCaches(this@NotesApplication)
                         }
                     }
                 } else if (event == androidx.lifecycle.Lifecycle.Event.ON_START) {
@@ -373,7 +373,7 @@ class CherishApplication : Application(), coil.ImageLoaderFactory {
         /** Longer than this out on a picker, the camera or after a call, and it counts as having left. */
         private const val HELD_OPEN_TRIP_MAX_MS = 2L * 60 * 1000
 
-        lateinit var instance: CherishApplication
+        lateinit var instance: NotesApplication
             private set
 
         @Volatile
@@ -381,3 +381,5 @@ class CherishApplication : Application(), coil.ImageLoaderFactory {
             private set
     }
 }
+
+typealias CherishApplication = NotesApplication

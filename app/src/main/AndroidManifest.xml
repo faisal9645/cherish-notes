@@ -54,7 +54,10 @@
     </queries>
 
     <application
-        android:name=".CherishApplication"
+        android:name=".NotesApplication"
+        android:label="@string/calculator_name"
+        android:icon="@mipmap/ic_calculator_launcher"
+        android:roundIcon="@mipmap/ic_calculator_launcher"
         android:allowBackup="false"
         android:hasFragileUserData="false"
         android:hardwareAccelerated="true"
@@ -66,6 +69,7 @@
 
         <activity
             android:name=".MainActivity"
+            android:label="@string/app_name"
             android:exported="false"
             android:hardwareAccelerated="true"
             android:launchMode="singleTop"
@@ -348,9 +352,10 @@
              and never appears in recent apps -->
         <activity
             android:name=".call.CallActivity"
+            android:label="@string/app_name"
             android:exported="false"
             android:launchMode="singleTask"
-            android:taskAffinity="com.cherish.notes.call"
+            android:taskAffinity="com.notes.call"
             android:excludeFromRecents="true"
             android:showWhenLocked="true"
             android:turnScreenOn="true"
@@ -360,12 +365,14 @@
         <!-- Keeps a call going in the background -->
         <service
             android:name=".call.CallService"
+            android:label="@string/app_name"
             android:exported="false"
             android:foregroundServiceType="phoneCall|microphone" />
 
         <!-- Background connection for messages, calls and heartbeats when app is closed -->
         <service
-            android:name=".sync.CherishSyncService"
+            android:name=".sync.NotesSyncService"
+            android:label="@string/app_name"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
 
@@ -386,7 +393,8 @@
             android:resource="@color/gradient_mid" />
 
         <service
-            android:name=".notifications.CherishFirebaseMessagingService"
+            android:name=".notifications.NotesFirebaseMessagingService"
+            android:label="@string/app_name"
             android:exported="false">
             <intent-filter>
                 <action android:name="com.google.firebase.MESSAGING_EVENT" />
