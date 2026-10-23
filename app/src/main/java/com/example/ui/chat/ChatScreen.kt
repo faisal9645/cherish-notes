@@ -215,51 +215,62 @@ fun ChatScreen(
         object : NestedScrollConnection {
             private var flingTravel = 0f
             private var lastTickAt = 0L
-            private var pullSign = 0f
 
             /** The list can't go on that way because it's at the newest message. */
             private fun isPastNewest(deltaY: Float): Boolean =
                 !listState.canScrollBackward && (listState.canScrollForward || deltaY < 0f)
 
+            /** The list can't go on that way because it's at the oldest message. */
+            private fun isPastOldest(deltaY: Float): Boolean =
+                !listState.canScrollForward && (listState.canScrollBackward || deltaY > 0f)
+
             override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
                 // Pulling back while bunched up: the accordion opens first
-                if (source == NestedScrollSource.UserInput && accordion.value > 0f && pullSign != 0f &&
-                    kotlin.math.sign(available.y) == -pullSign
-                ) {
-                    val taken = accordion.releaseBy(kotlin.math.abs(available.y))
-                    return Offset(0f, taken * -pullSign)
+                if (source == NestedScrollSource.UserInput) {
+                    if (accordion.bottomPull > 0f && available.y > 0f) {
+                        val taken = accordion.releaseBottom(available.y)
+                        return Offset(0f, taken)
+                    }
+                    if (accordion.topPull > 0f && available.y < 0f) {
+                        val taken = accordion.releaseTop(kotlin.math.abs(available.y))
+                        return Offset(0f, -taken)
+                    }
                 }
                 return Offset.Zero
             }
 
             override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
-                // A fling: a tiny tick every few messages' worth, never faster than about 30 a second
+                // A fling: ticks get softer as it slows down, like a wheel winding down
                 if (source == NestedScrollSource.SideEffect && consumed.y != 0f) {
                     flingTravel += kotlin.math.abs(consumed.y)
                     if (flingTravel >= flingTickPx) {
                         flingTravel = 0f
                         val now = android.os.SystemClock.uptimeMillis()
-                        if (now - lastTickAt >= 32L &&
-                            com.example.security.SecurityPreferences.getInstance(scrollView.context).isHapticFeedbackEnabled()
-                        ) {
+                        val dt = (now - lastTickAt).coerceAtLeast(1L)
+                        if (now - lastTickAt >= 32L) {
                             lastTickAt = now
-                            scrollView.performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK)
+                            val speedFactor = kotlin.math.abs(consumed.y) / dt.toFloat().coerceIn(16f, 60f)
+                            triggerWindingTick(scrollView, speedFactor)
                         }
                     }
                 }
-                // Past the newest message: the bubbles bunch up instead of the list stretching
-                if (source == NestedScrollSource.UserInput && available.y != 0f && isPastNewest(available.y)) {
-                    pullSign = kotlin.math.sign(available.y)
-                    accordion.dragBy(kotlin.math.abs(available.y), accordionMaxPx)
-                    return Offset(0f, available.y)
+                // Past either end: rubber accordion bunch up on both ends instead of system stretch
+                if (source == NestedScrollSource.UserInput && available.y != 0f) {
+                    if (isPastNewest(available.y)) {
+                        accordion.dragBottom(kotlin.math.abs(available.y), accordionMaxPx)
+                        return Offset(0f, available.y)
+                    } else if (isPastOldest(available.y)) {
+                        accordion.dragTop(kotlin.math.abs(available.y), accordionMaxPx)
+                        return Offset(0f, available.y)
+                    }
                 }
                 return Offset.Zero
             }
 
             override suspend fun onPreFling(available: androidx.compose.ui.unit.Velocity): androidx.compose.ui.unit.Velocity {
-                // Let go: it springs back open with a bounce
+                // Let go: springs back open on rubber spring
                 flingTravel = 0f
-                if (accordion.value > 0f) accordion.settle(scope)
+                accordion.settle(scope)
                 return androidx.compose.ui.unit.Velocity.Zero
             }
 
@@ -267,10 +278,17 @@ fun ChatScreen(
                 consumed: androidx.compose.ui.unit.Velocity,
                 available: androidx.compose.ui.unit.Velocity
             ): androidx.compose.ui.unit.Velocity {
-                // A fling that runs into the newest message: a quick bunch-up and rebound with what's left of it
-                if (available.y != 0f && isPastNewest(available.y)) {
-                    accordion.settle(scope, velocityPxPerSec = kotlin.math.abs(available.y) * 0.12f)
-                    return available
+                // A fling that runs into either end: soft thud + quick rebound with what's left
+                if (available.y != 0f) {
+                    if (isPastNewest(available.y)) {
+                        triggerEndThud(scrollView, kotlin.math.abs(available.y))
+                        accordion.settleBottom(scope, velocityPxPerSec = kotlin.math.abs(available.y) * 0.12f)
+                        return available
+                    } else if (isPastOldest(available.y)) {
+                        triggerEndThud(scrollView, kotlin.math.abs(available.y))
+                        accordion.settleTop(scope, velocityPxPerSec = kotlin.math.abs(available.y) * 0.12f)
+                        return available
+                    }
                 }
                 return androidx.compose.ui.unit.Velocity.Zero
             }
@@ -834,7 +852,7 @@ fun ChatScreen(
                         if (replyReturns.size > 20) replyReturns.removeAt(0)
                         scope.launch {
                             highlightedMessageId = replyId
-                            listState.revealMessage(shown.lastIndex - index)
+                            listState.revealMessage(shown.lastIndex - index, accordion, scope)
                             try {
                                 val vib = (context.getSystemService(android.content.Context.VIBRATOR_SERVICE) as? android.os.Vibrator)
                                 if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
@@ -2163,11 +2181,16 @@ fun ChatScreen(
                     }
                 }
 
-                LazyColumn(
-                    state = listState,
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth()
+                val iphoneFling = rememberIphoneFlingBehavior()
+                CompositionLocalProvider(
+                    androidx.compose.foundation.LocalOverscrollConfiguration provides null
+                ) {
+                    LazyColumn(
+                        state = listState,
+                        flingBehavior = iphoneFling,
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth()
                         // The scroll feel outside the keyboard's: the keyboard's pull-up still sees
                         // what the list left over before the accordion takes it
                         .nestedScroll(chatScrollConnection)
@@ -2339,6 +2362,7 @@ fun ChatScreen(
 
                     // Strictly 2-Person Beginning of Chat Banner (shown when pagination is exhausted)
             } // Box content end
+                } // CompositionLocalProvider end
 
                 // No message yet today but older ones are shown (Recover all): "Today" badge
                 // follows them, where the first message will land (banner removed when older chats are recovered)
@@ -2586,11 +2610,17 @@ fun ChatScreen(
                             scope.launch {
                                 if (returnTo != null) {
                                     highlightedMessageId = returnTo
-                                    listState.revealMessage(returnIndex)
+                                    listState.revealMessage(returnIndex, accordion, scope)
                                     delay(800)
                                     if (highlightedMessageId == returnTo) highlightedMessageId = null
                                 } else if (displayedMessages.isNotEmpty()) {
+                                    val current = listState.firstVisibleItemIndex
+                                    if (current > 10) {
+                                        listState.scrollToItem(10)
+                                    }
                                     listState.animateScrollToItem(0)
+                                    accordion.dragBottom(30f, accordionMaxPx)
+                                    accordion.settleBottom(scope, velocityPxPerSec = 400f)
                                 }
                             }
                         },
@@ -4039,12 +4069,70 @@ private fun ScheduledMessagesDialog(
 }
 
 /**
- * Scrolls the (bottom-up) chat list to a message and lifts it about a third of the way up the
- * screen, so a jumped-to message isn't left sitting under the typing bar.
+ * iPhone glide fling behavior: after a flick, coasts further and eases to a stop instead of Android's quick brake.
+ * One number to tune (frictionMultiplier).
  */
-private suspend fun androidx.compose.foundation.lazy.LazyListState.revealMessage(index: Int) {
+@Composable
+private fun rememberIphoneFlingBehavior(
+    frictionMultiplier: Float = 0.82f
+): androidx.compose.foundation.gestures.FlingBehavior {
+    val decay = remember(frictionMultiplier) {
+        androidx.compose.animation.core.exponentialDecay<Float>(
+            frictionMultiplier = frictionMultiplier,
+            absVelocityThreshold = 0.5f
+        )
+    }
+    return remember(decay) {
+        object : androidx.compose.foundation.gestures.FlingBehavior {
+            override suspend fun androidx.compose.foundation.gestures.ScrollScope.performFling(initialVelocity: Float): Float {
+                if (kotlin.math.abs(initialVelocity) < 1f) return 0f
+                var velocityLeft = initialVelocity
+                var lastValue = 0f
+                androidx.compose.animation.core.AnimationState(
+                    initialValue = 0f,
+                    initialVelocity = initialVelocity
+                ).animateDecay(decay) {
+                    val delta = value - lastValue
+                    val consumed = scrollBy(delta)
+                    lastValue = value
+                    velocityLeft = velocity
+                    if (kotlin.math.abs(delta - consumed) > 0.5f) {
+                        cancelAnimation()
+                    }
+                }
+                return velocityLeft
+            }
+        }
+    }
+}
+
+/**
+ * Jumps that land: skips to about 10 messages away so scrolling through up to 100 messages doesn't stutter,
+ * glides the rest, lifts it about a third of the way up the screen, and lands with the accordion bounce.
+ */
+private suspend fun androidx.compose.foundation.lazy.LazyListState.revealMessage(
+    index: Int,
+    accordion: AccordionPull? = null,
+    scope: kotlinx.coroutines.CoroutineScope? = null
+) {
     val viewport = layoutInfo.viewportEndOffset - layoutInfo.viewportStartOffset
-    animateScrollToItem(index, scrollOffset = -(viewport * 0.3f).toInt())
+    val offset = -(viewport * 0.3f).toInt()
+    val current = firstVisibleItemIndex
+    val diff = index - current
+    if (kotlin.math.abs(diff) > 10) {
+        val intermediateIndex = if (diff > 0) index - 10 else index + 10
+        scrollToItem(intermediateIndex, offset)
+    }
+    animateScrollToItem(index, offset)
+    if (accordion != null && scope != null) {
+        if (index <= 1 || diff < 0) {
+            accordion.dragBottom(28f, 96f)
+            accordion.settleBottom(scope, velocityPxPerSec = 360f)
+        } else {
+            accordion.dragTop(28f, 96f)
+            accordion.settleTop(scope, velocityPxPerSec = 360f)
+        }
+    }
 }
 
 /**
@@ -4210,9 +4298,9 @@ private fun ChatMessageRow(
                     }
                     val b = bump.value
                     val bumpScale = if (b > 0f) 1f + 0.035f * b else 1f
-                    // Pulled on past the newest message, it bunches up toward the bottom (see AccordionPull)
+                    // Pulled on past either end, it bunches up toward that end like rubber (see AccordionPull)
                     val bunch = accordion?.shiftFor(message.id) ?: 0f
-                    if (bunch != 0f) translationY = -bunch
+                    if (bunch != 0f) translationY = bunch
                     scaleX = bumpScale
                     scaleY = bumpScale
                 }
@@ -5491,6 +5579,14 @@ private fun ChatBottomComposerBar(
                 onSendHaptic()
                 onUnreadJumpDone()
                 viewModel.sendGif(gif)
+            },
+            onSendSticker = if (
+                uiState.isStealthCurtainActive ||
+                uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE
+            ) null else { sticker ->
+                onSendHaptic()
+                onUnreadJumpDone()
+                viewModel.sendTextMessage(sticker)
             },
             myPhotoUrl = myUser?.photoUrl,
             myName = myUser?.displayName ?: "Me",

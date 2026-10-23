@@ -165,6 +165,8 @@ fun MessageComposer(
     onPickVideo: (() -> Unit)? = null,
     // A GIF picked from GIPHY's search (the emoji board's GIF tab); null hides the tab
     onSendGif: ((GiphyGif) -> Unit)? = null,
+    // A Sticker picked from the Stickers tab; sends immediately like WhatsApp/Telegram
+    onSendSticker: ((String) -> Unit)? = null,
     // Holding the camera button: record a video with the phone's camera (a tap takes a photo)
     onRecordVideo: (() -> Unit)? = null,
     focusRequester: FocusRequester = remember { FocusRequester() },
@@ -184,6 +186,7 @@ fun MessageComposer(
     var dragOffsetY by remember { mutableFloatStateOf(0f) }
     var isVideoMode by remember { mutableStateOf(false) }
     var showGifPicker by remember { mutableStateOf(false) }
+    var activeMediaTab by rememberSaveable { mutableIntStateOf(0) }
 
     val density = LocalDensity.current
     val keyboardInsets = WindowInsets.ime.exclude(WindowInsets.navigationBars)
@@ -1525,132 +1528,43 @@ fun MessageComposer(
                     shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
                     modifier = Modifier.fillMaxSize()
                 ) {
-                    Column(modifier = Modifier.fillMaxSize()) {
-                        // Drag handle pill at top of emoji board
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .then(swipeDownModifier)
-                                .padding(top = 6.dp, bottom = 2.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(width = 36.dp, height = 4.dp)
-                                    .clip(CircleShape)
-                                    .background(if (isDark) Color(0xFF334155) else Color(0xFFCBD5E1))
-                            )
-                        }
-
-                        // Category Tab Row (bottom-style like WhatsApp)
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .then(swipeDownModifier)
-                                .background(if (isDark) Color(0x66080B14) else Color.White.copy(alpha = 0.90f))
-                                .border(BorderStroke(0.6.dp, if (isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFE2E8F0)))
-                                .padding(horizontal = 4.dp, vertical = 2.dp),
-                            horizontalArrangement = Arrangement.SpaceEvenly,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            emojiTabs.forEachIndexed { index, tabEmoji ->
-                                val isSelected = emojiPagerState.currentPage == index
-                                Box(
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .clip(RoundedCornerShape(8.dp))
-                                        .background(
-                                            if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
-                                            else Color.Transparent
-                                        )
-                                        .clickable {
-                                            scope.launch {
-                                                emojiPagerState.animateScrollToPage(index)
-                                            }
-                                        }
-                                        .padding(vertical = 6.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(
-                                        text = tabEmoji,
-                                        fontSize = if (isSelected) 18.sp else 15.sp
-                                    )
-                                }
+                    MediaBoardPanel(
+                        activeTab = activeMediaTab,
+                        onTabSelected = { activeMediaTab = it },
+                        isDark = isDark,
+                        swipeDownModifier = swipeDownModifier,
+                        emojiTabs = emojiTabs,
+                        emojiCategories = emojiCategories,
+                        emojiPagerState = emojiPagerState,
+                        onEmojiPicked = { emoji ->
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            onTextChanged(text + emoji)
+                        },
+                        onSendGif = onSendGif,
+                        onOpenGifSearchSheet = { showGifPicker = true },
+                        onStickerPicked = { sticker ->
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            if (onSendSticker != null) {
+                                onSendSticker(sticker)
+                            } else {
+                                onTextChanged(sticker)
+                                onSendText()
                             }
-
-                            // GIFs: searching needs the keyboard, so they open in their own sheet
-                            if (onSendGif != null && Giphy.isAvailable) {
-                                Box(
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .clip(RoundedCornerShape(8.dp))
-                                        .clickable {
-                                            closeEmojiBoard()
-                                            showGifPicker = true
-                                        }
-                                        .padding(vertical = 6.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(
-                                        text = "GIF",
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.ExtraBold,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier
-                                            .border(1.2.dp, MaterialTheme.colorScheme.onSurfaceVariant, RoundedCornerShape(4.dp))
-                                            .padding(horizontal = 4.dp)
-                                    )
-                                }
+                        },
+                        onStickerLongClicked = { sticker ->
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            onTextChanged(if (text.isBlank()) sticker else "$text $sticker")
+                        },
+                        onBackspace = {
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            if (text.isNotEmpty()) {
+                                val lastCodePoint = text.codePointBefore(text.length)
+                                val charCount = Character.charCount(lastCodePoint)
+                                onTextChanged(text.substring(0, text.length - charCount))
                             }
-
-                            // Close button at end
-                            IconButton(
-                                onClick = { closeEmojiBoard() },
-                                modifier = Modifier.size(32.dp)
-                            ) {
-                                Icon(
-                                    Icons.Rounded.Close,
-                                    contentDescription = "Close",
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                            }
-                        }
-
-                        // Emoji pager for smooth left/right gliding between categories
-                        androidx.compose.foundation.pager.HorizontalPager(
-                            state = emojiPagerState,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .weight(1f)
-                        ) { pageIndex ->
-                            val currentEmojis = emojiCategories.getOrElse(pageIndex) { emptyList() }
-                            LazyVerticalGrid(
-                                columns = GridCells.Fixed(8),
-                                modifier = Modifier.fillMaxSize(),
-                                contentPadding = PaddingValues(6.dp),
-                                horizontalArrangement = Arrangement.SpaceEvenly,
-                                verticalArrangement = Arrangement.spacedBy(2.dp)
-                            ) {
-                                items(currentEmojis, key = { "${pageIndex}_$it" }) { emoji ->
-                                    val displayEmoji = remember(emoji) { withFairSkinTone(emoji) }
-                                    Box(
-                                        modifier = Modifier
-                                            .pressScaleTarget()
-                                            .clip(RoundedCornerShape(8.dp))
-                                            .springClickable {
-                                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                                onTextChanged(text + displayEmoji)
-                                            }
-                                            .padding(vertical = 4.dp),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Text(text = displayEmoji, fontSize = 24.sp, maxLines = 1, softWrap = false, modifier = Modifier.fitToCell())
-                                    }
-                                }
-                            }
-                        }
-                    }
+                        },
+                        onSwitchToKeyboard = { switchToKeyboard() }
+                    )
                 }
             }
         }

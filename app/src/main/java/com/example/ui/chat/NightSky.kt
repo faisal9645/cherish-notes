@@ -163,9 +163,9 @@ internal fun NightSky(starry: Boolean, sunrise: Boolean, onSunriseDone: () -> Un
             }
             TwinklingStars(
                 modifier = Modifier.fillMaxSize(),
-                count = if (isNight && isDark) 36 else 70,
-                brightness = if (isDark) 0.8f else 0.95f,
-                periodMs = 4_200
+                count = if (isNight && isDark) 70 else 125,
+                brightness = if (isDark) 0.88f else 0.98f,
+                periodMs = 3_200
             )
             // A soft moon, high on the right (skip if photo wallpaper already contains moon)
             if (!isNight || !isDark) {

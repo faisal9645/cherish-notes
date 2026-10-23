@@ -212,17 +212,20 @@ fun MessageBubble(
     val heartAlpha = remember { Animatable(0f) }
     val heartBurst = rememberHeartBurstState()
 
-    // Bubble sinks a little under the finger (more on long-press) and springs back on release.
-    // The press shows after a short delay so a scroll starting on a bubble doesn't flicker it.
+    // Bubble cushion tip: tips a degree or two toward your finger like pressing one side of a cushion,
+    // then springs flat with one small wobble.
     var isPressed by remember { mutableStateOf(false) }
     var isLongPressed by remember { mutableStateOf(false) }
+    var bubbleCardSize by remember { mutableStateOf(androidx.compose.ui.unit.IntSize.Zero) }
+    val cushionTiltX = remember { Animatable(0f) }
+    val cushionTiltY = remember { Animatable(0f) }
     val pressScale = animateFloatAsState(
         targetValue = when {
-            isLongPressed -> 0.94f
-            isPressed -> 0.96f
+            isLongPressed -> 0.95f
+            isPressed -> 0.985f
             else -> 1f
         },
-        animationSpec = spring(dampingRatio = 0.5f, stiffness = 700f),
+        animationSpec = spring(dampingRatio = 0.42f, stiffness = 420f),
         label = "bubble_press"
     )
 
@@ -239,15 +242,36 @@ fun MessageBubble(
             }
         }
     }
-    val trackPress: suspend androidx.compose.foundation.gestures.PressGestureScope.(androidx.compose.ui.geometry.Offset) -> Unit = {
+    val trackPress: suspend androidx.compose.foundation.gestures.PressGestureScope.(androidx.compose.ui.geometry.Offset) -> Unit = { touchOffset ->
         val showPress = scope.launch {
-            delay(70)
+            delay(50)
             isPressed = true
+            val width = bubbleCardSize.width.toFloat().coerceAtLeast(1f)
+            val height = bubbleCardSize.height.toFloat().coerceAtLeast(1f)
+            // Normalized touch offset from center: -1f (left/top) to +1f (right/bottom)
+            val normX = ((touchOffset.x - width / 2f) / (width / 2f)).coerceIn(-1f, 1f)
+            val normY = ((touchOffset.y - height / 2f) / (height / 2f)).coerceIn(-1f, 1f)
+            // Tips 1 to 2 degrees toward the finger (pressing right tilts around Y; pressing bottom tilts around X)
+            val targetRotY = normX * 1.8f
+            val targetRotX = -normY * 1.8f
+            launch {
+                cushionTiltX.animateTo(targetRotX, spring(dampingRatio = 0.65f, stiffness = 550f))
+            }
+            launch {
+                cushionTiltY.animateTo(targetRotY, spring(dampingRatio = 0.65f, stiffness = 550f))
+            }
         }
         tryAwaitRelease()
         showPress.cancel()
         isPressed = false
         isLongPressed = false
+        // Springs flat with one small wobble
+        scope.launch {
+            cushionTiltX.animateTo(0f, spring(dampingRatio = 0.38f, stiffness = 420f))
+        }
+        scope.launch {
+            cushionTiltY.animateTo(0f, spring(dampingRatio = 0.38f, stiffness = 420f))
+        }
     }
     val onBubbleLongPress: (androidx.compose.ui.geometry.Offset) -> Unit = {
         isLongPressed = true
@@ -261,6 +285,7 @@ fun MessageBubble(
     val maxDragPx = remember(density) { with(density) { 88.dp.toPx() } }
 
     val swipeOffset = remember { Animatable(0f) }
+    val magnetHop = remember { Animatable(0f) }
 
     val replyProgress by remember {
         derivedStateOf { (abs(swipeOffset.value) / thresholdPx).coerceIn(0f, 1f) }
@@ -349,13 +374,18 @@ fun MessageBubble(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = if (isFromMe) Arrangement.End else Arrangement.Start,
             modifier = (if (isYouTube) Modifier.fillMaxWidth() else Modifier)
-                .offset { androidx.compose.ui.unit.IntOffset(swipeOffset.value.roundToInt(), 0) }
-                // Swiping to reply, it leans a little (up to 2.5°) the way the finger pulls it
+                .offset { androidx.compose.ui.unit.IntOffset((swipeOffset.value + magnetHop.value).roundToInt(), 0) }
+                // Swiping to reply, it leans a little (up to 2.5°) and stretches slightly in pull direction
                 .graphicsLayer {
-                    val pull = (swipeOffset.value / maxDragPx).coerceIn(-1f, 1f)
+                    val rawOffset = swipeOffset.value + magnetHop.value
+                    val pull = (rawOffset / maxDragPx).coerceIn(-1f, 1f)
                     if (pull != 0f) {
-                        transformOrigin = androidx.compose.ui.graphics.TransformOrigin(if (isFromMe) 1f else 0f, 0.5f)
+                        val anchorX = if (rawOffset >= 0f) 0f else 1f
+                        transformOrigin = androidx.compose.ui.graphics.TransformOrigin(anchorX, 0.5f)
                         rotationZ = 2.5f * pull
+                        val pullAbs = abs(pull)
+                        scaleX = 1f + 0.08f * pullAbs
+                        scaleY = 1f - 0.025f * pullAbs
                     }
                 }
         ) {
@@ -400,6 +430,9 @@ fun MessageBubble(
                                     val ease = 1f / (1f + abs(accumulatedDragX) * quadraticK)
                                     accumulatedDragX = 0f
                                     scope.launch {
+                                        if (magnetHop.value != 0f) {
+                                            launch { magnetHop.animateTo(0f, spring(dampingRatio = 0.5f, stiffness = 420f)) }
+                                        }
                                         swipeOffset.animateTo(
                                             targetValue = 0f,
                                             animationSpec = spring(
@@ -414,6 +447,9 @@ fun MessageBubble(
                                     hasTriggeredThresholdHaptic = false
                                     accumulatedDragX = 0f
                                     scope.launch {
+                                        if (magnetHop.value != 0f) {
+                                            launch { magnetHop.animateTo(0f, spring(dampingRatio = 0.5f, stiffness = 420f)) }
+                                        }
                                         swipeOffset.animateTo(
                                             targetValue = 0f,
                                             animationSpec = spring(
@@ -438,6 +474,12 @@ fun MessageBubble(
                                             // Crisp tactile tick right when detent threshold is breached
                                             haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
                                         } catch (_: Exception) {}
+                                        // At the reply mark it hops slightly ahead with the haptic, as if a magnet caught it
+                                        val hopDistance = with(density) { 10.dp.toPx() }
+                                        scope.launch {
+                                            magnetHop.snapTo(signX * hopDistance)
+                                            magnetHop.animateTo(0f, spring(dampingRatio = 0.45f, stiffness = 420f))
+                                        }
                                     } else if (abs(newTarget) < thresholdPx) {
                                         hasTriggeredThresholdHaptic = false
                                     }
@@ -488,12 +530,16 @@ fun MessageBubble(
                         modifier = Modifier
                             .requiredSize(animatedCircleSize)
                             .bringIntoViewRequester(bringPlayingNoteIntoView)
+                            .onGloballyPositioned { bubbleCardSize = it.size }
                             .graphicsLayer {
                                 val hp = highlightPulse.value
                                 val vhs = if (hp > 0f) 1f + 0.04f * kotlin.math.sin(hp * Math.PI.toFloat()) else 1f
                                 val ps = pressScale.value
                                 scaleX = ps * vhs
                                 scaleY = ps * vhs
+                                cameraDistance = 16f * density.density
+                                rotationX = cushionTiltX.value
+                                rotationY = cushionTiltY.value
                             }
                             .heartBurst(heartBurst)
                             .then(
@@ -575,12 +621,16 @@ fun MessageBubble(
                 var bigEmojiReplay by remember { mutableIntStateOf(0) }
                 Box(
                     modifier = Modifier
+                        .onGloballyPositioned { bubbleCardSize = it.size }
                         .graphicsLayer {
                             val pulse = highlightPulse.value
                             val highlight = if (pulse > 0f) 1f + 0.06f * kotlin.math.sin(pulse * Math.PI.toFloat()) else 1f
                             val ps = pressScale.value
                             scaleX = ps * highlight
                             scaleY = ps * highlight
+                            cameraDistance = 16f * density.density
+                            rotationX = cushionTiltX.value
+                            rotationY = cushionTiltY.value
                         }
                         .heartBurst(heartBurst)
                         .pointerInput(message.id) {
@@ -671,12 +721,16 @@ fun MessageBubble(
 
                 Box(
                     modifier = (if (isYouTube) Modifier.fillMaxWidth() else Modifier.widthIn(min = bubbleMinWidth, max = bubbleMaxWidth))
+                        .onGloballyPositioned { bubbleCardSize = it.size }
                         .graphicsLayer {
                             val hp = highlightPulse.value
                             val bhs = if (hp > 0f) 1f + 0.045f * kotlin.math.sin(hp * Math.PI.toFloat()) else 1f
                             val ps = pressScale.value
                             scaleX = ps * bhs
                             scaleY = ps * bhs
+                            cameraDistance = 16f * density.density
+                            rotationX = cushionTiltX.value
+                            rotationY = cushionTiltY.value
                         }
                         .heartBurst(heartBurst)
                         .then(
@@ -1850,7 +1904,7 @@ private fun ReplyIndicator(
         isReached -> if (isPrivateMode) Gray600 else RoseGoldPrimary
         isPrivateMode -> if (isDark) darkTone(Gray800) else Neutral200
         isDark -> Color(0xFF0E121E)
-        else -> Color(0xFFFFF1F4)
+        else -> Color.White
     }
 
     val iconTint = when {

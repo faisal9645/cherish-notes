@@ -1,9 +1,9 @@
 {
-  "versionCode": 218,
-  "versionName": "1.8.46",
-  "tagName": "v1.8.46-218",
-  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.8.46-218/app_update_218.apk",
-  "assetSize": 19551420,
-  "releaseNotes": "Notes v1.8.46 (Build 218):\n• Fixes the app closing on open after the last update\n• Day mode is clean and white again\n• Classic blue look restored\n• Bug fixes and refinements",
-  "releaseDate": "2026-10-23T06:00:33Z"
+  "versionCode": 219,
+  "versionName": "1.8.47",
+  "tagName": "v1.8.47-219",
+  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.8.47-219/app_update_219.apk",
+  "assetSize": 19575152,
+  "releaseNotes": "Notes v1.8.47 (Build 219):\n• Fixes the app closing on open after the last update\n• Day mode is clean and white again\n• Classic blue look restored\n• Bug fixes and refinements",
+  "releaseDate": "2026-10-23T08:02:54Z"
 }

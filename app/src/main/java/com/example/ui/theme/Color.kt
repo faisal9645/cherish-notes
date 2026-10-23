@@ -19,11 +19,11 @@ val DayBluePrimary = Color(0xFF3048F5)
 val DayBlueSecondary = Color(0xFF258BE8)
 val DayBlueTertiary = Color(0xFF3630F2)
 
-// Dark Mode Blues (Deeper / richer royal midnight blues preserving the original gradient spectrum)
-val DarkBluePrimary = Color(0xFF1D3FD6)
-val DarkBlueSecondary = Color(0xFF1868D8)
-val DarkBlueTertiary = Color(0xFF1C18C0)
-val DarkBlueBubble = Color(0xFF1D3FD6)
+// Dark Mode Blues (Deeper / richer royal midnight blues like previous)
+val DarkBluePrimary = Color(0xFF1B44C8)
+val DarkBlueSecondary = Color(0xFF16348C)
+val DarkBlueTertiary = Color(0xFF0F1E54)
+val DarkBlueBubble = Color(0xFF1A3EB8)
 
 // Black (AMOLED) theme: graphite instead of blue for bubbles, buttons and headers, grey accents
 val BlackGradientStart = Color(0xFF3A3A3C)
@@ -59,7 +59,7 @@ val AppGradientEnd: Color
 val AppGradientShadow: Color
     @Composable
     @ReadOnlyComposable
-    get() = if (LocalAmoledBlack.current) Color(0x35000000) else if (isAppInDark()) Color(0x351868D8) else Color(0x353048F5)
+    get() = if (LocalAmoledBlack.current) Color(0x35000000) else if (isAppInDark()) Color(0x351D4ED8) else Color(0x353048F5)
 
 @Composable
 fun appHorizontalGradient(): Brush {

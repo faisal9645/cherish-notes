@@ -247,52 +247,166 @@ class HeartBurstState {
 @Composable
 fun rememberHeartBurstState(): HeartBurstState = remember { HeartBurstState() }
 
+/** A fling that hits either end gives one soft thud, stronger the harder it hits. */
+fun triggerEndThud(view: View, speed: Float) {
+    val prefs = com.example.security.SecurityPreferences.getInstance(view.context)
+    if (!prefs.isHapticFeedbackEnabled()) return
+    try {
+        val vibrator = if (Build.VERSION.SDK_INT >= 31) {
+            view.context.getSystemService(VibratorManager::class.java)?.defaultVibrator
+        } else {
+            @Suppress("DEPRECATION")
+            view.context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+        }
+        if (Build.VERSION.SDK_INT >= 26 && vibrator != null && vibrator.hasAmplitudeControl()) {
+            val amplitude = ((speed / 3500f) * 220f).toInt().coerceIn(35, 255)
+            val effect = VibrationEffect.createOneShot(26L, amplitude)
+            if (Build.VERSION.SDK_INT >= 33) {
+                vibrator.vibrate(effect, VibrationAttributes.createForUsage(VibrationAttributes.USAGE_TOUCH))
+            } else {
+                vibrator.vibrate(effect)
+            }
+        } else {
+            view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+        }
+    } catch (_: Exception) {}
+}
+
+/** The fling ticks also get softer as it slows, like a wheel winding down. Phones without rich haptics keep today's tick. */
+fun triggerWindingTick(view: View, speedFactor: Float) {
+    val prefs = com.example.security.SecurityPreferences.getInstance(view.context)
+    if (!prefs.isHapticFeedbackEnabled()) return
+    try {
+        val vibrator = if (Build.VERSION.SDK_INT >= 31) {
+            view.context.getSystemService(VibratorManager::class.java)?.defaultVibrator
+        } else {
+            @Suppress("DEPRECATION")
+            view.context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+        }
+        if (Build.VERSION.SDK_INT >= 26 && vibrator != null && vibrator.hasAmplitudeControl()) {
+            val amplitude = (speedFactor * 75f).toInt().coerceIn(15, 110)
+            val effect = VibrationEffect.createOneShot(8L, amplitude)
+            if (Build.VERSION.SDK_INT >= 33) {
+                vibrator.vibrate(effect, VibrationAttributes.createForUsage(VibrationAttributes.USAGE_TOUCH))
+            } else {
+                vibrator.vibrate(effect)
+            }
+        } else {
+            view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+        }
+    } catch (_: Exception) {
+        view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+    }
+}
+
 /**
- * Pulled on past the newest message, in px (shared by the chat's rows, read only while drawing):
- * the rows bunch up toward the bottom like an accordion, the newest the most, and spring back open
- * with a bounce when let go, in place of the system's stretch.
+ * Pulled on past either end of the chat list, in px (shared by the chat's rows, read only while drawing):
+ * the newest and oldest ends bunch up like an accordion and spring back open with a bounce when let go,
+ * so both ends feel like the same rubber in place of Android's system stretch.
  */
 @Stable
 class AccordionPull(private val list: androidx.compose.foundation.lazy.LazyListState) {
-    var value by androidx.compose.runtime.mutableFloatStateOf(0f)
+    var bottomPull by androidx.compose.runtime.mutableFloatStateOf(0f)
         private set
-    private var settleJob: kotlinx.coroutines.Job? = null
+    var topPull by androidx.compose.runtime.mutableFloatStateOf(0f)
+        private set
 
-    /** The finger went [px] further past the newest message: taken in ever stiffer, up to [maxPx]. */
-    fun dragBy(px: Float, maxPx: Float) {
-        settleJob?.cancel()
-        val give = (1f - value / maxPx).coerceIn(0.05f, 1f)
-        value = (value + px * 0.5f * give).coerceIn(0f, maxPx)
+    val value: Float
+        get() = maxOf(bottomPull, topPull)
+
+    private var bottomSettleJob: kotlinx.coroutines.Job? = null
+    private var topSettleJob: kotlinx.coroutines.Job? = null
+
+    /** Dragged past the newest message (bottom of chat). */
+    fun dragBottom(px: Float, maxPx: Float) {
+        bottomSettleJob?.cancel()
+        val give = (1f - bottomPull / maxPx).coerceIn(0.05f, 1f)
+        bottomPull = (bottomPull + px * 0.5f * give).coerceIn(0f, maxPx)
     }
 
-    /** Pulled back by [px]: the accordion opens first. Returns how much of it that took. */
-    fun releaseBy(px: Float): Float {
-        settleJob?.cancel()
-        val taken = minOf(px, value.coerceAtLeast(0f))
-        value -= taken
+    /** Dragged past the oldest message (top of chat). */
+    fun dragTop(px: Float, maxPx: Float) {
+        topSettleJob?.cancel()
+        val give = (1f - topPull / maxPx).coerceIn(0.05f, 1f)
+        topPull = (topPull + px * 0.5f * give).coerceIn(0f, maxPx)
+    }
+
+    /** Legacy / bottom drag helper. */
+    fun dragBy(px: Float, maxPx: Float) = dragBottom(px, maxPx)
+
+    /** Released back from bottom accordion. Returns how much of it that took. */
+    fun releaseBottom(px: Float): Float {
+        bottomSettleJob?.cancel()
+        val taken = minOf(px, bottomPull.coerceAtLeast(0f))
+        bottomPull -= taken
         return taken
     }
 
-    /** Let go (or a fling ran into the end at [velocityPxPerSec]): back open on a bouncy spring. */
-    fun settle(scope: kotlinx.coroutines.CoroutineScope, velocityPxPerSec: Float = 0f) {
-        if (value == 0f && velocityPxPerSec == 0f) return
-        settleJob?.cancel()
-        settleJob = scope.launch {
+    /** Released back from top accordion. Returns how much of it that took. */
+    fun releaseTop(px: Float): Float {
+        topSettleJob?.cancel()
+        val taken = minOf(px, topPull.coerceAtLeast(0f))
+        topPull -= taken
+        return taken
+    }
+
+    /** Legacy release helper. */
+    fun releaseBy(px: Float): Float = releaseBottom(px)
+
+    fun settleBottom(scope: kotlinx.coroutines.CoroutineScope, velocityPxPerSec: Float = 0f) {
+        if (bottomPull == 0f && velocityPxPerSec == 0f) return
+        bottomSettleJob?.cancel()
+        bottomSettleJob = scope.launch {
             androidx.compose.animation.core.animate(
-                initialValue = value,
+                initialValue = bottomPull,
                 targetValue = 0f,
                 initialVelocity = velocityPxPerSec,
                 animationSpec = androidx.compose.animation.core.spring(dampingRatio = 0.42f, stiffness = 380f)
-            ) { pulled, _ -> value = pulled }
+            ) { pulled, _ -> bottomPull = pulled }
         }
     }
 
-    /** How far up the screen the row [key] moves now: the newest the most, each one above it less. */
+    fun settleTop(scope: kotlinx.coroutines.CoroutineScope, velocityPxPerSec: Float = 0f) {
+        if (topPull == 0f && velocityPxPerSec == 0f) return
+        topSettleJob?.cancel()
+        topSettleJob = scope.launch {
+            androidx.compose.animation.core.animate(
+                initialValue = topPull,
+                targetValue = 0f,
+                initialVelocity = velocityPxPerSec,
+                animationSpec = androidx.compose.animation.core.spring(dampingRatio = 0.42f, stiffness = 380f)
+            ) { pulled, _ -> topPull = pulled }
+        }
+    }
+
+    /** Settle both ends back to flat. */
+    fun settle(scope: kotlinx.coroutines.CoroutineScope, velocityPxPerSec: Float = 0f) {
+        if (bottomPull > 0f) settleBottom(scope, velocityPxPerSec)
+        if (topPull > 0f) settleTop(scope, velocityPxPerSec)
+    }
+
+    /**
+     * How far the row [key] moves now (+ is down for top accordion, - is up for bottom accordion).
+     * The boundary items move the most, with exponential decay into the list.
+     */
     fun shiftFor(key: Any): Float {
-        val pulled = value
-        if (pulled == 0f) return 0f
-        val index = list.layoutInfo.visibleItemsInfo.firstOrNull { it.key == key }?.index ?: return 0f
-        return pulled * kotlin.math.exp(-index / 4.5f)
+        val b = bottomPull
+        val t = topPull
+        if (b == 0f && t == 0f) return 0f
+        val visible = list.layoutInfo.visibleItemsInfo
+        val item = visible.firstOrNull { it.key == key } ?: return 0f
+        var total = 0f
+        if (b > 0f) {
+            // Newest message (index 0) bunches up toward bottom
+            total -= b * kotlin.math.exp(-item.index / 4.5f)
+        }
+        if (t > 0f) {
+            // Oldest message (max visible index) bunches down toward top
+            val maxIdx = visible.maxOfOrNull { it.index } ?: 0
+            val dist = (maxIdx - item.index).coerceAtLeast(0)
+            total += t * kotlin.math.exp(-dist / 4.5f)
+        }
+        return total
     }
 }
 

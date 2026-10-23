@@ -234,15 +234,30 @@ fun isStressedMood(mood: String?): Boolean {
 // Visuals
 // ---------------------------------------------------------------------------------------------
 
-private class Star(val x: Float, val y: Float, val radius: Float, val phase: Float)
+private class Star(
+    val x: Float,
+    val y: Float,
+    val radius: Float,
+    val phase: Float,
+    val speed: Float,
+    val isGlitter: Boolean
+)
 
-/** Softly twinkling stars over the whole area. */
+/** Softly twinkling stars over the whole area with varied blinking rates and subtle sparkles. */
 @Composable
-internal fun TwinklingStars(modifier: Modifier = Modifier, count: Int = 60, brightness: Float = 1f, periodMs: Int = 2600) {
-    val stars = remember {
+internal fun TwinklingStars(modifier: Modifier = Modifier, count: Int = 100, brightness: Float = 1f, periodMs: Int = 2600) {
+    val stars = remember(count) {
         val random = Random(42)
         List(count) {
-            Star(random.nextFloat(), random.nextFloat(), 0.6f + random.nextFloat() * 1.8f, random.nextFloat())
+            val r = 0.5f + random.nextFloat() * 1.9f
+            Star(
+                x = random.nextFloat(),
+                y = random.nextFloat(),
+                radius = r,
+                phase = random.nextFloat(),
+                speed = 0.6f + random.nextFloat() * 1.8f,
+                isGlitter = r > 1.6f && random.nextFloat() < 0.35f
+            )
         }
     }
     val isAppForeground = com.example.ui.components.rememberAppIsResumed()
@@ -260,13 +275,47 @@ internal fun TwinklingStars(modifier: Modifier = Modifier, count: Int = 60, brig
     }
     Canvas(modifier = modifier) {
         stars.forEach { star ->
-            val twinkle = 0.3f + 0.7f * (0.5f + 0.5f * sin(2f * PI.toFloat() * (time + star.phase)))
+            // Dynamic blinking: deep valleys (stars dim/turn off) and crisp shining peaks
+            val rawWave = 0.5f + 0.5f * sin(2f * PI.toFloat() * (time * star.speed + star.phase))
+            val blink = (rawWave * rawWave).coerceIn(0.04f, 1f)
+            val alpha = blink * brightness
             val center = Offset(star.x * size.width, star.y * size.height)
             val r = star.radius.dp.toPx()
-            if (star.radius > 1.8f) {
-                drawCircle(Color.White.copy(alpha = 0.18f * twinkle * brightness), radius = r * 3f, center = center)
+
+            // Soft glow for larger stars when bright
+            if (star.radius > 1.5f && alpha > 0.3f) {
+                drawCircle(
+                    color = Color.White.copy(alpha = 0.16f * alpha),
+                    radius = r * 3.2f,
+                    center = center
+                )
             }
-            drawCircle(Color.White.copy(alpha = twinkle * brightness), radius = r, center = center)
+
+            // Core star dot
+            drawCircle(
+                color = Color.White.copy(alpha = alpha),
+                radius = r,
+                center = center
+            )
+
+            // Sparkle cross flare glint on prominent blinking stars at peak
+            if (star.isGlitter && alpha > 0.65f) {
+                val glintLength = r * 2.5f * (alpha - 0.5f) * 2f
+                val glintColor = Color.White.copy(alpha = 0.75f * alpha)
+                val strokeW = 1.dp.toPx()
+                drawLine(
+                    color = glintColor,
+                    start = Offset(center.x - glintLength, center.y),
+                    end = Offset(center.x + glintLength, center.y),
+                    strokeWidth = strokeW
+                )
+                drawLine(
+                    color = glintColor,
+                    start = Offset(center.x, center.y - glintLength),
+                    end = Offset(center.x, center.y + glintLength),
+                    strokeWidth = strokeW
+                )
+            }
         }
     }
 }
@@ -323,7 +372,7 @@ fun GoodnightCard(partnerName: String, onSendGoodnight: () -> Unit, onDismiss: (
                 // Taps on the card itself don't close it
                 .pointerInput(Unit) { detectTapGestures { } }
         ) {
-            TwinklingStars(modifier = Modifier.matchParentSize(), count = 34)
+            TwinklingStars(modifier = Modifier.matchParentSize(), count = 50)
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier
@@ -430,7 +479,7 @@ fun GoodnightStarsOverlay(partnerName: String, onDismiss: () -> Unit) {
             .testTag("goodnight_stars"),
         contentAlignment = Alignment.Center
     ) {
-        TwinklingStars(modifier = Modifier.fillMaxSize(), count = 80)
+        TwinklingStars(modifier = Modifier.fillMaxSize(), count = 140)
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Box(contentAlignment = Alignment.Center) {
                 Box(
