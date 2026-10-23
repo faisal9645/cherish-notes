@@ -433,12 +433,19 @@ fun MessageComposer(
         else if (isDark) Neutral700
         else Neutral300
     } else {
-        if (isDark) Color(0x403870FF) else Gray200
+        if (isDark) Color(0xFF526B96).copy(alpha = 0.30f) else Gray200
+    }
+    val typingFill = remember(isDark, pillBg) {
+        if (isDark) Brush.verticalGradient(
+            0f to Color(0xFF263653),
+            0.45f to Color(0xFF17243B),
+            1f to Color(0xFF111B2E)
+        ) else SolidColor(pillBg)
     }
     // The message box's shape: Day keeps its original rounder, slimmer pill
     val pillShape = RoundedCornerShape(if (isDark) 24.dp else 28.dp)
     val composerSidePadding = if (isDark) 16.dp else 12.dp
-    val composerIconTint = if (isDark) Color(0xFFCBD5E1) else MaterialTheme.colorScheme.onSurfaceVariant
+    val composerIconTint = if (isDark) Color(0xFFA9C5ED) else MaterialTheme.colorScheme.onSurfaceVariant
 
     // Emojis in the message box: the size they'll be in the sent message, the same however many
     // there are (picked or typed), so nothing jumps while typing
@@ -955,7 +962,7 @@ fun MessageComposer(
                             .fillMaxWidth()
                             .heightIn(min = if (isDark) 48.dp else 44.dp)
                             .clip(pillShape)
-                            .background(pillBg)
+                            .background(typingFill)
                             .border(BorderStroke(1.dp, pillBorder), pillShape)
                             .padding(start = 4.dp, end = 4.dp),
                         verticalAlignment = Alignment.CenterVertically
@@ -985,7 +992,7 @@ fun MessageComposer(
                             if (text.isEmpty()) {
                                 Text(
                                     text = placeholder,
-                                    color = if (isDark) Color(0xFF94A3B8) else Slate500,
+                                    color = if (isDark) Color(0xFFA1AEC4) else Slate500,
                                     fontSize = 13.sp,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
@@ -1001,7 +1008,7 @@ fun MessageComposer(
                                     lineHeight = composerFontSize * 1.3f
                                 ),
                                 visualTransformation = emojiVisualTransformation,
-                                cursorBrush = SolidColor(DayBluePrimary),
+                                cursorBrush = SolidColor(if (isDark) Color(0xFFA9C5ED) else DayBluePrimary),
                                 maxLines = 5,
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -1289,7 +1296,7 @@ fun MessageComposer(
                                         }
                                         .then(
                                             if (isRecordingVoice && !isPrivateMode) {
-                                                // Pulses but keeps the original pink gradient
+                                                // Pulses with the shared chat gradient
                                                 Modifier
                                                     .graphicsLayer {
                                                         scaleX = 1f + pulseAlpha.value * 0.1f

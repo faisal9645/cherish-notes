@@ -1,9 +1,9 @@
 {
-  "versionCode": 225,
-  "versionName": "1.8.53",
-  "tagName": "v1.8.53-225",
-  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.8.53-225/app_update_225.apk",
-  "assetSize": 19519676,
-  "releaseNotes": "Notes v1.8.53 (Build 225):\n\u2022 Enhanced dark mode message bubbles with rich midnight-blue gradients and crisp contrast\n\u2022 Refined subtle divider boundary in header\n\u2022 Celestial starry night goodnight wallpaper and stars\n\u2022 Clean Notes system branding across Android Settings\n\u2022 Performance optimizations and bug fixes",
-  "releaseDate": "2026-10-23T16:23:37Z"
+  "versionCode": 226,
+  "versionName": "1.8.54",
+  "tagName": "v1.8.54-226",
+  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.8.54-226/app_update_226.apk",
+  "assetSize": 19517652,
+  "releaseNotes": "Notes v1.8.54 (Build 226):\n\u2022 Unified midnight-blue themes across dark and AMOLED modes\n\u2022 Refined card surfaces, composer styling, and message bubbles\n\u2022 Enhanced contrast and border outlines across screens\n\u2022 Performance optimizations and stability improvements",
+  "releaseDate": "2026-10-23T16:40:54Z"
 }

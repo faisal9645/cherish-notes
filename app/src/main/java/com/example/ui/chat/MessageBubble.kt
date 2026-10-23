@@ -97,24 +97,31 @@ private val SentPhotosCaption = Regex("""Sent \d+ photos?""")
 internal class BubbleFill(val brush: Brush, val edge: Color?)
 
 /**
- * Opaque midnight-blue fills in dark mode; the original Notes palette in light mode.
+ * Sapphire glass lighting in dark mode; the original Notes palette in light mode.
  * Shapes and sizing are supplied by the existing message card.
  */
 @Composable
 internal fun rememberBubbleFill(isFromMe: Boolean, isDark: Boolean): BubbleFill {
     val black = com.example.ui.theme.LocalAmoledBlack.current
     val received = if (isDark) Color(0xFF263653) else MistBlue
-    val receivedEdge = if (isDark) Color(0xFF526B96).copy(alpha = 0.45f) else Gray200
+    val receivedEdge = if (isDark) Color(0xFF647DA8).copy(alpha = 0.30f) else Gray200
     return remember(isFromMe, black, isDark, received, receivedEdge) {
         if (isFromMe) BubbleFill(
             if (isDark) Brush.horizontalGradient(
-                0f to Color(0xFF2858D6),
-                0.55f to Color(0xFF2448B8),
-                1f to Color(0xFF183C9D)
+                0f to DarkBlueSecondary,
+                0.55f to DarkBluePrimary,
+                1f to DarkBlueTertiary
             ) else notesGradient(black = black, isDark = false),
-            edge = null
+            edge = if (isDark) Color(0xFF7197FF).copy(alpha = 0.25f) else null
         )
-        else BubbleFill(SolidColor(received), receivedEdge)
+        else BubbleFill(
+            if (isDark) Brush.verticalGradient(
+                0f to Color(0xFF344765).copy(alpha = 0.96f),
+                0.45f to received.copy(alpha = 0.96f),
+                1f to Color(0xFF1C2942).copy(alpha = 0.96f)
+            ) else SolidColor(received),
+            receivedEdge
+        )
     }
 }
 
@@ -756,7 +763,7 @@ fun MessageBubble(
                                 )
                             } else if (isPhotoOnly) Modifier
                             else if (isPrivateMode) Modifier
-                            // My partner's bubble has a fine edge; mine is just the blue
+                            // The existing inset border follows the exact same card shape.
                             else fill.edge?.let { Modifier.border(BorderStroke(if (isDark) 0.7.dp else 0.5.dp, it), cardShape) } ?: Modifier
                         )
                         .background(

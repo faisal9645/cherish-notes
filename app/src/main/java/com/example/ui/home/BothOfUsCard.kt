@@ -254,18 +254,18 @@ private val DayCard = CardColors(
 // decorations stay the same pink and blue as by day
 private val NightCard = CardColors(
     isLight = false,
-    background = Brush.verticalGradient(listOf(Color(0xFF111B45), NavyDeep)),
-    border = HeartbeatBlue.copy(alpha = 0.28f),
+    background = Brush.verticalGradient(listOf(Color(0xFF30415F), Color(0xFF263653))),
+    border = Color(0xFF526B96).copy(alpha = 0.45f),
     ink = Color(0xFFF3F4FA),
-    softInk = Color(0xFFBAC2E8),
+    softInk = Color(0xFFA9C5ED),
     pill = Color.White.copy(alpha = 0.08f),
     dimInk = Color(0xFFA6ADCB),
     hairline = Color.White.copy(alpha = 0.12f),
-    blueInk = HeartbeatBlue
+    blueInk = Color(0xFFA9C5ED)
 )
 
 /** The navy behind the night card's hearts (their separating edge matches it). */
-private val NightCardEdge = Color(0xFF0E1638)
+private val NightCardEdge = Color(0xFF263653)
 
 private val LocalCardColors = staticCompositionLocalOf { DayCard }
 
