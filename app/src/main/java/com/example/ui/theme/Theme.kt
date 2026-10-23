@@ -68,8 +68,8 @@ private val DarkColorScheme = darkColorScheme(
     surfaceContainerLowest = Color(0xFF000000),
     surfaceContainerHigh = Color(0xFF080808),
     surfaceContainerHighest = Color(0xFF101010),
-    outline = Color(0xFF646464),
-    outlineVariant = Color(0xFF383838)
+    outline = Color(0xFF262626),
+    outlineVariant = Color(0xFF171717)
 )
 
 // Black (AMOLED): black surfaces with the same sapphire action colours as chat.
@@ -90,8 +90,8 @@ private val AmoledBlackColorScheme = DarkColorScheme.copy(
     surfaceVariant = Color(0xFF000000),
     surfaceContainerHigh = Color(0xFF080808),
     surfaceContainerHighest = Color(0xFF101010),
-    outline = Color(0xFF646464),
-    outlineVariant = Color(0xFF383838)
+    outline = Color(0xFF262626),
+    outlineVariant = Color(0xFF171717)
 )
 
 /** True in the Black (AMOLED) theme, where dark surfaces are near-black greys instead of navy. */

@@ -425,24 +425,17 @@ fun MessageComposer(
         else if (isDark) Neutral800
         else Neutral200
     } else {
-        // Dark: see-through, so the wallpaper shines through; Day: plain white as before
-        if (isDark) Color.Transparent else Color.White
+        // Opaque midnight blue in dark mode; plain white in day mode.
+        if (isDark) Color(0xFF17243B) else Color.White
     }
     val pillBorder = if (isPrivateMode) {
         if (isAmoled) Neutral800
         else if (isDark) Neutral700
         else Neutral300
     } else {
-        if (isDark) Color(0xFF526B96).copy(alpha = 0.30f) else Gray200
+        if (isDark) MaterialTheme.colorScheme.outlineVariant else Gray200
     }
-    val opaque = LocalGoodnightSurfaces.current
-    val typingFill = remember(isDark, pillBg, opaque) {
-        if (isDark) Brush.verticalGradient(
-            0f to Color(0xFF263653).copy(alpha = if (opaque) 1f else 0.78f),
-            0.45f to Color(0xFF17243B).copy(alpha = if (opaque) 1f else 0.64f),
-            1f to Color(0xFF111B2E).copy(alpha = if (opaque) 1f else 0.72f)
-        ) else SolidColor(pillBg)
-    }
+    val typingFill = remember(pillBg) { SolidColor(pillBg) }
     // The message box's shape: Day keeps its original rounder, slimmer pill
     val pillShape = RoundedCornerShape(if (isDark) 24.dp else 28.dp)
     val composerSidePadding = if (isDark) 16.dp else 12.dp

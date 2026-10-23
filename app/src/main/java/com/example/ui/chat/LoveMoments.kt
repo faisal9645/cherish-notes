@@ -218,6 +218,13 @@ fun markGoodnightStarsSeen(context: Context, messageId: String) {
     lovePrefs(context).edit().putString("goodnight_stars_seen", messageId).apply()
 }
 
+fun isMorningGreetingSeen(context: Context, receiptKey: String): Boolean =
+    lovePrefs(context).getString("morning_greeting_seen", null) == receiptKey
+
+fun markMorningGreetingSeen(context: Context, receiptKey: String) {
+    lovePrefs(context).edit().putString("morning_greeting_seen", receiptKey).apply()
+}
+
 /** The mood (by the time it was set) whose hug nudge was already answered or closed. */
 fun hugNudgeHandledFor(context: Context): Long = lovePrefs(context).getLong("hug_nudge_handled", 0L)
 

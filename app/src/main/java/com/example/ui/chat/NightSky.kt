@@ -54,9 +54,6 @@ import kotlin.math.sin
 /** The chat's calm night (11 PM to 6 AM): its animations slower and softer, see NightCalm. */
 internal val LocalChatNight = staticCompositionLocalOf { false }
 
-/** Opaque chat surfaces while the good-night background is active. */
-internal val LocalGoodnightSurfaces = staticCompositionLocalOf { false }
-
 /** Whether it's the calm night now; it turns by itself at 11 PM and 6 AM. */
 @Composable
 internal fun rememberIsNight(): Boolean {

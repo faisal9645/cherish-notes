@@ -903,6 +903,7 @@ fun ChatScreen(
     // the anniversary / monthly date / 100th day (once that day), and from 11:30 PM the goodnight card
     // (once a night, unless a goodnight was already sent tonight)
     var showGoodMorning by remember { mutableStateOf(false) }
+    var showReceivedGoodMorning by remember { mutableStateOf(false) }
     var celebration by remember { mutableStateOf<String?>(null) }
     var showGoodnightCard by remember { mutableStateOf(false) }
     var showGoodnightStars by remember { mutableStateOf(false) }
@@ -1009,14 +1010,37 @@ fun ChatScreen(
             return@LaunchedEffect
         }
         if (isGoodnightDue(context) && !sentGoodnightTonight) {
-            while (showGoodMorning || celebration != null || showGoodnightStars) delay(250)
+            while (showGoodMorning || showReceivedGoodMorning || celebration != null || showGoodnightStars) delay(250)
             markGoodnightShown(context)
             showGoodnightCard = true
         }
     }
 
-    // The partner said goodnight: the first time it's seen (within the night), the screen softly
-    // dims with stars
+    // Persisted greetings also arrive after an offline session. Play on the recipient's
+    // visible chat, never based on the sender's current online status.
+    val latestReceivedMorning = remember(uiState.messages, currentUserId) {
+        uiState.messages
+            .filter { it.effect == EFFECT_GOODMORNING && it.senderId != currentUserId && !it.isDeleted }
+            .maxByOrNull { it.timestamp }
+    }
+    LaunchedEffect(latestReceivedMorning?.id, isChatInView, currentUserId) {
+        val greeting = latestReceivedMorning ?: return@LaunchedEffect
+        if (!isChatInView || currentUserId.isBlank()) return@LaunchedEffect
+        val receiptKey = "$currentUserId:${greeting.id}"
+        if (isMorningGreetingSeen(context, receiptKey)) return@LaunchedEffect
+        delay(1_500)
+        while (showGoodMorning || celebration != null || showGoodnightCard || showGoodnightStars) delay(250)
+        try {
+            showReceivedGoodMorning = true
+            withFrameNanos { }
+            markMorningGreetingSeen(context, receiptKey)
+            delay(8_500)
+        } finally {
+            showReceivedGoodMorning = false
+        }
+    }
+
+    // Keep an unseen goodnight pending until the recipient returns to dark chat.
     val latestGoodnight = remember(uiState.messages, currentUserId) {
         uiState.messages
             .filter { it.effect == EFFECT_GOODNIGHT && it.senderId != currentUserId && !it.isDeleted }
@@ -1025,12 +1049,12 @@ fun ChatScreen(
     LaunchedEffect(latestGoodnight?.id, isChatInView, isDark) {
         val goodnight = latestGoodnight ?: return@LaunchedEffect
         if (!isDark || !isChatInView || isGoodnightStarsSeen(context, goodnight.id)) return@LaunchedEffect
-        if (System.currentTimeMillis() - goodnight.timestamp > 10L * 60 * 60 * 1000) return@LaunchedEffect
         delay(600)
-        while (showGoodMorning || celebration != null || showGoodnightCard) delay(250)
-        markGoodnightStarsSeen(context, goodnight.id)
+        while (showGoodMorning || showReceivedGoodMorning || celebration != null || showGoodnightCard) delay(250)
         try {
             showGoodnightStars = true
+            withFrameNanos { }
+            markGoodnightStarsSeen(context, goodnight.id)
             delay(7_000)
         } finally {
             showGoodnightStars = false
@@ -1316,10 +1340,7 @@ fun ChatScreen(
     }
     // From 11 PM: the same colours, but slower, softer motion and quieter sounds (see NightCalm)
     val isNight = rememberIsNight()
-    val goodnightSurfaces = showWallpaper && isDark &&
-        (isNight || (bothSaidGoodnightTonight && !showSunrise))
     CompositionLocalProvider(LocalChatTextStyle provides chatTextStyle, LocalHugCouple provides hugCouple, LocalChatNight provides isNight, LocalAccordionPull provides accordion,
-        LocalGoodnightSurfaces provides goodnightSurfaces,
         com.example.ui.components.LocalVisualWorkAllowed provides chatVisualsActive) {
     Box(
         modifier = Modifier
@@ -1350,7 +1371,7 @@ fun ChatScreen(
         if (isDark) {
             TwinklingStars(
                 modifier = Modifier.fillMaxSize(),
-                count = 60,
+                count = 45,
                 brightness = 1f,
                 periodMs = 3_400,
                 maxYFraction = if (isNight) 0.62f else 1f,
@@ -2854,6 +2875,20 @@ fun ChatScreen(
     }
 
     androidx.compose.animation.AnimatedVisibility(
+        visible = showReceivedGoodMorning,
+        enter = fadeIn(tween(350)),
+        exit = fadeOut(tween(500))
+    ) {
+        GoodMorningGreeting(
+            myName = myUser?.displayName?.ifBlank { null } ?: "love",
+            partnerName = partnerName,
+            onSendGoodMorning = {},
+            received = true,
+            onDismiss = { showReceivedGoodMorning = false }
+        )
+    }
+
+    androidx.compose.animation.AnimatedVisibility(
         visible = celebration != null,
         enter = fadeIn(tween(350)),
         exit = fadeOut(tween(600))
@@ -3029,7 +3064,7 @@ fun ChatScreen(
             onMoreReactions = { viewModel.setSelectedMessageForActions(live) },
             onDismissed = { focusedMessage = null }
         ) {
-            CompositionLocalProvider(LocalChatTextStyle provides chatTextStyle, LocalHugCouple provides hugCouple, LocalChatNight provides isNight, LocalGoodnightSurfaces provides goodnightSurfaces) {
+            CompositionLocalProvider(LocalChatTextStyle provides chatTextStyle, LocalHugCouple provides hugCouple, LocalChatNight provides isNight) {
                 MessageBubble(
                     message = live,
                     isFromMe = focusedIsFromMe,
@@ -3820,16 +3855,17 @@ private fun GoodMorningGreeting(
     partnerName: String,
     onSendGoodMorning: () -> Unit,
     alreadySentToday: Boolean = false,
+    received: Boolean = false,
     onDismiss: () -> Unit
 ) {
-    var sent by remember { mutableStateOf(alreadySentToday) }
+    var sent by remember(received) { mutableStateOf(alreadySentToday) }
     val rise = remember { Animatable(0f) }
     val cardIn = remember { Animatable(0.86f) }
-    LaunchedEffect(Unit) {
+    LaunchedEffect(received) {
         launch { cardIn.animateTo(1f, spring(dampingRatio = 0.62f, stiffness = 380f)) }
         rise.animateTo(1f, tween(1400, easing = FastOutSlowInEasing))
         // Automatically send the good morning message without needing to type!
-        if (!sent) {
+        if (!received && !sent) {
             delay(700)
             if (!sent) {
                 sent = true
@@ -3920,7 +3956,7 @@ private fun GoodMorningGreeting(
                 Text(text = date, fontSize = 13.sp, color = Color(0xFF7A4A4E))
                 Spacer(modifier = Modifier.height(12.dp))
                 Text(
-                    text = if (sent) "Good morning sent to $partnerName \u2600\uFE0F\uD83D\uDC9B" else "A new day with $partnerName \uD83D\uDC9B",
+                    text = if (received) "$partnerName sent you a good morning \u2600\uFE0F\uD83D\uDC9B" else if (sent) "Good morning sent to $partnerName \u2600\uFE0F\uD83D\uDC9B" else "A new day with $partnerName \uD83D\uDC9B",
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Medium,
                     color = Color(0xFF5E3438),
@@ -3936,7 +3972,7 @@ private fun GoodMorningGreeting(
                         .pressScaleTarget()
                         .clip(RoundedCornerShape(50))
                         .springClickable {
-                            if (!sent) {
+                            if (!received && !sent) {
                                 sent = true
                                 onSendGoodMorning()
                             } else {
@@ -3946,7 +3982,7 @@ private fun GoodMorningGreeting(
                         .testTag("good_morning_auto_sent")
                 ) {
                     Text(
-                        text = if (sent) "Sent automatically \u2728" else "Sending good morning \u2600\uFE0F",
+                        text = if (received) "Close" else if (sent) "Sent automatically \u2728" else "Sending good morning \u2600\uFE0F",
                         fontSize = 14.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = Color(0xFF5A3015),
