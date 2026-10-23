@@ -1,9 +1,9 @@
 {
-  "versionCode": 217,
-  "versionName": "1.8.45",
-  "tagName": "v1.8.45-217",
-  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.8.45-217/app_update_217.apk",
-  "assetSize": 19553300,
-  "releaseNotes": "Notes v1.8.45 (Build 217):\n• GIFs excluded from All gallery media filter\n• Gentle, smooth floating wallpaper tilt parallax\n• Translucent midnight glass blur styling for keyboard and bottom bar\n• Video player and video note dynamic aspect ratio scaling fixes",
-  "releaseDate": "2026-10-23T04:56:40Z"
+  "versionCode": 218,
+  "versionName": "1.8.46",
+  "tagName": "v1.8.46-218",
+  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.8.46-218/app_update_218.apk",
+  "assetSize": 19551420,
+  "releaseNotes": "Notes v1.8.46 (Build 218):\n• Fixes the app closing on open after the last update\n• Day mode is clean and white again\n• Classic blue look restored\n• Bug fixes and refinements",
+  "releaseDate": "2026-10-23T06:00:33Z"
 }

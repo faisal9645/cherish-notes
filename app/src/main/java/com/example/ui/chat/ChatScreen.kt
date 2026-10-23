@@ -1406,17 +1406,17 @@ fun ChatScreen(
                 val topBarActionBtnSize = when {
                     isCompactTopBar -> 29.5.dp
                     isMediumTopBar -> 32.dp
-                    else -> 36.dp
+                    else -> 34.dp
                 }
                 val topBarActionIconSize = when {
                     isCompactTopBar -> 19.5.dp
                     isMediumTopBar -> 21.dp
-                    else -> 23.dp
+                    else -> 22.dp
                 }
                 val topBarActionSpacing = when {
                     isCompactTopBar -> 0.dp
                     isMediumTopBar -> 0.5.dp
-                    else -> 2.dp
+                    else -> 1.dp
                 }
                 val topBarNavBtnSize = when {
                     isCompactTopBar -> 31.dp
@@ -4616,27 +4616,37 @@ private fun ChatPartnerHeaderContent(
 
     val partnerName = presence.displayName.ifBlank { fallbackPartnerName }
 
+    val partnerMood = presence.mood?.takeIf {
+        val moodAt = presence.moodAt
+        moodAt == 0L || System.currentTimeMillis() - moodAt < MOOD_FRESH_MS
+    }?.trim()
+    val hasMood = !partnerMood.isNullOrBlank()
+
     val screenWidthDp = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp
     val fontScale = androidx.compose.ui.platform.LocalDensity.current.fontScale
     val isCompact = screenWidthDp < 370 || (screenWidthDp < 390 && fontScale > 1.05f)
     val isMedium = screenWidthDp in 370..405 && fontScale <= 1.05f
 
     val avatarSize = when {
+        hasMood -> if (isCompact) 38.dp else if (isMedium) 42.dp else 44.dp
         isCompact -> 44.dp
         isMedium -> 48.dp
         else -> 52.dp
     }
     val avatarSpacer = when {
+        hasMood -> if (isCompact) 4.dp else 6.dp
         isCompact -> 6.dp
         isMedium -> 8.dp
         else -> 9.dp
     }
     val nameFontSize = when {
+        hasMood -> if (isCompact) 13.5.sp else if (isMedium) 14.sp else 14.5.sp
         isCompact -> 15.sp
         isMedium -> 16.sp
         else -> 17.sp
     }
     val nameLineHeight = when {
+        hasMood -> if (isCompact) 16.sp else if (isMedium) 16.5.sp else 17.5.sp
         isCompact -> 17.5.sp
         isMedium -> 18.5.sp
         else -> 19.5.sp
@@ -4681,7 +4691,7 @@ private fun ChatPartnerHeaderContent(
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                horizontalArrangement = Arrangement.spacedBy(if (hasMood) 3.5.dp else 6.dp)
             ) {
                 val cleanPartnerName = partnerName.replace("💕", "").replace("❤️", "").trim()
                 Text(
@@ -4696,31 +4706,39 @@ private fun ChatPartnerHeaderContent(
                 )
                 Text(
                     text = "💕",
-                    fontSize = (nameFontSize.value * 0.92f).sp,
+                    fontSize = if (hasMood) (nameFontSize.value * 0.88f).sp else (nameFontSize.value * 0.92f).sp,
                     lineHeight = nameLineHeight
                 )
 
-                val partnerMood = presence.mood?.takeIf {
-                    val moodAt = presence.moodAt
-                    moodAt == 0L || System.currentTimeMillis() - moodAt < MOOD_FRESH_MS
-                }
-                if (!partnerMood.isNullOrBlank()) {
+                if (hasMood && partnerMood != null) {
+                    val moodLength = partnerMood.length
+                    val moodFontSize = when {
+                        moodLength > 18 -> if (isCompact) 7.5.sp else 8.sp
+                        moodLength > 12 -> if (isCompact) 8.sp else 8.5.sp
+                        moodLength > 7  -> if (isCompact) 8.5.sp else 9.sp
+                        else            -> if (isCompact) 9.sp else 9.5.sp
+                    }
+                    val maxMoodWidth = when {
+                        isCompact -> 120.dp
+                        isMedium -> 140.dp
+                        else -> 160.dp
+                    }
                     Surface(
-                        shape = RoundedCornerShape(12.dp),
+                        shape = RoundedCornerShape(8.dp),
                         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.75f),
                         modifier = Modifier
-                            .weight(1f, fill = false)
+                            .widthIn(max = maxMoodWidth)
                             .clickable { onMoodClick() }
                     ) {
                         EmojiText(
                             text = partnerMood,
-                            fontSize = 10.sp,
+                            fontSize = moodFontSize,
                             fontWeight = FontWeight.Medium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
-                            emojiScale = 1.2f,
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            emojiScale = 1.05f,
+                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
                         )
                     }
                 }

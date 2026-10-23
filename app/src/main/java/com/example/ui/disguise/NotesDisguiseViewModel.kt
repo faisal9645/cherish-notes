@@ -326,7 +326,7 @@ class NotesDisguiseViewModel(
         // Not back into Notes itself
         chooser.putExtra(
             Intent.EXTRA_EXCLUDE_COMPONENTS,
-            arrayOf(android.content.ComponentName(context, com.example.share.ShareReceiverActivity::class.java))
+            com.example.share.ShareRotationHelper.getAllShareComponents(context)
         )
         chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         context.startActivity(chooser)

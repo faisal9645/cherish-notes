@@ -110,10 +110,10 @@ class SecurityPreferences(private val context: Context) {
 
     /**
      * The app is the Calculator right now: its icon, its name in notifications and recent apps, and
-     * what hides Cherish. The Calculator is the app's own identity (its name and icon in Settings),
-     * so it's Notes only while Disguise Mode is on with Notes picked.
+     * what hides Cherish. It's Calculator only while Disguise Mode is on with Calculator picked;
+     * otherwise the app is Notes (its base identity, and when Notes disguise is picked).
      */
-    fun isCalculatorDecoy(): Boolean = !isDisguiseModeEnabled() || getDisguiseStyle() == DISGUISE_STYLE_CALCULATOR
+    fun isCalculatorDecoy(): Boolean = isDisguiseModeEnabled() && getDisguiseStyle() == DISGUISE_STYLE_CALCULATOR
 
     /** The style the app wears right now (see [isCalculatorDecoy]). */
     fun currentDecoyStyle(): String = if (isCalculatorDecoy()) DISGUISE_STYLE_CALCULATOR else DISGUISE_STYLE_NOTES
@@ -159,67 +159,23 @@ class SecurityPreferences(private val context: Context) {
             val isCalc = isCalculatorDecoy()
             val incoming = if (isCalc) calcComp else notesComp
             val outgoing = if (isCalc) notesComp else calcComp
+
             // "Share to Notes" is offered only while the app is Notes (a calculator taking shares
-            // would stand out in every share sheet)
-            setComponentOn(pm, shareComp, !isCalc)
+            // would stand out in every share sheet). Rotating aliases ensures Android never ranks it as #1 or #2.
+            com.example.share.ShareRotationHelper.syncShareAliases(context)
 
-            val incomingOn = isComponentOn(pm, incoming)
-            val outgoingOn = isComponentOn(pm, outgoing)
-            // Phones whose launcher already filed the icon under the wrong letter get it re-filed once
-            val refile = !prefs.getBoolean(KEY_DRAWER_ICON_REFILED, false)
-            if (incomingOn && !outgoingOn && !refile) return
-
-            // Every launcher entry goes off first (the right one too, when re-filing it)...
-            val goingOff = listOfNotNull(outgoing.takeIf { outgoingOn }, incoming.takeIf { incomingOn })
-            if (goingOff.isNotEmpty()) {
-                awaitPackageChangeSent {
-                    goingOff.forEach { setComponentOn(pm, it, false) }
-                }
-                // ...the launcher drops the old item...
-                kotlinx.coroutines.delay(LAUNCHER_SETTLE_MS)
-            }
-            // ...and the right icon comes in as a new app. (If the app was killed halfway, there's no
-            // icon on at all, and the next start lands here straight away.)
+            // Immediately enable the active disguise entry so the launcher, recents, and
+            // Android App Info immediately resolve the right app name and icon
             setComponentOn(pm, incoming, true)
+
+            // Disable the inactive disguise entry
+            setComponentOn(pm, outgoing, false)
+
             prefs.edit().putBoolean(KEY_DRAWER_ICON_REFILED, true).apply()
         } catch (_: Throwable) {}
     }
 
-    /**
-     * Runs [change] and returns once Android has sent out the "package changed" broadcast that
-     * carries it, or after [PACKAGE_CHANGE_WAIT_MS] if it never comes.
-     */
-    private suspend fun awaitPackageChangeSent(change: () -> Unit) {
-        val sent = kotlinx.coroutines.CompletableDeferred<Unit>()
-        val receiver = object : android.content.BroadcastReceiver() {
-            override fun onReceive(c: Context, intent: android.content.Intent) {
-                sent.complete(Unit)
-            }
-        }
-        val filter = android.content.IntentFilter(android.content.Intent.ACTION_PACKAGE_CHANGED).apply {
-            addDataScheme("package")
-            addDataSchemeSpecificPart(context.packageName, android.os.PatternMatcher.PATTERN_LITERAL)
-        }
-        val listening = try {
-            androidx.core.content.ContextCompat.registerReceiver(
-                context,
-                receiver,
-                filter,
-                androidx.core.content.ContextCompat.RECEIVER_NOT_EXPORTED
-            )
-            true
-        } catch (_: Throwable) {
-            false
-        }
-        try {
-            change()
-            kotlinx.coroutines.withTimeoutOrNull(PACKAGE_CHANGE_WAIT_MS) { sent.await() }
-        } finally {
-            if (listening) {
-                try { context.unregisterReceiver(receiver) } catch (_: Throwable) {}
-            }
-        }
-    }
+
 
     /** A component's real state: what it was switched to, or its manifest default if never switched */
     @Suppress("DEPRECATION")
@@ -1416,11 +1372,7 @@ class SecurityPreferences(private val context: Context) {
         private const val KEY_HAS_ALERTED_SINCE_LAST_OPEN = "has_alerted_since_last_open"
         // v3: the earlier re-file switched the icon back on too soon to take effect
         private const val KEY_DRAWER_ICON_REFILED = "drawer_icon_refiled_v3"
-        // Android sends launcher icon changes out about a second after they're made (10 s on older
-        // versions and just after boot); this is how long to wait for that broadcast at most
-        private const val PACKAGE_CHANGE_WAIT_MS = 12_000L
-        // Then how long the launcher gets to drop the old icon before the new one comes on
-        private const val LAUNCHER_SETTLE_MS = 2_000L
+
 
         @Volatile
         private var INSTANCE: SecurityPreferences? = null

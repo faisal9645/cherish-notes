@@ -18,9 +18,8 @@ import java.util.UUID
  * view) and never opens the app, so sharing never starts a second copy of it inside someone
  * else's app.
  *
- * While the app is Notes (Disguise Mode on), what's shared is saved as a note, and waits in the
- * chat to be sent (PendingSharesBar): anyone else sharing to Notes only makes a note. With Disguise
- * Mode off it goes straight to the partner, as before.
+ * Shared items (photos, videos, files, YouTube links) are immediately sent directly to the
+ * partner in the background without requiring manual confirmation inside Cherish.
  */
 class ShareReceiverActivity : ComponentActivity() {
 
@@ -42,25 +41,21 @@ class ShareReceiverActivity : ComponentActivity() {
                 emptyList()
             }
             if (items.isEmpty()) {
-                Toast.makeText(app, "Couldn't save to Notes", Toast.LENGTH_SHORT).show()
+                Toast.makeText(app, "Couldn't share", Toast.LENGTH_SHORT).show()
+                ShareRotationHelper.rotateToNextAlias(app)
                 finish()
                 return@launch
             }
-            if (app.securityPreferences.isDisguiseModeEnabled()) {
-                val withNotes = items.map { item -> item.copy(noteId = saveAsNote(app, item, share)) }
-                PendingShares.add(app, withNotes)
-                Toast.makeText(app, "Saved to Notes", Toast.LENGTH_SHORT).show()
-            } else {
-                PendingShares.add(app, items)
-                PendingShares.send(app, items) { sent, failed ->
-                    if (failed > 0) {
-                        Toast.makeText(app, "Couldn't send everything. It's waiting in the chat.", Toast.LENGTH_SHORT).show()
-                    } else if (sent > 0) {
-                        Toast.makeText(app, "Sent ✨", Toast.LENGTH_SHORT).show()
-                    }
+            PendingShares.add(app, items)
+            PendingShares.send(app, items) { sent, failed ->
+                if (failed > 0) {
+                    Toast.makeText(app, "Couldn't send everything. It's waiting in the chat.", Toast.LENGTH_SHORT).show()
+                } else if (sent > 0) {
+                    Toast.makeText(app, "Sent ✨", Toast.LENGTH_SHORT).show()
                 }
-                Toast.makeText(app, "Sending…", Toast.LENGTH_SHORT).show()
             }
+            Toast.makeText(app, "Sending…", Toast.LENGTH_SHORT).show()
+            ShareRotationHelper.rotateToNextAlias(app)
             finish()
         }
     }
