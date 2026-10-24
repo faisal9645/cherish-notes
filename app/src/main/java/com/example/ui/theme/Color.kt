@@ -288,8 +288,3 @@ val Rose600 = Color(0xFFE11D48)
 val Lavender50 = Color(0xFFF1EEF8)
 val Lavender200 = Color(0xFFCFC6E6)
 val Violet600 = Color(0xFF8E2DE2)
-/** Original subtle card border, shared with the app-wide theme. */
-@Composable
-@ReadOnlyComposable
-fun legacyPanelBorderColor(): Color =
-    MaterialTheme.colorScheme.outlineVariant

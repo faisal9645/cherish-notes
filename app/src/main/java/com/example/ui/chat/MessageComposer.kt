@@ -433,7 +433,7 @@ fun MessageComposer(
         else if (isDark) Neutral700
         else Neutral300
     } else {
-        if (isDark) MaterialTheme.colorScheme.outlineVariant else Gray200
+        if (isDark) darkSurface(NavyRaised, Neutral800) else Gray200
     }
     val typingFill = remember(pillBg) { SolidColor(pillBg) }
     // The message box's shape: Day keeps its original rounder, slimmer pill

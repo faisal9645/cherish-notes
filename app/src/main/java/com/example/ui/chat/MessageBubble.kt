@@ -97,19 +97,22 @@ private val SentPhotosCaption = Regex("""Sent \d+ photos?""")
 internal class BubbleFill(val brush: Brush, val edge: Color?)
 
 /**
- * Solid blue surfaces in dark mode; the original Notes palette in light mode.
+ * Opaque day-blue gradient, slightly darkened at night; solid received surfaces.
  * Shapes and sizing are supplied by the existing message card.
  */
 @Composable
 internal fun rememberBubbleFill(isFromMe: Boolean, isDark: Boolean): BubbleFill {
-    val black = com.example.ui.theme.LocalAmoledBlack.current
     val received = if (isDark) Color(0xFF263653) else MistBlue
-    val receivedEdge = if (isDark) MaterialTheme.colorScheme.outlineVariant else Gray200
-    return remember(isFromMe, black, isDark, received, receivedEdge) {
+    val receivedEdge = if (isDark) darkSurface(NavyRaised, Neutral800) else Gray200
+    return remember(isFromMe, isDark, received, receivedEdge) {
+        val shade = if (isDark) 0.18f else 0f
         if (isFromMe) BubbleFill(
-            if (isDark) SolidColor(DarkBluePrimary)
-            else notesGradient(black = black, isDark = false),
-            edge = if (isDark) receivedEdge else null
+            Brush.horizontalGradient(
+                0f to androidx.compose.ui.graphics.lerp(DayBlueSecondary, Color.Black, shade),
+                0.55f to androidx.compose.ui.graphics.lerp(DayBluePrimary, Color.Black, shade),
+                1f to androidx.compose.ui.graphics.lerp(DayBlueTertiary, Color.Black, shade)
+            ),
+            edge = null
         )
         else BubbleFill(
             SolidColor(received),
@@ -756,8 +759,11 @@ fun MessageBubble(
                                 )
                             } else if (isPhotoOnly) Modifier
                             else if (isPrivateMode) Modifier
-                            // The existing inset border follows the exact same card shape.
-                            else fill.edge?.let { Modifier.border(BorderStroke(if (isDark) 0.7.dp else 0.5.dp, it), cardShape) } ?: Modifier
+                            else if (!isFromMe) Modifier.border(
+                                BorderStroke(0.5.dp, if (isDark) darkSurface(NavyRaised, Neutral800) else Gray200),
+                                cardShape
+                            )
+                            else Modifier
                         )
                         .background(
                             if (isPhotoOnly) androidx.compose.ui.graphics.SolidColor(Color.Transparent)
