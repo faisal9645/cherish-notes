@@ -425,24 +425,26 @@ fun MessageComposer(
         else if (isDark) Neutral800
         else Neutral200
     } else {
-        // Opaque neutral charcoal in dark mode; plain white in day mode.
-        if (isDark) Color(0xFF181818) else Color.White
+        // A subdued version of the shared chat blue, with the original white day surface.
+        if (isDark) androidx.compose.ui.graphics.lerp(MaterialTheme.colorScheme.primary, Color.Black, 0.75f)
+        else Color.White
     }
     val pillBorder = if (isPrivateMode) {
         if (isAmoled) Neutral800
         else if (isDark) Neutral700
         else Neutral300
     } else {
-        if (isDark) Color(0xFF262626) else Gray200
+        if (isDark) MaterialTheme.colorScheme.secondary.copy(alpha = 0.30f) else Gray200
     }
     val composerBackdrop = LocalComposerBackdrop.current.takeIf { isDark && !isPrivateMode }
     val typingFill = remember(pillBg, composerBackdrop) {
-        SolidColor(if (composerBackdrop != null) pillBg.copy(alpha = 0.65f) else pillBg)
+        // A light matte tint lets the blurred wallpaper show through without glass highlights.
+        SolidColor(if (composerBackdrop != null) pillBg.copy(alpha = 0.35f) else pillBg)
     }
     // The message box's shape: Day keeps its original rounder, slimmer pill
     val pillShape = RoundedCornerShape(if (isDark) 24.dp else 28.dp)
     val composerSidePadding = if (isDark) 16.dp else 12.dp
-    val composerIconTint = if (isDark) Color(0xFFCBD5E1) else MaterialTheme.colorScheme.onSurfaceVariant
+    val composerIconTint = if (isDark) Color(0xFFD1D1D1) else MaterialTheme.colorScheme.onSurfaceVariant
 
     // Emojis in the message box: the size they'll be in the sent message, the same however many
     // there are (picked or typed), so nothing jumps while typing
