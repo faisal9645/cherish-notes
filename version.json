@@ -1,9 +1,9 @@
 {
-  "versionCode": 235,
-  "versionName": "1.8.63",
-  "tagName": "v1.8.63-235",
-  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.8.63-235/app_update_235.apk",
-  "assetSize": 20259444,
-  "releaseNotes": "Notes v1.8.63 (Build 235):\n- Good-night stars timing and neutral dark chat styling update.",
-  "releaseDate": "2026-10-24T04:34:58Z"
+  "versionCode": 236,
+  "versionName": "1.8.64",
+  "tagName": "v1.8.64-236",
+  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.8.64-236/app_update_236.apk",
+  "assetSize": 20349256,
+  "releaseNotes": "Notes v1.8.64 (Build 236):\n- Composer backdrop blur and refined chat wallpaper styling.",
+  "releaseDate": "2026-10-24T05:13:18Z"
 }

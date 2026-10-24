@@ -97,7 +97,7 @@ private val SentPhotosCaption = Regex("""Sent \d+ photos?""")
 internal class BubbleFill(val brush: Brush, val edge: Color?)
 
 /**
- * Opaque day-blue gradient, slightly darkened at night; solid received surfaces.
+ * Original opaque blue gradient in both themes; solid received surfaces.
  * Shapes and sizing are supplied by the existing message card.
  */
 @Composable
@@ -105,12 +105,11 @@ internal fun rememberBubbleFill(isFromMe: Boolean, isDark: Boolean): BubbleFill 
     val received = if (isDark) Color(0xFF202020) else MistBlue
     val receivedEdge = if (isDark) Color(0xFF262626) else Gray200
     return remember(isFromMe, isDark, received, receivedEdge) {
-        val shade = if (isDark) 0.18f else 0f
         if (isFromMe) BubbleFill(
             Brush.horizontalGradient(
-                0f to androidx.compose.ui.graphics.lerp(DayBlueSecondary, Color.Black, shade),
-                0.55f to androidx.compose.ui.graphics.lerp(DayBluePrimary, Color.Black, shade),
-                1f to androidx.compose.ui.graphics.lerp(DayBlueTertiary, Color.Black, shade)
+                0f to DayBlueSecondary,
+                0.55f to DayBluePrimary,
+                1f to DayBlueTertiary
             ),
             edge = null
         )

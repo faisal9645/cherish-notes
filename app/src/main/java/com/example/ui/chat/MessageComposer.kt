@@ -435,11 +435,14 @@ fun MessageComposer(
     } else {
         if (isDark) Color(0xFF262626) else Gray200
     }
-    val typingFill = remember(pillBg) { SolidColor(pillBg) }
+    val composerBackdrop = LocalComposerBackdrop.current.takeIf { isDark && !isPrivateMode }
+    val typingFill = remember(pillBg, composerBackdrop) {
+        SolidColor(if (composerBackdrop != null) pillBg.copy(alpha = 0.65f) else pillBg)
+    }
     // The message box's shape: Day keeps its original rounder, slimmer pill
     val pillShape = RoundedCornerShape(if (isDark) 24.dp else 28.dp)
     val composerSidePadding = if (isDark) 16.dp else 12.dp
-    val composerIconTint = if (isDark) Color(0xFFA9C5ED) else MaterialTheme.colorScheme.onSurfaceVariant
+    val composerIconTint = if (isDark) Color(0xFFCBD5E1) else MaterialTheme.colorScheme.onSurfaceVariant
 
     // Emojis in the message box: the size they'll be in the sent message, the same however many
     // there are (picked or typed), so nothing jumps while typing
@@ -956,6 +959,7 @@ fun MessageComposer(
                             .fillMaxWidth()
                             .heightIn(min = if (isDark) 48.dp else 44.dp)
                             .clip(pillShape)
+                            .composerBackdropBlur(composerBackdrop)
                             .background(typingFill)
                             .border(BorderStroke(1.dp, pillBorder), pillShape)
                             .padding(start = 4.dp, end = 4.dp),
@@ -971,7 +975,7 @@ fun MessageComposer(
                             Icon(
                                 imageVector = if (isEmojiBoardShown) Icons.Rounded.Keyboard else Icons.Rounded.Mood,
                                 contentDescription = "Toggle emoji panel",
-                                tint = if (isEmojiBoardShown) MaterialTheme.colorScheme.primary else composerIconTint,
+                                tint = if (!isDark && isEmojiBoardShown) MaterialTheme.colorScheme.primary else composerIconTint,
                                 modifier = Modifier.size(24.dp)
                             )
                         }

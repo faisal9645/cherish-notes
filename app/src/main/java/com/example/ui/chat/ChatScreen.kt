@@ -1276,19 +1276,21 @@ fun ChatScreen(
     // Scroll to exact target message when navigating from gallery ("Show in chat")
     // Found in the rows the list actually shows (worked out a moment after the messages), so the
     // index is the list's own
-    LaunchedEffect(uiState.targetScrollMessageId, reversedChatRowItems.size) {
+    LaunchedEffect(uiState.targetScrollMessageId, reversedChatRowItems) {
         val targetId = uiState.targetScrollMessageId
         if (targetId != null && reversedChatRowItems.isNotEmpty()) {
             val targetIndex = reversedChatRowItems.indexOfFirst { it.message.id == targetId }
             if (targetIndex >= 0) {
                 // Coming back from the gallery or calendar search, the list lays out first
-                kotlinx.coroutines.withTimeoutOrNull(1_500) {
+                val laidOut = kotlinx.coroutines.withTimeoutOrNull(5_000) {
                     snapshotFlow { listState.layoutInfo.totalItemsCount }.first { it > targetIndex }
                 }
-                delay(100)
+                if (laidOut == null) return@LaunchedEffect
                 highlightedMessageId = targetId
                 try {
                     listState.scrollToItem(targetIndex)
+                } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                    throw cancelled
                 } catch (_: Exception) {
                     listState.revealMessage(targetIndex)
                 }
@@ -1300,10 +1302,14 @@ fun ChatScreen(
     }
     // Never found (say, older than the chat shows): given up once older chat has stopped coming in
     // for a while, so the chat follows new messages again
-    LaunchedEffect(uiState.targetScrollMessageId, reversedChatRowItems.size) {
+    LaunchedEffect(uiState.targetScrollMessageId, reversedChatRowItems, uiState.isLoadingMore) {
         val targetId = uiState.targetScrollMessageId ?: return@LaunchedEffect
-        delay(12_000)
-        if (viewModel.uiState.value.targetScrollMessageId == targetId) viewModel.clearTargetScrollMessageId()
+        if (uiState.isLoadingMore || reversedChatRowItems.any { it.message.id == targetId }) return@LaunchedEffect
+        delay(30_000)
+        if (viewModel.uiState.value.targetScrollMessageId == targetId) {
+            viewModel.clearTargetScrollMessageId()
+            CherishToast.show("Couldn't find this message in the available chat history.", long = true)
+        }
     }
 
     // Leaving the chat: stop any voice recording and hide the history again
@@ -1340,7 +1346,10 @@ fun ChatScreen(
     }
     // From 11 PM: the same colours, but slower, softer motion and quieter sounds (see NightCalm)
     val isNight = rememberIsNight()
+    val composerBackdrop = rememberComposerBackdrop()
+        .takeIf { showWallpaper && isDark && android.os.Build.VERSION.SDK_INT >= 31 }
     CompositionLocalProvider(LocalChatTextStyle provides chatTextStyle, LocalHugCouple provides hugCouple, LocalChatNight provides isNight, LocalAccordionPull provides accordion,
+        LocalComposerBackdrop provides composerBackdrop,
         com.example.ui.components.LocalVisualWorkAllowed provides chatVisualsActive) {
     Box(
         modifier = Modifier
@@ -1358,7 +1367,7 @@ fun ChatScreen(
     if (showWallpaper) {
         ChatWallpaper(
             chatBgTheme = uiState.chatBgTheme,
-            modifier = Modifier.fillMaxSize()
+            modifier = Modifier.fillMaxSize().recordComposerBackdrop(composerBackdrop)
         )
         NightSky(
             starry = isDark && bothSaidGoodnightTonight && !showSunrise,
@@ -3407,7 +3416,9 @@ fun ChatScreen(
             mediaTimes = mediaTimes,
             onShowInChat = { clickedUrl ->
                 val targetMsg = uiState.messages.find { it.mediaUrl == clickedUrl || it.getAllMediaUrls().contains(clickedUrl) }
-                if (targetMsg != null && !viewModel.navigateToMessageInChat(targetMsg.id)) {
+                if (targetMsg == null) {
+                    CherishToast.show("The original message is no longer available.", long = true)
+                } else if (!viewModel.navigateToMessageInChat(targetMsg.id)) {
                     CherishToast.show("Older chat is hidden. Use Recover All in settings to see it.", long = true)
                 }
             },

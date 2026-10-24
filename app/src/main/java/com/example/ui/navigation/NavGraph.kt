@@ -550,7 +550,10 @@ fun CherishNavGraph(
                 onNavigateToMessage = { messageId ->
                     if (sharedChatViewModel.navigateToMessageInChat(messageId)) {
                         app.securityPreferences.ignoreChatNavigation = false
-                        navController.popBackStack()
+                        val popped = navController.popBackStack(Screen.Chat.route, inclusive = false)
+                        if (!popped) {
+                            navController.navigate(Screen.Chat.route) { launchSingleTop = true }
+                        }
                     } else {
                         CherishToast.show("Older chat is hidden. Use Recover All in settings to see it.", long = true)
                     }

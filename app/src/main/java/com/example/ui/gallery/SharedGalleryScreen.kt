@@ -2104,10 +2104,15 @@ fun SharedGalleryScreen(
             circularMediaUrls = circularUrls,
             mediaTimes = mediaTimes,
             onShowInChat = { clickedUrl ->
-                val targetMsg = sourceMessages.find { it.mediaUrl == clickedUrl || it.getAllMediaUrls().contains(clickedUrl) }
+                val targetMsg = sourceMessages.find {
+                    it.id == selectedMessageIdForViewer &&
+                        (it.mediaUrl == clickedUrl || clickedUrl in it.getAllMediaUrls())
+                } ?: sourceMessages.find { it.mediaUrl == clickedUrl || it.getAllMediaUrls().contains(clickedUrl) }
                     ?: allGalleryItems.find { it.mediaUrl == clickedUrl || it.getAllMediaUrls().contains(clickedUrl) }
                 if (targetMsg != null) {
                     onNavigateToMessage(targetMsg.id)
+                } else {
+                    CherishToast.show("The original message is no longer available.", long = true)
                 }
             },
             onDeleteMedia = { clickedUrl ->

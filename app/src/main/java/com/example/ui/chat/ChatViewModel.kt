@@ -1355,6 +1355,7 @@ class ChatViewModel(
      * all hasn't been used (nothing older is revealed).
      */
     fun navigateToMessageInChat(messageId: String): Boolean {
+        if (messageId.isBlank()) return false
         val target = _uiState.value.messages.find { it.id == messageId }
             ?: chatRepository.galleryMediaMessages.value.find { it.id == messageId }
         val isTodays = target != null && com.example.util.ChatTimeFormatter.isToday(target.timestamp)
@@ -1371,7 +1372,16 @@ class ChatViewModel(
                 loadHistoryUntil(messageId)
             }
         }
-        _uiState.update { it.copy(targetScrollMessageId = messageId) }
+        // A gallery jump must not remain hidden behind an unrelated search or star filter.
+        setSearching(false)
+        _uiState.update {
+            it.copy(
+                filterStarredOnly = false,
+                showPreviousChats = if (!isTodays) true else it.showPreviousChats,
+                isSecretHistoryRevealed = if (!isTodays) true else it.isSecretHistoryRevealed,
+                targetScrollMessageId = messageId
+            )
+        }
         return true
     }
 
