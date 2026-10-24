@@ -1311,6 +1311,13 @@ class ChatRepository(
         }
     }
 
+    /** One entry point for opening a YouTube message from chat, gallery or theater. */
+    fun recordYouTubeOpened(messageId: String, videoId: String) {
+        com.example.ui.gallery.GalleryPlayedManager.setPlayed(context, messageId, true)
+        com.example.ui.gallery.GalleryPlayedManager.setPlayed(context, videoId, true)
+        markYouTubePlayed(messageId)
+    }
+
     fun markYouTubePlayed(messageId: String) {
         val uid = authRepository.getCurrentUserId()
         val message = _messagesFlow.value.find { it.id == messageId }
@@ -1325,6 +1332,7 @@ class ChatRepository(
             .addOnSuccessListener {
                 updateMessageEverywhere(messageId) { it.copy(isYouTubePlayed = true) }
             }
+            .addOnFailureListener { Log.w("ChatRepository", "YouTube opened receipt could not be saved", it) }
     }
 
     fun markAudioPlayed(messageId: String) {

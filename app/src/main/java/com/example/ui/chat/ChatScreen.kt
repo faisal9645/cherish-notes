@@ -338,6 +338,7 @@ fun ChatScreen(
     val kissListCoords = remember { arrayOfNulls<androidx.compose.ui.layout.LayoutCoordinates>(1) }
     val kissRootCoords = remember { arrayOfNulls<androidx.compose.ui.layout.LayoutCoordinates>(1) }
     var showMoodPicker by remember { mutableStateOf(false) }
+    var weeklyMoodPicker by remember { mutableStateOf(false) }
     var showScheduleSheet by remember { mutableStateOf(false) }
     var showScheduledList by remember { mutableStateOf(false) }
     // The calendar in chat search
@@ -3202,7 +3203,7 @@ fun ChatScreen(
 
     WeeklyMoodPrompt(
         userId = myUser?.id.orEmpty(),
-        visible = isChatInView,
+        visible = isChatInView && uiState.chatExperienceMode != ChatExperienceMode.PRIVATE,
         canAsk = {
             composerState.text.isBlank() && !uiState.isSearching && uiState.fullScreenMediaUrl == null &&
                 !isRecordingVoice && !showVideoNoteRecorder && !showMoodPicker &&
@@ -3214,7 +3215,7 @@ fun ChatScreen(
                 showDeleteConfirmDialog == null && !showMultiDeleteConfirmDialog && !showClearChatDialog &&
                 !com.example.call.CallManager.hasActiveCall()
         },
-        onAsk = { showMoodPicker = true }
+        onAsk = { weeklyMoodPicker = true; showMoodPicker = true }
     )
 
     // Partner & My Mood Picker Sheet
@@ -3223,9 +3224,10 @@ fun ChatScreen(
             currentMood = myUser?.mood,
             onSelectMood = { viewModel.updateMood(it) },
             onClearMood = { viewModel.clearMood() },
-            onDismiss = { showMoodPicker = false },
+            onDismiss = { showMoodPicker = false; weeklyMoodPicker = false },
             currentMoodAt = myUser?.moodAt ?: 0L,
-            partnerName = partnerName
+            partnerName = partnerName,
+            onSkipWeek = if (weeklyMoodPicker) ({ showMoodPicker = false; weeklyMoodPicker = false }) else null
         )
     }
 

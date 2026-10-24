@@ -1,9 +1,9 @@
 {
-  "versionCode": 242,
-  "versionName": "1.8.70",
-  "tagName": "v1.8.70-242",
-  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.8.70-242/app_update_242.apk",
-  "assetSize": 20354804,
-  "releaseNotes": "Notes v1.8.70 (Build 242):\n- Optimized synced watch party heartbeats, playback state transitions, and YouTube inline player.",
-  "releaseDate": "2026-10-24T10:02:30Z"
+  "versionCode": 243,
+  "versionName": "1.8.71",
+  "tagName": "v1.8.71-243",
+  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.8.71-243/app_update_243.apk",
+  "assetSize": 20372132,
+  "releaseNotes": "Notes v1.8.71 (Build 243):\n- Fixed Vivo and OEM launcher alphabetical app drawer ordering when switching disguise mode\n- Calculator disguise now strictly shows Calculator icon and name in Android App Info\n- Moved YouTube played indicator dot before the full view expand icon with spacing\n- Darkened and enriched dark mode blue gradient tones\n- Fixed circular video note preview thumbnails so they never appear blank black while scrolling",
+  "releaseDate": "2026-10-24T11:43:33Z"
 }

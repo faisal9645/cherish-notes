@@ -160,7 +160,8 @@ data class GalleryLinkItem(
     val messageText: String,
     val timestamp: Long,
     val senderName: String,
-    val isFromMe: Boolean
+    val isFromMe: Boolean,
+    val isYouTubePlayed: Boolean = false
 )
 
 private val URL_REGEX = Regex(
@@ -220,9 +221,11 @@ fun SharedGalleryScreen(
 
     val app = LocalContext.current.applicationContext as? com.example.CherishApplication
     val isDisguiseActive by (app?.securityPreferences?.isDisguiseActive ?: kotlinx.coroutines.flow.MutableStateFlow(false)).collectAsState()
+    var youtubeTheater by remember { mutableStateOf<Pair<String, String>?>(null) }
 
     LaunchedEffect(isDisguiseActive) {
         if (isDisguiseActive) {
+            youtubeTheater = null
             selectedMediaUrl = null
             selectedMessageIdForViewer = null
             isSelectionMode = false
@@ -236,6 +239,12 @@ fun SharedGalleryScreen(
     val startOfToday = remember { com.example.CherishApplication.instance.chatRepository.getStartOfToday() }
 
     var playedIds by remember { mutableStateOf(GalleryPlayedManager.getPlaybackState(context)) }
+    youtubeTheater?.takeUnless { isDisguiseActive }?.let { (_, videoId) ->
+        com.example.ui.chat.InlineVideoTheaterModal(
+            videoId = videoId,
+            onDismiss = { youtubeTheater = null }
+        )
+    }
 
     DisposableEffect(context) {
         val prefs = context.getSharedPreferences("cherish_gallery_played_prefs", Context.MODE_PRIVATE)
@@ -353,7 +362,8 @@ fun SharedGalleryScreen(
                             messageText = msg.text,
                             timestamp = msg.timestamp,
                             senderName = msg.senderName.ifBlank { if (msg.senderId == currentUserId) "You" else "Partner" },
-                            isFromMe = (msg.senderId == currentUserId)
+                            isFromMe = (msg.senderId == currentUserId),
+                            isYouTubePlayed = msg.isYouTubePlayed
                         )
                     )
                 }
@@ -1458,6 +1468,9 @@ fun SharedGalleryScreen(
                                                                     flags = Intent.FLAG_ACTIVITY_NEW_TASK
                                                                 }
                                                                 context.startActivity(intent)
+                                                                if (ytVideoId != null) {
+                                                                    app?.chatRepository?.recordYouTubeOpened(item.messageId, ytVideoId)
+                                                                }
                                                             } catch (e: Exception) {
                                                                 CherishToast.show("Cannot open link")
                                                             }
@@ -1507,17 +1520,27 @@ fun SharedGalleryScreen(
                                                         Spacer(modifier = Modifier.width(8.dp))
 
                                                         val playKey = ytVideoId ?: item.url
-                                                        val isItemPlayed = remember(playedIds, item.messageId, playKey, item.isFromMe) {
-                                                            GalleryPlayedManager.isPlayed(context, playKey, item.isFromMe) ||
-                                                            GalleryPlayedManager.isPlayed(context, item.messageId, item.isFromMe)
+                                                        val isItemPlayed = remember(playedIds, item.messageId, playKey, item.isFromMe, item.isYouTubePlayed) {
+                                                            if (ytVideoId != null) {
+                                                                GalleryPlayedManager.isPlayed(context, item.messageId, item.isFromMe) ||
+                                                                    (!item.isFromMe && item.isYouTubePlayed && item.messageId !in playedIds.second)
+                                                            } else {
+                                                                GalleryPlayedManager.isPlayed(context, playKey, item.isFromMe) ||
+                                                                    GalleryPlayedManager.isPlayed(context, item.messageId, item.isFromMe)
+                                                            }
                                                         }
 
                                                         PlayedStatusBadge(
                                                             isPlayed = isItemPlayed,
                                                             onToggle = {
-                                                                toggleItemPlayed(playKey, item.isFromMe)
-                                                                GalleryPlayedManager.setPlayed(context, item.messageId,
-                                                                    GalleryPlayedManager.isPlayed(context, playKey, item.isFromMe))
+                                                                if (ytVideoId != null) {
+                                                                    GalleryPlayedManager.setPlayed(context, item.messageId, !isItemPlayed)
+                                                                    if (!isItemPlayed) app?.chatRepository?.recordYouTubeOpened(item.messageId, ytVideoId)
+                                                                } else {
+                                                                    toggleItemPlayed(playKey, item.isFromMe)
+                                                                    GalleryPlayedManager.setPlayed(context, item.messageId,
+                                                                        GalleryPlayedManager.isPlayed(context, playKey, item.isFromMe))
+                                                                }
                                                             }
                                                         )
                                                     }
@@ -1544,8 +1567,9 @@ fun SharedGalleryScreen(
                                                             val playKey = ytVideoId ?: item.url
                                                             markItemPlayed(playKey)
                                                             markItemPlayed(item.messageId)
-                                                            if (item.url.contains("youtube.com") || item.url.contains("youtu.be")) {
-                                                                onNavigateToMessage(item.messageId)
+                                                            if (ytVideoId != null) {
+                                                                app?.chatRepository?.recordYouTubeOpened(item.messageId, ytVideoId)
+                                                                youtubeTheater = item.messageId to ytVideoId
                                                             } else {
                                                                 try {
                                                                     val intent = Intent(Intent.ACTION_VIEW, Uri.parse(item.url)).apply {

@@ -49,7 +49,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Chat
-import androidx.compose.material.icons.automirrored.rounded.Message
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Forward10
@@ -75,7 +74,6 @@ import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -90,6 +88,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -133,6 +132,8 @@ import com.example.ui.security.EmergencyExitHandle
 import com.example.ui.theme.OnlineGreen
 import com.example.data.model.Message
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -143,7 +144,6 @@ import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.random.Random
 import com.example.ui.components.CherishToast
-import com.example.ui.components.CherishAlertDialog
 import com.example.ui.components.CherishTonalButton
 import com.example.ui.components.pressScaleTarget
 import com.example.ui.components.springClickable
@@ -186,6 +186,53 @@ fun WatchPartyHost(app: CherishApplication, allowed: Boolean) {
     val floating = mode == WatchPartyMode.Mini && (!WatchPartyUi.chatOnScreen || WatchPartyUi.chatBlocked || dockBounds == null)
     val shown = allowed && onScreen && party != null
     val showPlayer = shown && (mode == WatchPartyMode.Theater || docked || floating)
+    val chatMessages by app.chatRepository.messagesFlow.collectAsState()
+    val galleryMessages by app.chatRepository.galleryMediaMessages.collectAsState()
+    LaunchedEffect(showPlayer, myId) {
+        if (showPlayer) app.chatRepository.loadAllGalleryMedia()
+    }
+    val chatVideos = remember(chatMessages, galleryMessages) {
+        (chatMessages + galleryMessages).distinctBy { it.id }
+            .filterNot { it.isDeleted }
+            .sortedWith(compareBy<Message> { it.timestamp }.thenBy { it.id })
+            .mapNotNull { message ->
+                YouTubeHelper.extractVideoId(message.text)
+                    ?: message.mediaUrl?.let { YouTubeHelper.extractVideoId(it) }
+            }.distinct()
+    }
+    var switchingVideo by remember { mutableStateOf(false) }
+    val currentVideoIndex = chatVideos.indexOf(party?.videoId)
+    val previousVideo = chatVideos.getOrNull(currentVideoIndex - 1)
+    val nextVideo = chatVideos.getOrNull(currentVideoIndex + 1)
+    fun switchChatVideo(videoId: String?) {
+        val expected = party ?: return
+        if (videoId == null || switchingVideo) return
+        switchingVideo = true
+        scope.launch {
+            try {
+                val title = YouTubeHelper.getCachedMetadata(context, videoId)?.title ?: "YouTube video"
+                if (!repo.switchWatchPartyChatVideo(expected, videoId, title)) {
+                    CherishToast.show("Playback changed. Try again.")
+                }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                CherishToast.show("Couldn't switch video. Check your connection and try again.")
+            } finally {
+                switchingVideo = false
+            }
+        }
+    }
+    val chatVideoNavigation: @Composable () -> Unit = {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+            TextButton(onClick = { switchChatVideo(previousVideo) }, enabled = previousVideo != null && !switchingVideo) {
+                Text("Previous video")
+            }
+            TextButton(onClick = { switchChatVideo(nextVideo) }, enabled = nextVideo != null && !switchingVideo) {
+                Text(if (switchingVideo) "Switching…" else "Next video")
+            }
+        }
+    }
     SideEffect { WatchPartyUi.playerVisible = showPlayer }
 
     LaunchedEffect(mode) {
@@ -254,6 +301,57 @@ fun WatchPartyHost(app: CherishApplication, allowed: Boolean) {
     var heartNote by remember { mutableStateOf<HeartNote?>(null) }
     var chip by remember { mutableStateOf<EventChip?>(null) }
     val sender = remember(repo) { ReactionSender(repo, scope) }
+    val overlaySession = party?.startedAt
+    val seenChatIds = remember(overlaySession, myId) { mutableSetOf<String>() }
+    val pendingTexts = remember(overlaySession, myId) { mutableStateListOf<Pair<String, String>>() }
+    var chatBaselineReady by remember(overlaySession, myId) { mutableStateOf(false) }
+    var activeChatOverlay by remember(overlaySession, myId) { mutableStateOf<String?>(null) }
+    val visibleSince = remember(showPlayer, overlaySession) { System.currentTimeMillis() }
+    LaunchedEffect(chatMessages, showPlayer, overlaySession, myId) {
+        if (!showPlayer || !chatBaselineReady) {
+            seenChatIds.addAll(chatMessages.map { it.id })
+            pendingTexts.clear()
+            activeChatOverlay = null
+            chatBaselineReady = showPlayer
+            return@LaunchedEffect
+        }
+        chatMessages.sortedWith(compareBy<Message> { it.timestamp }.thenBy { it.id }).forEach { message ->
+            if (seenChatIds.add(message.id) && message.senderId == partnerId &&
+                !message.isDeleted && message.type == "TEXT" && message.text.isNotBlank() &&
+                message.timestamp >= visibleSince) {
+                pendingTexts.add(message.id to message.text)
+            }
+        }
+        val removed = chatMessages.filter { it.isDeleted }.map { it.id }.toSet()
+        pendingTexts.removeAll { it.first in removed }
+    }
+    LaunchedEffect(showPlayer, overlaySession, myId) {
+        if (!showPlayer) return@LaunchedEffect
+        snapshotFlow { pendingTexts.firstOrNull() }.filterNotNull().collect { item ->
+            activeChatOverlay = item.second
+            delay(5_000)
+            activeChatOverlay = null
+            delay(350) // Finish the fade before showing the next message.
+            pendingTexts.remove(item)
+        }
+    }
+    val pendingReactions = remember(overlaySession) { mutableStateListOf<Triple<String, String, Int>>() }
+    val seenReactions = remember(overlaySession) { mutableSetOf<String>() }
+    LaunchedEffect(showPlayer, overlaySession) {
+        sender.reset()
+        if (!showPlayer) {
+            pendingReactions.clear()
+            bursts.clear()
+            return@LaunchedEffect
+        }
+        snapshotFlow { pendingReactions.firstOrNull() }.filterNotNull().collect { reaction ->
+            repeat(reaction.third) {
+                bursts.spawn(reaction.second)
+                delay(110)
+            }
+            pendingReactions.removeAt(0)
+        }
+    }
     LaunchedEffect(heartNote) {
         if (heartNote != null) {
             delay(2_800)
@@ -268,13 +366,10 @@ fun WatchPartyHost(app: CherishApplication, allowed: Boolean) {
     }
     LaunchedEffect(party?.reactionId) {
         val p = party ?: return@LaunchedEffect
-        if (!showPlayer || p.reactionId.isEmpty() || p.reactionBy == myId) return@LaunchedEffect
+        if (!showPlayer || p.reactionId.isEmpty() || p.reactionBy == myId || !seenReactions.add(p.reactionId)) return@LaunchedEffect
         if (p.reactionAt < joinedAt - 2_000 || System.currentTimeMillis() - p.reactionAt > 15_000) return@LaunchedEffect
         val emoji = p.reactionEmoji.takeIf { it in FloatableEmojis } ?: "❤️"
-        repeat(p.reactionCount.coerceIn(1, 8)) {
-            bursts.spawn(emoji)
-            delay(110)
-        }
+        pendingReactions.add(Triple(p.reactionId, emoji, p.reactionCount.coerceIn(1, 8)))
     }
     LaunchedEffect(party?.lastHeartburstAt) {
         val p = party ?: return@LaunchedEffect
@@ -331,16 +426,17 @@ fun WatchPartyHost(app: CherishApplication, allowed: Boolean) {
         )
     }
 
-    fun positionNow(p: WatchPartySession) = if (player.isReady && player.currentTime > 0.5f) player.currentTime else p.positionAt()
+    fun positionNow(p: WatchPartySession) = if (player.isReady) player.estimatedPosition else p.positionAt()
     fun togglePlay() {
         val p = party ?: return
         val newPlaying = !p.isPlaying
+        val position = positionNow(p)
         if (newPlaying) {
             player.play()
         } else {
             player.pause()
         }
-        repo.updateWatchPartyPlayback(newPlaying, positionNow(p))
+        repo.updateWatchPartyPlayback(newPlaying, position)
     }
     fun seek(to: Float) {
         val p = party ?: return
@@ -500,8 +596,7 @@ fun WatchPartyHost(app: CherishApplication, allowed: Boolean) {
                     onTogglePlay = { togglePlay() },
                     onSeek = { seek(it) },
                     onSpeedChange = { repo.updateWatchPartySpeed(it) },
-                    onSendWhisper = { repo.sendWatchPartyWhisper(it) },
-                    controlsVisible = controlsVisible
+                    chatVideoNavigation = chatVideoNavigation
                 )
             }
             if (showPlayer && placed) {
@@ -513,6 +608,7 @@ fun WatchPartyHost(app: CherishApplication, allowed: Boolean) {
                     bursts = bursts,
                     heartNote = heartNote,
                     chip = chip,
+                    activeChatText = activeChatOverlay,
                     partnerName = partnerName,
                     partnerTyping = partnerUser?.typingInChat == true,
                     onSingleTap = {
@@ -525,6 +621,25 @@ fun WatchPartyHost(app: CherishApplication, allowed: Boolean) {
                     onDoubleTap = { heartbeat() },
                     onPickAnother = { pickVideo = true }
                 )
+                val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+                if (mode == WatchPartyMode.Theater &&
+                    configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE) {
+                    FullscreenWatchControls(
+                        party = party,
+                        player = player,
+                        controlsVisible = controlsVisible,
+                        onReact = { react(it) },
+                        onTogglePlay = { togglePlay() },
+                        onSeek = { seek(it) },
+                        onSpeedChange = { repo.updateWatchPartySpeed(it) },
+                        chatVideoNavigation = chatVideoNavigation,
+                        onMinimize = { WatchPartyUi.minimize() },
+                        onPickVideo = { pickVideo = true },
+                        onLeave = { leave() },
+                        onChat = { WatchPartyUi.minimize(); WatchPartyUi.openChat() },
+                        onEnd = { WatchPartyUi.close(); repo.endWatchParty() }
+                    )
+                }
             }
         }
 
@@ -554,14 +669,20 @@ private fun rememberSteadyParty(live: WatchPartySession?): WatchPartySession? {
 
 /**
  * Keeps this phone's video with the party: when it's ready, on every change either of us makes,
- * and every few seconds while playing (a phone that fell behind catches up). A tap on the video
- * itself (play, pause) or its end goes to the party once it settles.
+ * and regularly while playing (a phone that fell behind catches up). Shared controls publish
+ * playback changes; buffering and ads remain local so they cannot pause the other phone.
  */
 @Composable
 private fun KeepInSync(party: WatchPartySession, player: WatchPartyPlayer, repo: CoupleFeaturesRepository, myId: String) {
     val latest by rememberUpdatedState(party)
-    LaunchedEffect(player.isReady, party.videoId, party.isPlaying, party.positionSeconds, party.updatedAt, party.playScheduledAt, party.playbackRate) {
+    val correction = remember(player) { WatchPartySyncCorrection() }
+    val command = listOf(party.videoId, party.isPlaying, party.positionSeconds, party.updatedAt, party.playScheduledAt, party.playbackRate)
+    var previousCommand by remember(player) { mutableStateOf<List<Any>?>(null) }
+    val recovering = player.state == YtState.BUFFERING || player.state == YtState.AD
+    LaunchedEffect(player.isReady, recovering, party.videoId, party.isPlaying, party.positionSeconds, party.updatedAt, party.playScheduledAt, party.playbackRate) {
         if (!player.isReady) return@LaunchedEffect
+        val commandChanged = previousCommand != command
+        previousCommand = command
         var pass = 0
         while (true) {
             val p = latest
@@ -569,19 +690,22 @@ private fun KeepInSync(party: WatchPartySession, player: WatchPartyPlayer, repo:
             var target = p.positionAt().coerceAtLeast(0f)
             if (end > 1f) target = target.coerceAtMost(end - 0.3f)
             val over = end > 1f && player.state == YtState.ENDED && target >= end - 1f
-            val off = abs(player.currentTime - target)
-            // Right away when anything changed; later only if it drifted. A phone still loading is
-            // left to load (seeking it again only starts the loading over), and an ad isn't touched.
-            val seek = !over && player.state != YtState.AD && when {
-                pass == 0 -> off > 0.8f
-                player.state == YtState.PLAYING -> off > 1.5f
-                player.state == YtState.PAUSED -> off > 0.8f
-                else -> false
-            }
+            val elapsed = android.os.SystemClock.elapsedRealtime()
+            // Ignore transient drift and stale bridge samples; retain cooldown across buffering.
+            val seek = !over && correction.shouldSeek(
+                drift = player.estimatedPosition - target,
+                playing = player.state == YtState.PLAYING,
+                recovering = recovering,
+                freshSample = player.hasFreshPositionSample,
+                commandChanged = pass == 0 && commandChanged,
+                now = elapsed
+            )
             val now = com.example.data.repository.ServerTime.now()
             val shouldPlay = p.isPlaying && (p.playScheduledAt == 0L || p.playScheduledAt <= now)
-            if (seek) player.seekTo(target)
-            if (player.playbackRate != p.playbackRate) player.setPlaybackRate(p.playbackRate)
+            if (seek) {
+                player.seekTo(target)
+            }
+            if (!recovering && player.playbackRate != p.playbackRate) player.setPlaybackRate(p.playbackRate)
             
             if (shouldPlay) {
                 if (!over && player.state != YtState.PLAYING && player.state != YtState.AD &&
@@ -600,7 +724,7 @@ private fun KeepInSync(party: WatchPartySession, player: WatchPartyPlayer, repo:
                 val waitTime = (p.playScheduledAt - now).coerceAtLeast(100L)
                 delay(waitTime)
             } else if (shouldPlay) {
-                delay(3_000)
+                delay(750)
             } else {
                 delay(1_500)
             }
@@ -656,6 +780,7 @@ private fun VideoLayer(
     bursts: SnapshotStateList<Burst>,
     heartNote: HeartNote?,
     chip: EventChip?,
+    activeChatText: String?,
     partnerName: String,
     partnerTyping: Boolean,
     onSingleTap: (() -> Unit)? = null,
@@ -663,8 +788,6 @@ private fun VideoLayer(
     onPickAnother: () -> Unit
 ) {
     val context = LocalContext.current
-    val app = context.applicationContext as com.example.CherishApplication
-    val myId = app.authRepository.getCurrentUserId()
     val density = LocalDensity.current
     val currentOnDoubleTap by rememberUpdatedState(onDoubleTap)
     val doubleTap = remember { { currentOnDoubleTap() } }
@@ -765,26 +888,20 @@ private fun VideoLayer(
                 compact = compact
             )
         }
-        var activeWhisper by remember { mutableStateOf<String?>(null) }
-        LaunchedEffect(party.whisperId) {
-            if (party.whisperId.isNotEmpty() && party.whisperBy != myId) {
-                activeWhisper = party.whisperText
-                delay(5000)
-                activeWhisper = null
-            }
-        }
-        
+        val shownChatText = rememberLast(activeChatText)
         AnimatedVisibility(
-            visible = activeWhisper != null,
+            visible = activeChatText != null,
             enter = fadeIn(tween(300)) + slideInVertically { it / 2 },
             exit = fadeOut(tween(300)),
             modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = if (compact) 16.dp else 32.dp)
         ) {
             Text(
-                text = activeWhisper.orEmpty(),
+                text = shownChatText.orEmpty(),
                 color = Color.White,
                 fontSize = if (compact) 14.sp else 18.sp,
                 fontWeight = FontWeight.Medium,
+                maxLines = if (compact) 2 else 4,
+                overflow = TextOverflow.Ellipsis,
                 textAlign = TextAlign.Center,
                 modifier = Modifier
                     .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(8.dp))
@@ -883,6 +1000,83 @@ private fun VideoSlot(modifier: Modifier, corner: Dp, onSlot: (Rect) -> Unit) {
     )
 }
 
+/** Drawn after the video so landscape controls remain visible and tappable. */
+@Composable
+private fun FullscreenWatchControls(
+    party: WatchPartySession,
+    player: WatchPartyPlayer,
+    controlsVisible: Boolean,
+    onReact: (String) -> Unit,
+    onTogglePlay: () -> Unit,
+    onSeek: (Float) -> Unit,
+    onSpeedChange: (Float) -> Unit,
+    chatVideoNavigation: @Composable () -> Unit,
+    onMinimize: () -> Unit,
+    onPickVideo: () -> Unit,
+    onLeave: () -> Unit,
+    onChat: () -> Unit,
+    onEnd: () -> Unit
+) {
+    val context = LocalContext.current
+    var reactionsOpen by remember { mutableStateOf(false) }
+    Box(Modifier.fillMaxSize().systemBarsPadding().padding(12.dp)) {
+        // Always available, including after the other controls auto-hide.
+        Column(
+            modifier = Modifier.align(Alignment.BottomStart),
+            horizontalAlignment = Alignment.Start
+        ) {
+            if (reactionsOpen) {
+                Surface(shape = RoundedCornerShape(20.dp), color = Color.Black.copy(alpha = 0.8f)) {
+                    Column {
+                        ReactionEmojis.forEach { emoji ->
+                            ReactionButton(emoji, 42.dp) { onReact(emoji) }
+                        }
+                    }
+                }
+            }
+            FilledTonalButton(
+                onClick = { reactionsOpen = !reactionsOpen },
+                modifier = Modifier.testTag("watch_party_fullscreen_reactions")
+            ) { Text(if (reactionsOpen) "Close reactions" else "❤️ React") }
+        }
+        if (controlsVisible) {
+            Surface(
+                modifier = Modifier.align(Alignment.CenterEnd).widthIn(max = 340.dp).fillMaxHeight(),
+                shape = RoundedCornerShape(20.dp),
+                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f)
+            ) {
+                Column(Modifier.verticalScroll(rememberScrollState()).padding(8.dp)) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                        IconButton(onClick = onMinimize) {
+                            Icon(Icons.Rounded.KeyboardArrowDown, contentDescription = "Minimize")
+                        }
+                        IconButton(onClick = onPickVideo) {
+                            Icon(Icons.Rounded.VideoLibrary, contentDescription = "Pick another video")
+                        }
+                        IconButton(onClick = onLeave) {
+                            Icon(Icons.Rounded.Close, contentDescription = "Leave")
+                        }
+                        IconButton(onClick = {
+                            var activity = context
+                            while (activity is android.content.ContextWrapper && activity !is android.app.Activity) {
+                                activity = activity.baseContext
+                            }
+                            (activity as? android.app.Activity)?.requestedOrientation =
+                                android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+                        }) {
+                            Icon(Icons.Rounded.FullscreenExit, contentDescription = "Exit full screen")
+                        }
+                    }
+                    Text(party.title, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    chatVideoNavigation()
+                    PlaybackDeck(party, player, onTogglePlay, onSeek, onSpeedChange)
+                    TheaterActions(onChat, onEnd)
+                }
+            }
+        }
+    }
+}
+
 /** Full screen: the video, reactions, the shared controls, and the ways out. */
 @Composable
 private fun Theater(
@@ -905,36 +1099,9 @@ private fun Theater(
     onTogglePlay: () -> Unit,
     onSeek: (Float) -> Unit,
     onSpeedChange: (Float) -> Unit,
-    onSendWhisper: (String) -> Unit,
-    controlsVisible: Boolean
+    chatVideoNavigation: @Composable () -> Unit
 ) {
     val ink = MaterialTheme.colorScheme.onBackground
-    var showWhisperDialog by remember { mutableStateOf(false) }
-
-    if (showWhisperDialog) {
-        var text by remember { mutableStateOf("") }
-        CherishAlertDialog(
-            onDismissRequest = { showWhisperDialog = false },
-            title = { Text("Send a whisper") },
-            text = { 
-                OutlinedTextField(
-                    value = text, 
-                    onValueChange = { text = it }, 
-                    placeholder = { Text("A short message...") }
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = { 
-                    if (text.isNotBlank()) onSendWhisper(text)
-                    showWhisperDialog = false 
-                }) { Text("Send") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showWhisperDialog = false }) { Text("Cancel") }
-            }
-        )
-    }
-
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -945,7 +1112,7 @@ private fun Theater(
     ) {
         BoxWithConstraints(modifier = Modifier.fillMaxSize().systemBarsPadding()) {
             val header = @Composable {
-                TheaterHeader(party, partnerName, partnerWatching, partnerPhoto, myBuffering, partnerBuffering, myAd, partnerAd, onMinimize, { showWhisperDialog = true }, onPickVideo, onLeave)
+                TheaterHeader(party, partnerName, partnerWatching, partnerPhoto, myBuffering, partnerBuffering, myAd, partnerAd, onMinimize, onPickVideo, onLeave)
             }
             if (maxWidth > maxHeight) {
                 Box(modifier = Modifier.fillMaxSize()) {
@@ -954,33 +1121,7 @@ private fun Theater(
                         corner = 0.dp,
                         onSlot = onVideoSlot
                     )
-                    androidx.compose.animation.AnimatedVisibility(
-                        visible = controlsVisible,
-                        enter = androidx.compose.animation.fadeIn(),
-                        exit = androidx.compose.animation.fadeOut(),
-                        modifier = Modifier.fillMaxSize()
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(Color.Black.copy(alpha = 0.4f))
-                        ) {
-                            Column(
-                                modifier = Modifier
-                                    .align(Alignment.CenterEnd)
-                                    .fillMaxHeight()
-                                    .widthIn(max = 340.dp)
-                                    .verticalScroll(rememberScrollState())
-                                    .padding(8.dp)
-                            ) {
-                                header()
-                                ReactionBar(onReact = onReact, buttonSize = 42.dp)
-                                Spacer(modifier = Modifier.height(8.dp))
-                                PlaybackDeck(party, player, onTogglePlay, onSeek, onSpeedChange)
-                                TheaterActions(onChatWhileWatching, onEndForBoth)
-                            }
-                        }
-                    }
+
                 }
             } else {
                 Column(modifier = Modifier.fillMaxSize()) {
@@ -1006,6 +1147,7 @@ private fun Theater(
                     Spacer(modifier = Modifier.weight(1f))
                     ReactionBar(onReact = onReact, buttonSize = 54.dp)
                     Spacer(modifier = Modifier.height(12.dp))
+                    chatVideoNavigation()
                     PlaybackDeck(party, player, onTogglePlay, onSeek, onSpeedChange)
                     TheaterActions(onChatWhileWatching, onEndForBoth)
                     Spacer(modifier = Modifier.height(16.dp))
@@ -1026,7 +1168,6 @@ private fun TheaterHeader(
     myAd: Boolean,
     partnerAd: Boolean,
     onMinimize: () -> Unit,
-    onWhisperClick: () -> Unit,
     onPickVideo: () -> Unit,
     onLeave: () -> Unit
 ) {
@@ -1046,9 +1187,6 @@ private fun TheaterHeader(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-            }
-            IconButton(onClick = onWhisperClick, modifier = Modifier.testTag("watch_party_whisper")) {
-                Icon(Icons.AutoMirrored.Rounded.Message, contentDescription = "Whisper", tint = ink)
             }
             val ctx = androidx.compose.ui.platform.LocalContext.current
             val configuration = androidx.compose.ui.platform.LocalConfiguration.current
@@ -1219,7 +1357,12 @@ private fun PlaybackDeck(
             IconButton(onClick = { onSeek(position + 10f) }) {
                 Icon(Icons.Rounded.Forward10, contentDescription = "Forward 10 seconds", tint = muted)
             }
-            Spacer(modifier = Modifier.width(16.dp))
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             var speedMenu by remember { mutableStateOf(false) }
             Box {
                 TextButton(onClick = { speedMenu = true }) {
@@ -1297,6 +1440,30 @@ private fun PlaybackDeck(
                         )
                     }
                 }
+            }
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(
+                if (player.captionsUnavailable) "Captions unavailable in this player"
+                else "Captions · when available",
+                color = muted,
+                fontSize = 12.sp,
+                modifier = Modifier.weight(1f)
+            )
+            TextButton(
+                onClick = { player.setCaptionsEnabled(!player.captionsEnabled) },
+                enabled = player.isReady,
+                modifier = Modifier.testTag("watch_party_captions_btn")
+            ) {
+                Text(
+                    if (player.captionsEnabled) "CC On" else "CC Off",
+                    color = if (player.captionsEnabled) accent else muted,
+                    fontWeight = FontWeight.Bold
+                )
             }
         }
     }
@@ -1636,14 +1803,22 @@ private class ReactionSender(private val repo: CoupleFeaturesRepository, private
     private val pending = LinkedHashMap<String, Int>()
     private var job: Job? = null
 
+    fun reset() {
+        job?.cancel()
+        job = null
+        pending.clear()
+    }
+
     fun send(emoji: String) {
         pending[emoji] = (pending[emoji] ?: 0) + 1
         if (job?.isActive == true) return
         job = scope.launch {
             while (pending.isNotEmpty()) {
                 val emojiToSend = pending.keys.first()
-                val count = pending.remove(emojiToSend) ?: 0
-                repo.sendWatchPartyReaction(emojiToSend, count.coerceIn(1, 8))
+                val count = pending[emojiToSend] ?: 0
+                val batch = count.coerceIn(1, 8)
+                if (count > batch) pending[emojiToSend] = count - batch else pending.remove(emojiToSend)
+                repo.sendWatchPartyReaction(emojiToSend, batch)
                 delay(500)
             }
         }

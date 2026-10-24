@@ -39,6 +39,11 @@ object VideoThumbnailHelper {
 
     fun getVideoInfo(videoPathOrUrl: String): VideoInfo? = videoInfoCache[videoPathOrUrl]
 
+    fun getMemoryCachedThumbnail(videoPathOrUrl: String): Bitmap? {
+        if (videoPathOrUrl.isBlank()) return null
+        return memoryCache.get(videoPathOrUrl)
+    }
+
     fun trimMemory(level: Int) {
         if (level >= android.content.ComponentCallbacks2.TRIM_MEMORY_MODERATE) {
             memoryCache.evictAll()

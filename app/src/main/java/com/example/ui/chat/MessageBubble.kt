@@ -594,7 +594,7 @@ fun MessageBubble(
                                 },
                                 // In view, it plays by itself, muted, at this size, with no buttons
                                 silentPreview = true,
-                                posterUrl = remember(message) { message.thumbnailFor(videoUrl).takeIf { it != videoUrl && it.isNotBlank() } },
+                                posterUrl = remember(message) { message.thumbnailFor(videoUrl).takeIf { it.isNotBlank() } ?: videoUrl },
                                 modifier = Modifier.fillMaxSize()
                             )
                         }
@@ -956,7 +956,7 @@ fun MessageBubble(
                                 durationSeconds = message.durationSeconds,
                                 onExpandClick = openBigVideo,
                                 shape = RoundedCornerShape(12.dp),
-                                posterUrl = remember(message) { message.thumbnailFor(videoUrl).takeIf { it != videoUrl && it.isNotBlank() } },
+                                posterUrl = remember(message) { message.thumbnailFor(videoUrl).takeIf { it.isNotBlank() } ?: videoUrl },
                                 modifier = Modifier
                                     .padding(vertical = 2.dp)
                                     .fillMaxWidth()
@@ -1522,12 +1522,8 @@ fun MessageBubble(
                                 openedByPartner = isFromMe && message.isYouTubePlayed,
                                 onOpenTheater = { vid -> onOpenTheaterVideo?.invoke(vid) },
                                 onPlay = {
-                                    com.example.ui.gallery.GalleryPlayedManager.setPlayed(context, youtubeVideoId, true)
-                                    com.example.ui.gallery.GalleryPlayedManager.setPlayed(context, message.id, true)
-                                    if (!isFromMe) {
-                                        (context.applicationContext as com.example.CherishApplication)
-                                            .chatRepository.markYouTubePlayed(message.id)
-                                    }
+                                    (context.applicationContext as com.example.CherishApplication)
+                                        .chatRepository.recordYouTubeOpened(message.id, youtubeVideoId)
                                 },
                                 modifier = Modifier.fillMaxWidth()
                             )

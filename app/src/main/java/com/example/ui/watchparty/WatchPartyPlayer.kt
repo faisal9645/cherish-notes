@@ -64,10 +64,40 @@ internal class WatchPartyPlayer {
     var webView: WebView? = null
     var isReady by mutableStateOf(false)
     var state by mutableIntStateOf(YtState.UNSTARTED)
-    var currentTime by mutableFloatStateOf(0f)
+    private var sampledTime by mutableFloatStateOf(0f)
+    private var sampledAt = -1L
+    val hasFreshPositionSample: Boolean
+        get() = sampledAt >= 0L && SystemClock.elapsedRealtime() - sampledAt <= 1_500L
+    var currentTime: Float
+        get() = sampledTime
+        set(value) {
+            sampledTime = value
+            sampledAt = SystemClock.elapsedRealtime()
+        }
+    // Bridge samples arrive periodically; compare the shared clock against the position now.
+    val estimatedPosition: Float
+        get() = sampledTime + if (state == YtState.PLAYING) {
+            ((SystemClock.elapsedRealtime() - sampledAt).coerceIn(0L, 1_000L) / 1000f) * playbackRate
+        } else 0f
     var duration by mutableFloatStateOf(0f)
     var playbackRate by mutableFloatStateOf(1f)
         internal set
+    private var _captionsEnabled by mutableStateOf(false)
+    val captionsEnabled: Boolean get() = _captionsEnabled
+    var captionsUnavailable by mutableStateOf(false)
+        private set
+
+    /** Captions are a personal viewing preference, not a shared playback command. */
+    fun setCaptionsEnabled(enabled: Boolean) {
+        val view = webView ?: return
+        view.evaluateJavascript(
+            "(function(){try{return !!(window.__party && __party.captions($enabled));}catch(e){return false;}})()"
+        ) { result ->
+            if (webView !== view) return@evaluateJavascript
+            captionsUnavailable = result != "true"
+            if (!captionsUnavailable) _captionsEnabled = enabled
+        }
+    }
 
     /**
      * YouTube's error: 2 bad id, 5 can't play here, 100 gone or private, 101 / 150 not allowed
@@ -188,6 +218,7 @@ internal class PlayerBridge(private val player: WatchPartyPlayer) {
         dispatch {
             if (duration.isFinite() && duration > 0) player.duration = duration.toFloat()
             player.isReady = true
+            player.setCaptionsEnabled(player.captionsEnabled)
             // Playing after all (say, once signed in on YouTube's page): no error left showing
             player.errorCode = 0
         }
@@ -389,6 +420,39 @@ internal fun WatchPartyVideo(
     )
 }
 
+/** Click only YouTube's available skip button; never seek through or hide an ad. */
+private val autoSkipAdScript = """
+var lastAdSkipAt = -1000;
+function autoSkipAvailableAd() {
+  if (document.visibilityState === 'hidden') return;
+  var now = performance.now();
+  if (now - lastAdSkipAt < 1000) return;
+  var docs = [document];
+  // Some embed origins are isolated. In that case leave skipping to YouTube's controls.
+  try {
+    var frame = document.querySelector('iframe');
+    if (frame && frame.contentDocument) docs.push(frame.contentDocument);
+  } catch (e) {}
+  for (var d = 0; d < docs.length; d++) {
+    try {
+      var doc = docs[d];
+      if (!doc.querySelector('.ad-showing, .ad-interrupting')) continue;
+      var buttons = doc.querySelectorAll('.ytp-ad-skip-button, .ytp-ad-skip-button-modern, .ytp-skip-ad-button');
+      for (var i = 0; i < buttons.length; i++) {
+        var button = buttons[i];
+        var style = doc.defaultView.getComputedStyle(button);
+        if (button.disabled || button.getAttribute('aria-disabled') === 'true' ||
+            !button.getClientRects().length || style.visibility !== 'visible' ||
+            style.display === 'none' || Number(style.opacity) === 0) continue;
+        lastAdSkipAt = now;
+        button.click();
+        return;
+      }
+    } catch (e) {}
+  }
+}
+"""
+
 /** YouTube's IFrame player, reporting back to [PlayerBridge] as "Party". */
 private fun playerPage(videoId: String, startSeconds: Int, autoplay: Boolean): String = """
 <!DOCTYPE html>
@@ -401,11 +465,23 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 </head><body>
 <div id="player"></div>
 <script>
+$autoSkipAdScript
 var player = null, isReady = false;
+var captionsWanted = false;
+function applyCaptions() {
+  if (!player) return false;
+  var method = captionsWanted ? 'loadModule' : 'unloadModule';
+  if (typeof player[method] !== 'function') return false;
+  try { player[method]('captions'); return true; } catch (e) { return false; }
+}
 var pendingCommand = ${if (autoplay) "'play'" else "null"};
 
 window.__party = {
   ready: false,
+  captions: function (enabled) {
+    captionsWanted = !!enabled;
+    return applyCaptions();
+  },
   play: function () {
     pendingCommand = 'play';
     if (player && typeof player.playVideo === 'function') {
@@ -514,6 +590,12 @@ function onYouTubeIframeAPIReady() {
           Party.onQuality(e.data || 'auto', JSON.stringify(qLevels));
         } catch (qe) {}
       },
+      onApiChange: function () {
+        // Only unload a module that is present, avoiding a module-change loop.
+        if (!captionsWanted && player && player.getOptions) {
+          try { if (player.getOptions().indexOf('captions') !== -1) applyCaptions(); } catch (e) {}
+        }
+      },
       onStateChange: function (e) {
         var state = e.data;
         try {
@@ -538,6 +620,7 @@ if (window.YT && window.YT.Player) {
 }
 
 function tick() {
+  autoSkipAvailableAd();
   if (!player || !player.getPlayerState) return;
   var state = player.getPlayerState();
   try {
@@ -557,6 +640,7 @@ private fun watchPageScript(videoId: String, autoplay: Boolean): String = """
 (function () {
   if (window.__partyInstalled) return;
   window.__partyInstalled = true;
+  $autoSkipAdScript
   var VID = '$videoId';
   var css = document.createElement('style');
   css.textContent =
@@ -608,6 +692,19 @@ private fun watchPageScript(videoId: String, autoplay: Boolean): String = """
   }
   window.__party = {
     ready: false,
+    captions: function (enabled) {
+      var player = document.getElementById('movie_player');
+      var method = enabled ? 'loadModule' : 'unloadModule';
+      if (player && typeof player[method] === 'function') {
+        try { player[method]('captions'); return true; } catch (e) {}
+      }
+      var button = document.querySelector('.ytp-subtitles-button');
+      if (button && button.getAttribute('aria-pressed') !== null) {
+        if ((button.getAttribute('aria-pressed') === 'true') !== !!enabled) button.click();
+        return true;
+      }
+      return false;
+    },
     play: function () {
       tryTriggerPlay();
     },
@@ -679,6 +776,7 @@ private fun watchPageScript(videoId: String, autoplay: Boolean): String = """
   }
 
   setInterval(function () {
+    autoSkipAvailableAd();
     var el = v();
     if (el && el !== watched) {
       watched = el;

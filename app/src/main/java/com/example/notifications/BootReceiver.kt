@@ -4,6 +4,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import com.example.CherishApplication
+import kotlinx.coroutines.launch
 
 /**
  * Reschedules all upcoming note reminders whenever the device boots up or the application package is updated.
@@ -13,6 +14,16 @@ class BootReceiver : BroadcastReceiver() {
         val action = intent.action ?: return
         if (action == Intent.ACTION_BOOT_COMPLETED || action == Intent.ACTION_MY_PACKAGE_REPLACED) {
             val app = context.applicationContext as? CherishApplication ?: return
+            // Keep the update/boot receiver alive until both launcher aliases and share identity
+            // match the saved disguise, even when the user hasn't opened the updated app yet.
+            val pending = goAsync()
+            kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                try {
+                    app.securityPreferences.syncLauncherIcon().join()
+                } finally {
+                    pending.finish()
+                }
+            }
             NoteReminderScheduler.rescheduleAllUpcomingReminders(context, app.notesRepository)
             ScheduledMessageScheduler.rescheduleAll(context)
             GoodnightReminderScheduler.scheduleNext(context)

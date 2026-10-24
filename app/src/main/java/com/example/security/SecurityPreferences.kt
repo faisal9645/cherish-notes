@@ -133,18 +133,12 @@ class SecurityPreferences(private val context: Context) {
      * Mode is off). Calls queue up and each works from the current settings, so a newer call never
      * cuts an icon switch off halfway.
      *
-     * Samsung One UI and Vivo keep a drawer item's place when an app swaps one launcher entry for
-     * another in a single change (they take it as the same app renamed): the Calculator stayed under
-     * N where Notes was, and Notes under C. Android sends component changes out together, about a
-     * second after the first one (10 s on older versions), so switching the old icon off and the new
-     * one on a moment apart still lands as one swap. So the old icon goes off on its own, and the new
-     * one comes on only after that change has gone out and the launcher has dropped the old item: the
-     * launcher then files it as a new app, under its own letter.
+     * Android 13+ applies both alias changes atomically. Older versions enable the destination
+     * first so there is always a working launcher entry. Drawer sorting/cached positions belong
+     * to the launcher; switching aliases cannot force an OEM launcher to rebuild its alphabet index.
      */
-    fun syncLauncherIcon() {
-        launcherSyncScope.launch {
-            launcherSyncLock.withLock { applyLauncherIcon() }
-        }
+    fun syncLauncherIcon(): kotlinx.coroutines.Job = launcherSyncScope.launch {
+        launcherSyncLock.withLock { applyLauncherIcon() }
     }
 
     private suspend fun applyLauncherIcon() {
@@ -153,7 +147,6 @@ class SecurityPreferences(private val context: Context) {
             val mainComp = android.content.ComponentName(context, "com.example.MainActivity")
             val notesComp = android.content.ComponentName(context, "com.example.NotesAlias")
             val calcComp = android.content.ComponentName(context, "com.example.CalculatorAlias")
-            val shareComp = android.content.ComponentName(context, "com.example.share.ShareReceiverActivity")
 
             // Both icons open MainActivity, so it must never stay disabled
             setComponentOn(pm, mainComp, true)
@@ -166,15 +159,25 @@ class SecurityPreferences(private val context: Context) {
             // would stand out in every share sheet). Android controls the share target ranking.
             com.example.share.ShareRotationHelper.syncShareAliases(context)
 
-            // Enable the active disguise entry before disabling the old one;
-            // Android Settings still uses the static application identity from the manifest.
-            setComponentOn(pm, incoming, true)
+            val drawerFixedKey = "drawer_order_fixed_v243"
+            val needsDrawerReorder = !prefs.getBoolean(drawerFixedKey, false)
 
-            // Disable the inactive disguise entry
+            if (!needsDrawerReorder && isComponentOn(pm, incoming) && !isComponentOn(pm, outgoing)) return
+
+            // To force OEM launchers (e.g. Vivo FuntouchOS/OriginOS) to re-index and sort the icon
+            // into its proper alphabetical drawer position, disable the previous alias first so the
+            // launcher removes the old slot from its internal database, then wait briefly before
+            // enabling the new alias.
             setComponentOn(pm, outgoing, false)
-
-            prefs.edit().putBoolean(KEY_DRAWER_ICON_REFILED, true).apply()
-        } catch (_: Throwable) {}
+            if (needsDrawerReorder) {
+                setComponentOn(pm, incoming, false)
+            }
+            kotlinx.coroutines.delay(350)
+            setComponentOn(pm, incoming, true)
+            prefs.edit().putBoolean(drawerFixedKey, true).apply()
+        } catch (e: Exception) {
+            android.util.Log.w("SecurityPreferences", "Launcher identity switch failed", e)
+        }
     }
 
 
@@ -1378,7 +1381,6 @@ class SecurityPreferences(private val context: Context) {
         private const val KEY_CALL_RECORDINGS_AUTO_UPLOAD = "call_recordings_auto_upload"
         private const val KEY_HAS_ALERTED_SINCE_LAST_OPEN = "has_alerted_since_last_open"
         // v3: the earlier re-file switched the icon back on too soon to take effect
-        private const val KEY_DRAWER_ICON_REFILED = "drawer_icon_refiled_v3"
 
 
         @Volatile

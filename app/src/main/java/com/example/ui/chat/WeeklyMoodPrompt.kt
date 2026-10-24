@@ -10,7 +10,7 @@ import kotlinx.coroutines.delay
 import java.util.Calendar
 import kotlin.random.Random
 
-/** A local, per-account check-in; no alarms or notifications while the disguise is showing. */
+/** Account-synced check-in; no alarms or notifications while the disguise is showing. */
 @Composable
 internal fun WeeklyMoodPrompt(
     userId: String,
@@ -19,6 +19,7 @@ internal fun WeeklyMoodPrompt(
     onAsk: () -> Unit
 ) {
     val context = LocalContext.current.applicationContext
+    val auth = (context as com.example.CherishApplication).authRepository
     val latestCanAsk by rememberUpdatedState(canAsk)
     val latestOnAsk by rememberUpdatedState(onAsk)
     LaunchedEffect(userId, visible) {
@@ -37,18 +38,26 @@ internal fun WeeklyMoodPrompt(
                 if (timeInMillis <= minimum) add(Calendar.DAY_OF_YEAR, 1)
             }.timeInMillis
         }
-        if (!prefs.contains(key)) {
-            prefs.edit().putLong(key, nextTime(System.currentTimeMillis(), first = true)).apply()
-        }
+        // Import an existing local schedule only when the account has no saved schedule.
+        val initialAt = prefs.getLong(key, 0L).takeIf { it > 0L }
+            ?: nextTime(System.currentTimeMillis(), first = true)
+        var scheduledAt: Long? = null
         // Let the opened chat settle before offering a check-in.
         delay(20_000)
         while (true) {
             val now = System.currentTimeMillis()
             val hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
-            if (now >= prefs.getLong(key, Long.MAX_VALUE) && hour in 10..19 && latestCanAsk()) {
-                // Dismissal also counts: never nag again on every reopen.
-                prefs.edit().putLong(key, nextTime(now, first = false)).apply()
-                latestOnAsk()
+            if (scheduledAt == null) {
+                scheduledAt = auth.syncWeeklyMoodPrompt(userId, initialAt, now)?.first
+            }
+            if (scheduledAt != null && now >= scheduledAt!! && hour in 10..19 && latestCanAsk()) {
+                // Schedule the next week before showing; skipping/dismissing doesn't nag again.
+                val result = auth.syncWeeklyMoodPrompt(userId, initialAt, now, nextTime(now, first = false))
+                if (result != null) {
+                    scheduledAt = result.first
+                    prefs.edit().putLong(key, result.first).apply()
+                    if (result.second) latestOnAsk()
+                }
             }
             delay(30_000)
         }

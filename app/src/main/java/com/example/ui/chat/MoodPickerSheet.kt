@@ -35,7 +35,8 @@ fun MoodPickerSheet(
     onDismiss: () -> Unit,
     // When my mood was set (0 = before this was kept) and who sees it
     currentMoodAt: Long = 0L,
-    partnerName: String = "Your partner"
+    partnerName: String = "Your partner",
+    onSkipWeek: (() -> Unit)? = null
 ) {
     // The quick check-in: one tap, shown softly in the partner's header ("Stressed" offers them
     // to send a hug)
@@ -229,6 +230,14 @@ fun MoodPickerSheet(
                 }
             }
 
+            if (onSkipWeek != null) {
+                TextButton(
+                    onClick = onSkipWeek,
+                    modifier = Modifier.align(Alignment.CenterHorizontally).testTag("skip_weekly_mood")
+                ) {
+                    Text("Skip this week")
+                }
+            }
             Spacer(modifier = Modifier.height(8.dp))
 
             // Custom mood text field

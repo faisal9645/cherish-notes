@@ -37,6 +37,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
@@ -610,28 +611,7 @@ fun InlineYouTubeCard(
                             modifier = Modifier.size(13.dp)
                         )
                     }
-                    // A dedicated receipt beside the provider badge, away from the action buttons.
-                    // Keep its slot fixed so a live receipt never shifts the title or controls.
-                    Box(
-                        modifier = Modifier.width(20.dp).height(14.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        if (openedByPartner) {
-                            Canvas(
-                                modifier = Modifier.size(12.dp)
-                                    .semantics { contentDescription = "YouTube opened by partner" }
-                            ) {
-                                val green = Color(0xFF4ADE80)
-                                val stroke = 1.dp.toPx()
-                                drawCircle(
-                                    color = green.copy(alpha = 0.75f),
-                                    radius = (size.minDimension - stroke) / 2f,
-                                    style = androidx.compose.ui.graphics.drawscope.Stroke(stroke)
-                                )
-                                drawCircle(color = green, radius = 2.5.dp.toPx())
-                            }
-                        }
-                    }
+                    Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = metadata?.authorName?.let { "$it • YouTube" } ?: "YouTube",
                         color = Color.White.copy(alpha = 0.75f),
@@ -649,6 +629,24 @@ fun InlineYouTubeCard(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
+                        // YouTube played green dot: placed right before full view icon with little gap
+                        if (openedByPartner) {
+                            Canvas(
+                                modifier = Modifier
+                                    .size(10.dp)
+                                    .semantics { contentDescription = "YouTube opened by partner" }
+                            ) {
+                                val green = Color(0xFF4ADE80)
+                                val stroke = 1.dp.toPx()
+                                drawCircle(
+                                    color = green.copy(alpha = 0.75f),
+                                    radius = (size.minDimension - stroke) / 2f,
+                                    style = androidx.compose.ui.graphics.drawscope.Stroke(stroke)
+                                )
+                                drawCircle(color = green, radius = 2.5.dp.toPx())
+                            }
+                        }
+
                         // Expand full screen icon on top with other icons
                         CardHeaderButton(
                             icon = Icons.Rounded.Fullscreen,
@@ -713,7 +711,10 @@ fun InlineYouTubeCard(
                 }
             } else {
                 // A tap plays it inline; "Theater" opens full view
-                Box(
+                var actionBarHeightPx by remember { mutableIntStateOf(0) }
+                val density = androidx.compose.ui.platform.LocalDensity.current
+                val actionBarHeight = if (actionBarHeightPx > 0) with(density) { actionBarHeightPx.toDp() } else 44.dp
+                BoxWithConstraints(
                     modifier = Modifier
                         .fillMaxWidth()
                         .aspectRatio(16f / 9f)
@@ -734,23 +735,28 @@ fun InlineYouTubeCard(
                             .background(Color.Black.copy(alpha = 0.40f))
                     )
 
-                    // Pristine circular play button with smooth pulse and zero corner glitch
+                    val playAreaSize = minOf(64.dp, (maxHeight - actionBarHeight).coerceAtLeast(0.dp))
+                    // Center in the visible poster, excluding the footer overlay on compact cards.
+                    Box(
+                        modifier = Modifier.matchParentSize().padding(bottom = actionBarHeight),
+                        contentAlignment = Alignment.Center
+                    ) {
                     Box(
                         contentAlignment = Alignment.Center,
-                        modifier = Modifier.size(64.dp)
+                        modifier = Modifier.size(playAreaSize)
                     ) {
                         // Soft outer pulse ring (strictly anti-aliased Canvas drawCircle - zero corner glitch)
-                        Canvas(modifier = Modifier.size(64.dp)) {
+                        Canvas(modifier = Modifier.size(playAreaSize)) {
                             drawCircle(
                                 color = Color.Red.copy(alpha = 0.25f),
-                                radius = (size.minDimension / 2f) * pulse.value
+                                radius = (size.minDimension / (2f * 1.08f)) * pulse.value
                             )
                         }
 
                         // Clean circular play button
                         Box(
                             modifier = Modifier
-                                .size(52.dp)
+                                .size(playAreaSize * (52f / 64f))
                                 .clip(CircleShape)
                                 .background(Color.Red)
                                 .border(1.5.dp, Color.White.copy(alpha = 0.7f), CircleShape),
@@ -760,9 +766,10 @@ fun InlineYouTubeCard(
                                 imageVector = Icons.Rounded.PlayArrow,
                                 contentDescription = "Play inline",
                                 tint = Color.White,
-                                modifier = Modifier.size(28.dp)
+                                modifier = Modifier.size(playAreaSize * (28f / 64f)).offset(x = 1.dp)
                             )
                         }
+                    }
                     }
 
                     // Floating Bottom Action Bar
@@ -770,6 +777,7 @@ fun InlineYouTubeCard(
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
                             .fillMaxWidth()
+                            .onSizeChanged { actionBarHeightPx = it.height }
                             .background(Color.Black.copy(alpha = 0.75f))
                             .padding(horizontal = 12.dp, vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
@@ -779,7 +787,10 @@ fun InlineYouTubeCard(
                             text = "▶ Tap to play inline",
                             color = Color.White.copy(alpha = 0.9f),
                             fontSize = 11.sp,
-                            fontWeight = FontWeight.Medium
+                            fontWeight = FontWeight.Medium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f).padding(end = 4.dp)
                         )
 
                         Row(verticalAlignment = Alignment.CenterVertically) {

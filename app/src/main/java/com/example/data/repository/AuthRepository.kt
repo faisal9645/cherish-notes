@@ -1206,6 +1206,36 @@ class AuthRepository(private val context: Context) {
         } catch (_: Exception) {}
     }
 
+    /** Claims a weekly check-in atomically, so another device cannot show the same week's prompt. */
+    suspend fun syncWeeklyMoodPrompt(
+        uid: String,
+        initialAt: Long,
+        now: Long,
+        nextAt: Long? = null
+    ): Pair<Long, Boolean>? {
+        if (uid.isBlank() || uid != getCurrentUserId()) return null
+        val ref = userDocument(uid)?.collection("preferences")?.document("weeklyMood") ?: return null
+        val fs = firestore ?: return null
+        return try {
+            fs.runTransaction { transaction ->
+                val snapshot = transaction.get(ref)
+                val saved = snapshot.getLong("nextPromptAt")
+                val scheduled = saved ?: initialAt
+                val claimed = saved != null && nextAt != null && scheduled <= now
+                val next = if (claimed) nextAt!! else scheduled
+                if (saved == null || claimed) {
+                    transaction.set(ref, mapOf("nextPromptAt" to next), com.google.firebase.firestore.SetOptions.merge())
+                }
+                next to claimed
+            }.await()
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w("AuthRepository", "Weekly mood schedule sync unavailable", e)
+            null
+        }
+    }
+
     suspend fun updateMood(mood: String): Result<Unit> {
         val uid = getCurrentUserId()
         val current = _currentUserState.value ?: User(id = uid)

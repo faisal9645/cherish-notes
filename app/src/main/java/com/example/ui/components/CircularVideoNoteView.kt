@@ -226,7 +226,9 @@ fun CircularVideoNoteView(
     var isVideoReady by remember { mutableStateOf(false) }
     var isLoading by remember { mutableStateOf(false) }
     var hasError by remember { mutableStateOf(false) }
-    var thumbnailBitmap by remember { mutableStateOf<Bitmap?>(null) }
+    var thumbnailBitmap by remember(videoUrl) {
+        mutableStateOf(VideoThumbnailHelper.getMemoryCachedThumbnail(videoUrl))
+    }
     var videoAspect by remember { mutableFloatStateOf(1f) }
     var effectiveDurationSeconds by remember { mutableIntStateOf(durationSeconds) }
     var localVideoFile by remember { mutableStateOf<File?>(null) }
@@ -714,6 +716,8 @@ fun CircularVideoNoteView(
         // Thumbnail Poster Frame: shown until video is actively ready and playing
         if (!isPlaying || !isVideoReady) {
             val bmp = thumbnailBitmap
+            val thumbModel = bmp ?: posterUrl?.takeIf { it.isNotBlank() } ?: localVideoFile ?: videoUrl.takeIf { it.isNotBlank() }
+
             if (bmp != null) {
                 Image(
                     bitmap = bmp.asImageBitmap(),
@@ -723,12 +727,40 @@ fun CircularVideoNoteView(
                         .fillMaxSize()
                         .clip(shape)
                 )
-            } else if (posterUrl != null) {
-                // The uploaded poster (small, and cached)
-                coil.compose.AsyncImage(
-                    model = posterUrl,
+            } else if (thumbModel != null) {
+                coil.compose.SubcomposeAsyncImage(
+                    model = coil.request.ImageRequest.Builder(context)
+                        .data(thumbModel)
+                        .decoderFactory(coil.decode.VideoFrameDecoder.Factory())
+                        .setParameter(coil.decode.VideoFrameDecoder.VIDEO_FRAME_MICROS_KEY, 500_000L)
+                        .crossfade(true)
+                        .build(),
                     contentDescription = "Video note thumbnail",
                     contentScale = if (cropToFill) ContentScale.Crop else ContentScale.Fit,
+                    loading = {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(
+                                    Brush.radialGradient(
+                                        colors = listOf(
+                                            NavyCard,
+                                            Slate900
+                                        )
+                                    )
+                                )
+                                .clip(shape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (!isPreview) {
+                                CircularProgressIndicator(
+                                    color = BlueCircularBorder,
+                                    strokeWidth = 2.5.dp,
+                                    modifier = Modifier.size(28.dp)
+                                )
+                            }
+                        }
+                    },
                     modifier = Modifier
                         .fillMaxSize()
                         .clip(shape)

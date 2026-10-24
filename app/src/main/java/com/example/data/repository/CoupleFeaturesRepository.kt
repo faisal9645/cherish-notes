@@ -7,6 +7,7 @@ import com.example.data.model.ImportantDate
 import com.example.data.model.Memory
 import com.example.data.model.NoteCategory
 import com.example.data.model.SharedNote
+import com.example.data.model.WatchPartySession
 import com.google.firebase.FirebaseApp
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
@@ -1038,6 +1039,38 @@ class CoupleFeaturesRepository(
         val queued = mapOf("id" to item.id, "videoId" to item.videoId, "title" to item.title, "addedBy" to item.addedBy, "addedAt" to item.addedAt)
         ref.set(mapOf("watchParty" to mapOf("queue" to com.google.firebase.firestore.FieldValue.arrayUnion(queued))), com.google.firebase.firestore.SetOptions.merge())
             .addOnFailureListener { Log.w("CoupleFeaturesRepo", "Enqueuing video failed", it) }
+    }
+
+    /** Compare-and-switch prevents simultaneous Next taps from advancing twice. */
+    suspend fun switchWatchPartyChatVideo(expected: WatchPartySession, videoId: String, title: String): Boolean {
+        if (!Regex("[A-Za-z0-9_-]{11}").matches(videoId) || videoId == expected.videoId) return false
+        val ref = watchPartyDocRef() ?: return false
+        val fs = firestore ?: return false
+        val myId = authRepository.getCurrentUserId().ifBlank { return false }
+        val update = fs.runTransaction { tx ->
+            val saved = tx.get(ref).get("watchParty") as? Map<*, *> ?: return@runTransaction null
+            if (saved["isActive"] != true || saved["videoId"] != expected.videoId ||
+                (saved["startedAt"] as? Number)?.toLong() != expected.startedAt ||
+                (saved["updatedAt"] as? Number)?.toLong() != expected.updatedAt) return@runTransaction null
+            val now = ServerTime.now()
+            val changes = mapOf("watchParty" to mapOf(
+                "videoId" to videoId,
+                "mediaUrl" to "https://www.youtube.com/watch?v=$videoId",
+                "title" to title,
+                "isPlaying" to true,
+                "positionSeconds" to 0f,
+                "playScheduledAt" to now + 4000L,
+                "updatedAt" to now,
+                "updatedBy" to myId,
+                "bufferingBy" to "",
+                "adBy" to ""
+            ))
+            tx.set(ref, changes, com.google.firebase.firestore.SetOptions.merge())
+            changes
+        }.await() ?: return false
+        // Playback changes arrive through the shared listener, never just on the tapping phone.
+        loveCoupleRef()?.set(update, com.google.firebase.firestore.SetOptions.merge())
+        return true
     }
 
     fun dequeueWatchPartyVideo(currentVideoId: String) {
