@@ -1457,6 +1457,10 @@ fun ChatScreen(
                                 )
                             )
                         )
+                } else if (showWallpaper && isDark &&
+                    (isNight || (bothSaidGoodnightTonight && !showSunrise))) {
+                    // Let the good-night wallpaper show through without the header tint.
+                    Modifier.fillMaxWidth()
                 } else if (showWallpaper && isDark) {
                     // Dark: the wallpaper fades in under the bar. Day keeps its plain white bar
                     Modifier
