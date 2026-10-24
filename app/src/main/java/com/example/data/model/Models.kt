@@ -508,7 +508,8 @@ data class WatchPartySession(
 
     /** Whether [userId] has it open (their phone says so about once a minute while it is). */
     fun isWatchedBy(userId: String?, now: Long = com.example.data.repository.ServerTime.now()): Boolean =
-        userId != null && now - (watching[userId] ?: 0L) < WATCHING_FRESH_MS
+        userId != null && (watching[userId] ?: 0L) > 0L &&
+            now - (watching[userId] ?: 0L) in -5_000L until WATCHING_FRESH_MS
 
     companion object {
         const val WATCHING_FRESH_MS = 150_000L

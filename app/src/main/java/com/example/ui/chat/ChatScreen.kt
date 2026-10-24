@@ -2784,10 +2784,10 @@ fun ChatScreen(
             Column(
                 verticalArrangement = Arrangement.spacedBy(6.dp),
                 modifier = Modifier
-                    .align(Alignment.BottomStart)
+                    .align(Alignment.BottomCenter)
                     .widthIn(max = 600.dp)
                     .fillMaxWidth()
-                    .padding(start = 12.dp, end = 72.dp, bottom = 6.dp)
+                    .padding(start = chatComposerSidePadding(isDark), end = 72.dp, bottom = 6.dp)
                     .onSizeChanged { bottomOverlayHeightPx = it.height }
             ) {
                 val isPrivate = uiState.chatExperienceMode == com.example.ui.chat.ChatExperienceMode.PRIVATE

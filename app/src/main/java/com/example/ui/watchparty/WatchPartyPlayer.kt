@@ -19,6 +19,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.viewinterop.AndroidView
@@ -196,8 +197,10 @@ internal class PlayerBridge(private val player: WatchPartyPlayer) {
     fun onState(state: Int, time: Double, duration: Double) {
         dispatch {
             if (duration.isFinite() && duration > 0) player.duration = duration.toFloat()
-            player.isReady = true
-            player.errorCode = 0
+            if (state != YtState.UNSTARTED) {
+                player.isReady = true
+                player.errorCode = 0
+            }
             player.onState(state, time.toFloat())
         }
     }
@@ -205,7 +208,7 @@ internal class PlayerBridge(private val player: WatchPartyPlayer) {
     @JavascriptInterface
     fun onTime(time: Double, state: Int) {
         dispatch {
-            player.isReady = true
+            if (state != YtState.UNSTARTED) player.isReady = true
             if (time.isFinite() && time >= 0) player.currentTime = time.toFloat()
             if (state != player.state) player.onState(state, time.toFloat())
         }
@@ -245,6 +248,7 @@ internal fun WatchPartyVideo(
     autoplay: Boolean,
     modifier: Modifier = Modifier
 ) {
+    val latestAutoplay by rememberUpdatedState(autoplay)
     // Loaded once for this video; from then on the party drives it through [player]
     val page = remember(videoId) {
         videoId.takeIf { VideoIdPattern.matches(it) }
@@ -262,6 +266,14 @@ internal fun WatchPartyVideo(
     LaunchedEffect(player.onWatchPage) {
         if (!player.onWatchPage) return@LaunchedEffect
         val view = player.webView ?: return@LaunchedEffect
+        // Discard queued callbacks from the rejected embed before loading the fallback page.
+        player.bridge?.close()
+        val bridge = PlayerBridge(player)
+        player.bridge = bridge
+        view.removeJavascriptInterface("Party")
+        view.addJavascriptInterface(bridge, "Party")
+        player.isReady = false
+        player.playbackRate = 1f
         view.settings.userAgentString = MOBILE_CHROME_UA
         val from = (if (player.currentTime > 0f) player.currentTime else startAt).toInt().coerceAtLeast(0)
         view.loadUrl("https://m.youtube.com/watch?v=$videoId&t=${from}s")
@@ -271,6 +283,9 @@ internal fun WatchPartyVideo(
         factory = { ctx ->
             WebView(ctx).apply {
                 player.webView = this
+                player.playbackRate = 1f
+                player.state = YtState.UNSTARTED
+                player.lastVideoAction = null
                 setBackgroundColor(android.graphics.Color.BLACK)
                 setLayerType(android.view.View.LAYER_TYPE_HARDWARE, null)
                 // The screen stays on while watching
@@ -346,7 +361,7 @@ internal fun WatchPartyVideo(
 
                     override fun onPageFinished(view: WebView?, url: String?) {
                         if (player.onWatchPage && view != null && url.orEmpty().contains("youtube.com/watch")) {
-                            view.evaluateJavascript(watchPageScript(videoId, autoplay), null)
+                            view.evaluateJavascript(watchPageScript(videoId, latestAutoplay), null)
                         }
                     }
                 }
@@ -362,11 +377,11 @@ internal fun WatchPartyVideo(
                 player.bridge?.close()
                 player.bridge = null
                 player.webView = null
+                player.isReady = false
             }
             webView.removeJavascriptInterface("Party")
             webView.keepScreenOn = false
             webView.onPause()
-            player.isReady = false
             webView.stopLoading()
             webView.loadUrl("about:blank")
             webView.destroy()
@@ -457,30 +472,8 @@ window.__party = {
   }
 };
 
-window.addEventListener('message', function (e) {
-  try {
-    var data = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
-    if (data && data.event === 'onReady') {
-      isReady = true;
-      window.__party.ready = true;
-      try { Party.onReady(0); } catch (err) {}
-    } else if (data && data.event === 'onStateChange') {
-      try { Party.onState(data.info, 0, 0); } catch (err) {}
-    } else if (data && data.event === 'infoDelivery' && data.info) {
-      var curTime = data.info.currentTime !== undefined ? data.info.currentTime : 0;
-      var pState = data.info.playerState !== undefined ? data.info.playerState : -1;
-      var dur = data.info.duration !== undefined ? data.info.duration : 0;
-      if (dur > 0 && !isReady) {
-        isReady = true;
-        window.__party.ready = true;
-        try { Party.onReady(dur); } catch (err) {}
-      }
-      if (pState !== -1) {
-        try { Party.onTime(curTime, pState); } catch (err) {}
-      }
-    }
-  } catch (err) {}
-});
+// Use the IFrame API callbacks only. Raw postMessage events omit the position and
+// otherwise reset native time to zero, causing the sync loop to repeatedly seek.
 
 function onYouTubeIframeAPIReady() {
   if (player) return;
@@ -587,7 +580,7 @@ private fun watchPageScript(videoId: String, autoplay: Boolean): String = """
   function ad() { return !!document.querySelector('.ad-showing, .ad-interrupting'); }
   function ours() { return location.href.indexOf(VID) !== -1; }
   function stateOf(el) {
-    if (!el) return -1;
+    if (!el || el.readyState < 1) return -1;
     if (ad() || !ours()) return 4;
     if (el.ended) return 0;
     if (el.paused) return 2;
@@ -614,7 +607,7 @@ private fun watchPageScript(videoId: String, autoplay: Boolean): String = """
     }
   }
   window.__party = {
-    ready: true,
+    ready: false,
     play: function () {
       tryTriggerPlay();
     },
@@ -666,7 +659,7 @@ private fun watchPageScript(videoId: String, autoplay: Boolean): String = """
   function checkReady() {
     var el = v();
     var player = document.getElementById('movie_player');
-    if ((el || player) && !reportedReady && ours()) {
+    if (el && el.readyState >= 1 && !reportedReady && ours()) {
       reportedReady = true;
       window.__party.ready = true;
       var dur = (el && isFinite(el.duration) && el.duration > 0) ? el.duration :

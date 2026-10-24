@@ -164,6 +164,8 @@ private fun RecordingWaveform(
     )
 }
 
+internal fun chatComposerSidePadding(isDark: Boolean) = if (isDark) 16.dp else 12.dp
+
 @OptIn(ExperimentalLayoutApi::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun MessageComposer(
@@ -443,7 +445,7 @@ fun MessageComposer(
     }
     // The message box's shape: Day keeps its original rounder, slimmer pill
     val pillShape = RoundedCornerShape(if (isDark) 24.dp else 28.dp)
-    val composerSidePadding = if (isDark) 16.dp else 12.dp
+    val composerSidePadding = chatComposerSidePadding(isDark)
     val composerIconTint = if (isDark) Color(0xFFD1D1D1) else MaterialTheme.colorScheme.onSurfaceVariant
 
     // Emojis in the message box: the size they'll be in the sent message, the same however many

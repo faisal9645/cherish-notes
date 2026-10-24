@@ -1,9 +1,9 @@
 {
-  "versionCode": 241,
-  "versionName": "1.8.69",
-  "tagName": "v1.8.69-241",
-  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.8.69-241/app_update_241.apk",
-  "assetSize": 20353604,
-  "releaseNotes": "Notes v1.8.69 (Build 241):\n- Disguise shield synchronization, weekly mood check-in prompt, and video player enhancements.",
-  "releaseDate": "2026-10-24T09:41:02Z"
+  "versionCode": 242,
+  "versionName": "1.8.70",
+  "tagName": "v1.8.70-242",
+  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.8.70-242/app_update_242.apk",
+  "assetSize": 20354804,
+  "releaseNotes": "Notes v1.8.70 (Build 242):\n- Optimized synced watch party heartbeats, playback state transitions, and YouTube inline player.",
+  "releaseDate": "2026-10-24T10:02:30Z"
 }

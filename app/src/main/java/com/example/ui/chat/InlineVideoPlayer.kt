@@ -22,7 +22,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.BookmarkBorder
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Fullscreen
 import androidx.compose.material.icons.rounded.Info
@@ -534,6 +533,8 @@ fun InlineYouTubeCard(
                             YouTubeHelper.rememberPosition(videoId, it)
                         }
                     }
+                    if ((context.applicationContext as com.example.CherishApplication)
+                            .securityPreferences.isDisguiseActive()) return@launch
                     isPlayingInline = false
                     onPlay()
                     onOpenTheater(videoId)
@@ -667,19 +668,6 @@ fun InlineYouTubeCard(
                                 isPlayingInline = false
                                 onPlay()
                                 YouTubeHelper.openInYouTube(context, videoId)
-                            }
-                        )
-                        CardHeaderButton(
-                            icon = Icons.Rounded.BookmarkBorder,
-                            contentDescription = "Save to Watch Later",
-                            modifier = Modifier.testTag("youtube_watch_later"),
-                            onClick = {
-                                val app = context.applicationContext as com.example.CherishApplication
-                                app.coupleFeaturesRepository.addWatchLaterVideo(
-                                    videoId,
-                                    metadata?.title ?: "Saved from chat"
-                                )
-                                CherishToast.show("Saved to Watch Later list")
                             }
                         )
                         if (isPlayingInline) {

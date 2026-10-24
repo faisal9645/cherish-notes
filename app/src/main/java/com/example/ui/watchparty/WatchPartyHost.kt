@@ -224,9 +224,13 @@ fun WatchPartyHost(app: CherishApplication, allowed: Boolean) {
     // While it's on screen here, my partner's phone knows I'm watching
     LaunchedEffect(showPlayer, party?.startedAt) {
         if (!showPlayer) return@LaunchedEffect
-        while (true) {
-            repo.markWatchingParty(true)
-            delay(60_000)
+        try {
+            while (true) {
+                repo.markWatchingParty(true)
+                delay(60_000)
+            }
+        } finally {
+            if (repo.watchPartyFlow.value?.startedAt == party?.startedAt) repo.markWatchingParty(false)
         }
     }
     var joinedAt by remember { mutableLongStateOf(0L) }
@@ -556,7 +560,7 @@ private fun rememberSteadyParty(live: WatchPartySession?): WatchPartySession? {
 @Composable
 private fun KeepInSync(party: WatchPartySession, player: WatchPartyPlayer, repo: CoupleFeaturesRepository, myId: String) {
     val latest by rememberUpdatedState(party)
-    LaunchedEffect(player.isReady, party.videoId, party.isPlaying, party.positionSeconds, party.updatedAt, party.playScheduledAt) {
+    LaunchedEffect(player.isReady, party.videoId, party.isPlaying, party.positionSeconds, party.updatedAt, party.playScheduledAt, party.playbackRate) {
         if (!player.isReady) return@LaunchedEffect
         var pass = 0
         while (true) {
@@ -580,13 +584,14 @@ private fun KeepInSync(party: WatchPartySession, player: WatchPartyPlayer, repo:
             if (player.playbackRate != p.playbackRate) player.setPlaybackRate(p.playbackRate)
             
             if (shouldPlay) {
-                if (!over && player.state != YtState.PLAYING && player.state != YtState.AD) {
+                if (!over && player.state != YtState.PLAYING && player.state != YtState.AD &&
+                    player.state != YtState.BUFFERING) {
                     player.play()
                 }
                 if (player.state == YtState.PLAYING && p.bufferingBy == myId) {
                     repo.markWatchPartyWaiting(isBuffering = false, isAd = false)
                 }
-            } else if (!shouldPlay && player.state != YtState.AD && (player.state == YtState.PLAYING || player.state == YtState.BUFFERING)) {
+            } else if (!shouldPlay && player.state != YtState.AD && (pass == 0 || player.state == YtState.PLAYING || player.state == YtState.BUFFERING)) {
                 player.pause()
             }
             pass++
@@ -622,7 +627,7 @@ private fun KeepInSync(party: WatchPartySession, player: WatchPartyPlayer, repo:
             // Loading or an ad here is only said (my partner's phone shows it); the party itself
             // goes on, and this phone catches up once it plays. Pausing it for both left it paused.
             YtState.BUFFERING, YtState.AD -> {
-                if (p.isPlaying && player.state == YtState.BUFFERING) {
+                if (p.isPlaying) {
                     repo.markWatchPartyWaiting(isBuffering = true, isAd = action.state == YtState.AD)
                 }
             }
@@ -677,7 +682,7 @@ private fun VideoLayer(
                 player = player,
                 videoId = party.videoId,
                 startAt = party.positionAt(),
-                autoplay = party.isPlaying,
+                autoplay = party.isPlaying && party.playScheduledAt <= com.example.data.repository.ServerTime.now(),
                 modifier = Modifier.fillMaxSize()
             )
         }

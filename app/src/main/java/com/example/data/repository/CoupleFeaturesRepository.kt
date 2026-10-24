@@ -784,7 +784,8 @@ class CoupleFeaturesRepository(
 
     /** Starts a party with this video, or switches the video of the one that's on (it keeps going). */
     fun startWatchParty(videoId: String, title: String, mediaUrl: String) {
-        val myId = authRepository.getCurrentUserId()
+        if (!Regex("[A-Za-z0-9_-]{11}").matches(videoId)) return
+        val myId = authRepository.getCurrentUserId().ifBlank { return }
         val now = ServerTime.now()
         val ongoing = _watchPartyFlow.value?.takeIf { it.isActive }
         // A new party starts with only me watching; a new video keeps whoever is watching
@@ -805,7 +806,8 @@ class CoupleFeaturesRepository(
             startedBy = myId,
             isActive = true,
             startedAt = ongoing?.startedAt?.takeIf { it > 0L } ?: now,
-            watching = watching
+            watching = watching,
+            queue = ongoing?.queue.orEmpty()
         )
         _watchPartyFlow.value = session
         val ref = watchPartyDocRef() ?: return
@@ -820,7 +822,19 @@ class CoupleFeaturesRepository(
             "startedBy" to session.startedBy,
             "isActive" to session.isActive,
             "startedAt" to session.startedAt,
-            "watching" to watching
+            "watching" to watching,
+            "playbackRate" to session.playbackRate,
+            "playScheduledAt" to 0L,
+            "bufferingBy" to "",
+            "adBy" to "",
+            "reaction" to emptyMap<String, Any>(),
+            "voiceSnippet" to emptyMap<String, Any>(),
+            "whisper" to emptyMap<String, Any>(),
+            "lastHeartburstAt" to 0L,
+            "lastHeartburstBy" to "",
+            "queue" to session.queue.map { q ->
+                mapOf("id" to q.id, "videoId" to q.videoId, "title" to q.title, "addedBy" to q.addedBy, "addedAt" to q.addedAt)
+            }
         )
         ref.set(mapOf("watchParty" to map), com.google.firebase.firestore.SetOptions.merge())
             .addOnFailureListener { Log.w("CoupleFeaturesRepo", "Starting the watch party failed", it) }
@@ -834,28 +848,11 @@ class CoupleFeaturesRepository(
         val value = if (watching) ServerTime.now() else 0L
         val newWatching = current.watching + (myId to value)
         
-        val partnerId = partnerIdOrNull()
-        val bothWatchingNow = partnerId != null && newWatching[myId] != 0L && (newWatching[partnerId] ?: 0L) != 0L
-        val wasBothWatching = partnerId != null && current.watching[myId] != 0L && (current.watching[partnerId] ?: 0L) != 0L
-
-        var isPlaying = current.isPlaying
-        var playScheduledAt = current.playScheduledAt
-        var updatedAt = current.updatedAt
-        val now = ServerTime.now()
-        
-        if (bothWatchingNow && !wasBothWatching && !current.isPlaying && current.positionSeconds < 1f) {
-            isPlaying = true
-            playScheduledAt = now + 4000L
-            updatedAt = now
-        }
-
-        _watchPartyFlow.value = current.copy(watching = newWatching, isPlaying = isPlaying, playScheduledAt = playScheduledAt, updatedAt = updatedAt)
+        _watchPartyFlow.value = current.copy(watching = newWatching)
         val ref = watchPartyDocRef() ?: return
         val map = mapOf(
-            "watching" to newWatching,
-            "isPlaying" to isPlaying,
-            "playScheduledAt" to playScheduledAt,
-            "updatedAt" to updatedAt
+            // Merge only my heartbeat; never overwrite the partner or their playback commands.
+            "watching" to mapOf(myId to value)
         )
         ref.set(
             mapOf("watchParty" to map),
@@ -928,6 +925,7 @@ class CoupleFeaturesRepository(
     }
 
     fun updateWatchPartyPlayback(isPlaying: Boolean, positionSeconds: Float, isBuffering: Boolean = false, isAd: Boolean = false) {
+        if (!positionSeconds.isFinite() || positionSeconds < 0f) return
         val current = _watchPartyFlow.value?.takeIf { it.isActive } ?: return
         val myId = authRepository.getCurrentUserId()
         val bufferingBy = if (isBuffering) myId else ""
@@ -938,7 +936,8 @@ class CoupleFeaturesRepository(
             updatedAt = ServerTime.now(),
             updatedBy = myId,
             bufferingBy = bufferingBy,
-            adBy = adBy
+            adBy = adBy,
+            playScheduledAt = 0L
         )
         _watchPartyFlow.value = updated
         val ref = watchPartyDocRef() ?: return
@@ -975,10 +974,17 @@ class CoupleFeaturesRepository(
     }
 
     fun updateWatchPartySpeed(rate: Float) {
+        if (!rate.isFinite() || rate !in 0.25f..2f) return
         val current = _watchPartyFlow.value?.takeIf { it.isActive } ?: return
-        _watchPartyFlow.value = current.copy(playbackRate = rate)
+        val now = ServerTime.now()
+        val position = current.positionAt(now)
+        val myId = authRepository.getCurrentUserId().ifBlank { return }
+        _watchPartyFlow.value = current.copy(playbackRate = rate, positionSeconds = position, updatedAt = now, updatedBy = myId)
         val ref = watchPartyDocRef() ?: return
-        ref.set(mapOf("watchParty" to mapOf("playbackRate" to rate)), com.google.firebase.firestore.SetOptions.merge())
+        val update = mapOf("watchParty" to mapOf("playbackRate" to rate, "positionSeconds" to position, "updatedAt" to now, "updatedBy" to myId))
+        ref.set(update, com.google.firebase.firestore.SetOptions.merge())
+            .addOnFailureListener { Log.w("CoupleFeaturesRepo", "Changing playback speed failed", it) }
+        loveCoupleRef()?.set(update, com.google.firebase.firestore.SetOptions.merge())
     }
 
     /** A heartbeat (double-tap on the video): my partner's phone beats once it arrives. */
@@ -1016,6 +1022,7 @@ class CoupleFeaturesRepository(
     }
 
     fun enqueueWatchPartyVideo(videoId: String, title: String) {
+        if (!Regex("[A-Za-z0-9_-]{11}").matches(videoId)) return
         val current = _watchPartyFlow.value?.takeIf { it.isActive } ?: return
         val myId = authRepository.getCurrentUserId()
         val item = com.example.data.model.WatchLaterVideo(
@@ -1028,52 +1035,45 @@ class CoupleFeaturesRepository(
         val updatedQueue = current.queue + item
         _watchPartyFlow.value = current.copy(queue = updatedQueue)
         val ref = watchPartyDocRef() ?: return
-        val mapList = updatedQueue.map { 
-            mapOf("id" to it.id, "videoId" to it.videoId, "title" to it.title, "addedBy" to it.addedBy, "addedAt" to it.addedAt)
-        }
-        ref.set(mapOf("watchParty" to mapOf("queue" to mapList)), com.google.firebase.firestore.SetOptions.merge())
+        val queued = mapOf("id" to item.id, "videoId" to item.videoId, "title" to item.title, "addedBy" to item.addedBy, "addedAt" to item.addedAt)
+        ref.set(mapOf("watchParty" to mapOf("queue" to com.google.firebase.firestore.FieldValue.arrayUnion(queued))), com.google.firebase.firestore.SetOptions.merge())
             .addOnFailureListener { Log.w("CoupleFeaturesRepo", "Enqueuing video failed", it) }
     }
 
     fun dequeueWatchPartyVideo(currentVideoId: String) {
-        val current = _watchPartyFlow.value?.takeIf { it.isActive } ?: return
-        if (current.videoId != currentVideoId) return // Already dequeued or changed
-        val queue = current.queue
-        if (queue.isEmpty()) {
-            endWatchParty()
-            return
-        }
-        val next = queue.first()
-        val remaining = queue.drop(1)
-        val myId = authRepository.getCurrentUserId()
-        val now = ServerTime.now()
-        val updated = current.copy(
-            videoId = next.videoId,
-            title = next.title,
-            isPlaying = true,
-            positionSeconds = 0f,
-            playScheduledAt = now + 4000L,
-            updatedAt = now,
-            updatedBy = myId,
-            queue = remaining
-        )
-        _watchPartyFlow.value = updated
+        val current = _watchPartyFlow.value?.takeIf { it.isActive && it.videoId == currentVideoId } ?: return
         val ref = watchPartyDocRef() ?: return
-        val mapList = remaining.map { 
-            mapOf("id" to it.id, "videoId" to it.videoId, "title" to it.title, "addedBy" to it.addedBy, "addedAt" to it.addedAt)
-        }
-        val map = mapOf(
-            "videoId" to updated.videoId,
-            "title" to updated.title,
-            "isPlaying" to updated.isPlaying,
-            "positionSeconds" to updated.positionSeconds,
-            "playScheduledAt" to updated.playScheduledAt,
-            "updatedAt" to updated.updatedAt,
-            "updatedBy" to updated.updatedBy,
-            "queue" to mapList
-        )
-        ref.set(mapOf("watchParty" to map), com.google.firebase.firestore.SetOptions.merge())
-            .addOnFailureListener { Log.w("CoupleFeaturesRepo", "Dequeuing video failed", it) }
+        val fs = firestore ?: return
+        val myId = authRepository.getCurrentUserId().ifBlank { return }
+        // Both phones may reach the end together. Read and advance the shared queue atomically.
+        fs.runTransaction { tx ->
+            val saved = tx.get(ref).get("watchParty") as? Map<*, *> ?: return@runTransaction null
+            if (saved["isActive"] != true || saved["videoId"] != currentVideoId ||
+                (saved["startedAt"] as? Number)?.toLong() != current.startedAt ||
+                (saved["updatedAt"] as? Number)?.toLong() != current.updatedAt) return@runTransaction null
+            val queue = (saved["queue"] as? List<*>)?.filterIsInstance<Map<*, *>>().orEmpty()
+            val next = queue.firstOrNull() ?: return@runTransaction null
+            val nextId = next["videoId"] as? String ?: return@runTransaction null
+            if (!Regex("[A-Za-z0-9_-]{11}").matches(nextId)) return@runTransaction null
+            val now = ServerTime.now()
+            val update = mapOf("watchParty" to mapOf(
+                "videoId" to nextId,
+                "mediaUrl" to "https://www.youtube.com/watch?v=$nextId",
+                "title" to (next["title"] as? String ?: "Watch Together"),
+                "isPlaying" to true,
+                "positionSeconds" to 0f,
+                "playScheduledAt" to now + 4000L,
+                "updatedAt" to now,
+                "updatedBy" to myId,
+                "bufferingBy" to "",
+                "adBy" to "",
+                "queue" to queue.drop(1)
+            ))
+            tx.set(ref, update, com.google.firebase.firestore.SetOptions.merge())
+            update
+        }.addOnSuccessListener { update ->
+            if (update != null) loveCoupleRef()?.set(update, com.google.firebase.firestore.SetOptions.merge())
+        }.addOnFailureListener { Log.w("CoupleFeaturesRepo", "Advancing the watch queue failed", it) }
     }
 
     // ---- Goodnight Kiss / Sleep Sync: tap and hold glowing sphere until both phones trigger vibration ----

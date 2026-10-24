@@ -130,7 +130,6 @@ fun WatchPartyYouTubePickerModal(
 
     var webViewRef by remember { mutableStateOf<WebView?>(null) }
     val app = context.applicationContext as com.example.CherishApplication
-    val watchLaterList by app.coupleFeaturesRepository.listenToWatchLater().collectAsState(initial = emptyList())
     val activeParty by app.coupleFeaturesRepository.watchPartyFlow.collectAsState()
 
     var searchQuery by remember { mutableStateOf("") }
@@ -259,14 +258,14 @@ fun WatchPartyYouTubePickerModal(
         )
     }
 
-    val categories = remember(watchLaterList.size) {
+    val categories = remember {
         listOf(
             "💖 Romantic Date",
             "☕ Cozy Lofi Beats",
             "🔥 Trending Hits",
             "🎬 Movie Trailers",
             "😂 Comedy & Fun"
-        ) + if (watchLaterList.isNotEmpty()) listOf("⏳ Watch Later (${watchLaterList.size})") else emptyList()
+        )
     }
 
     val displayedVideos = remember(selectedCategory, searchQuery, curatedVideos) {
@@ -666,73 +665,7 @@ fun WatchPartyYouTubePickerModal(
                             }
 
                             // Video List
-                            if (selectedCategory.startsWith("⏳ Watch Later")) {
-                                if (watchLaterList.isEmpty()) {
-                                    Box(
-                                        modifier = Modifier.fillMaxSize(),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Text(
-                                            text = "No saved videos in Watch Later",
-                                            fontSize = 13.sp,
-                                            color = ink.copy(alpha = 0.6f)
-                                        )
-                                    }
-                                } else {
-                                    LazyColumn(
-                                        modifier = Modifier.fillMaxSize(),
-                                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                                    ) {
-                                        items(watchLaterList, key = { it.id }) { v ->
-                                            Surface(
-                                                shape = RoundedCornerShape(12.dp),
-                                                color = MaterialTheme.colorScheme.surface,
-                                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .clickable { onStart(v.videoId, v.title) }
-                                            ) {
-                                                Row(
-                                                    modifier = Modifier.padding(12.dp),
-                                                    verticalAlignment = Alignment.CenterVertically
-                                                ) {
-                                                    AsyncImage(
-                                                        model = YouTubeHelper.getThumbnailUrl(v.videoId),
-                                                        contentDescription = null,
-                                                        contentScale = ContentScale.Crop,
-                                                        modifier = Modifier
-                                                            .width(110.dp)
-                                                            .aspectRatio(16f / 9f)
-                                                            .clip(RoundedCornerShape(8.dp))
-                                                            .background(Color.Black)
-                                                    )
-                                                    Spacer(modifier = Modifier.width(10.dp))
-                                                    Column(modifier = Modifier.weight(1f)) {
-                                                        Text(
-                                                            text = v.title.ifBlank { "Saved Video" },
-                                                            color = ink,
-                                                            fontSize = 13.sp,
-                                                            fontWeight = FontWeight.Bold,
-                                                            maxLines = 2,
-                                                            overflow = TextOverflow.Ellipsis
-                                                        )
-                                                        Spacer(modifier = Modifier.height(4.dp))
-                                                        Text(
-                                                            text = "Saved from chat",
-                                                            color = ink.copy(alpha = 0.6f),
-                                                            fontSize = 11.sp
-                                                        )
-                                                    }
-                                                    IconButton(onClick = { app.coupleFeaturesRepository.removeWatchLaterVideo(v.id) }) {
-                                                        Icon(Icons.Rounded.Delete, contentDescription = "Remove", tint = MaterialTheme.colorScheme.error)
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            } else {
+                            androidx.compose.runtime.key("video_list") {
                                 LazyColumn(
                                     modifier = Modifier.fillMaxSize(),
                                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),

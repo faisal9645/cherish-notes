@@ -235,7 +235,6 @@ fun SharedGalleryScreen(
     val isAllGalleryRecovered by (app?.securityPreferences?.isAllGalleryRecovered?.collectAsState() ?: remember { mutableStateOf(false) })
     val startOfToday = remember { com.example.CherishApplication.instance.chatRepository.getStartOfToday() }
 
-    val watchLaterItems by (app?.coupleFeaturesRepository?.watchLaterFlow ?: remember { kotlinx.coroutines.flow.MutableStateFlow(emptyList()) }).collectAsState()
     var playedIds by remember { mutableStateOf(GalleryPlayedManager.getPlaybackState(context)) }
 
     DisposableEffect(context) {
@@ -1530,7 +1529,7 @@ fun SharedGalleryScreen(
                                                 color = MaterialTheme.colorScheme.outlineVariant
                                             )
 
-                                            // Action Buttons (Open, Watch Later, Copy, Show in chat, Delete)
+                                            // Action Buttons (Open, Copy, Show in chat, Delete)
                                             Row(
                                                 modifier = Modifier.fillMaxWidth(),
                                                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -1563,41 +1562,6 @@ fun SharedGalleryScreen(
                                                         Icon(Icons.Rounded.OpenInBrowser, contentDescription = null, modifier = Modifier.size(13.dp))
                                                         Spacer(modifier = Modifier.width(3.dp))
                                                         Text("Open", fontSize = 11.sp)
-                                                    }
-
-                                                    // Watch Later button for YouTube and shared links
-                                                    val watchLaterKey = ytVideoId ?: item.url
-                                                    val isWatchLaterSaved = remember(watchLaterItems, watchLaterKey) {
-                                                        watchLaterItems.any { it.videoId == watchLaterKey }
-                                                    }
-                                                    CherishTonalButton(
-                                                        onClick = {
-                                                            val repo = app?.coupleFeaturesRepository
-                                                            val existing = watchLaterItems.find { it.videoId == watchLaterKey }
-                                                            if (existing != null) {
-                                                                repo?.removeWatchLaterVideo(existing.id)
-                                                                CherishToast.show("Removed from Watch Later")
-                                                            } else {
-                                                                val title = ytTitle?.takeIf { it.isNotBlank() } ?: (if (cleanText.isNotBlank()) cleanText else item.host)
-                                                                repo?.addWatchLaterVideo(watchLaterKey, title)
-                                                                CherishToast.show("Saved to Watch Later list")
-                                                            }
-                                                        },
-                                                        shape = RoundedCornerShape(12.dp),
-                                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                                                        modifier = Modifier.height(30.dp),
-                                                        colors = ButtonDefaults.filledTonalButtonColors(
-                                                            containerColor = if (isWatchLaterSaved) RoseGoldPrimary.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant,
-                                                            contentColor = if (isWatchLaterSaved) RoseGoldPrimary else MaterialTheme.colorScheme.onSurface
-                                                        )
-                                                    ) {
-                                                        Icon(
-                                                            imageVector = if (isWatchLaterSaved) Icons.Rounded.Bookmark else Icons.Rounded.BookmarkBorder,
-                                                            contentDescription = "Watch Later",
-                                                            modifier = Modifier.size(13.dp)
-                                                        )
-                                                        Spacer(modifier = Modifier.width(3.dp))
-                                                        Text(if (isWatchLaterSaved) "Saved" else "Watch Later", fontSize = 11.sp)
                                                     }
 
                                                     // Copy button
