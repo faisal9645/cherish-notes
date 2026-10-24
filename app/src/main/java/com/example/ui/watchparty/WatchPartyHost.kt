@@ -805,7 +805,7 @@ private fun VideoLayer(
                 player = player,
                 videoId = party.videoId,
                 startAt = party.positionAt(),
-                autoplay = party.isPlaying && party.playScheduledAt <= com.example.data.repository.ServerTime.now(),
+                autoplay = party.isPlaying && (party.playScheduledAt == 0L || party.playScheduledAt <= com.example.data.repository.ServerTime.now()),
                 modifier = Modifier.fillMaxSize()
             )
         }

@@ -2339,11 +2339,6 @@ fun ChatScreen(
                         }
                     ) { item ->
                         val message = item.message
-                        val rowVisible by remember(listState, message.id) {
-                            derivedStateOf {
-                                listState.layoutInfo.visibleItemsInfo.any { it.key == message.id }
-                            }
-                        }
                         val isFromMe = message.senderId == currentUserId
                         // A message that arrives while the chat is open lands with a spring
                         val isFreshArrival = remember(message.id) {
@@ -2369,7 +2364,7 @@ fun ChatScreen(
                                 .fillMaxWidth()
                         ) {
                             CompositionLocalProvider(
-                                com.example.ui.components.LocalVisualWorkAllowed provides (chatVisualsActive && rowVisible)
+                                com.example.ui.components.LocalVisualWorkAllowed provides chatVisualsActive
                             ) {
                             ChatMessageRow(
                                 message = message,

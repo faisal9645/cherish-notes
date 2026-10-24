@@ -41,6 +41,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
@@ -136,7 +138,10 @@ fun ChatWatchPartySlot(blocked: Boolean) {
                 .padding(horizontal = 12.dp, vertical = 4.dp)
                 .height(DockHeight)
                 .onGloballyPositioned { c ->
-                    WatchPartyUi.chatDockBounds = Rect(c.positionInRoot(), c.size.toSize())
+                    val newBounds = Rect(c.positionInRoot(), c.size.toSize())
+                    if (WatchPartyUi.chatDockBounds != newBounds) {
+                        WatchPartyUi.chatDockBounds = newBounds
+                    }
                 }
         )
     }
@@ -181,18 +186,15 @@ fun WatchPartyInvite(modifier: Modifier = Modifier) {
         }
         val accent = MaterialTheme.colorScheme.primary
         val isAppForeground = com.example.ui.components.rememberAppIsResumed()
-        val pulse: Float = if (isAppForeground) {
-            val glow = rememberInfiniteTransition(label = "invite_glow")
-            val pAnim by glow.animateFloat(
-                initialValue = 0.3f,
+        val glow = rememberInfiniteTransition(label = "invite_glow")
+        val pulse = if (isAppForeground) {
+            glow.animateFloat(
+                initialValue = 0.35f,
                 targetValue = 0.95f,
                 animationSpec = infiniteRepeatable(tween(1300, easing = FastOutSlowInEasing), RepeatMode.Reverse),
                 label = "invite_pulse"
             )
-            pAnim
-        } else {
-            0.5f
-        }
+        } else null
         // The whole pill opens it full screen, not only its button
         Surface(
             onClick = {
@@ -201,11 +203,20 @@ fun WatchPartyInvite(modifier: Modifier = Modifier) {
             },
             shape = RoundedCornerShape(50),
             color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f),
-            border = BorderStroke(1.5.dp, accent.copy(alpha = pulse)),
             shadowElevation = 4.dp,
             modifier = Modifier
                 .fillMaxWidth()
                 .testTag("watch_party_invite")
+                .drawWithContent {
+                    drawContent()
+                    val pAlpha = if (isAppForeground && pulse != null) pulse.value else 0.5f
+                    val strokeWidth = 1.5.dp.toPx()
+                    drawRoundRect(
+                        color = accent.copy(alpha = pAlpha),
+                        cornerRadius = CornerRadius(size.height / 2f, size.height / 2f),
+                        style = androidx.compose.ui.graphics.drawscope.Stroke(width = strokeWidth)
+                    )
+                }
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,

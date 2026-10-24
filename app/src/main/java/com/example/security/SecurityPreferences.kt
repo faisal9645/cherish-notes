@@ -159,22 +159,25 @@ class SecurityPreferences(private val context: Context) {
             // would stand out in every share sheet). Android controls the share target ranking.
             com.example.share.ShareRotationHelper.syncShareAliases(context)
 
-            val drawerFixedKey = "drawer_order_fixed_v243"
+            val drawerFixedKey = "drawer_order_fixed_v244"
             val needsDrawerReorder = !prefs.getBoolean(drawerFixedKey, false)
 
             if (!needsDrawerReorder && isComponentOn(pm, incoming) && !isComponentOn(pm, outgoing)) return
 
-            // To force OEM launchers (e.g. Vivo FuntouchOS/OriginOS) to re-index and sort the icon
-            // into its proper alphabetical drawer position, disable the previous alias first so the
-            // launcher removes the old slot from its internal database, then wait briefly before
-            // enabling the new alias.
-            setComponentOn(pm, outgoing, false)
             if (needsDrawerReorder) {
+                // To force OEM launchers (e.g. Vivo FuntouchOS/OriginOS) to re-index and sort the icon
+                // into its proper alphabetical drawer position on initial upgrade:
+                setComponentOn(pm, outgoing, false)
                 setComponentOn(pm, incoming, false)
+                kotlinx.coroutines.delay(350)
+                setComponentOn(pm, incoming, true)
+                prefs.edit().putBoolean(drawerFixedKey, true).apply()
+            } else {
+                // Ensure the incoming launcher alias is always enabled first so system settings
+                // and launchers never see a zero-component state when switching disguise.
+                setComponentOn(pm, incoming, true)
+                setComponentOn(pm, outgoing, false)
             }
-            kotlinx.coroutines.delay(350)
-            setComponentOn(pm, incoming, true)
-            prefs.edit().putBoolean(drawerFixedKey, true).apply()
         } catch (e: Exception) {
             android.util.Log.w("SecurityPreferences", "Launcher identity switch failed", e)
         }

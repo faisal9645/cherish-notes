@@ -228,18 +228,17 @@ internal class PlayerBridge(private val player: WatchPartyPlayer) {
     fun onState(state: Int, time: Double, duration: Double) {
         dispatch {
             if (duration.isFinite() && duration > 0) player.duration = duration.toFloat()
-            if (state != YtState.UNSTARTED) {
-                player.isReady = true
-                player.errorCode = 0
-            }
-            player.onState(state, time.toFloat())
+            player.isReady = true
+            player.errorCode = 0
+            if (time.isFinite() && time >= 0) player.currentTime = time.toFloat()
+            player.onState(state, player.currentTime)
         }
     }
 
     @JavascriptInterface
     fun onTime(time: Double, state: Int) {
         dispatch {
-            if (state != YtState.UNSTARTED) player.isReady = true
+            player.isReady = true
             if (time.isFinite() && time >= 0) player.currentTime = time.toFloat()
             if (state != player.state) player.onState(state, time.toFloat())
         }
@@ -548,8 +547,32 @@ window.__party = {
   }
 };
 
-// Use the IFrame API callbacks only. Raw postMessage events omit the position and
-// otherwise reset native time to zero, causing the sync loop to repeatedly seek.
+window.addEventListener('message', function (e) {
+  try {
+    var data = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
+    if (data && data.event === 'onReady') {
+      isReady = true;
+      window.__party.ready = true;
+      try { Party.onReady(0); } catch (err) {}
+    } else if (data && data.event === 'onStateChange') {
+      try { Party.onState(data.info, -1, 0); } catch (err) {}
+    } else if (data && data.event === 'infoDelivery' && data.info) {
+      var dur = data.info.duration !== undefined ? data.info.duration : 0;
+      if (dur > 0 && !isReady) {
+        isReady = true;
+        window.__party.ready = true;
+        try { Party.onReady(dur); } catch (err) {}
+      }
+      var pState = data.info.playerState !== undefined ? data.info.playerState : -1;
+      // Pass currentTime ONLY if explicitly supplied, avoiding resetting position to 0
+      if (data.info.currentTime !== undefined && pState !== -1) {
+        try { Party.onTime(data.info.currentTime, pState); } catch (err) {}
+      } else if (pState !== -1) {
+        try { Party.onState(pState, -1, dur); } catch (err) {}
+      }
+    }
+  } catch (err) {}
+});
 
 function onYouTubeIframeAPIReady() {
   if (player) return;
@@ -582,7 +605,6 @@ function onYouTubeIframeAPIReady() {
         } else if (pendingCommand === 'pause') {
           try { player.pauseVideo(); } catch (e) {}
         }
-        setInterval(tick, 500);
       },
       onPlaybackQualityChange: function (e) {
         try {
@@ -618,6 +640,8 @@ document.head.appendChild(tag);
 if (window.YT && window.YT.Player) {
   onYouTubeIframeAPIReady();
 }
+
+setInterval(tick, 500);
 
 function tick() {
   autoSkipAvailableAd();
@@ -756,7 +780,7 @@ private fun watchPageScript(videoId: String, autoplay: Boolean): String = """
   function checkReady() {
     var el = v();
     var player = document.getElementById('movie_player');
-    if (el && el.readyState >= 1 && !reportedReady && ours()) {
+    if ((el || player) && !reportedReady && ours()) {
       reportedReady = true;
       window.__party.ready = true;
       var dur = (el && isFinite(el.duration) && el.duration > 0) ? el.duration :

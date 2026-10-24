@@ -803,7 +803,9 @@ fun InlineYouTubeCard(
                                         metadata?.title ?: "Shared video",
                                         ""
                                     )
+                                    cherishApp?.coupleFeaturesRepository?.markWatchingParty(true)
                                     isPlayingInline = false
+                                    onPlay()
                                     com.example.ui.watchparty.WatchPartyUi.openTheater()
                                 },
                                 contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),

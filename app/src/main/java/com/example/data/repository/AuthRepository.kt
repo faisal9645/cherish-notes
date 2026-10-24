@@ -2176,10 +2176,10 @@ class AuthRepository(private val context: Context) {
                         partnerPresenceReceivedAt = 0L
                     } else if (step in 1L..LIVE_HEARTBEAT_MAX_STEP_MS) {
                         partnerPresenceReceivedAt = now
-                    } else if (step == 0L && partnerPresenceReceivedAt > 0L && (now - partnerPresenceReceivedAt) <= User.ONLINE_WINDOW_MS) {
+                    } else if (step == 0L && partnerPresenceReceivedAt > 0L && (now - partnerPresenceReceivedAt) <= User.ONLINE_WINDOW_MS && clockDiff <= User.ONLINE_WINDOW_MS) {
                         partnerPresenceReceivedAt = now
-                    } else if (clockDiff <= 300_000L) {
-                        // A first copy, a new lastSeen, or a live profile update within 5 minutes of this phone's clock
+                    } else if (clockDiff <= User.ONLINE_WINDOW_MS) {
+                        // A first copy or fresh lastSeen heartbeat within the active online window
                         partnerPresenceReceivedAt = now
                     } else {
                         partnerPresenceReceivedAt = 0L
@@ -2552,7 +2552,7 @@ class AuthRepository(private val context: Context) {
         const val CONNECTION_PROBLEM = "Couldn't check your login. Check your internet connection and try again."
 
         /** Partner heartbeats ~10 s apart; a bigger jump is a catch-up after a disconnect, not a live beat. */
-        const val LIVE_HEARTBEAT_MAX_STEP_MS = 60_000L
+        const val LIVE_HEARTBEAT_MAX_STEP_MS = 30_000L
         /** notificationStatus values meaning a phone shows no notifications (the Profile screen's list). */
         val NOTIFICATIONS_OFF = setOf("CLOSED", "OFF", "MUTED")
     }
