@@ -1466,15 +1466,7 @@ fun ChatScreen(
                     val topBg = if (isDark) Color.Black else Color.White
                     Modifier
                         .fillMaxWidth()
-                        .background(
-                            Brush.verticalGradient(
-                                colorStops = arrayOf(
-                                    0.0f to topBg,
-                                    0.8f to topBg,
-                                    1.0f to topBg.copy(alpha = 0.92f)
-                                )
-                            )
-                        )
+                        .background(topBg)
                 } else if (showWallpaper && isDark &&
                     (isNight || (bothSaidGoodnightTonight && !showSunrise))) {
                     // Let the good-night wallpaper show through without the header tint.
@@ -1589,8 +1581,8 @@ fun ChatScreen(
                             isDark = isDark,
                             onClick = onNavigateToProfile,
                             modifier = Modifier
-                                .padding(start = 12.dp)
-                                .size(38.dp)
+                                .padding(start = 8.dp)
+                                .size(48.dp)
                                 .testTag("chat_back_button")
                         ) {
                             TwoLineMenuIcon(tint = if (isDark) Color(0xFFECECEC) else Color(0xFF1F2937))
@@ -1642,16 +1634,16 @@ fun ChatScreen(
                         val iconTint = if (isPrivateChat) (if (isDark) Color(0xFFECECEC) else Color(0xFF1F2937)) else MaterialTheme.colorScheme.onSurface
                         if (isPrivateChat) {
                             // ChatGPT style: round grey icon buttons for new chat and overflow menu
-                            Box(modifier = Modifier.padding(end = 12.dp)) {
+                            Box(modifier = Modifier.padding(end = 8.dp)) {
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    horizontalArrangement = Arrangement.spacedBy(0.dp)
                                 ) {
                                     PrivateRoundButton(
                                         isDark = isDark,
                                         onClick = { showClearChatDialog = true },
                                         modifier = Modifier
-                                            .size(38.dp)
+                                            .size(48.dp)
                                             .testTag("chat_new_chat_button")
                                     ) {
                                         NewChatIcon(tint = iconTint)
@@ -1660,7 +1652,7 @@ fun ChatScreen(
                                         isDark = isDark,
                                         onClick = { showChatMenu = true },
                                         modifier = Modifier
-                                            .size(38.dp)
+                                            .size(48.dp)
                                             .testTag("chat_more_button")
                                     ) {
                                         Icon(
@@ -1833,7 +1825,9 @@ fun ChatScreen(
             }
         },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = if (showWallpaper && isDark) {
+                    containerColor = if (isPrivate) {
+                        if (isDark) Color.Black else Color.White
+                    } else if (showWallpaper && isDark) {
                         Color.Transparent
                     } else if (isDark) {
                         Color.Black
@@ -1846,7 +1840,7 @@ fun ChatScreen(
                 windowInsets = WindowInsets.statusBars
             )
             // Keep the header boundary visible on black surfaces, including dark wallpapers.
-            if (isDark || uiState.chatExperienceMode != com.example.ui.chat.ChatExperienceMode.PRIVATE) {
+            if (!isPrivate) {
                 HorizontalDivider(
                     thickness = if (isDark) 0.5.dp else 1.dp,
                     color = if (isDark) Color(0xFF252A35).copy(alpha = 0.45f)
@@ -3205,6 +3199,23 @@ fun ChatScreen(
             }
         )
     }
+
+    WeeklyMoodPrompt(
+        userId = myUser?.id.orEmpty(),
+        visible = isChatInView,
+        canAsk = {
+            composerState.text.isBlank() && !uiState.isSearching && uiState.fullScreenMediaUrl == null &&
+                !isRecordingVoice && !showVideoNoteRecorder && !showMoodPicker &&
+                !showAttachmentSheet && !showWatchPartySetup &&
+                !showHeartbeatTouch && !showKissPad &&
+                !showGoodMorning && !showReceivedGoodMorning && !showGoodnightCard &&
+                !showGoodnightStars && celebration == null &&
+                !showScheduleSheet && !showScheduledList && !showJumpToDate &&
+                showDeleteConfirmDialog == null && !showMultiDeleteConfirmDialog && !showClearChatDialog &&
+                !com.example.call.CallManager.hasActiveCall()
+        },
+        onAsk = { showMoodPicker = true }
+    )
 
     // Partner & My Mood Picker Sheet
     if (showMoodPicker) {
@@ -4817,6 +4828,9 @@ private fun ChatPartnerHeaderContent(
     val mediaStatus = if (isPartnerOnline && activityClock - presence.mediaActivityAt in -5_000L..60_000L) {
         when (presence.mediaActivity) {
             "youtube" -> "playing YouTube…"
+            "call_recording" -> "listening to a call recording…"
+            "recording_video_note" -> "recording a video message…"
+            "video_note" -> "watching a video message…"
             "audio" -> "listening to a voice note…"
             "media" -> "viewing media…"
             "gallery" -> "viewing gallery…"
@@ -4853,10 +4867,10 @@ private fun ChatPartnerHeaderContent(
     val isMedium = screenWidthDp in 370..405 && fontScale <= 1.05f
 
     val avatarSize = when {
-        hasMood -> if (isCompact) 38.dp else if (isMedium) 42.dp else 44.dp
-        isCompact -> 44.dp
-        isMedium -> 48.dp
-        else -> 52.dp
+        hasMood -> if (isCompact) 42.dp else if (isMedium) 46.dp else 48.dp
+        isCompact -> 48.dp
+        isMedium -> 52.dp
+        else -> 56.dp
     }
     val avatarSpacer = when {
         hasMood -> if (isCompact) 4.dp else 6.dp
@@ -4973,8 +4987,10 @@ private fun ChatPartnerHeaderContent(
                     if (headerRemaining.startsWith("✨")) "✨ Reconnecting now"
                     else "🌙 Quiet time (${CheckAfterHelper.formatTargetTime(partnerCheckAfterTarget)})"
                 }
+                presence.mediaActivity == "recording_video_note" && mediaStatus != null -> mediaStatus
                 presence.isRecordingAudio -> "recording audio..."
                 presence.isTyping -> "typing..."
+                presence.mediaActivity == "call_recording" && mediaStatus != null -> mediaStatus
                 hearingStatus != null -> hearingStatus
                 mediaStatus != null -> mediaStatus
                 isPartnerOnline -> "Online"
@@ -5751,11 +5767,9 @@ private fun ChatBottomComposerBar(
 
 
 
-/** The round buttons and pill at the top of private chat (ChatGPT's dark grey, with a fine edge). */
+/** Neutral surfaces for private chat controls. */
 private val PrivateChromeDark = Color(0xFF262626)
 private val PrivateChromeLight = Color(0xFFF0F0F0)
-private val PrivateChromeEdgeDark = Color(0xFF383838)
-private val PrivateChromeEdgeLight = Color(0xFFE0E0E0)
 
 @Composable
 private fun PrivateRoundButton(
@@ -5764,17 +5778,21 @@ private fun PrivateRoundButton(
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit
 ) {
-    val bg = if (isDark) PrivateChromeDark else PrivateChromeLight
-    val edge = if (isDark) PrivateChromeEdgeDark else PrivateChromeEdgeLight
+    val bg = if (isDark) Color(0xFF1F1F1F) else Color(0xFFF4F4F4)
     Box(
         contentAlignment = Alignment.Center,
         modifier = modifier
             .pressScaleTarget()
-            .clip(CircleShape)
-            .background(bg)
-            .border(1.dp, edge, CircleShape)
             .springClickable(onClick = onClick)
-    ) { content() }
+    ) {
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier
+                .size(38.dp)
+                .clip(CircleShape)
+                .background(bg)
+        ) { content() }
+    }
 }
 
 /** ChatGPT's "new chat" mark: a rounded square, open at the top right, with a pen across it. */

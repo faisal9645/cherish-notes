@@ -217,6 +217,7 @@ fun CircularVideoNoteView(
     var textureView by remember { mutableStateOf<TextureView?>(null) }
     // Meant to be playing (set before the player is ready)
     var isPlaying by remember { mutableStateOf(autoPlay) }
+    var isPlayerActuallyPlaying by remember { mutableStateOf(false) }
     var isCompleted by remember { mutableStateOf(false) }
     var isMuted by remember { mutableStateOf(false) }
     var isLooping by remember { mutableStateOf(false) }
@@ -233,6 +234,10 @@ fun CircularVideoNoteView(
 
     // Playing with sound (a silent preview doesn't count): it grows and shows its ring
     val activelyPlaying = isPlaying && isVideoReady && !isPreview
+    com.example.ui.chat.ReportChatMediaActivity(
+        activity = "video_note",
+        active = isRound && activelyPlaying && isPlayerActuallyPlaying && !hasError
+    )
     LaunchedEffect(activelyPlaying) {
         onPlayingChanged?.invoke(activelyPlaying)
     }
@@ -344,6 +349,10 @@ fun CircularVideoNoteView(
 
     val listener = remember {
         object : Player.Listener {
+            override fun onIsPlayingChanged(isPlaying: Boolean) {
+                isPlayerActuallyPlaying = isPlaying
+            }
+
             override fun onPlaybackStateChanged(playbackState: Int) {
                 isLoading = playbackState == Player.STATE_BUFFERING
                 when (playbackState) {
@@ -371,6 +380,7 @@ fun CircularVideoNoteView(
             }
 
             override fun onPlayerError(error: PlaybackException) {
+                isPlayerActuallyPlaying = false
                 Log.w(TAG, "Playback error", error)
                 // Shows its retry button, even from a preview
                 isPreview = false
@@ -394,6 +404,7 @@ fun CircularVideoNoteView(
         player = exo
         onDispose {
             exo.removeListener(listener)
+            isPlayerActuallyPlaying = false
             exo.release()
             if (player === exo) player = null
             isVideoReady = false

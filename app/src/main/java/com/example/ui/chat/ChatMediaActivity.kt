@@ -10,6 +10,19 @@ import com.example.CherishApplication
 import com.example.ui.components.rememberAppIsResumed
 import kotlinx.coroutines.delay
 
+/** Lives above the chat/gallery rows so scrolling a playing recording away keeps its status. */
+@Composable
+internal fun ReportCallRecordingActivity() {
+    val app = LocalContext.current.applicationContext as CherishApplication
+    val trackId by app.voicePlayerHelper.currentTrackId.collectAsState()
+    val playing by app.voicePlayerHelper.isPlaying.collectAsState()
+    val recordings by com.example.call.CallRecordingPlayer.items.collectAsState()
+    ReportChatMediaActivity(
+        activity = "call_recording",
+        active = playing && recordings[trackId]?.status == com.example.call.CallRecordingPlayer.Status.READY
+    )
+}
+
 /** Sends only a category while the screen is visible; never sends filenames or URLs. */
 @Composable
 internal fun ReportChatMediaActivity(activity: String, active: Boolean = true) {

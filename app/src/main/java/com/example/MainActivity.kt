@@ -37,7 +37,6 @@ import com.example.security.PrivacyShield
 import com.example.ui.navigation.CherishNavGraph
 import com.example.ui.theme.CherishTheme
 import com.example.util.BatteryStatusHelper
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
@@ -65,6 +64,7 @@ open class MainActivity : FragmentActivity() {
     /** Drawn over everything in the window while PrivacyShield is up, so previews show nothing. */
     private var privacyCover: View? = null
     private var privacyCoverColor = android.graphics.Color.WHITE
+    private val disguiseDrawRequest = androidx.compose.runtime.mutableIntStateOf(0)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         val isCalc = try {
@@ -157,11 +157,7 @@ open class MainActivity : FragmentActivity() {
                     // Named and drawn as the app is right now: the Calculator, unless Notes is the decoy
                     updateTaskDescription(calculator)
                     updateSplashTheme(calculator)
-                    if (disguised) {
-                        // Only once Notes/Calculator has been drawn over the chat
-                        delay(300)
-                        setSecretAppOnScreen(false)
-                    } else {
+                    if (!disguised) {
                         setSecretAppOnScreen(true)
                     }
                 }
@@ -233,7 +229,11 @@ open class MainActivity : FragmentActivity() {
                     }
 
                     Box(modifier = Modifier.fillMaxSize()) {
-                        CherishNavGraph(app = app)
+                        CherishNavGraph(
+                            app = app,
+                            disguiseDrawRequest = disguiseDrawRequest.intValue,
+                            onDisguiseDrawn = ::onDisguiseDrawn
+                        )
                         FloatingCallBubble()
                     }
                 }
@@ -331,6 +331,7 @@ open class MainActivity : FragmentActivity() {
         }
         privacyCoverCallback = callback
         PrivacyShield.onChange = callback
+        callback(PrivacyShield.isRaised)
     }
 
     /** This screen's own cover hook, so closing another copy of the screen never takes this one's away. */
@@ -338,7 +339,29 @@ open class MainActivity : FragmentActivity() {
 
     /** Covers the chat when the app is on its way out (home, recent apps, another app). */
     private fun coverSecretApp() {
-        if (secretAppOnScreen) PrivacyShield.raise()
+        if (secretAppOnScreen || !app.securityPreferences.isDisguiseActive()) PrivacyShield.raise()
+    }
+
+    /** Called after Compose draws the opaque disguise, never on a guessed timeout. */
+    private fun onDisguiseDrawn(request: Int) {
+        if (request != disguiseDrawRequest.intValue) return
+        if (!app.securityPreferences.isDisguiseActive() || isDestroyed || isFinishing) return
+        if (secretAppOnScreen) setSecretAppOnScreen(false)
+        if (lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED) && hasWindowFocus()) {
+            PrivacyShield.lower()
+        }
+    }
+
+    private fun uncoverWhenReady() {
+        if (app.securityPreferences.isDisguiseActive()) {
+            // Keep the cover until the returning Compose view has drawn the decoy.
+            disguiseDrawRequest.intValue++
+            window.decorView.invalidate()
+            findViewById<View>(android.R.id.content)?.invalidate()
+        } else {
+            setSecretAppOnScreen(true)
+            PrivacyShield.lower()
+        }
     }
 
     private fun setSecretAppOnScreen(onScreen: Boolean) {
@@ -370,7 +393,7 @@ open class MainActivity : FragmentActivity() {
         com.example.notifications.NotificationHelper.clearNotifications(this)
         hideKeyboardOnFocus = true
         applyScreenshotProtection()
-        PrivacyShield.lower()
+        uncoverWhenReady()
         // Do NOT re-call setDecorFitsSystemWindows here — already set in onCreate.
         // Re-calling it causes a layout recalculation that shifts content after minimize/reopen.
         app.authRepository.onAppForegroundStateChanged(true)
@@ -427,7 +450,7 @@ open class MainActivity : FragmentActivity() {
         // notification shade) the chat is covered, and uncovered when it's back.
         if (hasFocus) {
             com.example.notifications.NotificationHelper.clearNotifications(this)
-            PrivacyShield.lower()
+            uncoverWhenReady()
             // Back in the app on Notes: no keyboard left over from the chat's message box underneath
             // (only after coming back from outside, not when an in-app dialog closes)
             val justCameBack = hideKeyboardOnFocus

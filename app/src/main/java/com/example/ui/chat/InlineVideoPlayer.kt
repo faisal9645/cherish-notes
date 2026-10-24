@@ -66,8 +66,20 @@ import java.net.URL
 import org.json.JSONObject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.launch
 
 object YouTubeHelper {
+    private val playbackPositions = object : LinkedHashMap<String, Double>(32, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Double>?): Boolean = size > 64
+    }
+
+    @Synchronized
+    fun rememberPosition(videoId: String, seconds: Double) {
+        if (seconds.isFinite() && seconds >= 0.0) playbackPositions[videoId] = seconds
+    }
+
+    @Synchronized
+    fun playbackPosition(videoId: String): Double = playbackPositions[videoId] ?: 0.0
     private val YOUTUBE_REGEX = Regex(
         """(?:https?://)?(?:www\.|m\.)?(?:youtube\.com/(?:watch\?(?:.*&)?v=|shorts/|embed/|live/|v/)|youtu\.be/)([a-zA-Z0-9_-]{11})""",
         RegexOption.IGNORE_CASE
@@ -136,6 +148,7 @@ object YouTubeHelper {
     }
 
     fun getEmbedHtml(videoId: String): String {
+        val startSeconds = playbackPosition(videoId)
         return """
             <!DOCTYPE html>
             <html>
@@ -169,21 +182,48 @@ object YouTubeHelper {
                 <div class="player-container">
                     <iframe 
                         id="ytplayer"
-                        src="https://www.youtube.com/embed/$videoId?origin=https://www.youtube-nocookie.com&autoplay=1&enablejsapi=1&fs=1&rel=0&playsinline=1&modestbranding=1"
+                        src="https://www.youtube.com/embed/$videoId?origin=https://www.youtube-nocookie.com&start=${startSeconds.toLong()}&autoplay=1&enablejsapi=1&fs=1&rel=0&playsinline=1&modestbranding=1"
                         allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                         allowfullscreen>
                     </iframe>
                 </div>
                 <script>
+                    var cherishPlayer;
+                    var positionTimer;
+                    function savePosition() {
+                        if (cherishPlayer && cherishPlayer.getCurrentTime && window.CherishPlayback) {
+                            CherishPlayback.onPosition(cherishPlayer.getCurrentTime());
+                        }
+                    }
+                    function pauseForTheater() {
+                        if (!cherishPlayer || !cherishPlayer.getCurrentTime) return null;
+                        var seconds = cherishPlayer.getCurrentTime();
+                        cherishPlayer.pauseVideo();
+                        return seconds;
+                    }
                     function onYouTubeIframeAPIReady() {
-                        new YT.Player('ytplayer', {
+                        cherishPlayer = new YT.Player('ytplayer', {
                             events: {
+                                onReady: function(event) {
+                                    if ($startSeconds > 0) event.target.seekTo($startSeconds, true);
+                                    event.target.playVideo();
+                                },
                                 onStateChange: function(event) {
+                                    clearInterval(positionTimer);
+                                    if (event.data === YT.PlayerState.ENDED) {
+                                        if (window.CherishPlayback) CherishPlayback.onPosition(0);
+                                    } else {
+                                        savePosition();
+                                    }
+                                    if (event.data === YT.PlayerState.PLAYING) {
+                                        positionTimer = setInterval(savePosition, 250);
+                                    }
                                     if (window.CherishPlayback) {
                                         CherishPlayback.onPlaying(event.data === YT.PlayerState.PLAYING);
                                     }
                                 },
                                 onError: function() {
+                                    clearInterval(positionTimer);
                                     if (window.CherishPlayback) CherishPlayback.onPlaying(false);
                                 }
                             }
@@ -235,7 +275,8 @@ object GenericLinkHelper {
 @Composable
 fun YouTubeWebView(
     videoId: String,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onPlayerAvailable: (WebView?) -> Unit = {}
 ) {
     val context = LocalContext.current
     val embedHtml = remember(videoId) { YouTubeHelper.getEmbedHtml(videoId) }
@@ -243,11 +284,13 @@ fun YouTubeWebView(
     var hasError by remember { mutableStateOf(false) }
     var youtubePlaying by remember(videoId) { mutableStateOf(false) }
     val playbackAlive = remember(videoId) { java.util.concurrent.atomic.AtomicBoolean(true) }
+    val latestPlayerAvailable by rememberUpdatedState(onPlayerAvailable)
     ReportChatMediaActivity("youtube", active = youtubePlaying && !hasError)
 
     DisposableEffect(videoId) {
         onDispose {
             playbackAlive.set(false)
+            latestPlayerAvailable(null)
             webViewRef?.apply {
                 removeJavascriptInterface("CherishPlayback")
                 stopLoading()
@@ -265,8 +308,13 @@ fun YouTubeWebView(
             factory = { ctx ->
                 WebView(ctx).apply {
                     webViewRef = this
+                    latestPlayerAvailable(this)
                     val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
                     addJavascriptInterface(object {
+                        @android.webkit.JavascriptInterface
+                        fun onPosition(seconds: Double) {
+                            if (playbackAlive.get()) YouTubeHelper.rememberPosition(videoId, seconds)
+                        }
                         @android.webkit.JavascriptInterface
                         fun onPlaying(playing: Boolean) {
                             mainHandler.post {
@@ -463,6 +511,39 @@ fun InlineYouTubeCard(
 ) {
     val context = LocalContext.current
     var isPlayingInline by remember { mutableStateOf(false) }
+    var inlinePlayer by remember(videoId) { mutableStateOf<WebView?>(null) }
+    var openingTheater by remember(videoId) { mutableStateOf(false) }
+    val transferScope = rememberCoroutineScope()
+    val openTheater = {
+        if (!openingTheater) {
+            openingTheater = true
+            transferScope.launch {
+                try {
+                    val player = inlinePlayer
+                    if (player != null) {
+                        val position = kotlinx.coroutines.CompletableDeferred<Double?>()
+                        try {
+                            player.evaluateJavascript("pauseForTheater();") { result ->
+                                position.complete(result?.toDoubleOrNull())
+                            }
+                        } catch (_: Exception) {
+                            position.complete(null)
+                        }
+                        // Use the latest tracked position if the WebView cannot answer in time.
+                        kotlinx.coroutines.withTimeoutOrNull(600L) { position.await() }?.let {
+                            YouTubeHelper.rememberPosition(videoId, it)
+                        }
+                    }
+                    isPlayingInline = false
+                    onPlay()
+                    onOpenTheater(videoId)
+                } finally {
+                    openingTheater = false
+                }
+            }
+        }
+        Unit
+    }
     var metadata by remember(videoId) {
         mutableStateOf(YouTubeHelper.getCachedMetadata(context, videoId))
     }
@@ -528,7 +609,28 @@ fun InlineYouTubeCard(
                             modifier = Modifier.size(13.dp)
                         )
                     }
-                    Spacer(modifier = Modifier.width(8.dp))
+                    // A dedicated receipt beside the provider badge, away from the action buttons.
+                    // Keep its slot fixed so a live receipt never shifts the title or controls.
+                    Box(
+                        modifier = Modifier.width(20.dp).height(14.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (openedByPartner) {
+                            Canvas(
+                                modifier = Modifier.size(12.dp)
+                                    .semantics { contentDescription = "YouTube opened by partner" }
+                            ) {
+                                val green = Color(0xFF4ADE80)
+                                val stroke = 1.dp.toPx()
+                                drawCircle(
+                                    color = green.copy(alpha = 0.75f),
+                                    radius = (size.minDimension - stroke) / 2f,
+                                    style = androidx.compose.ui.graphics.drawscope.Stroke(stroke)
+                                )
+                                drawCircle(color = green, radius = 2.5.dp.toPx())
+                            }
+                        }
+                    }
                     Text(
                         text = metadata?.authorName?.let { "$it • YouTube" } ?: "YouTube",
                         color = Color.White.copy(alpha = 0.75f),
@@ -539,17 +641,7 @@ fun InlineYouTubeCard(
                         modifier = Modifier.weight(1f)
                     )
 
-                    // Reuse the existing gap so the receipt never shifts the header actions.
-                    Box(modifier = Modifier.width(8.dp), contentAlignment = Alignment.Center) {
-                        if (openedByPartner) {
-                            Canvas(
-                                modifier = Modifier.size(6.dp)
-                                    .semantics { contentDescription = "YouTube opened by partner" }
-                            ) {
-                                drawCircle(Color(0xFF4ADE80))
-                            }
-                        }
-                    }
+                    Spacer(modifier = Modifier.width(8.dp))
 
                     // Same-size round buttons, each tappable only where it's drawn
                     Row(
@@ -562,11 +654,7 @@ fun InlineYouTubeCard(
                             contentDescription = "Expand Fullscreen Theater",
                             iconSize = 20.dp,
                             modifier = Modifier.testTag("youtube_expand_fullscreen"),
-                            onClick = {
-                                isPlayingInline = false
-                                onPlay()
-                                onOpenTheater(videoId)
-                            }
+                            onClick = openTheater
                         )
 
                         // Open the video in the YouTube app (or the browser without it)
@@ -621,7 +709,7 @@ fun InlineYouTubeCard(
                 }
             }
 
-            // Player View / Thumbnail View (Full width 16:9 aspect ratio)
+            // Keep the thumbnail and player at their original 16:9 size.
             if (isPlayingInline) {
                 Box(
                     modifier = Modifier
@@ -631,6 +719,7 @@ fun InlineYouTubeCard(
                 ) {
                     YouTubeWebView(
                         videoId = videoId,
+                        onPlayerAvailable = { inlinePlayer = it },
                         modifier = Modifier.fillMaxSize()
                     )
                 }
@@ -729,7 +818,7 @@ fun InlineYouTubeCard(
                             }
                             Spacer(modifier = Modifier.width(6.dp))
                             CherishTonalButton(
-                                onClick = { onPlay(); onOpenTheater(videoId) },
+                                onClick = openTheater,
                                 contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
                                 modifier = Modifier
                                     .height(28.dp)

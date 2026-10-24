@@ -82,7 +82,7 @@ const val EFFECT_GOODNIGHT = "goodnight"
 const val EFFECT_GOODMORNING = "goodmorning"
 
 /** A mood older than this fades from the partner's header (and its hug nudge with it). */
-const val MOOD_FRESH_MS = 12L * 60 * 60 * 1000
+const val MOOD_FRESH_MS = 24L * 60 * 60 * 1000
 
 private const val HOUR_MS = 60L * 60 * 1000
 

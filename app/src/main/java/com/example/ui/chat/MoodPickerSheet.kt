@@ -97,12 +97,12 @@ fun MoodPickerSheet(
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = "Your partner sees it softly next to your name in chat.",
+                text = "Your partner sees it next to your name in chat for 24 hours.",
                 fontSize = 12.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
-            // My mood as it is now, also a custom one (the partner sees it for 12 hours)
+            // My mood as it is now, also a custom one (the partner sees it for 24 hours)
             if (!currentMood.isNullOrBlank()) {
                 val now = System.currentTimeMillis()
                 val showing = currentMoodAt == 0L || now - currentMoodAt < MOOD_FRESH_MS
@@ -132,7 +132,7 @@ fun MoodPickerSheet(
                         )
                         Text(
                             text = when {
-                                !showing -> "Not showing anymore (moods show for 12 hours). Set it again to show it."
+                                !showing -> "Not showing anymore (moods show for 24 hours). Set it again to show it."
                                 currentMoodAt == 0L -> "$partnerName sees it next to your name"
                                 else -> {
                                     val until = java.text.SimpleDateFormat("h:mm a", java.util.Locale.getDefault())

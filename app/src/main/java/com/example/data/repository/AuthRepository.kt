@@ -1784,7 +1784,7 @@ class AuthRepository(private val context: Context) {
         val uid = getCurrentUserId()
         if (uid.isBlank()) return
         val selected = mediaActivityOwners.values.maxByOrNull {
-            when (it) { "youtube", "audio" -> 3; "media" -> 2; else -> 1 }
+            when (it) { "recording_video_note" -> 5; "call_recording" -> 4; "youtube", "audio", "video_note" -> 3; "media" -> 2; else -> 1 }
         }
         try {
             userDocument(uid)?.set(

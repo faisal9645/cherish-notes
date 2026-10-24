@@ -14,6 +14,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.painterResource
@@ -92,9 +93,12 @@ private const val UPDATE_CHECK_DELAY_MS = 4_000L
 fun CherishNavGraph(
     app: CherishApplication,
     navController: NavHostController = rememberNavController(),
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    disguiseDrawRequest: Int = 0,
+    onDisguiseDrawn: (Int) -> Unit = {}
 ) {
     val isDisguiseActive by app.securityPreferences.isDisguiseActive.collectAsState()
+    com.example.ui.chat.ReportCallRecordingActivity()
     val isCalculatorDecoy by app.securityPreferences.calculatorDecoy.collectAsState()
     val hasRevealedSecretApp by app.securityPreferences.hasRevealedSecretAppInSession.collectAsState()
     val isAppLocked by app.securityPreferences.isAppLocked.collectAsState()
@@ -745,13 +749,20 @@ fun CherishNavGraph(
         }
     }
 
+    val disguiseHostView = androidx.compose.ui.platform.LocalView.current
     // Real Disguise screen (Notes or Calculator) - instant zero-latency snap on disguise, elegant smooth reveal on unlock
     AnimatedVisibility(
         visible = isDisguiseActive,
         enter = EnterTransition.None,
         exit = fadeOut(animationSpec = tween(280, easing = FastOutSlowInEasing)) +
                scaleOut(targetScale = 1.04f, animationSpec = tween(280, easing = FastOutSlowInEasing)),
-        modifier = Modifier.fillMaxSize()
+        modifier = Modifier.fillMaxSize().drawWithContent {
+            drawContent()
+            if (isDisguiseActive) {
+                // Run after this draw completes, before uncovering a resumed window.
+                disguiseHostView.post { onDisguiseDrawn(disguiseDrawRequest) }
+            }
+        }
     ) {
         val onUnlockSecret: () -> Unit = {
             app.securityPreferences.revealSecretApp()

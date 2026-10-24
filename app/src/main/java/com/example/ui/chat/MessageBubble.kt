@@ -960,7 +960,7 @@ fun MessageBubble(
                                 modifier = Modifier
                                     .padding(vertical = 2.dp)
                                     .fillMaxWidth()
-                                    .aspectRatio(videoAspect)
+                                    .aspectRatio(videoAspect / 1.1f)
                                     .mediaTileAnchor(videoAnchor)
                             )
                         }
@@ -1065,6 +1065,7 @@ fun MessageBubble(
                         }
                     }
                     MessageType.AUDIO -> {
+                        val voiceAvatarSize = 60.dp
                         val playButtonGradient = if (isPrivateMode) {
                             null
                         } else if (isFromMe) {
@@ -1082,13 +1083,13 @@ fun MessageBubble(
                             // Sent voice message: profile icon on the LEFT side with sticky mic badge
                             if (isFromMe && !isPrivateMode) {
                                 Box(
-                                    modifier = Modifier.size(56.dp),
+                                    modifier = Modifier.size(voiceAvatarSize),
                                     contentAlignment = Alignment.BottomEnd
                                 ) {
                                     com.example.ui.components.AvatarView(
                                         photoUrl = senderPhotoUrl,
                                         name = message.senderName,
-                                        size = 56.dp,
+                                        size = voiceAvatarSize,
                                         isOnline = false,
                                         showOnlineBadge = false
                                     )
@@ -1270,13 +1271,13 @@ fun MessageBubble(
                             if (!isFromMe && !isPrivateMode) {
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Box(
-                                    modifier = Modifier.size(56.dp),
+                                    modifier = Modifier.size(voiceAvatarSize),
                                     contentAlignment = Alignment.BottomEnd
                                 ) {
                                     com.example.ui.components.AvatarView(
                                         photoUrl = senderPhotoUrl,
                                         name = message.senderName,
-                                        size = 56.dp,
+                                        size = voiceAvatarSize,
                                         isOnline = false,
                                         showOnlineBadge = false
                                     )

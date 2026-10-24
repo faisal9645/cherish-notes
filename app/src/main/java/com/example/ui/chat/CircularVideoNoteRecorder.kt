@@ -90,6 +90,7 @@ fun CircularVideoNoteRecorderDialog(
     var recordingStartTime by remember { mutableLongStateOf(0L) }
 
     var isRecording by remember { mutableStateOf(false) }
+    ReportChatMediaActivity(activity = "recording_video_note", active = isRecording)
     var isCancelled by remember { mutableStateOf(false) }
     var recordingDurationSec by remember { mutableIntStateOf(0) }
     var cameraFacing by remember { mutableIntStateOf(Camera.CameraInfo.CAMERA_FACING_FRONT) }
