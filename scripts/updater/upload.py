@@ -253,6 +253,14 @@ def release_notes(version_name: str, version_code: int, custom_notes: str = None
     """Public text (the release page and the in-app update dialog): a plain notes app only."""
     if custom_notes:
         return f"Notes v{version_name} (Build {version_code}):\n{custom_notes}"
+    try:
+        if os.path.exists("version.json"):
+            with open("version.json", "r", encoding="utf-8") as vf:
+                vj = json.load(vf)
+                if vj.get("releaseNotes") and vj.get("versionCode") == version_code:
+                    return vj["releaseNotes"]
+    except Exception:
+        pass
     return (
         f"Notes v{version_name} (Build {version_code}):\n"
         "\u2022 Fixes the app closing on open after the last update\n"

@@ -3,7 +3,7 @@
   "versionName": "1.8.72",
   "tagName": "v1.8.72-244",
   "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.8.72-244/app_update_244.apk",
-  "assetSize": 20372132,
+  "assetSize": 20375316,
   "releaseNotes": "Notes v1.8.72 (Build 244):\n- Fixed Watch Together sync button and player playback unstarted state deadlock\n- Fixed Android App Settings app name and icon synchronization when switching disguise app to Notes\n- Accurate real-time online/offline presence status with zero-delay offline detection\n- Smooth 120 FPS chat screen scrolling without layout recomposition lag\n- Optimized in-chat Watch Together dock layout bounds and invite glow drawing",
-  "releaseDate": "2026-10-24T13:00:00Z"
+  "releaseDate": "2026-10-24T16:03:31Z"
 }
