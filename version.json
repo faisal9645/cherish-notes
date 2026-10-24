@@ -1,9 +1,9 @@
 {
-  "versionCode": 236,
-  "versionName": "1.8.64",
-  "tagName": "v1.8.64-236",
-  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.8.64-236/app_update_236.apk",
-  "assetSize": 20349256,
-  "releaseNotes": "Notes v1.8.64 (Build 236):\n- Composer backdrop blur and refined chat wallpaper styling.",
-  "releaseDate": "2026-10-24T05:13:18Z"
+  "versionCode": 237,
+  "versionName": "1.8.65",
+  "tagName": "v1.8.65-237",
+  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.8.65-237/app_update_237.apk",
+  "assetSize": 20348800,
+  "releaseNotes": "Notes v1.8.65 (Build 237):\n- Refined blue theme gradients and dark surfaces for chat bubbles.",
+  "releaseDate": "2026-10-24T05:37:13Z"
 }

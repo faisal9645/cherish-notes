@@ -13,15 +13,15 @@ import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.unit.dp
 import com.example.ui.components.softShadow
 
-// Day Mode Blues (Vibrant electric royal blues matching screenshots)
-val DayBluePrimary = Color(0xFF3048F5)
-val DayBlueSecondary = Color(0xFF258BE8)
-val DayBlueTertiary = Color(0xFF3630F2)
+// Shared original blue hues, gently darkened for cards and accents across all tabs.
+val DayBluePrimary = Color(0xFF2B41DD)
+val DayBlueSecondary = Color(0xFF217DD1)
+val DayBlueTertiary = Color(0xFF312BDA)
 
 // Dark Mode Blues (Deep, rich dark midnight blues - sleek, calm, and not bright)
-val DarkBluePrimary = Color(0xFF2448B8)
-val DarkBlueSecondary = Color(0xFF2858D6)
-val DarkBlueTertiary = Color(0xFF183C9D)
+val DarkBluePrimary = Color(0xFF273BC9)
+val DarkBlueSecondary = Color(0xFF1E72BE)
+val DarkBlueTertiary = Color(0xFF2C27C6)
 val DarkBlueBubble = DarkBluePrimary
 
 // Shared sapphire accents for dark and AMOLED controls; backgrounds stay black.
