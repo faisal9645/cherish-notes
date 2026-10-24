@@ -1,5 +1,7 @@
 package com.example.ui.chat
 
+import androidx.compose.ui.draw.drawBehind
+
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -815,6 +817,9 @@ fun MessageBubble(
             ) {
                 // Reply Quote Preview
                 if (!message.replyToText.isNullOrEmpty()) {
+                    val replyAccent = if (isPrivateMode) {
+                        if (isDark) darkTone(Gray400) else Gray500
+                    } else if (isFromMe) Color.White else MaterialTheme.colorScheme.primary
                     Surface(
                         color = (if (isFromMe) Color.Black else MaterialTheme.colorScheme.surface).copy(alpha = 0.15f),
                         shape = RoundedCornerShape(8.dp),
@@ -825,13 +830,19 @@ fun MessageBubble(
                                 onReplyQuoteClick?.invoke(message.replyToMessageId)
                             }
                     ) {
-                        Row(modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)) {
-                            Box(
-                                modifier = Modifier
-                                    .width(3.dp)
-                                    .height(28.dp)
-                                    .background(if (isPrivateMode) (if (isDark) darkTone(Gray400) else Gray500) else (if (isFromMe) Color.White else MaterialTheme.colorScheme.primary), CircleShape)
-                            )
+                        Row(modifier = Modifier
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                            .heightIn(min = 28.dp)
+                            .drawBehind {
+                                // Follow the measured quote height instead of cutting off at 28dp.
+                                drawRoundRect(
+                                    color = replyAccent,
+                                    size = androidx.compose.ui.geometry.Size(3.dp.toPx(), size.height),
+                                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(1.5.dp.toPx())
+                                )
+                            }
+                        ) {
+                            Spacer(modifier = Modifier.width(3.dp))
                             Spacer(modifier = Modifier.width(6.dp))
                             Column {
                                 Text(

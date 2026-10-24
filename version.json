@@ -1,9 +1,9 @@
 {
-  "versionCode": 238,
-  "versionName": "1.8.66",
-  "tagName": "v1.8.66-238",
-  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.8.66-238/app_update_238.apk",
-  "assetSize": 20348664,
-  "releaseNotes": "Notes v1.8.66 (Build 238):\n- Refined translucent composer pill tint and subtle border in dark mode.",
-  "releaseDate": "2026-10-24T06:08:56Z"
+  "versionCode": 239,
+  "versionName": "1.8.67",
+  "tagName": "v1.8.67-239",
+  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.8.67-239/app_update_239.apk",
+  "assetSize": 20349328,
+  "releaseNotes": "Notes v1.8.67 (Build 239):\n- Dynamic reply quote preview bar height and refined dark palette tones.",
+  "releaseDate": "2026-10-24T06:27:21Z"
 }
