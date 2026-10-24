@@ -1065,6 +1065,7 @@ class ChatRepository(
         message.isPinned = flag("isPinned", "pinned") ?: message.isPinned
         message.isEdited = flag("isEdited", "edited") ?: message.isEdited
         message.isAudioPlayed = flag("isAudioPlayed", "audioPlayed") ?: message.isAudioPlayed
+        message.isYouTubePlayed = flag("isYouTubePlayed", "youTubePlayed") ?: message.isYouTubePlayed
         return message
     }
 
@@ -1308,6 +1309,22 @@ class ChatRepository(
                 Log.w("ChatRepository", "Failed to mark ${chunk.size} messages read", e)
             }
         }
+    }
+
+    fun markYouTubePlayed(messageId: String) {
+        val uid = authRepository.getCurrentUserId()
+        val message = _messagesFlow.value.find { it.id == messageId }
+            ?: _galleryMediaMessages.value.find { it.id == messageId }
+            ?: return
+        if (uid.isBlank() || message.senderId == uid || message.isDeleted || message.isYouTubePlayed) return
+        val fs = firestore ?: return
+        val conversationId = getConversationId()
+        if (conversationId.isBlank()) return
+        fs.collection("conversations").document(conversationId).collection("messages")
+            .document(messageId).update("isYouTubePlayed", true)
+            .addOnSuccessListener {
+                updateMessageEverywhere(messageId) { it.copy(isYouTubePlayed = true) }
+            }
     }
 
     fun markAudioPlayed(messageId: String) {

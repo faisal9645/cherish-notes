@@ -1,9 +1,9 @@
 {
-  "versionCode": 239,
-  "versionName": "1.8.67",
-  "tagName": "v1.8.67-239",
-  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.8.67-239/app_update_239.apk",
-  "assetSize": 20349328,
-  "releaseNotes": "Notes v1.8.67 (Build 239):\n- Dynamic reply quote preview bar height and refined dark palette tones.",
-  "releaseDate": "2026-10-24T06:27:21Z"
+  "versionCode": 240,
+  "versionName": "1.8.68",
+  "tagName": "v1.8.68-240",
+  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.8.68-240/app_update_240.apk",
+  "assetSize": 20349444,
+  "releaseNotes": "Notes v1.8.68 (Build 240):\n- Partner media activity status, YouTube playback read receipts, and calculator disguise refinement.",
+  "releaseDate": "2026-10-24T08:55:22Z"
 }

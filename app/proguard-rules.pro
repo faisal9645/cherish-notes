@@ -40,6 +40,7 @@
 -keep class com.example.security.** { *; }
 -keepclassmembers class com.example.security.** { *; }
 -keepclassmembers class * {
+    @android.webkit.JavascriptInterface <methods>;
     @com.google.firebase.firestore.PropertyName <fields>;
     @com.google.firebase.firestore.PropertyName <methods>;
     @com.google.firebase.firestore.Exclude <fields>;

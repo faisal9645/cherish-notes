@@ -19,9 +19,9 @@ val DayBlueSecondary = Color(0xFF217DD1)
 val DayBlueTertiary = Color(0xFF312BDA)
 
 // Dark Mode Blues (Deep, rich dark midnight blues - sleek, calm, and not bright)
-val DarkBluePrimary = Color(0xFF2335B5)
-val DarkBlueSecondary = Color(0xFF1B67AB)
-val DarkBlueTertiary = Color(0xFF2823B2)
+val DarkBluePrimary = Color(0xFF2031A7)
+val DarkBlueSecondary = Color(0xFF195F9D)
+val DarkBlueTertiary = Color(0xFF2520A4)
 val DarkBlueBubble = DarkBluePrimary
 
 // Shared sapphire accents for dark and AMOLED controls; backgrounds stay black.

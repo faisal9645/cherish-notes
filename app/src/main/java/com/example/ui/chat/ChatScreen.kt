@@ -1276,26 +1276,35 @@ fun ChatScreen(
     // Scroll to exact target message when navigating from gallery ("Show in chat")
     // Found in the rows the list actually shows (worked out a moment after the messages), so the
     // index is the list's own
-    LaunchedEffect(uiState.targetScrollMessageId, reversedChatRowItems) {
+    val targetScrollIndex = remember(uiState.targetScrollMessageId, reversedChatRowItems) {
+        reversedChatRowItems.indexOfFirst { it.message.id == uiState.targetScrollMessageId }
+    }
+    // Reactions and delivery updates must not restart an in-flight scroll to the same row.
+    LaunchedEffect(uiState.targetScrollMessageId, targetScrollIndex) {
         val targetId = uiState.targetScrollMessageId
         if (targetId != null && reversedChatRowItems.isNotEmpty()) {
-            val targetIndex = reversedChatRowItems.indexOfFirst { it.message.id == targetId }
+            val targetIndex = targetScrollIndex
             if (targetIndex >= 0) {
                 // Coming back from the gallery or calendar search, the list lays out first
                 val laidOut = kotlinx.coroutines.withTimeoutOrNull(5_000) {
                     snapshotFlow { listState.layoutInfo.totalItemsCount }.first { it > targetIndex }
                 }
                 if (laidOut == null) return@LaunchedEffect
-                highlightedMessageId = targetId
                 try {
-                    listState.scrollToItem(targetIndex)
+                    val viewport = listState.layoutInfo.viewportEndOffset - listState.layoutInfo.viewportStartOffset
+                    listState.animateScrollToItem(targetIndex, scrollOffset = -(viewport * 0.3f).toInt())
                 } catch (cancelled: kotlinx.coroutines.CancellationException) {
                     throw cancelled
                 } catch (_: Exception) {
                     listState.revealMessage(targetIndex)
                 }
-                kotlinx.coroutines.delay(1200)
-                highlightedMessageId = null
+                // Show the full highlight after arrival, rather than spending it during the scroll.
+                highlightedMessageId = targetId
+                try {
+                    kotlinx.coroutines.delay(1200)
+                } finally {
+                    if (highlightedMessageId == targetId) highlightedMessageId = null
+                }
                 viewModel.clearTargetScrollMessageId()
             }
         }
@@ -4797,6 +4806,23 @@ private fun ChatPartnerHeaderContent(
     val presence by presenceFlow.collectAsStateWithLifecycle()
     val headerActive = com.example.ui.components.rememberAppIsResumed()
     val isPartnerOnline = presence.isOnline
+    var activityClock by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(presence.mediaActivityAt, headerActive) {
+        activityClock = System.currentTimeMillis()
+        while (headerActive && presence.mediaActivity != null) {
+            delay(5_000)
+            activityClock = System.currentTimeMillis()
+        }
+    }
+    val mediaStatus = if (isPartnerOnline && activityClock - presence.mediaActivityAt in -5_000L..60_000L) {
+        when (presence.mediaActivity) {
+            "youtube" -> "playing YouTube…"
+            "audio" -> "listening to a voice note…"
+            "media" -> "viewing media…"
+            "gallery" -> "viewing gallery…"
+            else -> null
+        }
+    } else null
     val partnerHasCheckAfter = presence.checkAfterActive
     val partnerCheckAfterTarget = presence.checkAfterTimeMillis ?: 0L
 
@@ -4950,6 +4976,7 @@ private fun ChatPartnerHeaderContent(
                 presence.isRecordingAudio -> "recording audio..."
                 presence.isTyping -> "typing..."
                 hearingStatus != null -> hearingStatus
+                mediaStatus != null -> mediaStatus
                 isPartnerOnline -> "Online"
                 else -> {
                     val lastSeen = presence.lastSeen

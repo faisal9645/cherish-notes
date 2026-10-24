@@ -21,7 +21,6 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -65,7 +64,6 @@ import androidx.compose.material.icons.automirrored.rounded.Backspace
 import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.rounded.Dialpad
-import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.window.Dialog
 import com.example.R
@@ -253,9 +251,7 @@ fun CalculatorDisguiseScreen(
     // The keypad's measured height, so the inline history takes exactly the same space and the
     // display above never moves when you open history or the unit converter
     val density = androidx.compose.ui.platform.LocalDensity.current
-    var keypadHeightPx by remember { mutableIntStateOf(0) }
     var showUnitConverterScreen by remember { mutableStateOf(false) }
-    var showOptionsMenu by remember { mutableStateOf(false) }
     var showAboutDialog by remember { mutableStateOf(false) }
 
     // Secret unlock transition state
@@ -375,8 +371,6 @@ fun CalculatorDisguiseScreen(
     BackHandler(enabled = true) {
         if (showAboutDialog) {
             showAboutDialog = false
-        } else if (showOptionsMenu) {
-            showOptionsMenu = false
         } else if (showUnitConverterScreen) {
             showUnitConverterScreen = false
         } else if (showHistoryInline) {
@@ -707,7 +701,6 @@ fun CalculatorDisguiseScreen(
             .background(bgMain)
     ) {
         val isLandscape = maxWidth > maxHeight
-        LaunchedEffect(isLandscape) { keypadHeightPx = 0 }
         val screenHeight = maxHeight
         val isCompactScreen = screenHeight < 720.dp
         val isVerySmallScreen = screenHeight < 600.dp
@@ -1050,18 +1043,19 @@ fun CalculatorDisguiseScreen(
 
             }
             val keypad: @Composable () -> Unit = {
+                BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                val keyDiameter = ((maxWidth - keypadSpacing * 3) / 4).coerceAtLeast(1.dp)
+                val bottomPadding = if (isCompactScreen) 8.dp else 16.dp
+                val keypadHeight = keyDiameter * 5 + keypadSpacing * 4 + bottomPadding
                 if (showHistoryInline) {
                     // Inline History View (Screenshot 4)
                     // The left 3 columns are replaced by the History list and 'Clear history' pill button,
                     // while the right column keeps the 5 operator keys (÷, ×, −, +, =). It takes exactly
                     // the keypad's height, so switching to it doesn't move the display.
-                    val historyHeight = if (isLandscape) (screenHeight - 64.dp).coerceAtLeast(120.dp)
-                        else if (keypadHeightPx > 0) with(density) { keypadHeightPx.toDp() }
-                        else if (isCompactScreen) 300.dp else 340.dp
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(historyHeight)
+                            .height(keypadHeight)
                             .padding(bottom = if (isCompactScreen) 8.dp else 16.dp),
                         horizontalArrangement = Arrangement.spacedBy(keypadSpacing)
                     ) {
@@ -1163,7 +1157,7 @@ fun CalculatorDisguiseScreen(
                         // Right 1 column: operators (÷, ×, −, +, =)
                         Column(
                             modifier = Modifier
-                                .weight(1f)
+                                .width(keyDiameter)
                                 .fillMaxHeight(),
                             verticalArrangement = Arrangement.SpaceBetween
                         ) {
@@ -1213,7 +1207,6 @@ fun CalculatorDisguiseScreen(
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .onSizeChanged { keypadHeightPx = it.height }
                             .padding(bottom = if (isCompactScreen) 8.dp else 16.dp),
                         verticalArrangement = Arrangement.spacedBy(keypadSpacing)
                     ) {
@@ -1326,6 +1319,7 @@ fun CalculatorDisguiseScreen(
                     }
                 }
             }
+            }
             if (isLandscape) {
                 Row(
                     modifier = Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()
@@ -1333,60 +1327,6 @@ fun CalculatorDisguiseScreen(
                     horizontalArrangement = Arrangement.spacedBy(20.dp)
                 ) {
                     Column(modifier = Modifier.weight(1f).fillMaxHeight()) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(bottom = 2.dp),
-                            horizontalArrangement = Arrangement.End,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Box {
-                                CalculatorCircleButton(
-                                    onClick = {
-                                        showOptionsMenu = true
-                                        haptic.performHapticFeedback(HapticFeedbackType.KeyboardTap)
-                                    },
-                                    size = 36.dp,
-                                    isDark = isDark
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Rounded.MoreVert,
-                                        contentDescription = "More options",
-                                        tint = iconMuted,
-                                        modifier = Modifier.size(22.dp)
-                                    )
-                                }
-                                DropdownMenu(
-                                    expanded = showOptionsMenu,
-                                    onDismissRequest = { showOptionsMenu = false },
-                                    modifier = Modifier.background(if (isDark) Color(0xFF252527) else Color(0xFFFFFFFF))
-                                ) {
-                                    DropdownMenuItem(
-                                        text = { Text("History", color = primaryText, fontSize = 15.sp, fontFamily = FontFamily.SansSerif) },
-                                        onClick = {
-                                            showOptionsMenu = false
-                                            showUnitConverterScreen = false
-                                            showHistoryInline = true
-                                        }
-                                    )
-                                    DropdownMenuItem(
-                                        text = { Text("Unit converter", color = primaryText, fontSize = 15.sp, fontFamily = FontFamily.SansSerif) },
-                                        onClick = {
-                                            showOptionsMenu = false
-                                            showHistoryInline = false
-                                            showUnitConverterScreen = true
-                                        }
-                                    )
-                                    DropdownMenuItem(
-                                        text = { Text("About Calculator", color = primaryText, fontSize = 15.sp, fontFamily = FontFamily.SansSerif) },
-                                        onClick = {
-                                            showOptionsMenu = false
-                                            showAboutDialog = true
-                                        }
-                                    )
-                                }
-                            }
-                        }
                         display()
                         toolbar()
                         Column(modifier = Modifier.weight(1f).verticalScroll(rememberScrollState())) {
@@ -1398,7 +1338,8 @@ fun CalculatorDisguiseScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         // Five rows of round keys fit the actual space left by the system bars.
-                        val keyDiameter = ((maxHeight - keypadSpacing * 4 - 8.dp) / 5).coerceAtLeast(1.dp)
+                        val bottomPadding = if (isCompactScreen) 8.dp else 16.dp
+                        val keyDiameter = ((maxHeight - keypadSpacing * 4 - bottomPadding) / 5).coerceAtLeast(1.dp)
                         val fittedWidth = minOf(maxWidth, keyDiameter * 4 + keypadSpacing * 3)
                         Box(modifier = Modifier.width(fittedWidth)) { keypad() }
                     }
@@ -1410,59 +1351,6 @@ fun CalculatorDisguiseScreen(
                         .padding(bottom = if (isCompactScreen) 4.dp else 8.dp),
                     verticalArrangement = Arrangement.Bottom
                 ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 2.dp),
-                        horizontalArrangement = Arrangement.End,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Box {
-                            CalculatorCircleButton(
-                                onClick = {
-                                    showOptionsMenu = true
-                                    haptic.performHapticFeedback(HapticFeedbackType.KeyboardTap)
-                                },
-                                isDark = isDark
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Rounded.MoreVert,
-                                    contentDescription = "More options",
-                                    tint = iconMuted,
-                                    modifier = Modifier.size(24.dp)
-                                )
-                            }
-                            DropdownMenu(
-                                expanded = showOptionsMenu,
-                                onDismissRequest = { showOptionsMenu = false },
-                                modifier = Modifier.background(if (isDark) Color(0xFF252527) else Color(0xFFFFFFFF))
-                            ) {
-                                DropdownMenuItem(
-                                    text = { Text("History", color = primaryText, fontSize = 15.sp, fontFamily = FontFamily.SansSerif) },
-                                    onClick = {
-                                        showOptionsMenu = false
-                                        showUnitConverterScreen = false
-                                        showHistoryInline = true
-                                    }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("Unit converter", color = primaryText, fontSize = 15.sp, fontFamily = FontFamily.SansSerif) },
-                                    onClick = {
-                                        showOptionsMenu = false
-                                        showHistoryInline = false
-                                        showUnitConverterScreen = true
-                                    }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("About Calculator", color = primaryText, fontSize = 15.sp, fontFamily = FontFamily.SansSerif) },
-                                    onClick = {
-                                        showOptionsMenu = false
-                                        showAboutDialog = true
-                                    }
-                                )
-                            }
-                        }
-                    }
                     Spacer(modifier = Modifier.weight(1f))
                     display()
                     toolbar()

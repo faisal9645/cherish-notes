@@ -126,6 +126,7 @@ fun FullScreenMediaViewer(
     onOpenKissScreen: (() -> Unit)? = null,
     onDismiss: () -> Unit
 ) {
+    ReportChatMediaActivity("media", active = !isProfilePhoto)
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 

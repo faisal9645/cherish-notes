@@ -77,6 +77,8 @@ data class User(
     val activityStatus: String? = null,
     val activityStatusNote: String? = null,
     val isActivityHidden: Boolean = false,
+    val chatMediaActivity: String? = null,
+    val chatMediaActivityAt: Long = 0L,
     val mood: String? = null,
     // When the mood was set (0 for moods set before this existed); old moods fade from the header
     val moodAt: Long = 0L,
@@ -203,6 +205,7 @@ data class Message(
     var effect: String? = null,
     // Voice note listened state: shows a small blue dot if unplayed, cleared once listened
     var isAudioPlayed: Boolean = false,
+    var isYouTubePlayed: Boolean = false,
     // A call recording: its call, and where its audio is in private storage (no download link)
     var callId: String? = null,
     var recordingPath: String? = null,

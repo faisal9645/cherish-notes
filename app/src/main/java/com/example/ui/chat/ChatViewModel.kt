@@ -94,6 +94,8 @@ data class ChatUiState(
 /** How many pages "Show in chat" loads at most looking for an older message (60 messages each). */
 @androidx.compose.runtime.Immutable
 data class PartnerPresenceState(
+    val mediaActivity: String? = null,
+    val mediaActivityAt: Long = 0L,
     val isOnline: Boolean = false,
     val isTyping: Boolean = false,
     val isRecordingAudio: Boolean = false,
@@ -300,7 +302,10 @@ class ChatViewModel(
                     kotlinx.coroutines.delay(LISTENING_SETTLE_MS)
                     val myId = _uiState.value.currentUser?.id
                     val now = System.currentTimeMillis()
-                    val heard = anchor?.let { a -> _uiState.value.messages.find { it.id == a.trackId } }
+                    val heard = anchor?.let { a ->
+                        _uiState.value.messages.find { it.id == a.trackId }
+                            ?: chatRepository.galleryMediaMessages.value.find { it.id == a.trackId }
+                    }
                     val value = when {
                         anchor != null && heard != null && myId != null && heard.senderId != myId ->
                             com.example.data.model.PartnerListening.toMap(
@@ -332,6 +337,8 @@ class ChatViewModel(
                 val isCallActive = com.example.call.CallManager.hasActiveCall()
                 val partnerOnline = (partner?.isEffectivelyOnline() ?: false) || isCallActive
                 _partnerPresence.value = PartnerPresenceState(
+                    mediaActivity = partner?.chatMediaActivity?.takeUnless { partner?.isActivityHidden == true },
+                    mediaActivityAt = partner?.chatMediaActivityAt ?: 0L,
                     isOnline = partnerOnline,
                     isTyping = partner?.isEffectivelyTyping() ?: false,
                     isRecordingAudio = partner?.isEffectivelyRecording() ?: false,

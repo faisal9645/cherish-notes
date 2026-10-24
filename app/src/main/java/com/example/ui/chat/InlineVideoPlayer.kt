@@ -40,6 +40,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -167,11 +169,28 @@ object YouTubeHelper {
                 <div class="player-container">
                     <iframe 
                         id="ytplayer"
-                        src="https://www.youtube.com/embed/$videoId?origin=https://www.youtube.com&autoplay=1&enablejsapi=1&fs=1&rel=0&playsinline=1&modestbranding=1"
+                        src="https://www.youtube.com/embed/$videoId?origin=https://www.youtube-nocookie.com&autoplay=1&enablejsapi=1&fs=1&rel=0&playsinline=1&modestbranding=1"
                         allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                         allowfullscreen>
                     </iframe>
                 </div>
+                <script>
+                    function onYouTubeIframeAPIReady() {
+                        new YT.Player('ytplayer', {
+                            events: {
+                                onStateChange: function(event) {
+                                    if (window.CherishPlayback) {
+                                        CherishPlayback.onPlaying(event.data === YT.PlayerState.PLAYING);
+                                    }
+                                },
+                                onError: function() {
+                                    if (window.CherishPlayback) CherishPlayback.onPlaying(false);
+                                }
+                            }
+                        });
+                    }
+                </script>
+                <script src="https://www.youtube.com/iframe_api"></script>
             </body>
             </html>
         """.trimIndent()
@@ -222,10 +241,15 @@ fun YouTubeWebView(
     val embedHtml = remember(videoId) { YouTubeHelper.getEmbedHtml(videoId) }
     var webViewRef by remember { mutableStateOf<WebView?>(null) }
     var hasError by remember { mutableStateOf(false) }
+    var youtubePlaying by remember(videoId) { mutableStateOf(false) }
+    val playbackAlive = remember(videoId) { java.util.concurrent.atomic.AtomicBoolean(true) }
+    ReportChatMediaActivity("youtube", active = youtubePlaying && !hasError)
 
     DisposableEffect(videoId) {
         onDispose {
+            playbackAlive.set(false)
             webViewRef?.apply {
+                removeJavascriptInterface("CherishPlayback")
                 stopLoading()
                 loadUrl("about:blank")
                 destroy()
@@ -241,6 +265,15 @@ fun YouTubeWebView(
             factory = { ctx ->
                 WebView(ctx).apply {
                     webViewRef = this
+                    val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
+                    addJavascriptInterface(object {
+                        @android.webkit.JavascriptInterface
+                        fun onPlaying(playing: Boolean) {
+                            mainHandler.post {
+                                if (playbackAlive.get()) youtubePlaying = playing
+                            }
+                        }
+                    }, "CherishPlayback")
                     layoutParams = ViewGroup.LayoutParams(
                         ViewGroup.LayoutParams.MATCH_PARENT,
                         ViewGroup.LayoutParams.MATCH_PARENT
@@ -425,7 +458,8 @@ fun InlineYouTubeCard(
     videoId: String,
     onOpenTheater: (String) -> Unit,
     modifier: Modifier = Modifier,
-    onPlay: () -> Unit = {}
+    onPlay: () -> Unit = {},
+    openedByPartner: Boolean = false
 ) {
     val context = LocalContext.current
     var isPlayingInline by remember { mutableStateOf(false) }
@@ -505,7 +539,17 @@ fun InlineYouTubeCard(
                         modifier = Modifier.weight(1f)
                     )
 
-                    Spacer(modifier = Modifier.width(8.dp))
+                    // Reuse the existing gap so the receipt never shifts the header actions.
+                    Box(modifier = Modifier.width(8.dp), contentAlignment = Alignment.Center) {
+                        if (openedByPartner) {
+                            Canvas(
+                                modifier = Modifier.size(6.dp)
+                                    .semantics { contentDescription = "YouTube opened by partner" }
+                            ) {
+                                drawCircle(Color(0xFF4ADE80))
+                            }
+                        }
+                    }
 
                     // Same-size round buttons, each tappable only where it's drawn
                     Row(

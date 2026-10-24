@@ -1518,10 +1518,15 @@ fun MessageBubble(
                             Spacer(modifier = Modifier.height(6.dp))
                             InlineYouTubeCard(
                                 videoId = youtubeVideoId,
+                                openedByPartner = isFromMe && message.isYouTubePlayed,
                                 onOpenTheater = { vid -> onOpenTheaterVideo?.invoke(vid) },
                                 onPlay = {
                                     com.example.ui.gallery.GalleryPlayedManager.setPlayed(context, youtubeVideoId, true)
                                     com.example.ui.gallery.GalleryPlayedManager.setPlayed(context, message.id, true)
+                                    if (!isFromMe) {
+                                        (context.applicationContext as com.example.CherishApplication)
+                                            .chatRepository.markYouTubePlayed(message.id)
+                                    }
                                 },
                                 modifier = Modifier.fillMaxWidth()
                             )

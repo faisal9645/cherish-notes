@@ -191,6 +191,7 @@ fun SharedGalleryScreen(
     val context = LocalContext.current
     val chatState by chatViewModel.uiState.collectAsState()
     val tabs = listOf("Media", "Voice Notes", "Links", "Starred", "Calls")
+    com.example.ui.chat.ReportChatMediaActivity("gallery")
     val pagerState = rememberPagerState(initialPage = 0, pageCount = { tabs.size })
     val coroutineScope = rememberCoroutineScope()
     var selectedMediaUrl by remember { mutableStateOf<String?>(null) }
@@ -210,6 +211,7 @@ fun SharedGalleryScreen(
     val voicePlayerHelper = chatViewModel.voicePlayerHelper
     val currentTrackId by voicePlayerHelper.currentTrackId.collectAsState()
     val isVoicePlaying by voicePlayerHelper.isPlaying.collectAsState()
+    com.example.ui.chat.ReportChatMediaActivity("audio", active = isVoicePlaying)
     val voiceProgress by voicePlayerHelper.playbackProgress.collectAsState()
     val currentPositionSec by voicePlayerHelper.currentPositionSec.collectAsState()
     val playbackSpeed by voicePlayerHelper.playbackSpeed.collectAsState()

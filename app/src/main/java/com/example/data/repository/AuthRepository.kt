@@ -1774,6 +1774,30 @@ class AuthRepository(private val context: Context) {
         }
     }
 
+    private val mediaActivityOwners = mutableMapOf<String, String>()
+
+    /** Foreground screens own their status; closing a player restores gallery status. */
+    @Synchronized
+    fun setChatMediaActivity(owner: String, activity: String?) {
+        if (activity == null) mediaActivityOwners.remove(owner)
+        else mediaActivityOwners[owner] = activity
+        val uid = getCurrentUserId()
+        if (uid.isBlank()) return
+        val selected = mediaActivityOwners.values.maxByOrNull {
+            when (it) { "youtube", "audio" -> 3; "media" -> 2; else -> 1 }
+        }
+        try {
+            userDocument(uid)?.set(
+                mapOf(
+                    "chatMediaActivity" to (selected ?: com.google.firebase.firestore.FieldValue.delete()),
+                    "chatMediaActivityAt" to System.currentTimeMillis()
+                ), com.google.firebase.firestore.SetOptions.merge()
+            )
+        } catch (e: Exception) {
+            Log.w("AuthRepository", "Couldn't update media activity", e)
+        }
+    }
+
     fun setRecordingAudio(recording: Boolean) {
         val uid = getCurrentUserId()
         try {
@@ -1924,6 +1948,8 @@ class AuthRepository(private val context: Context) {
                 activityStatus = activityStatus,
                 activityStatusNote = activityStatusNote,
                 isActivityHidden = isActivityHidden,
+                chatMediaActivity = snapshot.getString("chatMediaActivity"),
+                chatMediaActivityAt = snapshot.getLong("chatMediaActivityAt") ?: 0L,
                 mood = mood,
                 moodAt = moodAt,
                 batteryLevel = batteryLevel,
