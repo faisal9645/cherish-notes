@@ -1,9 +1,9 @@
 {
-  "versionCode": 234,
-  "versionName": "1.8.62",
-  "tagName": "v1.8.62-234",
-  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.8.62-234/app_update_234.apk",
-  "assetSize": 19983736,
-  "releaseNotes": "Notes v1.8.62 (Build 234):\n- Reverted border effect on chat bubbles, composer pill and cards to exact build 200 specifications.",
-  "releaseDate": "2026-10-24T00:33:08Z"
+  "versionCode": 235,
+  "versionName": "1.8.63",
+  "tagName": "v1.8.63-235",
+  "downloadUrl": "https://github.com/faisal9645/cherish-notes/releases/download/v1.8.63-235/app_update_235.apk",
+  "assetSize": 20259444,
+  "releaseNotes": "Notes v1.8.63 (Build 235):\n- Good-night stars timing and neutral dark chat styling update.",
+  "releaseDate": "2026-10-24T04:34:58Z"
 }

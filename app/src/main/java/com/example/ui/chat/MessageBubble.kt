@@ -102,8 +102,8 @@ internal class BubbleFill(val brush: Brush, val edge: Color?)
  */
 @Composable
 internal fun rememberBubbleFill(isFromMe: Boolean, isDark: Boolean): BubbleFill {
-    val received = if (isDark) Color(0xFF263653) else MistBlue
-    val receivedEdge = if (isDark) darkSurface(NavyRaised, Neutral800) else Gray200
+    val received = if (isDark) Color(0xFF202020) else MistBlue
+    val receivedEdge = if (isDark) Color(0xFF262626) else Gray200
     return remember(isFromMe, isDark, received, receivedEdge) {
         val shade = if (isDark) 0.18f else 0f
         if (isFromMe) BubbleFill(
@@ -231,7 +231,7 @@ fun MessageBubble(
         if (isFromMe) {
             if (isDark) DarkBlueBubble else DayBluePrimary
         } else {
-            if (isDark) Color(0xFF080B14) else MistBlue
+            if (isDark) Color(0xFF202020) else MistBlue
         }
     }
 

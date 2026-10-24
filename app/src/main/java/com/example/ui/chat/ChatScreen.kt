@@ -1366,15 +1366,15 @@ fun ChatScreen(
             onSunriseDone = { showSunrise = false },
             modifier = Modifier.fillMaxSize()
         )
-        // One dot layer for dark chat, independent of the clock and good-night messages.
+        // Wallpaper dots run only during good-night hours (10 PM to 6 AM) in dark mode.
         // Draw after NightSky so its dimming overlay cannot hide the dots.
-        if (isDark) {
+        if (isDark && isNight) {
             TwinklingStars(
                 modifier = Modifier.fillMaxSize(),
                 count = 45,
                 brightness = 1f,
                 periodMs = 3_400,
-                maxYFraction = if (isNight) 0.62f else 1f,
+                maxYFraction = 0.62f,
                 blueGlow = true
             )
         }

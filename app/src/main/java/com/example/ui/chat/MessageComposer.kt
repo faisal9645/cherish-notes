@@ -425,15 +425,15 @@ fun MessageComposer(
         else if (isDark) Neutral800
         else Neutral200
     } else {
-        // Opaque midnight blue in dark mode; plain white in day mode.
-        if (isDark) Color(0xFF17243B) else Color.White
+        // Opaque neutral charcoal in dark mode; plain white in day mode.
+        if (isDark) Color(0xFF181818) else Color.White
     }
     val pillBorder = if (isPrivateMode) {
         if (isAmoled) Neutral800
         else if (isDark) Neutral700
         else Neutral300
     } else {
-        if (isDark) darkSurface(NavyRaised, Neutral800) else Gray200
+        if (isDark) Color(0xFF262626) else Gray200
     }
     val typingFill = remember(pillBg) { SolidColor(pillBg) }
     // The message box's shape: Day keeps its original rounder, slimmer pill
